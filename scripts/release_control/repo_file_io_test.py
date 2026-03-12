@@ -1,3 +1,4 @@
+import os
 import json
 import subprocess
 import tempfile
@@ -9,6 +10,18 @@ from repo_file_io import load_repo_json, read_repo_text
 
 
 class RepoFileIoTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_read_repo_text_and_load_repo_json_can_read_staged_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
@@ -16,9 +29,9 @@ class RepoFileIoTest(unittest.TestCase):
             path = repo_root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
 
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
             path.write_text('{"version": "staged"}\n', encoding="utf-8")
-            subprocess.run(["git", "add", rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "add", rel)
             path.write_text('{"version": "working-tree"}\n', encoding="utf-8")
 
             with patch("repo_file_io.REPO_ROOT", repo_root):

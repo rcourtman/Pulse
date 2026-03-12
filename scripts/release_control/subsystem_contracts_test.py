@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -15,6 +16,18 @@ from subsystem_contracts import (
 
 
 class SubsystemContractsTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_parse_contract_text_extracts_metadata_and_path_references(self) -> None:
         parsed, errors = parse_contract_text(
             "docs/release-control/v6/subsystems/example.md",
@@ -148,9 +161,9 @@ Stable.
             contract_path = contracts_dir / "example.md"
             contract_rel = "docs/release-control/v6/subsystems/example.md"
 
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
             contract_path.write_text("# staged version\n", encoding="utf-8")
-            subprocess.run(["git", "add", contract_rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "add", contract_rel)
             contract_path.write_text("# working tree version\n", encoding="utf-8")
 
             with (
@@ -169,9 +182,9 @@ Stable.
             tracked_rel = "docs/release-control/v6/subsystems/tracked.md"
             untracked_rel = "docs/release-control/v6/subsystems/untracked.md"
 
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
             (repo_root / tracked_rel).write_text("# tracked\n", encoding="utf-8")
-            subprocess.run(["git", "add", tracked_rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "add", tracked_rel)
             (repo_root / untracked_rel).write_text("# untracked\n", encoding="utf-8")
 
             with (

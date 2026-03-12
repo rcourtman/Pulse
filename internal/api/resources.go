@@ -120,7 +120,8 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	resources := registry.List()
+	allResources := registry.List()
+	resources := allResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
 		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
 		return
@@ -140,7 +141,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	// no conversion needed), but recompute ByType from the full registry list so keys
 	// match the canonical REST resource contract.
 	stats := registry.Stats()
-	stats.ByType = computeResourceContractByType(registry.List())
+	stats.ByType = computeResourceContractByType(allResources)
 
 	applyResourceContractTypes(paged)
 
@@ -379,8 +380,9 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allResources := registry.List()
 	stats := registry.Stats()
-	stats.ByType = computeResourceContractByType(registry.List())
+	stats.ByType = computeResourceContractByType(allResources)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)

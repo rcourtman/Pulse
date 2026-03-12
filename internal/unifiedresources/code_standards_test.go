@@ -893,3 +893,26 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 // legacyStateRatchets slice, TestLegacyStateAccessRatchet) has been removed.
 //
 // Migration changelog preserved in git history (see commits SRC-03f → SRC-04g).
+
+func TestResourceAPIHotPathUsesSingleRegistryListSnapshot(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	path := filepath.Join(repoRoot, "internal", "api", "resources.go")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+
+	source := string(data)
+	normalizedPath := filepath.ToSlash(path)
+
+	if strings.Count(source, "allResources := registry.List()") != 2 {
+		t.Fatalf("%s: expected HandleListResources and HandleStats to each seed exactly one registry list snapshot", normalizedPath)
+	}
+	if strings.Count(source, "computeResourceContractByType(allResources)") != 2 {
+		t.Fatalf("%s: expected canonical by-type aggregations to reuse the seeded registry snapshot in both handlers", normalizedPath)
+	}
+	if strings.Contains(source, "computeResourceContractByType(registry.List())") {
+		t.Fatalf("%s: duplicate registry.List() hot-path aggregation detected", normalizedPath)
+	}
+}

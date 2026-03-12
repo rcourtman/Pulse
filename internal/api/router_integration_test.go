@@ -194,7 +194,7 @@ func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
 	// validation. The request should make it to the alert manager, which returns 404 because
 	// the alert does not exist in this test environment.
 	alertID := "docker(host)-container-unhealthy"
-	body := bytes.NewBufferString(`{"id":"` + alertID + `"}`)
+	body := bytes.NewBufferString(`{"alertIdentifier":"` + alertID + `"}`)
 	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/acknowledge", body)
 	if err != nil {
 		t.Fatalf("create request: %v", err)

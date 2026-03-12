@@ -4,12 +4,21 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_REPO_ROOT = REPO_ROOT
+
+
+def git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if REPO_ROOT != DEFAULT_REPO_ROOT:
+        env.pop("GIT_INDEX_FILE", None)
+    return env
 
 
 def repo_relative_path(path: str | Path) -> str:
@@ -29,6 +38,7 @@ def read_repo_text(path: str | Path, *, staged: bool = False) -> str:
                 check=True,
                 capture_output=True,
                 text=True,
+                env=git_env(),
             )
             return result.stdout
         except subprocess.CalledProcessError:

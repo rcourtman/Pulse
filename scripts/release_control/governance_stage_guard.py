@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -24,6 +25,16 @@ WORKTREE_SENSITIVE_EXACT_FILES = (
 )
 
 
+DEFAULT_REPO_ROOT = REPO_ROOT
+
+
+def git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if REPO_ROOT != DEFAULT_REPO_ROOT:
+        env.pop("GIT_INDEX_FILE", None)
+    return env
+
+
 def git_diff_name_only(*args: str) -> list[str]:
     result = subprocess.run(
         ["git", "diff", *args],
@@ -31,6 +42,7 @@ def git_diff_name_only(*args: str) -> list[str]:
         check=True,
         capture_output=True,
         text=False,
+        env=git_env(),
     )
     return sorted(
         {

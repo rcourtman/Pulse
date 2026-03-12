@@ -305,3 +305,8 @@ Update API channel selection now also follows that same contract: `/api/updates`
 surfaces accept only `stable` or `rc`, reject unsupported channel values at the
 HTTP boundary, and must not allow a `stable` installation path to apply a
 prerelease tarball even when a caller posts a direct GitHub release URL.
+The `/api/resources` and `/api/resources/stats` handlers now also carry a
+single-snapshot aggregation invariant: canonical `aggregations.byType` must be
+derived from the same registry list snapshot used for that request's response
+path, so the contract stays deterministic without paying for duplicate
+registry-clone work on the hot path.

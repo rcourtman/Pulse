@@ -3,18 +3,31 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_REPO_ROOT = REPO_ROOT
+
+
+def git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # Unit tests patch REPO_ROOT to a temporary repository. In that case, an
+    # inherited alternate index from the caller should not leak into the temp
+    # repo and point git plumbing at entries from a different repository.
+    if REPO_ROOT != DEFAULT_REPO_ROOT:
+        env.pop("GIT_INDEX_FILE", None)
+    return env
 
 
 def git(*args: str, text: bool, input_data: str | bytes | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
         cwd=REPO_ROOT,
+        env=git_env(),
         check=True,
         capture_output=True,
         text=text,
@@ -30,7 +43,8 @@ def staged_go_files() -> list[str]:
         "--diff-filter=ACMR",
         "-z",
         "--",
-        "*.go",
+        ":(glob)*.go",
+        ":(glob)**/*.go",
         text=False,
     )
     return sorted(

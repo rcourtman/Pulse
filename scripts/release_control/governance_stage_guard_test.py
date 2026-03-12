@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,18 @@ from governance_stage_guard import (
 
 
 class GovernanceStageGuardTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_is_worktree_sensitive_governance_path_matches_expected_scope(self) -> None:
         self.assertTrue(is_worktree_sensitive_governance_path(".husky/pre-commit"))
         self.assertTrue(is_worktree_sensitive_governance_path(".github/workflows/canonical-governance.yml"))
@@ -48,10 +61,10 @@ class GovernanceStageGuardTest(unittest.TestCase):
             path = repo_root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
 
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
 
             path.write_text('{"version":"staged"}\n', encoding="utf-8")
-            subprocess.run(["git", "add", rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "add", rel)
             path.write_text('{"version":"working-tree"}\n', encoding="utf-8")
 
             with patch("governance_stage_guard.REPO_ROOT", repo_root):
@@ -64,10 +77,10 @@ class GovernanceStageGuardTest(unittest.TestCase):
             path = repo_root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
 
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
 
             path.write_text("package api\n", encoding="utf-8")
-            subprocess.run(["git", "add", rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "add", rel)
             path.write_text("package api\n\nvar x = 1\n", encoding="utf-8")
 
             with patch("governance_stage_guard.REPO_ROOT", repo_root):

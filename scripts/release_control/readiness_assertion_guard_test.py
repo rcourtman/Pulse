@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -33,6 +34,18 @@ def base_payload() -> dict:
 
 
 class ReadinessAssertionGuardTest(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env.pop("GIT_INDEX_FILE", None)
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
     def test_parse_args_accepts_filters_and_staged(self) -> None:
         args = readiness_assertion_guard.parse_args(
             [
@@ -204,7 +217,7 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
     def test_main_can_read_staged_status_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
-            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            self.git(repo_root, "init")
 
             payload = base_payload()
             payload["readiness_assertions"][0]["proof_commands"][0]["run"] = [
@@ -213,13 +226,7 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
                 "from pathlib import Path; Path('proof.out').write_text('ok', encoding='utf-8')",
             ]
             write_status(repo_root, payload)
-            subprocess.run(
-                ["git", "add", "docs/release-control/v6/status.json"],
-                cwd=repo_root,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            self.git(repo_root, "add", "docs/release-control/v6/status.json")
 
             payload["readiness_assertions"][0]["proof_commands"][0]["run"] = ["python3", "-c", "raise SystemExit(1)"]
             write_status(repo_root, payload)

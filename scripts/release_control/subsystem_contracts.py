@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -12,6 +13,7 @@ from typing import Any
 from control_plane import DEFAULT_CONTROL_PLANE
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_REPO_ROOT = REPO_ROOT
 CONTRACTS_DIR = DEFAULT_CONTROL_PLANE["subsystems_dir_path"]
 TEMPLATE_REL = DEFAULT_CONTROL_PLANE["subsystem_contract_template_rel"]
 REQUIRED_SECTIONS = [
@@ -45,13 +47,31 @@ PATH_SUFFIXES = (
 )
 
 
+def git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if REPO_ROOT != DEFAULT_REPO_ROOT:
+        env.pop("GIT_INDEX_FILE", None)
+    return env
+
+
+def git(*args: str, text: bool) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=text,
+        env=git_env(),
+    )
+
+
 def tracked_contract_paths(*, staged: bool = False) -> list[str]:
     if staged:
-        result = subprocess.run(
-            ["git", "ls-files", "-z", "--", CONTRACTS_DIR.relative_to(REPO_ROOT).as_posix()],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
+        result = git(
+            "ls-files",
+            "-z",
+            "--",
+            CONTRACTS_DIR.relative_to(REPO_ROOT).as_posix(),
             text=False,
         )
         return sorted(
@@ -66,13 +86,7 @@ def tracked_contract_paths(*, staged: bool = False) -> list[str]:
 
 
 def staged_contract_text(rel: str) -> str:
-    result = subprocess.run(
-        ["git", "show", f":{rel}"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    result = git("show", f":{rel}", text=True)
     return result.stdout
 
 

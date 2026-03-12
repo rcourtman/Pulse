@@ -110,3 +110,9 @@ now governed as explicit shared boundaries with the performance lane rather
 than implicit downstream usage. That means future fleet-scale table changes
 must preserve both canonical unified-resource semantics and the table
 performance proof route.
+Shared API consumers now also depend on a single registry-list snapshot per
+request when deriving canonical type aggregations for resource list and stats
+responses. Re-reading `registry.List()` for the same `/api/resources` request
+is forbidden because it adds avoidable clone churn to the hot path and breaks
+the guarantee that aggregations describe the exact resource snapshot used to
+build the response.
