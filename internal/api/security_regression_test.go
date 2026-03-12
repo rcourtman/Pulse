@@ -1221,6 +1221,7 @@ func TestAIExecuteReadEndpointsRequireAIExecuteScope(t *testing.T) {
 		"/api/ai/patrol/findings",
 		"/api/ai/patrol/history",
 		"/api/ai/patrol/runs",
+		"/api/ai/patrol/runs/run-1",
 		"/api/ai/patrol/dismissed",
 		"/api/ai/patrol/suppressions",
 		"/api/ai/approvals",

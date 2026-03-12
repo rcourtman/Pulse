@@ -508,6 +508,7 @@ var allRouteAllowlist = []string{
 	"/api/ai/patrol/snooze",
 	"/api/ai/patrol/resolve",
 	"/api/ai/patrol/runs",
+	"/api/ai/patrol/runs/",
 	"/api/ai/patrol/suppressions",
 	"/api/ai/patrol/suppressions/",
 	"/api/ai/patrol/dismissed",

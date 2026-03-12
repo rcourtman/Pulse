@@ -275,6 +275,20 @@ func (s *PatrolRunHistoryStore) GetRecent(n int) []PatrolRunRecord {
 	return result
 }
 
+// GetByID returns a single run by ID.
+func (s *PatrolRunHistoryStore) GetByID(id string) (PatrolRunRecord, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, run := range s.runs {
+		if run.ID == id {
+			return run, true
+		}
+	}
+
+	return PatrolRunRecord{}, false
+}
+
 // Count returns the number of runs in history
 func (s *PatrolRunHistoryStore) Count() int {
 	s.mu.RLock()

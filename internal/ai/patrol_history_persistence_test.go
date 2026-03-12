@@ -171,6 +171,24 @@ func TestPatrolRunHistoryStore_GetRecent(t *testing.T) {
 	}
 }
 
+func TestPatrolRunHistoryStore_GetByID(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	store.Add(PatrolRunRecord{ID: "run-1"})
+	store.Add(PatrolRunRecord{ID: "run-2"})
+
+	run, ok := store.GetByID("run-1")
+	if !ok {
+		t.Fatal("expected run-1 to be found")
+	}
+	if run.ID != "run-1" {
+		t.Fatalf("expected run-1, got %s", run.ID)
+	}
+
+	if _, ok := store.GetByID("missing"); ok {
+		t.Fatal("expected missing run lookup to fail")
+	}
+}
+
 func TestPatrolRunHistoryStore_Count(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 

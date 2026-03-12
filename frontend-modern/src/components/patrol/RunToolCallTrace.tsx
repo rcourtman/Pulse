@@ -6,7 +6,7 @@
  */
 
 import { Component, createSignal, createResource, Show, For } from 'solid-js';
-import { getPatrolRunHistoryWithToolCalls, type ToolCallRecord } from '@/api/patrol';
+import { getPatrolRunWithToolCalls, type ToolCallRecord } from '@/api/patrol';
 import {
   getToolCallResultBadgeClass,
   getToolCallsLoadingState,
@@ -28,14 +28,8 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
     async (runId) => {
       if (!runId) return [];
       try {
-        // Start with a small fetch; if not found, widen the search
-        let runs = await getPatrolRunHistoryWithToolCalls(10);
-        let run = runs.find((r) => r.id === runId);
-        if (!run) {
-          runs = await getPatrolRunHistoryWithToolCalls(50);
-          run = runs.find((r) => r.id === runId);
-        }
-        return run?.tool_calls || [];
+        const run = await getPatrolRunWithToolCalls(runId);
+        return run?.tool_calls ?? [];
       } catch {
         return [];
       }

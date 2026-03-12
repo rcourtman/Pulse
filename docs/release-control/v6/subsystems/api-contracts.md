@@ -118,6 +118,11 @@ The frontend Patrol history clients in `frontend-modern/src/api/patrol.ts`
 must mirror that normalization before sending the request: invalid and
 non-positive caller input collapses back to the client default of `30`, and
 oversized requests clamp to the backend maximum of `100`.
+Patrol run detail access for selected-history UX must now resolve a canonical
+single-run contract at `/api/ai/patrol/runs/{id}` instead of probing bounded
+history pages and hoping the target run is still inside a recent window; the
+tool-call trace UI must fetch the selected run by ID, with
+`?include=tool_calls` carrying the full trace only when explicitly requested.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and

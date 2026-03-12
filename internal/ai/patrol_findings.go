@@ -574,6 +574,14 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 	return p.runHistoryStore.GetRecent(limit)
 }
 
+// GetRunByID returns a single patrol run from history.
+func (p *PatrolService) GetRunByID(id string) (PatrolRunRecord, bool) {
+	if strings.TrimSpace(id) == "" {
+		return PatrolRunRecord{}, false
+	}
+	return p.runHistoryStore.GetByID(id)
+}
+
 // GetAllFindings returns all active findings sorted by severity
 // Only returns critical and warning findings - watch/info are filtered out as noise
 func (p *PatrolService) GetAllFindings() []*Finding {

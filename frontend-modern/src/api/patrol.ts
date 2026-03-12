@@ -428,6 +428,13 @@ export interface PatrolRunRecord {
 const DEFAULT_PATROL_HISTORY_LIMIT = 30;
 const MAX_PATROL_HISTORY_LIMIT = 100;
 
+function normalizePatrolRunRecord(run: PatrolRunRecord | null | undefined): PatrolRunRecord | null {
+  if (!run || typeof run !== 'object' || Array.isArray(run)) {
+    return null;
+  }
+  return promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string });
+}
+
 function normalizeHistoryLimit(limit: number): number {
   if (!Number.isFinite(limit)) {
     return DEFAULT_PATROL_HISTORY_LIMIT;
@@ -444,9 +451,14 @@ function normalizeHistoryLimit(limit: number): number {
 
 async function fetchPatrolRunHistory(search: URLSearchParams): Promise<PatrolRunRecord[]> {
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
-    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
-  );
+  return arrayOrEmpty<PatrolRunRecord>(runs)
+    .map((run) => normalizePatrolRunRecord(run))
+    .filter((run): run is PatrolRunRecord => run !== null);
+}
+
+async function fetchPatrolRun(path: string): Promise<PatrolRunRecord | null> {
+  const run = await apiFetchJSON<PatrolRunRecord | null>(path);
+  return normalizePatrolRunRecord(run);
 }
 
 /**
@@ -472,6 +484,20 @@ export async function getPatrolRunHistoryWithToolCalls(
     limit: String(normalizeHistoryLimit(limit)),
   });
   return fetchPatrolRunHistory(search);
+}
+
+/**
+ * Get a single patrol run
+ */
+export async function getPatrolRun(runId: string): Promise<PatrolRunRecord | null> {
+  return fetchPatrolRun(`/api/ai/patrol/runs/${encodeURIComponent(runId)}`);
+}
+
+/**
+ * Get a single patrol run with tool call details included
+ */
+export async function getPatrolRunWithToolCalls(runId: string): Promise<PatrolRunRecord | null> {
+  return fetchPatrolRun(`/api/ai/patrol/runs/${encodeURIComponent(runId)}?include=tool_calls`);
 }
 
 /** SSE event from /api/ai/patrol/stream */

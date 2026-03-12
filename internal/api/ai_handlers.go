@@ -5784,6 +5784,73 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	}
 }
 
+// HandleGetPatrolRun returns a single patrol run by ID (GET /api/ai/patrol/runs/{id})
+func (h *AISettingsHandler) HandleGetPatrolRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	const prefix = "/api/ai/patrol/runs/"
+	if !strings.HasPrefix(r.URL.Path, prefix) {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	runID := strings.TrimPrefix(r.URL.Path, prefix)
+	if runID == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+	if decoded, err := url.PathUnescape(runID); err == nil {
+		runID = decoded
+	}
+	if strings.TrimSpace(runID) == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(
+			w,
+			http.StatusServiceUnavailable,
+			"service_unavailable",
+			"Pulse Patrol service not available",
+			nil,
+		)
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
+	if patrol == nil {
+		writeErrorResponse(
+			w,
+			http.StatusServiceUnavailable,
+			"service_unavailable",
+			"Pulse Patrol service not available",
+			nil,
+		)
+		return
+	}
+
+	run, ok := patrol.GetRunByID(runID)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Patrol run not found", nil)
+		return
+	}
+
+	// By default, omit full tool call arrays to keep payloads lean.
+	// Use ?include=tool_calls to get the full array.
+	if r.URL.Query().Get("include") != "tool_calls" {
+		run.ToolCalls = nil
+	}
+
+	if err := utils.WriteJSONResponse(w, run); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol run response")
+	}
+}
+
 // HandleGetAICostSummary returns AI usage rollups (GET /api/ai/cost/summary?days=N).
 func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
