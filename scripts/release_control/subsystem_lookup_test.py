@@ -35,6 +35,31 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["README.md"])
         self.assertEqual(result["unowned_runtime_files"], ["README.md"])
 
+    def test_lookup_paths_assigns_organization_billing_panel_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/subsystems/cloud-paid.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-billing-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx"],
+        )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])
