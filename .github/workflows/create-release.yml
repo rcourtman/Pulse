@@ -674,6 +674,9 @@ jobs:
             gh release upload "${TAG}" release/*.tgz --clobber
           fi
           gh release upload "${TAG}" release/install.sh --clobber
+          if [ -f release/install.ps1 ]; then
+            gh release upload "${TAG}" release/install.ps1 --clobber
+          fi
           gh release upload "${TAG}" release/install-docker.sh --clobber
           gh release upload "${TAG}" release/pulse-auto-update.sh --clobber
 

@@ -335,7 +335,8 @@ fi
 #   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 # instead of pulling from main branch (which may have newer, incompatible changes)
 echo "Copying install scripts to release directory..."
-cp install.sh "$RELEASE_DIR/"
+cp scripts/install.sh "$RELEASE_DIR/install.sh"
+[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$RELEASE_DIR/install.ps1"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 
