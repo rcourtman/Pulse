@@ -192,6 +192,13 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.
+Session and CSRF persistence compatibility under `internal/api/session_store.go`
+and `internal/api/csrf_store.go` now also has an explicit governed migration
+proof route: legacy raw-token `sessions.json` and `csrf_tokens.json` files must
+load into hashed runtime state and stay covered by
+`internal/api/session_store_test.go`, `internal/api/csrf_store_test.go`, plus
+`tests/migration/v5_session_db_test.go`, rather than borrowing the generic
+backend payload contract proof path.
 Hosted signup handler payload flow now also follows an explicit shared
 boundary: `internal/api/public_signup_handlers.go` owns request/response and
 magic-link payload semantics, while `internal/hosted/provisioner.go` owns the

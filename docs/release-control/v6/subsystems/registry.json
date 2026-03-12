@@ -208,6 +208,22 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "auth-state-persistence-compatibility",
+            "label": "session and CSRF persistence migration proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/csrf_store.go",
+              "internal/api/session_store.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/csrf_store_test.go",
+              "internal/api/session_store_test.go",
+              "tests/migration/v5_session_db_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [

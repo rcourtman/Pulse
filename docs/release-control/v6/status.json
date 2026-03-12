@@ -176,7 +176,7 @@
             "test",
             "./tests/migration",
             "-run",
-            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5FullUpgradeScenario|TestV5DowngradeSafety|TestV5DataDir_SessionTokenContinuity",
+            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
             "-count=1"
           ]
         }
@@ -275,6 +275,22 @@
       "release_gate_ids": [
         "paid-feature-entitlement-gating"
       ],
+      "proof_commands": [
+        {
+          "id": "frontend-paid-surface-visibility-tests",
+          "cwd": "frontend-modern",
+          "run": [
+            "npm",
+            "test",
+            "--",
+            "--run",
+            "src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
+            "src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+            "src/components/Settings/__tests__/settingsNavigation.integration.test.tsx",
+            "src/pages/__tests__/AIIntelligence.test.tsx"
+          ]
+        }
+      ],
       "evidence": [
         {
           "repo": "pulse",
@@ -318,18 +334,34 @@
       ],
       "proof_commands": [
         {
+          "id": "csrf-state-migration-api-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired|TestCSRFTokenStore_Load_MigratesLegacyFormat",
+            "-count=1"
+          ]
+        },
+        {
           "id": "upgrade-state-migration-tests",
           "run": [
             "go",
             "test",
             "./tests/migration",
             "-run",
-            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5FullUpgradeScenario|TestV5DowngradeSafety|TestV5DataDir_SessionTokenContinuity",
+            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
             "-count=1"
           ]
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/api/csrf_store_test.go",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "internal/api/licensing_handlers_auto_migrate_test.go",

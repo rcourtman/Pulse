@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -559,7 +560,7 @@ func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenStore_Load_RejectsLegacyFormat(t *testing.T) {
+func TestCSRFTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create legacy format JSON (map[sessionID]tokenData) with snake_case fields
@@ -580,8 +581,40 @@ func TestCSRFTokenStore_Load_RejectsLegacyFormat(t *testing.T) {
 
 	store.load()
 
-	if len(store.tokens) != 0 {
-		t.Errorf("store should reject legacy format, got %d tokens", len(store.tokens))
+	if len(store.tokens) != 2 {
+		t.Fatalf("store should load 2 active legacy tokens, got %d", len(store.tokens))
+	}
+
+	if !store.ValidateCSRFToken("session-1", "token-value-1") {
+		t.Fatal("session-1 token should validate after legacy load")
+	}
+	if !store.ValidateCSRFToken("session-2", "token-value-2") {
+		t.Fatal("session-2 token should validate after legacy load")
+	}
+	if store.ValidateCSRFToken("session-expired", "expired-token") {
+		t.Fatal("expired legacy CSRF token should be filtered during load")
+	}
+
+	if _, ok := store.tokens[csrfSessionKey("session-1")]; !ok {
+		t.Fatal("session-1 should be stored under its hashed session key")
+	}
+	if _, ok := store.tokens[csrfSessionKey("session-2")]; !ok {
+		t.Fatal("session-2 should be stored under its hashed session key")
+	}
+
+	store.save()
+
+	savedData, err := os.ReadFile(csrfFile)
+	if err != nil {
+		t.Fatalf("failed to read migrated csrf tokens file: %v", err)
+	}
+
+	var persisted []*CSRFTokenData
+	if err := json.Unmarshal(savedData, &persisted); err != nil {
+		t.Fatalf("migrated csrf tokens file should be hashed array format: %v", err)
+	}
+	if len(persisted) != 2 {
+		t.Fatalf("migrated csrf tokens file should contain 2 active tokens, got %d", len(persisted))
 	}
 }
 
@@ -589,7 +622,7 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create current format JSON with expired and nil entries (snake_case fields)
-	// This tests the nil check and expiration check in lines 238-240
+	// to verify nil records and expired tokens are ignored during load.
 	currentJSON := `[
 		{"token_hash": "hash1", "session_key": "key1", "expires_at": "2099-12-31T23:59:59Z"},
 		null,

@@ -222,6 +222,62 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_session_store_change_uses_session_migration_proof_policy(self):
+        required = infer_impacted_subsystems(["internal/api/session_store.go"])
+        self.assertEqual(set(required), {"api-contracts"})
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(api_contracts["contract"], "docs/release-control/v6/subsystems/api-contracts.md")
+        self.assertEqual(api_contracts["touched_runtime_files"], ["internal/api/session_store.go"])
+        self.assertTrue(
+            api_contracts["verification"]["require_explicit_path_policy_coverage"]
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "auth-state-persistence-compatibility",
+                    "label": "session and CSRF persistence migration proof",
+                    "touched_runtime_files": ["internal/api/session_store.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/csrf_store_test.go",
+                        "internal/api/session_store_test.go",
+                        "tests/migration/v5_session_db_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_csrf_store_change_uses_auth_state_migration_proof_policy(self):
+        required = infer_impacted_subsystems(["internal/api/csrf_store.go"])
+        self.assertEqual(set(required), {"api-contracts"})
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(api_contracts["contract"], "docs/release-control/v6/subsystems/api-contracts.md")
+        self.assertEqual(api_contracts["touched_runtime_files"], ["internal/api/csrf_store.go"])
+        self.assertTrue(
+            api_contracts["verification"]["require_explicit_path_policy_coverage"]
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "auth-state-persistence-compatibility",
+                    "label": "session and CSRF persistence migration proof",
+                    "touched_runtime_files": ["internal/api/csrf_store.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/csrf_store_test.go",
+                        "internal/api/session_store_test.go",
+                        "tests/migration/v5_session_db_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_shared_canonical_file_requires_dependent_contract_update(self):
         required = required_contract_updates(["internal/unifiedresources/views.go"])
         self.assertEqual(

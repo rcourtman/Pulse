@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -684,7 +685,7 @@ func TestSessionStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestSessionStore_Load_RejectsLegacyFormat(t *testing.T) {
+func TestSessionStore_Load_MigratesLegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create legacy format JSON (map[token]sessionData) with snake_case fields
@@ -707,7 +708,39 @@ func TestSessionStore_Load_RejectsLegacyFormat(t *testing.T) {
 
 	store.load()
 
-	if len(store.sessions) != 0 {
-		t.Errorf("store should reject legacy format, got %d sessions", len(store.sessions))
+	if len(store.sessions) != 2 {
+		t.Fatalf("store should load 2 active legacy sessions, got %d", len(store.sessions))
+	}
+
+	if !store.ValidateSession("raw-token-1") {
+		t.Fatal("raw-token-1 should validate after legacy load")
+	}
+	if !store.ValidateSession("raw-token-2") {
+		t.Fatal("raw-token-2 should validate after legacy load")
+	}
+	if store.ValidateSession("raw-token-expired") {
+		t.Fatal("expired raw-token-expired session should be filtered during legacy load")
+	}
+
+	if _, ok := store.sessions[sessionHash("raw-token-1")]; !ok {
+		t.Fatal("raw-token-1 should be stored under its hashed key")
+	}
+	if _, ok := store.sessions[sessionHash("raw-token-2")]; !ok {
+		t.Fatal("raw-token-2 should be stored under its hashed key")
+	}
+
+	store.save()
+
+	savedData, err := os.ReadFile(sessionsFile)
+	if err != nil {
+		t.Fatalf("failed to read migrated sessions file: %v", err)
+	}
+
+	var persisted []sessionPersisted
+	if err := json.Unmarshal(savedData, &persisted); err != nil {
+		t.Fatalf("migrated sessions file should be hashed array format: %v", err)
+	}
+	if len(persisted) != 2 {
+		t.Fatalf("migrated sessions file should contain 2 active sessions, got %d", len(persisted))
 	}
 }

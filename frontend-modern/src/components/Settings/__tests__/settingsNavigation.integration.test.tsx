@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settingsTabs';
+import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
 
 const canonicalTabPaths = {
   agents: '/settings',
@@ -43,6 +44,14 @@ const gatedTabs: Array<[SettingsTab, string]> = [
 ];
 
 describe('settingsNavigation integration scaffold', () => {
+  beforeAll(() => {
+    updateDisableLocalUpgradeMetricsSetting(true);
+  });
+
+  afterAll(() => {
+    updateDisableLocalUpgradeMetricsSetting(false);
+  });
+
   it('hides organization navigation items unless multi-tenant is enabled', () => {
     expect(
       shouldHideSettingsNavItem('organization-overview', {
