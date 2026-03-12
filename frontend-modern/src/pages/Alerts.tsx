@@ -72,9 +72,14 @@ import {
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
   getAlertIncidentLevelBadgeClass,
+  getAlertIncidentTimelineCommandClass,
+  getAlertIncidentTimelineDetailClass,
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
   getAlertIncidentTimelineEventCardClass,
+  getAlertIncidentTimelineHeadingClass,
+  getAlertIncidentTimelineMetaRowClass,
+  getAlertIncidentTimelineOutputClass,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
@@ -5392,8 +5397,8 @@ function HistoryTab(props: {
                                           <Show when={incidentTimelines()[rowKey]}>
                                             {(timeline) => (
                                               <div class="space-y-3">
-                                                <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                                  <span class="font-medium text-base-content">
+                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
                                                     Incident
                                                   </span>
                                                   <span>{timeline().status}</span>
@@ -5446,8 +5451,8 @@ function HistoryTab(props: {
                                                                   'surface',
                                                                 )}
                                                               >
-                                                                <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                                                  <span class="font-medium text-base-content">
+                                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
                                                                     {event.summary}
                                                                   </span>
                                                                   <span>
@@ -5466,7 +5471,9 @@ function HistoryTab(props: {
                                                                     ).note
                                                                   }
                                                                 >
-                                                                  <p class="text-xs text-base-content mt-1">
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineDetailClass()}
+                                                                  >
                                                                     {
                                                                       (
                                                                         event.details as {
@@ -5486,7 +5493,9 @@ function HistoryTab(props: {
                                                                     ).command
                                                                   }
                                                                 >
-                                                                  <p class="text-xs text-base-content mt-1 font-mono">
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineCommandClass()}
+                                                                  >
                                                                     {
                                                                       (
                                                                         event.details as {
@@ -5506,7 +5515,9 @@ function HistoryTab(props: {
                                                                     ).output_excerpt
                                                                   }
                                                                 >
-                                                                  <p class="text-xs text-muted mt-1">
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineOutputClass()}
+                                                                  >
                                                                     {
                                                                       (
                                                                         event.details as {

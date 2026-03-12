@@ -230,3 +230,23 @@ export function getAlertIncidentNoteTextareaClass(): string {
 export function getAlertIncidentNoteSaveButtonClass(): string {
   return 'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed';
 }
+
+export function getAlertIncidentTimelineMetaRowClass(): string {
+  return 'flex flex-wrap items-center gap-2 text-xs text-muted';
+}
+
+export function getAlertIncidentTimelineHeadingClass(): string {
+  return 'font-medium text-base-content';
+}
+
+export function getAlertIncidentTimelineDetailClass(): string {
+  return 'mt-1 text-xs text-base-content';
+}
+
+export function getAlertIncidentTimelineCommandClass(): string {
+  return 'mt-1 font-mono text-xs text-base-content';
+}
+
+export function getAlertIncidentTimelineOutputClass(): string {
+  return 'mt-1 text-xs text-muted';
+}

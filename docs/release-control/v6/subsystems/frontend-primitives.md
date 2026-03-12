@@ -87,3 +87,8 @@ Alert incident acknowledged badges, event cards, and note-editor controls must
 also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
 instead of letting the alerts page and overview timeline maintain duplicate
 inline incident-detail styling.
+
+Alert incident meta-row and detail-text presentation must also route through
+`frontend-modern/src/utils/alertIncidentPresentation.ts` instead of letting
+the alerts page and overview timeline maintain duplicated inline incident
+typography rules.

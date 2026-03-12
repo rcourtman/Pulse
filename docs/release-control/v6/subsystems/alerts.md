@@ -75,3 +75,8 @@ Alert incident acknowledged badges, timeline event cards, and note-editor
 presentation now also route through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
 duplicated inline across the alerts page and overview timeline surfaces.
+
+Alert incident event meta rows and detail text treatments now also route
+through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
+keeping duplicate summary/detail typography inline in the alerts page and
+overview timelines.

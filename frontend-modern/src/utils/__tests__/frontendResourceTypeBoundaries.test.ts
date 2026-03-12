@@ -2049,6 +2049,11 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertIncidentTimelineEventCardClass');
     expect(alertsPageSource).toContain('getAlertIncidentNoteTextareaClass');
     expect(alertsPageSource).toContain('getAlertIncidentNoteSaveButtonClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineMetaRowClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineHeadingClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineDetailClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineCommandClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineOutputClass');
     expect(alertsPageSource).toContain('getAlertBucketCountLabel');
     expect(alertsPageSource).toContain('getAlertHistorySearchPlaceholder');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
@@ -2689,6 +2694,11 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineEventCardClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentNoteTextareaClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentNoteSaveButtonClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineMetaRowClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineHeadingClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineDetailClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineCommandClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineOutputClass');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
     expect(alertOverviewTabSource).not.toContain(
       'No timeline events match the selected filters.',
@@ -2734,6 +2744,21 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertIncidentNoteSaveButtonClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineMetaRowClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineHeadingClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineDetailClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineCommandClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineOutputClass',
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistoryEmptyState',

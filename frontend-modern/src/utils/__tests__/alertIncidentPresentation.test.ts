@@ -31,6 +31,11 @@ import {
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
   getAlertIncidentTimelineEventCardClass,
+  getAlertIncidentTimelineMetaRowClass,
+  getAlertIncidentTimelineHeadingClass,
+  getAlertIncidentTimelineDetailClass,
+  getAlertIncidentTimelineCommandClass,
+  getAlertIncidentTimelineOutputClass,
   normalizeAlertIncidentStatus,
 } from '@/utils/alertIncidentPresentation';
 
@@ -170,5 +175,12 @@ describe('alertIncidentPresentation', () => {
     expect(getAlertIncidentNoteSaveButtonClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
     );
+    expect(getAlertIncidentTimelineMetaRowClass()).toBe(
+      'flex flex-wrap items-center gap-2 text-xs text-muted',
+    );
+    expect(getAlertIncidentTimelineHeadingClass()).toBe('font-medium text-base-content');
+    expect(getAlertIncidentTimelineDetailClass()).toBe('mt-1 text-xs text-base-content');
+    expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
+    expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
   });
 });

@@ -28,9 +28,14 @@ import {
   getAlertIncidentEventFilterChipClass,
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
+  getAlertIncidentTimelineCommandClass,
+  getAlertIncidentTimelineDetailClass,
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
   getAlertIncidentTimelineEventCardClass,
+  getAlertIncidentTimelineHeadingClass,
+  getAlertIncidentTimelineMetaRowClass,
+  getAlertIncidentTimelineOutputClass,
   getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentSaveNoteLabel,
 } from '@/utils/alertIncidentPresentation';
@@ -697,8 +702,8 @@ export function OverviewTab(props: {
                         <Show when={incidentTimelines()[getCanonicalAlertId(alert)]}>
                           {(timeline) => (
                             <div class="space-y-3">
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                <span class="font-medium text-base-content">Incident</span>
+                              <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                <span class={getAlertIncidentTimelineHeadingClass()}>Incident</span>
                                 <span>{timeline().status}</span>
                                 <Show when={timeline().acknowledged}>
                                   <span class={getAlertIncidentAcknowledgedBadgeClass()}>
@@ -738,8 +743,8 @@ export function OverviewTab(props: {
                                             <div
                                               class={getAlertIncidentTimelineEventCardClass('alt')}
                                             >
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                                <span class="font-medium text-base-content">
+                                              <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                                <span class={getAlertIncidentTimelineHeadingClass()}>
                                                   {event.summary}
                                                 </span>
                                                 <span>
@@ -752,7 +757,7 @@ export function OverviewTab(props: {
                                                   (event.details as { note?: string }).note
                                                 }
                                               >
-                                                <p class="text-xs text-base-content mt-1">
+                                                <p class={getAlertIncidentTimelineDetailClass()}>
                                                   {(event.details as { note?: string }).note}
                                                 </p>
                                               </Show>
@@ -762,7 +767,7 @@ export function OverviewTab(props: {
                                                   (event.details as { command?: string }).command
                                                 }
                                               >
-                                                <p class="text-xs text-base-content mt-1 font-mono">
+                                                <p class={getAlertIncidentTimelineCommandClass()}>
                                                   {(event.details as { command?: string }).command}
                                                 </p>
                                               </Show>
@@ -773,7 +778,7 @@ export function OverviewTab(props: {
                                                     .output_excerpt
                                                 }
                                               >
-                                                <p class="text-xs text-muted mt-1">
+                                                <p class={getAlertIncidentTimelineOutputClass()}>
                                                   {
                                                     (event.details as { output_excerpt?: string })
                                                       .output_excerpt
