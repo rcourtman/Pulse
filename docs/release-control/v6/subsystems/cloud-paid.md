@@ -132,6 +132,10 @@ Hosted signup provisioning now follows the same rule. Changes to
 must carry this contract and the dedicated hosted-signup provisioning proof
 files instead of remaining a split boundary between API handlers and an
 unowned hosted runtime helper.
+That hosted signup boundary is now also canonical in shape: the public signup
+handler owns request validation, trial billing initialization, and magic-link
+issuance, while `internal/hosted/provisioner.go` owns the shared org
+bootstrap/admin-role assignment and rollback path for hosted signup failures.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.

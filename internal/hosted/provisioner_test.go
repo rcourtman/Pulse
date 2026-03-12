@@ -19,6 +19,8 @@ type mockAuthProvider struct {
 	err       error
 	calls     int
 	lastOrgID string
+	removeErr error
+	removeIDs []string
 }
 
 func (m *mockAuthProvider) GetManager(orgID string) (AuthManager, error) {
@@ -28,6 +30,11 @@ func (m *mockAuthProvider) GetManager(orgID string) (AuthManager, error) {
 		return nil, m.err
 	}
 	return m.manager, nil
+}
+
+func (m *mockAuthProvider) RemoveTenant(orgID string) error {
+	m.removeIDs = append(m.removeIDs, orgID)
+	return m.removeErr
 }
 
 type mockAuthManager struct {
@@ -339,11 +346,62 @@ func TestProvisionTenantPartialFailureRollback(t *testing.T) {
 	if !errors.As(err, &systemErr) {
 		t.Fatalf("expected SystemError, got %T (%v)", err, err)
 	}
+	if len(authProvider.removeIDs) != 1 || authProvider.removeIDs[0] != "rollback-org" {
+		t.Fatalf("expected RemoveTenant rollback for rollback-org, got %v", authProvider.removeIDs)
+	}
 
 	orgDir := filepath.Join(baseDir, "orgs", "rollback-org")
 	_, statErr := os.Stat(orgDir)
 	if !os.IsNotExist(statErr) {
 		t.Fatalf("expected org dir to be removed, stat error: %v", statErr)
+	}
+}
+
+func TestProvisionHostedSignupSuccess(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newOrgID = func() string { return "org-hosted-signup" }
+	provisioner.now = func() time.Time { return time.Unix(1700000100, 0).UTC() }
+
+	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
+		Email:   " owner@example.com ",
+		OrgName: "My Organization",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionHostedSignup returned error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Status != ProvisionStatusCreated {
+		t.Fatalf("expected status %q, got %q", ProvisionStatusCreated, result.Status)
+	}
+	if result.OrgID != "org-hosted-signup" {
+		t.Fatalf("expected org ID org-hosted-signup, got %q", result.OrgID)
+	}
+	if result.UserID != "owner@example.com" {
+		t.Fatalf("expected normalized user ID owner@example.com, got %q", result.UserID)
+	}
+
+	org, err := persistence.LoadOrganization("org-hosted-signup")
+	if err != nil {
+		t.Fatalf("LoadOrganization returned error: %v", err)
+	}
+	if org.DisplayName != "My Organization" {
+		t.Fatalf("expected org display name My Organization, got %q", org.DisplayName)
+	}
+	if org.OwnerUserID != "owner@example.com" {
+		t.Fatalf("expected owner owner@example.com, got %q", org.OwnerUserID)
+	}
+	if authProvider.calls != 1 || authProvider.lastOrgID != "org-hosted-signup" {
+		t.Fatalf("expected auth manager lookup for org-hosted-signup, got calls=%d org=%q", authProvider.calls, authProvider.lastOrgID)
+	}
+	if authManager.calls != 1 || authManager.lastUser != "owner@example.com" {
+		t.Fatalf("expected admin role assignment for owner@example.com, got calls=%d user=%q", authManager.calls, authManager.lastUser)
 	}
 }
 

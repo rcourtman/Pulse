@@ -2,20 +2,15 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
 
-	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"github.com/rs/zerolog/log"
 )
 
 const hostedSignupRequestBodyLimit = 64 * 1024
@@ -112,55 +107,48 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		return
 	}
 
-	orgID := uuid.NewString()
-	userID := req.Email
+	baseURL := ""
+	if h.publicURL != nil {
+		baseURL = strings.TrimSpace(h.publicURL(r))
+	}
+	if baseURL == "" {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "public_url_missing", "Public URL is not configured", nil)
+		return
+	}
+
+	provisioner := hosted.NewProvisioner(h.persistence, hosted.NewTenantRBACAuthProvider(h.rbacProvider))
+	result, err := provisioner.ProvisionHostedSignup(r.Context(), hosted.HostedSignupRequest{
+		Email:   req.Email,
+		OrgName: req.OrgName,
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "create_failed"
+		message := "Failed to create organization"
+		if hosted.IsValidationError(err) {
+			status = http.StatusBadRequest
+			code = "invalid_request"
+			message = "Invalid signup request"
+		}
+		writeErrorResponse(w, status, code, message, nil)
+		return
+	}
+
+	orgID := result.OrgID
+	userID := result.UserID
 
 	var cleanupOnce sync.Once
 	cleanupProvisioning := func() {
 		cleanupOnce.Do(func() {
 			hosted.GetHostedMetrics().RecordProvisionStatus(hosted.ProvisionMetricStatusFailure)
-
-			// Best-effort cleanup: close/remove RBAC manager first to avoid lingering DB handles.
-			if err := h.rbacProvider.RemoveTenant(orgID); err != nil {
-				log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted signup cleanup: failed to remove RBAC tenant")
-			}
-			if err := h.persistence.DeleteOrganization(orgID); err != nil && !errors.Is(err, os.ErrNotExist) {
-				log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted signup cleanup: failed to delete org directory")
-			}
+			provisioner.RollbackProvisioning(orgID)
 		})
-	}
-
-	// Force tenant directory creation using the same EnsureConfigDir-backed path as multi-tenant persistence.
-	if _, err := h.persistence.GetPersistence(orgID); err != nil {
-		cleanupProvisioning()
-		writeErrorResponse(w, http.StatusInternalServerError, "tenant_init_failed", "Failed to initialize tenant data directory", nil)
-		return
-	}
-
-	now := time.Now().UTC()
-	org := &models.Organization{
-		ID:          orgID,
-		DisplayName: req.OrgName,
-		CreatedAt:   now,
-		OwnerUserID: userID,
-		Members: []models.OrganizationMember{
-			{
-				UserID:  userID,
-				Role:    models.OrgRoleOwner,
-				AddedAt: now,
-				AddedBy: userID,
-			},
-		},
-	}
-	if err := h.persistence.SaveOrganization(org); err != nil {
-		cleanupProvisioning()
-		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
-		return
 	}
 
 	// Seed trial billing state so the tenant is usable immediately (before Stripe checkout completes).
 	// Stripe webhook will overwrite this with active subscription state on successful checkout.
 	if h.billingStore != nil {
+		now := time.Now().UTC()
 		trialState := buildTrialBillingStateWithPlanFromLicensing(
 			now,
 			cloudCapabilitiesFromLicensing(),
@@ -174,34 +162,11 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		}
 	}
 
-	authManager, err := h.rbacProvider.GetManager(orgID)
-	if err != nil {
-		cleanupProvisioning()
-		writeErrorResponse(w, http.StatusInternalServerError, "auth_unavailable", "Failed to initialize organization auth manager", nil)
-		return
-	}
-	if err := authManager.UpdateUserRoles(userID, []string{auth.RoleAdmin}); err != nil {
-		cleanupProvisioning()
-		writeErrorResponse(w, http.StatusInternalServerError, "user_create_failed", "Failed to create admin user", nil)
-		return
-	}
-
 	// Issue a magic link for passwordless sign-in.
 	token, err := h.magicLinks.GenerateToken(userID, orgID)
 	if err != nil {
 		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "magic_link_failed", "Failed to generate magic link", nil)
-		return
-	}
-	baseURL := ""
-	if h.publicURL != nil {
-		baseURL = h.publicURL(r)
-	}
-	if baseURL == "" {
-		// Hosted mode must have a configured canonical URL for external links.
-		// Never fall back to request Host header (host header injection risk).
-		cleanupProvisioning()
-		writeErrorResponse(w, http.StatusServiceUnavailable, "public_url_missing", "Public URL is not configured", nil)
 		return
 	}
 	if err := h.magicLinks.SendMagicLink(userID, orgID, token, baseURL); err != nil {

@@ -173,6 +173,27 @@ func TestContract_ApprovalJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
+	payload := hostedSignupResponse{
+		OrgID:   "org-123",
+		UserID:  "owner@example.com",
+		Message: "Check your email for a magic link to finish signing in.",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal hosted signup response: %v", err)
+	}
+
+	const want = `{
+		"org_id":"org-123",
+		"user_id":"owner@example.com",
+		"message":"Check your email for a magic link to finish signing in."
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 	cases := []struct {
 		name  string

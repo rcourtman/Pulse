@@ -46,6 +46,10 @@ type orgRollbackDeleter interface {
 	DeleteOrganization(orgID string) error
 }
 
+type authRollbackDeleter interface {
+	RemoveTenant(orgID string) error
+}
+
 type Provisioner struct {
 	persistence  OrgPersistence
 	authProvider AuthProvider
@@ -57,6 +61,11 @@ type ProvisionRequest struct {
 	Email    string
 	Password string
 	OrgName  string
+}
+
+type HostedSignupRequest struct {
+	Email   string
+	OrgName string
 }
 
 type ProvisionResult struct {
@@ -110,19 +119,11 @@ func NewProvisioner(persistence OrgPersistence, authProvider AuthProvider) *Prov
 }
 
 func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest) (*ProvisionResult, error) {
-	if p == nil {
-		return nil, &SystemError{Op: "initialize_provisioner", Err: errors.New("provisioner is nil")}
-	}
-	if p.persistence == nil {
-		return nil, &SystemError{Op: "initialize_provisioner", Err: errors.New("org persistence is nil")}
-	}
-	if p.authProvider == nil {
-		return nil, &SystemError{Op: "initialize_provisioner", Err: errors.New("auth provider is nil")}
+	if err := p.ensureReady(); err != nil {
+		return nil, err
 	}
 
-	req.Email = strings.TrimSpace(req.Email)
-	req.Email = strings.ToLower(req.Email)
-	req.OrgName = strings.TrimSpace(req.OrgName)
+	req = normalizeProvisionRequest(req)
 	if err := validateProvisionRequest(req); err != nil {
 		return nil, err
 	}
@@ -148,7 +149,70 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 	}
 
 	orgID := p.newOrgID()
+	return p.createOrganization(ctx, orgID, req.Email, req.OrgName)
+}
 
+func (p *Provisioner) ProvisionHostedSignup(ctx context.Context, req HostedSignupRequest) (*ProvisionResult, error) {
+	if err := p.ensureReady(); err != nil {
+		return nil, err
+	}
+
+	req = normalizeHostedSignupRequest(req)
+	if err := validateHostedSignupRequest(req); err != nil {
+		return nil, err
+	}
+	if err := contextErr(ctx); err != nil {
+		return nil, err
+	}
+
+	return p.createOrganization(ctx, p.newOrgID(), req.Email, req.OrgName)
+}
+
+func (p *Provisioner) RollbackProvisioning(orgID string) {
+	if p == nil {
+		return
+	}
+
+	if remover, ok := p.authProvider.(authRollbackDeleter); ok && remover != nil {
+		if err := remover.RemoveTenant(orgID); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Warn().
+				Err(err).
+				Str("org_id", orgID).
+				Msg("Hosted tenant rollback: failed to remove auth tenant")
+		}
+	}
+
+	if deleter, ok := p.persistence.(orgRollbackDeleter); ok && deleter != nil {
+		p.cleanupOrgDirectory(orgID, "")
+		return
+	}
+
+	tenantPersistence, err := p.persistence.GetPersistence(orgID)
+	if err != nil || tenantPersistence == nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Msg("Hosted tenant rollback: failed to resolve tenant persistence")
+		return
+	}
+
+	p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+}
+
+func (p *Provisioner) ensureReady() error {
+	if p == nil {
+		return &SystemError{Op: "initialize_provisioner", Err: errors.New("provisioner is nil")}
+	}
+	if p.persistence == nil {
+		return &SystemError{Op: "initialize_provisioner", Err: errors.New("org persistence is nil")}
+	}
+	if p.authProvider == nil {
+		return &SystemError{Op: "initialize_provisioner", Err: errors.New("auth provider is nil")}
+	}
+	return nil
+}
+
+func (p *Provisioner) createOrganization(ctx context.Context, orgID, userID, orgName string) (*ProvisionResult, error) {
 	tenantPersistence, err := p.persistence.GetPersistence(orgID)
 	if err != nil {
 		return nil, &SystemError{Op: "initialize_tenant_directory", Err: err}
@@ -157,51 +221,51 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 		return nil, &SystemError{Op: "initialize_tenant_directory", Err: errors.New("tenant persistence is nil")}
 	}
 	if err := contextErr(ctx); err != nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+		p.RollbackProvisioning(orgID)
 		return nil, err
 	}
 
 	now := p.now().UTC()
 	org := &models.Organization{
 		ID:          orgID,
-		DisplayName: req.OrgName,
+		DisplayName: orgName,
 		CreatedAt:   now,
-		OwnerUserID: req.Email,
+		OwnerUserID: userID,
 		Members: []models.OrganizationMember{
 			{
-				UserID:  req.Email,
+				UserID:  userID,
 				Role:    models.OrgRoleOwner,
 				AddedAt: now,
-				AddedBy: req.Email,
+				AddedBy: userID,
 			},
 		},
 	}
 	if err := p.persistence.SaveOrganization(org); err != nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+		p.RollbackProvisioning(orgID)
 		return nil, &SystemError{Op: "save_organization", Err: err}
 	}
 	if err := contextErr(ctx); err != nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+		p.RollbackProvisioning(orgID)
 		return nil, err
 	}
 
 	authManager, err := p.authProvider.GetManager(orgID)
 	if err != nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+		p.RollbackProvisioning(orgID)
 		return nil, &SystemError{Op: "get_auth_manager", Err: err}
 	}
 	if authManager == nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+		p.RollbackProvisioning(orgID)
 		return nil, &SystemError{Op: "get_auth_manager", Err: errors.New("auth manager is nil")}
 	}
-	if err := authManager.UpdateUserRoles(req.Email, []string{auth.RoleAdmin}); err != nil {
-		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
+	if err := authManager.UpdateUserRoles(userID, []string{auth.RoleAdmin}); err != nil {
+		p.RollbackProvisioning(orgID)
 		return nil, &SystemError{Op: "create_admin_user", Err: err}
 	}
 
 	return &ProvisionResult{
 		OrgID:  orgID,
-		UserID: req.Email,
+		UserID: userID,
 		Status: ProvisionStatusCreated,
 	}, nil
 }
@@ -277,8 +341,11 @@ func isSafeTenantDataDir(dataDir, orgID string) bool {
 }
 
 func validateProvisionRequest(req ProvisionRequest) error {
-	if !isValidSignupEmail(req.Email) {
-		return &ValidationError{Field: "email", Message: "invalid email format"}
+	if err := validateHostedSignupRequest(HostedSignupRequest{
+		Email:   req.Email,
+		OrgName: req.OrgName,
+	}); err != nil {
+		return err
 	}
 	if len(req.Password) < 8 {
 		return &ValidationError{Field: "password", Message: "password must be at least 8 characters"}
@@ -286,10 +353,29 @@ func validateProvisionRequest(req ProvisionRequest) error {
 	if len(req.Password) > maxHostedSignupPasswordLength {
 		return &ValidationError{Field: "password", Message: "password exceeds maximum length"}
 	}
+	return nil
+}
+
+func validateHostedSignupRequest(req HostedSignupRequest) error {
+	if !isValidSignupEmail(req.Email) {
+		return &ValidationError{Field: "email", Message: "invalid email format"}
+	}
 	if !isValidHostedOrgName(req.OrgName) {
 		return &ValidationError{Field: "org_name", Message: "invalid organization name"}
 	}
 	return nil
+}
+
+func normalizeProvisionRequest(req ProvisionRequest) ProvisionRequest {
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.OrgName = strings.TrimSpace(req.OrgName)
+	return req
+}
+
+func normalizeHostedSignupRequest(req HostedSignupRequest) HostedSignupRequest {
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.OrgName = strings.TrimSpace(req.OrgName)
+	return req
 }
 
 func isValidSignupEmail(email string) bool {
@@ -374,4 +460,15 @@ func (a *tenantRBACAdapter) GetManager(orgID string) (AuthManager, error) {
 		return nil, errors.New("tenant RBAC provider is nil")
 	}
 	return a.provider.GetManager(orgID)
+}
+
+func (a *tenantRBACAdapter) RemoveTenant(orgID string) error {
+	if a == nil || a.provider == nil {
+		return errors.New("tenant RBAC provider is nil")
+	}
+	remover, ok := a.provider.(authRollbackDeleter)
+	if !ok || remover == nil {
+		return nil
+	}
+	return remover.RemoveTenant(orgID)
 }

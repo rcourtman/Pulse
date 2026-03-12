@@ -38,16 +38,19 @@ result.
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
 - Manual scenario:
   1. Start a hosted signup from the self-hosted trial/upgrade path.
-  2. Confirm the user is sent to hosted checkout instead of receiving a local
+  2. Confirm a missing hosted public URL fails closed before any org or RBAC
+     tenant is created.
+  3. Confirm the user is sent to hosted checkout instead of receiving a local
      entitlement immediately.
-  3. Confirm unresolved org linkage fails closed on webhook handling.
-  4. Replay the same webhook after the linked org exists and confirm it
+  4. Confirm unresolved org linkage fails closed on webhook handling.
+  5. Replay the same webhook after the linked org exists and confirm it
      succeeds.
-  5. Confirm billing-admin state reflects the resulting org/subscription state.
+  6. Confirm billing-admin state reflects the resulting org/subscription state.
 - Pass when:
-  Hosted signup creates the correct org, webhook replay is fail-closed before
-  linkage and succeeds after linkage, and the UI shows the resulting state
-  coherently.
+  Hosted signup fails closed before provisioning when required external URL
+  config is missing, creates the correct org when enabled, webhook replay is
+  fail-closed before linkage and succeeds after linkage, and the UI shows the
+  resulting state coherently.
 - Block release if:
   Any hosted checkout, org linkage, magic-link, billing-admin, or webhook
   replay path is unconfirmed or inconsistent.

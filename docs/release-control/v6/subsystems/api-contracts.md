@@ -192,3 +192,8 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.
+Hosted signup handler payload flow now also follows an explicit shared
+boundary: `internal/api/public_signup_handlers.go` owns request/response and
+magic-link payload semantics, while `internal/hosted/provisioner.go` owns the
+shared org bootstrap and rollback mechanics that the hosted signup handler
+invokes.

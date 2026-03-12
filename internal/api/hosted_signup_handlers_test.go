@@ -263,6 +263,14 @@ func TestHostedSignupFailsClosedWithoutPublicURL(t *testing.T) {
 		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
 
+	orgs, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list orgs after public-url failure: %v", err)
+	}
+	if len(orgs) != 1 || orgs[0].ID != "default" {
+		t.Fatalf("expected no provisioned orgs when public URL is missing, got %+v", orgs)
+	}
+
 	emailer.mu.Lock()
 	defer emailer.mu.Unlock()
 	if emailer.calls != 0 {
