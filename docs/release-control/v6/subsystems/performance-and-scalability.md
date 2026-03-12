@@ -25,8 +25,9 @@ regression protection.
 3. `pkg/metrics/store_slo_test.go`
 4. `internal/api/slo.go`
 5. `internal/api/slo_bench_test.go`
-6. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-7. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
+7. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+8. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -61,7 +62,11 @@ All governed performance-owned runtime files now require explicit registry
 path-policy coverage, so new protected hot paths must be mapped to a concrete
 proof route instead of falling back to subsystem-default verification.
 
-The dashboard workload selector path is now part of the protected performance
-surface rather than proof-only context. Future hot-path filter/group/sort
-changes must route through the explicit dashboard performance proof policy in
-the subsystem registry.
+The dashboard workload selector path and the dashboard runtime that consumes it
+are now part of the protected performance surface rather than proof-only
+context. Future hot-path filter/group/sort/windowing changes must route through
+the explicit dashboard performance proof policy in the subsystem registry.
+
+The remaining top-level performance gap is no longer the main dashboard
+workload path. It is the adjacent fleet-scale surfaces that still sit outside
+explicit performance ownership, such as unified resource table hot paths.

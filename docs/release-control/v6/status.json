@@ -292,6 +292,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
           "kind": "file"
         },

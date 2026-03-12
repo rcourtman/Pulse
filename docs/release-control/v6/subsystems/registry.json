@@ -771,6 +771,7 @@
         "pkg/metrics/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Dashboard/Dashboard.tsx",
         "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
@@ -809,6 +810,7 @@
             "label": "dashboard workload selector proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Dashboard/Dashboard.tsx",
               "frontend-modern/src/components/Dashboard/workloadSelectors.ts"
             ],
             "allow_same_subsystem_tests": false,
