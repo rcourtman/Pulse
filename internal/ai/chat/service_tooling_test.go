@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type fakeStateProvider struct{}
@@ -28,6 +29,25 @@ func (f fakeAgentServer) ExecuteCommand(ctx context.Context, agentID string, cmd
 	return &agentexec.CommandResultPayload{Stdout: "ok", ExitCode: 0}, nil
 }
 
+type fakeCanonicalReadState struct{}
+
+func (f *fakeCanonicalReadState) VMs() []*ur.VMView                           { return nil }
+func (f *fakeCanonicalReadState) Containers() []*ur.ContainerView             { return nil }
+func (f *fakeCanonicalReadState) Nodes() []*ur.NodeView                       { return nil }
+func (f *fakeCanonicalReadState) Hosts() []*ur.HostView                       { return nil }
+func (f *fakeCanonicalReadState) DockerHosts() []*ur.DockerHostView           { return nil }
+func (f *fakeCanonicalReadState) DockerContainers() []*ur.DockerContainerView { return nil }
+func (f *fakeCanonicalReadState) StoragePools() []*ur.StoragePoolView         { return nil }
+func (f *fakeCanonicalReadState) PhysicalDisks() []*ur.PhysicalDiskView       { return nil }
+func (f *fakeCanonicalReadState) PBSInstances() []*ur.PBSInstanceView         { return nil }
+func (f *fakeCanonicalReadState) PMGInstances() []*ur.PMGInstanceView         { return nil }
+func (f *fakeCanonicalReadState) K8sClusters() []*ur.K8sClusterView           { return nil }
+func (f *fakeCanonicalReadState) K8sNodes() []*ur.K8sNodeView                 { return nil }
+func (f *fakeCanonicalReadState) Pods() []*ur.PodView                         { return nil }
+func (f *fakeCanonicalReadState) K8sDeployments() []*ur.K8sDeploymentView     { return nil }
+func (f *fakeCanonicalReadState) Workloads() []*ur.WorkloadView               { return nil }
+func (f *fakeCanonicalReadState) Infrastructure() []*ur.InfrastructureView    { return nil }
+
 func toolNameSet(list []providers.Tool) map[string]bool {
 	set := make(map[string]bool, len(list))
 	for _, tool := range list {
@@ -40,6 +60,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
 		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
 		ControlLevel:  tools.ControlLevelControlled,
 	})
 
