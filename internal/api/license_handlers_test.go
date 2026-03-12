@@ -1010,6 +1010,91 @@ func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 	}
 }
 
+func TestRequireLicenseFeature_HostedEntitlementsBlockMissingFeature(t *testing.T) {
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	orgID := "hosted-free"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(tempDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+		},
+		Limits:            map[string]int64{},
+		PlanVersion:       "community",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	handler := NewLicenseHandlers(mtp, true)
+
+	handlerCalled := false
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIAlerts, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, rec.Code)
+	}
+	if handlerCalled {
+		t.Fatalf("expected handler not to be called when hosted entitlements are missing the feature")
+	}
+}
+
+func TestRequireLicenseFeature_HostedEntitlementsAllowGrantedFeature(t *testing.T) {
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	orgID := "hosted-pro"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(tempDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+			license.FeatureAIAlerts,
+		},
+		Limits:            map[string]int64{},
+		PlanVersion:       "pro",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	handler := NewLicenseHandlers(mtp, true)
+
+	handlerCalled := false
+	wrappedHandler := RequireLicenseFeature(handler, license.FeatureAIAlerts, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !handlerCalled {
+		t.Fatalf("expected handler to be called when hosted entitlements grant the feature")
+	}
+}
+
 // ========================================
 // LicenseGatedEmptyResponse middleware tests
 // ========================================
@@ -1075,5 +1160,57 @@ func TestLicenseGatedEmptyResponse_WithLicense(t *testing.T) {
 	}
 	if rec.Body.String() != `{"data":"real"}` {
 		t.Fatalf("expected real data, got %s", rec.Body.String())
+	}
+}
+
+func TestLicenseGatedEmptyResponse_HostedEntitlementsReturnEmptyArrayWhenLocked(t *testing.T) {
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	orgID := "hosted-empty-response"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(tempDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+		},
+		Limits:            map[string]int64{},
+		PlanVersion:       "community",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	handler := NewLicenseHandlers(mtp, true)
+
+	handlerCalled := false
+	wrappedHandler := LicenseGatedEmptyResponse(handler, license.FeatureAIAlerts, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":"real"}`))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if handlerCalled {
+		t.Fatalf("expected handler not to be called when hosted entitlements are missing the feature")
+	}
+	if rec.Header().Get("X-License-Required") != "true" {
+		t.Fatalf("expected X-License-Required header to be true, got %q", rec.Header().Get("X-License-Required"))
+	}
+	if rec.Header().Get("X-License-Feature") != license.FeatureAIAlerts {
+		t.Fatalf("expected X-License-Feature %q, got %q", license.FeatureAIAlerts, rec.Header().Get("X-License-Feature"))
+	}
+	if rec.Body.String() != "[]" {
+		t.Fatalf("expected empty array [], got %s", rec.Body.String())
 	}
 }

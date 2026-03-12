@@ -69,6 +69,7 @@ result.
   `internal/cloudcp/entitlements/service.go`
   `pkg/licensing/entitlements.go`
 - Automated proof:
+  `go test ./internal/api -run 'TestEntitlementHandler_|TestRequireLicenseFeature_HostedEntitlements|TestLicenseGatedEmptyResponse_HostedEntitlements' -count=1`
   `go test ./internal/license/... -count=1`
   `go test ./internal/cloudcp/... -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/AIIntelligence.test.tsx src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx src/components/shared/__tests__/AgentLimitWarningBanner.test.tsx src/utils/__tests__/licensePresentation.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
