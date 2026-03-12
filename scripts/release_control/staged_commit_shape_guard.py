@@ -13,7 +13,10 @@ from canonical_completion_guard import (
     staged_contract_has_substantive_change,
     staged_verification_files_for_requirement,
 )
-from release_promotion_policy_support import staged_governance_input_errors
+from release_promotion_policy_support import (
+    slice_requires_staged_governance_inputs,
+    staged_governance_input_errors,
+)
 
 
 def git_staged_files() -> list[str]:
@@ -66,7 +69,9 @@ def canonical_commit_shape_errors(staged_files: Sequence[str]) -> list[str]:
     ]
 
 
-def staged_promotion_proof_errors() -> list[str]:
+def staged_promotion_proof_errors(staged_files: Sequence[str]) -> list[str]:
+    if not slice_requires_staged_governance_inputs(staged_files):
+        return []
     errors = staged_governance_input_errors(use_staged_governance=True)
     if not errors:
         return []
@@ -86,7 +91,7 @@ def format_combined_errors(errors: Sequence[str]) -> str:
 def main() -> int:
     staged_files = git_staged_files()
     errors = canonical_commit_shape_errors(staged_files)
-    errors.extend(staged_promotion_proof_errors())
+    errors.extend(staged_promotion_proof_errors(staged_files))
     if not errors:
         print("Staged commit shape guard passed.")
         return 0

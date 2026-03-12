@@ -11,9 +11,12 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
         with patch(
             "staged_commit_shape_guard.staged_governance_input_errors",
             return_value=["stage the canonical promotion proof inputs:\n- docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md"],
+        ), patch(
+            "staged_commit_shape_guard.slice_requires_staged_governance_inputs",
+            return_value=True,
         ):
             self.assertEqual(
-                staged_promotion_proof_errors(),
+                staged_promotion_proof_errors([".github/workflows/release-dry-run.yml"]),
                 [
                     "BLOCKED: staged promotion proof inputs are incomplete.\n\n"
                     "Required staged promotion inputs:\n"
@@ -21,6 +24,19 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                     "  - docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md"
                 ],
             )
+
+    def test_staged_promotion_proof_errors_skip_unrelated_slices(self) -> None:
+        with patch(
+            "staged_commit_shape_guard.slice_requires_staged_governance_inputs",
+            return_value=False,
+        ), patch(
+            "staged_commit_shape_guard.staged_governance_input_errors",
+        ) as staged_governance_input_errors:
+            self.assertEqual(
+                staged_promotion_proof_errors(["scripts/release_control/verify_commit_slice.py"]),
+                [],
+            )
+            staged_governance_input_errors.assert_not_called()
 
     def test_format_combined_errors_joins_blocks_with_blank_line(self) -> None:
         self.assertEqual(

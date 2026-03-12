@@ -1,10 +1,34 @@
 import unittest
 from unittest.mock import patch
 
-from release_promotion_policy_support import staged_governance_input_errors
+from release_promotion_policy_support import (
+    slice_requires_staged_governance_inputs,
+    staged_governance_input_errors,
+)
 
 
 class ReleasePromotionPolicySupportTest(unittest.TestCase):
+    def test_slice_requires_staged_governance_inputs_for_promotion_paths(self) -> None:
+        self.assertTrue(
+            slice_requires_staged_governance_inputs(
+                [
+                    ".github/workflows/release-dry-run.yml",
+                    "scripts/other_helper.py",
+                ]
+            )
+        )
+
+    def test_slice_skips_staged_governance_inputs_for_unrelated_paths(self) -> None:
+        self.assertFalse(
+            slice_requires_staged_governance_inputs(
+                [
+                    "scripts/release_control/release_promotion_policy_support.py",
+                    "scripts/release_control/verify_commit_slice.py",
+                    "scripts/release_control/verify_commit_slice_test.py",
+                ]
+            )
+        )
+
     def test_returns_no_errors_when_not_using_staged_governance(self) -> None:
         self.assertEqual(staged_governance_input_errors(use_staged_governance=False), [])
 

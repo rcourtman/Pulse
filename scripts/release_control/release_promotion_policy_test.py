@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import unittest
 
-from release_promotion_policy_support import staged_governance_input_errors
-from repo_file_io import read_repo_text
+from release_promotion_policy_support import (
+    slice_requires_staged_governance_inputs,
+    staged_governance_input_errors,
+)
+from repo_file_io import REPO_ROOT, git_env, read_repo_text
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
@@ -19,13 +23,32 @@ def read(rel: str) -> str:
         strict_staged=USE_STAGED_GOVERNANCE,
     )
 
-STAGED_GOVERNANCE_INPUT_ERRORS = tuple(
-    staged_governance_input_errors(use_staged_governance=USE_STAGED_GOVERNANCE)
+
+def staged_files() -> tuple[str, ...]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_env(),
+    )
+    return tuple(line for line in result.stdout.splitlines() if line.strip())
+
+
+STAGED_FILES = staged_files() if USE_STAGED_GOVERNANCE else ()
+REQUIRES_STAGED_GOVERNANCE_INPUTS = slice_requires_staged_governance_inputs(STAGED_FILES)
+STAGED_GOVERNANCE_INPUT_ERRORS = (
+    tuple(staged_governance_input_errors(use_staged_governance=True))
+    if REQUIRES_STAGED_GOVERNANCE_INPUTS
+    else ()
 )
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):
     def setUp(self) -> None:
+        if USE_STAGED_GOVERNANCE and not REQUIRES_STAGED_GOVERNANCE_INPUTS:
+            self.skipTest("staged slice does not touch the promotion-proof surface")
         if (
             STAGED_GOVERNANCE_INPUT_ERRORS
             and self._testMethodName != "test_staged_governance_inputs_are_present"
