@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Page, expect } from '@playwright/test';
+import { Browser, Page, expect } from '@playwright/test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const runtimeStatePath = path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
@@ -216,10 +216,39 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     throw new Error(`Login did not render and did not redirect (url=${url}, body="${preview}")`);
   }
 
+  const loginErrorText = page.locator(
+    'text=/Invalid username or password|Too many requests|Account locked|Failed to connect to server|Server error/i',
+  ).first();
+
   await page.fill('input[name="username"]', credentials.username);
   await page.fill('input[name="password"]', credentials.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(authenticatedURL);
+
+  await expect.poll(
+    async () => {
+      const url = page.url();
+      if (authenticatedURL.test(url)) {
+        return 'authenticated';
+      }
+
+      const loginErrorVisible = await loginErrorText.isVisible().catch(() => false);
+      if (loginErrorVisible) {
+        const message = ((await loginErrorText.textContent()) || 'login_error').trim();
+        return `error:${message}`;
+      }
+
+      const stillShowingLogin = await usernameInput.isVisible().catch(() => false);
+      if (stillShowingLogin) {
+        return 'login';
+      }
+
+      return 'pending';
+    },
+    {
+      timeout: 30_000,
+      message: 'Timed out waiting for authenticated app state after login submission',
+    },
+  ).toBe('authenticated');
 }
 
 /**
@@ -244,6 +273,26 @@ export async function ensureAuthenticated(page: Page) {
   await maybeCompleteSetupWizard(page);
   await login(page);
   await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/);
+}
+
+export async function createAuthenticatedStorageState(
+  browser: Browser,
+  storageStatePath: string,
+): Promise<void> {
+  const context = await browser.newContext({
+    baseURL:
+      process.env.PULSE_BASE_URL ||
+      process.env.PLAYWRIGHT_BASE_URL ||
+      runtimeBaseURL() ||
+      'http://localhost:7655',
+  });
+  const page = await context.newPage();
+  try {
+    await ensureAuthenticated(page);
+    await context.storageState({ path: storageStatePath });
+  } finally {
+    await context.close();
+  }
 }
 
 export async function logout(page: Page) {

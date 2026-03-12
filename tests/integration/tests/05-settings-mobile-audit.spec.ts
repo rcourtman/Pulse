@@ -1,5 +1,13 @@
-import { test, expect } from '@playwright/test';
-import { ensureAuthenticated } from './helpers';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test as base, expect } from '@playwright/test';
+import { createAuthenticatedStorageState } from './helpers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+type WorkerFixtures = {
+    authStorageStatePath: string;
+};
 
 const SETTINGS_ROUTES = [
     '/settings/infrastructure',
@@ -32,6 +40,29 @@ const SETTINGS_ROUTES = [
     '/settings/security-audit',
     '/settings/security-webhooks',
 ] as const;
+
+const test = base.extend<{}, WorkerFixtures>({
+    storageState: async ({ authStorageStatePath }, use) => {
+        await use(authStorageStatePath);
+    },
+    authStorageStatePath: [async ({ browser }, use, workerInfo) => {
+        const storageStatePath = path.resolve(
+            __dirname,
+            '..',
+            '..',
+            'tmp',
+            'playwright-auth',
+            `settings-mobile-audit-${workerInfo.project.name}.json`,
+        );
+        fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+        await createAuthenticatedStorageState(browser, storageStatePath);
+        try {
+            await use(storageStatePath);
+        } finally {
+            fs.rmSync(storageStatePath, { force: true });
+        }
+    }, { scope: 'worker' }],
+});
 
 type OverflowAudit = {
     viewportWidth: number;
@@ -97,9 +128,7 @@ const scrollToBottom = async (page: import('@playwright/test').Page): Promise<vo
 };
 
 test.describe('Settings mobile optimization audit', () => {
-    test.beforeEach(async ({ page }) => {
-        await ensureAuthenticated(page);
-    });
+    test.setTimeout(180_000);
 
     for (const route of SETTINGS_ROUTES) {
         test(`no horizontal overflow after full scroll on ${route}`, async ({ page }) => {
