@@ -71,7 +71,7 @@ result.
 - Automated proof:
   `go test ./internal/license/... -count=1`
   `go test ./internal/cloudcp/... -count=1`
-  `cd frontend-modern && npx vitest run src/utils/__tests__/licensePresentation.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
+  `cd frontend-modern && npx vitest run src/pages/__tests__/AIIntelligence.test.tsx src/utils/__tests__/licensePresentation.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
 - Manual scenario:
   1. Use a free/community entitlement state and confirm paid features are gated.
   2. Use a Pro/Cloud entitlement state and confirm the same surfaces unlock.
