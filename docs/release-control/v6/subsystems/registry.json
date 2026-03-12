@@ -892,7 +892,8 @@
         "internal/monitoring/"
       ],
       "owned_files": [
-        "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+        "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "scripts/install.sh"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -945,6 +946,19 @@
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/send_report_test.go"
+            ]
+          },
+          {
+            "id": "unified-agent-installer-runtime",
+            "label": "unified agent installer runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/install_sh_test.go"
             ]
           },
           {

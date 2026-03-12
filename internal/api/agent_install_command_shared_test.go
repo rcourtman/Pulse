@@ -31,6 +31,19 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
 }
 
+func TestBuildProxmoxAgentInstallCommand_IncludesInsecureForPlainHTTP(t *testing.T) {
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            "http://pulse.example.com:7655/",
+		Token:              "token-123",
+		InstallType:        "pve",
+		IncludeInstallType: true,
+	})
+
+	require.Contains(t, command, posixShellQuote("http://pulse.example.com:7655/install.sh"))
+	require.Contains(t, command, "--url "+posixShellQuote("http://pulse.example.com:7655"))
+	require.Contains(t, command, "--insecure")
+}
+
 func TestBuildProxmoxAgentInstallCommand_ShellEscapesArguments(t *testing.T) {
 	baseURL := "https://pulse.example.com' && touch /tmp/pwned #"
 	token := "tok'en"
@@ -45,6 +58,13 @@ func TestBuildProxmoxAgentInstallCommand_ShellEscapesArguments(t *testing.T) {
 	require.Contains(t, command, "--url "+posixShellQuote(baseURL))
 	require.Contains(t, command, "--token "+posixShellQuote(token))
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
+}
+
+func TestInstallBaseURLRequiresInsecure(t *testing.T) {
+	require.True(t, installBaseURLRequiresInsecure("http://pulse.example.com:7655"))
+	require.True(t, installBaseURLRequiresInsecure(" HTTP://pulse.example.com:7655/ "))
+	require.False(t, installBaseURLRequiresInsecure("https://pulse.example.com"))
+	require.False(t, installBaseURLRequiresInsecure(""))
 }
 
 func TestResolveConfigAgentInstallBaseURL(t *testing.T) {

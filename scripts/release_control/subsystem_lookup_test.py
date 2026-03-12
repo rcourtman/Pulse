@@ -110,6 +110,34 @@ class SubsystemLookupTest(unittest.TestCase):
             ["frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"],
         )
 
+    def test_lookup_paths_assigns_install_script_to_monitoring(self) -> None:
+        result = lookup_paths(["scripts/install.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"monitoring"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"monitoring"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/monitoring.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "unified-agent-installer-runtime",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["scripts/installtests/install_sh_test.go"],
+        )
+
     def test_lookup_paths_assigns_organization_sharing_panel_to_organization_settings(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

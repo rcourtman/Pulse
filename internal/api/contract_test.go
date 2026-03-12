@@ -307,6 +307,22 @@ func TestContract_InstallScriptReleaseAssetURLRejectsUnreleasedBuild(t *testing.
 	}
 }
 
+func TestContract_ProxmoxInstallCommandIncludesInsecureForPlainHTTP(t *testing.T) {
+	got := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            "http://pulse.example.com:7655/",
+		Token:              "token-123",
+		InstallType:        "pve",
+		IncludeInstallType: true,
+	})
+
+	if !strings.Contains(got, "--url "+posixShellQuote("http://pulse.example.com:7655")) {
+		t.Fatalf("install command missing canonical base URL: %s", got)
+	}
+	if !strings.Contains(got, "--insecure") {
+		t.Fatalf("install command missing insecure flag for plain HTTP Pulse URL: %s", got)
+	}
+}
+
 func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 	payload := struct {
 		*config.SystemSettings

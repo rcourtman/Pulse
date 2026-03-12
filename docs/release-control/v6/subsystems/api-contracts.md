@@ -90,6 +90,11 @@ contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
 backend must proxy the install script asset from the exact GitHub release that
 matches `serverVersion` and must fail closed for dev or unreleased builds
 rather than serving branch-tip installer logic.
+Those same install-command payloads now also carry a non-TLS continuity
+contract: when Pulse returns a plain `http://` base URL for a generated agent
+install command, the command must include `--insecure` so the installed agent
+keeps its update path alive on lab or self-hosted targets instead of silently
+skipping updater checks after the first install.
 `/api/charts/workloads-summary` now also has a canonical hot-path invariant:
 aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.

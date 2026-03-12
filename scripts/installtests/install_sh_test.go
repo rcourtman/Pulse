@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -326,5 +327,101 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 	}
 	if got := gotHeaders.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func extractInstallShellFunction(t *testing.T, name string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join("..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	pattern := regexp.MustCompile(`(?ms)^` + regexp.QuoteMeta(name) + `\(\) \{\n.*?^\}`)
+	match := pattern.Find(content)
+	if match == nil {
+		t.Fatalf("could not find %s in install.sh", name)
+	}
+	return string(match)
+}
+
+func TestPlainHTTPInstallAutoEnablesInsecure(t *testing.T) {
+	script := `
+		log_info() { :; }
+` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
+` + extractInstallShellFunction(t, "auto_enable_insecure_for_plain_http_url") + `
+		PULSE_URL="http://192.168.0.98:7655"
+		INSECURE="false"
+		auto_enable_insecure_for_plain_http_url
+		echo "$INSECURE"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "true" {
+		t.Fatalf("INSECURE = %q, want true", got)
+	}
+}
+
+func TestHTTPSInstallKeepsInsecureDisabledByDefault(t *testing.T) {
+	script := `
+		log_info() { :; }
+` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
+` + extractInstallShellFunction(t, "auto_enable_insecure_for_plain_http_url") + `
+		PULSE_URL="https://pulse.example.com"
+		INSECURE="false"
+		auto_enable_insecure_for_plain_http_url
+		echo "$INSECURE"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "false" {
+		t.Fatalf("INSECURE = %q, want false", got)
+	}
+}
+
+func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
+	script := `
+		log_info() { :; }
+` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
+` + extractInstallShellFunction(t, "auto_enable_insecure_for_plain_http_url") + `
+` + extractInstallShellFunction(t, "build_exec_args_array") + `
+		PULSE_URL="http://pulse.local:7655"
+		PULSE_TOKEN="deadbeef"
+		INTERVAL="30s"
+		ENABLE_HOST="true"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS=""
+		ENROLL=""
+		KUBE_INCLUDE_ALL_PODS=""
+		KUBE_INCLUDE_ALL_DEPLOYMENTS=""
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR=""
+		DISK_EXCLUDES=()
+		auto_enable_insecure_for_plain_http_url
+		build_exec_args_array
+		printf '%s\n' "${EXEC_ARGS_ARRAY[*]}"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := strings.TrimSpace(string(out))
+	if !strings.Contains(got, "--insecure") {
+		t.Fatalf("EXEC_ARGS_ARRAY missing --insecure: %s", got)
 	}
 }

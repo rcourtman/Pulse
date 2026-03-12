@@ -97,6 +97,11 @@ func posixShellQuote(value string) string {
 	return "'" + escaped + "'"
 }
 
+func installBaseURLRequiresInsecure(raw string) bool {
+	baseURL := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(baseURL, "http://")
+}
+
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/")
 	installScriptURL := baseURL + "/install.sh"
@@ -105,6 +110,11 @@ func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
   --token %s \
   --enable-proxmox`,
 		posixShellQuote(installScriptURL), posixShellQuote(baseURL), posixShellQuote(opts.Token))
+
+	if installBaseURLRequiresInsecure(baseURL) {
+		command += ` \
+  --insecure`
+	}
 
 	if opts.IncludeInstallType {
 		command += fmt.Sprintf(` \

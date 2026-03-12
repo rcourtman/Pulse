@@ -29,7 +29,8 @@ truth for live infrastructure data.
 5. `internal/unifiedresources/views.go`
 6. `internal/agentupdate/update.go`
 7. `internal/hostagent/agent.go`
-8. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+8. `scripts/install.sh`
+9. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Shared Boundaries
 
@@ -42,7 +43,8 @@ truth for live infrastructure data.
 3. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 4. Add or change unified agent download, self-update, and persisted version handoff through `internal/agentupdate/update.go`
 5. Add or change unified agent startup, update continuity, and first-report assembly through `internal/hostagent/agent.go`
-6. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+6. Add or change unified agent installer runtime flags, persisted service args, and update-safe install defaults through `scripts/install.sh`
+7. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Forbidden Paths
 
@@ -80,6 +82,10 @@ this boundary. Changes there must preserve the same continuity contract across
 the public update flow: a successful check/download/install handoff must write
 the previous version for the next v6 host-agent start, and that handoff must
 not require branch-local or dev-only installer behavior.
+The unified-agent installer in `scripts/install.sh` now also lives under this
+boundary. Plain `http://` Pulse URLs must persist update-safe runtime args
+automatically so lab or self-hosted installs do not silently disable agent
+update checks just because the operator used a non-TLS control-plane URL.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary

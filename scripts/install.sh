@@ -186,7 +186,7 @@ Options:
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
-  --insecure              Skip TLS verification
+  --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
@@ -402,6 +402,23 @@ detect_proxmox_type() {
     fi
     echo ""
     return 1
+}
+
+pulse_url_uses_plain_http() {
+    local url_lower
+    url_lower=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    [[ "$url_lower" =~ ^http:// ]]
+}
+
+auto_enable_insecure_for_plain_http_url() {
+    if [[ "$INSECURE" == "true" ]]; then
+        return 0
+    fi
+    if ! pulse_url_uses_plain_http "$PULSE_URL"; then
+        return 0
+    fi
+    INSECURE="true"
+    log_info "Plain HTTP Pulse URL detected; enabling insecure mode for installer downloads and persisted agent update checks."
 }
 
 # Build exec args string for use in service files
@@ -862,6 +879,8 @@ url_lower=$(echo "$PULSE_URL" | tr '[:upper:]' '[:lower:]')
 if [[ ! "$url_lower" =~ ^https?:// ]]; then
     fail "Invalid URL format. Must start with http:// or https://"
 fi
+
+auto_enable_insecure_for_plain_http_url
 
 # Validate token format (should be hex string, typically 64 chars)
 if [[ ! "$PULSE_TOKEN" =~ ^[a-fA-F0-9]+$ ]]; then
