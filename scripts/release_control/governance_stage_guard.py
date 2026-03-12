@@ -19,6 +19,9 @@ WORKTREE_SENSITIVE_EXACT_FILES = (
     ".husky/pre-commit",
     CONTROL_PLANE_REL,
 )
+STAGED_EXECUTION_EXACT_FILES = (
+    "scripts/release_control/release_promotion_policy_test.py",
+)
 
 
 DEFAULT_REPO_ROOT = REPO_ROOT
@@ -51,6 +54,8 @@ def git_diff_name_only(*args: str) -> list[str]:
 
 
 def is_worktree_sensitive_governance_path(path: str) -> bool:
+    if path in STAGED_EXECUTION_EXACT_FILES:
+        return False
     if path in WORKTREE_SENSITIVE_EXACT_FILES:
         return True
     return any(path.startswith(prefix) for prefix in WORKTREE_SENSITIVE_PREFIXES)

@@ -34,6 +34,11 @@ class GovernanceStageGuardTest(unittest.TestCase):
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/CONTROL_PLANE.md"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/status.json"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/PRE_RELEASE_CHECKLIST.md"))
+        self.assertFalse(
+            is_worktree_sensitive_governance_path(
+                "scripts/release_control/release_promotion_policy_test.py"
+            )
+        )
         self.assertFalse(is_worktree_sensitive_governance_path("internal/api/slo.go"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/API.md"))
 
@@ -43,6 +48,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
             "docs/release-control/control_plane.json",
             "docs/release-control/v6/status.json",
             "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+            "scripts/release_control/release_promotion_policy_test.py",
             "internal/api/slo.go",
             "scripts/release_control/status_audit.py",
         ]
