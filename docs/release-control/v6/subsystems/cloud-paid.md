@@ -43,9 +43,10 @@ agreement, and cloud-specific enforcement rules.
 21. `internal/hosted/provisioner.go`
 22. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
 23. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-24. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-25. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-26. `frontend-modern/src/pages/CloudPricing.tsx`
+24. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+25. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+26. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+27. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Shared Boundaries
 
@@ -67,9 +68,10 @@ agreement, and cloud-specific enforcement rules.
 9. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
 10. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
 11. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-12. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-13. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-14. Add contract tests where runtime and pricing need to stay aligned
+12. Add or change Pro license activation, trial, and entitlement presentation through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+13. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+14. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+15. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -137,6 +139,11 @@ to `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` must
 carry this contract and the dedicated organization-billing proof file instead
 of remaining an unowned consumer of plan tier, entitlement limits, and
 usage-versus-cap presentation.
+The Pro license settings surface now follows the same rule as well. Changes to
+`frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
+contract and the dedicated Pro-license proof file instead of remaining an
+unowned consumer of activation, trial eligibility, entitlement capability, and
+plan-term presentation.
 The paid relay settings and onboarding surfaces are now part of that same
 ownership model. Changes to
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and

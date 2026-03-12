@@ -286,6 +286,7 @@
         "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
+        "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
@@ -677,6 +678,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx"
+            ]
+          },
+          {
+            "id": "pro-license-surface",
+            "label": "pro license surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/ProLicensePanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"
             ]
           },
           {
