@@ -86,6 +86,11 @@ boundary with monitoring. Changes to
 contract together with the shared monitoring contract and the dedicated API
 proof files for token generation, agent lookup, and profile assignment, rather
 than remaining an unowned consumer of those contract surfaces.
+The unified-agent install endpoints now also carry an exact-release fallback
+contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
+backend must proxy the install script asset from the exact GitHub release that
+matches `serverVersion` and must fail closed for dev or unreleased builds
+rather than serving branch-tip installer logic.
 `/api/charts/workloads-summary` now also has a canonical hot-path invariant:
 aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.

@@ -16,11 +16,14 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-func newTestInstallScriptClient(t *testing.T, expectedURL string, status int, body string, err error) *http.Client {
+func newTestInstallScriptClient(t *testing.T, expectedMethod, expectedURL string, status int, body string, err error) *http.Client {
 	t.Helper()
 
 	return &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if expectedMethod != "" && req.Method != expectedMethod {
+				t.Fatalf("unexpected method: %s", req.Method)
+			}
 			if expectedURL != "" && req.URL.String() != expectedURL {
 				t.Fatalf("unexpected URL: %s", req.URL.String())
 			}
@@ -65,9 +68,10 @@ func TestDownloadUnifiedInstallScriptPS_MethodNotAllowed(t *testing.T) {
 
 func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
-	expectedURL := "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install.sh"
+	router.serverVersion = "v6.0.0-rc.1"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
 	payload := "#!/bin/bash\necho hi"
-	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, payload, nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, payload, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
@@ -93,9 +97,10 @@ func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 
 func TestDownloadUnifiedInstallScriptPS_ProxyFallback(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
-	expectedURL := "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install.ps1"
+	router.serverVersion = "6.0.0"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/install.ps1"
 	payload := "Write-Host 'hi'"
-	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, payload, nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, payload, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/install.ps1", nil)
 	w := httptest.NewRecorder()
@@ -115,7 +120,8 @@ func TestDownloadUnifiedInstallScriptPS_ProxyFallback(t *testing.T) {
 
 func TestProxyInstallScriptFromGitHub_NonOK(t *testing.T) {
 	router := &Router{
-		installScriptClient: newTestInstallScriptClient(t, "", http.StatusNotFound, "", nil),
+		serverVersion:       "v6.0.0-rc.1",
+		installScriptClient: newTestInstallScriptClient(t, http.MethodGet, "", http.StatusNotFound, "", nil),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
@@ -133,7 +139,8 @@ func TestProxyInstallScriptFromGitHub_NonOK(t *testing.T) {
 
 func TestProxyInstallScriptFromGitHub_Error(t *testing.T) {
 	router := &Router{
-		installScriptClient: newTestInstallScriptClient(t, "", 0, "", errors.New("boom")),
+		serverVersion:       "v6.0.0-rc.1",
+		installScriptClient: newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("boom")),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
@@ -146,6 +153,42 @@ func TestProxyInstallScriptFromGitHub_Error(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Failed to fetch install script") {
 		t.Fatalf("expected fetch failure message")
+	}
+}
+
+func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevelopmentBuild(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "dev"
+
+	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedInstallScript(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Install script unavailable for current server build") {
+		t.Fatalf("unexpected response body: %q", w.Body.String())
+	}
+}
+
+func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.1"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodHead, expectedURL, http.StatusOK, "", nil)
+
+	req := httptest.NewRequest(http.MethodHead, "/install.sh", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedInstallScript(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("expected empty HEAD response body")
 	}
 }
 

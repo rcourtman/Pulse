@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
 
@@ -433,11 +434,40 @@ func extractFromZip(archive []byte, entryName string) ([]byte, error) {
 	return nil, fmt.Errorf("binary %q not found in zip", entryName)
 }
 
-// proxyInstallScriptFromGitHub fetches an install script from GitHub releases
-// This is used as a fallback when scripts aren't available locally (e.g., LXC updates)
+func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error) {
+	rawVersion := strings.TrimSpace(r.serverVersion)
+	if rawVersion == "" {
+		return "", fmt.Errorf("server version is unavailable")
+	}
+	if strings.EqualFold(rawVersion, "dev") {
+		return "", fmt.Errorf("development builds must serve local install scripts")
+	}
+
+	version, err := updates.ParseVersion(rawVersion)
+	if err != nil {
+		return "", fmt.Errorf("server version %q is not a published release version", rawVersion)
+	}
+	if version.Build != "" {
+		return "", fmt.Errorf("server version %q includes build metadata and cannot map to a release asset", rawVersion)
+	}
+
+	return fmt.Sprintf(
+		"https://github.com/rcourtman/Pulse/releases/download/v%s/%s",
+		version.String(),
+		scriptName,
+	), nil
+}
+
+// proxyInstallScriptFromGitHub fetches an install script from the exact GitHub
+// release asset that matches the running server version. This is used as a
+// fallback when scripts aren't available locally (for example in LXC updates).
 func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.Request, scriptName string) {
-	// Use raw.githubusercontent.com to fetch from main branch
-	githubURL := "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/" + scriptName
+	githubURL, err := r.installScriptReleaseAssetURL(scriptName)
+	if err != nil {
+		log.Error().Err(err).Str("server_version", strings.TrimSpace(r.serverVersion)).Str("script", scriptName).Msg("Install script fallback unavailable for current server build")
+		http.Error(w, "Install script unavailable for current server build", http.StatusServiceUnavailable)
+		return
+	}
 
 	client := r.installScriptClient
 	if client == nil {
@@ -446,7 +476,14 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 		}
 	}
 
-	resp, err := client.Get(githubURL)
+	proxyReq, err := http.NewRequestWithContext(req.Context(), req.Method, githubURL, nil)
+	if err != nil {
+		log.Error().Err(err).Str("url", githubURL).Msg("Failed to create install script fallback request")
+		http.Error(w, "Failed to fetch install script", http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := client.Do(proxyReq)
 	if err != nil {
 		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch install script from GitHub")
 		http.Error(w, "Failed to fetch install script", http.StatusServiceUnavailable)
@@ -477,5 +514,9 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
 	w.Header().Set("X-Served-From", "github-fallback")
+	if req.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Write(content)
 }

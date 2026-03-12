@@ -145,7 +145,7 @@ func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
 
 	binaryContent := "fresh github binary"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
-	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -182,7 +182,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
 	// Set up a mock HTTP client to simulate GitHub response
 	binaryContent := "fake binary content for proxy test"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
-	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -205,7 +205,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 
 	binaryContent := "MZ fake windows binary"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-windows-amd64.exe"
-	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=windows-amd64", nil)
 	w := httptest.NewRecorder()
@@ -275,7 +275,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_NotFound(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
 	// GitHub returns 404 for the binary
-	router.installScriptClient = newTestInstallScriptClient(t, "", http.StatusNotFound, "", nil)
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", http.StatusNotFound, "", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -289,7 +289,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Error(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
 	// GitHub is unreachable
-	router.installScriptClient = newTestInstallScriptClient(t, "", 0, "", errors.New("connection refused"))
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("connection refused"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
