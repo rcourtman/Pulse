@@ -1040,6 +1040,7 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/registry_audit.py --check",
 		"python3 scripts/release_control/contract_audit.py --check",
 		"python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated",
+		"python3 scripts/release_control/readiness_assertion_guard.py --proof-type hybrid",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
 		"python3 scripts/release_control/contract_audit_test.py",

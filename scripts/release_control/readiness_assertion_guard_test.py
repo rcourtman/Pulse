@@ -89,6 +89,35 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
         self.assertEqual(commands, [])
         self.assertEqual(errors, ["RA1 is automated but has no proof_commands"])
 
+    def test_deduplicated_proof_commands_groups_shared_runs(self) -> None:
+        deduped = readiness_assertion_guard.deduplicated_proof_commands(
+            [
+                {
+                    "assertion_id": "RA3",
+                    "command_id": "shared-a",
+                    "cwd": ".",
+                    "run": ["python3", "-c", "print('shared')"],
+                },
+                {
+                    "assertion_id": "RA4",
+                    "command_id": "shared-b",
+                    "cwd": ".",
+                    "run": ["python3", "-c", "print('shared')"],
+                },
+                {
+                    "assertion_id": "RA2",
+                    "command_id": "unique",
+                    "cwd": ".",
+                    "run": ["python3", "-c", "print('unique')"],
+                },
+            ]
+        )
+
+        self.assertEqual(len(deduped), 2)
+        self.assertEqual(deduped[0]["assertion_ids"], ["RA3", "RA4"])
+        self.assertEqual(deduped[0]["command_ids"], ["shared-a", "shared-b"])
+        self.assertEqual(deduped[1]["assertion_ids"], ["RA2"])
+
     def test_main_can_read_staged_status_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)

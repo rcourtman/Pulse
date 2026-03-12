@@ -12,7 +12,7 @@ This folder is the canonical execution control layer for Pulse v6.
 
 `status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
 Use `python3 scripts/release_control/status_audit.py --pretty` for the current derived repo/release readiness summary.
-Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that automated assertion guardrails run.
+Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that readiness assertion guardrails run.
 
 Supporting governance file:
 
@@ -32,6 +32,8 @@ Useful helper tools:
   Validates lane evidence, readiness assertions, release gates, decision records, and derived repo/release readiness.
 - `python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated`
   Runs the machine-declared proof commands for automated repo-ready assertions straight from `status.json.readiness_assertions`.
+- `python3 scripts/release_control/readiness_assertion_guard.py --proof-type hybrid`
+  Runs any machine-declared executable proof commands attached to hybrid release assertions, without replacing the linked manual release gates.
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
 

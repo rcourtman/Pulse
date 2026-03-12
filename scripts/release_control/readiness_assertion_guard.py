@@ -134,22 +134,58 @@ def selected_proof_commands(
     return selected, errors
 
 
+def deduplicated_proof_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, tuple[str, ...]], dict[str, Any]] = {}
+    ordered_keys: list[tuple[str, tuple[str, ...]]] = []
+
+    for command in commands:
+        cwd = str(command["cwd"])
+        run = tuple(str(entry) for entry in command["run"])
+        key = (cwd, run)
+        record = grouped.get(key)
+        if record is None:
+            record = {
+                "assertion_ids": [str(command["assertion_id"])],
+                "command_ids": [str(command["command_id"])],
+                "cwd": cwd,
+                "run": list(run),
+            }
+            grouped[key] = record
+            ordered_keys.append(key)
+            continue
+        assertion_id = str(command["assertion_id"])
+        command_id = str(command["command_id"])
+        if assertion_id not in record["assertion_ids"]:
+            record["assertion_ids"].append(assertion_id)
+        if command_id not in record["command_ids"]:
+            record["command_ids"].append(command_id)
+
+    return [grouped[key] for key in ordered_keys]
+
+
 def run_selected_proof_commands(commands: list[dict[str, Any]]) -> int:
+    unique_commands = deduplicated_proof_commands(commands)
     if not commands:
         print("Readiness assertion guard: no matching proof commands.")
         return 0
 
-    print(f"Running readiness assertion guard: commands={len(commands)}")
-    for command in commands:
-        assertion_id = str(command["assertion_id"])
-        command_id = str(command["command_id"])
+    print(
+        "Running readiness assertion guard: "
+        f"commands={len(unique_commands)} selected={len(commands)}"
+    )
+    for command in unique_commands:
+        assertion_ids = [str(entry) for entry in command["assertion_ids"]]
+        command_ids = [str(entry) for entry in command["command_ids"]]
         run = [str(entry) for entry in command["run"]]
         cwd = REPO_ROOT / str(command["cwd"])
-        print(f"[{assertion_id}] {command_id}: {shlex.join(run)}")
+        print(
+            f"[{','.join(assertion_ids)}] {','.join(command_ids)}: {shlex.join(run)}"
+        )
         result = subprocess.run(run, cwd=cwd, check=False)
         if result.returncode != 0:
             print(
-                f"BLOCKED: readiness assertion proof failed for {assertion_id}:{command_id} "
+                "BLOCKED: readiness assertion proof failed for "
+                f"{','.join(assertion_ids)}:{','.join(command_ids)} "
                 f"(exit {result.returncode})"
             )
             return result.returncode or 1

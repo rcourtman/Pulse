@@ -124,5 +124,8 @@ jobs:
       - name: Run readiness assertion guard
         run: python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated
 
+      - name: Run hybrid readiness assertion proofs
+        run: python3 scripts/release_control/readiness_assertion_guard.py --proof-type hybrid
+
       - name: Run readiness assertion guard unit tests
         run: python3 scripts/release_control/readiness_assertion_guard_test.py
