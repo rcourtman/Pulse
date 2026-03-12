@@ -200,6 +200,53 @@ result.
   The relay can strand the app/client in resume loops, dead sessions, or lost
   inflight work.
 
+## Gate: `unified-agent-v5-upgrade-continuity`
+
+- Why this is risky:
+  The v5-to-v6 unified-agent crossover is where release-asset integrity,
+  updater continuity, legacy compatibility routing, and user-visible agent
+  inventory can drift apart. Repo-local tests cover most of the mechanics, but
+  the real RC path still needs one exercised upgrade from an actual v5 install.
+- Primary runtime surfaces:
+  `GET /install.sh`
+  `GET /install.ps1`
+  `GET /api/agent/version`
+  `internal/api/unified_agent.go`
+  `internal/api/router_routes_registration.go`
+  `internal/agentupdate/update.go`
+  `internal/hostagent/agent.go`
+  `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+  `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+- Automated proof:
+  `go test ./internal/api -run 'TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent' -count=1`
+  `go test ./internal/agentupdate -run 'TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce|TestUpdateToFirstHostReportCarriesPreviousVersionOnce|TestPerformUpdatePersistsPreviousVersionForNextStart' -count=1`
+  `go test ./internal/hostagent -run 'TestNew_CarriesUpdatedFromIntoFirstV6Report|TestAgentSendReport_SetsHeadersAndPostsJSON' -count=1`
+- Manual scenario:
+  1. Start from a real Pulse v5 install with an already-enrolled unified agent
+     and non-empty agent inventory.
+  2. Point that install at the candidate v6 RC build and trigger the real
+     upgrade path through the release-served installer or updater assets, not a
+     repo-local script.
+  3. Confirm the fetched install script or update asset resolves to the
+     matching v6 RC release asset rather than branch-tip `main` content.
+  4. Confirm the upgraded agent reconnects as one canonical v6 unified agent
+     identity and does not create a duplicate host or agent resource during the
+     crossover.
+  5. Confirm the first canonical v6 report carries the prior v5 version in
+     `updated_from` exactly once.
+  6. Confirm a subsequent report clears `updated_from`, and the active-agent
+     count shown in settings/billing surfaces still matches runtime
+     enforcement after the upgrade.
+- Pass when:
+  A real v5-installed unified agent upgrades through the candidate v6 RC asset
+  path, reconnects as one canonical v6 agent identity, preserves one-shot
+  `updated_from` continuity, and leaves user-visible agent counts aligned with
+  runtime enforcement.
+- Block release if:
+  The RC asset path serves the wrong installer logic, the upgrade creates
+  duplicate or orphaned agent identity, `updated_from` continuity is missing or
+  repeated, or user-visible agent counts drift from runtime enforcement.
+
 ## Gate: `mobile-relay-auth-approvals`
 
 - Why this is risky:

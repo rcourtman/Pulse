@@ -585,6 +585,92 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA9",
+      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 agent identity, preserves one-shot update continuity metadata, and does not drift agent-count or fallback behavior during the crossover.",
+      "kind": "journey",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L6",
+        "L11",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "monitoring"
+      ],
+      "release_gate_ids": [
+        "unified-agent-v5-upgrade-continuity"
+      ],
+      "proof_commands": [
+        {
+          "id": "unified-agent-first-report-continuity-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/hostagent",
+            "-run",
+            "TestNew_CarriesUpdatedFromIntoFirstV6Report|TestAgentSendReport_SetsHeadersAndPostsJSON",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "unified-agent-install-fallback-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "unified-agent-update-handoff-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/agentupdate",
+            "-run",
+            "TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce|TestUpdateToFirstHostReportCarriesPreviousVersionOnce|TestPerformUpdatePersistsPreviousVersionForNextStart",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/agentupdate/coverage_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentupdate/update_hostagent_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/host_agents_upgrade_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/unified_agent_more_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/unified_agent_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/agent_new_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -1108,6 +1194,19 @@
       "lane_ids": [
         "L5",
         "L7",
+        "L12"
+      ]
+    },
+    {
+      "id": "unified-agent-v5-upgrade-continuity",
+      "summary": "Confirm a real v5-installed Pulse Unified Agent upgrades through candidate v6 RC assets into one canonical v6 agent identity without duplicate registration, stale fallback behavior, or agent-count drift.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L6",
+        "L11",
         "L12"
       ]
     },
