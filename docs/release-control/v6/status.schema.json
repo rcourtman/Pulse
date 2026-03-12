@@ -14,6 +14,7 @@
     "evidence_reference_policy",
     "priority_engine",
     "lanes",
+    "release_gates",
     "open_decisions",
     "source_of_truth_file",
     "resolved_decisions"
@@ -80,6 +81,13 @@
       "minItems": 1,
       "items": {
         "$ref": "#/$defs/lane"
+      }
+    },
+    "release_gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/release_gate"
       }
     },
     "open_decisions": {
@@ -186,7 +194,7 @@
         },
         "release_ready_rule": {
           "type": "string",
-          "const": "repo_ready plus zero open_decisions plus release checklist gates cleared"
+          "const": "repo_ready plus zero open_decisions plus all release_gates passed"
         },
         "release_blockers": {
           "type": "array",
@@ -345,6 +353,53 @@
             "file",
             "dir"
           ]
+        }
+      }
+    },
+    "release_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "status",
+        "verification_doc",
+        "lane_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "blocked",
+            "passed"
+          ]
+        },
+        "verification_doc": {
+          "type": "string",
+          "const": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
         }
       }
     },

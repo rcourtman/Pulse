@@ -26,10 +26,10 @@
     "repo_ready": true,
     "release_ready": false,
     "repo_ready_rule": "all lanes target-met and evidence-present",
-    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
     "release_blockers": [
       "Open operational decisions remain in status.json.open_decisions.",
-      "Release checklist gates still require explicit completion."
+      "High-risk release gates remain pending or blocked in status.json.release_gates."
     ]
   },
   "evidence_reference_policy": {
@@ -455,6 +455,83 @@
           "path": "tests/integration/tests/journeys",
           "kind": "dir"
         }
+      ]
+    }
+  ],
+  "release_gates": [
+    {
+      "id": "api-token-scope-and-assignment",
+      "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries, and revoke cleanly.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L1",
+        "L6",
+        "L11"
+      ]
+    },
+    {
+      "id": "hosted-signup-billing-replay",
+      "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L12"
+      ]
+    },
+    {
+      "id": "mobile-relay-auth-approvals",
+      "summary": "Confirm pulse-mobile pairing, persistence, relay reconnect, auth transitions, and approval flows work against a real instance.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L5",
+        "L7",
+        "L12"
+      ]
+    },
+    {
+      "id": "organization-user-scope-and-rbac",
+      "summary": "Confirm user creation, organization membership, RBAC scope, and cross-org sharing fail closed outside intended access.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L4",
+        "L9",
+        "L12"
+      ]
+    },
+    {
+      "id": "paid-feature-entitlement-gating",
+      "summary": "Confirm free-versus-paid feature gating matches entitlements across UI, API, hosted, and upgrade surfaces.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L6",
+        "L9",
+        "L12"
+      ]
+    },
+    {
+      "id": "relay-registration-reconnect-drain",
+      "summary": "Confirm relay fresh registration, reconnect, stale-session recovery, and disconnect drain behavior hold under real pressure.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L5",
+        "L7",
+        "L12"
       ]
     }
   ],

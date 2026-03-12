@@ -194,6 +194,7 @@ docs/release-control/*
 !docs/release-control/v6/
 docs/release-control/v6/*
 !docs/release-control/v6/PRE_RELEASE_CHECKLIST.md
+!docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md
 !docs/release-control/v6/README.md
 !docs/release-control/v6/SOURCE_OF_TRUTH.md
 !docs/release-control/v6/status.schema.json

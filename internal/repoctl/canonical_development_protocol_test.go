@@ -224,6 +224,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	readme := readRepoFile(t, "docs/release-control/v6/README.md")
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
+		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
 		"registry.schema.json",
 		"subsystems/*.md",
@@ -236,6 +237,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
 	assertContainsAll(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md", source, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
+		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
 		"registry.schema.json",
 		"docs/release-control/v6/subsystems/",
@@ -243,6 +245,17 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
 		"status.json.readiness.repo_ready",
 		"status.json.readiness.release_ready",
+	})
+
+	matrix := readRepoFile(t, "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
+	assertContainsAll(t, "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md", matrix, []string{
+		"status.json.release_gates",
+		"hosted-signup-billing-replay",
+		"paid-feature-entitlement-gating",
+		"relay-registration-reconnect-drain",
+		"mobile-relay-auth-approvals",
+		"organization-user-scope-and-rbac",
+		"api-token-scope-and-assignment",
 	})
 }
 
@@ -343,11 +356,14 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	} else if got {
 		t.Fatalf("status.json readiness.release_ready = %v, want false", got)
 	}
+	if gates, ok := status["release_gates"].([]any); !ok || len(gates) == 0 {
+		t.Fatalf("status.json release_gates must be a non-empty list")
+	}
 	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present" {
 		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present")
 	}
-	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus zero open_decisions plus release checklist gates cleared" {
-		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus zero open_decisions plus release checklist gates cleared")
+	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus zero open_decisions plus all release_gates passed" {
+		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus zero open_decisions plus all release_gates passed")
 	}
 	if blockers, ok := readiness["release_blockers"].([]any); !ok || len(blockers) == 0 {
 		t.Fatalf("status.json readiness.release_blockers must be a non-empty list while release_ready is false")
@@ -714,6 +730,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"STATUS_SCHEMA_PATH",
 		"repo_root_for_name",
 		"audit_status_payload",
+		"release_gates",
 		"open_decisions",
 		"resolved_decisions",
 		"subsystem_ids",

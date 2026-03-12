@@ -10,7 +10,8 @@ Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
 `status.json.readiness.repo_ready` and `status.json.readiness.release_ready`
 are the canonical machine-visible distinction between repo readiness and
-release readiness.
+release readiness. The human runbook for trust-critical manual release gates
+lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 ## Purpose
 
@@ -70,7 +71,7 @@ Pulse v6 is ready when these outcomes land together:
 2. Do not ship when paywalls and runtime gates disagree.
 3. Do not ship hosted flows that break signup, auth, provision, or revocation.
 4. Do not keep polishing strong lanes while weak lanes remain behind.
-5. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions and release checklist gates still apply.
+5. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions and unresolved release gates still apply.
 
 ## Locked Decisions
 

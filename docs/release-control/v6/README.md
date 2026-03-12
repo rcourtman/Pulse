@@ -10,7 +10,7 @@ This folder is the canonical execution control layer for Pulse v6.
 4. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
 5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
-`status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or release checklist gates remain unresolved.
+`status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
 Use `status.json.readiness.repo_ready` for repo/governance readiness and `status.json.readiness.release_ready` for release approval state.
 
 Supporting governance file:
@@ -18,6 +18,7 @@ Supporting governance file:
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
+- `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` (manual verification runbook for trust-critical release gates)
 - `subsystems/*.md` (per-subsystem contracts: truth, shared boundaries, extension points, forbidden paths, completion obligations)
 
 Useful helper tools:

@@ -30,8 +30,11 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "Open operational decisions remain in status.json.open_decisions.",
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse"],
@@ -78,6 +81,16 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need release verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L1"],
+                    }
+                ],
                 "open_decisions": [
                     {
                         "id": "d1",
@@ -115,6 +128,99 @@ class StatusAuditTest(unittest.TestCase):
             self.assertTrue(report["lanes"][0]["all_evidence_present"])
             self.assertEqual(report["lanes"][0]["derived_status"], "behind-target")
 
+    def test_audit_status_payload_requires_release_gates_to_clear_release_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pulse = root / "pulse"
+            pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "proof.md").write_text("proof", encoding="utf-8")
+
+            payload = {
+                "version": "6.0",
+                "updated_at": "2026-03-12",
+                "execution_model": "direct-repo-sessions",
+                "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": True,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
+                },
+                "scope": {
+                    "active_repos": ["pulse"],
+                    "ignored_repos": [],
+                },
+                "source_precedence": [
+                    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                    "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
+                    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+                    "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
+                ],
+                "priority_engine": {
+                    "formula": "gap-first",
+                    "floor_rule": {
+                        "release_critical_lanes": ["L1"],
+                        "minimum_score": 6,
+                    },
+                    "weights": {
+                        "gap_multiplier": 4,
+                        "blocker_bonus": 8,
+                        "criticality_range": "0-5",
+                        "staleness_range": "0-3",
+                        "dependency_range": "0-3",
+                    },
+                },
+                "evidence_reference_policy": {
+                    "format": "repo-qualified-relative-paths",
+                    "allowed_kinds": ["file", "dir"],
+                    "absolute_paths_forbidden": True,
+                    "local_repo": "pulse",
+                },
+                "lanes": [
+                    {
+                        "id": "L1",
+                        "name": "Lane 1",
+                        "target_score": 8,
+                        "current_score": 8,
+                        "status": "target-met",
+                        "subsystems": [],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
+                        ],
+                    }
+                ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need manual verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L1"],
+                    }
+                ],
+                "open_decisions": [],
+                "resolved_decisions": [],
+            }
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["summary"]["release_gate_count"], 1)
+            self.assertEqual(report["summary"]["release_gates_passed"], 0)
+
     def test_audit_status_payload_reports_missing_cross_repo_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -132,8 +238,11 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "Open operational decisions remain in status.json.open_decisions.",
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse", "pulse-pro"],
@@ -178,6 +287,16 @@ class StatusAuditTest(unittest.TestCase):
                         "evidence": [
                             {"repo": "pulse-pro", "path": "missing.md", "kind": "file"},
                         ],
+                    }
+                ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need release verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L2"],
                     }
                 ],
                 "open_decisions": [
@@ -238,8 +357,11 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "Open operational decisions remain in status.json.open_decisions.",
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse"],
@@ -286,6 +408,16 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need release verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L6"],
+                    }
+                ],
                 "open_decisions": [],
                 "resolved_decisions": [],
             }
@@ -322,8 +454,11 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "Open operational decisions remain in status.json.open_decisions.",
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse"],
@@ -368,6 +503,16 @@ class StatusAuditTest(unittest.TestCase):
                         "evidence": [
                             {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
                         ],
+                    }
+                ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need release verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L3"],
                     }
                 ],
                 "open_decisions": [
@@ -421,8 +566,11 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "Open operational decisions remain in status.json.open_decisions.",
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse-pro", "pulse"],
@@ -480,6 +628,24 @@ class StatusAuditTest(unittest.TestCase):
                             {"repo": "pulse", "path": "docs/b.md", "kind": "file"},
                         ],
                     },
+                ],
+                "release_gates": [
+                    {
+                        "id": "g2",
+                        "summary": "Later gate",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L10", "L2"],
+                    },
+                    {
+                        "id": "g1",
+                        "summary": "Earlier gate",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L2"],
+                    }
                 ],
                 "open_decisions": [
                     {
@@ -543,6 +709,8 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertIn("status.json lanes must be sorted by lane id", joined_errors)
             self.assertIn("lanes[0].evidence must be sorted by repo, path, then kind", joined_errors)
+            self.assertIn("release_gates[0].lane_ids must be sorted by lane id", joined_errors)
+            self.assertIn("status.json release_gates must be sorted by id", joined_errors)
             self.assertIn("open_decisions[0].lane_ids must be sorted by lane id", joined_errors)
             self.assertIn("status.json open_decisions must be sorted by opened_at then id", joined_errors)
             self.assertIn("resolved_decisions[0].lane_ids must be sorted by lane id", joined_errors)
@@ -565,8 +733,10 @@ class StatusAuditTest(unittest.TestCase):
                     "repo_ready": False,
                     "release_ready": False,
                     "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
-                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "release_blockers": [
+                        "High-risk release gates remain pending or blocked in status.json.release_gates.",
+                    ],
                 },
                 "scope": {
                     "active_repos": ["pulse"],
@@ -610,6 +780,16 @@ class StatusAuditTest(unittest.TestCase):
                         "evidence": [
                             {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
                         ],
+                    }
+                ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need release verification",
+                        "owner": "project-owner",
+                        "status": "pending",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L1"],
                     }
                 ],
                 "open_decisions": [],

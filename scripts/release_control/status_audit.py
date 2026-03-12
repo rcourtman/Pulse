@@ -23,6 +23,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
 STATUS_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.schema.json"
 SOURCE_OF_TRUTH_FILE = "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+HIGH_RISK_RELEASE_MATRIX = "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+OPEN_DECISIONS_BLOCKER = "Open operational decisions remain in status.json.open_decisions."
+RELEASE_GATES_BLOCKER = "High-risk release gates remain pending or blocked in status.json.release_gates."
 REQUIRED_SOURCE_PRECEDENCE = [
     SOURCE_OF_TRUTH_FILE,
     "docs/release-control/v6/status.json",
@@ -70,6 +73,7 @@ def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
     return {
         "schema": schema,
         "valid_lane_statuses": schema_enum(schema, "lane", "status"),
+        "valid_release_gate_statuses": schema_enum(schema, "release_gate", "status"),
         "valid_open_decision_statuses": schema_enum(schema, "open_decision", "status"),
         "valid_resolved_decision_kinds": schema_enum(schema, "resolved_decision", "kind"),
         "required_top_level_fields": schema_required(schema),
@@ -288,11 +292,11 @@ def validate_readiness(payload: dict[str, Any], errors: list[str]) -> dict[str, 
     if (
         release_ready_rule
         and release_ready_rule
-        != "repo_ready plus zero open_decisions plus release checklist gates cleared"
+        != "repo_ready plus zero open_decisions plus all release_gates passed"
     ):
         errors.append(
             "status.json readiness.release_ready_rule must be "
-            "'repo_ready plus zero open_decisions plus release checklist gates cleared'"
+            "'repo_ready plus zero open_decisions plus all release_gates passed'"
         )
 
     release_blockers = readiness.get("release_blockers")
@@ -521,6 +525,64 @@ def validate_decision_subsystems(
             )
 
 
+def validate_release_gates(
+    payload: dict[str, Any],
+    *,
+    lane_ids: set[str],
+    valid_release_gate_statuses: set[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    gates = _require_object_list(payload, "release_gates", errors, context="status.json")
+    seen_ids: set[str] = set()
+    records: list[dict[str, Any]] = []
+
+    for index, raw in enumerate(gates):
+        context = f"release_gates[{index}]"
+        gate_id = _require_string(raw, "id", errors, context=context)
+        if gate_id:
+            if gate_id in seen_ids:
+                errors.append(f"{context} duplicates id {gate_id}")
+            seen_ids.add(gate_id)
+        summary = _require_string(raw, "summary", errors, context=context)
+        owner = _require_string(raw, "owner", errors, context=context)
+        status = _require_string(raw, "status", errors, context=context)
+        verification_doc = _require_string(raw, "verification_doc", errors, context=context)
+        lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
+
+        if status and status not in valid_release_gate_statuses:
+            errors.append(f"{context} has invalid status {status!r}")
+        if verification_doc and verification_doc != HIGH_RISK_RELEASE_MATRIX:
+            errors.append(
+                f"{context}.verification_doc must be {HIGH_RISK_RELEASE_MATRIX!r}, got {verification_doc!r}"
+            )
+        if len(lane_refs) != len(set(lane_refs)):
+            errors.append(f"{context}.lane_ids must not contain duplicates")
+        if lane_refs != sorted(lane_refs, key=_lane_sort_key):
+            errors.append(f"{context}.lane_ids must be sorted by lane id")
+        for lane_id in lane_refs:
+            if lane_id not in lane_ids:
+                errors.append(f"{context} references unknown lane_id {lane_id!r}")
+
+        if gate_id and summary and owner and status and verification_doc:
+            records.append(
+                {
+                    "id": gate_id,
+                    "summary": summary,
+                    "owner": owner,
+                    "status": status,
+                    "verification_doc": verification_doc,
+                    "lane_ids": lane_refs,
+                }
+            )
+
+    if len(records) == len(gates):
+        gate_ids = [record["id"] for record in records]
+        if gate_ids != sorted(gate_ids):
+            errors.append("status.json release_gates must be sorted by id")
+
+    return records
+
+
 def validate_open_decisions(
     payload: dict[str, Any],
     *,
@@ -658,6 +720,7 @@ def audit_status_payload(
     contract = schema_contract or DEFAULT_STATUS_SCHEMA_CONTRACT
     required_top_level_fields = set(contract["required_top_level_fields"])
     valid_lane_statuses = set(contract["valid_lane_statuses"])
+    valid_release_gate_statuses = set(contract["valid_release_gate_statuses"])
     valid_open_decision_statuses = set(contract["valid_open_decision_statuses"])
     valid_resolved_decision_kinds = set(contract["valid_resolved_decision_kinds"])
     errors: list[str] = []
@@ -715,6 +778,12 @@ def audit_status_payload(
     for lane_id in release_critical_lanes:
         if lane_id not in lane_ids:
             errors.append(f"priority_engine.floor_rule.release_critical_lanes references unknown lane_id {lane_id!r}")
+    release_gates = validate_release_gates(
+        payload,
+        lane_ids=lane_ids,
+        valid_release_gate_statuses=valid_release_gate_statuses,
+        errors=errors,
+    )
     open_decisions = validate_open_decisions(
         payload,
         lane_ids=lane_ids,
@@ -731,7 +800,8 @@ def audit_status_payload(
     )
 
     repo_ready_derived = all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
-    release_ready_derived = repo_ready_derived and len(open_decisions) == 0
+    release_gates_cleared = all(gate["status"] == "passed" for gate in release_gates)
+    release_ready_derived = repo_ready_derived and len(open_decisions) == 0 and release_gates_cleared
 
     if readiness:
         if readiness.get("repo_ready") is not repo_ready_derived:
@@ -747,6 +817,15 @@ def audit_status_payload(
             errors.append("status.json readiness.release_blockers must be empty when release_ready is true")
         if not release_ready_derived and not release_blockers:
             errors.append("status.json readiness.release_blockers must be non-empty when release_ready is false")
+        if not release_ready_derived:
+            expected_blockers: list[str] = []
+            if open_decisions:
+                expected_blockers.append(OPEN_DECISIONS_BLOCKER)
+            if not release_gates_cleared:
+                expected_blockers.append(RELEASE_GATES_BLOCKER)
+            for blocker in expected_blockers:
+                if blocker not in release_blockers:
+                    errors.append(f"status.json readiness.release_blockers missing {blocker!r}")
 
     return {
         "errors": errors,
@@ -756,6 +835,8 @@ def audit_status_payload(
             "lanes_at_target": sum(1 for lane in lane_reports if lane["at_target"]),
             "lanes_missing_evidence": sum(1 for lane in lane_reports if not lane["all_evidence_present"]),
             "all_evidence_present": all(lane["all_evidence_present"] for lane in lane_reports),
+            "release_gate_count": len(release_gates),
+            "release_gates_passed": sum(1 for gate in release_gates if gate["status"] == "passed"),
             "open_decision_count": len(open_decisions),
             "resolved_decision_count": len(resolved_decisions),
             "repo_ready": repo_ready_derived,
@@ -769,6 +850,7 @@ def audit_status_payload(
             "release_blockers": readiness.get("release_blockers", []) if readiness else [],
         },
         "lanes": lane_reports,
+        "release_gates": release_gates,
         "open_decisions": open_decisions,
         "resolved_decisions": resolved_decisions,
     }
@@ -803,6 +885,8 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"lanes={summary['lane_count']} "
             f"at_target={summary['lanes_at_target']} "
             f"missing_evidence={summary['lanes_missing_evidence']} "
+            f"release_gates={summary['release_gate_count']} "
+            f"release_gates_passed={summary['release_gates_passed']} "
             f"open_decisions={summary['open_decision_count']} "
             f"resolved_decisions={summary['resolved_decision_count']} "
             f"repo_ready={summary['repo_ready']} "

@@ -7,11 +7,13 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - Treat every failed command or failed scenario as a release blocker until it is explained or fixed.
 - If the mobile app is part of the release, run the mobile checks from `/Volumes/Development/pulse/repos/pulse-mobile`.
 - Record pass/fail notes inline in this file or in the release ticket as each section is completed.
+- Use `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` for the trust-critical hosted, relay, mobile, entitlement, org-scope, and API-token checks that must be manually confirmed before release.
 
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - Manual scenarios and staging-like end-to-end flows are still the main remaining release gate.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
+- High-risk release confidence now lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.
@@ -67,6 +69,7 @@ npx vitest run src/utils/__tests__/frontendResourceTypeBoundaries.test.ts
 - [x] Verify replay succeeds once the linked org exists.
 - [ ] Verify the normal hosted provisioning path still succeeds.
 - [x] Confirm commit `8b3a5d30246a86005d363b405126b0e9bfdda8d3` is present.
+- [ ] Clear gate `hosted-signup-billing-replay` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 Run:
 
@@ -90,6 +93,7 @@ Manual scenario:
 - [x] Verify stale cached session resume recovers by fresh registration.
 - [ ] Verify abrupt disconnect and inflight drain behavior still work.
 - [x] Confirm commit `ee78cb33dd35b891d84e61bfce2098b4548bbb56` is present.
+- [ ] Clear gate `relay-registration-reconnect-drain` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 Run:
 
@@ -110,6 +114,7 @@ Manual scenario:
 - [x] Verify explicitly provisioned orgs initialize correctly.
 - [x] Verify there is no default-org fallback for non-default tenant requests.
 - [x] Confirm commit `f090a77ae` is present.
+- [ ] Clear gate `organization-user-scope-and-rbac` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 Run:
 
@@ -150,6 +155,7 @@ Manual scenario:
 - [x] Verify Kubernetes tools work through unified read-state.
 - [x] Verify PMG tools still work.
 - [x] Verify Patrol scoped runs still behave correctly.
+- [ ] Clear gate `paid-feature-entitlement-gating` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 Run:
 
@@ -216,6 +222,15 @@ Mobile automated checks completed:
 - [x] Secure storage / auth / instance persistence
 - [x] Relay reconnect and hardening tests
 - [x] Approval store state consistency
+- [ ] Clear gate `mobile-relay-auth-approvals` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
+
+## High-Risk Trust Gates
+- [ ] Clear gate `hosted-signup-billing-replay`.
+- [ ] Clear gate `paid-feature-entitlement-gating`.
+- [ ] Clear gate `relay-registration-reconnect-drain`.
+- [ ] Clear gate `mobile-relay-auth-approvals`.
+- [ ] Clear gate `organization-user-scope-and-rbac`.
+- [ ] Clear gate `api-token-scope-and-assignment`.
 
 ## Release Decision
 Mark Pulse v6 pre-release ready only if all of the following are true:
