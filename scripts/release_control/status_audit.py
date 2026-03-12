@@ -64,7 +64,12 @@ def _evidence_sort_key(value: tuple[str, str, str]) -> tuple[str, str, str]:
 
 def _is_executable_proof_artifact(path: str) -> bool:
     filename = Path(path).name
-    return filename.endswith("_test.go") or ".test." in filename or ".spec." in filename
+    return (
+        filename.endswith("_test.go")
+        or filename.endswith("_test.py")
+        or ".test." in filename
+        or ".spec." in filename
+    )
 
 
 def _proof_command_sort_key(value: str) -> str:

@@ -98,6 +98,8 @@ complete but still marked active.
 Durable truths that are not target changes should be normalized into
 readiness assertions, release gates, or open decisions rather than copied into
 the target text.
+For release targets, `release_ready` means stable or GA promotion readiness,
+not merely that an RC can be cut.
 Do not wait for a special governance prompt before checking whether informal
 user language should update the control plane.
 

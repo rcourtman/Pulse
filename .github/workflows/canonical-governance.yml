@@ -115,6 +115,9 @@ jobs:
       - name: Run repo file IO unit tests
         run: python3 scripts/release_control/repo_file_io_test.py
 
+      - name: Run release promotion policy unit tests
+        run: python3 scripts/release_control/release_promotion_policy_test.py
+
       - name: Run status audit unit tests
         run: python3 scripts/release_control/status_audit_test.py
 

@@ -355,6 +355,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"control_plane_audit.py --check",
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
+		"stable or GA promotion readiness",
 		"should always be true",
 	})
 
@@ -408,6 +409,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"## Evergreen Readiness Assertions",
 		"## Development Governance",
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
+		"Do not promote v6 to stable or GA without an exercised RC",
+		"v5 maintenance-only support policy",
 		"control_plane_audit.py --check",
 		"When a user states a durable product truth",
 		"classify that as an active-target update or another control-plane",
@@ -422,6 +425,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"status.json.release_gates",
 		"hosted-signup-billing-replay",
 		"paid-feature-entitlement-gating",
+		"rc-to-ga-promotion-readiness",
 		"relay-registration-reconnect-drain",
 		"mobile-relay-auth-approvals",
 		"organization-user-scope-and-rbac",

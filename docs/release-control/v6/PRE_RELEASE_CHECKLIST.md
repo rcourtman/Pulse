@@ -18,9 +18,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 
 ## Promotion Policy
 - [ ] Record the previous stable tag and exact rollback pin command before publishing a new RC or stable release.
+- [ ] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real RC tag, not only linted or YAML-parsed.
 - [ ] For stable promotion, confirm the candidate commit has already shipped on `rc`.
 - [ ] For stable promotion, confirm the RC soak window is at least 72 hours or document the hotfix exception explicitly.
 - [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
+- [ ] For GA/stable promotion, write down the v5 maintenance-only support window and end-of-support notice that will ship with the promotion.
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.
@@ -234,6 +236,7 @@ Mobile automated checks completed:
 ## High-Risk Trust Gates
 - [ ] Clear gate `hosted-signup-billing-replay`.
 - [ ] Clear gate `paid-feature-entitlement-gating`.
+- [ ] Clear gate `rc-to-ga-promotion-readiness`.
 - [ ] Clear gate `relay-registration-reconnect-drain`.
 - [ ] Clear gate `mobile-relay-auth-approvals`.
 - [ ] Clear gate `organization-user-scope-and-rbac`.
@@ -252,3 +255,5 @@ Mark a Pulse v6 build stable-promotion ready only if all of the following are tr
 - [ ] The `Promotion Policy` section above is complete.
 - [ ] Applicable items in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` are cleared.
 - [ ] The rollback target and exact reinstall command are recorded.
+- [ ] The release pipeline has already been exercised on the candidate RC path in a real run, not only statically validated.
+- [ ] The v5 maintenance-only support policy and end-of-support note are written and ready to publish.

@@ -45,6 +45,8 @@ Cloud, and self-hosted production users.
    - Targeted automated checks for touched release surfaces.
    - A smoke install on a fresh or staging-like environment.
    - Release notes and a rollback target recorded before publish.
+   - At least one live run of the release pipeline for the RC tag itself, not
+     only structural workflow validation.
 3. Failed RCs are fixed forward and replaced with a new RC. They are never
    promoted as-is to `stable`.
 
@@ -59,6 +61,10 @@ Cloud, and self-hosted production users.
    - Applicable entries in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` cleared.
    - No known unresolved high-severity regressions in touched release surfaces.
    - The previous stable rollback target and exact reinstall command recorded.
+   - A live release-pipeline exercise already completed for the promoted RC,
+     not only YAML lint or static workflow validation.
+   - A written v5 maintenance-only support policy and end-of-support window
+     ready to publish with the promotion.
 4. Normal stable promotions require a minimum 72-hour RC soak after the
    candidate is available to internal or staging-like users.
 5. Hotfix exception:
@@ -94,6 +100,7 @@ Cloud, and self-hosted production users.
 2. Rollback target version and exact pin command.
 3. Checklist evidence and gate status.
 4. Staging or internal validation note.
+5. v5 maintenance-only support policy and end-of-support note for the GA cutover.
 
 ## Authority
 

@@ -526,6 +526,49 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA8",
+      "summary": "Stable or GA promotion happens only after an exercised RC, live release-pipeline proof, a recorded rollback target, and a written v5 maintenance-only support policy.",
+      "kind": "trust-gate",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L1",
+        "L9",
+        "L11",
+        "L12"
+      ],
+      "subsystem_ids": [],
+      "release_gate_ids": [
+        "rc-to-ga-promotion-readiness"
+      ],
+      "proof_commands": [
+        {
+          "id": "release-promotion-policy-tests",
+          "run": [
+            "python3",
+            "scripts/release_control/release_promotion_policy_test.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/RELEASE_PROMOTION_POLICY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/release_promotion_policy_test.py",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -1019,6 +1062,19 @@
       ]
     },
     {
+      "id": "rc-to-ga-promotion-readiness",
+      "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L1",
+        "L9",
+        "L11",
+        "L12"
+      ]
+    },
+    {
       "id": "relay-registration-reconnect-drain",
       "summary": "Confirm relay fresh registration, reconnect, stale-session recovery, and disconnect drain behavior hold under real pressure.",
       "owner": "project-owner",
@@ -1072,6 +1128,17 @@
         "L2",
         "L3",
         "L4"
+      ]
+    },
+    {
+      "id": "v5-maintenance-support-policy",
+      "summary": "Decide and publish the v5 maintenance-only support window and end-of-support notice that will apply once v6 reaches stable or GA.",
+      "owner": "project-owner",
+      "status": "open",
+      "opened_at": "2026-03-12",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L9"
       ]
     }
   ],
@@ -1206,7 +1273,7 @@
     },
     {
       "id": "stable-release-promotion-model",
-      "summary": "v6 and later releases use an opt-in RC preview channel plus a promotion-only stable channel; stable customers must receive only already-validated builds and unattended auto-update exposure remains stable-only.",
+      "summary": "v6 and later releases use an opt-in RC preview channel plus a promotion-only stable channel; stable customers must receive only already-validated builds, unattended auto-update exposure remains stable-only, and GA stays blocked until rollback instructions and the v5 maintenance-only policy are explicit.",
       "kind": "release-policy",
       "decided_at": "2026-03-12",
       "subsystem_ids": [],

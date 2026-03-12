@@ -99,6 +99,42 @@ result.
   correctly granted capability, or agent counts/caps disagree across
   enforcement and user-visible surfaces.
 
+## Gate: `rc-to-ga-promotion-readiness`
+
+- Why this is risky:
+  Stable users must not become the first real validation cohort for v6. The
+  RC-to-GA handoff is where migration confidence, release automation,
+  rollback clarity, and the v5 support policy have to become explicit.
+- Primary runtime surfaces:
+  `.github/workflows/create-release.yml`
+  `.github/workflows/publish-docker.yml`
+  `.github/workflows/promote-floating-tags.yml`
+  `docs/release-control/v6/PRE_RELEASE_CHECKLIST.md`
+  `docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`
+  `docs/releases/RELEASE_NOTES_v6.md`
+- Automated proof:
+  `python3 scripts/release_control/release_promotion_policy_test.py`
+- Manual scenario:
+  1. Identify the exact RC tag and commit that are being considered for stable
+     or GA promotion.
+  2. Confirm the candidate commit has already shipped on `rc` through a real
+     release-pipeline run, not only workflow lint or static YAML validation.
+  3. Confirm the candidate satisfies the minimum 72-hour RC soak or that a
+     hotfix exception and reason are recorded explicitly before promotion.
+  4. Confirm the previous stable rollback target and exact reinstall or pin
+     command are recorded in the release notes or release ticket.
+  5. Confirm the v5 maintenance-only support policy and end-of-support window
+     are written down and ready to ship with the stable or GA announcement.
+  6. Confirm the migration gate and other applicable high-risk gates are
+     cleared for this same candidate before broad rollout.
+- Pass when:
+  Stable or GA promotion is a governed handoff from an exercised RC with live
+  release-pipeline proof, explicit rollback instructions, and a published v5
+  maintenance policy.
+- Block release if:
+  Stable users would become the first real validation cohort, the rollback
+  target is unclear, or the v5 maintenance-only policy is still undecided.
+
 ## Gate: `upgrade-state-and-entitlement-preservation`
 
 - Why this is risky:

@@ -92,6 +92,8 @@ Pulse v6 is ready when these outcomes land together:
 1. Unified resource model is stable and expansion-ready.
 2. Product quality feels polished and trustable out of the box.
 3. Commercial packaging materially improves conversion and revenue.
+4. Stable or GA promotion happens only after RC validation, not as the first
+   customer exposure.
 
 ## Evergreen Readiness Assertions
 
@@ -131,6 +133,7 @@ Assertion design rules:
 4. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
 5. Do not keep polishing strong lanes while weak lanes remain behind.
 6. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+7. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
 
 ## Locked Decisions
 
@@ -147,7 +150,10 @@ Assertion design rules:
    and downgrade safety.
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
    architectural blockers.
-6. v6 and later releases use a promotion model, not a direct broad-rollout
+6. Stable or GA promotion for v6 must come from an exercised RC and stay
+   blocked until the RC-to-GA promotion gate and v5 maintenance-policy
+   decision are both resolved.
+7. v6 and later releases use a promotion model, not a direct broad-rollout
    model.
    `stable` must receive only promoted, already-validated builds, `rc` is the
    opt-in preview channel, and unattended auto-update exposure remains

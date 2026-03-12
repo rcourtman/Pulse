@@ -28,7 +28,7 @@
       "profile_id": "v6",
       "kind": "release",
       "status": "active",
-      "summary": "Drive Pulse v6 to release readiness with governed proof, cleared blockers, and cleared high-risk gates.",
+      "summary": "Drive Pulse v6 through RC validation and governed GA promotion with proven migration, cleared blockers, and cleared high-risk gates.",
       "completion_rule": "release_ready"
     }
   ]

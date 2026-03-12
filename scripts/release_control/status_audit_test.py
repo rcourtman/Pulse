@@ -280,6 +280,29 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_python_test_files_count_as_executable_proof_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.py")
+            write_file(pulse, "docs/hybrid_test.py")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        readiness_assertions=[
+                            automated_assertion(evidence_path="docs/proof_test.py"),
+                            hybrid_assertion(evidence_path="docs/hybrid_test.py"),
+                        ]
+                    )
+                )
+
+            self.assertEqual(report["errors"], [])
+
     def test_render_pretty_includes_proof_command_counts_and_release_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
