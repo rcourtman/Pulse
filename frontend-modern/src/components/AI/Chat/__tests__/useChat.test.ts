@@ -112,13 +112,15 @@ describe('useChat', () => {
     it('creates session when none exists and sends message', async () => {
       mockCreateSession.mockResolvedValue({ id: 'new-sess' });
       mockChat.mockResolvedValue(undefined);
+      const onConversationChanged = vi.fn();
 
-      const { value: chat, dispose } = withRoot(() => useChat());
+      const { value: chat, dispose } = withRoot(() => useChat({ onConversationChanged }));
       const result = await chat.sendMessage('hello');
 
       expect(result).toBe(true);
       expect(mockCreateSession).toHaveBeenCalledOnce();
       expect(chat.sessionId()).toBe('new-sess');
+      expect(onConversationChanged).toHaveBeenCalledTimes(2);
 
       // Should have user + assistant messages
       const msgs = chat.messages();
@@ -884,8 +886,11 @@ describe('useChat', () => {
         message_count: 0,
       });
       mockChat.mockResolvedValue(undefined);
+      const onConversationChanged = vi.fn();
 
-      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'old' }));
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 'old', onConversationChanged }),
+      );
       await chat.sendMessage('setup');
 
       const session = await chat.newSession();
@@ -894,6 +899,7 @@ describe('useChat', () => {
       expect(session!.id).toBe('new-sess-99');
       expect(chat.sessionId()).toBe('new-sess-99');
       expect(chat.messages()).toEqual([]);
+      expect(onConversationChanged).toHaveBeenCalledTimes(2);
       dispose();
     });
 

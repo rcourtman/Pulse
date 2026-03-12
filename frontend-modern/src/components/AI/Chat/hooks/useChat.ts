@@ -15,6 +15,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 export interface UseChatOptions {
   sessionId?: string;
   model?: string;
+  onConversationChanged?: () => void | Promise<void>;
 }
 
 export function useChat(options: UseChatOptions = {}) {
@@ -23,6 +24,15 @@ export function useChat(options: UseChatOptions = {}) {
   const [isLoading, setIsLoading] = createSignal(false);
   const [sessionId, setSessionId] = createSignal(options.sessionId || '');
   const [model, setModel] = createSignal(options.model || '');
+
+  const notifyConversationChanged = async () => {
+    if (!options.onConversationChanged) return;
+    try {
+      await options.onConversationChanged();
+    } catch (error) {
+      logger.warn('[useChat] Failed to refresh conversations:', error);
+    }
+  };
 
   // Abort controller for canceling requests
   let abortControllerRef: AbortController | null = null;
@@ -425,6 +435,7 @@ export function useChat(options: UseChatOptions = {}) {
         const session = await AIChatAPI.createSession();
         currentSessionId = session.id;
         setSessionId(currentSessionId);
+        await notifyConversationChanged();
         logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
       } catch (error) {
         logger.error('[useChat] Failed to create session:', error);
@@ -471,6 +482,7 @@ export function useChat(options: UseChatOptions = {}) {
         mentions,
         findingId,
       );
+      await notifyConversationChanged();
       return true;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -489,6 +501,7 @@ export function useChat(options: UseChatOptions = {}) {
             : msg,
         ),
       );
+      await notifyConversationChanged();
       return false;
     } finally {
       abortControllerRef = null;
@@ -528,6 +541,7 @@ export function useChat(options: UseChatOptions = {}) {
       const session = await AIChatAPI.createSession();
       setSessionId(session.id);
       setMessages([]);
+      await notifyConversationChanged();
       return session;
     } catch (error) {
       logger.error('[useChat] Failed to create session:', error);

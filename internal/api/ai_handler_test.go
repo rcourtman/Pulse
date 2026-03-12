@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
@@ -693,6 +694,51 @@ func TestHandleChat_Error(t *testing.T) {
 	// ExecuteStream error happens after headers are sent, so w.Code might be 200
 	// but the error is returned.
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_BindsExecutionToRequestContext(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+
+	executeDone := make(chan struct{})
+	handlerDone := make(chan struct{})
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		cancelReq()
+		<-ctx.Done()
+		if ctx.Err() != context.Canceled {
+			t.Fatalf("expected request cancellation, got %v", ctx.Err())
+		}
+		close(executeDone)
+	})
+
+	body := `{"prompt":"hi"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body)).WithContext(reqCtx)
+	w := httptest.NewRecorder()
+
+	go func() {
+		defer close(handlerDone)
+		h.HandleChat(w, req)
+	}()
+
+	select {
+	case <-executeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected ExecuteStream context to be canceled with the request")
+	}
+
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected handler to return after request cancellation")
+	}
 }
 
 func TestHandleDiff_Error(t *testing.T) {

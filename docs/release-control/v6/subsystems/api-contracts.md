@@ -240,6 +240,14 @@ Monitoring command-trigger clients must now also route empty-body
 `{ success: true }` fallback behavior through a shared success-envelope helper
 in `frontend-modern/src/api/responseUtils.ts` instead of open-coding
 `parseOptionalAPIResponse(response, { success: true }, ...)` in each method.
+AI chat SSE now also treats interactive `question` events as a canonical API
+contract surface: backend and frontend must preserve `session_id`,
+`question_id`, and the structured `questions` array without handler-local
+rewrites or alternate payload aliases.
+That same chat SSE contract must remain request-bound. If the HTTP request
+context is canceled or the client disconnects, backend assistant execution
+must cancel with the request rather than continuing on a detached background
+context until an unrelated timeout expires.
 AI and agent-profile collection/detail clients must now also route `apiFetchJSON`
 `402`/`404` fallback behavior through shared API-error-status fallback helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

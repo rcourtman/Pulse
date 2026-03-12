@@ -706,8 +706,9 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	flusher.Flush()
 
-	// Context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	// Keep assistant execution bound to the client request so disconnects cancel
+	// backend work instead of letting it continue until the hard timeout expires.
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 	defer cancel()
 
 	// Heartbeat
@@ -719,11 +720,15 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		defer ticker.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				clientDisconnected.Store(true)
+				return
 			case <-ticker.C:
 				_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				_, err := w.Write([]byte(": heartbeat\n\n"))
 				if err != nil {
 					clientDisconnected.Store(true)
+					cancel()
 					return
 				}
 				flusher.Flush()
@@ -747,6 +752,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte("data: " + string(data) + "\n\n"))
 		if err != nil {
 			clientDisconnected.Store(true)
+			cancel()
 			return
 		}
 		flusher.Flush()

@@ -362,6 +362,45 @@ func TestService_ExtendedMethods(t *testing.T) {
 	err = service.AbortSession(ctx, "s1")
 	assert.Error(t, err) // Service not started
 }
+
+func TestService_AnswerQuestion_UsesRegisteredActiveLoop(t *testing.T) {
+	service := &Service{
+		started:            true,
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
+	}
+	answersCh := make(chan []QuestionAnswer, 1)
+	loop := &AgenticLoop{
+		pendingQs: map[string]chan []QuestionAnswer{
+			"q-live": answersCh,
+		},
+		aborted: make(map[string]bool),
+	}
+	service.registerQuestionLoop("q-live", loop)
+
+	answers := []QuestionAnswer{{ID: "target", Value: "node-a"}}
+	err := service.AnswerQuestion(context.Background(), "q-live", answers)
+	require.NoError(t, err)
+	assert.Equal(t, answers, <-answersCh)
+}
+
+func TestService_AbortSession_UsesRegisteredActiveLoops(t *testing.T) {
+	service := &Service{
+		started:            true,
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
+	}
+	loop := &AgenticLoop{
+		aborted:   make(map[string]bool),
+		pendingQs: make(map[string]chan []QuestionAnswer),
+	}
+	service.registerActiveLoop("session-live", loop)
+
+	err := service.AbortSession(context.Background(), "session-live")
+	require.NoError(t, err)
+	assert.True(t, loop.aborted["session-live"])
+}
+
 func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},

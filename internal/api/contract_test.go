@@ -490,6 +490,26 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"approval_needed","data":{"approval_id":"approval-1","tool_id":"tool-2","tool_name":"pulse_exec","command":"systemctl restart nginx","run_on_host":true,"target_host":"node-1","risk":"high","description":"Restart web service"}}`,
 		},
 		{
+			name: "question",
+			event: mustStreamEvent(t, "question", chat.QuestionData{
+				SessionID:  "session-1",
+				QuestionID: "question-1",
+				Questions: []chat.Question{
+					{
+						ID:       "target",
+						Type:     "select",
+						Question: "Which node should I inspect?",
+						Header:   "Target",
+						Options: []chat.QuestionOption{
+							{Label: "Node A", Value: "node-a", Description: "Primary compute node"},
+							{Label: "Node B", Value: "node-b", Description: "Replica node"},
+						},
+					},
+				},
+			}),
+			want: `{"type":"question","data":{"session_id":"session-1","question_id":"question-1","questions":[{"id":"target","type":"select","question":"Which node should I inspect?","header":"Target","options":[{"label":"Node A","value":"node-a","description":"Primary compute node"},{"label":"Node B","value":"node-b","description":"Replica node"}]}]}}`,
+		},
+		{
 			name: "done",
 			event: mustStreamEvent(t, "done", chat.DoneData{
 				SessionID:    "session-1",

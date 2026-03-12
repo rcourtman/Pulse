@@ -122,8 +122,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const refreshSessions = async () => {
+    const sessionList = await AIChatAPI.listSessions();
+    setSessions(sessionList);
+  };
+
   // Chat hook
-  const chat = useChat({ model: initialModelSelections[DEFAULT_SESSION_KEY] || '' });
+  const chat = useChat({
+    model: initialModelSelections[DEFAULT_SESSION_KEY] || '',
+    onConversationChanged: refreshSessions,
+  });
 
   const defaultModelLabel = createMemo(() => {
     const fallback = defaultModel().trim();
@@ -285,8 +293,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         // Users who intentionally disabled AI don't need a notification about it
         return;
       }
-      const sessionList = await AIChatAPI.listSessions();
-      setSessions(sessionList);
+      await refreshSessions();
       await loadSettings();
       await loadModels();
     } catch (error) {

@@ -90,6 +90,10 @@ type Service struct {
 	contextPrefetcher *ContextPrefetcher
 	budgetChecker     func() error // Optional mid-run budget enforcement
 	orgID             string
+
+	activeMu           sync.RWMutex
+	activeExecutions   map[string]map[*AgenticLoop]struct{}
+	questionExecutions map[string]*AgenticLoop
 }
 
 // NewService creates a new chat service
@@ -125,14 +129,100 @@ func NewService(cfg Config) *Service {
 	executor.SetTelemetryCallback(NewAIMetricsTelemetryCallback())
 
 	return &Service{
-		cfg:           cfg.AIConfig,
-		dataDir:       cfg.DataDir,
-		stateProvider: cfg.StateProvider,
-		readState:     cfg.ReadState,
-		agentServer:   cfg.AgentServer,
-		executor:      executor,
-		orgID:         strings.TrimSpace(cfg.OrgID),
+		cfg:                cfg.AIConfig,
+		dataDir:            cfg.DataDir,
+		stateProvider:      cfg.StateProvider,
+		readState:          cfg.ReadState,
+		agentServer:        cfg.AgentServer,
+		executor:           executor,
+		orgID:              strings.TrimSpace(cfg.OrgID),
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
 	}
+}
+
+func (s *Service) registerActiveLoop(sessionID string, loop *AgenticLoop) {
+	if s == nil || sessionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if s.activeExecutions == nil {
+		s.activeExecutions = make(map[string]map[*AgenticLoop]struct{})
+	}
+	loops := s.activeExecutions[sessionID]
+	if loops == nil {
+		loops = make(map[*AgenticLoop]struct{})
+		s.activeExecutions[sessionID] = loops
+	}
+	loops[loop] = struct{}{}
+}
+
+func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
+	if s == nil || sessionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if loops := s.activeExecutions[sessionID]; loops != nil {
+		delete(loops, loop)
+		if len(loops) == 0 {
+			delete(s.activeExecutions, sessionID)
+		}
+	}
+	for questionID, registeredLoop := range s.questionExecutions {
+		if registeredLoop == loop {
+			delete(s.questionExecutions, questionID)
+		}
+	}
+}
+
+func (s *Service) registerQuestionLoop(questionID string, loop *AgenticLoop) {
+	if s == nil || questionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if s.questionExecutions == nil {
+		s.questionExecutions = make(map[string]*AgenticLoop)
+	}
+	s.questionExecutions[questionID] = loop
+}
+
+func (s *Service) findQuestionLoop(questionID string) *AgenticLoop {
+	if s == nil || questionID == "" {
+		return nil
+	}
+
+	s.activeMu.RLock()
+	defer s.activeMu.RUnlock()
+	return s.questionExecutions[questionID]
+}
+
+func (s *Service) getActiveLoops(sessionID string) []*AgenticLoop {
+	if s == nil || sessionID == "" {
+		return nil
+	}
+
+	s.activeMu.RLock()
+	defer s.activeMu.RUnlock()
+
+	loops := s.activeExecutions[sessionID]
+	if len(loops) == 0 {
+		return nil
+	}
+
+	active := make([]*AgenticLoop, 0, len(loops))
+	for loop := range loops {
+		active = append(active, loop)
+	}
+	return active
 }
 
 // Adapter types
@@ -367,6 +457,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop.SetOrgID(s.orgID)
 	}
 	loop.SetAutonomousMode(autonomousMode)
+	s.registerActiveLoop(session.ID, loop)
+	defer s.unregisterActiveLoop(session.ID, loop)
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
@@ -544,7 +636,21 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// mutating shared service state from concurrent goroutines.
 	loop.SetAutonomousMode(autonomousMode)
 
-	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
+	streamCallback := callback
+	if streamCallback == nil {
+		streamCallback = func(StreamEvent) {}
+	}
+	wrappedCallback := func(event StreamEvent) {
+		if event.Type == "question" {
+			var data QuestionData
+			if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
+				s.registerQuestionLoop(data.QuestionID, loop)
+			}
+		}
+		streamCallback(event)
+	}
+
+	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)
 
 	log.Debug().
 		Str("session_id", session.ID).
@@ -579,7 +685,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		InputTokens:  loop.GetTotalInputTokens(),
 		OutputTokens: loop.GetTotalOutputTokens(),
 	})
-	callback(StreamEvent{Type: "done", Data: doneData})
+	streamCallback(StreamEvent{Type: "done", Data: doneData})
 
 	return nil
 }
@@ -889,8 +995,21 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 // AbortSession aborts an ongoing session
 func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 	s.mu.RLock()
+	started := s.started
 	agenticLoop := s.agenticLoop
 	s.mu.RUnlock()
+
+	if !started {
+		return fmt.Errorf("service not started")
+	}
+
+	activeLoops := s.getActiveLoops(sessionID)
+	if len(activeLoops) > 0 {
+		for _, loop := range activeLoops {
+			loop.Abort(sessionID)
+		}
+		return nil
+	}
 
 	if agenticLoop == nil {
 		return fmt.Errorf("service not started")
@@ -903,8 +1022,17 @@ func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 // AnswerQuestion provides answers to a pending question
 func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers []QuestionAnswer) error {
 	s.mu.RLock()
+	started := s.started
 	agenticLoop := s.agenticLoop
 	s.mu.RUnlock()
+
+	if !started {
+		return fmt.Errorf("service not started")
+	}
+
+	if loop := s.findQuestionLoop(questionID); loop != nil {
+		return loop.AnswerQuestion(questionID, answers)
+	}
 
 	if agenticLoop == nil {
 		return fmt.Errorf("service not started")
