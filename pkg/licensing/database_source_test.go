@@ -284,6 +284,36 @@ func TestDatabaseSourceTrialExpiryMarksExpiredAndStripsCapabilities(t *testing.T
 	}
 }
 
+func TestDatabaseSourceCanceledCloudPlanFailsClosed(t *testing.T) {
+	store := &mockBillingStore{
+		state: &BillingState{
+			Capabilities:      []string{"relay"},
+			Limits:            map[string]int64{"max_agents": 999},
+			MetersEnabled:     []string{"api_requests"},
+			PlanVersion:       "cloud_starter",
+			SubscriptionState: SubStateCanceled,
+		},
+	}
+
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+
+	if got := source.SubscriptionState(); got != SubStateCanceled {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateCanceled, got)
+	}
+	if got := source.Capabilities(); got != nil && len(got) != 0 {
+		t.Fatalf("expected capabilities to be stripped on cancellation, got %v", got)
+	}
+	if got := source.Limits(); got != nil && len(got) != 0 {
+		t.Fatalf("expected limits to be stripped on cancellation, got %v", got)
+	}
+	if got := source.MetersEnabled(); got != nil && len(got) != 0 {
+		t.Fatalf("expected meters_enabled to be stripped on cancellation, got %v", got)
+	}
+	if got := source.PlanVersion(); got != "cloud_starter" {
+		t.Fatalf("expected plan_version %q, got %q", "cloud_starter", got)
+	}
+}
+
 func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {

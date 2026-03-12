@@ -179,3 +179,8 @@ feature/limit primitives, billing and entitlement type shapes, commercial
 migration and trial flow, conversion telemetry, host lifecycle tracking, and
 public-key/build-mode boundaries should all resolve through explicit proof
 routes rather than a package-wide `pkg/licensing/` fallback.
+Stripe checkout and subscription webhook persistence now also follows the
+canonical Cloud/MSP limit rule: when paid state is granted, billing-state
+writes must persist authoritative `limits.max_agents` derived from canonical
+plan resolution, and when paid state is revoked they must clear those stored
+limits instead of preserving stale paid capacity.

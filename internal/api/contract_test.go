@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 )
@@ -189,6 +190,37 @@ func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 		"org_id":"org-123",
 		"user_id":"owner@example.com",
 		"message":"Check your email for a magic link to finish signing in."
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_BillingStateJSONSnapshot(t *testing.T) {
+	payload := entitlements.BillingState{
+		Capabilities:         []string{"relay", "mobile_app"},
+		Limits:               map[string]int64{"max_agents": 10},
+		MetersEnabled:        []string{"api_requests"},
+		PlanVersion:          "cloud_starter",
+		SubscriptionState:    entitlements.SubStateActive,
+		StripeCustomerID:     "cus_123",
+		StripeSubscriptionID: "sub_123",
+		StripePriceID:        "price_123",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal billing state: %v", err)
+	}
+
+	const want = `{
+		"capabilities":["relay","mobile_app"],
+		"limits":{"max_agents":10},
+		"meters_enabled":["api_requests"],
+		"plan_version":"cloud_starter",
+		"subscription_state":"active",
+		"stripe_customer_id":"cus_123",
+		"stripe_subscription_id":"sub_123",
+		"stripe_price_id":"price_123"
 	}`
 
 	assertJSONSnapshot(t, got, want)

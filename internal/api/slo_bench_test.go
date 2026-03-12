@@ -448,6 +448,13 @@ func TestSLO_InfrastructureCharts(t *testing.T) {
 	if sanityResp.Stats.PrimarySourceHint != "store_or_memory_fallback" {
 		t.Fatalf("sanity: expected store-backed source hint, got %q", sanityResp.Stats.PrimarySourceHint)
 	}
+	if SLOWorkloadsSummaryChartsP95 != SLOWorkloadChartsP95 {
+		t.Fatalf(
+			"sanity: workloads-summary SLO=%v, want alignment with workload charts SLO=%v",
+			SLOWorkloadsSummaryChartsP95,
+			SLOWorkloadChartsP95,
+		)
+	}
 
 	latencies := measureEndpointLatencies(t, func() {
 		req := httptest.NewRequest(http.MethodGet, url, nil)

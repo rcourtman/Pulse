@@ -47,4 +47,11 @@ const (
 	// with a store-backed 4h window across VMs, system containers, and docker
 	// containers. This is the workloads summary sparkline hot path.
 	SLOWorkloadChartsP95 = 90 * time.Millisecond
+
+	// SLOWorkloadsSummaryChartsP95 is the p95 target for
+	// GET /api/charts/workloads-summary with a store-backed 4h window across
+	// VMs, system containers, Kubernetes pods, and docker containers. This
+	// aggregate endpoint is latency-sensitive because it powers the top-card
+	// workload sparklines and blast-radius summaries without per-workload output.
+	SLOWorkloadsSummaryChartsP95 = 90 * time.Millisecond
 )

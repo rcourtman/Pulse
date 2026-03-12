@@ -254,6 +254,9 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	if state.PlanVersion != "cloud_starter" {
 		t.Fatalf("plan_version=%q, want %q", state.PlanVersion, "cloud_starter")
 	}
+	if got := state.Limits["max_agents"]; got != 10 {
+		t.Fatalf("limits[max_agents]=%d, want %d", got, 10)
+	}
 	if state.StripeCustomerID != "cus_abc" {
 		t.Fatalf("stripe_customer_id=%q, want %q", state.StripeCustomerID, "cus_abc")
 	}
@@ -570,6 +573,9 @@ func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 	}
 	if len(state.Capabilities) != 0 {
 		t.Fatalf("capabilities=%v, want empty", state.Capabilities)
+	}
+	if len(state.Limits) != 0 {
+		t.Fatalf("limits=%v, want empty", state.Limits)
 	}
 }
 

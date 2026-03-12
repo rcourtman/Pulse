@@ -190,6 +190,10 @@ func deriveStripePlanVersionFromLicensing(metadata map[string]string, priceID st
 	return pkglicensing.DeriveStripePlanVersion(metadata, priceID)
 }
 
+func limitsForCloudPlanFromLicensing(planVersion string) (map[string]int64, bool) {
+	return pkglicensing.LimitsForCloudPlan(planVersion)
+}
+
 func buildEntitlementPayloadFromLicensing(status *licenseStatus, subscriptionState string) entitlementPayloadModel {
 	return pkglicensing.BuildEntitlementPayload(status, subscriptionState)
 }

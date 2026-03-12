@@ -251,11 +251,18 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 		}
 	}
 
-	if limit, known := CloudPlanAgentLimits[normalized.PlanVersion]; known {
-		if normalized.Limits == nil {
-			normalized.Limits = map[string]int64{}
+	switch normalized.SubscriptionState {
+	case SubStateExpired, SubStateSuspended, SubStateCanceled:
+		normalized.Capabilities = nil
+		normalized.Limits = nil
+		normalized.MetersEnabled = nil
+	default:
+		if limit, known := CloudPlanAgentLimits[normalized.PlanVersion]; known {
+			if normalized.Limits == nil {
+				normalized.Limits = map[string]int64{}
+			}
+			normalized.Limits[MaxAgentsLicenseGateKey] = int64(limit)
 		}
-		normalized.Limits[MaxAgentsLicenseGateKey] = int64(limit)
 	}
 
 	return normalized

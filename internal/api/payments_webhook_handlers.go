@@ -332,10 +332,11 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	}
 
 	planVersion := derivePlanVersion(session.Metadata, "")
+	limits, _ := limitsForCloudPlanFromLicensing(planVersion)
 
 	state := &billingState{
 		Capabilities:         cloudCapabilitiesFromLicensing(),
-		Limits:               map[string]int64{},
+		Limits:               limits,
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
 		SubscriptionState:    subscriptionStateActiveValue,
@@ -442,8 +443,11 @@ func (h *StripeWebhookHandlers) handleSubscriptionUpdated(ctx context.Context, s
 
 	if shouldGrantPaidCapabilities(subState) {
 		state.Capabilities = cloudCapabilitiesFromLicensing()
+		limits, _ := limitsForCloudPlanFromLicensing(state.PlanVersion)
+		state.Limits = limits
 	} else {
 		state.Capabilities = []string{}
+		state.Limits = map[string]int64{}
 	}
 
 	if err := h.billingStore.SaveBillingState(orgID, state); err != nil {
@@ -499,6 +503,7 @@ func (h *StripeWebhookHandlers) handleSubscriptionDeleted(ctx context.Context, s
 	// CRITICAL: revoke paid capabilities immediately on cancellation.
 	state.SubscriptionState = subscriptionStateCanceledValue
 	state.Capabilities = []string{}
+	state.Limits = map[string]int64{}
 	state.StripeCustomerID = customerID
 	state.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 

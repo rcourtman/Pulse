@@ -322,3 +322,27 @@ func TestNormalizeBillingState_PreservesNonCloudPlanLimits(t *testing.T) {
 		t.Fatalf("limits[max_agents]=%d, want %d", got, 50)
 	}
 }
+
+func TestNormalizeBillingState_StripsEntitlementsForRevokedSubscriptions(t *testing.T) {
+	state := &BillingState{
+		Capabilities:      []string{"relay"},
+		Limits:            map[string]int64{"max_agents": 999},
+		MetersEnabled:     []string{"api_requests"},
+		PlanVersion:       "cloud_starter",
+		SubscriptionState: SubStateCanceled,
+	}
+
+	normalized := NormalizeBillingState(state)
+	if len(normalized.Capabilities) != 0 {
+		t.Fatalf("capabilities=%v, want empty", normalized.Capabilities)
+	}
+	if len(normalized.Limits) != 0 {
+		t.Fatalf("limits=%v, want empty", normalized.Limits)
+	}
+	if len(normalized.MetersEnabled) != 0 {
+		t.Fatalf("meters_enabled=%v, want empty", normalized.MetersEnabled)
+	}
+	if normalized.PlanVersion != "cloud_starter" {
+		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "cloud_starter")
+	}
+}

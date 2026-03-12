@@ -189,6 +189,11 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 `try/catch` wrappers that map those statuses to `[]`, `{ plans: [] }`, or
 `null`.
+Hosted billing-state payloads now also treat Stripe webhook-backed commercial
+state as canonical API contract data: when checkout and subscription webhooks
+persist paid state, `plan_version`, `stripe_price_id`, and `limits.max_agents`
+must stay aligned instead of emitting paid-state payloads with an empty limits
+map or stale canceled-state carryover.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.

@@ -78,3 +78,7 @@ The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
 consumer boundary. The remaining performance work is no longer top-level
 ownership ambiguity on the main dashboard or infrastructure tables.
+The aggregate `/api/charts/workloads-summary` endpoint now also has its own
+explicit API p95 budget constant, aligned with the per-workload charts budget,
+and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
+store-backed mixed-workload benchmark coverage drifts.
