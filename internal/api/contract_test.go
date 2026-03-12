@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestContract_FindingJSONSnapshot(t *testing.T) {
@@ -286,6 +287,68 @@ func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 		"hideLocalLogin":false,
 		"disableDockerUpdateActions":true,
 		"envOverrides":{"PULSE_TELEMETRY":true}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
+	lastPatrolAt := time.Date(2026, 3, 12, 9, 30, 0, 0, time.UTC)
+	nextPatrolAt := lastPatrolAt.Add(6 * time.Hour)
+	blockedAt := lastPatrolAt.Add(15 * time.Minute)
+
+	payload := PatrolStatusResponse{
+		Running:                    false,
+		Enabled:                    true,
+		LastPatrolAt:               &lastPatrolAt,
+		NextPatrolAt:               &nextPatrolAt,
+		LastDurationMs:             12345,
+		ResourcesChecked:           18,
+		FindingsCount:              3,
+		ErrorCount:                 1,
+		Healthy:                    false,
+		IntervalMs:                 21600000,
+		FixedCount:                 2,
+		BlockedReason:              "Awaiting AI provider configuration",
+		BlockedAt:                  &blockedAt,
+		QuickstartCreditsRemaining: 7,
+		QuickstartCreditsTotal:     pkglicensing.QuickstartCreditsTotal,
+		UsingQuickstart:            true,
+		LicenseRequired:            true,
+		LicenseStatus:              "none",
+		UpgradeURL:                 "https://pulserelay.pro/upgrade?feature=ai_autofix",
+	}
+	payload.Summary.Critical = 1
+	payload.Summary.Warning = 2
+	payload.Summary.Watch = 0
+	payload.Summary.Info = 4
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal patrol status response: %v", err)
+	}
+
+	const want = `{
+		"running":false,
+		"enabled":true,
+		"last_patrol_at":"2026-03-12T09:30:00Z",
+		"next_patrol_at":"2026-03-12T15:30:00Z",
+		"last_duration_ms":12345,
+		"resources_checked":18,
+		"findings_count":3,
+		"error_count":1,
+		"healthy":false,
+		"interval_ms":21600000,
+		"fixed_count":2,
+		"blocked_reason":"Awaiting AI provider configuration",
+		"blocked_at":"2026-03-12T09:45:00Z",
+		"quickstart_credits_remaining":7,
+		"quickstart_credits_total":25,
+		"using_quickstart":true,
+		"license_required":true,
+		"license_status":"none",
+		"upgrade_url":"https://pulserelay.pro/upgrade?feature=ai_autofix",
+		"summary":{"critical":1,"warning":2,"watch":0,"info":4}
 	}`
 
 	assertJSONSnapshot(t, got, want)

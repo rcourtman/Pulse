@@ -110,6 +110,16 @@ The `/api/ai/patrol/runs` frontend history clients must now also route their
 shared fetch plus run-normalization pipeline through one canonical local helper
 in `frontend-modern/src/api/patrol.ts` rather than duplicating the same
 endpoint-specific stack across each history variant.
+Patrol status payloads now also treat quickstart credit state as canonical API
+contract data: `/api/ai/patrol/status` must surface
+`quickstart_credits_remaining`, `quickstart_credits_total`, and
+`using_quickstart` directly from backend runtime state so the frontend can
+render Patrol quickstart availability without local heuristics or shadow
+derived state.
+Patrol mutate endpoints that depend on the background service must also fail
+closed with `503 Service Unavailable` when AI service initialization is absent
+rather than dereferencing a nil service and crashing before a contract response
+is written.
 The same rule now also covers optional nested node cluster endpoint collections
 so `frontend-modern/src/api/nodes.ts` does not own its own
 `Array.isArray(node.clusterEndpoints)` response-shape branch.

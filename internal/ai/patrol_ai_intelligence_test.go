@@ -23,6 +23,7 @@ type mockReadState struct {
 	dockerHosts []*ur.DockerHostView
 	dockerCtrs  []*ur.DockerContainerView
 	storage     []*ur.StoragePoolView
+	physical    []*ur.PhysicalDiskView
 	pbs         []*ur.PBSInstanceView
 	pmg         []*ur.PMGInstanceView
 	k8sClusters []*ur.K8sClusterView
@@ -37,6 +38,7 @@ func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
 	return m.dockerCtrs
 }
 func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return m.storage }
+func (m *mockReadState) PhysicalDisks() []*ur.PhysicalDiskView   { return m.physical }
 func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return m.pbs }
 func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return m.pmg }
 func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return m.k8sClusters }

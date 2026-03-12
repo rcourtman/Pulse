@@ -4671,6 +4671,10 @@ type PatrolStatusResponse struct {
 	FixedCount       int        `json:"fixed_count"` // Number of issues auto-fixed by Patrol
 	BlockedReason    string     `json:"blocked_reason,omitempty"`
 	BlockedAt        *time.Time `json:"blocked_at,omitempty"`
+	// Quickstart credit info for Patrol quickstart mode
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`
+	UsingQuickstart            bool `json:"using_quickstart"`
 	// License status for Pro feature gating
 	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
 	LicenseStatus   string `json:"license_status"`   // "active", "expired", "grace_period", "none"
@@ -4681,6 +4685,14 @@ type PatrolStatusResponse struct {
 		Watch    int `json:"watch"`
 		Info     int `json:"info"`
 	} `json:"summary"`
+}
+
+func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolService {
+	aiService := h.GetAIService(ctx)
+	if aiService == nil {
+		return nil
+	}
+	return aiService.GetPatrolService()
 }
 
 // HandleGetPatrolStatus returns the current patrol status (GET /api/ai/patrol/status)
@@ -4744,21 +4756,24 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 
 	response := PatrolStatusResponse{
-		Running:          status.Running,
-		Enabled:          status.Enabled,
-		LastPatrolAt:     status.LastPatrolAt,
-		NextPatrolAt:     status.NextPatrolAt,
-		LastDurationMs:   status.LastDuration.Milliseconds(),
-		ResourcesChecked: status.ResourcesChecked,
-		FindingsCount:    status.FindingsCount,
-		ErrorCount:       status.ErrorCount,
-		Healthy:          status.Healthy,
-		IntervalMs:       status.IntervalMs,
-		FixedCount:       fixedCount,
-		BlockedReason:    status.BlockedReason,
-		BlockedAt:        status.BlockedAt,
-		LicenseRequired:  !hasAutoFixFeature,
-		LicenseStatus:    licenseStatus,
+		Running:                    status.Running,
+		Enabled:                    status.Enabled,
+		LastPatrolAt:               status.LastPatrolAt,
+		NextPatrolAt:               status.NextPatrolAt,
+		LastDurationMs:             status.LastDuration.Milliseconds(),
+		ResourcesChecked:           status.ResourcesChecked,
+		FindingsCount:              status.FindingsCount,
+		ErrorCount:                 status.ErrorCount,
+		Healthy:                    status.Healthy,
+		IntervalMs:                 status.IntervalMs,
+		FixedCount:                 fixedCount,
+		BlockedReason:              status.BlockedReason,
+		BlockedAt:                  status.BlockedAt,
+		QuickstartCreditsRemaining: status.QuickstartCreditsRemaining,
+		QuickstartCreditsTotal:     status.QuickstartCreditsTotal,
+		UsingQuickstart:            status.UsingQuickstart,
+		LicenseRequired:            !hasAutoFixFeature,
+		LicenseStatus:              licenseStatus,
 	}
 	if !hasAutoFixFeature {
 		response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
@@ -5056,7 +5071,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5164,7 +5179,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5285,7 +5300,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5369,7 +5384,7 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5425,7 +5440,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5567,7 +5582,7 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5659,7 +5674,7 @@ func (h *AISettingsHandler) HandleClearAllFindings(w http.ResponseWriter, r *htt
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -5693,7 +5708,7 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		// Return empty history
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
@@ -5974,7 +5989,7 @@ func (h *AISettingsHandler) HandleGetSuppressionRules(w http.ResponseWriter, r *
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
 			log.Error().Err(err).Msg("Failed to write suppression rules response")
@@ -6002,7 +6017,7 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -6079,7 +6094,7 @@ func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
 		return
@@ -6125,7 +6140,7 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
 			log.Error().Err(err).Msg("Failed to write dismissed findings response")

@@ -11,8 +11,10 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore) {
@@ -73,6 +75,137 @@ func addUnifiedFinding(store *unified.UnifiedStore, id string, detectedAt time.T
 	}
 	store.AddFromAI(finding)
 	return finding
+}
+
+type stubQuickstartCreditManager struct {
+	remaining int
+}
+
+func (m *stubQuickstartCreditManager) HasCredits() bool                { return m.remaining > 0 }
+func (m *stubQuickstartCreditManager) CreditsRemaining() int           { return m.remaining }
+func (m *stubQuickstartCreditManager) ConsumeCredit() error            { return nil }
+func (m *stubQuickstartCreditManager) HasBYOK() bool                   { return false }
+func (m *stubQuickstartCreditManager) GetProvider() providers.Provider { return nil }
+func (m *stubQuickstartCreditManager) GrantCredits() error             { return nil }
+
+func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 7})
+	setUnexportedField(t, handler.defaultAIService, "usingQuickstart", true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.QuickstartCreditsRemaining != 7 {
+		t.Fatalf("quickstart credits remaining = %d, want 7", resp.QuickstartCreditsRemaining)
+	}
+	if resp.QuickstartCreditsTotal != pkglicensing.QuickstartCreditsTotal {
+		t.Fatalf("quickstart credits total = %d, want %d", resp.QuickstartCreditsTotal, pkglicensing.QuickstartCreditsTotal)
+	}
+	if !resp.UsingQuickstart {
+		t.Fatal("expected using_quickstart to be true")
+	}
+}
+
+func TestPatrolMutatingHandlers_NoAIService_ReturnServiceUnavailable(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	handler := newTestAISettingsHandler(cfg, nil, nil)
+
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:    "acknowledge",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/acknowledge",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleAcknowledgeFinding,
+		},
+		{
+			name:    "snooze",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/snooze",
+			body:    `{"finding_id":"finding-1","duration_hours":1}`,
+			handler: handler.HandleSnoozeFinding,
+		},
+		{
+			name:    "resolve",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/resolve",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleResolveFinding,
+		},
+		{
+			name:    "note",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/findings/note",
+			body:    `{"finding_id":"finding-1","note":"keep watching"}`,
+			handler: handler.HandleSetFindingNote,
+		},
+		{
+			name:    "dismiss",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/dismiss",
+			body:    `{"finding_id":"finding-1","reason":"expected_behavior"}`,
+			handler: handler.HandleDismissFinding,
+		},
+		{
+			name:    "suppress",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/suppress",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleSuppressFinding,
+		},
+		{
+			name:    "clear_all",
+			method:  http.MethodDelete,
+			path:    "/api/ai/patrol/findings?confirm=true",
+			handler: handler.HandleClearAllFindings,
+		},
+		{
+			name:    "add_suppression_rule",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/suppressions",
+			body:    `{"description":"known benign workload"}`,
+			handler: handler.HandleAddSuppressionRule,
+		},
+		{
+			name:    "delete_suppression_rule",
+			method:  http.MethodDelete,
+			path:    "/api/ai/patrol/suppressions/rule-1",
+			handler: handler.HandleDeleteSuppressionRule,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+
+			tc.handler(rec, req)
+
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+			}
+		})
+	}
 }
 
 func TestHandleAcknowledgeFinding_PatrolAndUnified(t *testing.T) {
