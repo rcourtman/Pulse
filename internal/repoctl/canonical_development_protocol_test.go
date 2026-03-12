@@ -175,6 +175,67 @@ func validateEvidenceRefs(t *testing.T, activeRepos map[string]struct{}, allowed
 	}
 }
 
+func validateProofCommands(t *testing.T, rawProofCommands any, context string) int {
+	t.Helper()
+
+	commands, ok := rawProofCommands.([]any)
+	if !ok || len(commands) == 0 {
+		t.Fatalf("%s missing proof_commands list", context)
+	}
+
+	seenIDs := make(map[string]struct{}, len(commands))
+	ids := make([]string, 0, len(commands))
+	for _, rawCommand := range commands {
+		command, ok := rawCommand.(map[string]any)
+		if !ok {
+			t.Fatalf("%s proof_commands contains non-object entry", context)
+		}
+
+		id, ok := command["id"].(string)
+		if !ok || strings.TrimSpace(id) == "" {
+			t.Fatalf("%s proof_commands contains command without id", context)
+		}
+		if _, exists := seenIDs[id]; exists {
+			t.Fatalf("%s proof_commands duplicates id %q", context, id)
+		}
+		seenIDs[id] = struct{}{}
+		ids = append(ids, id)
+
+		rawRun, ok := command["run"].([]any)
+		if !ok || len(rawRun) == 0 {
+			t.Fatalf("%s proof_command %q missing run list", context, id)
+		}
+		for _, rawArg := range rawRun {
+			arg, ok := rawArg.(string)
+			if !ok || strings.TrimSpace(arg) == "" {
+				t.Fatalf("%s proof_command %q run contains invalid entry", context, id)
+			}
+		}
+
+		if rawCwd, ok := command["cwd"]; ok {
+			cwd, ok := rawCwd.(string)
+			if !ok || strings.TrimSpace(cwd) == "" {
+				t.Fatalf("%s proof_command %q has invalid cwd %#v", context, id, rawCwd)
+			}
+			if filepath.IsAbs(cwd) {
+				t.Fatalf("%s proof_command %q cwd %q must not be absolute", context, id, cwd)
+			}
+			cleaned := filepath.ToSlash(filepath.Clean(cwd))
+			if cleaned != cwd || strings.HasPrefix(cwd, "../") || strings.Contains(cwd, "/../") {
+				t.Fatalf("%s proof_command %q cwd %q must be clean relative path", context, id, cwd)
+			}
+		}
+	}
+
+	sortedIDs := slices.Clone(ids)
+	slices.Sort(sortedIDs)
+	if !slices.Equal(ids, sortedIDs) {
+		t.Fatalf("%s proof_commands must be sorted by command id", context)
+	}
+
+	return len(commands)
+}
+
 func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 	rel := "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
 	content := readRepoFile(t, rel)
@@ -290,9 +351,9 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"subsystems/*.md",
 		"structured evidence references",
 		"does not, by itself, mean Pulse v6 is release-approved",
-		"status.json.readiness.repo_ready",
-		"status.json.readiness.release_ready",
+		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
+		"proof_commands",
 	})
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
@@ -305,8 +366,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"## Evergreen Readiness Assertions",
 		"## Development Governance",
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
-		"status.json.readiness.repo_ready",
-		"status.json.readiness.release_ready",
+		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
 	})
 
@@ -331,8 +391,8 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"title\": \"Pulse v6 Status Schema\"",
 		"\"readiness\"",
 		"\"readiness_assertion\"",
-		"\"repo_ready\"",
-		"\"release_ready\"",
+		"\"proof_command\"",
+		"\"proof_commands\"",
 		"\"blocking_level\"",
 		"\"proof_type\"",
 		"\"open_decision\"",
@@ -417,16 +477,6 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("status.json missing readiness object")
 	}
-	if got, ok := readiness["repo_ready"].(bool); !ok {
-		t.Fatalf("status.json readiness.repo_ready missing bool")
-	} else if got {
-		t.Fatalf("status.json readiness.repo_ready = %v, want false", got)
-	}
-	if got, ok := readiness["release_ready"].(bool); !ok {
-		t.Fatalf("status.json readiness.release_ready missing bool")
-	} else if got {
-		t.Fatalf("status.json readiness.release_ready = %v, want false", got)
-	}
 	if gates, ok := status["release_gates"].([]any); !ok || len(gates) == 0 {
 		t.Fatalf("status.json release_gates must be a non-empty list")
 	}
@@ -436,8 +486,14 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed" {
 		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed")
 	}
-	if blockers, ok := readiness["release_blockers"].([]any); !ok || len(blockers) == 0 {
-		t.Fatalf("status.json readiness.release_blockers must be a non-empty list while release_ready is false")
+	if _, ok := readiness["repo_ready"]; ok {
+		t.Fatalf("status.json readiness must not hand-maintain repo_ready")
+	}
+	if _, ok := readiness["release_ready"]; ok {
+		t.Fatalf("status.json readiness must not hand-maintain release_ready")
+	}
+	if _, ok := readiness["release_blockers"]; ok {
+		t.Fatalf("status.json readiness must not hand-maintain release_blockers")
 	}
 }
 
@@ -635,7 +691,6 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 	validKinds := []string{"invariant", "journey", "trust-gate"}
 	validBlockingLevels := []string{"repo-ready", "release-ready"}
 	validProofTypes := []string{"automated", "manual", "hybrid"}
-	validStatuses := []string{"pending", "partial", "blocked", "passed"}
 	seenIDs := make(map[string]struct{}, len(rawAssertions))
 
 	for _, rawAssertion := range rawAssertions {
@@ -665,9 +720,6 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 		proofType, ok := assertion["proof_type"].(string)
 		if !ok || !slices.Contains(validProofTypes, proofType) {
 			t.Fatalf("status.json readiness_assertion %q has invalid proof_type %#v", id, assertion["proof_type"])
-		}
-		if statusValue, ok := assertion["status"].(string); !ok || !slices.Contains(validStatuses, statusValue) {
-			t.Fatalf("status.json readiness_assertion %q has invalid status %#v", id, assertion["status"])
 		}
 
 		rawLaneIDs, ok := assertion["lane_ids"].([]any)
@@ -713,6 +765,13 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 		}
 		if proofType != "automated" && len(rawReleaseGateIDs) == 0 {
 			t.Fatalf("status.json readiness_assertion %q proof_type %q must carry release_gate_ids", id, proofType)
+		}
+		if rawProofCommands, ok := assertion["proof_commands"]; ok {
+			if count := validateProofCommands(t, rawProofCommands, "status.json readiness_assertion "+id); count == 0 {
+				t.Fatalf("status.json readiness_assertion %q proof_commands must not be empty", id)
+			}
+		} else if proofType == "automated" {
+			t.Fatalf("status.json readiness_assertion %q proof_type automated must carry proof_commands", id)
 		}
 
 		rawEvidence, ok := assertion["evidence"].([]any)
@@ -866,11 +925,14 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"contract_audit.py --check",
 		"Running governance guardrail tests...",
 		"go test ./internal/repoctl -count=1",
+		"Running readiness assertion guard...",
+		"readiness_assertion_guard.py --staged --blocking-level repo-ready --proof-type automated",
 		"canonical_completion_guard_test.py",
 		"contract_audit_test.py",
 		"format_staged_go_test.py",
 		"governance_stage_guard_test.py",
 		"registry_audit_test.py",
+		"readiness_assertion_guard_test.py",
 		"status_audit_test.py",
 		"subsystem_lookup_test.py",
 		"format_staged_go.py",
@@ -905,6 +967,16 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"subsystem_ids",
 		"derived_status",
 		"--check",
+	})
+
+	assertionGuard := readRepoFile(t, "scripts/release_control/readiness_assertion_guard.py")
+	assertContainsAll(t, "scripts/release_control/readiness_assertion_guard.py", assertionGuard, []string{
+		"STATUS_REL",
+		"selected_proof_commands",
+		"run_selected_proof_commands",
+		"--blocking-level",
+		"--proof-type",
+		"proof_commands",
 	})
 
 	registryAudit := readRepoFile(t, "scripts/release_control/registry_audit.py")
@@ -967,11 +1039,13 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/status_audit.py --check",
 		"python3 scripts/release_control/registry_audit.py --check",
 		"python3 scripts/release_control/contract_audit.py --check",
+		"python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
 		"python3 scripts/release_control/contract_audit_test.py",
 		"python3 scripts/release_control/governance_stage_guard_test.py",
 		"python3 scripts/release_control/registry_audit_test.py",
+		"python3 scripts/release_control/readiness_assertion_guard_test.py",
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",
 	})

@@ -30,17 +30,17 @@ For v6 work, agents must treat these files as the execution entry point:
 
 The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, locked decisions, and the
-evergreen readiness assertion definitions.
-`status.json` owns live lane state, lane-to-subsystem ownership, live
-readiness assertion state, structured evidence references, and typed
-lane/subsystem decision records.
+readiness-assertion design rules.
+`status.json` owns live lane state, lane-to-subsystem ownership, the active
+readiness assertion catalog, readiness derivation rules, executable
+proof commands, structured evidence references, and typed lane/subsystem
+decision records.
 Lane scores reaching target in `status.json` mean the tracked architecture and
 governance work for those lanes is at target; they are not, by themselves,
 release approval if readiness assertions, `open_decisions`, or `release_gates`
 still remain.
-Use `status.json.readiness.repo_ready` for machine-visible repo/governance
-readiness and `status.json.readiness.release_ready` for machine-visible
-release approval state. Use
+Use `python3 scripts/release_control/status_audit.py --pretty` for the current
+machine-derived repo/governance and release readiness summary. Use
 `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` as the
 human runbook for clearing the manual high-risk gates represented in
 `status.json.release_gates`.
@@ -51,13 +51,14 @@ intentionally multi-owner files.
 The protocol, subsystem registry, and subsystem contracts answer how work must
 be done.
 Readiness assertions are not a parallel checklist. They are the release truths
-written on top of those governed subsystem surfaces; `SOURCE_OF_TRUTH.md`
-defines them and `status.json.readiness_assertions` records whether they are
-currently proven.
+written on top of those governed subsystem surfaces; `status.json.readiness_assertions`
+declares the active assertion catalog, proof references, and executable proof
+commands, while this protocol and `SOURCE_OF_TRUTH.md` define how that layer
+must behave.
 
 `scripts/release_control/status_audit.py --check` is the machine audit entry
-point for validating live lane evidence references, readiness assertion state,
-typed decision records, and derived evidence health. It also enforces
+point for validating live lane evidence references, readiness assertion proof
+linkage, typed decision records, and derived evidence health. It also enforces
 canonical list ordering inside `status.json` so repo scope, lanes, readiness
 assertions, evidence references, and decision timelines do not drift into
 noisy, hand-arranged variants.
@@ -115,7 +116,7 @@ Every substantial task must finish by checking these questions:
 
 1. Did I change a canonical contract?
    If yes: update the relevant subsystem contract.
-2. Did I change live lane state, readiness assertion state, evidence references, or typed operational decision records?
+2. Did I change live lane state, readiness derivation rules, readiness assertion proof routes, evidence references, or typed operational decision records?
    If yes: update `status.json`.
 3. Did I change stable governance, scope, evergreen readiness assertions, or lock a new architectural/release decision?
    If yes: update `SOURCE_OF_TRUTH.md`.

@@ -23,15 +23,8 @@
   ],
   "execution_model": "direct-repo-sessions",
   "readiness": {
-    "repo_ready": false,
-    "release_ready": false,
     "repo_ready_rule": "all lanes target-met and evidence-present plus all repo-ready assertions passed",
-    "release_ready_rule": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed",
-    "release_blockers": [
-      "Required readiness assertions remain pending or blocked in status.json.readiness_assertions.",
-      "Open operational decisions remain in status.json.open_decisions.",
-      "High-risk release gates remain pending or blocked in status.json.release_gates."
-    ]
+    "release_ready_rule": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
   },
   "readiness_assertions": [
     {
@@ -40,7 +33,6 @@
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
-      "status": "partial",
       "lane_ids": [
         "L6"
       ],
@@ -49,20 +41,33 @@
         "unified-resources"
       ],
       "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra1-unified-resource-guardrails",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "-run",
+            "TestNoDirectStateAccessForMigratedResources|TestNoLegacyHostResourceTypeSymbol",
+            "-count=1"
+          ]
+        }
+      ],
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/state-read-consolidation-progress-2026-02.md",
+          "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "path": "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/api/resources.go",
+          "path": "internal/unifiedresources/code_standards_test.go",
           "kind": "file"
         }
       ]
@@ -73,7 +78,6 @@
       "kind": "journey",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
-      "status": "partial",
       "lane_ids": [
         "L2",
         "L3",
@@ -90,7 +94,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+          "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
           "kind": "file"
         },
         {
@@ -116,7 +120,6 @@
       "kind": "invariant",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
-      "status": "partial",
       "lane_ids": [
         "L3",
         "L5",
@@ -133,22 +136,22 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/hosted_lifecycle_integration_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/api/license_handlers_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/11-first-session.spec.ts",
+          "path": "internal/api/licensing_handlers_auto_migrate_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_commercial_migration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_session_db_test.go",
           "kind": "file"
         }
       ]
@@ -159,7 +162,6 @@
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
-      "status": "partial",
       "lane_ids": [
         "L2",
         "L3",
@@ -198,7 +200,6 @@
       "kind": "invariant",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
-      "status": "partial",
       "lane_ids": [
         "L2",
         "L3",
@@ -216,12 +217,17 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/Settings.tsx",
+          "path": "frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx",
           "kind": "file"
         },
         {
@@ -237,7 +243,6 @@
       "kind": "journey",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
-      "status": "partial",
       "lane_ids": [
         "L3",
         "L5",
@@ -253,17 +258,22 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/releases/RELEASE_NOTES_v6.md",
+          "path": "internal/api/licensing_handlers_auto_migrate_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "tests/integration/tests/11-first-session.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_full_upgrade_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_session_db_test.go",
           "kind": "file"
         }
       ]

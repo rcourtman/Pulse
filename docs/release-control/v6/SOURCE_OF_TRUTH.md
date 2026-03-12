@@ -8,13 +8,14 @@ It is not a live progress dashboard.
 
 Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
-`status.json.readiness.repo_ready` and `status.json.readiness.release_ready`
-are the canonical machine-visible distinction between repo readiness and
-release readiness. The human runbook for trust-critical manual release gates
-lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
-Stable readiness assertion definitions live in this file; live readiness
-assertion state and proof references live in
-`status.json.readiness_assertions`.
+Current repo/release readiness is derived by
+`python3 scripts/release_control/status_audit.py --pretty` from
+`status.json`, not hand-maintained in this file. The human runbook for
+trust-critical manual release gates lives in
+`docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
+Readiness assertion design rules live in this file.
+The active assertion catalog, proof references, and executable proof commands
+live in `status.json.readiness_assertions`.
 
 ## Purpose
 
@@ -72,40 +73,19 @@ Pulse v6 is ready when these outcomes land together:
 
 Pulse v6 readiness is governed by a small evergreen assertion set.
 These assertions are durable release truths, not one-off launch checklist
-items. This file owns the stable assertion definitions.
-`status.json.readiness_assertions` owns the live assertion state, proof
-references, and blocking status for the active release line.
+items.
+`status.json.readiness_assertions` owns the active assertion catalog, proof
+references, and executable proof commands for the active release line.
 
 Assertion design rules:
 
 1. Keep the set small and durable.
 2. Write each assertion as a binary release truth, not as a task list.
 3. Map each assertion to concrete lanes, governed subsystems, or release gates.
-4. If repeated manual proof becomes expensive, automate it or demote it to a
+4. Prefer machine-derived proof and generated summaries over hand-maintained
+   docs.
+5. If repeated manual proof becomes expensive, automate it or demote it to a
    one-time migration item instead of keeping it in the evergreen set.
-
-Current v6 assertion set:
-
-1. `RA1` repo-ready invariant:
-   No governed surfaces that should use the unified resource model may keep
-   shipping on legacy resource paths or response shapes.
-2. `RA2` release-ready journey:
-   A new user can complete Pulse Pro Relay signup through paid activation
-   without manual operator intervention or ambiguous provisioning steps.
-3. `RA3` release-ready invariant:
-   After first successful entitlement activation, Pulse preserves paid state
-   across normal sessions and supported upgrades without repeated license
-   entry.
-4. `RA4` release-ready trust gate:
-   Typical end users should not be able to trivially unlock Pulse Pro features
-   by removing client-only checks while server, hosted, or signed-entitlement
-   enforcement remains absent.
-5. `RA5` release-ready invariant:
-   Non-paid users do not see paid-only navigation or pages unless the surface
-   is explicitly promotional.
-6. `RA6` release-ready journey:
-   Supported upgrades preserve core state, entitlements, and first-session
-   continuity without manual repair work.
 
 ## Non-Negotiable Release Gates
 
@@ -114,7 +94,7 @@ Current v6 assertion set:
 3. Do not ship hosted flows that break signup, auth, provision, or revocation.
 4. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
 5. Do not keep polishing strong lanes while weak lanes remain behind.
-6. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, unresolved readiness assertions, and unresolved release gates still apply.
+6. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
 
 ## Locked Decisions
 
@@ -155,18 +135,19 @@ For canonical subsystem work:
 3. Then read `docs/release-control/v6/subsystems/registry.json`.
 4. Then read the relevant subsystem contract under
    `docs/release-control/v6/subsystems/`.
-5. Update `status.json` when live lane state, live readiness assertion state,
-   evidence references, or typed operational decision records change.
+5. Update `status.json` when live lane state, readiness derivation rules,
+   assertion proof routes, evidence references, or typed operational decision
+   records change.
 6. Update this file only when stable governance, scope, locked decisions, or
-   evergreen readiness assertions change.
+   the readiness-assertion design rules change.
 7. When a canonical path replaces an old path, add or tighten a guardrail so
    the old path cannot silently return.
 
 For readiness assertion work:
 
-1. Update this file when the stable assertion set or assertion wording changes.
-2. Update `status.json.readiness_assertions` when live proof state or blocking
-   status changes.
+1. Update this file only when the readiness-assertion design rules change.
+2. Update `status.json.readiness_assertions` when the active assertion catalog
+   or proof references/proof commands change.
 3. Route manual assertion proof through
    `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` whenever the assertion needs a
    trust-critical release gate instead of a one-off checklist.
@@ -178,14 +159,15 @@ If conflicts appear, resolve by domain:
 1. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`,
    `docs/release-control/v6/subsystems/registry.json`, and the relevant
    subsystem contract own implementation rules.
-2. `docs/release-control/v6/status.json` owns live lane state, live readiness
-   assertion state, structured evidence references, and typed operational
-   decision records.
+2. `docs/release-control/v6/status.json` owns live lane state, the active
+   readiness assertion catalog, readiness derivation rules, executable proof
+   commands, structured evidence references, and typed operational decision
+   records.
 3. `docs/release-control/v6/status.schema.json` owns the machine-readable shape
    contract for `status.json`.
 4. `docs/release-control/v6/subsystems/registry.schema.json` owns the
    machine-readable shape contract for the subsystem registry.
-5. This file owns stable governance, repo scope, release gates, evergreen
-   readiness assertion definitions, and locked decisions.
+5. This file owns stable governance, repo scope, release gates, readiness
+   assertion design rules, and locked decisions.
 6. Supporting architecture and release docs are evidence only. They do not
    override the files above.

@@ -183,19 +183,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "repo_ready",
-        "release_ready",
         "repo_ready_rule",
-        "release_ready_rule",
-        "release_blockers"
+        "release_ready_rule"
       ],
       "properties": {
-        "repo_ready": {
-          "type": "boolean"
-        },
-        "release_ready": {
-          "type": "boolean"
-        },
         "repo_ready_rule": {
           "type": "string",
           "const": "all lanes target-met and evidence-present plus all repo-ready assertions passed"
@@ -203,13 +194,6 @@
         "release_ready_rule": {
           "type": "string",
           "const": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
-        },
-        "release_blockers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
         }
       }
     },
@@ -373,7 +357,6 @@
         "kind",
         "blocking_level",
         "proof_type",
-        "status",
         "lane_ids",
         "subsystem_ids",
         "release_gate_ids",
@@ -411,15 +394,6 @@
             "hybrid"
           ]
         },
-        "status": {
-          "type": "string",
-          "enum": [
-            "pending",
-            "partial",
-            "blocked",
-            "passed"
-          ]
-        },
         "lane_ids": {
           "type": "array",
           "minItems": 1,
@@ -445,11 +419,44 @@
             "minLength": 1
           }
         },
+        "proof_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/proof_command"
+          }
+        },
         "evidence": {
           "type": "array",
           "minItems": 1,
           "items": {
             "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "proof_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "run"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }
