@@ -278,6 +278,10 @@ export const hasPendingInvestigationFixApproval = (
       approval.targetId === findingId,
   );
 
+export const isPatrolInvestigationFixApproval = (
+  approval: Pick<ApprovalRequest, 'toolId'>,
+): boolean => approval.toolId === 'investigation_fix';
+
 export const doesFindingNeedAttention = (
   finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome'>,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId'>[] = [],

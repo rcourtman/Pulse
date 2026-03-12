@@ -17,7 +17,11 @@ import type {
   ApprovalRequest,
   ApprovalExecutionResult,
 } from '@/api/ai';
-import { doesFindingNeedAttention, hasPendingInvestigationFixApproval } from '@/utils/aiFindingPresentation';
+import {
+  doesFindingNeedAttention,
+  hasPendingInvestigationFixApproval,
+  isPatrolInvestigationFixApproval,
+} from '@/utils/aiFindingPresentation';
 import { logger } from '@/utils/logger';
 
 // ============================================
@@ -389,7 +393,7 @@ export const aiIntelligenceStore = {
   async loadPendingApprovals() {
     setApprovalsError(null);
     try {
-      const approvals = await AIAPI.getPendingApprovals();
+      const approvals = (await AIAPI.getPendingApprovals()).filter(isPatrolInvestigationFixApproval);
       setPendingApprovals(approvals);
     } catch (e) {
       logger.error('Failed to load pending approvals:', e);

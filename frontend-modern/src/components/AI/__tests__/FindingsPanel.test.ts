@@ -16,6 +16,7 @@ import {
   getFindingSourceLabel,
   hasFindingInvestigationDetails,
   hasPendingInvestigationFixApproval,
+  isPatrolInvestigationFixApproval,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
   getInvestigationOutcomeSortOrder,
@@ -282,6 +283,11 @@ describe('aiFindingPresentation', () => {
           ] as never,
         ),
       ).toBe(false);
+
+      expect(isPatrolInvestigationFixApproval({ toolId: 'investigation_fix' } as never)).toBe(
+        true,
+      );
+      expect(isPatrolInvestigationFixApproval({ toolId: 'run_command' } as never)).toBe(false);
     });
   });
 

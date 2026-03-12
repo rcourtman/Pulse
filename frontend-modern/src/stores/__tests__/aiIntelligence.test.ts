@@ -113,4 +113,42 @@ describe('aiIntelligenceStore', () => {
       'finding-queued',
     ]);
   });
+
+  it('keeps Patrol approval state scoped to investigation_fix approvals', async () => {
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
+      {
+        id: 'approval-chat',
+        toolId: 'run_command',
+        command: 'apt upgrade',
+        targetType: 'host',
+        targetId: 'host-1',
+        targetName: 'node-1',
+        context: 'Upgrade packages',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: '2026-03-01T00:06:00Z',
+      },
+      {
+        id: 'approval-fix',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart pulse-agent',
+        targetType: 'host',
+        targetId: 'finding-queued',
+        targetName: 'node-200',
+        context: 'Restart the agent',
+        riskLevel: 'medium',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: '2026-03-01T00:06:00Z',
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.pendingApprovals.map((approval) => approval.id)).toEqual([
+      'approval-fix',
+    ]);
+    expect(aiIntelligenceStore.pendingApprovalCount).toBe(1);
+  });
 });
