@@ -278,7 +278,7 @@ result.
   `pulse-mobile/src/hooks/useRelay.ts`
   `pulse-mobile/src/api/client.ts`
 - Automated proof:
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/utils/__tests__/secureStorage.test.ts src/hooks/__tests__/useRelayLifecycle.test.ts src/hooks/__tests__/approvalActionPolicy.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts src/stores/__tests__/approvalStore.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/__tests__/mobileRelayAuthApprovals.rehearsal.test.ts src/utils/__tests__/secureStorage.test.ts src/hooks/__tests__/useRelayLifecycle.test.ts src/hooks/__tests__/approvalActionPolicy.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts src/stores/__tests__/approvalStore.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/api/__tests__/client.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/hooks/__tests__/useRelay.test.ts src/hooks/__tests__/relayPushRefresh.test.ts src/notifications/__tests__/notificationRouting.test.ts src/stores/__tests__/mobileAccessState.test.ts`
