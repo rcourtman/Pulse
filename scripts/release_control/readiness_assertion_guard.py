@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -11,7 +12,7 @@ import sys
 from typing import Any
 
 from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels
-from repo_file_io import REPO_ROOT, load_repo_json
+from repo_file_io import REPO_ROOT, load_repo_json, read_repo_text
 
 
 STATUS_REL = DEFAULT_CONTROL_PLANE["status_rel"]
@@ -172,7 +173,45 @@ def deduplicated_proof_commands(commands: list[dict[str, Any]]) -> list[dict[str
     return [grouped[key] for key in ordered_keys]
 
 
-def run_selected_proof_commands(commands: list[dict[str, Any]]) -> int:
+def _clean_repo_relative_file(path: str, *, cwd: str) -> str | None:
+    candidate = Path(cwd) / path
+    normalized = candidate.as_posix()
+    if candidate.is_absolute():
+        return None
+    if normalized.startswith("../") or "/../" in normalized:
+        return None
+    resolved = (REPO_ROOT / candidate).resolve()
+    try:
+        return resolved.relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def _staged_python_script_run(
+    command: dict[str, Any],
+) -> tuple[list[str], str, dict[str, str]] | None:
+    run = [str(entry) for entry in command["run"]]
+    if len(run) < 2:
+        return None
+    interpreter = run[0]
+    if Path(interpreter).name not in {"python", "python3"}:
+        return None
+    script_path = run[1]
+    if script_path.startswith("-"):
+        return None
+    rel = _clean_repo_relative_file(script_path, cwd=str(command["cwd"]))
+    if rel is None or not rel.endswith(".py"):
+        return None
+    script_dir = str((REPO_ROOT / rel).parent)
+    env = os.environ.copy()
+    current_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        script_dir if not current_pythonpath else f"{script_dir}{os.pathsep}{current_pythonpath}"
+    )
+    return [interpreter, "-", *run[2:]], read_repo_text(rel, staged=True), env
+
+
+def run_selected_proof_commands(commands: list[dict[str, Any]], *, staged: bool = False) -> int:
     unique_commands = deduplicated_proof_commands(commands)
     if not commands:
         print("Readiness assertion guard: no matching proof commands.")
@@ -190,7 +229,19 @@ def run_selected_proof_commands(commands: list[dict[str, Any]]) -> int:
         print(
             f"[{','.join(assertion_ids)}] {','.join(command_ids)}: {shlex.join(run)}"
         )
-        result = subprocess.run(run, cwd=cwd, check=False)
+        staged_python_run = _staged_python_script_run(command) if staged else None
+        if staged_python_run is None:
+            result = subprocess.run(run, cwd=cwd, check=False)
+        else:
+            staged_run, script_content, env = staged_python_run
+            result = subprocess.run(
+                staged_run,
+                cwd=cwd,
+                env=env,
+                input=script_content,
+                text=True,
+                check=False,
+            )
         if result.returncode != 0:
             print(
                 "BLOCKED: readiness assertion proof failed for "
@@ -229,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"BLOCKED: {error}")
         return 1
-    return run_selected_proof_commands(commands)
+    return run_selected_proof_commands(commands, staged=args.staged)
 
 
 if __name__ == "__main__":

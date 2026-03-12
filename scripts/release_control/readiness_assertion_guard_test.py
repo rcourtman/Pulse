@@ -241,6 +241,44 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual((repo_root / "proof.out").read_text(encoding="utf-8"), "ok")
 
+    def test_run_selected_proof_commands_executes_staged_repo_python_script(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            self.git(repo_root, "init")
+
+            script_rel = "scripts/release_control/proof_script.py"
+            script_path = repo_root / script_rel
+            script_path.parent.mkdir(parents=True, exist_ok=True)
+            script_path.write_text(
+                "from helper_module import write_ok\nwrite_ok()\n",
+                encoding="utf-8",
+            )
+            helper_path = repo_root / "scripts" / "release_control" / "helper_module.py"
+            helper_path.write_text(
+                "from pathlib import Path\n\n\ndef write_ok():\n    Path('proof.out').write_text('ok', encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            self.git(repo_root, "add", script_rel, "scripts/release_control/helper_module.py")
+
+            script_path.write_text("raise SystemExit(1)\n", encoding="utf-8")
+
+            commands = [
+                {
+                    "assertion_id": "RA8",
+                    "command_id": "staged-script",
+                    "cwd": ".",
+                    "run": ["python3", script_rel],
+                }
+            ]
+
+            with mock.patch.object(readiness_assertion_guard, "REPO_ROOT", repo_root), mock.patch(
+                "repo_file_io.REPO_ROOT", repo_root
+            ):
+                exit_code = readiness_assertion_guard.run_selected_proof_commands(commands, staged=True)
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual((repo_root / "proof.out").read_text(encoding="utf-8"), "ok")
+
 
 if __name__ == "__main__":
     unittest.main()
