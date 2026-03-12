@@ -55,6 +55,7 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
 type APIErrorShape = Error & {
   detail?: string;
   feature?: string;
+  requiredScope?: string;
   upgrade_url?: string;
   status?: number;
 };
@@ -623,6 +624,7 @@ class ApiClient {
       // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
       let errorDetail: string | undefined;
       let errorFeature: string | undefined;
+      let errorRequiredScope: string | undefined;
       let errorUpgradeUrl: string | undefined;
       try {
         const jsonError = JSON.parse(text);
@@ -635,6 +637,7 @@ class ApiClient {
         if (typeof jsonError.detail === 'string') {
           errorDetail = jsonError.detail;
         }
+        errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
         errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
         errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
       } catch {
@@ -659,6 +662,9 @@ class ApiClient {
       err.status = response.status;
       if (errorDetail) {
         err.detail = errorDetail;
+      }
+      if (errorRequiredScope) {
+        err.requiredScope = errorRequiredScope;
       }
       if (errorFeature) {
         err.feature = errorFeature;

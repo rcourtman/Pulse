@@ -36,7 +36,14 @@ describe('SecurityAPI', () => {
   describe('listTokens', () => {
     it('fetches all tokens', async () => {
       const mockTokens: APITokenRecord[] = [
-        { id: 't1', name: 'Token 1', prefix: 'pmp_', suffix: 'abc', createdAt: '' },
+        {
+          id: 't1',
+          name: 'Token 1',
+          prefix: 'pmp_',
+          suffix: 'abc',
+          createdAt: '',
+          ownerUserId: 'owner@example.com',
+        },
       ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: mockTokens });
 
@@ -67,7 +74,14 @@ describe('SecurityAPI', () => {
     it('creates token with name and scopes', async () => {
       const mockResponse: CreateAPITokenResponse = {
         token: 'pmp_xxx',
-        record: { id: 't1', name: 'Token', prefix: 'pmp_', suffix: 'xxx', createdAt: '' },
+        record: {
+          id: 't1',
+          name: 'Token',
+          prefix: 'pmp_',
+          suffix: 'xxx',
+          createdAt: '',
+          ownerUserId: 'owner@example.com',
+        },
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
 
@@ -81,6 +95,25 @@ describe('SecurityAPI', () => {
         }),
       );
       expect(result).toEqual(mockResponse);
+    });
+
+    it('preserves owner user binding from the API response', async () => {
+      const mockResponse: CreateAPITokenResponse = {
+        token: 'pmp_xxx',
+        record: {
+          id: 't1',
+          name: 'Token',
+          prefix: 'pmp_',
+          suffix: 'xxx',
+          createdAt: '',
+          ownerUserId: 'owner@example.com',
+        },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
+
+      const result = await SecurityAPI.createToken('My Token', ['read']);
+
+      expect(result.record.ownerUserId).toBe('owner@example.com');
     });
 
     it('creates token without optional params', async () => {

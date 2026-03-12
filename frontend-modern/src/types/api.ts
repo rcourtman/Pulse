@@ -2,6 +2,17 @@
 
 import type { Resource } from './resource';
 
+export interface APITokenRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  suffix: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  scopes?: string[];
+  ownerUserId?: string;
+}
+
 export interface State {
   // Canonical v6 resource contract.
   // Platform entities (nodes, guests, agents, storage, PBS/PMG, etc.) are modeled in `resources`.

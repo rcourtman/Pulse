@@ -1176,6 +1176,292 @@ func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 	}
 }
 
+func TestRevokedAPITokenImmediatelyLosesAccess(t *testing.T) {
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		hashedPass, err := internalauth.HashPassword("super-secure-pass")
+		if err != nil {
+			t.Fatalf("hash password: %v", err)
+		}
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = hashedPass
+	})
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar: %v", err)
+	}
+	sessionClient := &http.Client{Jar: jar}
+	tokenClient := &http.Client{}
+
+	loginBody, err := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "super-secure-pass",
+	})
+	if err != nil {
+		t.Fatalf("marshal login payload: %v", err)
+	}
+
+	loginReq, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := sessionClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d", loginResp.StatusCode)
+	}
+
+	sessionURL, err := url.Parse(srv.server.URL)
+	if err != nil {
+		t.Fatalf("parse session URL: %v", err)
+	}
+	var csrfToken string
+	for _, cookie := range jar.Cookies(sessionURL) {
+		if cookie.Name == "pulse_csrf" {
+			csrfToken = cookie.Value
+			break
+		}
+	}
+	if csrfToken == "" {
+		t.Fatalf("expected pulse_csrf cookie after login")
+	}
+
+	createReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.server.URL+"/api/security/tokens",
+		bytes.NewBufferString(`{"name":"revocation-proof","scopes":["monitoring:read"]}`),
+	)
+	if err != nil {
+		t.Fatalf("create token request: %v", err)
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-CSRF-Token", csrfToken)
+	createResp, err := sessionClient.Do(createReq)
+	if err != nil {
+		t.Fatalf("create token request failed: %v", err)
+	}
+	defer createResp.Body.Close()
+	if createResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createResp.Body)
+		t.Fatalf("expected 200 creating token, got %d: %s", createResp.StatusCode, string(body))
+	}
+
+	var tokenPayload struct {
+		Token  string `json:"token"`
+		Record struct {
+			ID string `json:"id"`
+		} `json:"record"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&tokenPayload); err != nil {
+		t.Fatalf("decode token create response: %v", err)
+	}
+	if tokenPayload.Token == "" || tokenPayload.Record.ID == "" {
+		t.Fatalf("expected token and record ID, got %+v", tokenPayload)
+	}
+
+	assertStateAuth := func(headerName, headerValue string, wantStatus int) {
+		t.Helper()
+
+		req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state", nil)
+		if err != nil {
+			t.Fatalf("create state request: %v", err)
+		}
+		req.Header.Set(headerName, headerValue)
+
+		res, err := tokenClient.Do(req)
+		if err != nil {
+			t.Fatalf("state request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != wantStatus {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("expected %d for %s auth, got %d: %s", wantStatus, headerName, res.StatusCode, string(body))
+		}
+	}
+
+	assertStateAuth("X-API-Token", tokenPayload.Token, http.StatusOK)
+	assertStateAuth("Authorization", "Bearer "+tokenPayload.Token, http.StatusOK)
+
+	deleteReq, err := http.NewRequest(
+		http.MethodDelete,
+		srv.server.URL+"/api/security/tokens/"+tokenPayload.Record.ID,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create delete request: %v", err)
+	}
+	deleteReq.Header.Set("X-CSRF-Token", csrfToken)
+	deleteResp, err := sessionClient.Do(deleteReq)
+	if err != nil {
+		t.Fatalf("delete token request failed: %v", err)
+	}
+	deleteResp.Body.Close()
+	if deleteResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 deleting token, got %d", deleteResp.StatusCode)
+	}
+
+	assertStateAuth("X-API-Token", tokenPayload.Token, http.StatusUnauthorized)
+	assertStateAuth("Authorization", "Bearer "+tokenPayload.Token, http.StatusUnauthorized)
+}
+
+func TestLimitedAPITokenCannotCreateBroaderToken(t *testing.T) {
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		hashedPass, err := internalauth.HashPassword("super-secure-pass")
+		if err != nil {
+			t.Fatalf("hash password: %v", err)
+		}
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = hashedPass
+	})
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar: %v", err)
+	}
+	sessionClient := &http.Client{Jar: jar}
+	tokenClient := &http.Client{}
+
+	loginBody, err := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "super-secure-pass",
+	})
+	if err != nil {
+		t.Fatalf("marshal login payload: %v", err)
+	}
+
+	loginReq, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := sessionClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d", loginResp.StatusCode)
+	}
+
+	sessionURL, err := url.Parse(srv.server.URL)
+	if err != nil {
+		t.Fatalf("parse session URL: %v", err)
+	}
+	var csrfToken string
+	for _, cookie := range jar.Cookies(sessionURL) {
+		if cookie.Name == "pulse_csrf" {
+			csrfToken = cookie.Value
+			break
+		}
+	}
+	if csrfToken == "" {
+		t.Fatalf("expected pulse_csrf cookie after login")
+	}
+
+	createLimitedReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.server.URL+"/api/security/tokens",
+		bytes.NewBufferString(`{"name":"limited-token","scopes":["settings:write"]}`),
+	)
+	if err != nil {
+		t.Fatalf("create limited token request: %v", err)
+	}
+	createLimitedReq.Header.Set("Content-Type", "application/json")
+	createLimitedReq.Header.Set("X-CSRF-Token", csrfToken)
+	createLimitedResp, err := sessionClient.Do(createLimitedReq)
+	if err != nil {
+		t.Fatalf("limited token creation request failed: %v", err)
+	}
+	defer createLimitedResp.Body.Close()
+	if createLimitedResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createLimitedResp.Body)
+		t.Fatalf("expected 200 creating limited token, got %d: %s", createLimitedResp.StatusCode, string(body))
+	}
+
+	var limitedTokenPayload struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(createLimitedResp.Body).Decode(&limitedTokenPayload); err != nil {
+		t.Fatalf("decode limited token create response: %v", err)
+	}
+	if limitedTokenPayload.Token == "" {
+		t.Fatalf("expected limited token value in response")
+	}
+
+	assertScopeEscalationDenied := func(name, body, wantFragment string) {
+		t.Helper()
+
+		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/security/tokens", bytes.NewBufferString(body))
+		if err != nil {
+			t.Fatalf("create denied token request %s: %v", name, err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+limitedTokenPayload.Token)
+
+		res, err := tokenClient.Do(req)
+		if err != nil {
+			t.Fatalf("denied token request %s failed: %v", name, err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusForbidden {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("expected 403 for %s, got %d: %s", name, res.StatusCode, string(body))
+		}
+
+		payload, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("read denied response for %s: %v", name, err)
+		}
+		if !strings.Contains(string(payload), wantFragment) {
+			t.Fatalf("expected %s response to contain %q, got %q", name, wantFragment, string(payload))
+		}
+	}
+
+	assertScopeEscalationDenied(
+		"explicit broader scope",
+		`{"name":"broader-token","scopes":["settings:write","monitoring:read"]}`,
+		`Cannot grant scope "monitoring:read"`,
+	)
+	assertScopeEscalationDenied(
+		"implicit wildcard scope",
+		`{"name":"wildcard-token"}`,
+		`Cannot grant scope "*"`,
+	)
+
+	listReq, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/security/tokens", nil)
+	if err != nil {
+		t.Fatalf("create list tokens request: %v", err)
+	}
+	listReq.Header.Set("X-CSRF-Token", csrfToken)
+	listResp, err := sessionClient.Do(listReq)
+	if err != nil {
+		t.Fatalf("list tokens request failed: %v", err)
+	}
+	defer listResp.Body.Close()
+	if listResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(listResp.Body)
+		t.Fatalf("expected 200 listing tokens, got %d: %s", listResp.StatusCode, string(body))
+	}
+
+	var listPayload struct {
+		Tokens []struct {
+			Name string `json:"name"`
+		} `json:"tokens"`
+	}
+	if err := json.NewDecoder(listResp.Body).Decode(&listPayload); err != nil {
+		t.Fatalf("decode list tokens response: %v", err)
+	}
+	if len(listPayload.Tokens) != 1 || listPayload.Tokens[0].Name != "limited-token" {
+		t.Fatalf("expected only limited token to remain after denied requests, got %+v", listPayload.Tokens)
+	}
+}
+
 func TestPublicURLDetectionUsesForwardedHeaders(t *testing.T) {
 	const apiToken = "public-url-detection-token-12345"
 

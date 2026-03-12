@@ -231,6 +231,43 @@ func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_APITokenDTOJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
+	lastUsed := now.Add(30 * time.Minute)
+	expires := now.Add(24 * time.Hour)
+
+	payload := apiTokenDTO{
+		ID:          "token-1",
+		Name:        "Deploy token",
+		Prefix:      "pulse_",
+		Suffix:      "1234",
+		CreatedAt:   now,
+		LastUsedAt:  &lastUsed,
+		ExpiresAt:   &expires,
+		Scopes:      []string{"monitoring:read", "settings:write"},
+		OwnerUserID: "owner@example.com",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal API token dto: %v", err)
+	}
+
+	const want = `{
+		"id":"token-1",
+		"name":"Deploy token",
+		"prefix":"pulse_",
+		"suffix":"1234",
+		"createdAt":"2026-02-08T13:14:15Z",
+		"lastUsedAt":"2026-02-08T13:44:15Z",
+		"expiresAt":"2026-02-09T13:14:15Z",
+		"scopes":["monitoring:read","settings:write"],
+		"ownerUserId":"owner@example.com"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_InstallScriptReleaseAssetURL(t *testing.T) {
 	router := &Router{serverVersion: "v6.0.0-rc.1"}
 

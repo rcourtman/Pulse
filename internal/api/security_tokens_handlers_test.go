@@ -238,3 +238,52 @@ func TestSecurityTokens_Create_BindsTokenToRequestOrg(t *testing.T) {
 		t.Fatalf("token org binding = %q, want acme", got)
 	}
 }
+
+func TestSecurityTokens_Create_RejectsScopeEscalationForTokenCaller(t *testing.T) {
+	tests := []struct {
+		name         string
+		body         string
+		wantFragment string
+	}{
+		{
+			name:         "explicit scope escalation",
+			body:         `{"name":"escalated","scopes":["monitoring:read","settings:write"]}`,
+			wantFragment: `Cannot grant scope "settings:write"`,
+		},
+		{
+			name:         "omitted scopes defaults to wildcard escalation",
+			body:         `{"name":"full-access"}`,
+			wantFragment: `Cannot grant scope "*"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			persistence := config.NewConfigPersistence(t.TempDir())
+			router := &Router{
+				config:      cfg,
+				persistence: persistence,
+			}
+
+			caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+			caller.OrgID = "acme"
+
+			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(tt.body))
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+			req = req.WithContext(authpkg.WithAPIToken(req.Context(), &caller))
+			rr := httptest.NewRecorder()
+			router.handleCreateAPIToken(rr, req)
+
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), tt.wantFragment) {
+				t.Fatalf("expected response to contain %q, got %q", tt.wantFragment, rr.Body.String())
+			}
+			if len(cfg.APITokens) != 0 {
+				t.Fatalf("expected no tokens to be stored after denied creation, got %d", len(cfg.APITokens))
+			}
+		})
+	}
+}

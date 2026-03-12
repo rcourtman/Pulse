@@ -246,6 +246,47 @@ func TestSecurityStatusSplitsReadAndWriteSettingsCapabilities(t *testing.T) {
 	}
 }
 
+func TestSecurityStatusUsesOwnerBoundTokenPrincipalForRBAC(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&mockAuthorizerFn{
+		fn: func(ctx context.Context, action string, resource string) (bool, error) {
+			return auth.GetUser(ctx) == "alice" && action == "admin" && resource == "users", nil
+		},
+	})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	rawToken := "status-owner-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record.Metadata = map[string]string{
+		apiTokenMetadataOwnerUserID: "alice",
+	}
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload struct {
+		SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !payload.SettingsCapabilities.APIAccessRead || !payload.SettingsCapabilities.APIAccessWrite {
+		t.Fatalf("expected owner-bound token to inherit RBAC settings capabilities, got %#v", payload.SettingsCapabilities)
+	}
+	if !payload.SettingsCapabilities.Roles || !payload.SettingsCapabilities.Users {
+		t.Fatalf("expected owner-bound token to inherit RBAC user-management capabilities, got %#v", payload.SettingsCapabilities)
+	}
+}
+
 func TestSecurityStatusUsesRBACForProxyCapabilities(t *testing.T) {
 	prevAuthorizer := auth.GetAuthorizer()
 	auth.SetAuthorizer(&allowRulesAuthorizer{

@@ -240,4 +240,65 @@ describe('APITokenManager', () => {
       expect(screen.getByText('Unused token')).toBeInTheDocument();
     });
   });
+
+  it('surfaces scope denial when token generation is blocked by caller scope', async () => {
+    createTokenMock.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot grant scope "monitoring:read": your token does not have this scope'), {
+        status: 403,
+      }),
+    );
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+      target: { value: 'Blocked token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Dashboard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('Blocked token', ['monitoring:read']);
+    });
+
+    expect(notificationErrorMock).toHaveBeenCalledWith(
+      'Cannot grant scope "monitoring:read": your token does not have this scope',
+    );
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(showTokenRevealMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces required scope when middleware rejects token generation', async () => {
+    createTokenMock.mockRejectedValueOnce(
+      Object.assign(new Error('missing_scope'), {
+        status: 403,
+        requiredScope: 'settings:write',
+      }),
+    );
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+      target: { value: 'Needs settings scope' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Container report' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('Needs settings scope', [DOCKER_REPORT_SCOPE]);
+    });
+
+    expect(notificationErrorMock).toHaveBeenCalledWith(
+      'This token is missing the required scope: Settings (write) (settings:write).',
+    );
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(showTokenRevealMock).not.toHaveBeenCalled();
+  });
 });

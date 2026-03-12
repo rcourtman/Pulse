@@ -6230,6 +6230,12 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 
 // getAuthUsername extracts the username from the current auth context
 func getAuthUsername(cfg *config.Config, r *http.Request) string {
+	if token := getAPITokenRecordFromRequest(r); token != nil {
+		if username := apiTokenAuthenticatedUser(token); username != "" {
+			return username
+		}
+	}
+
 	// Check OIDC session first
 	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if username := GetSessionUsername(cookie.Value); username != "" {

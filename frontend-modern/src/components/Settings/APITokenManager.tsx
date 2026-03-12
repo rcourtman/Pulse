@@ -381,7 +381,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       props.onTokensChanged?.();
     } catch (err) {
       logger.error('Failed to generate API token', err);
-      notificationStore.error(getAPITokenGenerateErrorMessage());
+      notificationStore.error(getAPITokenGenerateErrorMessage(err));
     } finally {
       setIsGenerating(false);
     }

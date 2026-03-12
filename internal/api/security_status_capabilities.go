@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -124,7 +123,7 @@ func (r *Router) buildSecurityStatusAuthSnapshot(req *http.Request) securityStat
 		if record, ok := r.config.ValidateAPIToken(token); ok {
 			snapshotReq := req
 			attachAPITokenRecord(snapshotReq, record)
-			tokenUsername := fmt.Sprintf("token:%s", record.ID)
+			tokenUsername := apiTokenAuthenticatedUser(record)
 			snapshotReq = attachUserContext(snapshotReq, tokenUsername)
 			recordClone := record.Clone()
 			return securityStatusAuthSnapshot{

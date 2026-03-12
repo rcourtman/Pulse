@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   apiFetch,
+  apiFetchJSON,
   clearApiToken,
   getApiToken,
   getOrgID,
@@ -119,5 +120,20 @@ describe('apiClient org context', () => {
     await vi.advanceTimersByTimeAsync(5000);
     await pending;
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves requiredScope on JSON missing_scope errors', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'missing_scope', requiredScope: 'settings:write' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(apiFetchJSON('/api/security/tokens', { method: 'POST', body: '{}' })).rejects.toMatchObject({
+      message: 'missing_scope',
+      status: 403,
+      requiredScope: 'settings:write',
+    });
   });
 });

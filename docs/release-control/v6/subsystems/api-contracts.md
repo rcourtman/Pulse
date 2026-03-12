@@ -26,7 +26,6 @@ Own canonical runtime payload shapes between backend and frontend.
 5. `frontend-modern/src/api/responseUtils.ts`
 6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 7. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-8. `internal/api/router.go`
 
 ## Shared Boundaries
 
@@ -146,6 +145,11 @@ the investigation detail endpoint is addressed by finding ID, so findings with
 canonical `investigation_status`, `investigation_outcome`, or non-zero
 `investigation_attempts` must still surface investigation UI even when the
 session ID field is absent or blank.
+That same Patrol findings UI contract must keep `fix_queued` approval recovery
+actions visible even when no live pending approval remains and
+`/api/ai/findings/{id}/investigation` resolves to `null` or omits
+`proposed_fix`: queued remediation state cannot collapse into a dead badge with
+no user action path.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and
@@ -265,12 +269,6 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 `try/catch` wrappers that map those statuses to `[]`, `{ plans: [] }`, or
 `null`.
-`/api/metrics-store/history` now also carries a canonical live-fallback
-contract: when the persistent store is unavailable or empty and the backend
-serves a synthetic live point from canonical monitor snapshots, CPU values
-must remain in frontend percent units for VM, container, node, and
-agent-backed node responses rather than being scaled a second time during
-fallback serialization.
 Paywalled Patrol remediation-intelligence responses must also scrub derived
 metadata together with the collection itself: when remediation history is
 license-locked, `remediations`, `count`, and `stats` must all collapse to an
@@ -301,6 +299,25 @@ rule. Changes to `frontend-modern/src/components/Settings/APITokenManager.tsx`
 must carry this contract and the dedicated API-token management proof file
 instead of remaining an unowned consumer of token scope labels, token
 assignment visibility, and revoke-state presentation.
+The `/api/security/tokens` payload contract now also carries explicit owner
+binding: token create/list responses must preserve the originating
+`ownerUserId` together with org scope so long-lived automation credentials
+cannot appear detached from their intended human identity.
+Those owner-bound credentials now also define the effective authenticated
+principal on governed API routes: when token metadata carries `ownerUserId`,
+RBAC and audit-facing auth resolution must use that bound user identity rather
+than a detached synthetic `token:<id>` subject, while still preserving token
+scope and org enforcement.
+The onboarding QR payload flow now also carries explicit token-bound auth
+semantics: when the frontend requests `/api/onboarding/qr` with a pairing
+token, the API client must send that token explicitly so the returned payload
+and deep link represent the exact minted pairing credential rather than the
+ambient browser session.
+Incoming organization-share payloads now also preserve requested access-role
+semantics at the API boundary: `/api/orgs/{id}/shares/incoming` must hide
+shares whose `accessRole` exceeds the caller's effective role in the target
+organization instead of leaking share metadata that the caller cannot
+legitimately accept or use.
 System settings API payloads now also carry an explicit v6 channel contract:
 `updateChannel` resolves to `stable` or `rc` with `stable` as the default, and
 `autoUpdateEnabled` must serialize as `false` whenever the effective channel is

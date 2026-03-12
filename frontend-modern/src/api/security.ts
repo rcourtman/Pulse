@@ -1,16 +1,9 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
+import type { APITokenRecord as APITokenRecordModel } from '@/types/api';
 import { objectArrayFieldOrEmpty } from './responseUtils';
 
-export interface APITokenRecord {
-  id: string;
-  name: string;
-  prefix: string;
-  suffix: string;
-  createdAt: string;
-  lastUsedAt?: string;
-  scopes?: string[];
-}
+export type APITokenRecord = APITokenRecordModel;
 
 export interface CreateAPITokenResponse {
   token: string;

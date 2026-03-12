@@ -15,26 +15,57 @@ import (
 )
 
 type apiTokenDTO struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Prefix     string     `json:"prefix"`
-	Suffix     string     `json:"suffix"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
-	Scopes     []string   `json:"scopes"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Prefix      string     `json:"prefix"`
+	Suffix      string     `json:"suffix"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	Scopes      []string   `json:"scopes"`
+	OwnerUserID string     `json:"ownerUserId,omitempty"`
+}
+
+const apiTokenMetadataOwnerUserID = "owner_user_id"
+
+func apiTokenOwnerUserID(record config.APITokenRecord) string {
+	if record.Metadata == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Metadata[apiTokenMetadataOwnerUserID])
+}
+
+func apiTokenOwnerUserIDForRequest(cfg *config.Config, req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		if ownerUserID := apiTokenOwnerUserID(*callerToken); ownerUserID != "" {
+			return ownerUserID
+		}
+	}
+	if user := strings.TrimSpace(internalauth.GetUser(req.Context())); user != "" && !strings.HasPrefix(user, "token:") {
+		return user
+	}
+	if cfg != nil {
+		if user := strings.TrimSpace(getAuthUsername(cfg, req)); user != "" && !strings.HasPrefix(user, "token:") {
+			return user
+		}
+	}
+	return ""
 }
 
 func toAPITokenDTO(record config.APITokenRecord) apiTokenDTO {
 	return apiTokenDTO{
-		ID:         record.ID,
-		Name:       record.Name,
-		Prefix:     record.Prefix,
-		Suffix:     record.Suffix,
-		CreatedAt:  record.CreatedAt,
-		LastUsedAt: record.LastUsedAt,
-		ExpiresAt:  record.ExpiresAt,
-		Scopes:     append([]string{}, record.Scopes...),
+		ID:          record.ID,
+		Name:        record.Name,
+		Prefix:      record.Prefix,
+		Suffix:      record.Suffix,
+		CreatedAt:   record.CreatedAt,
+		LastUsedAt:  record.LastUsedAt,
+		ExpiresAt:   record.ExpiresAt,
+		Scopes:      append([]string{}, record.Scopes...),
+		OwnerUserID: apiTokenOwnerUserID(record),
 	}
 }
 
@@ -177,6 +208,12 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 	record.OrgID = strings.TrimSpace(GetOrgID(req.Context()))
 	if record.OrgID == "" {
 		record.OrgID = "default"
+	}
+	if ownerUserID := apiTokenOwnerUserIDForRequest(r.config, req); ownerUserID != "" {
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
+		}
+		record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
 	}
 
 	if payload.ExpiresIn != nil && *payload.ExpiresIn != "" {
