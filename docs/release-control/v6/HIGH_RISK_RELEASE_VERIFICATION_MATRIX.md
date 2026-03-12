@@ -93,10 +93,16 @@ result.
   eviction, or disconnect pressure.
 - Primary runtime surfaces:
   `internal/relay/...`
+  `internal/api/router_routes_auth_security.go`
+  `internal/api/onboarding_handlers.go`
   `pulse-pro/relay-server/...`
+  `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+  `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
   `pulse-mobile/src/relay/...`
 - Automated proof:
   `go test ./internal/relay -count=1 -timeout=120s`
+  `go test ./internal/api -run 'TestRelay|TestOnboarding' -count=1`
+  `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
 - Manual scenario:
   1. Register a fresh relay client.

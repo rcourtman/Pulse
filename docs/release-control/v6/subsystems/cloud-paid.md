@@ -42,7 +42,9 @@ agreement, and cloud-specific enforcement rules.
 20. `internal/cloudcp/stripe/provisioner.go`
 21. `internal/hosted/provisioner.go`
 22. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-23. `frontend-modern/src/pages/CloudPricing.tsx`
+23. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+24. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+25. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Shared Boundaries
 
@@ -63,8 +65,9 @@ agreement, and cloud-specific enforcement rules.
 8. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
 9. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
 10. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-11. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-12. Add contract tests where runtime and pricing need to stay aligned
+11. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+12. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+13. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -127,6 +130,12 @@ cloud-paid ownership model as well. Changes to
 `frontend-modern/src/components/Settings/BillingAdminPanel.tsx` must carry this
 contract and the dedicated billing-admin proof file instead of remaining an
 unowned consumer of hosted billing state.
+The paid relay settings and onboarding surfaces are now part of that same
+ownership model. Changes to
+`frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and
+`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` must carry
+this contract and the dedicated relay frontend proof files instead of
+remaining unowned consumers of relay licensing and onboarding state.
 Hosted signup provisioning now follows the same rule. Changes to
 `internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
 must carry this contract and the dedicated hosted-signup provisioning proof
