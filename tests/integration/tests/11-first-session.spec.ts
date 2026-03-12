@@ -59,16 +59,15 @@ test.describe.serial('First-session experience', () => {
     await navigateToSettings(page);
 
     // The settings sidebar (div[aria-label="Settings navigation"]) lists category
-    // group headings. The actual categories are: Platforms, Operations, System, Security.
+    // group headings. The canonical always-visible groups are Infrastructure,
+    // System, and Security. Organization appears when multi-tenant mode is enabled.
     const sidebar = page.locator(SETTINGS_SIDEBAR);
     await expect(sidebar).toBeVisible({ timeout: 10_000 });
 
-    const requiredCategories = [
-      'Platforms',
-      'Operations',
-      'System',
-      'Security',
-    ] as const;
+    const requiredCategories = ['Infrastructure', 'System', 'Security'];
+    if (process.env.PULSE_MULTI_TENANT_ENABLED === 'true') {
+      requiredCategories.splice(1, 0, 'Organization');
+    }
 
     for (const category of requiredCategories) {
       const heading = sidebar.getByText(category, { exact: false }).first();

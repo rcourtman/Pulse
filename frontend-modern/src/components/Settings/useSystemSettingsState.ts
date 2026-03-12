@@ -187,9 +187,16 @@ export function useSystemSettingsState({
     }
 
     try {
-      const version = await UpdatesAPI.getVersion();
-      setVersionInfo(version);
+      const cachedVersion = updateStore.versionInfo();
+      if (cachedVersion) {
+        setVersionInfo(cachedVersion);
+      }
+
       await updateStore.checkForUpdates();
+      const version = updateStore.versionInfo();
+      if (version) {
+        setVersionInfo(version);
+      }
 
       const storeInfo = updateStore.updateInfo();
       if (storeInfo) {
@@ -204,7 +211,7 @@ export function useSystemSettingsState({
         }
       }
 
-      if (version.channel && !updateChannel()) {
+      if (version?.channel && !updateChannel()) {
         setUpdateChannel(version.channel as 'stable' | 'rc');
       }
     } catch (error) {

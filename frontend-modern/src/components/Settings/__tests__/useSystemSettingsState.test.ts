@@ -14,6 +14,7 @@ describe('useSystemSettingsState', () => {
   let getSystemSettingsMock: ReturnType<typeof vi.fn>;
   let getVersionMock: ReturnType<typeof vi.fn>;
   let updateSystemSettingsMock: ReturnType<typeof vi.fn>;
+  let updateStoreVersionInfoMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -30,6 +31,7 @@ describe('useSystemSettingsState', () => {
       deploymentType: 'systemd',
     });
     updateSystemSettingsMock = vi.fn().mockResolvedValue(undefined);
+    updateStoreVersionInfoMock = vi.fn().mockReturnValue(null);
 
     vi.doMock('@/api/settings', () => ({
       SettingsAPI: {
@@ -72,6 +74,7 @@ describe('useSystemSettingsState', () => {
       updateStore: {
         checkForUpdates: vi.fn().mockResolvedValue(undefined),
         updateInfo: vi.fn().mockReturnValue(null),
+        versionInfo: updateStoreVersionInfoMock,
         isDismissed: vi.fn().mockReturnValue(false),
         clearDismissed: vi.fn(),
       },
@@ -245,6 +248,28 @@ describe('useSystemSettingsState', () => {
 
     expect(hookState.updateChannel()).toBe('rc');
     expect(hookState.autoUpdateEnabled()).toBe(false);
+    dispose();
+  });
+
+  it('reuses version info from the shared update store during initialization', async () => {
+    updateStoreVersionInfoMock.mockReturnValue({
+      version: '1.0.1',
+      build: 'retry',
+      runtime: 'go1.22',
+      channel: 'stable',
+      isDocker: false,
+      isSourceBuild: false,
+      isDevelopment: false,
+      deploymentType: 'systemd',
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await hookState.initializeSystemSettingsState();
+    await flushAsync();
+
+    expect(hookState.versionInfo()?.version).toBe('1.0.1');
+    expect(getVersionMock).not.toHaveBeenCalled();
     dispose();
   });
 

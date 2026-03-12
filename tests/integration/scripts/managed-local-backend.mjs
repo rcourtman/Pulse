@@ -34,6 +34,8 @@ export function buildManagedLocalBackendState(env = process.env) {
     pidPath: path.join(rootDir, 'pulse.pid'),
     billingStatePath: path.join(rootDir, 'data', 'billing.json'),
     binaryPath: trim(env.PULSE_E2E_LOCAL_BACKEND_BINARY) || path.join(repoRoot, 'pulse'),
+    frontendRoot: path.join(repoRoot, 'frontend-modern'),
+    embeddedFrontendDistPath: path.join(repoRoot, 'internal', 'api', 'frontend-modern', 'dist'),
   };
 }
 
@@ -168,6 +170,80 @@ async function collectNewestGoMtime(entryPath) {
   return newest;
 }
 
+async function collectNewestMatchingMtime(entryPath, predicate) {
+  let stats;
+  try {
+    stats = await fs.stat(entryPath);
+  } catch {
+    return 0;
+  }
+
+  if (stats.isFile()) {
+    return predicate(entryPath) ? stats.mtimeMs : 0;
+  }
+
+  if (!stats.isDirectory()) {
+    return 0;
+  }
+
+  let newest = 0;
+  for (const child of await fs.readdir(entryPath, { withFileTypes: true })) {
+    const childPath = path.join(entryPath, child.name);
+    if (child.isDirectory()) {
+      newest = Math.max(newest, await collectNewestMatchingMtime(childPath, predicate));
+      continue;
+    }
+    if (child.isFile() && predicate(childPath)) {
+      const childStats = await fs.stat(childPath);
+      newest = Math.max(newest, childStats.mtimeMs);
+    }
+  }
+
+  return newest;
+}
+
+async function collectNewestTreeMtime(entryPath) {
+  return collectNewestMatchingMtime(entryPath, () => true);
+}
+
+export async function shouldBuildManagedLocalBackendFrontend(state) {
+  let embeddedDistStats;
+  try {
+    embeddedDistStats = await fs.stat(state.embeddedFrontendDistPath);
+  } catch {
+    return true;
+  }
+  if (!embeddedDistStats.isDirectory()) {
+    return true;
+  }
+
+  const frontendSourceRoots = ['src', 'scripts'].map((segment) => path.join(state.frontendRoot, segment));
+  let newestSourceMtime = 0;
+  for (const sourceRoot of frontendSourceRoots) {
+    newestSourceMtime = Math.max(newestSourceMtime, await collectNewestTreeMtime(sourceRoot));
+  }
+
+  for (const manifestName of [
+    'package.json',
+    'package-lock.json',
+    'vite.config.ts',
+    'tsconfig.json',
+    'tailwind.config.js',
+    'postcss.config.js',
+    'index.html',
+  ]) {
+    try {
+      const manifestStats = await fs.stat(path.join(state.frontendRoot, manifestName));
+      newestSourceMtime = Math.max(newestSourceMtime, manifestStats.mtimeMs);
+    } catch {
+      // ignore missing manifest files
+    }
+  }
+
+  const newestEmbeddedMtime = await collectNewestTreeMtime(state.embeddedFrontendDistPath);
+  return newestSourceMtime > newestEmbeddedMtime;
+}
+
 export async function shouldBuildManagedLocalBackendBinary(state) {
   let binaryStats;
   try {
@@ -182,6 +258,11 @@ export async function shouldBuildManagedLocalBackendBinary(state) {
     newestSourceMtime = Math.max(newestSourceMtime, await collectNewestGoMtime(sourceRoot));
   }
 
+  newestSourceMtime = Math.max(
+    newestSourceMtime,
+    await collectNewestTreeMtime(state.embeddedFrontendDistPath),
+  );
+
   for (const manifestName of ['go.mod', 'go.sum']) {
     try {
       const manifestStats = await fs.stat(path.join(state.repoRoot, manifestName));
@@ -192,6 +273,28 @@ export async function shouldBuildManagedLocalBackendBinary(state) {
   }
 
   return newestSourceMtime > binaryStats.mtimeMs;
+}
+
+async function ensureFrontendAssets(state, logger) {
+  if (!(await shouldBuildManagedLocalBackendFrontend(state))) {
+    return;
+  }
+
+  logger.log('[integration] Building embedded frontend assets');
+  await new Promise((resolve, reject) => {
+    const child = spawn('npm', ['run', 'build'], {
+      cwd: state.frontendRoot,
+      stdio: 'inherit',
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`npm run build exited with code ${code}`));
+    });
+  });
 }
 
 async function ensureBackendBinary(state, logger) {
@@ -311,6 +414,7 @@ export async function startManagedLocalBackend({
     `${backendEnv.PULSE_E2E_BOOTSTRAP_TOKEN}\n`,
     { mode: 0o600 },
   );
+  await ensureFrontendAssets(state, logger);
   await ensureBackendBinary(state, logger);
 
   const logHandle = await fs.open(state.logPath, 'w');

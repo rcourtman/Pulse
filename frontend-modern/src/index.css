@@ -97,6 +97,10 @@
 }
 
 @layer components {
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
   .app-scroll-shell {
     scrollbar-gutter: stable;
   }

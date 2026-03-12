@@ -67,6 +67,10 @@ Reporting time-range/export selectors and General settings Proxmox VE polling
 presets must now also route through the shared `FilterButtonGroup` prominent
 variant instead of maintaining local blue segmented-control styling forks in
 feature components.
+That same shared `FilterButtonGroup` primitive must stay CSP-safe: touch-scroll
+overflow behavior must come from canonical CSS classes rather than inline
+`style` attributes so settings and reporting selectors do not reintroduce
+browser console CSP violations under the release build policy.
 
 Selectable settings cards for compact provider pickers and detail choice panels
 must now route through the shared `SelectionCardGroup` primitive instead of

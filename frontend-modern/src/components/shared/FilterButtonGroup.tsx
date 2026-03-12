@@ -61,8 +61,7 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
 
   return (
     <div
-      class={`${groupClassByVariant[variant()]} ${props.class ?? ''}`.trim()}
-      style="-webkit-overflow-scrolling: touch;"
+      class={`${groupClassByVariant[variant()]} touch-scroll ${props.class ?? ''}`.trim()}
       role="group"
       aria-label="Filter Options"
     >

@@ -4,6 +4,8 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"sort"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // init sets dev mode for tests so license validation works without a real public key
@@ -603,25 +606,58 @@ func TestServiceActivateReturnsSnapshot(t *testing.T) {
 	origKey := publicKey
 	defer SetPublicKey(origKey)
 
-	pub, priv, err := ed25519.GenerateKey(nil)
+	testKey, err := GenerateLicenseForTesting("snapshot@example.com", TierPro, 30*24*time.Hour)
 	if err != nil {
-		t.Fatalf("failed to generate key: %v", err)
+		t.Fatalf("failed to generate test license: %v", err)
+	}
+	grantJWT, pub, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID: "snapshot_test",
+		Email:     "snapshot@example.com",
+		Tier:      string(TierPro),
+		State:     string(SubStateActive),
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("failed to generate grant JWT: %v", err)
 	}
 	SetPublicKey(pub)
 
-	claims := Claims{
-		LicenseID: "snapshot_test",
-		Email:     "snapshot@example.com",
-		Tier:      TierPro,
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(),
-	}
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
-	payloadBytes, _ := json.Marshal(claims)
-	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	signedData := header + "." + payload
-	signature := ed25519.Sign(priv, []byte(signedData))
-	testKey := signedData + "." + base64.RawURLEncoding.EncodeToString(signature)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+
+		var req pkglicensing.ExchangeLegacyLicenseRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.LegacyLicenseKey != testKey {
+			t.Fatalf("LegacyLicenseKey = %q, want %q", req.LegacyLicenseKey, testKey)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID: "snapshot_test",
+				State:     string(SubStateActive),
+				Tier:      string(TierPro),
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_snapshot",
+				InstallationToken: "pit_live_snapshot",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_snapshot",
+				ExpiresAt: time.Now().Add(30 * 24 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	service.SetLicenseServerClient(pkglicensing.NewLicenseServerClient(server.URL))
 
 	activated, err := service.Activate(testKey)
 	if err != nil {
@@ -629,6 +665,9 @@ func TestServiceActivateReturnsSnapshot(t *testing.T) {
 	}
 	if activated == nil {
 		t.Fatal("Activate() returned nil license")
+	}
+	if !service.IsActivated() {
+		t.Fatal("Activate() should create activation state in strict v6 mode")
 	}
 
 	// Mutating Activate()'s return value must not tamper internal service state.
@@ -1442,14 +1481,14 @@ func TestEvaluatorMatrix(t *testing.T) {
 		if status.Valid {
 			t.Fatalf("Status().Valid=%v, want false", status.Valid)
 		}
-		if status.Tier != TierPro {
-			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		if status.Tier != TierFree {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierFree)
 		}
 		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
 			t.Fatalf("Status().Features=%v, want %v", status.Features, TierFeatures[TierFree])
 		}
-		if status.MaxAgents != 0 || status.MaxGuests != 0 {
-			t.Fatalf("expected limits to be omitted for expired subscription, got MaxAgents=%d MaxGuests=%d", status.MaxAgents, status.MaxGuests)
+		if status.MaxAgents != TierAgentLimits[TierFree] || status.MaxGuests != 0 {
+			t.Fatalf("expected free-tier fallback limits for expired subscription, got MaxAgents=%d MaxGuests=%d", status.MaxAgents, status.MaxGuests)
 		}
 	})
 

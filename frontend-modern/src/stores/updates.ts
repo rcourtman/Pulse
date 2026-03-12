@@ -138,7 +138,10 @@ const isTransientUpdateCheckError = (error: unknown): boolean => {
   return /\bstatus (408|429|5\d\d)\b/.test(message);
 };
 
-const withTransientRetry = async <T>(label: string, operation: () => Promise<T>): Promise<T> => {
+export const withTransientRetry = async <T>(
+  label: string,
+  operation: () => Promise<T>,
+): Promise<T> => {
   let attempt = 1;
   for (;;) {
     try {

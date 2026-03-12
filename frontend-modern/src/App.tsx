@@ -546,15 +546,7 @@ function App() {
     }
     hasFetchedVersionInfo = true;
 
-    UpdatesAPI.getVersion()
-      .then((version) => {
-        setVersionInfo(version);
-        // Check for updates after loading version info (non-blocking)
-        updateStore.checkForUpdates();
-      })
-      .catch((error) => {
-        logger.error('Failed to load version', error);
-      });
+    void syncVersionInfoFromUpdateStore();
   });
 
   let alertsInitialized = false;
@@ -574,6 +566,20 @@ function App() {
 
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  async function syncVersionInfoFromUpdateStore() {
+    const cachedVersion = updateStore.versionInfo();
+    if (cachedVersion) {
+      setVersionInfo(cachedVersion);
+    }
+
+    await updateStore.checkForUpdates();
+
+    const resolvedVersion = updateStore.versionInfo();
+    if (resolvedVersion) {
+      setVersionInfo(resolvedVersion);
+    }
+  }
+
   // Theme settings
   // Single source of truth:
   // 1) localStorage preference
@@ -749,14 +755,7 @@ function App() {
           markSystemSettingsLoadedWithDefaults();
         }
 
-        // Load version info
-        UpdatesAPI.getVersion()
-          .then((version) => {
-            setVersionInfo(version);
-            // Check for updates after loading version info (non-blocking)
-            updateStore.checkForUpdates();
-          })
-          .catch((error) => logger.error('Failed to load version', error));
+        void syncVersionInfoFromUpdateStore();
 
         setIsLoading(false);
         return;
@@ -798,14 +797,7 @@ function App() {
           markSystemSettingsLoadedWithDefaults();
         }
 
-        // Load version info
-        UpdatesAPI.getVersion()
-          .then((version) => {
-            setVersionInfo(version);
-            // Check for updates after loading version info (non-blocking)
-            updateStore.checkForUpdates();
-          })
-          .catch((error) => logger.error('Failed to load version', error));
+        void syncVersionInfoFromUpdateStore();
 
         setIsLoading(false);
         return;

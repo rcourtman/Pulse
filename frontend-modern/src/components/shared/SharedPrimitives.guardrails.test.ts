@@ -35,6 +35,8 @@ describe('shared primitive guardrails', () => {
   it('routes canonical settings segmented selectors through FilterButtonGroup', () => {
     expect(filterButtonGroupSource).toContain("variant?: FilterButtonGroupVariant");
     expect(filterButtonGroupSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
+    expect(filterButtonGroupSource).toContain('touch-scroll');
+    expect(filterButtonGroupSource).not.toContain('-webkit-overflow-scrolling: touch;');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
     expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(3);
     expect(generalSettingsPanelSource).toContain('variant="prominent"');
