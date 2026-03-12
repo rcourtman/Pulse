@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import tempfile
 import threading
@@ -18,10 +20,19 @@ from unified_agent_rc_rehearsal import (
 )
 
 
+def run_main(argv: list[str]) -> int:
+    with contextlib.redirect_stdout(io.StringIO()):
+        return main(argv)
+
+
 class _FixtureHandler(BaseHTTPRequestHandler):
     routes: dict[str, tuple[int, bytes, dict[str, str]]] = {}
+    request_headers: dict[str, dict[str, str]] = {}
 
     def do_GET(self) -> None:  # noqa: N802
+        self.request_headers[self.path] = {
+            key.lower(): value for key, value in self.headers.items()
+        }
         status, body, headers = self.routes.get(self.path, (404, b"missing", {}))
         self.send_response(status)
         for key, value in headers.items():
@@ -47,6 +58,7 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
 
     def set_routes(self, routes: dict[str, tuple[int, bytes, dict[str, str]]]) -> None:
         _FixtureHandler.routes = routes
+        _FixtureHandler.request_headers = {}
 
     def test_release_asset_url(self) -> None:
         got = release_asset_url("https://example.invalid/releases/download/", "6.0.0-rc.1", "install.sh")
@@ -93,6 +105,10 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
                 "update_info_dir": None,
                 "expected_updated_from": None,
                 "timeout": 5.0,
+                "api_token": None,
+                "bearer_token": None,
+                "cookie": None,
+                "expected_active_agents": None,
                 "json": False,
             },
         )()
@@ -121,7 +137,7 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
             }
         )
 
-        exit_code = main(
+        exit_code = run_main(
             [
                 "--base-url",
                 f"{self.base_url}/pulse",
@@ -200,6 +216,158 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
             content = report_path.read_text(encoding="utf-8")
             self.assertIn("# Unified Agent RC Rehearsal", content)
             self.assertIn("`PASS` `install-sh-asset`", content)
+
+    def test_run_rehearsal_verifies_active_agent_accounting_via_api_token(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/pulse/api/license/entitlements": (
+                    200,
+                    json.dumps(
+                        {
+                            "limits": [
+                                {"key": "max_agents", "limit": 10, "current": 3, "state": "ok"}
+                            ]
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/api/license/agent-ledger": (
+                    200,
+                    json.dumps(
+                        {
+                            "agents": [{"name": "a"}, {"name": "b"}, {"name": "c"}],
+                            "total": 3,
+                            "limit": 10,
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--api-token",
+                "token-123",
+                "--expected-active-agents",
+                "3",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            _FixtureHandler.request_headers["/pulse/api/license/entitlements"].get("x-api-token"),
+            "token-123",
+        )
+        self.assertEqual(
+            _FixtureHandler.request_headers["/pulse/api/license/agent-ledger"].get("x-api-token"),
+            "token-123",
+        )
+
+    def test_run_rehearsal_fails_when_active_agent_accounting_mismatches(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/pulse/api/license/entitlements": (
+                    200,
+                    json.dumps(
+                        {
+                            "limits": [
+                                {"key": "max_agents", "limit": 10, "current": 2, "state": "ok"}
+                            ]
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/api/license/agent-ledger": (
+                    200,
+                    json.dumps(
+                        {
+                            "agents": [{"name": "a"}, {"name": "b"}, {"name": "c"}],
+                            "total": 3,
+                            "limit": 10,
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--api-token",
+                "token-123",
+                "--expected-active-agents",
+                "3",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
+
+    def test_run_rehearsal_requires_auth_for_active_agent_accounting(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--expected-active-agents",
+                "3",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
 
 
 if __name__ == "__main__":

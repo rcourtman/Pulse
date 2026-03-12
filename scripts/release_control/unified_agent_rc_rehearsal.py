@@ -61,6 +61,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="HTTP timeout in seconds",
     )
     parser.add_argument(
+        "--api-token",
+        help="Optional API token sent as X-API-Token for authenticated rehearsal checks",
+    )
+    parser.add_argument(
+        "--bearer-token",
+        help="Optional API token sent as Authorization: Bearer for authenticated rehearsal checks",
+    )
+    parser.add_argument(
+        "--cookie",
+        help="Optional raw Cookie header for authenticated rehearsal checks",
+    )
+    parser.add_argument(
+        "--expected-active-agents",
+        type=int,
+        help=(
+            "Optional expected active Pulse Unified Agent count after upgrade; "
+            "verifies both /api/license/entitlements and /api/license/agent-ledger"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON instead of human-readable output",
@@ -81,8 +101,21 @@ def normalize_base_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def fetch_bytes(url: str, *, timeout: float) -> tuple[bytes, dict[str, str]]:
-    req = request.Request(url, method="GET")
+def build_auth_headers(args: argparse.Namespace) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    if args.api_token:
+        headers["X-API-Token"] = args.api_token
+    if args.bearer_token:
+        headers["Authorization"] = f"Bearer {args.bearer_token}"
+    if args.cookie:
+        headers["Cookie"] = args.cookie
+    return headers
+
+
+def fetch_bytes(
+    url: str, *, timeout: float, headers: dict[str, str] | None = None
+) -> tuple[bytes, dict[str, str]]:
+    req = request.Request(url, method="GET", headers=headers or {})
     try:
         with request.urlopen(req, timeout=timeout) as resp:
             body = resp.read()
@@ -96,8 +129,10 @@ def fetch_bytes(url: str, *, timeout: float) -> tuple[bytes, dict[str, str]]:
         raise RuntimeError(f"failed to fetch {url}: {exc.reason}") from exc
 
 
-def fetch_json(url: str, *, timeout: float) -> dict[str, object]:
-    body, _headers = fetch_bytes(url, timeout=timeout)
+def fetch_json(
+    url: str, *, timeout: float, headers: dict[str, str] | None = None
+) -> dict[str, object]:
+    body, _headers = fetch_bytes(url, timeout=timeout, headers=headers)
     try:
         payload = json.loads(body.decode("utf-8"))
     except json.JSONDecodeError as exc:
@@ -204,9 +239,94 @@ def check_update_info(update_info_dir: str, expected_updated_from: str) -> Check
     )
 
 
+def check_active_agent_accounting(
+    *,
+    base_url: str,
+    timeout: float,
+    auth_headers: dict[str, str],
+    expected_active_agents: int,
+) -> CheckResult:
+    if not auth_headers:
+        return CheckResult(
+            name="active-agent-accounting",
+            ok=False,
+            detail=(
+                "expected active-agent verification requires --api-token, "
+                "--bearer-token, or --cookie"
+            ),
+        )
+
+    entitlements = fetch_json(
+        f"{base_url}/api/license/entitlements",
+        timeout=timeout,
+        headers=auth_headers,
+    )
+    limits = entitlements.get("limits")
+    if not isinstance(limits, list):
+        return CheckResult(
+            name="active-agent-accounting",
+            ok=False,
+            detail="/api/license/entitlements returned no limits array",
+        )
+
+    max_agents_current: int | None = None
+    for item in limits:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("key", "")).strip() != "max_agents":
+            continue
+        current = item.get("current")
+        if not isinstance(current, int):
+            return CheckResult(
+                name="active-agent-accounting",
+                ok=False,
+                detail="max_agents current usage was missing or not an integer",
+            )
+        max_agents_current = current
+        break
+
+    if max_agents_current is None:
+        return CheckResult(
+            name="active-agent-accounting",
+            ok=False,
+            detail="/api/license/entitlements did not include max_agents",
+        )
+
+    ledger = fetch_json(
+        f"{base_url}/api/license/agent-ledger",
+        timeout=timeout,
+        headers=auth_headers,
+    )
+    agents = ledger.get("agents")
+    if not isinstance(agents, list):
+        return CheckResult(
+            name="active-agent-accounting",
+            ok=False,
+            detail="/api/license/agent-ledger returned no agents array",
+        )
+    ledger_total = ledger.get("total")
+    if not isinstance(ledger_total, int):
+        ledger_total = len(agents)
+
+    ok = (
+        max_agents_current == expected_active_agents
+        and ledger_total == expected_active_agents
+        and len(agents) == expected_active_agents
+        and max_agents_current == ledger_total
+    )
+    detail = (
+        f"entitlements max_agents.current={max_agents_current}, "
+        f"agent-ledger total={ledger_total}, "
+        f"agent-ledger agents={len(agents)}, "
+        f"expected={expected_active_agents}"
+    )
+    return CheckResult(name="active-agent-accounting", ok=ok, detail=detail)
+
+
 def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
     base_url = normalize_base_url(args.base_url)
     release_base_url = normalize_base_url(args.release_base_url)
+    auth_headers = build_auth_headers(args)
     results = [
         check_version(base_url, args.expected_version, args.timeout),
         compare_asset(
@@ -248,6 +368,16 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
             )
         else:
             results.append(check_update_info(args.update_info_dir, args.expected_updated_from))
+
+    if args.expected_active_agents is not None:
+        results.append(
+            check_active_agent_accounting(
+                base_url=base_url,
+                timeout=args.timeout,
+                auth_headers=auth_headers,
+                expected_active_agents=args.expected_active_agents,
+            )
+        )
 
     return results
 
