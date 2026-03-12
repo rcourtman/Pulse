@@ -45,7 +45,7 @@ export function useDashboardActions(alertsList: Accessor<Alert[]>): DashboardAct
 
   const pendingApprovals = createMemo(() => {
     if (!hasPatrol()) return [];
-    return aiIntelligenceStore.pendingApprovals.filter((a) => a.status === 'pending');
+    return aiIntelligenceStore.pendingApprovals;
   });
 
   const unackedCriticalAlerts = createMemo(() =>

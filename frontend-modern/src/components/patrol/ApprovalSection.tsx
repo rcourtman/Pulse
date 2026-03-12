@@ -39,8 +39,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       aiIntelligenceStore.pendingApprovals.find(
         (a: ApprovalRequest) =>
           a.toolId === 'investigation_fix' &&
-          a.targetId === props.findingId &&
-          a.status === 'pending',
+          a.targetId === props.findingId,
       ) ?? null
     );
   });

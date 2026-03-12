@@ -25,9 +25,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [tick, setTick] = createSignal(Date.now());
 
-  const pending = createMemo(() =>
-    aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending'),
-  );
+  const pending = createMemo(() => aiIntelligenceStore.pendingApprovals);
 
   // Only tick when there are pending approvals to avoid unnecessary work
   createEffect(() => {

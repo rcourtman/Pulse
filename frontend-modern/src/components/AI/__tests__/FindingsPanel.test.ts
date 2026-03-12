@@ -248,12 +248,13 @@ describe('aiFindingPresentation', () => {
     it('promotes queued fixes without a pending approval into the needs-attention bucket', () => {
       expect(
         hasPendingInvestigationFixApproval('finding-1', [
-          {
-            status: 'pending',
-            toolId: 'investigation_fix',
-            targetId: 'finding-1',
-          },
-        ] as never),
+            {
+              status: 'pending',
+              toolId: 'investigation_fix',
+              targetId: 'finding-1',
+              expiresAt: '2026-04-01T00:06:00Z',
+            },
+          ] as never),
       ).toBe(true);
 
       expect(
@@ -279,8 +280,24 @@ describe('aiFindingPresentation', () => {
               status: 'pending',
               toolId: 'investigation_fix',
               targetId: 'finding-1',
+              expiresAt: '2026-04-01T00:06:00Z',
             },
           ] as never,
+        ),
+      ).toBe(false);
+
+      expect(
+        hasPendingInvestigationFixApproval(
+          'finding-1',
+          [
+            {
+              status: 'pending',
+              toolId: 'investigation_fix',
+              targetId: 'finding-1',
+              expiresAt: '2026-03-01T00:06:00Z',
+            },
+          ] as never,
+          Date.parse('2026-03-01T00:06:01Z'),
         ),
       ).toBe(false);
 

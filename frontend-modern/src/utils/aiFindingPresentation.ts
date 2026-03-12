@@ -1,6 +1,7 @@
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
+import { isLivePendingApproval } from '@/utils/approvalState';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -269,11 +270,12 @@ const ATTENTION_OUTCOMES = new Set([
 
 export const hasPendingInvestigationFixApproval = (
   findingId: string,
-  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId'>[],
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[],
+  now = Date.now(),
 ): boolean =>
   approvals.some(
     (approval) =>
-      approval.status === 'pending' &&
+      isLivePendingApproval(approval, now) &&
       approval.toolId === 'investigation_fix' &&
       approval.targetId === findingId,
   );

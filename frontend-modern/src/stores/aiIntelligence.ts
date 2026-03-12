@@ -22,6 +22,7 @@ import {
   hasPendingInvestigationFixApproval,
   isPatrolInvestigationFixApproval,
 } from '@/utils/aiFindingPresentation';
+import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { logger } from '@/utils/logger';
 
 // ============================================
@@ -159,6 +160,53 @@ const [plansError, setPlansError] = createSignal<string | null>(null);
 
 const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 const [approvalsError, setApprovalsError] = createSignal<string | null>(null);
+const [pendingApprovalsNow, setPendingApprovalsNow] = createSignal(Date.now());
+
+let pendingApprovalExpiryTimer: ReturnType<typeof setTimeout> | undefined;
+
+function syncPendingApprovalExpiryTimer(approvals: ApprovalRequest[]) {
+  if (pendingApprovalExpiryTimer) {
+    clearTimeout(pendingApprovalExpiryTimer);
+    pendingApprovalExpiryTimer = undefined;
+  }
+
+  const now = Date.now();
+  setPendingApprovalsNow(now);
+
+  let nextExpiry: number | null = null;
+  for (const approval of approvals) {
+    if (approval.status !== 'pending') {
+      continue;
+    }
+
+    const expiry = getApprovalExpiryTime(approval);
+    if (expiry === null || expiry <= now) {
+      continue;
+    }
+
+    if (nextExpiry === null || expiry < nextExpiry) {
+      nextExpiry = expiry;
+    }
+  }
+
+  if (nextExpiry === null) {
+    return;
+  }
+
+  pendingApprovalExpiryTimer = setTimeout(() => {
+    syncPendingApprovalExpiryTimer(pendingApprovals());
+  }, Math.max(0, nextExpiry - Date.now() + 1));
+}
+
+function setPendingApprovalsWithExpiryTracking(approvals: ApprovalRequest[]) {
+  setPendingApprovals(approvals);
+  syncPendingApprovalExpiryTimer(approvals);
+}
+
+function getLivePendingApprovals() {
+  const now = pendingApprovalsNow();
+  return pendingApprovals().filter((approval) => isLivePendingApproval(approval, now));
+}
 
 // ============================================
 // Circuit Breaker
@@ -363,26 +411,26 @@ export const aiIntelligenceStore = {
 
   // Pending Approvals
   get pendingApprovals() {
-    return pendingApprovals();
+    return getLivePendingApprovals();
   },
   get approvalsError() {
     return approvalsError();
   },
-  pendingApprovalsSignal: pendingApprovals,
+  pendingApprovalsSignal: getLivePendingApprovals,
 
   get pendingApprovalCount() {
-    return pendingApprovals().filter((a) => a.status === 'pending').length;
+    return getLivePendingApprovals().length;
   },
 
   get findingsWithPendingApprovals() {
-    const approvals = pendingApprovals();
+    const approvals = getLivePendingApprovals();
     return unifiedFindings().filter((finding) =>
       hasPendingInvestigationFixApproval(finding.id, approvals),
     );
   },
 
   get findingsNeedingAttention() {
-    const approvals = pendingApprovals();
+    const approvals = getLivePendingApprovals();
     return unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals));
   },
 
@@ -394,7 +442,7 @@ export const aiIntelligenceStore = {
     setApprovalsError(null);
     try {
       const approvals = (await AIAPI.getPendingApprovals()).filter(isPatrolInvestigationFixApproval);
-      setPendingApprovals(approvals);
+      setPendingApprovalsWithExpiryTracking(approvals);
     } catch (e) {
       logger.error('Failed to load pending approvals:', e);
       setApprovalsError(e instanceof Error ? e.message : 'Failed to load approvals');
