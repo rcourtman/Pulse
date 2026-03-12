@@ -1073,6 +1073,20 @@
         "L3",
         "L4"
       ]
+    },
+    {
+      "id": "stable-release-promotion-model",
+      "summary": "Define and adopt a release-promotion model that keeps stable customers off unproven builds and requires preview or RC validation before broad rollout.",
+      "owner": "project-owner",
+      "status": "open",
+      "opened_at": "2026-03-12",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L1",
+        "L3",
+        "L11",
+        "L12"
+      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
