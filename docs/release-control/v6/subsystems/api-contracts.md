@@ -26,6 +26,7 @@ Own canonical runtime payload shapes between backend and frontend.
 5. `frontend-modern/src/api/responseUtils.ts`
 6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 7. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+8. `internal/api/router.go`
 
 ## Shared Boundaries
 
@@ -259,6 +260,12 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 `try/catch` wrappers that map those statuses to `[]`, `{ plans: [] }`, or
 `null`.
+`/api/metrics-store/history` now also carries a canonical live-fallback
+contract: when the persistent store is unavailable or empty and the backend
+serves a synthetic live point from canonical monitor snapshots, CPU values
+must remain in frontend percent units for VM, container, node, and
+agent-backed node responses rather than being scaled a second time during
+fallback serialization.
 Paywalled Patrol remediation-intelligence responses must also scrub derived
 metadata together with the collection itself: when remediation history is
 license-locked, `remediations`, `count`, and `stats` must all collapse to an

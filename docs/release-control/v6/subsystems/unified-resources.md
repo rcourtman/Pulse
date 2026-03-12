@@ -25,6 +25,7 @@ cross-source deduplication.
 3. `internal/unifiedresources/read_state.go`
 4. `internal/unifiedresources/adapters.go`
 5. `internal/unifiedresources/monitor_adapter.go`
+6. `internal/unifiedresources/canonical_identity.go`
 
 ## Shared Boundaries
 
@@ -92,6 +93,12 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+
+Canonical identity now also treats Proxmox-backed infrastructure parents as
+node-owned resources first: when an agent resource carries canonical Proxmox
+node metadata, `canonicalIdentity.primaryId` must remain stable as
+`node:<proxmox-source-id>` even if agent discovery metadata is also present,
+so merged node-plus-agent views do not drift to transient agent identifiers.
 
 Frontend/API consumers and backend support files now require explicit registry
 path-policy coverage, so new unified-resource-owned runtime files must be added

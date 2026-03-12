@@ -7567,7 +7567,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if vm == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: vm.CPU * 100}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: vm.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: vm.Memory.Usage}
 			if vm.Disk.Usage >= 0 {
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: vm.Disk.Usage}
@@ -7581,7 +7581,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if ct == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: ct.CPU * 100}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: ct.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: ct.Memory.Usage}
 			if ct.Disk.Usage >= 0 {
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: ct.Disk.Usage}
@@ -7595,7 +7595,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if node == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU * 100}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
 		case "storage":
@@ -7644,7 +7644,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if node == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU * 100}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
 		case "app-container":

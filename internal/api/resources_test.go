@@ -808,7 +808,7 @@ func TestResourceGetResource(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host", nil)
 	h.HandleListResources(listRec, listReq)
 
 	var listResp ResourcesResponse
@@ -879,7 +879,7 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host", nil)
 	h.HandleListResources(listRec, listReq)
 
 	var listResp ResourcesResponse
@@ -902,7 +902,7 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host", nil)
 	h.HandleListResources(listRec2, listReq2)
 
 	var listResp2 ResourcesResponse
@@ -952,7 +952,7 @@ func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	listRec := httptest.NewRecorder()
-	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host", nil)
 	h.HandleListResources(listRec, listReq)
 
 	if listRec.Code != http.StatusOK {
@@ -981,7 +981,7 @@ func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	}
 
 	listRec2 := httptest.NewRecorder()
-	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host", nil)
 	h.HandleListResources(listRec2, listReq2)
 
 	if listRec2.Code != http.StatusOK {

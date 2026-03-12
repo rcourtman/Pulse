@@ -162,12 +162,20 @@ func isProtectedHandler(expr ast.Expr) bool {
 	}
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
-		return isAuthWrapper(fn.Name)
+		if isAuthWrapper(fn.Name) {
+			return true
+		}
 	case *ast.SelectorExpr:
-		return isAuthWrapper(fn.Sel.Name)
-	default:
-		return false
+		if isAuthWrapper(fn.Sel.Name) {
+			return true
+		}
 	}
+	for _, arg := range call.Args {
+		if isProtectedHandler(arg) {
+			return true
+		}
+	}
+	return false
 }
 
 func isAuthWrapper(name string) bool {

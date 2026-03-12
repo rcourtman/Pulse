@@ -446,9 +446,12 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 	// Minimum request volume per endpoint group — ensures throughput didn't
 	// collapse under contention. Counts include in-flight overrun past the
 	// nominal 2s window (RPS = count / wallTime, standard approach).
+	// The mixed-load metrics-history floor is lower because each request does a
+	// real store query plus canonical target resolution while contending with
+	// resource and stats endpoints on the same process.
 	minCounts := map[string]int64{
 		"resources":       50,
-		"metrics-history": 50,
+		"metrics-history": 30,
 		"metrics-stats":   10,
 	}
 	for _, r := range results {

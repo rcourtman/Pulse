@@ -136,6 +136,7 @@ func TestReportingGenerateReportEnrichesNodeFromMonitorUnifiedResources(t *testi
 
 	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
 	rr := httptest.NewRecorder()
 
 	handler.HandleGenerateReport(rr, req)
@@ -155,6 +156,7 @@ func newReportingMonitorForTest(t *testing.T, state *models.State, resources []u
 	t.Helper()
 
 	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
 	records := make([]unifiedresources.IngestRecord, 0, len(resources))
 	for i, resource := range resources {
 		sourceID := resource.ID
@@ -170,8 +172,8 @@ func newReportingMonitorForTest(t *testing.T, state *models.State, resources []u
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 
 	monitor := &monitoring.Monitor{}
-	setUnexportedField(t, monitor, "state", state)
 	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	setUnexportedField(t, monitor, "state", state)
 	return monitor
 }
 

@@ -28,6 +28,9 @@ func RefreshCanonicalIdentity(resource *Resource) {
 }
 
 func canonicalPrimaryID(resource Resource) string {
+	if nodeID := canonicalProxmoxNodePrimaryID(resource); nodeID != "" {
+		return nodeID
+	}
 	if identity := formatTargetIdentity(resource.MetricsTarget); identity != "" {
 		return identity
 	}
@@ -53,6 +56,17 @@ func canonicalPrimaryID(resource Resource) string {
 		return "pmg:" + instanceID
 	}
 	return strings.TrimSpace(resource.ID)
+}
+
+func canonicalProxmoxNodePrimaryID(resource Resource) string {
+	if CanonicalResourceType(resource.Type) != ResourceTypeAgent || resource.Proxmox == nil {
+		return ""
+	}
+	sourceID := strings.TrimSpace(resource.Proxmox.SourceID)
+	if sourceID == "" {
+		return ""
+	}
+	return "node:" + sourceID
 }
 
 func canonicalAliases(resource Resource, primaryID, platformID, hostname string) []string {

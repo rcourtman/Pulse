@@ -99,3 +99,33 @@ func TestRefreshCanonicalIdentityFallsBackWithoutTargets(t *testing.T) {
 		t.Fatalf("primaryId = %q, want pbs:pbs-main", got)
 	}
 }
+
+func TestRefreshCanonicalIdentityPrefersProxmoxNodePrimaryIDForAgentResources(t *testing.T) {
+	resource := Resource{
+		ID:   "agent-1",
+		Type: ResourceTypeAgent,
+		Name: "pve1",
+		Proxmox: &ProxmoxData{
+			SourceID: "instance-pve1",
+			NodeName: "pve1",
+		},
+		DiscoveryTarget: &DiscoveryTarget{
+			ResourceType: "agent",
+			ResourceID:   "host-1",
+			AgentID:      "host-1",
+		},
+		Agent: &AgentData{
+			AgentID:  "host-1",
+			Hostname: "pve1",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.PrimaryID; got != "node:instance-pve1" {
+		t.Fatalf("primaryId = %q, want node:instance-pve1", got)
+	}
+}

@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
@@ -324,6 +327,96 @@ func TestContract_AutoRegisterRequestJSONSnapshot(t *testing.T) {
 		"requestToken":true,
 		"username":"root@pam",
 		"password":"super-secret"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
+	state := models.NewState()
+	state.UpdateVMsForInstance("pve1", []models.VM{{
+		ID:       "pve1:node1:101",
+		VMID:     101,
+		Name:     "vm-101",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Type:     "qemu",
+		CPU:      0.42,
+		Memory: models.Memory{
+			Usage: 55.0,
+		},
+		Disk: models.Disk{
+			Usage: 33.0,
+		},
+	}})
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("failed to init persistence: %v", err)
+	}
+
+	router := &Router{
+		monitor:         monitor,
+		licenseHandlers: NewLicenseHandlers(mtp, false),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:101&metric=cpu&start=2026-03-11T00:00:00Z&end=2026-03-12T00:00:00Z",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal metrics history response: %v", err)
+	}
+
+	points, ok := payload["points"].([]any)
+	if !ok || len(points) != 1 {
+		t.Fatalf("unexpected points payload: %#v", payload["points"])
+	}
+	point, ok := points[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected point payload: %#v", points[0])
+	}
+	point["timestamp"] = float64(1700000000000)
+	payload["range"] = "24h"
+	payload["start"] = float64(1741651200000)
+	payload["end"] = float64(1741737600000)
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal normalized metrics history response: %v", err)
+	}
+
+	const want = `{
+		"end":1741737600000,
+		"metric":"cpu",
+		"points":[
+			{
+				"max":42,
+				"min":42,
+				"timestamp":1700000000000,
+				"value":42
+			}
+		],
+		"range":"24h",
+		"resourceId":"pve1:node1:101",
+		"resourceType":"vm",
+		"source":"live",
+		"start":1741651200000
 	}`
 
 	assertJSONSnapshot(t, got, want)
