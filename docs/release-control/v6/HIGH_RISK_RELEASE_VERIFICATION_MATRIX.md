@@ -222,7 +222,7 @@ result.
   `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
   `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
 - Automated proof:
-  `go test ./internal/api -run 'TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent' -count=1`
+  `go test ./internal/api -run 'TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent|TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias|TestNormalizeRequestedScopesCanonicalizesLegacyHostAgentAliases|TestContract_APITokenScopeAliasNormalization' -count=1`
   `go test ./internal/agentupdate -run 'TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce|TestUpdateToFirstHostReportCarriesPreviousVersionOnce|TestPerformUpdatePersistsPreviousVersionForNextStart' -count=1`
   `go test ./internal/hostagent -run 'TestNew_CarriesUpdatedFromIntoFirstV6Report|TestAgentSendReport_SetsHeadersAndPostsJSON' -count=1`
 - Manual scenario:
@@ -236,9 +236,12 @@ result.
   4. Confirm the upgraded agent reconnects as one canonical v6 unified agent
      identity and does not create a duplicate host or agent resource during the
      crossover.
-  5. Confirm the first canonical v6 report carries the prior v5 version in
+  5. Confirm the pre-existing installed agent token still reaches the
+     canonical `/api/agents/agent/*` v6 endpoints even if its persisted scopes
+     originated as legacy `host-agent:*` aliases.
+  6. Confirm the first canonical v6 report carries the prior v5 version in
      `updated_from` exactly once.
-  6. Confirm a subsequent report clears `updated_from`, and the active-agent
+  7. Confirm a subsequent report clears `updated_from`, and the active-agent
      count shown in settings/billing surfaces still matches runtime
      enforcement after the upgrade.
 - Pass when:
@@ -324,13 +327,17 @@ result.
   `frontend-modern/src/utils/url.ts`
 - Automated proof:
   `go test ./internal/api -run 'Test(APIToken|SecurityTokens|SystemSettings|MultiTenant)' -count=1`
+  `go test ./internal/api -run 'TestNormalizeRequestedScopesCanonicalizesLegacyHostAgentAliases|TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias|TestContract_APITokenScopeAliasNormalization' -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/APITokenManager.test.tsx src/utils/__tests__/apiClient.org.test.ts src/utils/__tests__/apiTokenPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
 - Manual scenario:
   1. Generate a token for a specific user.
   2. Confirm the token inherits only the intended user and org scope.
   3. Use the token against read, mutate, and exec paths that should be denied.
   4. Revoke the token and confirm the old token immediately stops working.
-  5. Confirm scoped agent/API-token flows fail with a clear message when the
+  5. Confirm legacy persisted `host-agent:*` token scopes still canonicalize to
+     the intended v6 `agent:*` scope checks on installed-agent report and
+     config flows.
+  6. Confirm scoped agent/API-token flows fail with a clear message when the
      scope is insufficient.
 - Pass when:
   Token create, use, read/write/exec scope enforcement, and revocation all

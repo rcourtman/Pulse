@@ -588,7 +588,7 @@
     },
     {
       "id": "RA9",
-      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 agent identity, preserves one-shot update continuity metadata, and does not drift agent-count or fallback behavior during the crossover.",
+      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 agent identity, preserves one-shot update continuity metadata, keeps legacy persisted host-agent token scopes valid at the v6 canonical agent endpoints, and does not drift agent-count or fallback behavior during the crossover.",
       "kind": "journey",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -623,7 +623,7 @@
             "test",
             "./internal/api",
             "-run",
-            "TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent",
+            "TestDownloadUnifiedInstallScript|TestDownloadUnifiedInstallScriptPS|TestProxyInstallScriptFromGitHub|TestContract_InstallScriptReleaseAssetURL|TestDownloadUnifiedAgent|TestHostAgentHandlers_LegacyV5ReportUpgradesToSingleCanonicalV6Agent|TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias|TestNormalizeRequestedScopesCanonicalizesLegacyHostAgentAliases|TestContract_APITokenScopeAliasNormalization",
             "-count=1"
           ]
         },
@@ -657,12 +657,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/security_regression_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/security_tokens_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/unified_agent_more_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/api/unified_agent_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/api_tokens_coverage_test.go",
           "kind": "file"
         },
         {
@@ -1104,7 +1119,7 @@
   "release_gates": [
     {
       "id": "api-token-scope-and-assignment",
-      "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries, and revoke cleanly.",
+      "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries including legacy persisted host-agent scope aliases, and revoke cleanly.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "status": "pending",
@@ -1199,7 +1214,7 @@
     },
     {
       "id": "unified-agent-v5-upgrade-continuity",
-      "summary": "Confirm a real v5-installed Pulse Unified Agent upgrades through candidate v6 RC assets into one canonical v6 agent identity without duplicate registration, stale fallback behavior, or agent-count drift.",
+      "summary": "Confirm a real v5-installed Pulse Unified Agent upgrades through candidate v6 RC assets into one canonical v6 agent identity without duplicate registration, stale fallback or legacy-scope breakage, or agent-count drift.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "status": "pending",
