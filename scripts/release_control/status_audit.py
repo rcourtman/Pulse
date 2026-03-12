@@ -1303,6 +1303,18 @@ def audit_status_payload(
         active_target_levels = []
         warnings.append(f"active target proof scope could not be derived: {exc}")
     active_target_level_set = set(active_target_levels)
+    current_target_assertions = [
+        assertion
+        for assertion in readiness_assertions
+        if assertion["blocking_level"] in active_target_level_set
+    ]
+    gate_to_current_target_assertions: dict[str, list[str]] = {}
+    for assertion in current_target_assertions:
+        assertion_id = str(assertion["id"])
+        for gate_id in assertion["release_gate_ids"]:
+            linked = gate_to_current_target_assertions.setdefault(str(gate_id), [])
+            if assertion_id not in linked:
+                linked.append(assertion_id)
     current_target_assertion_blockers = [
         {
             "id": assertion["id"],
@@ -1312,12 +1324,17 @@ def audit_status_payload(
             "repo_ids": list(assertion["repo_ids"]),
             "lane_ids": list(assertion["lane_ids"]),
             "subsystem_ids": list(assertion["subsystem_ids"]),
+            "release_gate_ids": list(assertion["release_gate_ids"]),
+            "proof_command_ids": [command["id"] for command in assertion["proof_commands"]],
         }
-        for assertion in readiness_assertions
+        for assertion in current_target_assertions
         if assertion["blocking_level"] in active_target_level_set and not assertion["derived_pass"]
     ]
     current_target_release_gate_blockers = [
-        _blocker_detail(gate, summary_key="summary", status_key="status")
+        {
+            **_blocker_detail(gate, summary_key="summary", status_key="status"),
+            "linked_assertion_ids": list(gate_to_current_target_assertions.get(gate["id"], [])),
+        }
         for gate in release_gates
         if gate["blocking_level"] in active_target_level_set and gate["status"] != "passed"
     ]
@@ -1587,9 +1604,13 @@ def render_pretty(report: dict[str, Any]) -> str:
         if current_target_blockers.get("assertions"):
             lines.append("  assertions:")
             for assertion in current_target_blockers["assertions"]:
+                gate_ids = assertion.get("release_gate_ids", [])
+                proof_ids = assertion.get("proof_command_ids", [])
                 lines.append(
                     f"    - {assertion['id']} blocking={assertion['blocking_level']} "
                     f"derived={assertion['derived_status']} "
+                    f"gates={','.join(gate_ids) or '-'} "
+                    f"proofs={','.join(proof_ids) or '-'} "
                     f"repos={','.join(assertion['repo_ids']) or '-'}"
                 )
         if current_target_blockers.get("open_decisions"):
@@ -1603,9 +1624,11 @@ def render_pretty(report: dict[str, Any]) -> str:
         if current_target_blockers.get("release_gates"):
             lines.append("  release_gates:")
             for gate in current_target_blockers["release_gates"]:
+                linked_assertions = gate.get("linked_assertion_ids", [])
                 lines.append(
                     f"    - {gate['id']} blocking={gate['blocking_level']} "
                     f"status={gate['status']} "
+                    f"assertions={','.join(linked_assertions) or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'}"
                 )
     if readiness.get("rc_blockers"):

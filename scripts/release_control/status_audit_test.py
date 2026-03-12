@@ -251,6 +251,8 @@ class StatusAuditTest(unittest.TestCase):
                         "repo_ids": ["pulse"],
                         "lane_ids": ["L1"],
                         "subsystem_ids": [],
+                        "release_gate_ids": ["g1"],
+                        "proof_command_ids": [],
                     }
                 ],
             )
@@ -264,6 +266,7 @@ class StatusAuditTest(unittest.TestCase):
                         "summary": "Need release verification",
                         "repo_ids": ["pulse"],
                         "lane_ids": ["L1"],
+                        "linked_assertion_ids": ["RA2"],
                     }
                 ],
             )
@@ -431,8 +434,11 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("release_gates:", pretty)
             self.assertIn("current_target_blockers:", pretty)
             self.assertIn("assertions:", pretty)
-            self.assertIn("RA2 blocking=rc-ready derived=gates-pending", pretty)
-            self.assertIn("g1 blocking=rc-ready status=pending", pretty)
+            self.assertIn(
+                "RA2 blocking=rc-ready derived=gates-pending gates=g1 proofs=-",
+                pretty,
+            )
+            self.assertIn("g1 blocking=rc-ready status=pending assertions=RA2", pretty)
             self.assertIn("rc_blockers:", pretty)
             self.assertIn("release_blockers:", pretty)
             self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
