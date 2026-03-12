@@ -1130,6 +1130,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "tests/integration/tests/journeys",
           "kind": "dir"
         }

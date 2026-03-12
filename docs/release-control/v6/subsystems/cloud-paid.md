@@ -156,6 +156,8 @@ existing recurring price remains in force until cancellation.
 Cancellation is the explicit boundary for that policy. Once a grandfathered v5
 recurring subscription is canceled, any later return must resolve through the
 current v6 pricing contract rather than reviving the legacy recurring rate.
+The canonical cross-repo manual drill for that boundary is
+`docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`.
 The paid relay settings and onboarding surfaces are now part of that same
 ownership model. Changes to
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and

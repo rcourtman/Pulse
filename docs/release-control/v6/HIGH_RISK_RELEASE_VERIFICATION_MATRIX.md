@@ -18,6 +18,13 @@ result.
    only after the full gate is clear.
 5. Treat every failed or unconfirmed gate as a release blocker.
 
+Companion drill:
+
+- For cancellation/reactivation pricing continuity, checkout re-entry, and
+  Stripe-driven revocation boundaries, run
+  `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`
+  and attach the resulting record to the applicable gate evidence.
+
 ## Gate: `hosted-signup-billing-replay`
 
 - Why this is risky:
