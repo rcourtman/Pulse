@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPatrolRunStatusPresentation,
+  isPatrolRunHealthy,
   getRunHistoryLoadingState,
   getToolCallsLoadingState,
   getToolCallsUnavailableState,
@@ -22,6 +23,13 @@ describe('patrolRunPresentation', () => {
 
   it('maps healthy runs to success styling', () => {
     expect(getPatrolRunStatusPresentation('healthy').badgeClass).toContain('green-100');
+  });
+
+  it('treats only healthy runs without errors as healthy', () => {
+    expect(isPatrolRunHealthy('healthy', 0)).toBe(true);
+    expect(isPatrolRunHealthy('critical', 0)).toBe(false);
+    expect(isPatrolRunHealthy('issues_found', 0)).toBe(false);
+    expect(isPatrolRunHealthy('healthy', 1)).toBe(false);
   });
 
   it('normalizes unknown status labels safely', () => {

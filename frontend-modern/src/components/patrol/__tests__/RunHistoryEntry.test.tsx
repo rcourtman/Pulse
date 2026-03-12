@@ -112,4 +112,31 @@ describe('RunHistoryEntry', () => {
       showScopeWarnings: true,
     });
   });
+
+  it('does not claim all clear when the run still had existing issues', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-existing-issues',
+          existing_findings: 2,
+          status: 'critical',
+          findings_summary: 'Existing issues remain',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByText((_, element) =>
+        element?.tagName === 'P' &&
+        (element.textContent?.includes('No new issues, but 2 existing issues remain.') ?? false),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
+  });
 });

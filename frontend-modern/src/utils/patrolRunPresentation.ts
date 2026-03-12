@@ -5,13 +5,24 @@ export interface PatrolRunStatusPresentation {
   label: string;
 }
 
-export function getPatrolRunStatusPresentation(
-  status: PatrolRunStatus | string,
-): PatrolRunStatusPresentation {
-  const normalized = String(status || '')
+function normalizePatrolRunStatus(status: PatrolRunStatus | string | undefined): string {
+  return String(status || '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '_');
+}
+
+export function isPatrolRunHealthy(
+  status: PatrolRunStatus | string | undefined,
+  errorCount: number = 0,
+): boolean {
+  return errorCount === 0 && normalizePatrolRunStatus(status) === 'healthy';
+}
+
+export function getPatrolRunStatusPresentation(
+  status: PatrolRunStatus | string,
+): PatrolRunStatusPresentation {
+  const normalized = normalizePatrolRunStatus(status);
 
   switch (normalized) {
     case 'critical':

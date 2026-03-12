@@ -12,7 +12,7 @@ import {
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
 import { formatRelativeTime } from '@/utils/format';
-import { getPatrolRunStatusPresentation } from '@/utils/patrolRunPresentation';
+import { getPatrolRunStatusPresentation, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 
 import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 import ActivityIcon from 'lucide-solid/icons/activity';
@@ -145,6 +145,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const duration = formatDurationMs(run.duration_ms);
   const runStatus = getPatrolRunStatusPresentation(run.status);
   const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
+  const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
 
   return (
     <div
@@ -238,8 +239,17 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   )}
                   .
                 </>
-              ) : (
+              ) : run.existing_findings > 0 ? (
+                <>
+                  No new issues, but <strong>{run.existing_findings}</strong> existing issue
+                  {run.existing_findings !== 1 ? 's' : ''} remain.
+                </>
+              ) : runIsHealthy ? (
                 <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
+              ) : (
+                <span class="text-amber-600 dark:text-amber-400">
+                  Patrol completed with issues requiring review.
+                </span>
               )}
             </p>
           </div>
@@ -336,7 +346,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   <FilterXIcon class="w-3 h-3" /> {run.rejected_findings} rejected
                 </span>
               </Show>
-              <Show when={run.status === 'healthy' && run.new_findings === 0}>
+              <Show
+                when={runIsHealthy && run.new_findings === 0 && run.existing_findings === 0}
+              >
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> All clear
                 </span>

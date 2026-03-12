@@ -9,6 +9,7 @@ import { Component, createResource, createMemo, Show } from 'solid-js';
 import { getPatrolRunHistory, type PatrolRunRecord } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
+import { isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -63,14 +64,12 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
     const lastRun = allRuns[0];
     const lastRunTime = lastRun ? new Date(lastRun.started_at) : null;
-    const lastRunHadErrors = lastRun?.error_count > 0;
-
     return {
       runsToday: todayRuns.length,
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
       lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
       lastRunTrigger: formatTrigger(lastRun?.trigger_reason),
-      isHealthy: !lastRunHadErrors && lastRun?.status === 'healthy',
+      isHealthy: isPatrolRunHealthy(lastRun?.status, lastRun?.error_count ?? 0),
     };
   });
 
