@@ -71,3 +71,8 @@ management gates: a user may only see or accept a share when their effective
 membership role satisfies the share's requested access role, and admin-capable
 operations must continue to derive from the canonical role comparator instead
 of duplicating owner/admin special cases.
+The comparator itself is now part of the owned runtime boundary: helpers such
+as `CanUserManage` and any share-filtering logic must route through the shared
+organization-role ordering function so viewer/editor/admin/owner semantics stay
+identical across model checks, handler authorization, and settings-surface
+presentation.

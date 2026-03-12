@@ -158,6 +158,11 @@ of accumulating long-lived hidden credentials.
 The same flow must fail closed if the pairing payload omits the authenticated
 relay token state needed by the mobile deep link; pairing UI cannot silently
 render a QR that bypasses governed auth ownership.
+Relay pairing token presentation is part of that same contract as well: the
+settings surface must label those transient credentials distinctly from
+long-lived automation tokens so operators can identify and revoke stale mobile
+pairing attempts without guessing which credential was created for device
+bootstrap.
 Hosted signup provisioning now follows the same rule. Changes to
 `internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
 must carry this contract and the dedicated hosted-signup provisioning proof
