@@ -210,17 +210,30 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 }
 
 func TestBuildEntitlementPayload_PreservesPlanVersionForSelfHostedJWT(t *testing.T) {
-	status := &license.LicenseStatus{
-		Valid:       true,
-		Tier:        license.TierPro,
-		PlanVersion: "v5_lifetime_grandfathered",
-		Features:    append([]string(nil), license.TierFeatures[license.TierPro]...),
+	tests := []struct {
+		name        string
+		planVersion string
+	}{
+		{name: "lifetime grandfathered", planVersion: "v5_lifetime_grandfathered"},
+		{name: "monthly grandfathered", planVersion: "v5_pro_monthly_grandfathered"},
+		{name: "annual grandfathered", planVersion: "v5_pro_annual_grandfathered"},
 	}
 
-	payload := buildEntitlementPayload(status, string(license.SubStateActive))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &license.LicenseStatus{
+				Valid:       true,
+				Tier:        license.TierPro,
+				PlanVersion: tc.planVersion,
+				Features:    append([]string(nil), license.TierFeatures[license.TierPro]...),
+			}
 
-	if payload.PlanVersion != "v5_lifetime_grandfathered" {
-		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "v5_lifetime_grandfathered")
+			payload := buildEntitlementPayload(status, string(license.SubStateActive))
+
+			if payload.PlanVersion != tc.planVersion {
+				t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, tc.planVersion)
+			}
+		})
 	}
 }
 

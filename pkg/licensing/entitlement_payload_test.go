@@ -144,43 +144,56 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 }
 
 func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
-	expiresAt := time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339)
-	graceEnd := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
-	status := &LicenseStatus{
-		Valid:          true,
-		Tier:           TierPro,
-		PlanVersion:    "v5_lifetime_grandfathered",
-		Email:          "owner@example.com",
-		ExpiresAt:      &expiresAt,
-		IsLifetime:     false,
-		DaysRemaining:  3,
-		InGracePeriod:  true,
-		GracePeriodEnd: &graceEnd,
-		Features:       append([]string(nil), TierFeatures[TierPro]...),
+	tests := []struct {
+		name        string
+		planVersion string
+	}{
+		{name: "lifetime grandfathered", planVersion: "v5_lifetime_grandfathered"},
+		{name: "monthly grandfathered", planVersion: "v5_pro_monthly_grandfathered"},
+		{name: "annual grandfathered", planVersion: "v5_pro_annual_grandfathered"},
 	}
 
-	payload := BuildEntitlementPayload(status, string(SubStateGrace))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			expiresAt := time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339)
+			graceEnd := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+			status := &LicenseStatus{
+				Valid:          true,
+				Tier:           TierPro,
+				PlanVersion:    tc.planVersion,
+				Email:          "owner@example.com",
+				ExpiresAt:      &expiresAt,
+				IsLifetime:     false,
+				DaysRemaining:  3,
+				InGracePeriod:  true,
+				GracePeriodEnd: &graceEnd,
+				Features:       append([]string(nil), TierFeatures[TierPro]...),
+			}
 
-	if !payload.Valid {
-		t.Fatalf("expected valid=true, got %v", payload.Valid)
-	}
-	if payload.PlanVersion != "v5_lifetime_grandfathered" {
-		t.Fatalf("expected plan_version %q, got %q", "v5_lifetime_grandfathered", payload.PlanVersion)
-	}
-	if payload.LicensedEmail != "owner@example.com" {
-		t.Fatalf("expected licensed_email %q, got %q", "owner@example.com", payload.LicensedEmail)
-	}
-	if payload.ExpiresAt == nil || *payload.ExpiresAt != expiresAt {
-		t.Fatalf("expected expires_at %q, got %v", expiresAt, payload.ExpiresAt)
-	}
-	if payload.DaysRemaining != 3 {
-		t.Fatalf("expected days_remaining 3, got %d", payload.DaysRemaining)
-	}
-	if !payload.InGracePeriod {
-		t.Fatalf("expected in_grace_period=true, got %v", payload.InGracePeriod)
-	}
-	if payload.GracePeriodEnd == nil || *payload.GracePeriodEnd != graceEnd {
-		t.Fatalf("expected grace_period_end %q, got %v", graceEnd, payload.GracePeriodEnd)
+			payload := BuildEntitlementPayload(status, string(SubStateGrace))
+
+			if !payload.Valid {
+				t.Fatalf("expected valid=true, got %v", payload.Valid)
+			}
+			if payload.PlanVersion != tc.planVersion {
+				t.Fatalf("expected plan_version %q, got %q", tc.planVersion, payload.PlanVersion)
+			}
+			if payload.LicensedEmail != "owner@example.com" {
+				t.Fatalf("expected licensed_email %q, got %q", "owner@example.com", payload.LicensedEmail)
+			}
+			if payload.ExpiresAt == nil || *payload.ExpiresAt != expiresAt {
+				t.Fatalf("expected expires_at %q, got %v", expiresAt, payload.ExpiresAt)
+			}
+			if payload.DaysRemaining != 3 {
+				t.Fatalf("expected days_remaining 3, got %d", payload.DaysRemaining)
+			}
+			if !payload.InGracePeriod {
+				t.Fatalf("expected in_grace_period=true, got %v", payload.InGracePeriod)
+			}
+			if payload.GracePeriodEnd == nil || *payload.GracePeriodEnd != graceEnd {
+				t.Fatalf("expected grace_period_end %q, got %v", graceEnd, payload.GracePeriodEnd)
+			}
+		})
 	}
 }
 
