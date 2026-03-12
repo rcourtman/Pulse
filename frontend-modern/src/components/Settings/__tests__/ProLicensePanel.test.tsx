@@ -148,29 +148,46 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
-    mockEntitlements = {
-      capabilities: ['ai_patrol'],
-      limits: [],
-      subscription_state: 'active',
-      upgrade_reasons: [],
-      tier: 'pro',
-      plan_version: 'v5_pro_monthly_grandfathered',
-      licensed_email: 'owner@example.com',
-      is_lifetime: false,
-      trial_eligible: false,
-    };
+    const tests = [
+      {
+        name: 'monthly',
+        planVersion: 'v5_pro_monthly_grandfathered',
+        expectedLabel: 'V5 Pro Monthly (Grandfathered)',
+      },
+      {
+        name: 'annual',
+        planVersion: 'v5_pro_annual_grandfathered',
+        expectedLabel: 'V5 Pro Annual (Grandfathered)',
+      },
+    ] as const;
 
-    render(() => <ProLicensePanel />);
+    for (const tc of tests) {
+      mockEntitlements = {
+        capabilities: ['ai_patrol'],
+        limits: [],
+        subscription_state: 'active',
+        upgrade_reasons: [],
+        tier: 'pro',
+        plan_version: tc.planVersion,
+        licensed_email: 'owner@example.com',
+        is_lifetime: false,
+        trial_eligible: false,
+      };
 
-    await waitFor(() => {
-      expect(screen.getByText('Plan Terms')).toBeInTheDocument();
-    });
+      render(() => <ProLicensePanel />);
 
-    expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
-    expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
-    expect(
-      screen.getByText(/keeps its existing recurring price until you cancel/i),
-    ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Plan Terms')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(tc.expectedLabel)).toBeInTheDocument();
+      expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
+      expect(
+        screen.getByText(/keeps its existing recurring price until you cancel/i),
+      ).toBeInTheDocument();
+
+      cleanup();
+    }
   });
 
   it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
