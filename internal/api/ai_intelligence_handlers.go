@@ -616,6 +616,8 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 	count := len(result)
 	if locked {
 		result = []map[string]interface{}{}
+		count = 0
+		stats = remediationStatsFromRecords(nil)
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{

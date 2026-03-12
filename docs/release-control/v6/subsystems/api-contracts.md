@@ -223,6 +223,11 @@ AI and agent-profile collection/detail clients must now also route `apiFetchJSON
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 `try/catch` wrappers that map those statuses to `[]`, `{ plans: [] }`, or
 `null`.
+Paywalled Patrol remediation-intelligence responses must also scrub derived
+metadata together with the collection itself: when remediation history is
+license-locked, `remediations`, `count`, and `stats` must all collapse to an
+explicit empty state rather than leaking paid history totals through a partial
+payload.
 Hosted billing-state payloads now also treat Stripe webhook-backed commercial
 state as canonical API contract data: when checkout and subscription webhooks
 persist paid state, `plan_version`, `stripe_price_id`, and `limits.max_agents`
