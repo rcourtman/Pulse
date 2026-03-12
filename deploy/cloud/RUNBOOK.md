@@ -97,7 +97,8 @@ Pricing note (see `docs/architecture/v6-pricing-and-tiering.md` for canonical pr
 - Cloud Max: $79/mo or $699/yr
 - `CP_TRIAL_SIGNUP_PRICE_ID` should be set to the Cloud Starter monthly Stripe price ID: `price_1T5kflBrHBocJIGHUqPv1dzV` ($29/mo).
 - Old v6 Pro price ID (`price_1T47OVBrHBocJIGHg4sMHMV7`, $15/mo) is replaced by the Cloud Starter price above.
-- Existing v5 subscriptions remain on their current recurring prices (grandfathered).
+- Existing v5 subscriptions remain on their current recurring prices (grandfathered) while subscription continuity is maintained.
+- If a grandfathered v5 subscriber cancels or lapses and later returns, the new purchase uses current public v6 pricing; the prior grandfathered price does not resume automatically.
 
 Recommended rate-limit overrides (all are requests/minute per source IP):
 
