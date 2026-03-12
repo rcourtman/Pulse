@@ -127,7 +127,9 @@ The same patrol run-history contract now also treats
 `effective_scope_resource_ids` as the canonical analyzed-resource scope when
 present, including when it is an explicit empty array, and frontend snapshot
 selection must treat an explicit empty `finding_ids` array as an empty snapshot
-rather than falling back to unrelated current findings.
+rather than falling back to unrelated current findings; a missing
+`finding_ids` field must retain its "no snapshot filter available" meaning
+rather than being collapsed into an empty snapshot.
 That same frontend run-history path must also preserve and expose
 `triage_flags` and `triage_skipped_llm` from canonical patrol run records so
 deterministic triage-only runs do not collapse into generic "no analysis"

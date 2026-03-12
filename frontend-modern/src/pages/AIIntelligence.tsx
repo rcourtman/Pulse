@@ -530,7 +530,7 @@ export function AIIntelligence() {
   const selectedRunFindingIds = createMemo(() => {
     const run = selectedRun();
     if (!run) return undefined;
-    return run.finding_ids ?? [];
+    return run.finding_ids;
   });
 
   const selectedRunScopeResourceIds = createMemo(() => {

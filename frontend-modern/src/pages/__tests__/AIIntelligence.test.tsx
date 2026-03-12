@@ -424,4 +424,62 @@ describe('AIIntelligence entitlement gating', () => {
       showScopeWarnings: true,
     });
   });
+
+  it('does not turn a missing snapshot finding list into an empty snapshot filter', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    runHistoryState.selection = {
+      id: 'run-missing-snapshot',
+      started_at: '2026-03-12T10:10:00Z',
+      completed_at: '2026-03-12T10:11:00Z',
+      duration_ms: 60000,
+      type: 'scoped',
+      trigger_reason: 'alert_fired',
+      scope_resource_ids: ['seed-resource'],
+      effective_scope_resource_ids: ['expanded-a'],
+      scope_resource_types: ['vm'],
+      resources_checked: 1,
+      nodes_checked: 0,
+      guests_checked: 1,
+      docker_checked: 0,
+      storage_checked: 0,
+      hosts_checked: 0,
+      pbs_checked: 0,
+      pmg_checked: 0,
+      kubernetes_checked: 0,
+      new_findings: 0,
+      existing_findings: 1,
+      rejected_findings: 0,
+      resolved_findings: 0,
+      auto_fix_count: 0,
+      findings_summary: 'Legacy run without snapshot ids',
+      error_count: 0,
+      status: 'issues_found',
+      tool_call_count: 0,
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(findingsPanelState.latestProps).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
+    });
+
+    expect(findingsPanelState.latestProps).toMatchObject({
+      filterOverride: 'all',
+      filterFindingIds: undefined,
+      scopeResourceIds: ['expanded-a'],
+      scopeResourceTypes: ['vm'],
+      showScopeWarnings: true,
+    });
+  });
 });
