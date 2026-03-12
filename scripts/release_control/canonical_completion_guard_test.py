@@ -136,7 +136,21 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                                     "internal/monitoring/canonical_guardrails_test.go",
                                     "internal/unifiedresources/code_standards_test.go",
                                 ],
-                            }
+                            },
+                            {
+                                "id": "unified-agent-settings-surface",
+                                "label": "unified agent settings monitoring proof",
+                                "match_prefixes": [],
+                                "match_files": [
+                                    "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+                                ],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": [
+                                    "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                                    "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+                                ],
+                            },
                         ],
                     },
                     "verification_requirements": [

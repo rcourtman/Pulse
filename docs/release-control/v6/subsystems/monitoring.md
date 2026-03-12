@@ -27,16 +27,18 @@ truth for live infrastructure data.
 3. `internal/unifiedresources/read_state.go`
 4. `internal/unifiedresources/monitor_adapter.go`
 5. `internal/unifiedresources/views.go`
+6. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Shared Boundaries
 
-1. None.
+1. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the unified agent settings surface is both a canonical monitoring-truth consumer and an API token, lookup, and assignment contract boundary.
 
 ## Extension Points
 
 1. Add pollers/providers through `internal/monitoring/`
 2. Add typed read access through `internal/unifiedresources/views.go`
 3. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
+4. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Forbidden Paths
 
@@ -55,6 +57,13 @@ truth for live infrastructure data.
 Consumer packages already use `ReadState`, but the monitoring core still has
 dual truth between unified resources and `StateSnapshot`. This is the main
 remaining architecture-coherence lane.
+The unified agent settings surface now also follows an explicit shared
+boundary with api-contracts. Changes to
+`frontend-modern/src/components/Settings/UnifiedAgents.tsx` must carry this
+contract together with the shared API-contract ownership and the dedicated
+proof files for agent inventory, lookup, reconnect, removal, and config
+update behavior, rather than remaining an unowned consumer of monitoring
+truth.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary

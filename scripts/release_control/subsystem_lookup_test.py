@@ -110,6 +110,62 @@ class SubsystemLookupTest(unittest.TestCase):
             ["frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"],
         )
 
+    def test_lookup_paths_assigns_unified_agents_to_shared_monitoring_and_api_contracts(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/UnifiedAgents.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"api-contracts", "monitoring"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["api-contracts", "monitoring"],
+        )
+        matches = {match["subsystem"] for match in file_entry["matches"]}
+        self.assertEqual(matches, {"api-contracts", "monitoring"})
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        api_match = by_subsystem["api-contracts"]
+        monitoring_match = by_subsystem["monitoring"]
+
+        self.assertEqual(
+            api_match["contract"],
+            "docs/release-control/v6/subsystems/api-contracts.md",
+        )
+        self.assertEqual(api_match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            api_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            api_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/api/__tests__/security.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+            ],
+        )
+
+        self.assertEqual(
+            monitoring_match["contract"],
+            "docs/release-control/v6/subsystems/monitoring.md",
+        )
+        self.assertEqual(monitoring_match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            monitoring_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            monitoring_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+            ],
+        )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])

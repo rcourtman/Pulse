@@ -26,6 +26,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+      "rationale": "the unified agent settings surface is both a canonical monitoring-truth consumer and an API token, lookup, and assignment contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "monitoring"
+      ]
+    },
+    {
       "path": "internal/api/licensing_bridge.go",
       "rationale": "commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
       "subsystems": [
@@ -196,6 +204,7 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
+        "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/types/api.ts"
       ],
       "verification": {
@@ -281,6 +290,22 @@
             ],
             "exact_files": [
               "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "unified-agent-settings-surface",
+            "label": "unified agent settings API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+              "frontend-modern/src/api/__tests__/monitoring.test.ts",
+              "frontend-modern/src/api/__tests__/security.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
             ]
           }
         ]
@@ -864,7 +889,9 @@
       "owned_prefixes": [
         "internal/monitoring/"
       ],
-      "owned_files": [],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+      ],
       "verification": {
         "allow_same_subsystem_tests": true,
         "test_prefixes": [],
@@ -899,6 +926,20 @@
             "exact_files": [
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "unified-agent-settings-surface",
+            "label": "unified agent settings monitoring proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/monitoring.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
             ]
           }
         ]

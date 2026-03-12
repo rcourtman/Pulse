@@ -25,15 +25,17 @@ Own canonical runtime payload shapes between backend and frontend.
 4. `frontend-modern/src/types/api.ts`
 5. `frontend-modern/src/api/responseUtils.ts`
 6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+7. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Shared Boundaries
 
-1. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-2. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-3. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-4. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
-5. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-6. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+1. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `monitoring`: the unified agent settings surface is both a canonical monitoring-truth consumer and an API token, lookup, and assignment contract boundary.
+2. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+3. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+4. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+5. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+6. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+7. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 
@@ -42,6 +44,7 @@ Own canonical runtime payload shapes between backend and frontend.
 3. Add dedicated contract tests for new stable payloads
 4. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 5. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
+6. Add or change unified agent token generation, lookup, and assignment presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Forbidden Paths
 
@@ -76,6 +79,12 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+The unified agent settings surface now also follows an explicit shared
+boundary with monitoring. Changes to
+`frontend-modern/src/components/Settings/UnifiedAgents.tsx` must carry this
+contract together with the shared monitoring contract and the dedicated API
+proof files for token generation, agent lookup, and profile assignment, rather
+than remaining an unowned consumer of those contract surfaces.
 `/api/charts/workloads-summary` now also has a canonical hot-path invariant:
 aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.
