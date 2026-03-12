@@ -6,13 +6,10 @@ from __future__ import annotations
 import os
 import unittest
 
-from repo_file_io import missing_staged_repo_paths, read_repo_text
+from release_promotion_policy_support import staged_governance_input_errors
+from repo_file_io import read_repo_text
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
-REQUIRED_STAGED_GOVERNANCE_INPUTS: tuple[str, ...] = (
-    "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
-    "docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md",
-)
 
 
 def read(rel: str) -> str:
@@ -22,40 +19,9 @@ def read(rel: str) -> str:
         strict_staged=USE_STAGED_GOVERNANCE,
     )
 
-
-def staged_governance_input_errors() -> list[str]:
-    if not USE_STAGED_GOVERNANCE:
-        return []
-
-    errors: list[str] = []
-    missing = missing_staged_repo_paths(REQUIRED_STAGED_GOVERNANCE_INPUTS)
-    if missing:
-        errors.append(
-            "stage the canonical promotion proof inputs:\n- " + "\n- ".join(missing)
-        )
-
-    checklist_rel = "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md"
-    if checklist_rel not in missing:
-        checklist = read_repo_text(
-            checklist_rel,
-            staged=True,
-            strict_staged=True,
-        )
-        if "rc-to-ga-rehearsal-summary" not in checklist:
-            errors.append(
-                "stage the updated docs/release-control/v6/PRE_RELEASE_CHECKLIST.md "
-                "that records the rc-to-ga-rehearsal-summary gate input"
-            )
-    else:
-        errors.append(
-            "stage the updated docs/release-control/v6/PRE_RELEASE_CHECKLIST.md "
-            "that records the rc-to-ga-rehearsal-summary gate input"
-        )
-
-    return errors
-
-
-STAGED_GOVERNANCE_INPUT_ERRORS = tuple(staged_governance_input_errors())
+STAGED_GOVERNANCE_INPUT_ERRORS = tuple(
+    staged_governance_input_errors(use_staged_governance=USE_STAGED_GOVERNANCE)
+)
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):

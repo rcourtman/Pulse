@@ -65,6 +65,10 @@ echo "Sensitivity check passed."
 echo "Running governance stage guard..."
 python3 scripts/release_control/governance_stage_guard.py
 
+# Preflight the full governed commit shape before deeper audits
+echo "Running staged commit shape guard..."
+python3 scripts/release_control/staged_commit_shape_guard.py
+
 # Enforce evergreen control-plane integrity and active target freshness
 echo "Running control plane audit..."
 python3 scripts/release_control/control_plane_audit.py --check --staged
@@ -99,10 +103,12 @@ python3 scripts/release_control/control_plane_audit_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py
 python3 scripts/release_control/governance_stage_guard_test.py
+python3 scripts/release_control/release_promotion_policy_support_test.py
 python3 scripts/release_control/registry_audit_test.py
 python3 scripts/release_control/readiness_assertion_guard_test.py
 (cd scripts/release_control && git -C ../.. show :scripts/release_control/release_promotion_policy_test.py | python3 -)
 python3 scripts/release_control/repo_file_io_test.py
+python3 scripts/release_control/staged_commit_shape_guard_test.py
 python3 scripts/release_control/status_audit_test.py
 python3 scripts/release_control/subsystem_contracts_test.py
 python3 scripts/release_control/subsystem_lookup_test.py
