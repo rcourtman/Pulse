@@ -525,8 +525,17 @@ export function AIIntelligence() {
 
   const selectedRunFindingIds = createMemo(() => {
     const run = selectedRun();
-    if (!run || !run.finding_ids || run.finding_ids.length === 0) return null;
-    return run.finding_ids;
+    if (!run) return undefined;
+    return run.finding_ids ?? [];
+  });
+
+  const selectedRunScopeResourceIds = createMemo(() => {
+    const run = selectedRun();
+    if (!run) return undefined;
+    if (run.effective_scope_resource_ids && run.effective_scope_resource_ids.length > 0) {
+      return run.effective_scope_resource_ids;
+    }
+    return run.scope_resource_ids;
   });
 
   // Live in-progress run entry for history list
@@ -1362,11 +1371,11 @@ export function AIIntelligence() {
               nextPatrolAt={patrolStatus()?.next_patrol_at}
               lastPatrolAt={patrolStatus()?.last_patrol_at}
               patrolIntervalMs={patrolStatus()?.interval_ms}
-              filterOverride={selectedRunFindingIds() ? 'all' : findingsFilterOverride()}
-              filterFindingIds={selectedRunFindingIds() ?? undefined}
-              scopeResourceIds={selectedRun()?.scope_resource_ids}
+              filterOverride={selectedRun() ? 'all' : findingsFilterOverride()}
+              filterFindingIds={selectedRunFindingIds()}
+              scopeResourceIds={selectedRunScopeResourceIds()}
               scopeResourceTypes={selectedRun()?.scope_resource_types}
-              showScopeWarnings={Boolean(selectedRunFindingIds()?.length)}
+              showScopeWarnings={Boolean(selectedRun())}
             />
           </Show>
 

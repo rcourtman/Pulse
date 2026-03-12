@@ -9,6 +9,7 @@ interface ModelInfo {
 
 interface PartialRunRecord {
   scope_resource_ids?: string[];
+  effective_scope_resource_ids?: string[];
   scope_resource_types?: string[];
   type?: string;
 }
@@ -47,7 +48,8 @@ export function formatTriggerReason(reason?: string): string {
 
 export function formatScope(run?: PartialRunRecord | null): string {
   if (!run) return '';
-  const idCount = run.scope_resource_ids?.length ?? 0;
+  const idCount =
+    run.effective_scope_resource_ids?.length ?? run.scope_resource_ids?.length ?? 0;
   if (idCount > 0) return `Scoped to ${idCount} resource${idCount === 1 ? '' : 's'}`;
   const types = run.scope_resource_types ?? [];
   if (types.length > 0) return `Scoped to ${types.join(', ')}`;

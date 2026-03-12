@@ -3,6 +3,21 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 
 import { AIIntelligence } from '../AIIntelligence';
 
+const { findingsPanelState, runHistoryState } = vi.hoisted(() => ({
+  findingsPanelState: {
+    latestProps: null as {
+      filterOverride?: string;
+      filterFindingIds?: string[];
+      scopeResourceIds?: string[];
+      scopeResourceTypes?: string[];
+      showScopeWarnings?: boolean;
+    } | null,
+  },
+  runHistoryState: {
+    selection: null as Record<string, unknown> | null,
+  },
+}));
+
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
@@ -61,13 +76,38 @@ vi.mock('@/stores/aiIntelligence', () => ({
 }));
 
 vi.mock('@/components/AI/FindingsPanel', () => ({
-  FindingsPanel: () => <div data-testid="findings-panel" />,
+  FindingsPanel: (props: Record<string, unknown>) => {
+    findingsPanelState.latestProps = {
+      filterOverride:
+        typeof props.filterOverride === 'string' ? props.filterOverride : undefined,
+      filterFindingIds: Array.isArray(props.filterFindingIds)
+        ? [...(props.filterFindingIds as string[])]
+        : undefined,
+      scopeResourceIds: Array.isArray(props.scopeResourceIds)
+        ? [...(props.scopeResourceIds as string[])]
+        : undefined,
+      scopeResourceTypes: Array.isArray(props.scopeResourceTypes)
+        ? [...(props.scopeResourceTypes as string[])]
+        : undefined,
+      showScopeWarnings:
+        typeof props.showScopeWarnings === 'boolean' ? props.showScopeWarnings : undefined,
+    };
+    return <div data-testid="findings-panel" />;
+  },
 }));
 
 vi.mock('@/components/patrol', () => ({
   ApprovalBanner: () => <div data-testid="approval-banner" />,
   PatrolStatusBar: () => <div data-testid="patrol-status-bar" />,
-  RunHistoryPanel: () => <div data-testid="run-history-panel" />,
+  RunHistoryPanel: (props: {
+    onSelectRun?: (run: Record<string, unknown> | null) => void;
+  }) => (
+    <div data-testid="run-history-panel">
+      <button type="button" onClick={() => props.onSelectRun?.(runHistoryState.selection)}>
+        Select mocked run
+      </button>
+    </div>
+  ),
   CountdownTimer: () => <div data-testid="countdown-timer" />,
 }));
 
@@ -164,6 +204,8 @@ describe('AIIntelligence entitlement gating', () => {
     trackUpgradeClickedMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
+    findingsPanelState.latestProps = null;
+    runHistoryState.selection = null;
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
     getPatrolAutonomySettingsMock.mockResolvedValue({
@@ -263,5 +305,64 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+  });
+
+  it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    runHistoryState.selection = {
+      id: 'run-empty',
+      started_at: '2026-03-12T10:00:00Z',
+      completed_at: '2026-03-12T10:01:00Z',
+      duration_ms: 60000,
+      type: 'scoped',
+      trigger_reason: 'alert_fired',
+      scope_resource_ids: ['seed-resource'],
+      effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+      scope_resource_types: ['vm'],
+      resources_checked: 2,
+      nodes_checked: 0,
+      guests_checked: 2,
+      docker_checked: 0,
+      storage_checked: 0,
+      hosts_checked: 0,
+      pbs_checked: 0,
+      pmg_checked: 0,
+      kubernetes_checked: 0,
+      new_findings: 0,
+      existing_findings: 0,
+      rejected_findings: 0,
+      resolved_findings: 0,
+      auto_fix_count: 0,
+      findings_summary: 'All healthy',
+      finding_ids: [],
+      error_count: 0,
+      status: 'healthy',
+      tool_call_count: 0,
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(findingsPanelState.latestProps).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
+    });
+
+    expect(findingsPanelState.latestProps).toMatchObject({
+      filterOverride: 'all',
+      filterFindingIds: [],
+      scopeResourceIds: ['expanded-a', 'expanded-b'],
+      scopeResourceTypes: ['vm'],
+      showScopeWarnings: true,
+    });
   });
 });

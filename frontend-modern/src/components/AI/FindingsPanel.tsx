@@ -157,7 +157,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
 
     // Filter by specific finding IDs if provided
-    if (props.filterFindingIds && props.filterFindingIds.length > 0) {
+    if (props.filterFindingIds !== undefined) {
       const idSet = new Set(props.filterFindingIds);
       findings = findings.filter((f) => idSet.has(f.id));
     }

@@ -100,6 +100,15 @@ describe('patrolFormat', () => {
       expect(formatScope({ scope_resource_ids: ['a'] })).toBe('Scoped to 1 resource');
     });
 
+    it('prefers effective_scope_resource_ids when present', () => {
+      expect(
+        formatScope({
+          scope_resource_ids: ['seed'],
+          effective_scope_resource_ids: ['seed', 'expanded'],
+        }),
+      ).toBe('Scoped to 2 resources');
+    });
+
     it('returns type list for scope_resource_types', () => {
       expect(formatScope({ scope_resource_types: ['vm', 'container'] })).toBe(
         'Scoped to vm, container',

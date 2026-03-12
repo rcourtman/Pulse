@@ -60,6 +60,7 @@ describe('patrol api', () => {
         status: 'healthy',
         tool_call_count: 0,
         alert_identifier: 'canonical-alert-1',
+        effective_scope_resource_ids: ['resource-1', 'resource-2'],
       },
     ] as any);
 
@@ -67,6 +68,7 @@ describe('patrol api', () => {
 
     expect(result[0]).toMatchObject({
       alertIdentifier: 'canonical-alert-1',
+      effective_scope_resource_ids: ['resource-1', 'resource-2'],
     });
   });
 

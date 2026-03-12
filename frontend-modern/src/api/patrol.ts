@@ -393,6 +393,7 @@ export interface PatrolRunRecord {
   type: string;
   trigger_reason?: string;
   scope_resource_ids?: string[];
+  effective_scope_resource_ids?: string[];
   scope_resource_types?: string[];
   scope_context?: string;
   alertIdentifier?: string;
