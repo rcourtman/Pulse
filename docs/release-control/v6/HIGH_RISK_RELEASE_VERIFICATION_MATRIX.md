@@ -329,6 +329,7 @@ result.
   `go test ./internal/api -run 'Test(APIToken|SecurityTokens|SystemSettings|MultiTenant)' -count=1`
   `go test ./internal/api -run 'TestNormalizeRequestedScopesCanonicalizesLegacyHostAgentAliases|TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias|TestContract_APITokenScopeAliasNormalization' -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/APITokenManager.test.tsx src/utils/__tests__/apiClient.org.test.ts src/utils/__tests__/apiTokenPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
+  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MULTI_TENANT_ENABLED=true npm test -- tests/13-api-token-scope.spec.ts --project=chromium`
 - Manual scenario:
   1. Generate a token for a specific user.
   2. Confirm the token inherits only the intended user and org scope.
