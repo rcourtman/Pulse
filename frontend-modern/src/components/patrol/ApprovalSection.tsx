@@ -119,6 +119,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     });
   };
 
+  const handleDiscussQueuedFix = (e: Event) => {
+    e.stopPropagation();
+    aiChatStore.openWithPrompt(
+      `Patrol queued a fix for a finding, but the original approval details are no longer available.\n\n**Finding:** ${props.findingTitle || 'Unknown finding'} on ${props.resourceName || 'unknown resource'}\n\nPlease help me investigate the issue again and propose a safe remediation approach.`,
+      {
+        targetType: props.resourceType,
+        targetId: props.resourceId,
+        findingId: props.findingId,
+      },
+    );
+  };
+
   // Load investigation details when outcome indicates a fix was proposed/executed
   const fixRelatedOutcomes = new Set([
     'fix_queued',
@@ -150,6 +162,14 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       investigation()?.proposed_fix,
   );
 
+  const isQueuedWithoutDetails = createMemo(
+    () =>
+      !pendingApproval() &&
+      props.investigationOutcome === 'fix_queued' &&
+      !investigation.loading &&
+      !investigation()?.proposed_fix,
+  );
+
   const isVerificationUnknown = createMemo(
     () => props.investigationOutcome === 'fix_verification_unknown',
   );
@@ -171,7 +191,13 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   // Show section only when there's something to display
   const shouldShow = createMemo(
-    () => pendingApproval() || isExpired() || isExecuted() || isFailed() || executionResult(),
+    () =>
+      pendingApproval() ||
+      isExpired() ||
+      isQueuedWithoutDetails() ||
+      isExecuted() ||
+      isFailed() ||
+      executionResult(),
   );
 
   const handleApprove = async (approval: ApprovalRequest, e: Event) => {
@@ -231,6 +257,61 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       setActionLoading(null);
     }
   };
+
+  const renderRecoveryActions = (assistantLabel: string, onAssistantClick: (e: Event) => void) => (
+    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
+      <Show when={canAutoFix()}>
+        <button
+          type="button"
+          onClick={handleReapprove}
+          disabled={actionLoading() === 'reapprove'}
+          class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+        >
+          <Show when={actionLoading() === 'reapprove'}>
+            <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </Show>
+          <Show when={actionLoading() !== 'reapprove'}>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </Show>
+          Re-approve & Execute
+        </button>
+      </Show>
+      <Show when={!canAutoFix()}>
+        <button
+          type="button"
+          onClick={onAssistantClick}
+          class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
+          </svg>
+          {assistantLabel}
+        </button>
+        <Show when={canStartTrial()}>
+          <button
+            type="button"
+            class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+            disabled={startingTrial()}
+            onClick={handleStartTrial}
+          >
+            Apply fixes automatically — start a free 14-day trial
+          </button>
+        </Show>
+      </Show>
+    </div>
+  );
 
   return (
     <Show when={shouldShow()}>
@@ -382,75 +463,52 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       {fix.commands![0]}
                     </div>
                   </Show>
-                  <Show when={fix.target_host}>
-                    <div class="text-xs text-muted">Target: {fix.target_host}</div>
-                  </Show>
-                </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-                  <Show when={canAutoFix()}>
-                    <button
-                      type="button"
-                      onClick={handleReapprove}
-                      disabled={actionLoading() === 'reapprove'}
-                      class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                    >
-                      <Show when={actionLoading() === 'reapprove'}>
-                        <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      </Show>
-                      <Show when={actionLoading() !== 'reapprove'}>
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      </Show>
-                      Re-approve & Execute
-                    </button>
-                  </Show>
-                  <Show when={!canAutoFix()}>
-                    <button
-                      type="button"
-                      onClick={(e) => handleFixWithAssistant(null, fix, e)}
-                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                    >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
-                      Fix with Assistant
-                    </button>
-                    <Show when={canStartTrial()}>
-                      <button
-                        type="button"
-                        class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
-                        disabled={startingTrial()}
-                        onClick={handleStartTrial}
-                      >
-                        Apply fixes automatically — start a free 14-day trial
-                      </button>
-                    </Show>
-                  </Show>
-                </div>
-              </>
-            );
-          })()}
+                <Show when={fix.target_host}>
+                  <div class="text-xs text-muted">Target: {fix.target_host}</div>
+                </Show>
+              </div>
+              {renderRecoveryActions('Fix with Assistant', (e) =>
+                handleFixWithAssistant(null, fix, e),
+              )}
+            </>
+          );
+        })()}
+        </Show>
+
+        {/* Queued approval with missing detail payload - keep recovery path visible */}
+        <Show when={isQueuedWithoutDetails() && !executionResult()}>
+          <>
+            <div class="flex items-center gap-2 mb-2">
+              <svg
+                class="w-4 h-4 text-amber-600 dark:text-amber-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
+              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                details unavailable
+              </span>
+            </div>
+            <div class="space-y-2 text-sm">
+              <div class="text-muted">
+                Patrol queued a fix for this finding, but the original approval details are no
+                longer available.
+              </div>
+              <div class="text-xs text-muted">
+                Regenerate the approval to continue, or rerun the investigation to let Patrol
+                rebuild the remediation plan.
+              </div>
+            </div>
+            {renderRecoveryActions('Discuss with Assistant', handleDiscussQueuedFix)}
+          </>
         </Show>
 
         {/* Execution result */}
