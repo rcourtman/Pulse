@@ -250,6 +250,8 @@ result.
   path, reconnects as one canonical v6 agent identity, preserves one-shot
   `updated_from` continuity, and leaves user-visible agent counts aligned with
   runtime enforcement.
+- Latest exercised record:
+  `docs/release-control/v6/records/unified-agent-v5-upgrade-continuity-2026-03-12.md`
 - Block release if:
   The RC asset path serves the wrong installer logic, the upgrade creates
   duplicate or orphaned agent identity, `updated_from` continuity is missing or

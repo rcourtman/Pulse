@@ -642,6 +642,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/unified-agent-v5-upgrade-continuity-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentupdate/coverage_test.go",
           "kind": "file"
         },
@@ -1217,7 +1222,7 @@
       "summary": "Confirm a real v5-installed Pulse Unified Agent upgrades through candidate v6 RC assets into one canonical v6 agent identity without duplicate registration, stale fallback or legacy-scope breakage, or agent-count drift.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L6",
