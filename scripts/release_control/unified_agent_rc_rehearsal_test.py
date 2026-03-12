@@ -154,6 +154,34 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
         )
         self.assertEqual(exit_code, 1)
 
+    def test_run_rehearsal_reports_missing_release_asset_without_crashing(self) -> None:
+        install = b"#!/bin/sh\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, b"ps1", {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, b"ps1", {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
+
     def test_check_update_info(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             info_path = Path(tmp) / ".pulse-update-info"

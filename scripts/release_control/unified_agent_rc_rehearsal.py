@@ -22,6 +22,13 @@ class CheckResult:
     detail: str
 
 
+def safe_check(name: str, fn) -> CheckResult:
+    try:
+        return fn()
+    except Exception as exc:  # pragma: no cover - exercised via caller tests
+        return CheckResult(name=name, ok=False, detail=str(exc))
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -415,32 +422,44 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
     release_base_url = normalize_base_url(args.release_base_url)
     auth_headers = build_auth_headers(args)
     results = [
-        check_version(base_url, args.expected_version, args.timeout),
-        compare_asset(
-            name="install-sh-asset",
-            live_url=f"{base_url}/install.sh",
-            release_url=release_asset_url(release_base_url, args.expected_version, "install.sh"),
-            timeout=args.timeout,
+        safe_check(
+            "agent-version-endpoint",
+            lambda: check_version(base_url, args.expected_version, args.timeout),
         ),
-        compare_asset(
-            name="install-ps1-asset",
-            live_url=f"{base_url}/install.ps1",
-            release_url=release_asset_url(release_base_url, args.expected_version, "install.ps1"),
-            timeout=args.timeout,
+        safe_check(
+            "install-sh-asset",
+            lambda: compare_asset(
+                name="install-sh-asset",
+                live_url=f"{base_url}/install.sh",
+                release_url=release_asset_url(release_base_url, args.expected_version, "install.sh"),
+                timeout=args.timeout,
+            ),
+        ),
+        safe_check(
+            "install-ps1-asset",
+            lambda: compare_asset(
+                name="install-ps1-asset",
+                live_url=f"{base_url}/install.ps1",
+                release_url=release_asset_url(release_base_url, args.expected_version, "install.ps1"),
+                timeout=args.timeout,
+            ),
         ),
     ]
 
     for arch in args.arch:
         quoted_arch = parse.quote(arch, safe="")
         results.append(
-            compare_asset(
-                name=f"agent-binary-{arch}",
-                live_url=f"{base_url}/download/pulse-agent?arch={quoted_arch}",
-                release_url=release_asset_url(
-                    release_base_url, args.expected_version, agent_binary_asset_name(arch)
+            safe_check(
+                f"agent-binary-{arch}",
+                lambda arch=arch, quoted_arch=quoted_arch: compare_asset(
+                    name=f"agent-binary-{arch}",
+                    live_url=f"{base_url}/download/pulse-agent?arch={quoted_arch}",
+                    release_url=release_asset_url(
+                        release_base_url, args.expected_version, agent_binary_asset_name(arch)
+                    ),
+                    timeout=args.timeout,
+                    expect_checksum_header=True,
                 ),
-                timeout=args.timeout,
-                expect_checksum_header=True,
             )
         )
 
@@ -454,26 +473,37 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
                 )
             )
         else:
-            results.append(check_update_info(args.update_info_dir, args.expected_updated_from))
+            results.append(
+                safe_check(
+                    "local-update-info",
+                    lambda: check_update_info(args.update_info_dir, args.expected_updated_from),
+                )
+            )
 
     if args.expected_active_agents is not None:
         results.append(
-            check_active_agent_accounting(
-                base_url=base_url,
-                timeout=args.timeout,
-                auth_headers=auth_headers,
-                expected_active_agents=args.expected_active_agents,
+            safe_check(
+                "active-agent-accounting",
+                lambda: check_active_agent_accounting(
+                    base_url=base_url,
+                    timeout=args.timeout,
+                    auth_headers=auth_headers,
+                    expected_active_agents=args.expected_active_agents,
+                ),
             )
         )
 
     if args.expected_agent_name or args.expected_online_agents is not None:
         results.append(
-            check_agent_ledger_identity(
-                base_url=base_url,
-                timeout=args.timeout,
-                auth_headers=auth_headers,
-                expected_agent_names=args.expected_agent_name,
-                expected_online_agents=args.expected_online_agents,
+            safe_check(
+                "agent-ledger-identity",
+                lambda: check_agent_ledger_identity(
+                    base_url=base_url,
+                    timeout=args.timeout,
+                    auth_headers=auth_headers,
+                    expected_agent_names=args.expected_agent_name,
+                    expected_online_agents=args.expected_online_agents,
+                ),
             )
         )
 
