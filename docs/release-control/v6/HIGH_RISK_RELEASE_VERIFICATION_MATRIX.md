@@ -123,15 +123,15 @@ result.
      hotfix exception and reason are recorded explicitly before promotion.
   4. Confirm the previous stable rollback target and exact reinstall or pin
      command are recorded in the release notes or release ticket.
-  5. Confirm the locked v5 policy is still a 90-day maintenance-only window,
-     and record the exact end-of-support date that will ship with the stable
-     or GA announcement.
+  5. Confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the governing v5
+     support policy and record the exact v6 GA date plus the exact v5
+     end-of-support date that will ship with the stable or GA announcement.
   6. Confirm the migration gate and other applicable high-risk gates are
      cleared for this same candidate before broad rollout.
 - Pass when:
   Stable or GA promotion is a governed handoff from an exercised RC with live
-  release-pipeline proof, explicit rollback instructions, and the published
-  90-day v5 maintenance policy.
+  release-pipeline proof, explicit rollback instructions, and the published v5
+  maintenance policy plus exact end-of-support date.
 - Block release if:
   Stable users would become the first real validation cohort, the rollback
   target is unclear, or the v5 maintenance-only policy is still undecided.

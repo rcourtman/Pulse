@@ -6,18 +6,18 @@ Pulse v6 is the largest release in the project's history — 1,200+ commits touc
 
 ## Pulse v5 Support Transition
 
-When Pulse v6 reaches stable availability, I will move Pulse v5 to
-maintenance-only support immediately.
+Replace the placeholders below with exact calendar dates before publishing the
+first stable `v6.0.0` release:
 
-- The v5 maintenance window lasts 90 calendar days from the v6 GA date.
-- During that window, I will only ship critical security fixes, critical
-  correctness or data-loss fixes, and migration blockers that prevent a safe
-  path to v6.
-- I will not add new features to v5, backport routine fixes, or make pricing
-  or entitlement exceptions to avoid the v6 model.
-- After the 90-day window ends, v5 may continue running for users who choose
-  to stay on it, but it will be unsupported.
-- The final GA announcement must include the exact v5 end-of-support date.
+- Pulse v5 entered maintenance-only support on `[v6-ga-date]`.
+- I will ship only critical security, critical correctness or data-loss,
+  installer or updater failure, licensing or billing blocker, and safe
+  migration blocker fixes for existing v5 users until `[v5-eos-date]`.
+- After `[v5-eos-date]`, Pulse v5 is end-of-support and new fixes land on v6
+  unless I publish an explicit exception.
+
+This notice must stay aligned with
+`docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`.
 
 ---
 

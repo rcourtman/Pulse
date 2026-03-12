@@ -201,6 +201,7 @@ docs/release-control/v6/*
 !docs/release-control/v6/README.md
 !docs/release-control/v6/RELEASE_PROMOTION_POLICY.md
 !docs/release-control/v6/SOURCE_OF_TRUTH.md
+!docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md
 !docs/release-control/v6/status.schema.json
 !docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md
 !docs/release-control/v6/SUBSYSTEM_CONTRACT_TEMPLATE.md

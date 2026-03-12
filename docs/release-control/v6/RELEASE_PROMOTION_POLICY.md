@@ -69,6 +69,8 @@ Cloud, and self-hosted production users.
    to stay on it, but it is unsupported.
 6. The v6 GA announcement must publish the exact v5 end-of-support date
    calculated from the GA publication date.
+7. `V5_MAINTENANCE_SUPPORT_POLICY.md` is the canonical source for this policy
+   and the required GA release notice.
 
 ## Stable Promotion Rules
 
@@ -83,8 +85,9 @@ Cloud, and self-hosted production users.
    - The previous stable rollback target and exact reinstall command recorded.
    - A live release-pipeline exercise already completed for the promoted RC,
      not only YAML lint or static workflow validation.
-   - The locked 90-day v5 maintenance-only policy and exact end-of-support
-     notice ready to publish with the promotion.
+   - The locked 90-day v5 maintenance-only policy in
+     `V5_MAINTENANCE_SUPPORT_POLICY.md` and the exact end-of-support notice
+     ready to publish with the promotion.
 4. Normal stable promotions require a minimum 72-hour RC soak after the
    candidate is available to internal or staging-like users.
 5. Hotfix exception:
@@ -121,6 +124,7 @@ Cloud, and self-hosted production users.
 3. Checklist evidence and gate status.
 4. Staging or internal validation note.
 5. v5 maintenance-only support policy and end-of-support note for the GA cutover.
+6. Exact v6 GA and v5 end-of-support dates published in the GA release notes.
 
 ## Authority
 

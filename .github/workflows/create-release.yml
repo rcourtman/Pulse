@@ -20,6 +20,10 @@ on:
         description: 'Required: prior stable version to pin for rollback (for example 5.1.14 or v5.1.14)'
         required: false
         type: string
+      v5_eos_date:
+        description: 'First stable v6.0.0 GA only: Pulse v5 end-of-support date (YYYY-MM-DD)'
+        required: false
+        type: string
       hotfix_exception:
         description: 'Stable only: bypass the 72-hour RC soak for urgent customer harm'
         required: false
@@ -121,6 +125,7 @@ jobs:
           IS_PRERELEASE: ${{ steps.extract.outputs.is_prerelease }}
           PROMOTED_FROM_TAG_INPUT: ${{ github.event.inputs.promoted_from_tag }}
           ROLLBACK_VERSION_INPUT: ${{ github.event.inputs.rollback_version }}
+          V5_EOS_DATE_INPUT: ${{ github.event.inputs.v5_eos_date }}
           HOTFIX_EXCEPTION_INPUT: ${{ github.event.inputs.hotfix_exception }}
           HOTFIX_REASON_INPUT: ${{ github.event.inputs.hotfix_reason }}
         run: |
@@ -141,6 +146,8 @@ jobs:
           git fetch --prune origin main pulse/v6 --tags
 
           ROLLBACK_TAG="$(normalize_tag "$ROLLBACK_VERSION_INPUT")"
+          RELEASE_NOTES_INPUT="$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH")"
+          V5_EOS_DATE="$(printf '%s' "${V5_EOS_DATE_INPUT:-}" | tr -d '[:space:]')"
           HOTFIX_EXCEPTION="${HOTFIX_EXCEPTION_INPUT:-false}"
           HOTFIX_REASON="$(printf '%s' "${HOTFIX_REASON_INPUT:-}" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')"
 
@@ -200,6 +207,21 @@ jobs:
               SOAK_HOURS="$(( (NOW_TS - PROMOTED_TAG_TS) / 3600 ))"
               if [ "$SOAK_HOURS" -lt 72 ]; then
                 echo "::error::Stable promotion ${TAG} has only ${SOAK_HOURS} hours of RC soak since ${PROMOTED_FROM_TAG}; minimum is 72 hours unless hotfix_exception is true."
+                exit 1
+              fi
+            fi
+
+            if [ "$VERSION" = "6.0.0" ]; then
+              if ! [[ "$V5_EOS_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                echo "::error::Stable v6.0.0 requires v5_eos_date in YYYY-MM-DD form so the support window is published explicitly."
+                exit 1
+              fi
+              if ! printf '%s' "$RELEASE_NOTES_INPUT" | grep -Fqi "maintenance-only support"; then
+                echo "::error::Stable v6.0.0 release_notes must include the Pulse v5 maintenance-only support notice."
+                exit 1
+              fi
+              if ! printf '%s' "$RELEASE_NOTES_INPUT" | grep -Fq "$V5_EOS_DATE"; then
+                echo "::error::Stable v6.0.0 release_notes must include the exact v5_eos_date (${V5_EOS_DATE})."
                 exit 1
               fi
             fi

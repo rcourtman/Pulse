@@ -22,29 +22,36 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("do not promote to `stable` until the active control-plane target", content)
         self.assertIn("A live release-pipeline exercise already completed for the promoted RC", content)
         self.assertIn("maintenance-only window lasts 90 calendar days", content)
-        self.assertIn("critical security issues", content)
-        self.assertIn("After the 90-day window ends, v5 may continue running", content)
+        self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
+        self.assertIn("Exact v6 GA and v5 end-of-support dates", content)
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/PRE_RELEASE_CHECKLIST.md")
         self.assertIn("release pipeline has already been exercised on a real RC tag", content)
-        self.assertIn("90-day v5 maintenance-only policy", content)
+        self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
+        self.assertIn("exact GA/EOS dates", content)
         self.assertIn("rc-to-ga-promotion-readiness", content)
 
-    def test_release_notes_publish_v5_support_transition(self) -> None:
-        content = read("docs/releases/RELEASE_NOTES_v6.md")
-        self.assertIn("## Pulse v5 Support Transition", content)
-        self.assertIn("maintenance-only support immediately", content)
-        self.assertIn("90 calendar days from the v6 GA date", content)
-        self.assertIn("After the 90-day window ends, v5 may continue running", content)
+    def test_v5_support_policy_and_release_notes_publish_exact_notice(self) -> None:
+        policy = read("docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md")
+        release_notes = read("docs/releases/RELEASE_NOTES_v6.md")
+        self.assertIn("maintenance-only support immediately on the v6 GA date", policy)
+        self.assertIn("90 calendar days from the v6 GA", policy)
+        self.assertIn("pulse/v5-maintenance", policy)
+        self.assertIn("[v5-eos-date]", release_notes)
+        self.assertIn("Pulse v5 Support Transition", release_notes)
+        self.assertIn("publish an explicit exception", release_notes)
 
-    def test_release_workflow_enforces_rc_lineage_and_soak(self) -> None:
+    def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
         self.assertIn('REQUIRED_BRANCH="pulse/v6"', content)
         self.assertIn('REQUIRED_BRANCH="main"', content)
         self.assertIn("Stable promotions require promoted_from_tag", content)
         self.assertIn("rollback_version is required for every release", content)
         self.assertIn("minimum is 72 hours unless hotfix_exception is true", content)
+        self.assertIn("v5_eos_date", content)
+        self.assertIn("Stable v6.0.0 requires v5_eos_date in YYYY-MM-DD form", content)
+        self.assertIn("release_notes must include the Pulse v5 maintenance-only support notice", content)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

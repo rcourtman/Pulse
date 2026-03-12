@@ -61,6 +61,9 @@ This file must not contain:
 10. `docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`
     Canonical stable-versus-RC promotion rules, rollout criteria, and rollback
     expectations for v6 and later release lines.
+11. `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`
+    Canonical v5 maintenance-only support window, release-line rules, and GA
+    notice requirements for the v6 cutover.
 
 ## Scope
 
@@ -151,8 +154,8 @@ Assertion design rules:
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
    architectural blockers.
 6. Stable or GA promotion for v6 must come from an exercised RC and stay
-   blocked until the RC-to-GA promotion gate and v5 maintenance-policy
-   decision are both resolved.
+   blocked until the RC-to-GA promotion gate is cleared and the published v5
+   maintenance-policy notice is ready.
 7. v6 and later releases use a promotion model, not a direct broad-rollout
    model.
    `stable` must receive only promoted, already-validated builds, `rc` is the
@@ -160,7 +163,8 @@ Assertion design rules:
    `stable`-only unless a new channel policy is explicitly adopted.
 8. Once v6 reaches stable or GA, v5 enters a 90-day maintenance-only window:
    critical security issues, critical correctness/data-loss issues, and safe
-   migration blockers only. After that window, v5 is unsupported.
+   migration blockers only. The exact end-of-support date must be published in
+   the GA release notice. After that window, v5 is unsupported.
 
 ## Cross-Repo Contracts
 

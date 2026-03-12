@@ -565,6 +565,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "scripts/release_control/release_promotion_policy_test.py",
           "kind": "file"
         }

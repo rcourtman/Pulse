@@ -122,9 +122,15 @@ git push origin main
 
 3. Release `6.0.0` from `main` using `Pulse Release Pipeline`.
 
-4. Continue critical v5 fixes from `pulse/v5-maintenance` only.
+4. Publish the exact v6 GA date and v5 end-of-support date in the GA release
+   notice using
+   `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` as the canonical
+   policy.
+
+5. Continue critical v5 fixes from `pulse/v5-maintenance` only.
    - The support window lasts 90 calendar days from v6 GA.
-   - Only critical security issues, critical correctness/data-loss issues, and
+   - Only critical security issues, critical correctness/data-loss issues,
+     installer or updater failures, licensing or billing blockers, and safe
      migration blockers are eligible during that window.
    - After that window, v5 is unsupported.
 
@@ -141,7 +147,9 @@ If GA has a severe regression:
 
 1. Patch quickly on `main` (v6.0.1), or
 2. Advise affected users to hold at prior stable while fix ships.
-3. Continue v5 emergency fixes from `pulse/v5-maintenance` if needed.
+3. Continue v5 emergency fixes from `pulse/v5-maintenance` only if the
+   published maintenance-only window is still active or I explicitly announce
+   an exception.
 
 ## Minimal Per-Release Checklist
 
