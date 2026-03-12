@@ -2,6 +2,30 @@
   "version": 11,
   "shared_ownerships": [
     {
+      "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+      "rationale": "the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+      "rationale": "resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+      "rationale": "the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "internal/api/licensing_bridge.go",
       "rationale": "commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
       "subsystems": [
@@ -773,6 +797,9 @@
       "owned_files": [
         "frontend-modern/src/components/Dashboard/Dashboard.tsx",
         "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go"
@@ -811,13 +838,17 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Dashboard/Dashboard.tsx",
-              "frontend-modern/src/components/Dashboard/workloadSelectors.ts"
+              "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
+              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+              "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
-              "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts"
+              "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx"
             ]
           },
           {
@@ -844,6 +875,9 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/hooks/useDashboardTrends.ts",
         "frontend-modern/src/hooks/useUnifiedResources.ts",
         "frontend-modern/src/pages/Infrastructure.tsx",
@@ -906,20 +940,27 @@
             "id": "resource-consumers",
             "label": "unified resource consumer proof",
             "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/hooks/useDashboardTrends.ts",
-              "frontend-modern/src/hooks/useUnifiedResources.ts",
-              "frontend-modern/src/pages/Infrastructure.tsx",
+        "match_files": [
+          "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+          "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+          "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "frontend-modern/src/hooks/useDashboardTrends.ts",
+          "frontend-modern/src/hooks/useUnifiedResources.ts",
+          "frontend-modern/src/pages/Infrastructure.tsx",
               "frontend-modern/src/routing/resourceLinks.ts",
               "frontend-modern/src/types/resource.ts",
               "internal/api/resources.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
-              "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+        "exact_files": [
+          "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+          "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+          "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
+          "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
+          "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+          "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+          "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
               "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
               "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",

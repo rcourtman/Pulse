@@ -27,11 +27,18 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-8. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+8. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+9. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+10. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+11. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+12. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
-1. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+4. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 
@@ -67,6 +74,7 @@ are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
 
-The remaining top-level performance gap is no longer the main dashboard
-workload path. It is the adjacent fleet-scale surfaces that still sit outside
-explicit performance ownership, such as unified resource table hot paths.
+The unified resource table hot path is now also governed as explicit
+performance-owned runtime, with shared ownership against the unified-resource
+consumer boundary. The remaining performance work is no longer top-level
+ownership ambiguity on the main dashboard or infrastructure tables.

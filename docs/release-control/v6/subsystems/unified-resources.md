@@ -28,7 +28,10 @@ cross-source deduplication.
 
 ## Shared Boundaries
 
-1. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+4. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
 
@@ -94,3 +97,9 @@ Frontend/API consumers and backend support files now require explicit registry
 path-policy coverage, so new unified-resource-owned runtime files must be added
 to a concrete proof route instead of falling back to subsystem-default
 verification.
+
+The infrastructure table, selector, and detail-mapper frontend consumers are
+now governed as explicit shared boundaries with the performance lane rather
+than implicit downstream usage. That means future fleet-scale table changes
+must preserve both canonical unified-resource semantics and the table
+performance proof route.
