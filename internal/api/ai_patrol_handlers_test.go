@@ -477,8 +477,8 @@ func TestHandleGetPatrolRunHistory_InvalidOrOversizedLimitIsNormalized(t *testin
 		query      string
 		wantLength int
 	}{
-		{name: "zero_uses_default", query: "?limit=0", wantLength: 50},
-		{name: "negative_uses_default", query: "?limit=-5", wantLength: 50},
+		{name: "zero_uses_default", query: "?limit=0", wantLength: 30},
+		{name: "negative_uses_default", query: "?limit=-5", wantLength: 30},
 		{name: "cap_at_100", query: "?limit=250", wantLength: 100},
 	}
 

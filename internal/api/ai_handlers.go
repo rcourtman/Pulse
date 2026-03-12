@@ -5761,8 +5761,8 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		return
 	}
 
-	// Parse optional limit query parameter (default: 50)
-	limit := 50
+	// Parse optional limit query parameter (default: 30)
+	limit := 30
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
 			limit = parsed
