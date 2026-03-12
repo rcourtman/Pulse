@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/api/ai', () => ({
   AIAPI: {
     getUnifiedFindings: vi.fn(),
+    getPendingApprovals: vi.fn(),
   },
 }));
 
@@ -56,5 +57,60 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'instance:node:100::metric/cpu',
     });
+  });
+
+  it('treats queued fixes without a live approval as findings needing attention', async () => {
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'finding-queued',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'performance',
+          resource_id: 'instance:node:200',
+          resource_name: 'node-200',
+          resource_type: 'host',
+          title: 'Queued remediation',
+          description: 'Patrol queued a remediation.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_queued',
+        },
+      ],
+      count: 1,
+    });
+
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([]);
+
+    await aiIntelligenceStore.loadFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((finding) => finding.id)).toEqual([
+      'finding-queued',
+    ]);
+    expect(aiIntelligenceStore.findingsWithPendingApprovals).toEqual([]);
+
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
+      {
+        id: 'approval-1',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart pulse-agent',
+        targetType: 'host',
+        targetId: 'finding-queued',
+        targetName: 'node-200',
+        context: 'Restart the agent',
+        riskLevel: 'medium',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: '2026-03-01T00:06:00Z',
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.findingsNeedingAttention).toEqual([]);
+    expect(aiIntelligenceStore.findingsWithPendingApprovals.map((finding) => finding.id)).toEqual([
+      'finding-queued',
+    ]);
   });
 });

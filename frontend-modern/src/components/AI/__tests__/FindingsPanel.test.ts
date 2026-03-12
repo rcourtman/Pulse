@@ -15,11 +15,13 @@ import {
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
   hasFindingInvestigationDetails,
+  hasPendingInvestigationFixApproval,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusLabel,
   getInvestigationStatusBadgeClasses,
+  doesFindingNeedAttention,
 } from '@/utils/aiFindingPresentation';
 
 describe('aiFindingPresentation', () => {
@@ -239,6 +241,46 @@ describe('aiFindingPresentation', () => {
           investigationOutcome: undefined,
           investigationAttempts: 0,
         } as never),
+      ).toBe(false);
+    });
+
+    it('promotes queued fixes without a pending approval into the needs-attention bucket', () => {
+      expect(
+        hasPendingInvestigationFixApproval('finding-1', [
+          {
+            status: 'pending',
+            toolId: 'investigation_fix',
+            targetId: 'finding-1',
+          },
+        ] as never),
+      ).toBe(true);
+
+      expect(
+        doesFindingNeedAttention(
+          {
+            id: 'finding-1',
+            status: 'active',
+            investigationOutcome: 'fix_queued',
+          } as never,
+          [],
+        ),
+      ).toBe(true);
+
+      expect(
+        doesFindingNeedAttention(
+          {
+            id: 'finding-1',
+            status: 'active',
+            investigationOutcome: 'fix_queued',
+          } as never,
+          [
+            {
+              status: 'pending',
+              toolId: 'investigation_fix',
+              targetId: 'finding-1',
+            },
+          ] as never,
+        ),
       ).toBe(false);
     });
   });

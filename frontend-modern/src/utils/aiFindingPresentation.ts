@@ -1,4 +1,5 @@
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
+import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -256,6 +257,44 @@ export const hasFindingInvestigationDetails = (
       finding.investigationOutcome ||
       (finding.investigationAttempts ?? 0) > 0,
   );
+
+const ATTENTION_OUTCOMES = new Set([
+  'fix_verification_failed',
+  'fix_verification_unknown',
+  'fix_failed',
+  'timed_out',
+  'needs_attention',
+  'cannot_fix',
+]);
+
+export const hasPendingInvestigationFixApproval = (
+  findingId: string,
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId'>[],
+): boolean =>
+  approvals.some(
+    (approval) =>
+      approval.status === 'pending' &&
+      approval.toolId === 'investigation_fix' &&
+      approval.targetId === findingId,
+  );
+
+export const doesFindingNeedAttention = (
+  finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome'>,
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId'>[] = [],
+): boolean => {
+  if (finding.status !== 'active' || !finding.investigationOutcome) {
+    return false;
+  }
+
+  if (ATTENTION_OUTCOMES.has(finding.investigationOutcome)) {
+    return true;
+  }
+
+  return (
+    finding.investigationOutcome === 'fix_queued' &&
+    !hasPendingInvestigationFixApproval(finding.id, approvals)
+  );
+};
 
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;

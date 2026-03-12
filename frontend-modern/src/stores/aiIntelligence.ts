@@ -17,6 +17,7 @@ import type {
   ApprovalRequest,
   ApprovalExecutionResult,
 } from '@/api/ai';
+import { doesFindingNeedAttention, hasPendingInvestigationFixApproval } from '@/utils/aiFindingPresentation';
 import { logger } from '@/utils/logger';
 
 // ============================================
@@ -370,28 +371,15 @@ export const aiIntelligenceStore = {
   },
 
   get findingsWithPendingApprovals() {
-    const approvals = pendingApprovals().filter((a) => a.status === 'pending');
-    const findingIds = new Set(
-      approvals.filter((a) => a.toolId === 'investigation_fix').map((a) => a.targetId),
+    const approvals = pendingApprovals();
+    return unifiedFindings().filter((finding) =>
+      hasPendingInvestigationFixApproval(finding.id, approvals),
     );
-    return unifiedFindings().filter((f) => findingIds.has(f.id));
   },
 
   get findingsNeedingAttention() {
-    const actionableOutcomes = new Set([
-      'fix_verification_failed',
-      'fix_verification_unknown',
-      'fix_failed',
-      'timed_out',
-      'needs_attention',
-      'cannot_fix',
-    ]);
-    return unifiedFindings().filter(
-      (f) =>
-        f.status === 'active' &&
-        f.investigationOutcome &&
-        actionableOutcomes.has(f.investigationOutcome),
-    );
+    const approvals = pendingApprovals();
+    return unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals));
   },
 
   get needsAttentionCount() {
