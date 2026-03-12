@@ -292,6 +292,43 @@ func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_AutoRegisterRequestJSONSnapshot(t *testing.T) {
+	payload := AutoRegisterRequest{
+		Type:         "pve",
+		Host:         "https://pve.local:8006",
+		TokenID:      "pulse-monitor@pve!pulse-homelab",
+		TokenValue:   "secret-token",
+		ServerName:   "pve-node-1",
+		SetupCode:    "deprecated-setup-code",
+		AuthToken:    "runtime-auth-token",
+		Source:       "agent",
+		RequestToken: true,
+		Username:     "root@pam",
+		Password:     "super-secret",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal auto-register request: %v", err)
+	}
+
+	const want = `{
+		"type":"pve",
+		"host":"https://pve.local:8006",
+		"tokenId":"pulse-monitor@pve!pulse-homelab",
+		"tokenValue":"secret-token",
+		"serverName":"pve-node-1",
+		"setupCode":"deprecated-setup-code",
+		"authToken":"runtime-auth-token",
+		"source":"agent",
+		"requestToken":true,
+		"username":"root@pam",
+		"password":"super-secret"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	lastPatrolAt := time.Date(2026, 3, 12, 9, 30, 0, 0, time.UTC)
 	nextPatrolAt := lastPatrolAt.Add(6 * time.Hour)

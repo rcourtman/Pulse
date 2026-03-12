@@ -1877,6 +1877,8 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 }
 
 func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	rawToken := "agent-register-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)

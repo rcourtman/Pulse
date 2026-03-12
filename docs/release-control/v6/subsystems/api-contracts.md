@@ -248,6 +248,12 @@ That same chat SSE contract must remain request-bound. If the HTTP request
 context is canceled or the client disconnects, backend assistant execution
 must cancel with the request rather than continuing on a detached background
 context until an unrelated timeout expires.
+Config-registration API contracts at `/api/auto-register` and
+`/api/config/nodes` now also require deterministic automated proof: backend
+verification must stub TLS fingerprint capture and Proxmox cluster-detection
+probes rather than depending on live network reachability, so canonical
+request/response verification reflects contract behavior instead of ambient
+lab state.
 AI and agent-profile collection/detail clients must now also route `apiFetchJSON`
 `402`/`404` fallback behavior through shared API-error-status fallback helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

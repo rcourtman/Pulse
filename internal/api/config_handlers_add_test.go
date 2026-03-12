@@ -178,6 +178,8 @@ func TestHandleAddNode(t *testing.T) {
 // TestHandleAddNode_NoLimitForConfigRegistration verifies that PVE/PBS/PMG
 // config registrations are never blocked by the agent limit (agents-only model).
 func TestHandleAddNode_NoLimitForConfigRegistration(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	setMaxAgentsLicenseForTests(t, 1)
 
 	tempDir, err := os.MkdirTemp("", "pulse-add-node-limit-test")

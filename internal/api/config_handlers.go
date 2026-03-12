@@ -819,7 +819,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 	// Capture the fingerprint for TOFU (Trust On First Use)
 	var capturedFingerprint string
 	if testHost != "" {
-		fp, err := tlsutil.FetchFingerprint(testConfig.Host)
+		fp, err := fetchTLSFingerprint(testConfig.Host)
 		if err != nil {
 			log.Debug().
 				Str("node", clusterNode.Name).
@@ -1006,7 +1006,10 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 	return ""
 }
 
-var detectPVECluster = defaultDetectPVECluster
+var (
+	detectPVECluster    = defaultDetectPVECluster
+	fetchTLSFingerprint = tlsutil.FetchFingerprint
+)
 
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
 // If existingEndpoints is provided, GuestURL values will be preserved for matching nodes

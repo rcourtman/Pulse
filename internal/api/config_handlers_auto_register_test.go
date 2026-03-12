@@ -11,7 +11,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
@@ -65,6 +64,8 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 }
 
 func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
@@ -115,6 +116,8 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 // TestHandleAutoRegister_NoLimitForConfigRegistration verifies that auto-register
 // for PVE/PBS/PMG is never blocked by the agent limit (agents-only model).
 func TestHandleAutoRegister_NoLimitForConfigRegistration(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	setMaxAgentsLicenseForTests(t, 1)
 
 	tempDir := t.TempDir()
@@ -258,14 +261,10 @@ func TestHandleAutoRegisterRejectsHeaderAPITokenOrgMismatch(t *testing.T) {
 }
 
 func TestHandleAutoRegisterConsolidatesStandaloneOverlapIntoClusterInMemory(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	t.Cleanup(func() { detectPVECluster = originalDetectPVECluster })
 
 	cfg := &config.Config{
 		DataPath:   tempDir,
@@ -392,15 +391,10 @@ func TestDisambiguateNodeName(t *testing.T) {
 // with the same hostname but different IPs are stored as separate nodes.
 // This is a regression test for Issue #891.
 func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	// Mock detectPVECluster to avoid network calls
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
 
 	cfg := &config.Config{
 		DataPath:   tempDir,

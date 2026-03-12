@@ -27,7 +27,6 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1487,7 +1486,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	fingerprint := ""
-	if fp, err := tlsutil.FetchFingerprint(host); err != nil {
+	if fp, err := fetchTLSFingerprint(host); err != nil {
 		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
 	} else {
 		fingerprint = fp
@@ -1977,7 +1976,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		tokenBytes[0:4], tokenBytes[4:6], tokenBytes[6:8], tokenBytes[8:10], tokenBytes[10:16])
 
 	fingerprint := ""
-	if fp, err := tlsutil.FetchFingerprint(host); err != nil {
+	if fp, err := fetchTLSFingerprint(host); err != nil {
 		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
 	} else {
 		fingerprint = fp
