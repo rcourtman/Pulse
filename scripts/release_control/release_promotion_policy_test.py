@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
 import unittest
 
+from repo_file_io import read_repo_text
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
 
 def read(rel: str) -> str:
-    return (REPO_ROOT / rel).read_text(encoding="utf-8")
+    return read_repo_text(rel, staged=USE_STAGED_GOVERNANCE)
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):

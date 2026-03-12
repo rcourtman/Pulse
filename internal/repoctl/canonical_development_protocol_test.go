@@ -2,7 +2,9 @@ package repoctl
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -10,8 +12,32 @@ import (
 	"testing"
 )
 
+func useStagedGovernanceReads() bool {
+	return os.Getenv("PULSE_READ_STAGED_GOVERNANCE") == "1"
+}
+
+func repoRootPath(t *testing.T) string {
+	t.Helper()
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("failed to resolve pulse repo root: %v", err)
+	}
+	return root
+}
+
 func readRepoFile(t *testing.T, rel string) string {
 	t.Helper()
+
+	if useStagedGovernanceReads() {
+		cmd := exec.Command("git", "show", ":"+rel)
+		cmd.Dir = repoRootPath(t)
+		data, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("failed to read staged %s: %v", rel, err)
+		}
+		return string(data)
+	}
 
 	path := filepath.Join("..", "..", rel)
 	data, err := os.ReadFile(path)
@@ -41,6 +67,20 @@ func assertContainsNone(t *testing.T, rel string, content string, forbidden []st
 
 func assertRepoFileMissing(t *testing.T, rel string) {
 	t.Helper()
+
+	if useStagedGovernanceReads() {
+		cmd := exec.Command("git", "cat-file", "-e", ":"+rel)
+		cmd.Dir = repoRootPath(t)
+		err := cmd.Run()
+		if err == nil {
+			t.Fatalf("%s should be removed from the staged commit", rel)
+		}
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("failed to inspect staged %s: %v", rel, err)
+		}
+		return
+	}
 
 	path := filepath.Join("..", "..", rel)
 	_, err := os.Stat(path)

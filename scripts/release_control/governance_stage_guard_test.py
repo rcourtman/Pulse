@@ -27,11 +27,13 @@ class GovernanceStageGuardTest(unittest.TestCase):
 
     def test_is_worktree_sensitive_governance_path_matches_expected_scope(self) -> None:
         self.assertTrue(is_worktree_sensitive_governance_path(".husky/pre-commit"))
-        self.assertTrue(is_worktree_sensitive_governance_path(".github/workflows/canonical-governance.yml"))
         self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/control_plane.json"))
-        self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/v6/status.json"))
         self.assertTrue(is_worktree_sensitive_governance_path("internal/repoctl/canonical_development_protocol_test.go"))
         self.assertTrue(is_worktree_sensitive_governance_path("scripts/release_control/status_audit.py"))
+        self.assertFalse(is_worktree_sensitive_governance_path(".github/workflows/canonical-governance.yml"))
+        self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/CONTROL_PLANE.md"))
+        self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/status.json"))
+        self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/PRE_RELEASE_CHECKLIST.md"))
         self.assertFalse(is_worktree_sensitive_governance_path("internal/api/slo.go"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/API.md"))
 
@@ -40,6 +42,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
             ".husky/pre-commit",
             "docs/release-control/control_plane.json",
             "docs/release-control/v6/status.json",
+            "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
             "internal/api/slo.go",
             "scripts/release_control/status_audit.py",
         ]
@@ -49,7 +52,6 @@ class GovernanceStageGuardTest(unittest.TestCase):
             [
                 ".husky/pre-commit",
                 "docs/release-control/control_plane.json",
-                "docs/release-control/v6/status.json",
                 "scripts/release_control/status_audit.py",
             ],
         )
@@ -57,7 +59,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
     def test_unstaged_governance_paths_detects_real_unstaged_governance_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
-            rel = "docs/release-control/v6/status.json"
+            rel = "docs/release-control/control_plane.json"
             path = repo_root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -73,15 +75,15 @@ class GovernanceStageGuardTest(unittest.TestCase):
     def test_unstaged_governance_paths_ignores_unstaged_changes_outside_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
-            rel = "internal/api/slo.go"
+            rel = "docs/release-control/v6/status.json"
             path = repo_root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
 
             self.git(repo_root, "init")
 
-            path.write_text("package api\n", encoding="utf-8")
+            path.write_text('{"version":"staged"}\n', encoding="utf-8")
             self.git(repo_root, "add", rel)
-            path.write_text("package api\n\nvar x = 1\n", encoding="utf-8")
+            path.write_text('{"version":"working-tree"}\n', encoding="utf-8")
 
             with patch("governance_stage_guard.REPO_ROOT", repo_root):
                 self.assertEqual(unstaged_governance_paths(), [])
