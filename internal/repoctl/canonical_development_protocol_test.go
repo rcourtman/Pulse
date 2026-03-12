@@ -356,6 +356,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
 		"stable or GA promotion readiness",
+		"v6-rc-cut",
 		"should always be true",
 	})
 
@@ -364,7 +365,9 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	assertContainsAll(t, jsonRel, jsonContent, []string{
 		"\"system\": \"pulse-release-control\"",
 		"\"active_profile_id\": \"v6\"",
-		"\"active_target_id\": \"v6-release\"",
+		"\"active_target_id\": \"v6-rc-cut\"",
+		"\"id\": \"v6-ga-promotion\"",
+		"\"completion_rule\": \"rc_ready\"",
 		"\"completion_rule\": \"release_ready\"",
 	})
 
@@ -390,7 +393,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"registry.schema.json",
 		"subsystems/*.md",
 		"structured evidence references",
-		"does not, by itself, mean Pulse v6 is release-approved",
+		"ready to cut an RC or approve stable/GA",
 		"control_plane_audit.py --check",
 		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
@@ -534,14 +537,23 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present plus all repo-ready assertions passed" {
 		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present plus all repo-ready assertions passed")
 	}
-	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed" {
-		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed")
+	if got, ok := readiness["rc_ready_rule"].(string); !ok || got != "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed" {
+		t.Fatalf("status.json readiness.rc_ready_rule = %#v, want %q", readiness["rc_ready_rule"], "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed")
+	}
+	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed" {
+		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed")
 	}
 	if _, ok := readiness["repo_ready"]; ok {
 		t.Fatalf("status.json readiness must not hand-maintain repo_ready")
 	}
+	if _, ok := readiness["rc_ready"]; ok {
+		t.Fatalf("status.json readiness must not hand-maintain rc_ready")
+	}
 	if _, ok := readiness["release_ready"]; ok {
 		t.Fatalf("status.json readiness must not hand-maintain release_ready")
+	}
+	if _, ok := readiness["rc_blockers"]; ok {
+		t.Fatalf("status.json readiness must not hand-maintain rc_blockers")
 	}
 	if _, ok := readiness["release_blockers"]; ok {
 		t.Fatalf("status.json readiness must not hand-maintain release_blockers")
@@ -782,6 +794,7 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 		t.Fatalf("status.json missing release_gates list")
 	}
 	releaseGateIDs := make(map[string]struct{}, len(rawGates))
+	releaseGateBlockingLevels := make(map[string]string, len(rawGates))
 	for _, raw := range rawGates {
 		gate, ok := raw.(map[string]any)
 		if !ok {
@@ -792,6 +805,11 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 			t.Fatalf("status.json release_gate missing id")
 		}
 		releaseGateIDs[id] = struct{}{}
+		blockingLevel, ok := gate["blocking_level"].(string)
+		if !ok || !slices.Contains([]string{"rc-ready", "release-ready"}, blockingLevel) {
+			t.Fatalf("status.json release_gate %q has invalid blocking_level %#v", id, gate["blocking_level"])
+		}
+		releaseGateBlockingLevels[id] = blockingLevel
 	}
 
 	rawAssertions, ok := status["readiness_assertions"].([]any)
@@ -800,7 +818,7 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 	}
 
 	validKinds := []string{"invariant", "journey", "trust-gate"}
-	validBlockingLevels := []string{"repo-ready", "release-ready"}
+	validBlockingLevels := []string{"repo-ready", "rc-ready", "release-ready"}
 	validProofTypes := []string{"automated", "manual", "hybrid"}
 	seenIDs := make(map[string]struct{}, len(rawAssertions))
 
@@ -825,7 +843,8 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 		if kind, ok := assertion["kind"].(string); !ok || !slices.Contains(validKinds, kind) {
 			t.Fatalf("status.json readiness_assertion %q has invalid kind %#v", id, assertion["kind"])
 		}
-		if blockingLevel, ok := assertion["blocking_level"].(string); !ok || !slices.Contains(validBlockingLevels, blockingLevel) {
+		blockingLevel, ok := assertion["blocking_level"].(string)
+		if !ok || !slices.Contains(validBlockingLevels, blockingLevel) {
 			t.Fatalf("status.json readiness_assertion %q has invalid blocking_level %#v", id, assertion["blocking_level"])
 		}
 		proofType, ok := assertion["proof_type"].(string)
@@ -869,6 +888,9 @@ func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 			}
 			if _, ok := releaseGateIDs[releaseGateID]; !ok {
 				t.Fatalf("status.json readiness_assertion %q references unknown release_gate_id %q", id, releaseGateID)
+			}
+			if releaseGateBlockingLevels[releaseGateID] != blockingLevel {
+				t.Fatalf("status.json readiness_assertion %q links release_gate_id %q with blocking_level %q, want %q", id, releaseGateID, releaseGateBlockingLevels[releaseGateID], blockingLevel)
 			}
 		}
 		if proofType == "automated" && len(rawReleaseGateIDs) != 0 {
@@ -924,6 +946,9 @@ func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
 		}
 		if owner, ok := decision["owner"].(string); !ok || strings.TrimSpace(owner) == "" {
 			t.Fatalf("status.json open_decision %q missing owner", id)
+		}
+		if blockingLevel, ok := decision["blocking_level"].(string); !ok || !slices.Contains([]string{"rc-ready", "release-ready"}, blockingLevel) {
+			t.Fatalf("status.json open_decision %q has invalid blocking_level %#v", id, decision["blocking_level"])
 		}
 		if statusValue, ok := decision["status"].(string); !ok || !slices.Contains([]string{"open", "blocked", "owner-action"}, statusValue) {
 			t.Fatalf("status.json open_decision %q has invalid status %#v", id, decision["status"])

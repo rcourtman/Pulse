@@ -7,8 +7,11 @@ from pathlib import Path
 from unittest import mock
 
 from status_audit import (
-    READINESS_ASSERTIONS_BLOCKER,
+    RC_READY_ASSERTIONS_BLOCKER,
+    RC_RELEASE_GATES_BLOCKER,
     RELEASE_GATES_BLOCKER,
+    RELEASE_READY_ASSERTIONS_BLOCKER,
+    REPO_READY_BLOCKER,
     audit_status_payload,
     parse_args,
     render_pretty,
@@ -16,8 +19,11 @@ from status_audit import (
 
 
 REPO_READY_RULE = "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+RC_READY_RULE = (
+    "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
+)
 RELEASE_READY_RULE = (
-    "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
+    "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
 )
 
 
@@ -51,15 +57,17 @@ def automated_assertion(
 
 def hybrid_assertion(
     *,
+    assertion_id: str = "RA2",
     lane_id: str = "L1",
     gate_id: str = "g1",
     evidence_path: str = "docs/hybrid_test.go",
+    blocking_level: str = "rc-ready",
 ) -> dict[str, object]:
     return {
-        "id": "RA2",
+        "id": assertion_id,
         "summary": "Hybrid release assertion",
         "kind": "journey",
-        "blocking_level": "release-ready",
+        "blocking_level": blocking_level,
         "proof_type": "hybrid",
         "lane_ids": [lane_id],
         "subsystem_ids": [],
@@ -83,6 +91,7 @@ def base_payload(
         "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
         "readiness": {
             "repo_ready_rule": REPO_READY_RULE,
+            "rc_ready_rule": RC_READY_RULE,
             "release_ready_rule": RELEASE_READY_RULE,
         },
         "scope": {
@@ -136,13 +145,28 @@ def base_payload(
                 "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
             }
         ],
-        "readiness_assertions": readiness_assertions or [automated_assertion(), hybrid_assertion()],
+        "readiness_assertions": readiness_assertions
+        or [
+            automated_assertion(),
+            hybrid_assertion(),
+            hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
+        ],
         "release_gates": [
             {
                 "id": "g1",
                 "summary": "Need release verification",
                 "owner": "project-owner",
+                "blocking_level": "rc-ready",
                 "status": release_gate_status,
+                "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                "lane_ids": ["L1"],
+            },
+            {
+                "id": "g2",
+                "summary": "Need GA promotion verification",
+                "owner": "project-owner",
+                "blocking_level": "release-ready",
+                "status": "passed",
                 "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
                 "lane_ids": ["L1"],
             }
@@ -174,12 +198,14 @@ class StatusAuditTest(unittest.TestCase):
 
             self.assertEqual(report["errors"], [])
             self.assertTrue(report["summary"]["repo_ready"])
+            self.assertTrue(report["summary"]["rc_ready"])
             self.assertTrue(report["summary"]["release_ready"])
+            self.assertEqual(report["readiness"]["rc_blockers"], [])
             self.assertEqual(report["readiness"]["release_blockers"], [])
             self.assertEqual(report["lanes"][0]["derived_status"], "target-met")
             self.assertEqual(report["readiness_assertions"][0]["proof_command_count"], 1)
 
-    def test_release_gate_pending_blocks_release_ready_and_hybrid_assertion(self) -> None:
+    def test_rc_ready_gate_pending_blocks_rc_ready_and_release_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -195,9 +221,45 @@ class StatusAuditTest(unittest.TestCase):
 
             self.assertEqual(report["errors"], [])
             self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["rc_ready"])
             self.assertFalse(report["summary"]["release_ready"])
-            self.assertEqual(report["readiness"]["release_blockers"], [READINESS_ASSERTIONS_BLOCKER, RELEASE_GATES_BLOCKER])
+            self.assertEqual(
+                report["readiness"]["rc_blockers"],
+                [RC_READY_ASSERTIONS_BLOCKER, RC_RELEASE_GATES_BLOCKER],
+            )
+            self.assertEqual(
+                report["readiness"]["release_blockers"],
+                [RC_READY_ASSERTIONS_BLOCKER, RC_RELEASE_GATES_BLOCKER],
+            )
             self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
+
+    def test_release_ready_gate_pending_blocks_only_release_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload()
+            payload["release_gates"][1]["status"] = "pending"
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertTrue(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["readiness"]["rc_blockers"], [])
+            self.assertEqual(
+                report["readiness"]["release_blockers"],
+                [RELEASE_READY_ASSERTIONS_BLOCKER, RELEASE_GATES_BLOCKER],
+            )
+            self.assertEqual(report["readiness_assertions"][2]["derived_status"], "gates-pending")
 
     def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -215,14 +277,17 @@ class StatusAuditTest(unittest.TestCase):
                         readiness_assertions=[
                             automated_assertion(evidence_path="docs/missing_test.go"),
                             hybrid_assertion(),
+                            hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
                         ]
                     )
                 )
 
             self.assertFalse(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["rc_ready"])
             self.assertFalse(report["summary"]["release_ready"])
             self.assertEqual(report["readiness_assertions"][0]["derived_status"], "evidence-missing")
-            self.assertIn(READINESS_ASSERTIONS_BLOCKER, report["readiness"]["release_blockers"])
+            self.assertEqual(report["readiness"]["rc_blockers"], [REPO_READY_BLOCKER])
+            self.assertEqual(report["readiness"]["release_blockers"], [REPO_READY_BLOCKER])
 
     def test_automated_assertion_requires_proof_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -318,12 +383,14 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(base_payload(release_gate_status="pending"))
 
             pretty = render_pretty(report)
-            self.assertIn("control_plane: profile=v6 target=v6-release", pretty)
+            self.assertIn("control_plane: profile=v6 target=v6-rc-cut", pretty)
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
+            self.assertIn("rc_ready=False", pretty)
             self.assertIn("proof_commands=1", pretty)
             self.assertIn("release_gates:", pretty)
+            self.assertIn("rc_blockers:", pretty)
             self.assertIn("release_blockers:", pretty)
-            self.assertIn(RELEASE_GATES_BLOCKER, pretty)
+            self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
 
     def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -342,6 +409,7 @@ class StatusAuditTest(unittest.TestCase):
                         "id": "d1",
                         "summary": "Cross-repo decision",
                         "owner": "project-owner",
+                        "blocking_level": "rc-ready",
                         "status": "open",
                         "opened_at": "2026-03-12",
                         "lane_ids": ["L1"],

@@ -47,7 +47,8 @@
   "execution_model": "direct-repo-sessions",
   "readiness": {
     "repo_ready_rule": "all lanes target-met and evidence-present plus all repo-ready assertions passed",
-    "release_ready_rule": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
+    "rc_ready_rule": "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed",
+    "release_ready_rule": "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
   },
   "readiness_assertions": [
     {
@@ -99,7 +100,7 @@
       "id": "RA2",
       "summary": "New users can complete Pulse Pro Relay signup through paid activation without manual operator intervention or ambiguous provisioning steps.",
       "kind": "journey",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L2",
@@ -165,7 +166,7 @@
       "id": "RA3",
       "summary": "After first successful entitlement activation, Pulse preserves paid state across supported sessions and upgrades without repeated license entry.",
       "kind": "invariant",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L3",
@@ -231,7 +232,7 @@
       "id": "RA4",
       "summary": "Typical end users cannot trivially unlock Pulse Pro features by stripping client-only checks while server and hosted entitlements still deny access.",
       "kind": "trust-gate",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L2",
@@ -282,7 +283,7 @@
       "id": "RA5",
       "summary": "Non-paid users do not see paid-only navigation or pages unless the surface is explicitly promotional.",
       "kind": "invariant",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L2",
@@ -341,7 +342,7 @@
       "id": "RA6",
       "summary": "Supported upgrades preserve core state, entitlements, and first-session continuity without manual repair steps.",
       "kind": "journey",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L3",
@@ -411,7 +412,7 @@
       "id": "RA7",
       "summary": "Agent allocation stays coherent across enforcement, entitlements, and UI: only installed v6 agents count toward max_agents, capped limits stay canonical, and users see the same active-agent usage that the runtime enforces.",
       "kind": "invariant",
-      "blocking_level": "release-ready",
+      "blocking_level": "rc-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L2",
@@ -555,7 +556,17 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": ".github/workflows/release-dry-run.yml",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md",
           "kind": "file"
         },
         {
@@ -1007,6 +1018,7 @@
       "id": "api-token-scope-and-assignment",
       "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries, and revoke cleanly.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1019,6 +1031,7 @@
       "id": "hosted-signup-billing-replay",
       "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1032,6 +1045,7 @@
       "id": "mobile-relay-auth-approvals",
       "summary": "Confirm pulse-mobile pairing, persistence, relay reconnect, auth transitions, and approval flows work against a real instance.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1044,6 +1058,7 @@
       "id": "organization-user-scope-and-rbac",
       "summary": "Confirm user creation, organization membership, RBAC scope, and cross-org sharing fail closed outside intended access.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1056,6 +1071,7 @@
       "id": "paid-feature-entitlement-gating",
       "summary": "Confirm free-versus-paid feature gating and agent allocation accounting match entitlements across UI, API, hosted, and upgrade surfaces.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1070,6 +1086,7 @@
       "id": "rc-to-ga-promotion-readiness",
       "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",
+      "blocking_level": "release-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1083,6 +1100,7 @@
       "id": "relay-registration-reconnect-drain",
       "summary": "Confirm relay fresh registration, reconnect, stale-session recovery, and disconnect drain behavior hold under real pressure.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1095,6 +1113,7 @@
       "id": "upgrade-state-and-entitlement-preservation",
       "summary": "Confirm supported upgrades preserve state, entitlements, and first-session continuity without repair flows.",
       "owner": "project-owner",
+      "blocking_level": "rc-ready",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -1109,6 +1128,7 @@
       "id": "cloud-msp-price-id-propagation",
       "summary": "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings.",
       "owner": "project-owner",
+      "blocking_level": "release-ready",
       "status": "open",
       "opened_at": "2026-02-27",
       "subsystem_ids": [
@@ -1124,6 +1144,7 @@
       "id": "cloud-msp-stripe-prices",
       "summary": "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
       "owner": "project-owner",
+      "blocking_level": "release-ready",
       "status": "open",
       "opened_at": "2026-02-27",
       "subsystem_ids": [

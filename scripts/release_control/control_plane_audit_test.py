@@ -10,7 +10,7 @@ VALID_PAYLOAD = {
     "control_plane_doc": "docs/release-control/CONTROL_PLANE.md",
     "control_plane_schema": "docs/release-control/control_plane.schema.json",
     "active_profile_id": "v6",
-    "active_target_id": "v6-release",
+    "active_target_id": "v6-rc-cut",
     "profiles": [
         {
             "id": "v6",
@@ -29,11 +29,19 @@ VALID_PAYLOAD = {
     ],
     "targets": [
         {
-            "id": "v6-release",
+            "id": "v6-rc-cut",
             "profile_id": "v6",
             "kind": "release",
             "status": "active",
-            "summary": "Drive Pulse v6 to release readiness.",
+            "summary": "Drive Pulse v6 to a governed RC cut.",
+            "completion_rule": "rc_ready",
+        },
+        {
+            "id": "v6-ga-promotion",
+            "profile_id": "v6",
+            "kind": "release",
+            "status": "planned",
+            "summary": "Promote Pulse v6 from validated RC to governed GA.",
             "completion_rule": "release_ready",
         }
     ],

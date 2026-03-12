@@ -5,7 +5,7 @@
   "control_plane_doc": "docs/release-control/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-release",
+  "active_target_id": "v6-rc-cut",
   "profiles": [
     {
       "id": "v6",
@@ -24,11 +24,19 @@
   ],
   "targets": [
     {
-      "id": "v6-release",
+      "id": "v6-rc-cut",
       "profile_id": "v6",
       "kind": "release",
       "status": "active",
-      "summary": "Drive Pulse v6 through RC validation and governed GA promotion with proven migration, cleared blockers, and cleared high-risk gates.",
+      "summary": "Drive Pulse v6 to a governed RC cut by clearing prerelease blockers, proving migration safety, and exercising the pre-RC high-risk gates.",
+      "completion_rule": "rc_ready"
+    },
+    {
+      "id": "v6-ga-promotion",
+      "profile_id": "v6",
+      "kind": "release",
+      "status": "planned",
+      "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
       "completion_rule": "release_ready"
     }
   ]

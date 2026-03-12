@@ -224,6 +224,7 @@
       "additionalProperties": false,
       "required": [
         "repo_ready_rule",
+        "rc_ready_rule",
         "release_ready_rule"
       ],
       "properties": {
@@ -231,9 +232,13 @@
           "type": "string",
           "const": "all lanes target-met and evidence-present plus all repo-ready assertions passed"
         },
+        "rc_ready_rule": {
+          "type": "string",
+          "const": "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
+        },
         "release_ready_rule": {
           "type": "string",
-          "const": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
+          "const": "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
         }
       }
     },
@@ -423,6 +428,7 @@
           "type": "string",
           "enum": [
             "repo-ready",
+            "rc-ready",
             "release-ready"
           ]
         },
@@ -508,6 +514,7 @@
         "id",
         "summary",
         "owner",
+        "blocking_level",
         "status",
         "verification_doc",
         "lane_ids"
@@ -524,6 +531,13 @@
         "owner": {
           "type": "string",
           "minLength": 1
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "rc-ready",
+            "release-ready"
+          ]
         },
         "status": {
           "type": "string",
@@ -555,6 +569,7 @@
         "id",
         "summary",
         "owner",
+        "blocking_level",
         "status",
         "opened_at",
         "lane_ids",
@@ -572,6 +587,13 @@
         "owner": {
           "type": "string",
           "minLength": 1
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "rc-ready",
+            "release-ready"
+          ]
         },
         "status": {
           "type": "string",

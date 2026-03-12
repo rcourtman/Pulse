@@ -98,16 +98,18 @@ complete but still marked active.
 Durable truths that are not target changes should be normalized into
 readiness assertions, release gates, or open decisions rather than copied into
 the target text.
-For release targets, `release_ready` means stable or GA promotion readiness,
-not merely that an RC can be cut.
+For release targets, `rc_ready` means a governed prerelease candidate can be
+cut, while `release_ready` means stable or GA promotion readiness after RC
+validation.
 Do not wait for a special governance prompt before checking whether informal
 user language should update the control plane.
 
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-release` is the current active engineering target.
-3. Its files remain under `docs/release-control/v6/`.
-4. The existing v6 control surfaces are still live, but they now sit underneath
+2. `v6-rc-cut` is the current active engineering target.
+3. `v6-ga-promotion` is the next planned target once the RC cut is genuinely ready.
+4. Its files remain under `docs/release-control/v6/`.
+5. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.

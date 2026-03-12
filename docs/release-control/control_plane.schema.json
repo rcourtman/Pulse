@@ -178,6 +178,7 @@
         "completion_rule": {
           "type": "string",
           "enum": [
+            "rc_ready",
             "release_ready",
             "repo_ready",
             "manual"

@@ -77,7 +77,8 @@ Cloud, and self-hosted production users.
 1. A stable tag must be promoted from a commit that has already been exercised
    as an RC.
 2. For v6 GA, do not promote to `stable` until the active control-plane target
-   satisfies its `release_ready` completion rule.
+   is the GA-promotion target and satisfies its `release_ready` completion
+   rule.
 3. Every stable promotion requires:
    - Applicable items in `PRE_RELEASE_CHECKLIST.md` complete.
    - Applicable entries in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` cleared.
@@ -125,6 +126,8 @@ Cloud, and self-hosted production users.
 4. Staging or internal validation note.
 5. v5 maintenance-only support policy and end-of-support note for the GA cutover.
 6. Exact v6 GA and v5 end-of-support dates published in the GA release notes.
+7. RC-to-GA rehearsal record, including the GitHub Actions run URL for the
+   non-publish dry run.
 
 ## Authority
 

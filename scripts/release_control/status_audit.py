@@ -27,11 +27,25 @@ STATUS_PATH = DEFAULT_CONTROL_PLANE["status_path"]
 STATUS_SCHEMA_PATH = DEFAULT_CONTROL_PLANE["status_schema_path"]
 SOURCE_OF_TRUTH_FILE = DEFAULT_CONTROL_PLANE["source_of_truth_rel"]
 HIGH_RISK_RELEASE_MATRIX = DEFAULT_CONTROL_PLANE["high_risk_matrix_rel"]
-READINESS_ASSERTIONS_BLOCKER = (
-    "Required readiness assertions remain pending or blocked in status.json.readiness_assertions."
+REPO_READY_BLOCKER = "Repo readiness is not yet satisfied; rc_ready and release_ready cannot pass until repo_ready is true."
+RC_READY_ASSERTIONS_BLOCKER = (
+    "Required rc-ready assertions remain pending or blocked in status.json.readiness_assertions."
 )
-OPEN_DECISIONS_BLOCKER = "Open operational decisions remain in status.json.open_decisions."
-RELEASE_GATES_BLOCKER = "High-risk release gates remain pending or blocked in status.json.release_gates."
+RC_OPEN_DECISIONS_BLOCKER = (
+    "RC-blocking operational decisions remain in status.json.open_decisions."
+)
+RC_RELEASE_GATES_BLOCKER = (
+    "RC-blocking high-risk release gates remain pending or blocked in status.json.release_gates."
+)
+RELEASE_READY_ASSERTIONS_BLOCKER = (
+    "Required release-ready assertions remain pending or blocked in status.json.readiness_assertions."
+)
+RELEASE_OPEN_DECISIONS_BLOCKER = (
+    "Release-blocking operational decisions remain in status.json.open_decisions."
+)
+RELEASE_GATES_BLOCKER = (
+    "Release-blocking high-risk release gates remain pending or blocked in status.json.release_gates."
+)
 REQUIRED_SOURCE_PRECEDENCE = [
     SOURCE_OF_TRUTH_FILE,
     DEFAULT_CONTROL_PLANE["status_rel"],
@@ -111,7 +125,9 @@ def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
         "valid_readiness_assertion_proof_types": schema_enum(
             schema, "readiness_assertion", "proof_type"
         ),
+        "valid_release_gate_blocking_levels": schema_enum(schema, "release_gate", "blocking_level"),
         "valid_release_gate_statuses": schema_enum(schema, "release_gate", "status"),
+        "valid_open_decision_blocking_levels": schema_enum(schema, "open_decision", "blocking_level"),
         "valid_open_decision_statuses": schema_enum(schema, "open_decision", "status"),
         "valid_resolved_decision_kinds": schema_enum(schema, "resolved_decision", "kind"),
         "required_top_level_fields": schema_required(schema),
@@ -478,19 +494,31 @@ def validate_readiness(payload: dict[str, Any], errors: list[str]) -> dict[str, 
             "'all lanes target-met and evidence-present plus all repo-ready assertions passed'"
         )
 
+    rc_ready_rule = _require_string(readiness, "rc_ready_rule", errors, context="readiness")
+    if (
+        rc_ready_rule
+        and rc_ready_rule
+        != "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
+    ):
+        errors.append(
+            "status.json readiness.rc_ready_rule must be "
+            "'repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed'"
+        )
+
     release_ready_rule = _require_string(readiness, "release_ready_rule", errors, context="readiness")
     if (
         release_ready_rule
         and release_ready_rule
-        != "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
+        != "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
     ):
         errors.append(
             "status.json readiness.release_ready_rule must be "
-            "'repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed'"
+            "'rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed'"
         )
 
     return {
         "repo_ready_rule": repo_ready_rule,
+        "rc_ready_rule": rc_ready_rule,
         "release_ready_rule": release_ready_rule,
     }
 
@@ -668,6 +696,7 @@ def validate_release_gates(
     *,
     lane_ids: set[str],
     lane_repo_ids: dict[str, list[str]],
+    valid_release_gate_blocking_levels: set[str],
     valid_release_gate_statuses: set[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
@@ -684,10 +713,13 @@ def validate_release_gates(
             seen_ids.add(gate_id)
         summary = _require_string(raw, "summary", errors, context=context)
         owner = _require_string(raw, "owner", errors, context=context)
+        blocking_level = _require_string(raw, "blocking_level", errors, context=context)
         status = _require_string(raw, "status", errors, context=context)
         verification_doc = _require_string(raw, "verification_doc", errors, context=context)
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
 
+        if blocking_level and blocking_level not in valid_release_gate_blocking_levels:
+            errors.append(f"{context} has invalid blocking_level {blocking_level!r}")
         if status and status not in valid_release_gate_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         if verification_doc and verification_doc != HIGH_RISK_RELEASE_MATRIX:
@@ -702,13 +734,14 @@ def validate_release_gates(
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
 
-        if gate_id and summary and owner and status and verification_doc:
+        if gate_id and summary and owner and blocking_level and status and verification_doc:
             repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             records.append(
                 {
                     "id": gate_id,
                     "summary": summary,
                     "owner": owner,
+                    "blocking_level": blocking_level,
                     "status": status,
                     "verification_doc": verification_doc,
                     "lane_ids": lane_refs,
@@ -803,6 +836,11 @@ def validate_readiness_assertions(
         for gate in release_gates
         if str(gate.get("id", "")).strip()
     }
+    release_gate_blocking_levels = {
+        str(gate["id"]).strip(): str(gate["blocking_level"]).strip()
+        for gate in release_gates
+        if str(gate.get("id", "")).strip()
+    }
     release_gate_repo_ids = {
         str(gate["id"]).strip(): list(gate.get("repo_ids", []))
         for gate in release_gates
@@ -854,6 +892,11 @@ def validate_readiness_assertions(
         for gate_id in gate_refs:
             if gate_id not in release_gate_statuses:
                 errors.append(f"{context} references unknown release_gate_id {gate_id!r}")
+            elif blocking_level and release_gate_blocking_levels.get(gate_id) != blocking_level:
+                errors.append(
+                    f"{context} links release_gate_id {gate_id!r} with blocking_level "
+                    f"{release_gate_blocking_levels.get(gate_id)!r}, want {blocking_level!r}"
+                )
 
         if proof_type == "automated" and gate_refs:
             errors.append(f"{context} proof_type automated must not declare release_gate_ids")
@@ -941,6 +984,7 @@ def validate_open_decisions(
     lane_ids: set[str],
     lane_repo_ids: dict[str, list[str]],
     subsystem_to_lane: dict[str, str],
+    valid_open_decision_blocking_levels: set[str],
     valid_open_decision_statuses: set[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
@@ -957,6 +1001,7 @@ def validate_open_decisions(
             seen_ids.add(decision_id)
         summary = _require_string(raw, "summary", errors, context=context)
         owner = _require_string(raw, "owner", errors, context=context)
+        blocking_level = _require_string(raw, "blocking_level", errors, context=context)
         opened_at = _require_string(raw, "opened_at", errors, context=context)
         status = _require_string(raw, "status", errors, context=context)
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
@@ -964,6 +1009,8 @@ def validate_open_decisions(
 
         if opened_at:
             _validate_date(opened_at, errors, context=f"{context}.opened_at")
+        if blocking_level and blocking_level not in valid_open_decision_blocking_levels:
+            errors.append(f"{context} has invalid blocking_level {blocking_level!r}")
         if status and status not in valid_open_decision_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         if len(lane_refs) != len(set(lane_refs)):
@@ -981,13 +1028,14 @@ def validate_open_decisions(
             context=context,
         )
 
-        if decision_id and summary and owner and opened_at and status:
+        if decision_id and summary and owner and blocking_level and opened_at and status:
             repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             records.append(
                 {
                     "id": decision_id,
                     "summary": summary,
                     "owner": owner,
+                    "blocking_level": blocking_level,
                     "status": status,
                     "opened_at": opened_at,
                     "lane_ids": lane_refs,
@@ -1083,7 +1131,9 @@ def audit_status_payload(
     valid_readiness_assertion_blocking_levels = set(contract["valid_readiness_assertion_blocking_levels"])
     valid_readiness_assertion_kinds = set(contract["valid_readiness_assertion_kinds"])
     valid_readiness_assertion_proof_types = set(contract["valid_readiness_assertion_proof_types"])
+    valid_release_gate_blocking_levels = set(contract["valid_release_gate_blocking_levels"])
     valid_release_gate_statuses = set(contract["valid_release_gate_statuses"])
+    valid_open_decision_blocking_levels = set(contract["valid_open_decision_blocking_levels"])
     valid_open_decision_statuses = set(contract["valid_open_decision_statuses"])
     valid_resolved_decision_kinds = set(contract["valid_resolved_decision_kinds"])
     errors: list[str] = []
@@ -1150,6 +1200,7 @@ def audit_status_payload(
         payload,
         lane_ids=lane_ids,
         lane_repo_ids=lane_repo_ids,
+        valid_release_gate_blocking_levels=valid_release_gate_blocking_levels,
         valid_release_gate_statuses=valid_release_gate_statuses,
         errors=errors,
     )
@@ -1170,6 +1221,7 @@ def audit_status_payload(
         lane_ids=lane_ids,
         lane_repo_ids=lane_repo_ids,
         subsystem_to_lane=subsystem_to_lane,
+        valid_open_decision_blocking_levels=valid_open_decision_blocking_levels,
         valid_open_decision_statuses=valid_open_decision_statuses,
         errors=errors,
     )
@@ -1187,6 +1239,11 @@ def audit_status_payload(
         for assertion in readiness_assertions
         if assertion["blocking_level"] == "repo-ready"
     )
+    rc_ready_assertions_cleared = all(
+        assertion["derived_pass"]
+        for assertion in readiness_assertions
+        if assertion["blocking_level"] == "rc-ready"
+    )
     release_ready_assertions_cleared = all(
         assertion["derived_pass"]
         for assertion in readiness_assertions
@@ -1196,24 +1253,58 @@ def audit_status_payload(
         all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
         and repo_ready_assertions_cleared
     )
-    release_gates_cleared = all(gate["status"] == "passed" for gate in release_gates)
-    release_ready_derived = (
-        repo_ready_derived
-        and release_ready_assertions_cleared
-        and len(open_decisions) == 0
-        and release_gates_cleared
+    rc_ready_release_gates_cleared = all(
+        gate["status"] == "passed"
+        for gate in release_gates
+        if gate["blocking_level"] == "rc-ready"
     )
+    release_ready_release_gates_cleared = all(
+        gate["status"] == "passed"
+        for gate in release_gates
+        if gate["blocking_level"] == "release-ready"
+    )
+    rc_ready_open_decisions_cleared = all(
+        decision["blocking_level"] != "rc-ready" for decision in open_decisions
+    )
+    release_ready_open_decisions_cleared = all(
+        decision["blocking_level"] != "release-ready" for decision in open_decisions
+    )
+    rc_ready_derived = (
+        repo_ready_derived
+        and rc_ready_assertions_cleared
+        and rc_ready_open_decisions_cleared
+        and rc_ready_release_gates_cleared
+    )
+    release_ready_derived = (
+        rc_ready_derived
+        and release_ready_assertions_cleared
+        and release_ready_open_decisions_cleared
+        and release_ready_release_gates_cleared
+    )
+    rc_blockers: list[str] = []
+    if not repo_ready_derived:
+        rc_blockers.append(REPO_READY_BLOCKER)
+    if not rc_ready_assertions_cleared:
+        rc_blockers.append(RC_READY_ASSERTIONS_BLOCKER)
+    if not rc_ready_open_decisions_cleared:
+        rc_blockers.append(RC_OPEN_DECISIONS_BLOCKER)
+    if not rc_ready_release_gates_cleared:
+        rc_blockers.append(RC_RELEASE_GATES_BLOCKER)
     release_blockers: list[str] = []
-    if not repo_ready_assertions_cleared or not release_ready_assertions_cleared:
-        release_blockers.append(READINESS_ASSERTIONS_BLOCKER)
-    if open_decisions:
-        release_blockers.append(OPEN_DECISIONS_BLOCKER)
-    if not release_gates_cleared:
+    if rc_blockers:
+        release_blockers.extend(rc_blockers)
+    if not release_ready_assertions_cleared:
+        release_blockers.append(RELEASE_READY_ASSERTIONS_BLOCKER)
+    if not release_ready_open_decisions_cleared:
+        release_blockers.append(RELEASE_OPEN_DECISIONS_BLOCKER)
+    if not release_ready_release_gates_cleared:
         release_blockers.append(RELEASE_GATES_BLOCKER)
 
     active_target_completion_met = False
     completion_rule = str(ACTIVE_TARGET.get("completion_rule", "")).strip()
-    if completion_rule == "release_ready":
+    if completion_rule == "rc_ready":
+        active_target_completion_met = rc_ready_derived
+    elif completion_rule == "release_ready":
         active_target_completion_met = release_ready_derived
     elif completion_rule == "repo_ready":
         active_target_completion_met = repo_ready_derived
@@ -1252,6 +1343,14 @@ def audit_status_payload(
                 for assertion in readiness_assertions
                 if assertion["blocking_level"] == "repo-ready" and assertion["derived_pass"]
             ),
+            "rc_ready_assertion_count": sum(
+                1 for assertion in readiness_assertions if assertion["blocking_level"] == "rc-ready"
+            ),
+            "rc_ready_assertions_passed": sum(
+                1
+                for assertion in readiness_assertions
+                if assertion["blocking_level"] == "rc-ready" and assertion["derived_pass"]
+            ),
             "release_ready_assertion_count": sum(
                 1 for assertion in readiness_assertions if assertion["blocking_level"] == "release-ready"
             ),
@@ -1262,18 +1361,49 @@ def audit_status_payload(
             ),
             "release_gate_count": len(release_gates),
             "release_gates_passed": sum(1 for gate in release_gates if gate["status"] == "passed"),
+            "rc_ready_release_gate_count": sum(
+                1 for gate in release_gates if gate["blocking_level"] == "rc-ready"
+            ),
+            "rc_ready_release_gates_passed": sum(
+                1
+                for gate in release_gates
+                if gate["blocking_level"] == "rc-ready" and gate["status"] == "passed"
+            ),
+            "release_ready_release_gate_count": sum(
+                1 for gate in release_gates if gate["blocking_level"] == "release-ready"
+            ),
+            "release_ready_release_gates_passed": sum(
+                1
+                for gate in release_gates
+                if gate["blocking_level"] == "release-ready" and gate["status"] == "passed"
+            ),
             "open_decision_count": len(open_decisions),
+            "rc_ready_open_decision_count": sum(
+                1 for decision in open_decisions if decision["blocking_level"] == "rc-ready"
+            ),
+            "release_ready_open_decision_count": sum(
+                1 for decision in open_decisions if decision["blocking_level"] == "release-ready"
+            ),
             "resolved_decision_count": len(resolved_decisions),
             "repo_ready": repo_ready_derived,
+            "rc_ready": rc_ready_derived,
             "release_ready": release_ready_derived,
         },
         "readiness": {
             "repo_ready": repo_ready_derived,
+            "rc_ready": rc_ready_derived,
             "release_ready": release_ready_derived,
             "repo_ready_rule": readiness.get("repo_ready_rule") if readiness else None,
+            "rc_ready_rule": readiness.get("rc_ready_rule") if readiness else None,
             "release_ready_rule": readiness.get("release_ready_rule") if readiness else None,
             "repo_ready_assertions_cleared": repo_ready_assertions_cleared,
+            "rc_ready_assertions_cleared": rc_ready_assertions_cleared,
             "release_ready_assertions_cleared": release_ready_assertions_cleared,
+            "rc_ready_open_decisions_cleared": rc_ready_open_decisions_cleared,
+            "release_ready_open_decisions_cleared": release_ready_open_decisions_cleared,
+            "rc_ready_release_gates_cleared": rc_ready_release_gates_cleared,
+            "release_ready_release_gates_cleared": release_ready_release_gates_cleared,
+            "rc_blockers": rc_blockers,
             "release_blockers": release_blockers,
         },
         "scope": {
@@ -1358,6 +1488,7 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"open_decisions={summary['open_decision_count']} "
             f"resolved_decisions={summary['resolved_decision_count']} "
             f"repo_ready={summary['repo_ready']} "
+            f"rc_ready={summary['rc_ready']} "
             f"release_ready={summary['release_ready']}"
         )
     for lane in report.get("lanes", []):
@@ -1383,7 +1514,7 @@ def render_pretty(report: dict[str, Any]) -> str:
         lines.append("open_decisions:")
         for decision in report["open_decisions"]:
             lines.append(
-                f"  - {decision['id']} status={decision['status']} "
+                f"  - {decision['id']} blocking={decision['blocking_level']} status={decision['status']} "
                 f"repos={','.join(decision['repo_ids']) or '-'} "
                 f"lanes={','.join(decision['lane_ids']) or '-'}"
             )
@@ -1391,11 +1522,15 @@ def render_pretty(report: dict[str, Any]) -> str:
         lines.append("release_gates:")
         for gate in report["release_gates"]:
             lines.append(
-                f"  - {gate['id']} status={gate['status']} "
+                f"  - {gate['id']} blocking={gate['blocking_level']} status={gate['status']} "
                 f"repos={','.join(gate['repo_ids']) or '-'} "
                 f"lanes={','.join(gate['lane_ids']) or '-'}"
             )
     readiness = report.get("readiness", {})
+    if readiness.get("rc_blockers"):
+        lines.append("rc_blockers:")
+        for blocker in readiness["rc_blockers"]:
+            lines.append(f"  - {blocker}")
     if readiness.get("release_blockers"):
         lines.append("release_blockers:")
         for blocker in readiness["release_blockers"]:

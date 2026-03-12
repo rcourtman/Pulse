@@ -165,7 +165,7 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 f"control plane target {target_id!r} has invalid status {target['status']!r}"
             )
-        if target["completion_rule"] not in {"release_ready", "repo_ready", "manual"}:
+        if target["completion_rule"] not in {"rc_ready", "release_ready", "repo_ready", "manual"}:
             raise ValueError(
                 f"control plane target {target_id!r} has invalid completion_rule {target['completion_rule']!r}"
             )

@@ -21,8 +21,11 @@ The evergreen control-plane files live one level up:
 8. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
 `status.json` reporting every lane as `target-met` means the tracked v6
-repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
-Use `python3 scripts/release_control/status_audit.py --pretty` for the current derived repo/release readiness summary.
+repo-hardening work is at target. It does not, by itself, mean Pulse v6 is
+ready to cut an RC or approve stable/GA while phase-blocking
+`readiness_assertions`, `open_decisions`, or `release_gates` remain unresolved.
+Use `python3 scripts/release_control/status_audit.py --pretty` for the current
+derived `repo_ready`, `rc_ready`, and `release_ready` summary.
 Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that readiness assertion guardrails run.
 Use `docs/release-control/control_plane.json` for the active profile and active
 target that sit above this profile.
@@ -37,6 +40,7 @@ Supporting governance file:
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
 - `RELEASE_PROMOTION_POLICY.md` (customer-facing release-train contract for `stable` versus `rc`)
 - `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` (manual verification runbook for trust-critical release gates)
+- `RC_TO_GA_REHEARSAL_TEMPLATE.md` (human record template for the non-publish GA rehearsal run)
 - `subsystems/*.md` (per-subsystem contracts: truth, shared boundaries, extension points, forbidden paths, completion obligations)
 
 Useful helper tools:
