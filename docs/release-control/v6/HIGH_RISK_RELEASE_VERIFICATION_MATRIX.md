@@ -81,7 +81,8 @@ Companion drill:
   `pulse-pro/license-server/v6_checkout.go`
   Stripe customer portal / recurring subscription state
 - Automated proof:
-  Run the automated proof bundle in
+  `python3 scripts/release_control/commercial_cancellation_reactivation_proof.py`
+  Manual command detail remains documented in
   `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`.
 - Manual scenario:
   Execute `CCR-1` through `CCR-7` from

@@ -58,13 +58,17 @@ Out of scope:
 
 ## Automated Proof Bundle
 
-Run these before the manual drill:
+Canonical wrapper:
+
+1. `python3 scripts/release_control/commercial_cancellation_reactivation_proof.py`
+
+That wrapper currently runs:
 
 `pulse`
 
 1. `go test ./internal/api -run 'TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities' -count=1`
 2. `go test ./tests/migration -run 'TestV5FullUpgradeScenario/PersistedV5RecurringLicenseAutoExchanges' -count=1`
-3. `npm --prefix frontend-modern test -- src/utils/__tests__/licensePresentation.test.ts src/components/Settings/__tests__/ProLicensePanel.test.tsx`
+3. `cd frontend-modern && npm test -- src/utils/__tests__/licensePresentation.test.ts src/components/Settings/__tests__/ProLicensePanel.test.tsx`
 
 `pulse-pro/license-server`
 

@@ -184,6 +184,7 @@ Manual scenario:
 - [ ] `/api/resources` filtering and resource detail retrieval.
 - [ ] Relay pairing flow.
 - [ ] Hosted signup / org creation / billing webhook replay.
+- [ ] Commercial cancellation / reactivation journey.
 - [ ] Multi-tenant org switching / tenant-bound API calls.
 - [ ] AI investigate / execute / query on canonical resource types.
 
@@ -235,6 +236,7 @@ Mobile automated checks completed:
 - [ ] Clear gate `mobile-relay-auth-approvals` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 ## High-Risk Trust Gates
+- [ ] Clear gate `commercial-cancellation-reactivation`.
 - [ ] Clear gate `hosted-signup-billing-replay`.
 - [ ] Clear gate `paid-feature-entitlement-gating`.
 - [ ] Clear gate `rc-to-ga-promotion-readiness`.
