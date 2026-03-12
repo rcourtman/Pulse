@@ -36,6 +36,7 @@ import {
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  hasFindingInvestigationDetails,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
   getInvestigationStatusLabel,
@@ -882,7 +883,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       {/* Inline Investigation Section (replaces drawer) */}
-      <Show when={finding.investigationSessionId}>
+      <Show when={hasFindingInvestigationDetails(finding)}>
         <InvestigationSection
           findingId={finding.id}
           investigationStatus={finding.investigationStatus}

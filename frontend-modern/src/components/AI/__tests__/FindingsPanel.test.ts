@@ -14,6 +14,7 @@ import {
   getFindingSeverityToneClasses,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  hasFindingInvestigationDetails,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
   getInvestigationOutcomeSortOrder,
@@ -196,6 +197,49 @@ describe('aiFindingPresentation', () => {
       expect(getInvestigationOutcomeSortOrder('needs_attention')).toBe(1);
       expect(getInvestigationOutcomeSortOrder('fix_queued')).toBe(2);
       expect(getInvestigationOutcomeSortOrder(undefined)).toBe(3);
+    });
+
+    it('treats any investigation metadata as enough to render investigation details', () => {
+      expect(
+        hasFindingInvestigationDetails({
+          investigationSessionId: '',
+          investigationStatus: 'failed',
+          investigationOutcome: undefined,
+          investigationAttempts: 0,
+        } as never),
+      ).toBe(true);
+      expect(
+        hasFindingInvestigationDetails({
+          investigationSessionId: '',
+          investigationStatus: undefined,
+          investigationOutcome: 'fix_queued',
+          investigationAttempts: 0,
+        } as never),
+      ).toBe(true);
+      expect(
+        hasFindingInvestigationDetails({
+          investigationSessionId: '',
+          investigationStatus: undefined,
+          investigationOutcome: undefined,
+          investigationAttempts: 2,
+        } as never),
+      ).toBe(true);
+      expect(
+        hasFindingInvestigationDetails({
+          investigationSessionId: 'session-1',
+          investigationStatus: undefined,
+          investigationOutcome: undefined,
+          investigationAttempts: 0,
+        } as never),
+      ).toBe(true);
+      expect(
+        hasFindingInvestigationDetails({
+          investigationSessionId: '   ',
+          investigationStatus: undefined,
+          investigationOutcome: undefined,
+          investigationAttempts: 0,
+        } as never),
+      ).toBe(false);
     });
   });
 

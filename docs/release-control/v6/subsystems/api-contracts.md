@@ -24,6 +24,7 @@ Own canonical runtime payload shapes between backend and frontend.
 3. `internal/api/alerts.go`
 4. `frontend-modern/src/types/api.ts`
 5. `frontend-modern/src/api/responseUtils.ts`
+6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 
 ## Shared Boundaries
 
@@ -40,6 +41,7 @@ Own canonical runtime payload shapes between backend and frontend.
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
 4. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+5. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
 
 ## Forbidden Paths
 
@@ -123,6 +125,12 @@ single-run contract at `/api/ai/patrol/runs/{id}` instead of probing bounded
 history pages and hoping the target run is still inside a recent window; the
 tool-call trace UI must fetch the selected run by ID, with
 `?include=tool_calls` carrying the full trace only when explicitly requested.
+Frontend investigation rendering for unified Patrol findings must also key off
+finding-level investigation metadata, not only `investigation_session_id`:
+the investigation detail endpoint is addressed by finding ID, so findings with
+canonical `investigation_status`, `investigation_outcome`, or non-zero
+`investigation_attempts` must still surface investigation UI even when the
+session ID field is absent or blank.
 Patrol run-history serialization and persistence must also preserve full field
 parity across API responses and restart boundaries, including
 `pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and
@@ -253,6 +261,11 @@ boundary: `internal/api/public_signup_handlers.go` owns request/response and
 magic-link payload semantics, while `internal/hosted/provisioner.go` owns the
 shared org bootstrap and rollback mechanics that the hosted signup handler
 invokes.
+The API token settings surface now also follows the same explicit ownership
+rule. Changes to `frontend-modern/src/components/Settings/APITokenManager.tsx`
+must carry this contract and the dedicated API-token management proof file
+instead of remaining an unowned consumer of token scope labels, token
+assignment visibility, and revoke-state presentation.
 System settings API payloads now also carry an explicit v6 channel contract:
 `updateChannel` resolves to `stable` or `rc` with `stable` as the default, and
 `autoUpdateEnabled` must serialize as `false` whenever the effective channel is

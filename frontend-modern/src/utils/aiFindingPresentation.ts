@@ -244,6 +244,19 @@ export const getInvestigationOutcomeSortOrder = (
   return INVESTIGATION_OUTCOME_SORT_ORDER[outcome] ?? 3;
 };
 
+export const hasFindingInvestigationDetails = (
+  finding: Pick<
+    UnifiedFinding,
+    'investigationSessionId' | 'investigationStatus' | 'investigationOutcome' | 'investigationAttempts'
+  >,
+): boolean =>
+  Boolean(
+    finding.investigationSessionId?.trim() ||
+      finding.investigationStatus ||
+      finding.investigationOutcome ||
+      (finding.investigationAttempts ?? 0) > 0,
+  );
+
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;
 

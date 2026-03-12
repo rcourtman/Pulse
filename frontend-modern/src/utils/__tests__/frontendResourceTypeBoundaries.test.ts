@@ -1708,9 +1708,11 @@ describe('frontend resource type boundaries', () => {
     expect(findingsPanelSource).toContain('getInvestigationOutcomeBadgeClasses');
     expect(findingsPanelSource).toContain('getInvestigationOutcomeLabel');
     expect(findingsPanelSource).toContain('getInvestigationStatusLabel');
+    expect(findingsPanelSource).toContain('hasFindingInvestigationDetails');
     expect(findingsPanelSource).toContain('getFindingResolutionReason');
     expect(findingsPanelSource).toContain('buildFindingFilterOptions');
     expect(findingsPanelSource).toContain('getFindingEmptyStateCopy');
+    expect(findingsPanelSource).not.toContain('finding.investigationSessionId');
     expect(findingsPanelSource).not.toContain("finding.status === 'resolved' ? 'Resolved'");
     expect(findingsPanelSource).not.toContain('const severityOrder');
     expect(findingsPanelSource).not.toContain('const outcomeOrder');
@@ -1742,6 +1744,9 @@ describe('frontend resource type boundaries', () => {
     );
     expect(aiFindingPresentationSource).toContain(
       'export const getInvestigationOutcomeSortOrder',
+    );
+    expect(aiFindingPresentationSource).toContain(
+      'export const hasFindingInvestigationDetails',
     );
     expect(aiFindingPresentationSource).toContain('export const getFindingResolutionReason');
     expect(aiFindingPresentationSource).toContain('export const buildFindingFilterOptions');
