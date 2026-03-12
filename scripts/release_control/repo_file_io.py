@@ -28,7 +28,7 @@ def repo_relative_path(path: str | Path) -> str:
     return candidate.as_posix()
 
 
-def read_repo_text(path: str | Path, *, staged: bool = False) -> str:
+def read_repo_text(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> str:
     rel = repo_relative_path(path)
     if staged:
         try:
@@ -42,9 +42,10 @@ def read_repo_text(path: str | Path, *, staged: bool = False) -> str:
             )
             return result.stdout
         except subprocess.CalledProcessError:
-            pass
+            if strict_staged:
+                raise FileNotFoundError(f"missing staged index entry for {rel}") from None
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
 
 
-def load_repo_json(path: str | Path, *, staged: bool = False) -> dict[str, Any]:
-    return json.loads(read_repo_text(path, staged=staged))
+def load_repo_json(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> dict[str, Any]:
+    return json.loads(read_repo_text(path, staged=staged, strict_staged=strict_staged))

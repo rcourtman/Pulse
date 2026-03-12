@@ -39,6 +39,21 @@ class RepoFileIoTest(unittest.TestCase):
                 self.assertEqual(read_repo_text(rel, staged=True), '{"version": "staged"}\n')
                 self.assertEqual(load_repo_json(rel, staged=True), {"version": "staged"})
 
+    def test_strict_staged_read_rejects_worktree_only_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            rel = "docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md"
+            path = repo_root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            self.git(repo_root, "init")
+            path.write_text("working-tree-only\n", encoding="utf-8")
+
+            with patch("repo_file_io.REPO_ROOT", repo_root):
+                self.assertEqual(read_repo_text(rel, staged=True), "working-tree-only\n")
+                with self.assertRaisesRegex(FileNotFoundError, "missing staged index entry"):
+                    read_repo_text(rel, staged=True, strict_staged=True)
+
 
 if __name__ == "__main__":
     unittest.main()

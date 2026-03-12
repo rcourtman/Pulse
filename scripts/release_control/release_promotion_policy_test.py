@@ -12,7 +12,11 @@ USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
 
 def read(rel: str) -> str:
-    return read_repo_text(rel, staged=USE_STAGED_GOVERNANCE)
+    return read_repo_text(
+        rel,
+        staged=USE_STAGED_GOVERNANCE,
+        strict_staged=USE_STAGED_GOVERNANCE,
+    )
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):
@@ -31,6 +35,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("release pipeline has already been exercised on a real RC tag", content)
         self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
         self.assertIn("exact GA/EOS dates", content)
+        self.assertIn("rc-to-ga-rehearsal-summary", content)
         self.assertIn("rc-to-ga-promotion-readiness", content)
 
     def test_v5_support_policy_and_release_notes_publish_exact_notice(self) -> None:
@@ -42,6 +47,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("[v5-eos-date]", release_notes)
         self.assertIn("Pulse v5 Support Transition", release_notes)
         self.assertIn("publish an explicit exception", release_notes)
+
+    def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
+        template = read("docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md")
+        workflow = read(".github/workflows/release-dry-run.yml")
+        self.assertIn("GitHub Actions run URL", template)
+        self.assertIn("rc-to-ga-rehearsal-summary", workflow)
+        self.assertIn("Stable rehearsal requires promoted_from_tag", workflow)
+        self.assertIn("Stable v6.0.0 rehearsal requires v5_eos_date", workflow)
 
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
