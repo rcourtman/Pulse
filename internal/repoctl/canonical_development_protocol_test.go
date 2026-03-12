@@ -249,6 +249,8 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"## Boundary Rule",
 		"contract_audit.py --check",
 		"Did the user state a durable product truth or change the current priority?",
+		"consistency, seamlessness, drift, bypass",
+		"Did the user casually raise a new quality bar or product invariant?",
 	})
 }
 
@@ -352,6 +354,8 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"v6 is the current active release profile",
 		"control_plane_audit.py --check",
 		"Direction changes must be normalized",
+		"Do not wait for a special governance prompt",
+		"should always be true",
 	})
 
 	jsonRel := "docs/release-control/control_plane.json"
@@ -407,6 +411,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"control_plane_audit.py --check",
 		"When a user states a durable product truth",
 		"classify that as an active-target update or another control-plane",
+		"Do not wait for a special governance prompt",
+		"consistency, seamlessness, drift, bypass",
 		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
 	})

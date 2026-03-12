@@ -143,6 +143,12 @@ Every substantial task must finish by checking these questions:
    If yes: classify it as a readiness assertion, release gate, open decision,
    or active-target update and record it in the owning control file instead of
    leaving it as chat.
+   Treat casual phrases about consistency, seamlessness, drift, bypass
+   resistance, or things that "should always be true" as candidate governance
+   input, not only explicit requests to update the control system.
+8. Did the user casually raise a new quality bar or product invariant?
+   If yes: before ending the task, either normalize it into the control plane
+   or explain clearly why existing governance already covers it.
 
 This is the minimum update set for canonical work:
 

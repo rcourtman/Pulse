@@ -116,6 +116,9 @@ Assertion design rules:
    instead of cloning a new governance stack.
 7. When a user states a durable product truth, normalize it into a readiness
    assertion, release gate, or open decision rather than leaving it as chat.
+8. Treat casual user language about consistency, seamlessness, drift, bypass
+   resistance, or things that "should always be true" as candidate governance
+   input, not only explicit requests to add a formal assertion.
 
 ## Non-Negotiable Release Gates
 
@@ -183,6 +186,11 @@ For canonical subsystem work:
 9. When the user changes Pulse's priority or says what the product should focus
    on next, classify that as an active-target update or another control-plane
    change instead of leaving it as informal discussion.
+10. Do not wait for a special governance prompt.
+    If the user casually says something should be consistent, seamless,
+    difficult to bypass, free of drift, or always true, decide whether it
+    belongs in a readiness assertion, release gate, open decision, or active
+    target before ending the task.
 
 For readiness assertion work:
 

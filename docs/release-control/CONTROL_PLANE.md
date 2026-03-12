@@ -47,6 +47,9 @@ model that active and future release profiles reuse.
    priority, the agent must classify that direction as a readiness assertion,
    release gate, open decision, or active-target update instead of leaving it
    as informal chat.
+   Treat casual statements about consistency, seamlessness, drift, bypass
+   resistance, or things that "should always be true" as candidate governance
+   input, not only explicit "add an assertion" requests.
 
 ## Canonical Files
 
@@ -95,6 +98,8 @@ complete but still marked active.
 Durable truths that are not target changes should be normalized into
 readiness assertions, release gates, or open decisions rather than copied into
 the target text.
+Do not wait for a special governance prompt before checking whether informal
+user language should update the control plane.
 
 ## Current State
 
