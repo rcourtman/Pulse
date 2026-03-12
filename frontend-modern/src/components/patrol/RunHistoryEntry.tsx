@@ -369,6 +369,17 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 {run.tool_call_count !== 1 ? 's' : ''}
               </span>
             </Show>
+            <Show when={run.triage_flags > 0}>
+              <span class="inline-flex items-center gap-1">
+                <ShieldAlertIcon class="w-3.5 h-3.5" /> {run.triage_flags} triage flag
+                {run.triage_flags !== 1 ? 's' : ''}
+              </span>
+            </Show>
+            <Show when={run.triage_skipped_llm}>
+              <span class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                <BrainCircuitIcon class="w-3.5 h-3.5" /> LLM skipped
+              </span>
+            </Show>
             <Show when={(run.input_tokens || 0) + (run.output_tokens || 0) > 0}>
               <span class="inline-flex items-center gap-1">
                 <BrainCircuitIcon class="w-3.5 h-3.5" />{' '}

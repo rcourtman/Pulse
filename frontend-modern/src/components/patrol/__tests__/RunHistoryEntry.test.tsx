@@ -80,6 +80,7 @@ describe('RunHistoryEntry', () => {
     finding_ids: [],
     error_count: 0,
     status: 'healthy',
+    triage_flags: 0,
     tool_call_count: 0,
   };
 
@@ -138,5 +139,26 @@ describe('RunHistoryEntry', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
     expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
+  });
+
+  it('surfaces deterministic triage runs that skipped the llm', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-triage-only',
+          triage_flags: 3,
+          triage_skipped_llm: true,
+          findings_summary: 'Quiet infrastructure',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('3 triage flags')).toBeInTheDocument();
+    expect(screen.getByText('LLM skipped')).toBeInTheDocument();
   });
 });

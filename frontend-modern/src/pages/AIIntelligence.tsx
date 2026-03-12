@@ -565,6 +565,7 @@ export function AIIntelligence() {
       finding_ids: [],
       error_count: 0,
       status: 'healthy',
+      triage_flags: 0,
       tool_call_count: 0,
     };
   });

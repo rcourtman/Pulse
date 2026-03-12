@@ -50,6 +50,7 @@ describe('PatrolStatusBar', () => {
         finding_ids: [],
         error_count: 0,
         status: 'healthy',
+        triage_flags: 0,
         tool_call_count: 0,
       },
     ]);
@@ -87,6 +88,7 @@ describe('PatrolStatusBar', () => {
         finding_ids: ['finding-1'],
         error_count: 0,
         status: 'critical',
+        triage_flags: 0,
         tool_call_count: 0,
       },
     ]);
@@ -126,6 +128,7 @@ describe('PatrolStatusBar', () => {
         finding_ids: [],
         error_count: 2,
         status: 'healthy',
+        triage_flags: 0,
         tool_call_count: 0,
       },
     ]);
