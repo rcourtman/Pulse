@@ -16,7 +16,7 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import load_subsystem_rules
-from control_plane import DEFAULT_CONTROL_PLANE
+from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels
 from repo_file_io import load_repo_json
 
 
@@ -97,6 +97,22 @@ def _repo_sort_key(value: str) -> str:
 def _decision_sort_key(value: tuple[str, str]) -> tuple[str, str]:
     date_value, decision_id = value
     return (date_value, decision_id.casefold())
+
+
+def _blocker_detail(
+    item: dict[str, Any],
+    *,
+    summary_key: str,
+    status_key: str,
+) -> dict[str, Any]:
+    return {
+        "id": item["id"],
+        "blocking_level": item["blocking_level"],
+        "status": item[status_key],
+        "summary": item[summary_key],
+        "repo_ids": list(item["repo_ids"]),
+        "lane_ids": list(item.get("lane_ids", [])),
+    }
 
 
 def load_status_schema(*, staged: bool = False) -> dict[str, Any]:
@@ -1281,6 +1297,35 @@ def audit_status_payload(
         and release_ready_open_decisions_cleared
         and release_ready_release_gates_cleared
     )
+    try:
+        active_target_levels = list(active_target_blocking_levels())
+    except ValueError as exc:
+        active_target_levels = []
+        warnings.append(f"active target proof scope could not be derived: {exc}")
+    active_target_level_set = set(active_target_levels)
+    current_target_assertion_blockers = [
+        {
+            "id": assertion["id"],
+            "blocking_level": assertion["blocking_level"],
+            "derived_status": assertion["derived_status"],
+            "summary": assertion["summary"],
+            "repo_ids": list(assertion["repo_ids"]),
+            "lane_ids": list(assertion["lane_ids"]),
+            "subsystem_ids": list(assertion["subsystem_ids"]),
+        }
+        for assertion in readiness_assertions
+        if assertion["blocking_level"] in active_target_level_set and not assertion["derived_pass"]
+    ]
+    current_target_release_gate_blockers = [
+        _blocker_detail(gate, summary_key="summary", status_key="status")
+        for gate in release_gates
+        if gate["blocking_level"] in active_target_level_set and gate["status"] != "passed"
+    ]
+    current_target_open_decision_blockers = [
+        _blocker_detail(decision, summary_key="summary", status_key="status")
+        for decision in open_decisions
+        if decision["blocking_level"] in active_target_level_set
+    ]
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)
@@ -1326,6 +1371,7 @@ def audit_status_payload(
             "active_target": {
                 **ACTIVE_TARGET,
                 "completion_met": active_target_completion_met,
+                "blocking_levels": active_target_levels,
             },
         },
         "summary": {
@@ -1403,6 +1449,11 @@ def audit_status_payload(
             "release_ready_open_decisions_cleared": release_ready_open_decisions_cleared,
             "rc_ready_release_gates_cleared": rc_ready_release_gates_cleared,
             "release_ready_release_gates_cleared": release_ready_release_gates_cleared,
+            "current_target_blockers": {
+                "assertions": current_target_assertion_blockers,
+                "open_decisions": current_target_open_decision_blockers,
+                "release_gates": current_target_release_gate_blockers,
+            },
             "rc_blockers": rc_blockers,
             "release_blockers": release_blockers,
         },
@@ -1455,6 +1506,9 @@ def render_pretty(report: dict[str, Any]) -> str:
         )
         if active_target.get("summary"):
             lines.append(f"  target_summary={active_target['summary']}")
+        blocking_levels = active_target.get("blocking_levels", [])
+        if blocking_levels:
+            lines.append(f"  target_blocking_levels={','.join(blocking_levels)}")
 
     scope = report.get("scope", {})
     repo_catalog = scope.get("repo_catalog", [])
@@ -1527,6 +1581,33 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"lanes={','.join(gate['lane_ids']) or '-'}"
             )
     readiness = report.get("readiness", {})
+    current_target_blockers = readiness.get("current_target_blockers", {})
+    if current_target_blockers:
+        lines.append("current_target_blockers:")
+        if current_target_blockers.get("assertions"):
+            lines.append("  assertions:")
+            for assertion in current_target_blockers["assertions"]:
+                lines.append(
+                    f"    - {assertion['id']} blocking={assertion['blocking_level']} "
+                    f"derived={assertion['derived_status']} "
+                    f"repos={','.join(assertion['repo_ids']) or '-'}"
+                )
+        if current_target_blockers.get("open_decisions"):
+            lines.append("  open_decisions:")
+            for decision in current_target_blockers["open_decisions"]:
+                lines.append(
+                    f"    - {decision['id']} blocking={decision['blocking_level']} "
+                    f"status={decision['status']} "
+                    f"repos={','.join(decision['repo_ids']) or '-'}"
+                )
+        if current_target_blockers.get("release_gates"):
+            lines.append("  release_gates:")
+            for gate in current_target_blockers["release_gates"]:
+                lines.append(
+                    f"    - {gate['id']} blocking={gate['blocking_level']} "
+                    f"status={gate['status']} "
+                    f"repos={','.join(gate['repo_ids']) or '-'}"
+                )
     if readiness.get("rc_blockers"):
         lines.append("rc_blockers:")
         for blocker in readiness["rc_blockers"]:
