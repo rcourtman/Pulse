@@ -32,6 +32,9 @@ The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
 `status.json` owns live lane state, lane-to-subsystem ownership, structured
 evidence references, and typed lane/subsystem decision records.
+Lane scores reaching target in `status.json` mean the tracked architecture and
+governance work for those lanes is at target; they are not, by themselves,
+release approval if `open_decisions` or checklist gates still remain.
 `status.schema.json` owns the machine-readable status contract.
 `subsystems/registry.schema.json` owns the machine-readable subsystem registry
 contract, including explicit shared-runtime ownership declarations for

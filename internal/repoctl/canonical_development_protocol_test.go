@@ -228,6 +228,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"registry.schema.json",
 		"subsystems/*.md",
 		"structured evidence references",
+		"does not, by itself, mean Pulse v6 is release-approved",
 	})
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
@@ -237,6 +238,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"registry.schema.json",
 		"docs/release-control/v6/subsystems/",
 		"## Development Governance",
+		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
 	})
 }
 
