@@ -1215,10 +1215,11 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"CONTROL_PLANE_REL",
 		"WORKTREE_SENSITIVE_PREFIXES",
 		"WORKTREE_SENSITIVE_EXACT_FILES",
+		"STAGED_EXECUTION_EXACT_FILES",
 		"internal/repoctl/",
 		"scripts/release_control/",
 		".husky/pre-commit",
-		".github/workflows/canonical-governance.yml",
+		"release_promotion_policy_test.py",
 		"unstaged_governance_paths",
 		"BLOCKED: unstaged governance file changes detected.",
 	})

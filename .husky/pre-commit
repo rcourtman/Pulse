@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
 # Pre-commit hook to prevent committing restricted or sensitive data
 RESTRICTED_FILES="active_subs.json charges.json customers.json subscriptions.json"
 

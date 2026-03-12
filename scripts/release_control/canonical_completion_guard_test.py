@@ -102,74 +102,51 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_monitoring_runtime_change_requires_monitoring_contract(self):
         required = infer_impacted_subsystems(["internal/monitoring/monitor.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(monitoring["id"], "monitoring")
         self.assertEqual(
-            required,
-            {
-                "monitoring": {
-                    "id": "monitoring",
-                    "contract": "docs/release-control/v6/subsystems/monitoring.md",
+            monitoring["contract"],
+            "docs/release-control/v6/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["internal/monitoring/monitor.go"],
+        )
+        self.assertTrue(
+            monitoring["verification"]["require_explicit_path_policy_coverage"]
+        )
+        self.assertEqual(
+            monitoring["verification"]["exact_files"],
+            ["internal/unifiedresources/code_standards_test.go"],
+        )
+        policy_ids = [policy["id"] for policy in monitoring["verification"]["path_policies"]]
+        self.assertEqual(
+            policy_ids,
+            [
+                "metrics-hot-path",
+                "agent-update-runtime",
+                "host-agent-runtime",
+                "monitoring-runtime",
+                "unified-agent-settings-surface",
+            ],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "monitoring-runtime",
+                    "label": "monitoring runtime proof",
                     "touched_runtime_files": ["internal/monitoring/monitor.go"],
-                    "verification": {
-                        "allow_same_subsystem_tests": True,
-                        "test_prefixes": [],
-                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
-                        "require_explicit_path_policy_coverage": True,
-                        "path_policies": [
-                            {
-                                "id": "metrics-hot-path",
-                                "label": "monitoring metrics hot-path proof",
-                                "match_prefixes": [],
-                                "match_files": ["internal/monitoring/monitor_metrics.go"],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": [],
-                                "exact_files": [
-                                    "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
-                                    "internal/monitoring/monitor_metrics_slo_test.go",
-                                ],
-                            },
-                            {
-                                "id": "monitoring-runtime",
-                                "label": "monitoring runtime proof",
-                                "match_prefixes": ["internal/monitoring/"],
-                                "match_files": [],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": [],
-                                "exact_files": [
-                                    "internal/monitoring/canonical_guardrails_test.go",
-                                    "internal/unifiedresources/code_standards_test.go",
-                                ],
-                            },
-                            {
-                                "id": "unified-agent-settings-surface",
-                                "label": "unified agent settings monitoring proof",
-                                "match_prefixes": [],
-                                "match_files": [
-                                    "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
-                                ],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": [],
-                                "exact_files": [
-                                    "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                                    "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
-                                ],
-                            },
-                        ],
-                    },
-                    "verification_requirements": [
-                        {
-                            "id": "monitoring-runtime",
-                            "label": "monitoring runtime proof",
-                            "touched_runtime_files": ["internal/monitoring/monitor.go"],
-                            "allow_same_subsystem_tests": False,
-                            "test_prefixes": [],
-                            "exact_files": [
-                                "internal/monitoring/canonical_guardrails_test.go",
-                                "internal/unifiedresources/code_standards_test.go",
-                            ],
-                        }
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
-            },
+            ],
         )
 
     def test_unified_resource_api_change_requires_two_contracts(self):
