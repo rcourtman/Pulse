@@ -14,9 +14,9 @@ const SETTINGS_ROUTES = [
     '/settings/organization/billing',
     '/settings/organization/billing-admin',
     '/settings/integrations/api',
-    '/settings/operations/diagnostics',
-    '/settings/operations/reporting',
-    '/settings/operations/logs',
+    '/operations/diagnostics',
+    '/operations/reporting',
+    '/operations/logs',
     '/settings/system-general',
     '/settings/system-network',
     '/settings/system-updates',
@@ -104,7 +104,7 @@ test.describe('Settings mobile optimization audit', () => {
     for (const route of SETTINGS_ROUTES) {
         test(`no horizontal overflow after full scroll on ${route}`, async ({ page }) => {
             await page.goto(route, { waitUntil: 'domcontentloaded' });
-            await page.waitForURL(/\/settings/, { timeout: 15000 });
+            await page.waitForURL(/\/(settings|operations)/, { timeout: 15000 });
             await expect(page.locator('#root')).toBeVisible();
             await page.waitForTimeout(600);
 

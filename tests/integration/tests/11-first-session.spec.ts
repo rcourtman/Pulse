@@ -153,13 +153,14 @@ test.describe.serial('First-session experience', () => {
     // tier-based — e.g. a "relay" tier has the relay feature but not
     // advanced_reporting or audit_logging.
     const gatedRoutes = [
-      { route: '/settings/operations/reporting', feature: 'advanced_reporting' },
+      { route: '/operations/reporting', feature: 'advanced_reporting' },
       { route: '/settings/security-webhooks', feature: 'audit_logging' },
       { route: '/settings/system-relay', feature: 'relay' },
     ] as const;
 
     for (const { route, feature } of gatedRoutes) {
       const hasFeature = features.has(feature);
+      const routePattern = route.startsWith('/operations/') ? /\/operations/ : /\/settings/;
 
       if (!hasFeature) {
         // Install a MutationObserver via addInitScript BEFORE navigating so it
@@ -194,7 +195,7 @@ test.describe.serial('First-session experience', () => {
         });
 
         await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForURL(/\/settings/, { timeout: 10_000 });
+        await page.waitForURL(routePattern, { timeout: 10_000 });
         await expect(page.locator('#root')).toBeVisible();
 
         // Wait for the page to settle, then read the observer result.
@@ -219,7 +220,7 @@ test.describe.serial('First-session experience', () => {
         ).toBeTruthy();
       } else {
         await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForURL(/\/settings/, { timeout: 10_000 });
+        await page.waitForURL(routePattern, { timeout: 10_000 });
         await expect(page.locator('#root')).toBeVisible();
 
         // Licensed for this feature — the full panel content should render.

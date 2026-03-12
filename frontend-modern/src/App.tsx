@@ -251,6 +251,13 @@ function GlobalUpdateProgressWatcher() {
 }
 
 function App() {
+  const LegacyOperationsSettingsRedirect = () => {
+    const location = useLocation();
+    const canonicalPath =
+      location.pathname.replace(/^\/settings\/operations(?=\/|$)/, '/operations') || '/operations';
+    return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
+  };
+
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
   initKioskMode();
@@ -1108,6 +1115,7 @@ function App() {
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
+      <Route path="/settings/operations/*" component={LegacyOperationsSettingsRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
       <Route path="/operations/*" component={Operations} />
       <Route path="*all" component={NotFoundPage} />
