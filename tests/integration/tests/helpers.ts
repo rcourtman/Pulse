@@ -9,7 +9,15 @@ import { fileURLToPath } from 'node:url';
 import { Browser, Page, expect } from '@playwright/test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const runtimeStatePath = path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
+const runtimeStatePath = (() => {
+  const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
+  if (configuredPath === '') {
+    return path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
+  }
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(__dirname, '..', '..', '..', configuredPath);
+})();
 
 const runtimeBaseURL = (): string | null => {
   try {

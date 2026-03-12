@@ -120,6 +120,8 @@ npm test -- tests/03-multi-tenant.spec.ts --project=chromium
 
 This mode starts an isolated Pulse backend from the local repo binary in a temporary data directory under `tmp/integration-local-backend`, seeds the requested entitlement profile, writes runtime connection state for Playwright, and cleans everything up in `posttest`.
 
+Each `npm test` invocation gets its own runtime-state file and managed-backend root automatically, so separate managed-local-backend runs can execute in parallel without sharing PID or cleanup state. Shared embedded-frontend and backend-binary refreshes are serialized by the harness.
+
 For deterministic paid-feature runs against an existing instance, provide one of:
 - `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.
 - `PULSE_E2E_ENTITLEMENT_WRITE_COMMAND='ssh host "cat > /etc/pulse/billing.json"'` to pipe the billing JSON to a remote/local writer command.

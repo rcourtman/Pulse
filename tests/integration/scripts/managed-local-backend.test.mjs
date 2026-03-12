@@ -24,6 +24,17 @@ test('buildManagedLocalBackendState uses deterministic defaults', () => {
   );
 });
 
+test('buildManagedLocalBackendState scopes the working directory by run id', () => {
+  const state = buildManagedLocalBackendState({
+    PULSE_E2E_RUN_ID: 'parallel run/42',
+  });
+
+  assert.equal(
+    state.rootDir.endsWith(path.join('tmp', 'integration-local-backend', 'parallel-run-42')),
+    true,
+  );
+});
+
 test('buildManagedLocalBackendEnv seeds auth, bootstrap token, and billing path', () => {
   const state = buildManagedLocalBackendState({
     PULSE_E2E_LOCAL_BACKEND_PORT: '9001',

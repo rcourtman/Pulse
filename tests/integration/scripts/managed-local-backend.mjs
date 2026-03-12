@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 
+import { withExclusiveLock } from '../../../scripts/exclusive-lock.mjs';
 import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
 import { getRepoRoot, writeRuntimeState, readRuntimeState, clearRuntimeState } from './runtime-state.mjs';
 
@@ -12,6 +13,21 @@ const DEFAULT_E2E_PASSWORD = 'adminadminadmin';
 const DEFAULT_E2E_PRIMARY_API_TOKEN = '1111111111111111111111111111111111111111111111111111111111111111';
 
 const trim = (value) => String(value || '').trim();
+const buildScopedPathSegment = (value) => String(value).replace(/[^A-Za-z0-9._-]+/g, '-');
+
+function resolveManagedLocalBackendRunId(env) {
+  const explicitRunId = trim(env.PULSE_E2E_RUN_ID);
+  if (explicitRunId !== '') {
+    return explicitRunId;
+  }
+
+  const runtimeStatePath = trim(env.PULSE_E2E_RUNTIME_STATE_PATH);
+  if (runtimeStatePath === '') {
+    return '';
+  }
+
+  return path.basename(runtimeStatePath).replace(/\.[^.]+$/, '');
+}
 
 export function buildManagedLocalBackendState(env = process.env) {
   const repoRoot = getRepoRoot();
@@ -19,7 +35,12 @@ export function buildManagedLocalBackendState(env = process.env) {
   const metricsPort = trim(env.PULSE_E2E_LOCAL_BACKEND_METRICS_PORT) || '0';
   const host = trim(env.PULSE_E2E_LOCAL_BACKEND_HOST) || '127.0.0.1';
   const baseURL = trim(env.PULSE_BASE_URL) || `http://${host}:${port}`;
-  const rootDir = trim(env.PULSE_E2E_LOCAL_BACKEND_ROOT) || path.join(repoRoot, 'tmp', 'integration-local-backend');
+  const runId = resolveManagedLocalBackendRunId(env);
+  const rootDir = trim(env.PULSE_E2E_LOCAL_BACKEND_ROOT) || (
+    runId === ''
+      ? path.join(repoRoot, 'tmp', 'integration-local-backend')
+      : path.join(repoRoot, 'tmp', 'integration-local-backend', buildScopedPathSegment(runId))
+  );
 
   return {
     managedLocalBackend: true,
@@ -34,6 +55,7 @@ export function buildManagedLocalBackendState(env = process.env) {
     pidPath: path.join(rootDir, 'pulse.pid'),
     billingStatePath: path.join(rootDir, 'data', 'billing.json'),
     binaryPath: trim(env.PULSE_E2E_LOCAL_BACKEND_BINARY) || path.join(repoRoot, 'pulse'),
+    binaryBuildLockPath: path.join(repoRoot, 'tmp', 'locks', 'managed-local-backend-binary.lock'),
     frontendRoot: path.join(repoRoot, 'frontend-modern'),
     embeddedFrontendDistPath: path.join(repoRoot, 'internal', 'api', 'frontend-modern', 'dist'),
   };
@@ -298,25 +320,38 @@ async function ensureFrontendAssets(state, logger) {
 }
 
 async function ensureBackendBinary(state, logger) {
-  if (!(await shouldBuildManagedLocalBackendBinary(state))) {
-    return;
-  }
-
-  logger.log(`[integration] Building local backend binary at ${state.binaryPath}`);
-  await new Promise((resolve, reject) => {
-    const child = spawn('go', ['build', '-o', state.binaryPath, './cmd/pulse'], {
-      cwd: state.repoRoot,
-      stdio: 'inherit',
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
+  await withExclusiveLock(
+    state.binaryBuildLockPath,
+    async () => {
+      if (!(await shouldBuildManagedLocalBackendBinary(state))) {
         return;
       }
-      reject(new Error(`go build exited with code ${code}`));
-    });
-  });
+
+      logger.log(`[integration] Building local backend binary at ${state.binaryPath}`);
+      const temporaryBinaryPath = `${state.binaryPath}.${process.pid}.tmp`;
+      await fs.rm(temporaryBinaryPath, { force: true });
+      try {
+        await new Promise((resolve, reject) => {
+          const child = spawn('go', ['build', '-o', temporaryBinaryPath, './cmd/pulse'], {
+            cwd: state.repoRoot,
+            stdio: 'inherit',
+          });
+          child.on('error', reject);
+          child.on('close', (code) => {
+            if (code === 0) {
+              resolve();
+              return;
+            }
+            reject(new Error(`go build exited with code ${code}`));
+          });
+        });
+        await fs.rename(temporaryBinaryPath, state.binaryPath);
+      } finally {
+        await fs.rm(temporaryBinaryPath, { force: true });
+      }
+    },
+    { description: 'managed local backend binary build' },
+  );
 }
 
 async function waitForHealth(healthURL, pid, timeoutMs = 120_000) {
@@ -446,11 +481,12 @@ export async function startManagedLocalBackend({
       logPath: state.logPath,
       billingStatePath: state.billingStatePath,
     };
-    await writeRuntimeState(runtimeState);
+    await writeRuntimeState(runtimeState, env);
     logger.log(`[integration] Started managed local backend at ${state.baseURL} (pid ${child.pid})`);
     return runtimeState;
   } catch (error) {
     await stopManagedLocalBackend({
+      env,
       logger,
       state: {
         managedLocalBackend: true,
@@ -463,12 +499,13 @@ export async function startManagedLocalBackend({
 }
 
 export async function stopManagedLocalBackend({
+  env = process.env,
   logger = console,
   state = null,
 } = {}) {
-  const runtimeState = state || await readRuntimeState();
+  const runtimeState = state || await readRuntimeState(env);
   if (!runtimeState || !runtimeState.managedLocalBackend) {
-    await clearRuntimeState();
+    await clearRuntimeState(env);
     return false;
   }
 
@@ -493,7 +530,7 @@ export async function stopManagedLocalBackend({
   if (trim(runtimeState.dataDir) !== '') {
     await fs.rm(path.dirname(runtimeState.dataDir), { recursive: true, force: true });
   }
-  await clearRuntimeState();
+  await clearRuntimeState(env);
   logger.log('[integration] Stopped managed local backend');
   return true;
 }

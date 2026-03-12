@@ -4,7 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
-const runtimeStatePath = path.resolve(configDir, '..', '..', 'tmp', 'e2e-runtime-state.json');
+const runtimeStatePath = (() => {
+  const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
+  if (configuredPath === '') {
+    return path.resolve(configDir, '..', '..', 'tmp', 'e2e-runtime-state.json');
+  }
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(configDir, '..', '..', configuredPath);
+})();
 
 const loadRuntimeBaseURL = (): string | null => {
   try {
