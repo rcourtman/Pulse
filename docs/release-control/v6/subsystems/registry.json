@@ -771,6 +771,7 @@
         "pkg/metrics/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go"
@@ -801,6 +802,20 @@
               "pkg/metrics/store_bench_test.go",
               "pkg/metrics/store_query_plan_test.go",
               "pkg/metrics/store_slo_test.go"
+            ]
+          },
+          {
+            "id": "dashboard-workload-hot-path",
+            "label": "dashboard workload selector proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Dashboard/workloadSelectors.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+              "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts"
             ]
           },
           {

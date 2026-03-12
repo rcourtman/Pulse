@@ -25,7 +25,8 @@ regression protection.
 3. `pkg/metrics/store_slo_test.go`
 4. `internal/api/slo.go`
 5. `internal/api/slo_bench_test.go`
-6. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+6. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+7. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -36,6 +37,7 @@ regression protection.
 1. Add performance budgets through SLO or contract tests
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
+4. Extend dashboard hot-path selectors through `frontend-modern/src/components/Dashboard/workloadSelectors.ts` rather than duplicating filtering/grouping logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 
 ## Forbidden Paths
 
@@ -58,3 +60,8 @@ score because critical hot paths need more complete protection and verification.
 All governed performance-owned runtime files now require explicit registry
 path-policy coverage, so new protected hot paths must be mapped to a concrete
 proof route instead of falling back to subsystem-default verification.
+
+The dashboard workload selector path is now part of the protected performance
+surface rather than proof-only context. Future hot-path filter/group/sort
+changes must route through the explicit dashboard performance proof policy in
+the subsystem registry.

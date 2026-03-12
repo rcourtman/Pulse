@@ -279,7 +279,7 @@
       "id": "L10",
       "name": "Performance & scalability",
       "target_score": 8,
-      "current_score": 6,
+      "current_score": 7,
       "status": "partial",
       "subsystems": [
         "performance-and-scalability"
@@ -288,6 +288,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
           "kind": "file"
         },
         {
