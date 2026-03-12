@@ -27,6 +27,7 @@ result.
 - Primary runtime surfaces:
   `frontend-modern/src/pages/HostedSignup.tsx`
   `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+  `internal/api/public_signup_handlers.go`
   `internal/hosted/...`
   `internal/cloudcp/...`
   `internal/api/stripe_webhook_handlers*.go`

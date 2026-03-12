@@ -40,14 +40,16 @@ agreement, and cloud-specific enforcement rules.
 18. `internal/cloudcp/entitlements/service.go`
 19. `internal/cloudcp/registry/registry.go`
 20. `internal/cloudcp/stripe/provisioner.go`
-21. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-22. `frontend-modern/src/pages/CloudPricing.tsx`
+21. `internal/hosted/provisioner.go`
+22. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+23. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Shared Boundaries
 
 1. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 2. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 3. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+4. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
 
 ## Extension Points
 
@@ -59,9 +61,10 @@ agreement, and cloud-specific enforcement rules.
 6. Add or change license-server transport through `pkg/licensing/license_server_client.go`
 7. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 8. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
-9. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-10. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-11. Add contract tests where runtime and pricing need to stay aligned
+9. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
+10. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+11. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+12. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -124,6 +127,11 @@ cloud-paid ownership model as well. Changes to
 `frontend-modern/src/components/Settings/BillingAdminPanel.tsx` must carry this
 contract and the dedicated billing-admin proof file instead of remaining an
 unowned consumer of hosted billing state.
+Hosted signup provisioning now follows the same rule. Changes to
+`internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
+must carry this contract and the dedicated hosted-signup provisioning proof
+files instead of remaining a split boundary between API handlers and an
+unowned hosted runtime helper.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
