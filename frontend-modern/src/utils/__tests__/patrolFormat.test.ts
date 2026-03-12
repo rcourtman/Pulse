@@ -3,6 +3,7 @@ import {
   formatDurationMs,
   formatTriggerReason,
   formatScope,
+  getCanonicalScopeResourceIds,
   sanitizeAnalysis,
   groupModelsByProvider,
 } from '@/utils/patrolFormat';
@@ -84,6 +85,28 @@ describe('patrolFormat', () => {
   });
 
   describe('formatScope', () => {
+    it('returns undefined scope ids for an empty run', () => {
+      expect(getCanonicalScopeResourceIds()).toBeUndefined();
+    });
+
+    it('returns effective scope ids when present', () => {
+      expect(
+        getCanonicalScopeResourceIds({
+          scope_resource_ids: ['seed'],
+          effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+        }),
+      ).toEqual(['expanded-a', 'expanded-b']);
+    });
+
+    it('preserves explicit empty effective scope ids', () => {
+      expect(
+        getCanonicalScopeResourceIds({
+          scope_resource_ids: ['seed'],
+          effective_scope_resource_ids: [],
+        }),
+      ).toEqual([]);
+    });
+
     it('returns empty string for undefined', () => {
       expect(formatScope(undefined)).toBe('');
     });

@@ -8,6 +8,7 @@ import {
   formatDurationMs,
   formatTriggerReason,
   formatScope,
+  getCanonicalScopeResourceIds,
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
 import { formatRelativeTime } from '@/utils/format';
@@ -143,6 +144,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const scopeSummary = formatScope(run);
   const duration = formatDurationMs(run.duration_ms);
   const runStatus = getPatrolRunStatusPresentation(run.status);
+  const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
 
   return (
     <div
@@ -400,11 +402,14 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <RunToolCallTrace runId={run.id} toolCallCount={run.tool_call_count} />
 
           {/* Section 7: Inline Findings */}
-          <Show when={run.finding_ids?.length}>
+          <Show when={run.finding_ids !== undefined}>
             <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
               <FindingsPanel
-                filterFindingIds={run.finding_ids}
+                filterFindingIds={run.finding_ids ?? []}
                 filterOverride="all"
+                scopeResourceIds={canonicalScopeResourceIds}
+                scopeResourceTypes={run.scope_resource_types}
+                showScopeWarnings={true}
                 showControls={false}
               />
             </div>

@@ -14,6 +14,16 @@ interface PartialRunRecord {
   type?: string;
 }
 
+export function getCanonicalScopeResourceIds(
+  run?: PartialRunRecord | null,
+): string[] | undefined {
+  if (!run) return undefined;
+  if (run.effective_scope_resource_ids !== undefined) {
+    return run.effective_scope_resource_ids;
+  }
+  return run.scope_resource_ids;
+}
+
 export function formatDurationMs(ms?: number): string {
   if (!ms || ms <= 0) return '';
   if (ms < 1000) return `${ms}ms`;
@@ -48,8 +58,7 @@ export function formatTriggerReason(reason?: string): string {
 
 export function formatScope(run?: PartialRunRecord | null): string {
   if (!run) return '';
-  const idCount =
-    run.effective_scope_resource_ids?.length ?? run.scope_resource_ids?.length ?? 0;
+  const idCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
   if (idCount > 0) return `Scoped to ${idCount} resource${idCount === 1 ? '' : 's'}`;
   const types = run.scope_resource_types ?? [];
   if (types.length > 0) return `Scoped to ${types.join(', ')}`;

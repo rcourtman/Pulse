@@ -82,7 +82,11 @@ import {
 } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { formatTriggerReason, groupModelsByProvider } from '@/utils/patrolFormat';
+import {
+  formatTriggerReason,
+  getCanonicalScopeResourceIds,
+  groupModelsByProvider,
+} from '@/utils/patrolFormat';
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import {
@@ -530,12 +534,7 @@ export function AIIntelligence() {
   });
 
   const selectedRunScopeResourceIds = createMemo(() => {
-    const run = selectedRun();
-    if (!run) return undefined;
-    if (run.effective_scope_resource_ids !== undefined) {
-      return run.effective_scope_resource_ids;
-    }
-    return run.scope_resource_ids;
+    return getCanonicalScopeResourceIds(selectedRun());
   });
 
   // Live in-progress run entry for history list
