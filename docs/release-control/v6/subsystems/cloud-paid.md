@@ -144,6 +144,14 @@ The Pro license settings surface now follows the same rule as well. Changes to
 contract and the dedicated Pro-license proof file instead of remaining an
 unowned consumer of activation, trial eligibility, entitlement capability, and
 plan-term presentation.
+Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
+when a recurring v5 customer migrates into v6, billing persistence,
+entitlement evaluation, renewal handling, and Pro-license presentation must
+preserve the customer's existing recurring price identity instead of silently
+rewriting them onto current v6 retail pricing.
+Cancellation is the explicit boundary for that policy. Once a grandfathered v5
+recurring subscription is canceled, any later return must resolve through the
+current v6 pricing contract rather than reviving the legacy recurring rate.
 The paid relay settings and onboarding surfaces are now part of that same
 ownership model. Changes to
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and

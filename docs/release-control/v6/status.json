@@ -1271,22 +1271,6 @@
         "L3",
         "L4"
       ]
-    },
-    {
-      "id": "v5-pro-legacy-price-continuity",
-      "summary": "Decide whether paid Pulse Pro v5 customers keep their v5 price through the v6 pricing change until they cancel, and lock the resulting migration and entitlement contract before release.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "status": "open",
-      "opened_at": "2026-03-12",
-      "subsystem_ids": [
-        "cloud-paid"
-      ],
-      "lane_ids": [
-        "L2",
-        "L3",
-        "L11"
-      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
@@ -1439,6 +1423,20 @@
       "subsystem_ids": [],
       "lane_ids": [
         "L9"
+      ]
+    },
+    {
+      "id": "v5-pro-price-grandfathering",
+      "summary": "Paid Pulse Pro v5 customers keep their existing recurring price through the v6 pricing change until they cancel; renewals must preserve that grandfathered price state, while any return after cancellation re-enters on current v6 pricing.",
+      "kind": "pricing",
+      "decided_at": "2026-03-12",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L11"
       ]
     }
   ]

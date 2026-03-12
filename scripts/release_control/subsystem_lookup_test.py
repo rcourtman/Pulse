@@ -341,11 +341,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(lane_context["lane_id"], "L3")
         self.assertEqual(
             {decision["id"] for decision in lane_context["open_decisions"]},
-            {
-                "cloud-msp-stripe-prices",
-                "cloud-msp-price-id-propagation",
-                "v5-pro-legacy-price-continuity",
-            },
+            {"cloud-msp-stripe-prices", "cloud-msp-price-id-propagation"},
         )
         self.assertEqual(
             {gate["id"] for gate in lane_context["release_gates"]},
@@ -353,6 +349,25 @@ class SubsystemLookupTest(unittest.TestCase):
                 "hosted-signup-billing-replay",
                 "paid-feature-entitlement-gating",
                 "upgrade-state-and-entitlement-preservation",
+            },
+        )
+
+    def test_lookup_paths_keeps_pricing_and_migration_resolved_decisions_for_cloud_paid_lane(self) -> None:
+        result = lookup_paths(["pkg/licensing/features.go"])
+        match = next(
+            item
+            for item in result["files"][0]["matches"]
+            if item["subsystem"] == "cloud-paid"
+        )
+        lane_context = match["lane_context"]
+        self.assertEqual(lane_context["lane_id"], "L3")
+        self.assertEqual(
+            {decision["id"] for decision in lane_context["resolved_decisions"]},
+            {
+                "stable-release-promotion-model",
+                "stripe-mapping-contract-lock",
+                "trial-authority-saas-controlled",
+                "v5-pro-price-grandfathering",
             },
         )
 

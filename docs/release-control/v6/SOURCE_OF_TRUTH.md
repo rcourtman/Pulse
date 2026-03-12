@@ -167,6 +167,10 @@ Assertion design rules:
    critical security issues, critical correctness/data-loss issues, and safe
    migration blockers only. The exact end-of-support date must be published in
    the GA release notice. After that window, v5 is unsupported.
+9. Paid Pulse Pro v5 customers keep their existing recurring price through the
+   v6 pricing change until they cancel. Renewal and entitlement continuity
+   must preserve that grandfathered price state; any return after cancellation
+   must use current v6 pricing.
 
 ## Cross-Repo Contracts
 

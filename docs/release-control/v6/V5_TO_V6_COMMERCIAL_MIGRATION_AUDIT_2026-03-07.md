@@ -15,6 +15,7 @@ Locked v6 contract from those sources:
 2. The local runtime may only redeem signed hosted trial activation tokens via `/auth/trial-activate`.
 3. v6 may auto-exchange persisted v5 Pro/Lifetime licenses on upgrade startup.
 4. v6 may accept valid v5 Pro/Lifetime keys in the activation flow.
+5. Paid Pulse Pro v5 recurring customers keep their existing recurring price after migration until they cancel; any return after cancellation uses current v6 pricing.
 
 ## Current bridge surface inspected
 
@@ -31,7 +32,7 @@ Locked v6 contract from those sources:
 |---|---|---|---|---|---|
 | Fresh/free v5 install | No `license.enc`, no `activation.enc` | Free / expired entitlement only | Standard free-state upgrade UI; Pro trial CTA allowed | No | No |
 | Already on v6 activation model | `activation.enc` present, optional stale `license.enc` | Keep current v6 activation/grant; do not re-exchange legacy file | Active paid state with current plan details; no migration prompt | No | No at startup |
-| Paid v5 Pro/Lifetime, exchange succeeds on startup | Valid v5 `license.enc`, no `activation.enc` | Auto-exchange into active v6 activation/grant; preserve grandfathered `plan_version`; keep legacy key on disk for downgrade fallback | Paid state is live immediately; if grandfathered, show migrated plan terms | No | Yes, license exchange endpoint |
+| Paid v5 Pro/Lifetime, exchange succeeds on startup | Valid v5 `license.enc`, no `activation.enc` | Auto-exchange into active v6 activation/grant; preserve grandfathered recurring-price identity and `plan_version`; keep legacy key on disk for downgrade fallback | Paid state is live immediately; if grandfathered, show migrated plan terms and legacy-price continuity | No | Yes, license exchange endpoint |
 | Paid v5 Pro/Lifetime, exchange fails transiently | Valid v5 `license.enc`, no `activation.enc`, exchange unavailable/5xx/network | Do not silently collapse to ordinary free/trial-eligible state; mark migration as pending/blocked; preserve legacy key | Explicit migration-needed notice: paid v5 key detected, automatic exchange did not complete, retry activation from this instance; no new-trial CTA | Yes, retry activation or retrieve v6 activation key | Yes, exchange endpoint unavailable |
 | Paid v5 Pro/Lifetime, exchange rejected permanently | Valid-looking v5 `license.enc`, no `activation.enc`, exchange returns invalid/expired/unsupported | Do not grant paid entitlements; preserve enough state to explain the failure; do not offer a misleading fresh trial as if no paid key existed | Explicit migration failure notice with invalid/expired/unsupported wording; direct user to activate with current v6 key or correct v5 key | Yes | Yes, exchange endpoint rejects key |
 | Manual activation with valid v5 Pro/Lifetime key | User pastes v5 key into v6 panel | Exchange into active v6 activation/grant; persist activation state; preserve legacy key for downgrade fallback | Success message should make it clear the v5 key was migrated to v6 | Yes, one-time manual paste | Yes, exchange endpoint |
@@ -53,7 +54,7 @@ These are not incoming paid-license migration states, but they are part of the s
 
 1. Startup auto-exchange exists for persisted legacy JWT-style licenses and preserves the old key for downgrade fallback.
 2. Manual activation accepts v6 activation keys and also exchanges v5 JWT-style keys outside dev mode.
-3. Migrated `plan_version` survives into `status` and `entitlements`, and the Pro panel renders migrated plan terms.
+3. Migrated `plan_version` survives into `status` and `entitlements`, and the Pro panel renders migrated plan terms without repricing recurring v5 customers.
 4. `POST /api/license/trial/start` does not mint local trial state; it returns `trial_signup_required` with a hosted action URL.
 5. `/auth/trial-activate` redeems a signed hosted token, stores lease-backed billing state, and redirects with an explicit result code.
 
