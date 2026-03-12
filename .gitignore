@@ -206,6 +206,8 @@ docs/release-control/v6/*
 !docs/release-control/v6/status.schema.json
 !docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md
 !docs/release-control/v6/SUBSYSTEM_CONTRACT_TEMPLATE.md
+!docs/release-control/v6/records/
+!docs/release-control/v6/records/*.md
 !docs/release-control/v6/subsystems/
 !docs/release-control/v6/subsystems/*.md
 !docs/release-control/v6/subsystems/registry.json

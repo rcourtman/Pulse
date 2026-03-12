@@ -1127,7 +1127,7 @@
       "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries including legacy persisted host-agent scope aliases, and revoke cleanly.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",

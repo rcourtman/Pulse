@@ -348,6 +348,8 @@ result.
 - Pass when:
   Token create, use, read/write/exec scope enforcement, and revocation all
   behave exactly as intended.
+- Latest exercised record:
+  `docs/release-control/v6/records/api-token-scope-and-assignment-2026-03-12.md`
 - Block release if:
   A token can outlive revocation, exceed assigned scope, or detach from the
   intended user/org identity.
