@@ -109,6 +109,8 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
                 "bearer_token": None,
                 "cookie": None,
                 "expected_active_agents": None,
+                "expected_agent_name": [],
+                "expected_online_agents": None,
                 "json": False,
             },
         )()
@@ -364,6 +366,109 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
                 f"{self.base_url}/releases",
                 "--expected-active-agents",
                 "3",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
+
+    def test_run_rehearsal_verifies_expected_agent_name_and_online_status(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/pulse/api/license/agent-ledger": (
+                    200,
+                    json.dumps(
+                        {
+                            "agents": [
+                                {
+                                    "name": "workstation-01",
+                                    "type": "agent",
+                                    "status": "online",
+                                    "last_seen": "2026-03-12T12:00:00Z",
+                                    "source": "agent",
+                                }
+                            ],
+                            "total": 1,
+                            "limit": 10,
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--api-token",
+                "token-123",
+                "--expected-agent-name",
+                "workstation-01",
+                "--expected-online-agents",
+                "1",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+
+    def test_run_rehearsal_fails_when_expected_agent_name_is_duplicated(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/pulse/api/license/agent-ledger": (
+                    200,
+                    json.dumps(
+                        {
+                            "agents": [
+                                {"name": "workstation-01", "status": "online"},
+                                {"name": "workstation-01", "status": "online"},
+                            ],
+                            "total": 2,
+                            "limit": 10,
+                        }
+                    ).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--api-token",
+                "token-123",
+                "--expected-agent-name",
+                "workstation-01",
                 "--json",
             ]
         )

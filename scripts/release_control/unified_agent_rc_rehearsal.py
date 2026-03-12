@@ -81,6 +81,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--expected-agent-name",
+        action="append",
+        default=[],
+        help=(
+            "Optional agent display name expected in /api/license/agent-ledger after "
+            "the upgrade; may be passed multiple times"
+        ),
+    )
+    parser.add_argument(
+        "--expected-online-agents",
+        type=int,
+        help=(
+            "Optional expected number of online agents in /api/license/agent-ledger "
+            "after the upgrade"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON instead of human-readable output",
@@ -323,6 +340,76 @@ def check_active_agent_accounting(
     return CheckResult(name="active-agent-accounting", ok=ok, detail=detail)
 
 
+def check_agent_ledger_identity(
+    *,
+    base_url: str,
+    timeout: float,
+    auth_headers: dict[str, str],
+    expected_agent_names: list[str],
+    expected_online_agents: int | None,
+) -> CheckResult:
+    if not auth_headers:
+        return CheckResult(
+            name="agent-ledger-identity",
+            ok=False,
+            detail=(
+                "agent ledger identity verification requires --api-token, "
+                "--bearer-token, or --cookie"
+            ),
+        )
+
+    ledger = fetch_json(
+        f"{base_url}/api/license/agent-ledger",
+        timeout=timeout,
+        headers=auth_headers,
+    )
+    agents = ledger.get("agents")
+    if not isinstance(agents, list):
+        return CheckResult(
+            name="agent-ledger-identity",
+            ok=False,
+            detail="/api/license/agent-ledger returned no agents array",
+        )
+
+    normalized_expected_names = [name.strip() for name in expected_agent_names if name.strip()]
+    names = [str(agent.get("name", "")).strip() for agent in agents if isinstance(agent, dict)]
+    online_agents = [
+        agent
+        for agent in agents
+        if isinstance(agent, dict) and str(agent.get("status", "")).strip() == "online"
+    ]
+
+    failures: list[str] = []
+    for expected_name in normalized_expected_names:
+        matches = sum(1 for name in names if name == expected_name)
+        if matches == 0:
+            failures.append(f"missing expected agent name {expected_name!r}")
+        elif matches > 1:
+            failures.append(f"agent name {expected_name!r} appeared {matches} times")
+
+    if expected_online_agents is not None and len(online_agents) != expected_online_agents:
+        failures.append(
+            f"online agent count {len(online_agents)} did not match expected {expected_online_agents}"
+        )
+
+    detail_parts = [
+        f"ledger names={names!r}",
+        f"online_agents={len(online_agents)}",
+    ]
+    if normalized_expected_names:
+        detail_parts.append(f"expected_names={normalized_expected_names!r}")
+    if expected_online_agents is not None:
+        detail_parts.append(f"expected_online_agents={expected_online_agents}")
+    if failures:
+        detail_parts.append("failures=" + "; ".join(failures))
+
+    return CheckResult(
+        name="agent-ledger-identity",
+        ok=not failures,
+        detail=", ".join(detail_parts),
+    )
+
+
 def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
     base_url = normalize_base_url(args.base_url)
     release_base_url = normalize_base_url(args.release_base_url)
@@ -376,6 +463,17 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
                 timeout=args.timeout,
                 auth_headers=auth_headers,
                 expected_active_agents=args.expected_active_agents,
+            )
+        )
+
+    if args.expected_agent_name or args.expected_online_agents is not None:
+        results.append(
+            check_agent_ledger_identity(
+                base_url=base_url,
+                timeout=args.timeout,
+                auth_headers=auth_headers,
+                expected_agent_names=args.expected_agent_name,
+                expected_online_agents=args.expected_online_agents,
             )
         )
 
