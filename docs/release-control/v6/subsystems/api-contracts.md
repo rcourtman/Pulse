@@ -114,6 +114,10 @@ That patrol run-history contract now also treats non-positive or malformed
 `limit` query values as defaulted input and caps oversized requests to the
 backend maximum, rather than letting invalid caller input widen the history
 payload unexpectedly.
+The frontend Patrol history clients in `frontend-modern/src/api/patrol.ts`
+must mirror that normalization before sending the request: invalid and
+non-positive caller input collapses back to the client default of `30`, and
+oversized requests clamp to the backend maximum of `100`.
 The same patrol run-history contract now also treats
 `effective_scope_resource_ids` as the canonical analyzed-resource scope when
 present, including when it is an explicit empty array, and frontend snapshot

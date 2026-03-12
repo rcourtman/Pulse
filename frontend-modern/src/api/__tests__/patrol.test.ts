@@ -20,10 +20,20 @@ describe('patrol api', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=30');
 
     await getPatrolRunHistory(0);
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=1');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=30');
 
     await getPatrolRunHistory(-5);
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=1');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=30');
+  });
+
+  it('caps oversized patrol history limits to the backend maximum', async () => {
+    await getPatrolRunHistory(101);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/runs?limit=100');
+
+    await getPatrolRunHistoryWithToolCalls(999);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/runs?include=tool_calls&limit=100',
+    );
   });
 
   it('builds tool-call history query with normalized limit', async () => {

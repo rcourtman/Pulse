@@ -423,13 +423,19 @@ export interface PatrolRunRecord {
   tool_call_count: number;
 }
 
+const DEFAULT_PATROL_HISTORY_LIMIT = 30;
+const MAX_PATROL_HISTORY_LIMIT = 100;
+
 function normalizeHistoryLimit(limit: number): number {
   if (!Number.isFinite(limit)) {
-    return 30;
+    return DEFAULT_PATROL_HISTORY_LIMIT;
   }
   const normalized = Math.floor(limit);
   if (normalized < 1) {
-    return 1;
+    return DEFAULT_PATROL_HISTORY_LIMIT;
+  }
+  if (normalized > MAX_PATROL_HISTORY_LIMIT) {
+    return MAX_PATROL_HISTORY_LIMIT;
   }
   return normalized;
 }
