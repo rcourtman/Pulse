@@ -8148,14 +8148,14 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 	defer config.Mu.RUnlock()
 
 	// Return public configuration
-	config := map[string]interface{}{
+	payload := map[string]interface{}{
 		"csrfProtection":    false, // Not implemented yet
-		"autoUpdateEnabled": r.config.AutoUpdateEnabled,
-		"updateChannel":     r.config.UpdateChannel,
+		"autoUpdateEnabled": config.EffectiveAutoUpdateEnabled(r.config.UpdateChannel, r.config.AutoUpdateEnabled),
+		"updateChannel":     config.EffectiveUpdateChannel(r.config.UpdateChannel, ""),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	json.NewEncoder(w).Encode(payload)
 }
 
 // handleWebSocket handles WebSocket connections

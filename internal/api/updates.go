@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
@@ -83,7 +84,11 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	// Get channel from query parameter if provided
-	channel := r.URL.Query().Get("channel")
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	info, err := h.manager.CheckForUpdatesWithChannel(ctx, channel)
 	if err != nil {
@@ -124,7 +129,11 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	channel := r.URL.Query().Get("channel")
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	applyReq := updates.ApplyUpdateRequest{
 		DownloadURL:  req.DownloadURL,
 		Channel:      channel,
@@ -178,6 +187,18 @@ func decodeStrictJSONBody(body io.Reader, dst any) error {
 	return nil
 }
 
+func normalizeRequestedUpdateChannel(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	canonical, ok := config.CanonicalUpdateChannel(trimmed)
+	if !ok {
+		return "", fmt.Errorf("update channel must be 'stable' or 'rc'")
+	}
+	return canonical, nil
+}
+
 func classifyApplyUpdateStartError(err error) (int, string) {
 	errMsg := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
@@ -185,6 +206,8 @@ func classifyApplyUpdateStartError(err error) (int, string) {
 		return http.StatusConflict, "Update already in progress"
 	case strings.Contains(errMsg, "download url is required"), strings.Contains(errMsg, "invalid download url"):
 		return http.StatusBadRequest, "Invalid download URL"
+	case strings.Contains(errMsg, "stable channel cannot install prerelease builds"):
+		return http.StatusConflict, err.Error()
 	case strings.Contains(errMsg, "cannot be applied in docker environment"),
 		strings.Contains(errMsg, "manual migration required"):
 		return http.StatusConflict, err.Error()
@@ -349,11 +372,16 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "version parameter required", http.StatusBadRequest)
 		return
 	}
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Prepare update plan
 	plan, err := updater.PrepareUpdate(r.Context(), updates.UpdateRequest{
 		Version: version,
-		Channel: r.URL.Query().Get("channel"),
+		Channel: channel,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to prepare update plan")

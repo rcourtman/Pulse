@@ -110,6 +110,25 @@ func TestHandleCheckUpdates_Error(t *testing.T) {
 	}
 }
 
+func TestHandleCheckUpdates_InvalidChannel(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		CheckForUpdatesFunc: func(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+			t.Fatalf("CheckForUpdatesWithChannel should not be called for invalid channels")
+			return nil, nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/updates/check?channel=beta", nil)
+
+	h.HandleCheckUpdates(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
 func TestHandleApplyUpdate_Success(t *testing.T) {
 	mockManager := &MockUpdateManager{
 		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
@@ -201,6 +220,48 @@ func TestHandleApplyUpdate_InvalidRequestBody(t *testing.T) {
 			t.Fatalf("expected missing URL error, got %q", w.Body.String())
 		}
 	})
+}
+
+func TestHandleApplyUpdate_InvalidChannel(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			t.Fatalf("ApplyUpdate should not be called for invalid channels")
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl":"https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply?channel=beta", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestHandleApplyUpdate_StableRejectsPrereleaseTarget(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			return errors.New("stable channel cannot install prerelease builds")
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl":"https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply?channel=stable", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("Expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+	if !strings.Contains(strings.ToLower(w.Body.String()), "prerelease") {
+		t.Fatalf("expected prerelease conflict message, got %q", w.Body.String())
+	}
 }
 
 func TestHandleUpdateStatus_Fresh(t *testing.T) {
@@ -515,6 +576,26 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	_ = json.NewDecoder(w.Body).Decode(&plan)
 	if len(plan.Instructions) != 1 {
 		t.Errorf("Expected 1 instruction, got %d", len(plan.Instructions))
+	}
+}
+
+func TestHandleGetUpdatePlan_InvalidChannel(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	h := NewUpdateHandlers(nil, nil)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			t.Fatalf("PrepareUpdate should not be called for invalid channels")
+			return nil, nil
+		},
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v1.2.3&channel=beta", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }
 

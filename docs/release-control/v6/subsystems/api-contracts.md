@@ -214,3 +214,7 @@ System settings API payloads now also carry an explicit v6 channel contract:
 `autoUpdateEnabled` must serialize as `false` whenever the effective channel is
 `rc`, even if stale persisted state or omitted request fields would otherwise
 leave unattended updates enabled.
+Update API channel selection now also follows that same contract: `/api/updates`
+surfaces accept only `stable` or `rc`, reject unsupported channel values at the
+HTTP boundary, and must not allow a `stable` installation path to apply a
+prerelease tarball even when a caller posts a direct GitHub release URL.

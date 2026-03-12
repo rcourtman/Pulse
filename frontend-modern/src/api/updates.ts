@@ -1,4 +1,5 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import type { UpdateChannel } from '@/types/config';
 
 export interface UpdateInfo {
   available: boolean;
@@ -24,7 +25,7 @@ export interface VersionInfo {
   version: string;
   build: string;
   runtime: string;
-  channel?: string;
+  channel?: UpdateChannel;
   isDocker: boolean;
   isSourceBuild: boolean;
   isDevelopment: boolean;
@@ -50,7 +51,7 @@ const requireNonEmpty = (value: string, fieldName: string): string => {
 };
 
 export class UpdatesAPI {
-  static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
+  static async checkForUpdates(channel?: UpdateChannel): Promise<UpdateInfo> {
     const search = new URLSearchParams();
     const trimmedChannel = channel?.trim();
     if (trimmedChannel) {
@@ -77,7 +78,7 @@ export class UpdatesAPI {
     return apiFetchJSON('/api/version');
   }
 
-  static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
+  static async getUpdatePlan(version: string, channel?: UpdateChannel): Promise<UpdatePlan> {
     const validatedVersion = requireNonEmpty(version, 'Version');
     const search = new URLSearchParams({ version: validatedVersion });
     if (channel) {

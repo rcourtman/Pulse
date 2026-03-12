@@ -43,6 +43,36 @@ func TestResolveChannel(t *testing.T) {
 	if got := manager.resolveChannel("", nil); got != "stable" {
 		t.Fatalf("expected default channel, got %s", got)
 	}
+
+	manager.config.UpdateChannel = "beta"
+	if got := manager.resolveChannel("", &VersionInfo{Channel: "rc"}); got != "rc" {
+		t.Fatalf("expected invalid config channel to fall back to version channel, got %s", got)
+	}
+	if got := manager.resolveChannel("beta", &VersionInfo{Channel: "rc"}); got != "rc" {
+		t.Fatalf("expected invalid requested channel to fall back to version channel, got %s", got)
+	}
+}
+
+func TestValidateApplyTargetVersion(t *testing.T) {
+	target, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz")
+	if err != nil {
+		t.Fatalf("stable release should be accepted, got %v", err)
+	}
+	if target != "v6.0.0" {
+		t.Fatalf("unexpected target version %q", target)
+	}
+
+	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err == nil {
+		t.Fatal("expected stable channel to reject prerelease target")
+	}
+
+	if _, err := validateApplyTargetVersion("rc", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err != nil {
+		t.Fatalf("rc channel should accept prerelease target, got %v", err)
+	}
+
+	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/latest/install.sh"); err == nil {
+		t.Fatal("expected invalid download URL to be rejected")
+	}
 }
 
 func TestGetCachedUpdateInfo(t *testing.T) {

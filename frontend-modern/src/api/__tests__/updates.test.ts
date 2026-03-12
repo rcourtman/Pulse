@@ -16,11 +16,9 @@ describe('UpdatesAPI', () => {
 
   it('encodes optional update-check channel safely', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
-    await UpdatesAPI.checkForUpdates('beta channel/rc+1');
+    await UpdatesAPI.checkForUpdates('rc');
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/updates/check?channel=beta+channel%2Frc%2B1',
-    );
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?channel=rc');
   });
 
   it('omits blank channel for update checks', async () => {
@@ -47,10 +45,10 @@ describe('UpdatesAPI', () => {
 
   it('encodes update-plan version and channel safely', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ canAutoUpdate: true } as any);
-    await UpdatesAPI.getUpdatePlan('v1.2.3-rc.1+build', 'edge/canary');
+    await UpdatesAPI.getUpdatePlan('v1.2.3-rc.1+build', 'rc');
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/updates/plan?version=v1.2.3-rc.1%2Bbuild&channel=edge%2Fcanary',
+      '/api/updates/plan?version=v1.2.3-rc.1%2Bbuild&channel=rc',
     );
   });
 

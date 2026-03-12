@@ -213,20 +213,9 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
 
-	// Track whether an explicit channel override was provided
-	explicitChannelProvided := channel != ""
-
-	// Use provided channel, or fall back to config, or auto-detect from current version
-	if channel == "" {
-		channel = m.config.UpdateChannel
-	}
-	if channel == "" && currentInfo.Channel != "" {
-		// Auto-detect channel from current version (RC users get RC updates)
-		channel = currentInfo.Channel
-	}
-	if channel == "" {
-		channel = "stable"
-	}
+	// Track whether an explicit channel override was provided.
+	explicitChannelProvided := strings.TrimSpace(channel) != ""
+	channel = m.resolveChannel(channel, currentInfo)
 
 	// Don't use cache when channel is explicitly provided (UI might have changed it)
 	// But DO use cache for auto-detected or default channels
@@ -456,7 +445,10 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	channel := m.resolveChannel(req.Channel, currentInfo)
-	targetVersion := inferVersionFromDownloadURL(req.DownloadURL)
+	targetVersion, validationErr := validateApplyTargetVersion(channel, req.DownloadURL)
+	if validationErr != nil {
+		return validationErr
+	}
 	initiatedBy := req.InitiatedBy
 	if initiatedBy == "" {
 		initiatedBy = InitiatedByUser
@@ -616,18 +608,8 @@ func (m *Manager) GetStatus() UpdateStatus {
 // Returns nil if no cached info is available
 // Uses the configured or auto-detected channel
 func (m *Manager) GetCachedUpdateInfo() *UpdateInfo {
-	// Determine which channel to use (same logic as CheckForUpdates)
-	channel := m.config.UpdateChannel
-	if channel == "" {
-		// Try to auto-detect from current version
-		currentInfo, err := GetCurrentVersion()
-		if err == nil && currentInfo.Channel != "" {
-			channel = currentInfo.Channel
-		}
-	}
-	if channel == "" {
-		channel = "stable"
-	}
+	currentInfo, _ := GetCurrentVersion()
+	channel := m.resolveChannel("", currentInfo)
 
 	m.statusMu.RLock()
 	defer m.statusMu.RUnlock()
@@ -836,14 +818,18 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 }
 
 func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) string {
-	if requested != "" {
-		return requested
+	if canonical, ok := config.CanonicalUpdateChannel(requested); ok {
+		return canonical
 	}
-	if m.config != nil && m.config.UpdateChannel != "" {
-		return m.config.UpdateChannel
+	if m.config != nil {
+		if canonical, ok := config.CanonicalUpdateChannel(m.config.UpdateChannel); ok {
+			return canonical
+		}
 	}
-	if currentInfo != nil && currentInfo.Channel != "" {
-		return currentInfo.Channel
+	if currentInfo != nil {
+		if canonical, ok := config.CanonicalUpdateChannel(currentInfo.Channel); ok {
+			return canonical
+		}
 	}
 	return "stable"
 }
@@ -990,6 +976,23 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 		return match
 	}
 	return ""
+}
+
+func validateApplyTargetVersion(channel string, downloadURL string) (string, error) {
+	targetVersion := inferVersionFromDownloadURL(downloadURL)
+	if targetVersion == "" {
+		return "", fmt.Errorf("invalid download URL")
+	}
+
+	targetVer, err := ParseVersion(targetVersion)
+	if err != nil {
+		return "", fmt.Errorf("invalid download URL")
+	}
+	if channel == "stable" && targetVer.IsPrerelease() {
+		return "", fmt.Errorf("stable channel cannot install prerelease builds")
+	}
+
+	return targetVersion, nil
 }
 
 func isRetryableUpdateStatusCode(statusCode int) bool {

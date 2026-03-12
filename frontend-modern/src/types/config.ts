@@ -22,13 +22,15 @@ export interface AuthConfig {
  * System settings from system.json file
  * These are application behavior settings
  */
+export type UpdateChannel = 'stable' | 'rc';
+
 export interface SystemConfig {
   pvePollingInterval?: number; // PVE polling interval in seconds
   pbsPollingInterval?: number; // PBS polling interval in seconds
   pmgPollingInterval?: number; // PMG polling interval in seconds
   connectionTimeout?: number; // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean; // Enable auto-updates
-  updateChannel?: string; // Update channel: 'stable' | 'rc' | 'beta'
+  updateChannel?: UpdateChannel; // Update channel: 'stable' | 'rc'
   autoUpdateCheckInterval?: number; // Hours between update checks
   autoUpdateTime?: string; // Time for updates (HH:MM format)
   backupPollingInterval?: number; // Backup polling interval in seconds (0 = default cadence)
@@ -180,8 +182,8 @@ export interface SetupRequest {
 /**
  * Type guards for configuration validation
  */
-export const isValidUpdateChannel = (value: string): value is 'stable' | 'rc' | 'beta' => {
-  return ['stable', 'rc', 'beta'].includes(value);
+export const isValidUpdateChannel = (value: string): value is UpdateChannel => {
+  return value === 'stable' || value === 'rc';
 };
 
 export const isValidTimeFormat = (value: string): boolean => {

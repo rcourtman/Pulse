@@ -50,22 +50,29 @@ var (
 	netInterfaceAddrs = net.InterfaceAddrs
 )
 
+// CanonicalUpdateChannel returns the supported v6 update channel if valid.
+func CanonicalUpdateChannel(channel string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "stable":
+		return "stable", true
+	case "rc":
+		return "rc", true
+	default:
+		return "", false
+	}
+}
+
 // EffectiveUpdateChannel resolves the runtime update channel using persisted
 // settings first and a fallback runtime/config value second. v6 only supports
 // stable and rc, and defaults to stable when unset.
 func EffectiveUpdateChannel(channel string, fallback string) string {
-	switch {
-	case strings.EqualFold(channel, "rc"):
-		return "rc"
-	case strings.EqualFold(channel, "stable"):
-		return "stable"
-	case strings.EqualFold(fallback, "rc"):
-		return "rc"
-	case strings.EqualFold(fallback, "stable"):
-		return "stable"
-	default:
-		return "stable"
+	if canonical, ok := CanonicalUpdateChannel(channel); ok {
+		return canonical
 	}
+	if canonical, ok := CanonicalUpdateChannel(fallback); ok {
+		return canonical
+	}
+	return "stable"
 }
 
 // EffectiveAutoUpdateEnabled enforces the v6 policy that unattended
