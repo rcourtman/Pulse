@@ -493,89 +493,117 @@ func TestStripeWebhook_DoesNotSendMagicLinkWithoutPublicURL(t *testing.T) {
 }
 
 func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_789")
+	tests := []struct {
+		name        string
+		customerID  string
+		email       string
+		orgID       string
+		planVersion string
+	}{
+		{
+			name:        "monthly grandfathered recurring plan",
+			customerID:  "cus_del_monthly",
+			email:       "user3@example.com",
+			orgID:       "org_gamma_monthly",
+			planVersion: "v5_pro_monthly_grandfathered",
+		},
+		{
+			name:        "annual grandfathered recurring plan",
+			customerID:  "cus_del_annual",
+			email:       "user4@example.com",
+			orgID:       "org_gamma_annual",
+			planVersion: "v5_pro_annual_grandfathered",
+		},
+	}
 
-	tmp := t.TempDir()
-	persistence := config.NewMultiTenantPersistence(tmp)
-	rbacProvider := NewTenantRBACProvider(tmp)
-	billingStore := config.NewFileBillingStore(tmp)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_789")
 
-	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, nil, nil, true, tmp)
+			tmp := t.TempDir()
+			persistence := config.NewMultiTenantPersistence(tmp)
+			rbacProvider := NewTenantRBACProvider(tmp)
+			billingStore := config.NewFileBillingStore(tmp)
 
-	orgID := "org_gamma"
-	createTestOrg(t, persistence, orgID, "user3@example.com")
+			h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, nil, nil, true, tmp)
 
-	// First: provision via checkout to establish customer->org mapping.
-	checkout := map[string]any{
-		"id":   "evt_checkout_2",
-		"type": "checkout.session.completed",
-		"data": map[string]any{
-			"object": map[string]any{
-				"id":             "cs_2",
-				"mode":           "subscription",
-				"customer":       "cus_del",
-				"customer_email": "user3@example.com",
-				"subscription":   "sub_del",
-				"metadata": map[string]any{
-					"org_id":       orgID,
-					"org_name":     "Gamma Org",
-					"plan_version": "cloud-v1",
+			createTestOrg(t, persistence, tc.orgID, tc.email)
+
+			// Provision via checkout first so cancellation is evaluated against an existing plan state.
+			checkout := map[string]any{
+				"id":   "evt_checkout_2",
+				"type": "checkout.session.completed",
+				"data": map[string]any{
+					"object": map[string]any{
+						"id":             "cs_2",
+						"mode":           "subscription",
+						"customer":       tc.customerID,
+						"customer_email": tc.email,
+						"subscription":   "sub_del",
+						"metadata": map[string]any{
+							"org_id":       tc.orgID,
+							"org_name":     "Gamma Org",
+							"plan_version": tc.planVersion,
+						},
+					},
 				},
-			},
-		},
-	}
-	checkoutPayload, _ := json.Marshal(checkout)
-	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(checkoutPayload))
-	req.Header.Set("Stripe-Signature", webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
-		Payload:   checkoutPayload,
-		Secret:    "whsec_test_789",
-		Timestamp: time.Now(),
-		Scheme:    "v1",
-	}).Header)
-	rr := httptest.NewRecorder()
-	h.HandleStripeWebhook(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("checkout status=%d, want %d", rr.Code, http.StatusOK)
-	}
+			}
+			checkoutPayload, _ := json.Marshal(checkout)
+			req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(checkoutPayload))
+			req.Header.Set("Stripe-Signature", webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+				Payload:   checkoutPayload,
+				Secret:    "whsec_test_789",
+				Timestamp: time.Now(),
+				Scheme:    "v1",
+			}).Header)
+			rr := httptest.NewRecorder()
+			h.HandleStripeWebhook(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("checkout status=%d, want %d", rr.Code, http.StatusOK)
+			}
 
-	// Then: delete subscription should cancel + strip capabilities.
-	del := map[string]any{
-		"id":   "evt_sub_deleted_1",
-		"type": "customer.subscription.deleted",
-		"data": map[string]any{
-			"object": map[string]any{
-				"id":       "sub_del",
-				"customer": "cus_del",
-				"status":   "canceled",
-			},
-		},
-	}
-	delPayload, _ := json.Marshal(del)
-	req2 := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(delPayload))
-	req2.Header.Set("Stripe-Signature", webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
-		Payload:   delPayload,
-		Secret:    "whsec_test_789",
-		Timestamp: time.Now(),
-		Scheme:    "v1",
-	}).Header)
-	rr2 := httptest.NewRecorder()
-	h.HandleStripeWebhook(rr2, req2)
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("delete status=%d, want %d", rr2.Code, http.StatusOK)
-	}
+			del := map[string]any{
+				"id":   "evt_sub_deleted_1",
+				"type": "customer.subscription.deleted",
+				"data": map[string]any{
+					"object": map[string]any{
+						"id":       "sub_del",
+						"customer": tc.customerID,
+						"status":   "canceled",
+					},
+				},
+			}
+			delPayload, _ := json.Marshal(del)
+			req2 := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(delPayload))
+			req2.Header.Set("Stripe-Signature", webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+				Payload:   delPayload,
+				Secret:    "whsec_test_789",
+				Timestamp: time.Now(),
+				Scheme:    "v1",
+			}).Header)
+			rr2 := httptest.NewRecorder()
+			h.HandleStripeWebhook(rr2, req2)
+			if rr2.Code != http.StatusOK {
+				t.Fatalf("delete status=%d, want %d", rr2.Code, http.StatusOK)
+			}
 
-	state, err := billingStore.GetBillingState(orgID)
-	if err != nil {
-		t.Fatalf("GetBillingState: %v", err)
-	}
-	if state.SubscriptionState != entitlements.SubStateCanceled {
-		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateCanceled)
-	}
-	if len(state.Capabilities) != 0 {
-		t.Fatalf("capabilities=%v, want empty", state.Capabilities)
-	}
-	if len(state.Limits) != 0 {
-		t.Fatalf("limits=%v, want empty", state.Limits)
+			state, err := billingStore.GetBillingState(tc.orgID)
+			if err != nil {
+				t.Fatalf("GetBillingState: %v", err)
+			}
+			if state.SubscriptionState != entitlements.SubStateCanceled {
+				t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateCanceled)
+			}
+			if state.PlanVersion != tc.planVersion {
+				t.Fatalf("plan_version=%q, want %q", state.PlanVersion, tc.planVersion)
+			}
+			if len(state.Capabilities) != 0 {
+				t.Fatalf("capabilities=%v, want empty", state.Capabilities)
+			}
+			if len(state.Limits) != 0 {
+				t.Fatalf("limits=%v, want empty", state.Limits)
+			}
+		})
 	}
 }
 
