@@ -195,6 +195,7 @@
         "internal/api/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/types/api.ts"
       ],
       "verification": {
@@ -237,6 +238,19 @@
             "exact_files": [
               "frontend-modern/src/types/api.ts",
               "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "api-token-management-surface",
+            "label": "API token management surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/APITokenManager.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"
             ]
           },
           {

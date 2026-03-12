@@ -85,6 +85,31 @@ class SubsystemLookupTest(unittest.TestCase):
             ["frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"],
         )
 
+    def test_lookup_paths_assigns_api_token_manager_to_api_contracts(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/APITokenManager.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"api-contracts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"api-contracts"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/subsystems/api-contracts.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "api-token-management-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"],
+        )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])
