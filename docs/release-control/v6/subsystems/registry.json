@@ -887,6 +887,7 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/subsystems/monitoring.md",
       "owned_prefixes": [
+        "internal/agentupdate/",
         "internal/hostagent/",
         "internal/monitoring/"
       ],
@@ -913,6 +914,21 @@
             "exact_files": [
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
               "internal/monitoring/monitor_metrics_slo_test.go"
+            ]
+          },
+          {
+            "id": "agent-update-runtime",
+            "label": "agent update runtime proof",
+            "match_prefixes": [
+              "internal/agentupdate/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentupdate/coverage_test.go",
+              "internal/agentupdate/update_hostagent_integration_test.go",
+              "internal/agentupdate/update_http_test.go"
             ]
           },
           {

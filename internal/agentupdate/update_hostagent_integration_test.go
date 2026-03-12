@@ -277,3 +277,77 @@ func TestUpdateToFirstHostReportCarriesPreviousVersionOnce(t *testing.T) {
 		t.Fatalf("second report updated_from = %q, want empty string", second[0].Agent.UpdatedFrom)
 	}
 }
+
+func TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce(t *testing.T) {
+	binaryPayload := testBinaryPayload()
+	checksum := testChecksum(binaryPayload)
+
+	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/agent/version":
+			if err := json.NewEncoder(w).Encode(map[string]string{"version": "6.0.0-rc.1"}); err != nil {
+				t.Fatalf("encode version: %v", err)
+			}
+		case "/download/pulse-agent":
+			w.Header().Set("X-Checksum-Sha256", checksum)
+			_, _ = w.Write(binaryPayload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer updateServer.Close()
+
+	tempDir := t.TempDir()
+	execPath := filepath.Join(tempDir, "pulse-agent")
+	if err := os.WriteFile(execPath, []byte("old-binary"), 0o755); err != nil {
+		t.Fatalf("write exec path: %v", err)
+	}
+
+	updater := agentupdate.New(agentupdate.Config{
+		PulseURL:       updateServer.URL,
+		AgentName:      "pulse-agent",
+		CurrentVersion: "5.1.14",
+		CheckInterval:  time.Hour,
+	})
+	restoreUpdateHook := agentupdate.UseExecPathForUpdateChecksForTest(updater, execPath)
+	defer restoreUpdateHook()
+
+	updater.CheckAndUpdate(context.Background())
+
+	firstServer, firstReports := captureReportServer(t)
+	defer firstServer.Close()
+
+	collector := &integrationCollector{
+		now: time.Date(2026, time.March, 12, 12, 13, 14, 0, time.UTC),
+	}
+
+	agentupdate.WithExecutablePathForTest(execPath, func() {
+		firstAgent, err := hostagent.New(hostagent.Config{
+			PulseURL:     firstServer.URL,
+			APIToken:     "token",
+			AgentID:      "agent-1",
+			AgentType:    "unified",
+			AgentVersion: "6.0.0-rc.1",
+			RunOnce:      true,
+			LogLevel:     zerolog.InfoLevel,
+			Collector:    collector,
+		})
+		if err != nil {
+			t.Fatalf("hostagent.New after CheckAndUpdate: %v", err)
+		}
+		if err := firstAgent.Run(context.Background()); err != nil {
+			t.Fatalf("Agent.Run after CheckAndUpdate: %v", err)
+		}
+	})
+
+	first := firstReports()
+	if len(first) != 1 {
+		t.Fatalf("expected 1 report after CheckAndUpdate, got %d", len(first))
+	}
+	if first[0].Agent.UpdatedFrom != "5.1.14" {
+		t.Fatalf("report updated_from = %q, want %q", first[0].Agent.UpdatedFrom, "5.1.14")
+	}
+	if first[0].Agent.Version != "6.0.0-rc.1" {
+		t.Fatalf("report version = %q, want %q", first[0].Agent.Version, "6.0.0-rc.1")
+	}
+}

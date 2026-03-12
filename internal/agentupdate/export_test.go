@@ -26,3 +26,26 @@ func WithExecutablePathForTest(execPath string, fn func()) {
 	}()
 	fn()
 }
+
+// UseExecPathForUpdateChecksForTest wires CheckAndUpdate to the real update
+// implementation while forcing a deterministic executable path.
+func UseExecPathForUpdateChecksForTest(u *Updater, execPath string) func() {
+	origPerform := u.performUpdateFn
+	origExec := osExecutableFn
+	origEval := evalSymlinksFn
+	origRestart := restartProcessFn
+
+	osExecutableFn = func() (string, error) { return execPath, nil }
+	evalSymlinksFn = func(string) (string, error) { return execPath, nil }
+	restartProcessFn = func(string) error { return nil }
+	u.performUpdateFn = func(ctx context.Context) error {
+		return u.performUpdateWithExecPath(ctx, execPath)
+	}
+
+	return func() {
+		u.performUpdateFn = origPerform
+		osExecutableFn = origExec
+		evalSymlinksFn = origEval
+		restartProcessFn = origRestart
+	}
+}
