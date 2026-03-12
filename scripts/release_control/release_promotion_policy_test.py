@@ -6,9 +6,13 @@ from __future__ import annotations
 import os
 import unittest
 
-from repo_file_io import read_repo_text
+from repo_file_io import missing_staged_repo_paths, read_repo_text
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
+REQUIRED_STAGED_GOVERNANCE_INPUTS: tuple[str, ...] = (
+    "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+    "docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md",
+)
 
 
 def read(rel: str) -> str:
@@ -19,7 +23,57 @@ def read(rel: str) -> str:
     )
 
 
+def staged_governance_input_errors() -> list[str]:
+    if not USE_STAGED_GOVERNANCE:
+        return []
+
+    errors: list[str] = []
+    missing = missing_staged_repo_paths(REQUIRED_STAGED_GOVERNANCE_INPUTS)
+    if missing:
+        errors.append(
+            "stage the canonical promotion proof inputs:\n- " + "\n- ".join(missing)
+        )
+
+    checklist_rel = "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md"
+    if checklist_rel not in missing:
+        checklist = read_repo_text(
+            checklist_rel,
+            staged=True,
+            strict_staged=True,
+        )
+        if "rc-to-ga-rehearsal-summary" not in checklist:
+            errors.append(
+                "stage the updated docs/release-control/v6/PRE_RELEASE_CHECKLIST.md "
+                "that records the rc-to-ga-rehearsal-summary gate input"
+            )
+    else:
+        errors.append(
+            "stage the updated docs/release-control/v6/PRE_RELEASE_CHECKLIST.md "
+            "that records the rc-to-ga-rehearsal-summary gate input"
+        )
+
+    return errors
+
+
+STAGED_GOVERNANCE_INPUT_ERRORS = tuple(staged_governance_input_errors())
+
+
 class ReleasePromotionPolicyTest(unittest.TestCase):
+    def setUp(self) -> None:
+        if (
+            STAGED_GOVERNANCE_INPUT_ERRORS
+            and self._testMethodName != "test_staged_governance_inputs_are_present"
+        ):
+            self.skipTest("staged governance inputs missing; see test_staged_governance_inputs_are_present")
+
+    def test_staged_governance_inputs_are_present(self) -> None:
+        self.assertEqual(
+            STAGED_GOVERNANCE_INPUT_ERRORS,
+            (),
+            "staged promotion proof inputs are incomplete:\n- "
+            + "\n- ".join(STAGED_GOVERNANCE_INPUT_ERRORS),
+        )
+
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("Every candidate intended for broad customer use must ship to `rc`", content)

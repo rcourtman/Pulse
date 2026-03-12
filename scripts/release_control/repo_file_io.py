@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from typing import Any
+from typing import Any, Iterable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +45,28 @@ def read_repo_text(path: str | Path, *, staged: bool = False, strict_staged: boo
             if strict_staged:
                 raise FileNotFoundError(f"missing staged index entry for {rel}") from None
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def staged_path_exists(path: str | Path) -> bool:
+    rel = repo_relative_path(path)
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f":{rel}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=git_env(),
+    )
+    return result.returncode == 0
+
+
+def missing_staged_repo_paths(paths: Iterable[str | Path]) -> list[str]:
+    missing: list[str] = []
+    for path in paths:
+        rel = repo_relative_path(path)
+        if not staged_path_exists(rel):
+            missing.append(rel)
+    return missing
 
 
 def load_repo_json(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> dict[str, Any]:
