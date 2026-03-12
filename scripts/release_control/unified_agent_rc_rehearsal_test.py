@@ -12,6 +12,7 @@ from unified_agent_rc_rehearsal import (
     agent_binary_asset_name,
     check_update_info,
     main,
+    render_markdown_report,
     release_asset_url,
     run_rehearsal,
 )
@@ -148,6 +149,57 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
             info_path.write_text("5.1.13\n", encoding="utf-8")
             result = check_update_info(tmp, "5.1.14")
             self.assertFalse(result.ok)
+
+    def test_render_markdown_report(self) -> None:
+        report = render_markdown_report(
+            title="Unified Agent RC Rehearsal",
+            base_url="https://pulse.example.com",
+            expected_version="6.0.0-rc.1",
+            release_base_url="https://github.com/example/releases/download",
+            results=[
+                type("R", (), {"name": "agent-version-endpoint", "ok": True, "detail": "matched"})(),
+                type("R", (), {"name": "agent-binary-linux-amd64", "ok": False, "detail": "checksum mismatch"})(),
+            ],
+        )
+        self.assertIn("# Unified Agent RC Rehearsal", report)
+        self.assertIn("`PASS` `agent-version-endpoint`", report)
+        self.assertIn("`FAIL` `agent-binary-linux-amd64`", report)
+        self.assertIn("## Manual Follow-up", report)
+
+    def test_main_writes_report(self) -> None:
+        install = b"#!/bin/sh\necho install\n"
+        ps1 = b"Write-Output 'install'\n"
+        self.set_routes(
+            {
+                "/pulse/api/agent/version": (
+                    200,
+                    json.dumps({"version": "6.0.0-rc.1"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                ),
+                "/pulse/install.sh": (200, install, {}),
+                "/pulse/install.ps1": (200, ps1, {}),
+                "/releases/v6.0.0-rc.1/install.sh": (200, install, {}),
+                "/releases/v6.0.0-rc.1/install.ps1": (200, ps1, {}),
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "report.md"
+            exit_code = main(
+                [
+                    "--base-url",
+                    f"{self.base_url}/pulse",
+                    "--expected-version",
+                    "6.0.0-rc.1",
+                    "--release-base-url",
+                    f"{self.base_url}/releases",
+                    "--report-out",
+                    str(report_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            content = report_path.read_text(encoding="utf-8")
+            self.assertIn("# Unified Agent RC Rehearsal", content)
+            self.assertIn("`PASS` `install-sh-asset`", content)
 
 
 if __name__ == "__main__":

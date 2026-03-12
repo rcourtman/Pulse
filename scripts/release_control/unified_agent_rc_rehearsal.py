@@ -65,6 +65,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Emit JSON instead of human-readable output",
     )
+    parser.add_argument(
+        "--report-out",
+        help="Optional path to write a markdown rehearsal report",
+    )
+    parser.add_argument(
+        "--report-title",
+        default="Unified Agent RC Rehearsal",
+        help="Markdown title used when writing --report-out",
+    )
     return parser.parse_args(argv)
 
 
@@ -256,10 +265,62 @@ def render_text(results: Iterable[CheckResult]) -> str:
     return "\n".join(lines)
 
 
+def render_markdown_report(
+    *,
+    title: str,
+    base_url: str,
+    expected_version: str,
+    release_base_url: str,
+    results: Iterable[CheckResult],
+) -> str:
+    lines = [
+        f"# {title}",
+        "",
+        f"- Base URL: `{base_url}`",
+        f"- Expected version: `{expected_version}`",
+        f"- Release asset base: `{release_base_url}`",
+        "",
+        "## Automated Checks",
+        "",
+    ]
+    for result in results:
+        status = "PASS" if result.ok else "FAIL"
+        lines.append(f"- `{status}` `{result.name}`: {result.detail}")
+    lines.extend(
+        [
+            "",
+            "## Manual Follow-up",
+            "",
+            "- Confirm the upgraded v5-installed agent reconnects as one canonical v6 identity.",
+            "- Confirm `updated_from` appears exactly once on the first canonical v6 report and clears on the next report.",
+            "- Confirm settings/billing active-agent counts still match runtime enforcement after the upgrade.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_report(path: str, content: str) -> None:
+    report_path = Path(path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(content + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     results = run_rehearsal(args)
     ok = all(result.ok for result in results)
+
+    if args.report_out:
+        write_report(
+            args.report_out,
+            render_markdown_report(
+                title=args.report_title,
+                base_url=normalize_base_url(args.base_url),
+                expected_version=args.expected_version,
+                release_base_url=normalize_base_url(args.release_base_url),
+                results=results,
+            ),
+        )
 
     if args.json:
         print(json.dumps({"ok": ok, "results": [asdict(result) for result in results]}, indent=2))
