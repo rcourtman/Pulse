@@ -27,7 +27,8 @@ truth for live infrastructure data.
 3. `internal/unifiedresources/read_state.go`
 4. `internal/unifiedresources/monitor_adapter.go`
 5. `internal/unifiedresources/views.go`
-6. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+6. `internal/hostagent/agent.go`
+7. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Shared Boundaries
 
@@ -38,7 +39,8 @@ truth for live infrastructure data.
 1. Add pollers/providers through `internal/monitoring/`
 2. Add typed read access through `internal/unifiedresources/views.go`
 3. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
-4. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+4. Add or change unified agent startup, update continuity, and first-report assembly through `internal/hostagent/agent.go`
+5. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Forbidden Paths
 
@@ -64,6 +66,11 @@ contract together with the shared API-contract ownership and the dedicated
 proof files for agent inventory, lookup, reconnect, removal, and config
 update behavior, rather than remaining an unowned consumer of monitoring
 truth.
+Host-agent startup and first-report assembly now also live under this
+monitoring boundary. Changes to `internal/hostagent/agent.go` must preserve
+the one-shot update continuity contract: when the updater persists a previous
+agent version, the next unified agent start must surface that `updated_from`
+value exactly once in the first canonical v6 host report.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary

@@ -887,6 +887,7 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/subsystems/monitoring.md",
       "owned_prefixes": [
+        "internal/hostagent/",
         "internal/monitoring/"
       ],
       "owned_files": [
@@ -912,6 +913,22 @@
             "exact_files": [
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
               "internal/monitoring/monitor_metrics_slo_test.go"
+            ]
+          },
+          {
+            "id": "host-agent-runtime",
+            "label": "host agent runtime proof",
+            "match_prefixes": [
+              "internal/hostagent/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentupdate/coverage_test.go",
+              "internal/hostagent/agent_metrics_test.go",
+              "internal/hostagent/agent_new_test.go",
+              "internal/hostagent/send_report_test.go"
             ]
           },
           {

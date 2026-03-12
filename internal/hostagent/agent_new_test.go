@@ -10,7 +10,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -127,6 +130,66 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 	if agent.trimmedPulseURL != "http://localhost:7655" {
 		t.Fatalf("trimmedPulseURL = %q, want %q", agent.trimmedPulseURL, "http://localhost:7655")
+	}
+}
+
+func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
+	origGetUpdatedFromVersion := getUpdatedFromVersion
+	t.Cleanup(func() { getUpdatedFromVersion = origGetUpdatedFromVersion })
+
+	getUpdatedFromVersion = func() string { return "5.1.14" }
+
+	fixedTime := time.Date(2026, time.March, 12, 9, 10, 11, 0, time.UTC)
+	mc := &mockCollector{
+		nowFn: func() time.Time { return fixedTime },
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "upgraded-host",
+				HostID:          "machine-id-1",
+				Platform:        "linux",
+				PlatformVersion: "6.8",
+				KernelVersion:   "6.8.12",
+				KernelArch:      runtime.GOARCH,
+			}, nil
+		},
+		hostUptimeFn: func(context.Context) (uint64, error) { return 7200, nil },
+		metricsFn: func(context.Context, []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{
+				Memory: agentshost.MemoryMetric{
+					TotalBytes: 1024,
+					UsedBytes:  512,
+					Usage:      50,
+				},
+			}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:     "token",
+		AgentID:      "agent-1",
+		AgentType:    "unified",
+		AgentVersion: "6.0.0-rc.1",
+		LogLevel:     zerolog.InfoLevel,
+		Collector:    mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if agent.updatedFrom != "5.1.14" {
+		t.Fatalf("updatedFrom = %q, want %q", agent.updatedFrom, "5.1.14")
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+
+	if report.Agent.Version != "6.0.0-rc.1" {
+		t.Fatalf("report agent version = %q, want %q", report.Agent.Version, "6.0.0-rc.1")
+	}
+	if report.Agent.UpdatedFrom != "5.1.14" {
+		t.Fatalf("report updated_from = %q, want %q", report.Agent.UpdatedFrom, "5.1.14")
 	}
 }
 

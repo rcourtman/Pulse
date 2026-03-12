@@ -115,6 +115,7 @@ var newCommandClient = NewCommandClient
 var runCommandClient = func(client *CommandClient, ctx context.Context) error {
 	return client.Run(ctx)
 }
+var getUpdatedFromVersion = agentupdate.GetUpdatedFromVersion
 
 // New constructs a fully initialised host Agent.
 func New(cfg Config) (*Agent, error) {
@@ -256,7 +257,7 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
-	updatedFrom := agentupdate.GetUpdatedFromVersion()
+	updatedFrom := getUpdatedFromVersion()
 	if updatedFrom != "" {
 		logger.Info().
 			Str("previousVersion", updatedFrom).

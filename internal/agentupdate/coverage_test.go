@@ -691,6 +691,46 @@ func TestGetUpdatedFromVersion(t *testing.T) {
 	}
 }
 
+func TestPerformUpdatePersistsPreviousVersionForNextStart(t *testing.T) {
+	data := testBinary()
+	check := checksum(data)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Checksum-Sha256", check)
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+
+	_, execPath := writeTempExec(t)
+	u := newUpdaterForTest(server.URL)
+	u.cfg.CurrentVersion = "5.1.14"
+	u.client = server.Client()
+
+	origRestart := restartProcessFn
+	origExec := osExecutableFn
+	origEval := evalSymlinksFn
+	t.Cleanup(func() {
+		restartProcessFn = origRestart
+		osExecutableFn = origExec
+		evalSymlinksFn = origEval
+	})
+
+	restartProcessFn = func(string) error { return nil }
+	osExecutableFn = func() (string, error) { return execPath, nil }
+	evalSymlinksFn = func(string) (string, error) { return execPath, nil }
+
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		t.Fatalf("performUpdateWithExecPath: %v", err)
+	}
+
+	if got := GetUpdatedFromVersion(); got != "5.1.14" {
+		t.Fatalf("GetUpdatedFromVersion() = %q, want %q", got, "5.1.14")
+	}
+	if got := GetUpdatedFromVersion(); got != "" {
+		t.Fatalf("GetUpdatedFromVersion() second read = %q, want empty string", got)
+	}
+}
+
 func TestPerformUpdateWrapper(t *testing.T) {
 	t.Run("ExecPathError", func(t *testing.T) {
 		origExec := osExecutableFn

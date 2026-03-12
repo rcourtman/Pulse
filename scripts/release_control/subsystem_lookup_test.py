@@ -350,6 +350,28 @@ class SubsystemLookupTest(unittest.TestCase):
             {"monitoring", "unified-resources"},
         )
 
+    def test_lookup_paths_maps_hostagent_runtime_to_monitoring(self) -> None:
+        result = lookup_paths(["internal/hostagent/agent.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "monitoring")
+        self.assertEqual(match["contract"], "docs/release-control/v6/subsystems/monitoring.md")
+        self.assertEqual(match["verification_requirement"]["id"], "host-agent-runtime")
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "internal/agentupdate/coverage_test.go",
+                "internal/hostagent/agent_metrics_test.go",
+                "internal/hostagent/agent_new_test.go",
+                "internal/hostagent/send_report_test.go",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
