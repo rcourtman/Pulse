@@ -119,7 +119,7 @@ func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
 	}
 }
 
-func TestPatrolMutatingHandlers_NoAIService_ReturnServiceUnavailable(t *testing.T) {
+func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	handler := newTestAISettingsHandler(cfg, nil, nil)
@@ -131,6 +131,12 @@ func TestPatrolMutatingHandlers_NoAIService_ReturnServiceUnavailable(t *testing.
 		body    string
 		handler func(http.ResponseWriter, *http.Request)
 	}{
+		{
+			name:    "force_patrol",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/run",
+			handler: handler.HandleForcePatrol,
+		},
 		{
 			name:    "acknowledge",
 			method:  http.MethodPost,
@@ -203,6 +209,17 @@ func TestPatrolMutatingHandlers_NoAIService_ReturnServiceUnavailable(t *testing.
 
 			if rec.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+			}
+
+			var resp APIError
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Code != "service_unavailable" {
+				t.Fatalf("code = %q, want service_unavailable", resp.Code)
+			}
+			if resp.ErrorMessage != "Pulse Patrol service not available" {
+				t.Fatalf("error = %q, want Pulse Patrol service not available", resp.ErrorMessage)
 			}
 		})
 	}

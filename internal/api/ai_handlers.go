@@ -4695,6 +4695,10 @@ func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolServ
 	return aiService.GetPatrolService()
 }
 
+func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
+	writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+}
+
 // HandleGetPatrolStatus returns the current patrol status (GET /api/ai/patrol/status)
 func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -4870,13 +4874,13 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 
 	aiService := h.GetAIService(r.Context())
 	if aiService == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5021,13 +5025,13 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 
 	aiService := h.GetAIService(r.Context())
 	if aiService == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5073,7 +5077,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5181,7 +5185,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5302,7 +5306,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5386,7 +5390,7 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5442,7 +5446,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5584,7 +5588,7 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -5676,7 +5680,7 @@ func (h *AISettingsHandler) HandleClearAllFindings(w http.ResponseWriter, r *htt
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -6087,7 +6091,7 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -6164,7 +6168,7 @@ func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
