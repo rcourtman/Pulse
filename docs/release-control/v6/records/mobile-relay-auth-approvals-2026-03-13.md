@@ -65,25 +65,51 @@
    - `/tmp/pulse-mobile-mobile-relay-auth-approvals-revoked.png`
 6. Confirmed the app returned to a safe empty state with `Add Instance` visible instead of preserving stale access.
 
+## Manual Exercise D: Real Android Approval Visibility Through Live Relay
+
+1. Switched from the earlier simulator-only lab backend to the real
+   enterprise-capable Pulse test container on `delly`:
+   - backend under test: `http://192.168.0.106:7655`
+   - live managed relay endpoint: `wss://relay.pulserelay.pro/ws/instance`
+   - mobile onboarding endpoint presented to the app:
+     `wss://relay.pulserelay.pro/ws/app`
+2. Paired a fresh Android device through the real relay onboarding path and
+   confirmed the phone reached the live instance as `Instance relay_98`.
+3. Verified the backend approval API first returned an empty state:
+   - `GET /api/ai/approvals`
+   - response stats: `pending=0`, `expired=1`
+4. Reloaded the real mobile dev bundle after the mobile initial-hydration fix
+   so the live phone was running the new `pulse-mobile` code, not a stale Metro
+   session.
+5. Opened the real phone approval route and confirmed the empty state rendered
+   without the previous perpetual spinner:
+   - screenshot: `/tmp/pulse-mobile-approvals-fresh.png`
+6. Seeded a fresh pending approval into the enterprise-backed test instance and
+   confirmed the backend returned:
+   - `GET /api/ai/approvals`
+   - response stats: `pending=1`, `expired=0`
+7. Reopened the approval route on the physical Android device and confirmed the
+   pending approval card rendered live over the real relay channel instead of
+   hanging in loading:
+   - screenshot: `/tmp/pulse-mobile-approvals-pending.png`
+
 ## Approval Coverage Note
 
-- The open `pulse` lab backend does not expose live approval management over
-  `/api/ai/approvals`; in this workspace build it correctly returned `402
-  Approval management requires Pulse Pro` without the enterprise auto-fix
-  adapter.
-- Approval routing, approval state handling, and approval-action behavior were
-  therefore covered by the audited `pulse-mobile` automated proof bundle plus
-  the targeted `pulse-enterprise/internal/aiautofix` approval handler tests
-  above, while the live manual rehearsal covered the real mobile pairing,
-  persistence, reconnect, and revocation boundaries against a real relay
-  instance.
+- Approval routing, approval list visibility, and scoped approval state are now
+  covered both by the audited `pulse-mobile` automated proof bundle and by the
+  live Android exercise above against the enterprise-backed approval runtime.
+- Approval action execution remains covered by the targeted
+  `pulse-enterprise/internal/aiautofix` approval handler tests from the
+  automated baseline above.
 
 ## Outcome
 
 - Real mobile pairing now succeeds against a real relay-backed Pulse instance.
 - Persisted relaunch and reconnect now succeed without re-pairing.
 - Revoked credentials fail closed back to a safe disconnected state.
+- Real approval list visibility now succeeds on a physical Android device for
+  both the empty state and a live pending approval.
 - The onboarding payload now gives mobile the canonical app endpoint instead of
   the instance-only relay endpoint that previously caused immediate disconnects.
-- Approval visibility and action handling remain covered by the governed mobile
-  and enterprise proof suites for the enterprise approval runtime.
+- Approval action handling remains covered by the governed mobile and
+  enterprise proof suites for the enterprise approval runtime.
