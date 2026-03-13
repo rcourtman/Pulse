@@ -272,6 +272,7 @@ Companion drill:
 - Automated proof:
   `go test ./internal/api -run 'TestHostedLifecycle|TestEntitlementHandler_|TestRequireLicenseFeature_HostedEntitlements' -count=1`
   `go test ./pkg/licensing/... -count=1`
+  `go test ./tests/migration -run 'TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5PaidLicenseUpgrade_RealLicenseServerExchange|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario' -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx src/pages/__tests__/AIIntelligence.test.tsx`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/11-first-session.spec.ts --project=chromium`
 - Manual scenario:
@@ -286,7 +287,7 @@ Companion drill:
   Upgrade keeps the user's local state, entitlements, and first-session
   continuity intact without requiring manual repair or repeated activation.
 - Latest exercised record:
-  `docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md`
+  `docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-13.md`
 - Block release if:
   Upgrade requires manual cleanup, repeated license entry, or leaves paid and
   non-paid surfaces in an inconsistent state.

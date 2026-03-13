@@ -205,7 +205,7 @@
             "test",
             "./tests/migration",
             "-run",
-            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
+            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5PaidLicenseUpgrade_RealLicenseServerExchange|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
             "-count=1"
           ]
         }
@@ -213,7 +213,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-13.md",
           "kind": "file"
         },
         {
@@ -229,6 +229,11 @@
         {
           "repo": "pulse",
           "path": "tests/migration/v5_commercial_migration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_real_exchange_upgrade_test.go",
           "kind": "file"
         },
         {
@@ -385,7 +390,7 @@
             "test",
             "./tests/migration",
             "-run",
-            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
+            "TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix|TestV5PaidLicenseUpgrade_RealLicenseServerExchange|TestV5DataDir_CSRFLegacyMapFormat|TestV5DataDir_CSRFTokenFileContinuity|TestV5DataDir_SessionLegacyMapFormat|TestV5DataDir_SessionTokenContinuity|TestV5DowngradeSafety|TestV5FullUpgradeScenario",
             "-count=1"
           ]
         }
@@ -393,7 +398,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-13.md",
           "kind": "file"
         },
         {
@@ -414,6 +419,11 @@
         {
           "repo": "pulse",
           "path": "tests/migration/v5_full_upgrade_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_real_exchange_upgrade_test.go",
           "kind": "file"
         },
         {
@@ -2278,9 +2288,9 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-13.md",
           "kind": "file",
-          "evidence_tier": "managed-runtime-exercise"
+          "evidence_tier": "real-external-e2e"
         }
       ]
     }

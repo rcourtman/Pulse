@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -110,10 +111,50 @@ type ActivateInstallationRequest struct {
 // ExchangeLegacyLicenseRequest is the payload sent to POST /v1/licenses/exchange.
 // It converts a legacy v5 JWT-style license into the v6 activation/grant model.
 type ExchangeLegacyLicenseRequest struct {
-	LegacyLicenseKey    string `json:"legacy_license_key"`
+	LegacyLicenseKey    string `json:"-"`
 	InstanceName        string `json:"instance_name,omitempty"`
 	InstanceFingerprint string `json:"instance_fingerprint"`
 	ClientVersion       string `json:"client_version,omitempty"`
+}
+
+// MarshalJSON emits the canonical v6 contract field `legacy_license_token`.
+// UnmarshalJSON remains backward-compatible with earlier local stub/test
+// paths that still decoded `legacy_license_key`.
+func (r ExchangeLegacyLicenseRequest) MarshalJSON() ([]byte, error) {
+	type exchangeLegacyLicenseRequestWire struct {
+		LegacyLicenseToken  string `json:"legacy_license_token"`
+		InstanceName        string `json:"instance_name,omitempty"`
+		InstanceFingerprint string `json:"instance_fingerprint"`
+		ClientVersion       string `json:"client_version,omitempty"`
+	}
+	return json.Marshal(exchangeLegacyLicenseRequestWire{
+		LegacyLicenseToken:  r.LegacyLicenseKey,
+		InstanceName:        r.InstanceName,
+		InstanceFingerprint: r.InstanceFingerprint,
+		ClientVersion:       r.ClientVersion,
+	})
+}
+
+func (r *ExchangeLegacyLicenseRequest) UnmarshalJSON(data []byte) error {
+	type exchangeLegacyLicenseRequestWire struct {
+		LegacyLicenseToken  string `json:"legacy_license_token"`
+		LegacyLicenseKey    string `json:"legacy_license_key"`
+		InstanceName        string `json:"instance_name,omitempty"`
+		InstanceFingerprint string `json:"instance_fingerprint"`
+		ClientVersion       string `json:"client_version,omitempty"`
+	}
+	var wire exchangeLegacyLicenseRequestWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	r.LegacyLicenseKey = wire.LegacyLicenseToken
+	if r.LegacyLicenseKey == "" {
+		r.LegacyLicenseKey = wire.LegacyLicenseKey
+	}
+	r.InstanceName = wire.InstanceName
+	r.InstanceFingerprint = wire.InstanceFingerprint
+	r.ClientVersion = wire.ClientVersion
+	return nil
 }
 
 // ActivateInstallationResponse is the payload returned from the activation endpoint.

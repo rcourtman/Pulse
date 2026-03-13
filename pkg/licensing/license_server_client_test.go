@@ -210,12 +210,26 @@ func TestClientExchangeLegacyLicense(t *testing.T) {
 				t.Error("missing Idempotency-Key header")
 			}
 
-			var req ExchangeLegacyLicenseRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			var raw map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 				t.Errorf("decode request: %v", err)
+			}
+			body, err := json.Marshal(raw)
+			if err != nil {
+				t.Fatalf("re-marshal request: %v", err)
+			}
+			var req ExchangeLegacyLicenseRequest
+			if err := json.Unmarshal(body, &req); err != nil {
+				t.Fatalf("decode compatibility request: %v", err)
 			}
 			if req.LegacyLicenseKey != "header.payload.signature" {
 				t.Errorf("LegacyLicenseKey = %q, want header.payload.signature", req.LegacyLicenseKey)
+			}
+			if got := raw["legacy_license_token"]; got != "header.payload.signature" {
+				t.Errorf("legacy_license_token = %v, want header.payload.signature", got)
+			}
+			if _, hasLegacyKey := raw["legacy_license_key"]; hasLegacyKey {
+				t.Error("legacy_license_key should not be sent by client")
 			}
 
 			w.WriteHeader(http.StatusCreated)

@@ -125,6 +125,14 @@ Activation-grant translation is part of the same boundary: when relay/license
 server grants enter the local claims model, Cloud plan keys and lifecycle state
 must still resolve through the canonical entitlement claim accessors rather
 than becoming a parallel truth path.
+The legacy-license exchange transport is part of that same activation boundary:
+`pkg/licensing/activation_types.go` and `pkg/licensing/license_server_client.go`
+must treat `legacy_license_token` as the canonical v6 request field for
+`POST /v1/licenses/exchange`, while accepting `legacy_license_key` only as a
+backward-compatible decode alias for older local stubs and historical test
+fixtures. Future exchange-path changes must not reintroduce a split contract
+where the shared Pulse runtime and the real `pulse-pro/license-server` disagree
+on the activation payload shape.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

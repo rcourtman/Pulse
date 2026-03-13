@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -199,6 +200,57 @@ func TestGrantClaimsToClaimsCanonicalizesCloudPlanAtEntitlementBoundary(t *testi
 	}
 	if got := claims.EntitlementSubscriptionState(); got != SubStateActive {
 		t.Fatalf("EntitlementSubscriptionState()=%q, want %q", got, SubStateActive)
+	}
+}
+
+func TestExchangeLegacyLicenseRequestJSONCompatibility(t *testing.T) {
+	req := ExchangeLegacyLicenseRequest{
+		LegacyLicenseKey:    "header.payload.signature",
+		InstanceName:        "pulse-node",
+		InstanceFingerprint: "fp-123",
+		ClientVersion:       "6.0.0-rc.2",
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal(raw) error = %v", err)
+	}
+	if got := raw["legacy_license_token"]; got != "header.payload.signature" {
+		t.Fatalf("legacy_license_token = %v, want header.payload.signature", got)
+	}
+	if _, hasLegacyKey := raw["legacy_license_key"]; hasLegacyKey {
+		t.Fatal("legacy_license_key should not be emitted by MarshalJSON")
+	}
+
+	for _, field := range []string{"legacy_license_token", "legacy_license_key"} {
+		t.Run("unmarshal "+field, func(t *testing.T) {
+			payload := map[string]any{
+				field:                  "header.payload.signature",
+				"instance_name":        "pulse-node",
+				"instance_fingerprint": "fp-123",
+				"client_version":       "6.0.0-rc.2",
+			}
+			body, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("json.Marshal(payload) error = %v", err)
+			}
+
+			var decoded ExchangeLegacyLicenseRequest
+			if err := json.Unmarshal(body, &decoded); err != nil {
+				t.Fatalf("json.Unmarshal(decoded) error = %v", err)
+			}
+			if decoded.LegacyLicenseKey != "header.payload.signature" {
+				t.Fatalf("LegacyLicenseKey = %q, want header.payload.signature", decoded.LegacyLicenseKey)
+			}
+			if decoded.InstanceFingerprint != "fp-123" {
+				t.Fatalf("InstanceFingerprint = %q, want fp-123", decoded.InstanceFingerprint)
+			}
+		})
 	}
 }
 
