@@ -877,7 +877,7 @@ export const AISettings: Component = () => {
   return (
     <>
       <SettingsPanel
-        title="AI"
+        title="AI Services"
         description="Configure AI providers, models, Pulse Assistant, and Patrol."
         icon={
           <svg

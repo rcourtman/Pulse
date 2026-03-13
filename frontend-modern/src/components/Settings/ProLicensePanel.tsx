@@ -255,7 +255,7 @@ export const ProLicensePanel: Component = () => {
   return (
     <div class="space-y-6">
       <SettingsPanel
-        title="Pro License"
+        title="Pulse Pro"
         description="Activate your Pro license to unlock auto-fix, alert-triggered AI, and advanced features."
         icon={<ShieldCheck class="w-5 h-5" />}
         action={

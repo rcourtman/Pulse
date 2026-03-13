@@ -12,8 +12,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Install and manage unified agents, runtime behavior, and the recommended path for bringing infrastructure and workloads into Pulse.',
   },
   'system-general': {
-    title: 'General Settings',
-    description: 'Configure appearance, layout, and default monitoring cadence.',
+    title: 'General',
+    description: 'Manage appearance, layout, and default monitoring cadence.',
   },
   'system-network': {
     title: 'Network Settings',
@@ -28,8 +28,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
   },
   'system-ai': {
-    title: 'AI Settings',
-    description: 'Configure AI providers, model defaults, Pulse Assistant, and Patrol automation.',
+    title: 'AI Services',
+    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
   },
   'system-relay': {
     title: 'Remote Access',
@@ -37,8 +37,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
   },
   'system-pro': {
-    title: 'Pro',
-    description: 'Manage license activation and Pro feature access.',
+    title: 'Pulse Pro',
+    description: 'Activate your Pro license to unlock auto-fix, alert-triggered AI, and advanced features.',
   },
   'organization-overview': {
     title: 'Organization Overview',
@@ -53,8 +53,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Share resources between organizations with scoped access.',
   },
   'organization-billing': {
-    title: 'Organization Billing',
-    description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
+    title: 'Billing & Plan',
+    description: 'Review your current plan tier, usage against limits, and available upgrade paths.',
   },
   'organization-billing-admin': {
     title: 'Billing Admin',
@@ -75,8 +75,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Manage password-based authentication and credential rotation.',
   },
   'security-sso': {
-    title: 'Single Sign-On',
-    description: 'Configure OIDC providers for team authentication.',
+    title: 'Single Sign-On Providers',
+    description: 'Configure OIDC and SAML identity providers.',
   },
   'security-roles': {
     title: 'Roles',

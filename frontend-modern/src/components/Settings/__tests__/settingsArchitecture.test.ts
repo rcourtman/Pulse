@@ -22,6 +22,7 @@ import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
+import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
 
 const extractedModules = [
   '../settingsTypes.ts',
@@ -82,6 +83,39 @@ const topLevelSettingsPanelSources = {
   RolesPanel: rolesPanelSource,
   UserAssignmentsPanel: userAssignmentsPanelSource,
 } as const;
+
+const canonicalShellTitleExpectations = [
+  {
+    tab: 'system-general',
+    title: 'General',
+    source: generalSettingsPanelSource,
+  },
+  {
+    tab: 'system-ai',
+    title: 'AI Services',
+    source: aiSettingsPanelSource,
+  },
+  {
+    tab: 'system-pro',
+    title: 'Pulse Pro',
+    source: proLicensePanelSource,
+  },
+  {
+    tab: 'organization-billing',
+    title: 'Billing & Plan',
+    source: organizationBillingPanelSource,
+  },
+  {
+    tab: 'security-overview',
+    title: 'Security Overview',
+    source: securityOverviewPanelSource,
+  },
+  {
+    tab: 'security-sso',
+    title: 'Single Sign-On Providers',
+    source: ssoProvidersPanelSource,
+  },
+] as const;
 
 describe('Settings architecture guardrails', () => {
   it('keeps extracted settings modules present on disk', () => {
@@ -177,6 +211,18 @@ describe('Settings architecture guardrails', () => {
       expect(source, `${panelName} should not introduce page-level header chrome`).not.toContain(
         '<PageHeader',
       );
+    }
+  });
+
+  it('keeps shell titles aligned with the leading settings panel on key top-level surfaces', () => {
+    for (const { tab, title, source } of canonicalShellTitleExpectations) {
+      expect(SETTINGS_HEADER_META[tab].title, `${tab} should keep its shell title canonical`).toBe(
+        title,
+      );
+      expect(
+        source,
+        `${tab} should keep its leading SettingsPanel title aligned with the shell title`,
+      ).toContain(`title="${title}"`);
     }
   });
 });

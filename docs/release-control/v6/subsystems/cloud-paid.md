@@ -163,6 +163,11 @@ The Pro license settings surface now follows the same rule as well. Changes to
 contract and the dedicated Pro-license proof file instead of remaining an
 unowned consumer of activation, trial eligibility, entitlement capability, and
 plan-term presentation.
+That owned presentation boundary includes the settings shell itself: the
+top-level Pulse Pro surface must keep its page-shell title and leading
+SettingsPanel title aligned so commercial activation, trial, and pricing state
+do not present as one surface in navigation and a differently named surface in
+the actual paid settings UI.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must

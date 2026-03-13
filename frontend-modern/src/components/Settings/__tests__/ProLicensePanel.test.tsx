@@ -77,6 +77,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseStatusMock).toHaveBeenCalled();
     });
 
+    expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start 14-day pro trial/i })).toBeInTheDocument();
   });
 
