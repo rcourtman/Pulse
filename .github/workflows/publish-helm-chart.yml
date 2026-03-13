@@ -68,20 +68,16 @@ jobs:
       - name: Validate release line policy
         env:
           RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
-          IS_PRERELEASE: ${{ steps.versions.outputs.is_prerelease }}
+          APP_VERSION: ${{ steps.versions.outputs.app_version }}
         run: |
           set -euo pipefail
 
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            REQUIRED_BRANCH="pulse/v6"
-          else
-            REQUIRED_BRANCH="main"
-          fi
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${APP_VERSION}")"
 
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             git fetch --prune --unshallow origin
           fi
-          git fetch --prune origin main pulse/v6 --tags
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
 
           if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
             echo "::error::Tag ${RELEASE_TAG} does not exist. Helm publish must map to a real Git tag."

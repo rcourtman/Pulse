@@ -113,8 +113,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")
         promote = read(".github/workflows/promote-floating-tags.yml")
+        demo = read(".github/workflows/update-demo-server.yml")
+        helm = read(".github/workflows/publish-helm-chart.yml")
+        runbook = read("docs/releases/V6_PRERELEASE_RUNBOOK.md")
+        self.assertIn("control_plane.py --branch-for-version", publish)
+        self.assertIn("control_plane.py --branch-for-version", promote)
+        self.assertIn("control_plane.py --branch-for-version", demo)
+        self.assertIn("control_plane.py --branch-for-version", helm)
         self.assertIn("does not descend from any matching RC tag", publish)
         self.assertIn("does not descend from any matching RC tag", promote)
+        self.assertIn("both stable and prerelease releases dispatch", runbook)
+        self.assertIn("Release `6.0.0` from `pulse/v6`", runbook)
 
 
 if __name__ == "__main__":

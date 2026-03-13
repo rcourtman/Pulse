@@ -47,7 +47,8 @@ jobs:
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             git fetch --prune --unshallow origin
           fi
-          git fetch --prune origin main --tags
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
 
           if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
             echo "::error::Tag ${TAG} does not exist in repository tags."
@@ -55,12 +56,12 @@ jobs:
           fi
 
           TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
-          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/main"; then
-            echo "::error::Tag ${TAG} is not reachable from origin/main. Refusing demo deployment."
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing demo deployment."
             exit 1
           fi
 
-          echo "[OK] ${TAG} validated for stable demo deployment"
+          echo "[OK] ${TAG} validated for stable demo deployment on ${REQUIRED_BRANCH}"
 
       - name: Skip if not latest published release
         id: gate

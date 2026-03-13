@@ -84,16 +84,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "$PRERELEASE" = "true" ]; then
-            REQUIRED_BRANCH="pulse/v6"
-          else
-            REQUIRED_BRANCH="main"
-          fi
+          VERSION="${TAG#v}"
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
 
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             git fetch --prune --unshallow origin
           fi
-          git fetch --prune origin main pulse/v6 --tags
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
 
           if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
             echo "::error::Tag ${TAG} does not exist in repository tags."

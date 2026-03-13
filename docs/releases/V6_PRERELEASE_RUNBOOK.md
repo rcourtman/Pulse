@@ -5,13 +5,16 @@ This runbook captures the branch-specific operational path that was used while
 
 Canonical customer-channel and promotion rules now live in
 `docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`.
+Current release-branch authority lives in
+`docs/release-control/control_plane.json`.
 If this historical runbook and the release-control policy disagree, the
 release-control policy wins.
 
 ## Branch Model (Current)
 
 - `main`: v5 stable (current public/stable line)
-- `pulse/v6`: v6 development and prereleases
+- `pulse/v6`: active v6 prerelease and stable release line until an explicit
+  post-GA branch cutover is governed
 
 Do not move `main` to v6 during prerelease.
 
@@ -20,16 +23,20 @@ Do not move `main` to v6 during prerelease.
 Release workflows now enforce branch/tag lineage rules:
 
 - `Pulse Release Pipeline` (`create-release.yml`)
-  - Stable versions must be dispatched from `main`.
-  - Prerelease versions (`-rc.N`, `-alpha.N`, `-beta.N`) must be dispatched from `pulse/v6`.
-- `publish-docker.yml`, `promote-floating-tags.yml`, and `publish-helm-chart.yml`
-  - Validate the release tag commit is reachable from the expected branch.
-  - Stable tags must be from `main`; prerelease tags must be from `pulse/v6`.
+  - Resolves stable versus prerelease branch requirements from
+    `docs/release-control/control_plane.json`.
+  - For the current v6 profile, both stable and prerelease releases dispatch
+    from `pulse/v6`.
+- `publish-docker.yml`, `promote-floating-tags.yml`, `publish-helm-chart.yml`,
+  and `update-demo-server.yml`
+  - Validate the release tag commit is reachable from the governed branch for
+    that version instead of assuming `main`.
 - `update-demo-server.yml`
   - Accepts stable tags only.
-  - Stable tag must be reachable from `main`.
+  - Stable tag must be reachable from the governed stable branch.
 
-This prevents accidental cross-line releases (for example, cutting stable from `pulse/v6` or prerelease from `main`).
+This prevents accidental cross-line releases from non-governed branches even if
+the stable branch changes later.
 
 ## Important Scope Note
 
@@ -114,16 +121,15 @@ git checkout -b pulse/v5-maintenance
 git push -u origin pulse/v5-maintenance
 ```
 
-2. Promote v6 to `main`:
+2. Keep the governed v6 release line on `pulse/v6` for GA:
 
 ```bash
-git checkout main
-git merge --ff-only pulse/v6
-git push origin main
+git checkout pulse/v6
+git pull --ff-only
 ```
 
-3. Release `6.0.0` from `main` using `Pulse Release Pipeline`.
-   Before the real GA publish, run `Release Dry Run` from `main` with:
+3. Release `6.0.0` from `pulse/v6` using `Pulse Release Pipeline`.
+   Before the real GA publish, run `Release Dry Run` from `pulse/v6` with:
    - `version`: `6.0.0`
    - `promoted_from_tag`: exact RC tag being promoted
    - `rollback_version`: prior stable
@@ -143,6 +149,9 @@ git push origin main
      installer or updater failures, licensing or billing blockers, and safe
      migration blockers are eligible during that window.
    - After that window, v5 is unsupported.
+6. Treat any future move of stable v6 releases away from `pulse/v6` as a
+   separate post-GA governance change; do not assume an automatic cutover to
+   `main`.
 
 ## Rollback Strategy
 
@@ -155,7 +164,7 @@ If an RC is bad:
 
 If GA has a severe regression:
 
-1. Patch quickly on `main` (v6.0.1), or
+1. Patch quickly on `pulse/v6` (v6.0.1), or
 2. Advise affected users to hold at prior stable while fix ships.
 3. Continue v5 emergency fixes from `pulse/v5-maintenance` only if the
    published maintenance-only window is still active or I explicitly announce
