@@ -62,7 +62,7 @@ This file must not contain:
     Canonical stable-versus-RC promotion rules, rollout criteria, and rollback
     expectations for v6 and later release lines.
 11. `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`
-    Canonical v5 maintenance-only support window, release-line rules, and GA
+    Canonical v5 maintenance-only support policy, release-line rules, and GA
     notice requirements for the v6 cutover.
 12. `docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md`
     Canonical human record shape for the non-publish RC-to-GA rehearsal run.
@@ -148,10 +148,22 @@ Assertion design rules:
    alias handling.
 7. Do not ship if a low-privilege user can view, mutate, or destroy beyond the
    permissions granted by their effective org membership and role.
-8. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
-9. Do not keep polishing strong lanes while weak lanes remain behind.
-10. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
-11. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
+8. Do not ship if grandfathered recurring continuity, cancellation revocation,
+   and later re-entry pricing can drift across Stripe, Pulse runtime, and
+   customer-visible billing state.
+9. Do not ship if Pulse Mobile can keep stale access, lose approval state, or
+   fail pairing, reconnect, or auth-transition recovery against a real
+   instance.
+10. Do not ship if relay registration, reconnect, stale-session recovery, or
+    disconnect drain can strand clients in resume loops, dead sessions, or
+    lost inflight work.
+11. Do not ship upgrades that reset paid state, licensing continuity, or
+    first-session flow.
+12. Do not keep polishing strong lanes while weak lanes remain behind.
+13. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+14. Do not promote v6 to stable or GA without an exercised RC, a real
+    release-pipeline proof run, a recorded rollback target, and a written v5
+    maintenance-only support policy.
 
 ## Locked Decisions
 

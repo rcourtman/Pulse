@@ -1323,6 +1323,188 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA16",
+      "summary": "Commercial continuity fails closed across cancellation and re-entry: active grandfathered v5 recurring customers keep their legacy recurring price only while the subscription remains continuous, cancellation revokes paid access cleanly, and any later re-entry uses current public v6 pricing rather than reviving grandfathered terms.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L11",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "release_gate_ids": [
+        "commercial-cancellation-reactivation"
+      ],
+      "proof_commands": [
+        {
+          "id": "commercial-cancellation-reactivation-proof",
+          "run": [
+            "python3",
+            "scripts/release_control/commercial_cancellation_reactivation_proof.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/billing_state_normalization_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/commercial_cancellation_reactivation_proof.py",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA17",
+      "summary": "Pulse Mobile access stays coherent against a real Pulse instance: pairing, secure persistence, relay reconnect, approval flows, and auth or revocation transitions recover cleanly and fail closed instead of leaving stale mobile access behind.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L5",
+        "L6",
+        "L7",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "relay-runtime"
+      ],
+      "release_gate_ids": [
+        "mobile-relay-auth-approvals"
+      ],
+      "proof_commands": [
+        {
+          "id": "mobile-relay-auth-approvals-proof",
+          "run": [
+            "python3",
+            "scripts/release_control/mobile_relay_auth_approvals_proof.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/mobile-relay-auth-approvals-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/mobile_relay_auth_approvals_proof.py",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-enterprise",
+          "path": "internal/aiautofix/handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/__tests__/mobileRelayAuthApprovals.rehearsal.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/hooks/__tests__/useRelayLifecycle.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/stores/__tests__/approvalStore.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/stores/__tests__/authStore.test.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA18",
+      "summary": "Relay runtime remains resilient under registration and reconnect pressure: fresh registration, reconnect, stale-session recovery, and disconnect drain all recover predictably without stranding clients in resume loops, dead sessions, or lost inflight work.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L5",
+        "L6",
+        "L7",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "relay-runtime"
+      ],
+      "release_gate_ids": [
+        "relay-registration-reconnect-drain"
+      ],
+      "proof_commands": [
+        {
+          "id": "relay-registration-reconnect-drain-proof",
+          "run": [
+            "python3",
+            "scripts/release_control/relay_registration_reconnect_drain_proof.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/relay/client_e2e_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/relay_registration_reconnect_drain_proof.py",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/relay/__tests__/client-hardening.test.ts",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
