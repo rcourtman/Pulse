@@ -1740,6 +1740,23 @@ def audit_status_payload(
         ),
         key=lambda entry: (-entry["blocker_count"], str(entry["subsystem_id"]).casefold()),
     )
+    lane_residuals = sorted(
+        (
+            {
+                "lane_id": lane["id"],
+                "lane_name": lane["name"],
+                "summary": lane["completion_summary"],
+                "tracking": [
+                    f"{tracking['kind']}:{tracking['id']}" for tracking in lane["completion_tracking"]
+                ],
+                "repo_ids": list(lane["repo_ids"]),
+                "subsystem_ids": list(lane["subsystems"]),
+            }
+            for lane in lane_reports
+            if lane["completion_state"] == "bounded-residual"
+        ),
+        key=lambda item: _lane_sort_key(str(item["lane_id"])),
+    )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)
@@ -1916,6 +1933,7 @@ def audit_status_payload(
                 "release_gates": current_target_release_gate_blockers,
             },
             "current_target_workstreams": current_target_workstreams,
+            "lane_residuals": lane_residuals,
             "rc_blockers": rc_blockers,
             "rc_blocker_details": rc_blocker_details,
             "release_blockers": release_blockers,
@@ -2125,6 +2143,18 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"proofs={','.join(workstream['proof_command_ids']) or '-'} "
                 f"repos={','.join(workstream['repo_ids']) or '-'}"
             )
+    lane_residuals = readiness.get("lane_residuals", [])
+    if lane_residuals:
+        lines.append("lane_residuals:")
+        for residual in lane_residuals:
+            lines.append(
+                f"  - {residual['lane_id']} "
+                f"tracking={','.join(residual['tracking']) or '-'} "
+                f"repos={','.join(residual['repo_ids']) or '-'} "
+                f"subsystems={','.join(residual['subsystem_ids']) or '-'}"
+            )
+            if residual.get("summary"):
+                lines.append(f"    {residual['summary']}")
     if readiness.get("rc_blockers"):
         lines.append("rc_blockers:")
         for blocker in readiness["rc_blockers"]:

@@ -586,6 +586,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("overclosed_release_gates=0", pretty)
             self.assertIn("release_gates:", pretty)
             self.assertIn("effective=pending", pretty)
+            self.assertNotIn("lane_residuals:", pretty)
             self.assertNotIn("overclosed_release_gates:", pretty)
             self.assertIn("current_target_blockers:", pretty)
             self.assertNotIn("current_target_workstreams:", pretty)
@@ -884,6 +885,47 @@ class StatusAuditTest(unittest.TestCase):
                 "lanes[L1].completion.tracking readiness assertion 'RA2' does not reference that lane",
                 report["errors"],
             )
+
+    def test_bounded_residual_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane still has a governed residual.",
+                completion_tracking=[{"kind": "target", "id": "v6-rc-stabilization"}],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["lane_residuals"],
+                [
+                    {
+                        "lane_id": "L1",
+                        "lane_name": "Lane 1",
+                        "summary": "Lane still has a governed residual.",
+                        "tracking": ["target:v6-rc-stabilization"],
+                        "repo_ids": ["pulse"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("lane_residuals:", pretty)
+            self.assertIn("L1 tracking=target:v6-rc-stabilization", pretty)
+            self.assertIn("Lane still has a governed residual.", pretty)
 
 
 if __name__ == "__main__":
