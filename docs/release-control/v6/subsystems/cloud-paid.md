@@ -220,6 +220,13 @@ control plane may bind-mount billing and handoff files into `/etc/pulse` as
 read-only inputs, but runtime startup ownership repair must treat those paths
 as immutable and skip `chown` attempts against them instead of aborting tenant
 provisioning.
+That same immutable-file boundary now also owns write-time runtime ownership:
+control-plane provisioning and later billing-state rewrites must leave
+`billing.json`, `secrets/handoff.key`, and `.cloud_handoff_key` readable by
+the tenant Pulse runtime user at the moment they are written. Fixing startup
+`chown` behavior alone is not enough if the mounted files stay `root:root`
+after provisioning, because hosted auth handoff and hosted lease reads will
+then fail closed inside an otherwise healthy tenant.
 JWT-backed entitlement claim evaluation and activation-grant translation now
 follow the same explicit proof model instead of relying only on the broad cloud
 runtime catch-all policy.

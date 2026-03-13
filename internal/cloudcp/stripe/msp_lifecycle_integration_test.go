@@ -32,6 +32,14 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	var chowned []string
+	provisioner.chownFile = func(path string, uid, gid int) error {
+		chowned = append(chowned, path)
+		if uid != hostedTenantRuntimeUID || gid != hostedTenantRuntimeGID {
+			t.Fatalf("unexpected hosted runtime ownership target uid=%d gid=%d", uid, gid)
+		}
+		return nil
+	}
 
 	// ── Phase 1: MSP account creation ──────────────────────────────────
 
@@ -119,6 +127,20 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if raw.SubscriptionState != "" || len(raw.Capabilities) != 0 {
 			t.Fatalf("workspace %s: expected raw lease-only state, got %+v", ws.ID, raw)
 		}
+	}
+	wantOwnership := map[string]bool{
+		filepath.Join(tenantsDir, ws1.ID, "billing.json"):           true,
+		filepath.Join(tenantsDir, ws1.ID, ".cloud_handoff_key"):     true,
+		filepath.Join(tenantsDir, ws1.ID, "secrets", "handoff.key"): true,
+		filepath.Join(tenantsDir, ws2.ID, "billing.json"):           true,
+		filepath.Join(tenantsDir, ws2.ID, ".cloud_handoff_key"):     true,
+		filepath.Join(tenantsDir, ws2.ID, "secrets", "handoff.key"): true,
+	}
+	for _, path := range chowned {
+		delete(wantOwnership, path)
+	}
+	if len(wantOwnership) != 0 {
+		t.Fatalf("missing hosted runtime ownership paths: %v", wantOwnership)
 	}
 
 	// Verify listing returns both workspaces.

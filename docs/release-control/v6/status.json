@@ -867,6 +867,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-followup-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -2200,6 +2205,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-followup-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }

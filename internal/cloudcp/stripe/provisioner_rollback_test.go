@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
@@ -145,6 +146,104 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 	}
 	if created.State != registry.TenantStateActive {
 		t.Fatalf("state = %q, want %q", created.State, registry.TenantStateActive)
+	}
+}
+
+func TestProvisionWorkspaceSetsHostedRuntimeOwnershipForImmutableFiles(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:            accountID,
+		PlanVersion:          "msp_starter",
+		SubscriptionState:    "active",
+		StripeCustomerID:     "cus_test_msp_owned",
+		StripeSubscriptionID: "sub_test_msp_owned",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	var chowned []string
+	p.chownFile = func(path string, uid, gid int) error {
+		chowned = append(chowned, path)
+		if uid != hostedTenantRuntimeUID || gid != hostedTenantRuntimeGID {
+			t.Fatalf("unexpected hosted runtime ownership target uid=%d gid=%d", uid, gid)
+		}
+		return nil
+	}
+
+	tenant, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One")
+	if err != nil {
+		t.Fatalf("ProvisionWorkspace: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(tenantsDir, tenant.ID, "billing.json"):           true,
+		filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):     true,
+		filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"): true,
+	}
+	for _, path := range chowned {
+		delete(want, path)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing hosted runtime ownership paths: %v", want)
+	}
+}
+
+func TestHandleCheckoutSetsHostedRuntimeOwnershipForImmutableFiles(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	var chowned []string
+	p.chownFile = func(path string, uid, gid int) error {
+		chowned = append(chowned, path)
+		if uid != hostedTenantRuntimeUID || gid != hostedTenantRuntimeGID {
+			t.Fatalf("unexpected hosted runtime ownership target uid=%d gid=%d", uid, gid)
+		}
+		return nil
+	}
+
+	session := CheckoutSession{
+		Customer:      "cus_checkout_owned",
+		Subscription:  "sub_checkout_owned",
+		CustomerEmail: "owner@example.com",
+		Metadata:      map[string]string{"plan_version": "cloud_starter"},
+	}
+	if err := p.HandleCheckout(context.Background(), session); err != nil {
+		t.Fatalf("HandleCheckout: %v", err)
+	}
+
+	tenant, err := reg.GetByStripeCustomerID(session.Customer)
+	if err != nil {
+		t.Fatalf("GetByStripeCustomerID: %v", err)
+	}
+	if tenant == nil {
+		t.Fatal("expected tenant to exist after checkout")
+	}
+
+	want := map[string]bool{
+		filepath.Join(tenantsDir, tenant.ID, "billing.json"):           true,
+		filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):     true,
+		filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"): true,
+	}
+	for _, path := range chowned {
+		delete(want, path)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing hosted runtime ownership paths: %v", want)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -68,6 +69,14 @@ func TestCloudLifecycle_CheckoutToBillingToAgentLimits(t *testing.T) {
 			reg := newStripeTestRegistry(t)
 			tenantsDir := t.TempDir()
 			provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
+			var chowned []string
+			provisioner.chownFile = func(path string, uid, gid int) error {
+				chowned = append(chowned, path)
+				if uid != hostedTenantRuntimeUID || gid != hostedTenantRuntimeGID {
+					t.Fatalf("unexpected hosted runtime ownership target uid=%d gid=%d", uid, gid)
+				}
+				return nil
+			}
 
 			// Build checkout session with metadata or price-based resolution.
 			session := CheckoutSession{
@@ -172,6 +181,18 @@ func TestCloudLifecycle_CheckoutToBillingToAgentLimits(t *testing.T) {
 			}
 			if raw.SubscriptionState != "" || len(raw.Capabilities) != 0 {
 				t.Fatalf("expected raw lease-only state (no SubscriptionState/Capabilities), got sub_state=%q caps=%v", raw.SubscriptionState, raw.Capabilities)
+			}
+
+			wantOwnership := map[string]bool{
+				filepath.Join(tenantsDir, tenant.ID, "billing.json"):           true,
+				filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):     true,
+				filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"): true,
+			}
+			for _, path := range chowned {
+				delete(wantOwnership, path)
+			}
+			if len(wantOwnership) != 0 {
+				t.Fatalf("missing hosted runtime ownership paths: %v", wantOwnership)
 			}
 		})
 	}

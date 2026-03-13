@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ type Provisioner struct {
 	emailFrom                 string
 	trialActivationPrivateKey string
 	hostedEntitlements        *entitlements.Service
+	chownFile                 func(string, int, int) error
 }
 
 type ProvisionerOption func(*Provisioner)
@@ -75,6 +77,7 @@ func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *
 		allowDockerless: allowDockerless,
 		emailSender:     emailSender,
 		emailFrom:       strings.TrimSpace(emailFrom),
+		chownFile:       os.Chown,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -86,6 +89,15 @@ func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *
 	}
 	return p
 }
+
+const (
+	// Hosted tenant containers run the Pulse process as the `pulse` user, which
+	// is currently UID/GID 1000 in the shipped image. Immutable hosted files
+	// must be owned for that runtime user at write time because startup chown is
+	// intentionally skipped for those mounts.
+	hostedTenantRuntimeUID = 1000
+	hostedTenantRuntimeGID = 1000
+)
 
 func (p *Provisioner) tenantDataDir(tenantID string) string {
 	return filepath.Join(p.tenantsDir, tenantID)
@@ -112,6 +124,9 @@ func (p *Provisioner) writeHandoffKey(secretsDir string) error {
 	if err := os.WriteFile(path, key, 0o600); err != nil {
 		return fmt.Errorf("write handoff key: %w", err)
 	}
+	if err := p.ensureHostedRuntimeFileOwnership(path); err != nil {
+		return fmt.Errorf("set handoff key ownership: %w", err)
+	}
 	return nil
 }
 
@@ -123,6 +138,26 @@ func (p *Provisioner) writeCloudHandoffKey(tenantDataDir string) error {
 	path := filepath.Join(tenantDataDir, cloudauth.HandoffKeyFile)
 	if err := os.WriteFile(path, key, 0o600); err != nil {
 		return fmt.Errorf("write cloud handoff key: %w", err)
+	}
+	if err := p.ensureHostedRuntimeFileOwnership(path); err != nil {
+		return fmt.Errorf("set cloud handoff key ownership: %w", err)
+	}
+	return nil
+}
+
+func (p *Provisioner) ensureHostedRuntimeFileOwnership(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("path is required")
+	}
+	chownFile := p.chownFile
+	if chownFile == nil {
+		chownFile = os.Chown
+	}
+	if os.Geteuid() != 0 && reflect.ValueOf(chownFile).Pointer() == reflect.ValueOf(os.Chown).Pointer() {
+		return nil
+	}
+	if err := chownFile(path, hostedTenantRuntimeUID, hostedTenantRuntimeGID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -229,6 +264,9 @@ func (p *Provisioner) writeBillingState(tenantDataDir string, state *pkglicensin
 	billingStore := config.NewFileBillingStore(tenantDataDir)
 	if err := billingStore.SaveBillingState("default", state); err != nil {
 		return fmt.Errorf("write billing state: %w", err)
+	}
+	if err := p.ensureHostedRuntimeFileOwnership(filepath.Join(tenantDataDir, "billing.json")); err != nil {
+		return fmt.Errorf("set billing state ownership: %w", err)
 	}
 	return nil
 }
