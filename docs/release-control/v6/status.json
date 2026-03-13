@@ -152,6 +152,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-production-fixed-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
           "kind": "file"
         },
@@ -1638,15 +1643,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial conversion surfaces are at the RC floor, but real checkout, billing replay, and cancellation/reactivation proof still gate broader lane closure.",
+        "summary": "Commercial conversion surfaces are at the RC floor, but real cancellation/reactivation continuity proof still gates broader lane closure.",
         "tracking": [
           {
             "kind": "release-gate",
             "id": "commercial-cancellation-reactivation"
-          },
-          {
-            "kind": "release-gate",
-            "id": "hosted-signup-billing-replay"
           }
         ]
       },
@@ -1682,15 +1683,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but hosted signup/billing replay and commercial continuity proof remain the governed residual gaps.",
+        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but real commercial continuity proof remains the governed residual gap.",
         "tracking": [
           {
             "kind": "release-gate",
             "id": "commercial-cancellation-reactivation"
-          },
-          {
-            "kind": "release-gate",
-            "id": "hosted-signup-billing-replay"
           }
         ]
       },
@@ -1720,16 +1717,11 @@
       "name": "Hosted MSP readiness",
       "target_score": 6,
       "current_score": 6,
-      "status": "partial",
+      "status": "target-met",
       "completion": {
-        "state": "bounded-residual",
-        "summary": "Hosted MSP support is at the current tracked floor for tenant-management behavior, but hosted commercial signup and billing replay confidence still remains bounded by the shared hosted signup/billing replay proof.",
-        "tracking": [
-          {
-            "kind": "release-gate",
-            "id": "hosted-signup-billing-replay"
-          }
-        ]
+        "state": "complete",
+        "summary": "Hosted MSP support is at the current tracked RC floor, including real tenant-management behavior and the shared hosted commercial replay proof.",
+        "tracking": []
       },
       "subsystems": [],
       "evidence": [
@@ -2124,12 +2116,8 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The end-to-end journey suite covers the RC floor, but remaining hosted signup/billing replay and RC-to-GA promotion journeys stay as governed residual proof work.",
+        "summary": "The end-to-end journey suite covers the RC floor, while RC-to-GA promotion remains the only shared residual proof track.",
         "tracking": [
-          {
-            "kind": "release-gate",
-            "id": "hosted-signup-billing-replay"
-          },
           {
             "kind": "release-gate",
             "id": "rc-to-ga-promotion-readiness"
@@ -2268,7 +2256,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
@@ -2286,6 +2274,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/hosted-signup-billing-replay-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-production-fixed-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }

@@ -63,7 +63,7 @@ Companion drill:
   fail-closed before linkage and succeeds after linkage, and the UI shows the
   resulting state coherently.
 - Latest exercised record:
-  `docs/release-control/v6/records/hosted-signup-billing-replay-production-2026-03-13.md`
+  `docs/release-control/v6/records/hosted-signup-billing-replay-production-fixed-2026-03-13.md`
 - Block release if:
   Any hosted checkout, org linkage, magic-link, billing-admin, or webhook
   replay path is unconfirmed or inconsistent.
