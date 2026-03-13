@@ -799,6 +799,8 @@ def audit_lanes(
             )
         if not at_target and completion_state != "open":
             errors.append(f"{context} lanes below target_score must use completion.state='open'")
+        if completion_state == "open" and completion_tracking:
+            errors.append(f"{context} open lanes must not declare residual tracking references")
         if completion_state == "bounded-residual" and not completion_tracking:
             errors.append(f"{context} bounded-residual completion must declare at least one tracking reference")
         if completion_state == "complete" and completion_tracking:

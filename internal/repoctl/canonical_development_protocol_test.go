@@ -788,6 +788,12 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if !ok {
 			t.Fatalf("status.json lane %q missing completion.tracking list", laneID)
 		}
+		if completionState == "open" && len(rawTracking) != 0 {
+			t.Fatalf("status.json lane %q must not declare completion.tracking while completion.state is open", laneID)
+		}
+		if completionState == "complete" && len(rawTracking) != 0 {
+			t.Fatalf("status.json lane %q must not declare completion.tracking while completion.state is complete", laneID)
+		}
 		for _, rawTrackingRef := range rawTracking {
 			trackingRef, ok := rawTrackingRef.(map[string]any)
 			if !ok {

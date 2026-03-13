@@ -738,6 +738,32 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_open_lane_must_not_declare_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=6,
+                        completion_state="open",
+                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] open lanes must not declare residual tracking references",
+                report["errors"],
+            )
+
     def test_bounded_residual_lane_rejects_unrelated_release_gate_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
