@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -30,6 +31,8 @@ type Manager struct {
 	cli *client.Client
 	cfg ManagerConfig
 }
+
+const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
 
 // NewManager creates a Docker manager connected to the local daemon.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
@@ -63,10 +66,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		&container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env: []string{
-				"PULSE_DATA_DIR=/etc/pulse",
-				"PULSE_HOSTED_MODE=true",
-			},
+			Env:    tenantEnv(),
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -74,31 +74,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 				Memory:    m.cfg.MemoryLimit,
 				CPUShares: m.cfg.CPUShares,
 			},
-			Mounts: []mount.Mount{
-				{
-					Type:   mount.TypeBind,
-					Source: tenantDataDir,
-					Target: "/etc/pulse",
-				},
-				{
-					Type:     mount.TypeBind,
-					Source:   filepath.Join(tenantDataDir, "billing.json"),
-					Target:   "/etc/pulse/billing.json",
-					ReadOnly: true,
-				},
-				{
-					Type:     mount.TypeBind,
-					Source:   filepath.Join(tenantDataDir, "secrets", "handoff.key"),
-					Target:   "/etc/pulse/secrets/handoff.key",
-					ReadOnly: true,
-				},
-				{
-					Type:     mount.TypeBind,
-					Source:   filepath.Join(tenantDataDir, ".cloud_handoff_key"),
-					Target:   "/etc/pulse/.cloud_handoff_key",
-					ReadOnly: true,
-				},
-			},
+			Mounts: tenantMounts(tenantDataDir),
 		},
 		&network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -123,6 +99,50 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		Msg("Tenant container started")
 
 	return resp.ID, nil
+}
+
+func tenantImmutableOwnershipPaths() []string {
+	return []string{
+		"/etc/pulse/billing.json",
+		"/etc/pulse/secrets/handoff.key",
+		"/etc/pulse/.cloud_handoff_key",
+	}
+}
+
+func tenantEnv() []string {
+	return []string{
+		"PULSE_DATA_DIR=/etc/pulse",
+		"PULSE_HOSTED_MODE=true",
+		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
+	}
+}
+
+func tenantMounts(tenantDataDir string) []mount.Mount {
+	return []mount.Mount{
+		{
+			Type:   mount.TypeBind,
+			Source: tenantDataDir,
+			Target: "/etc/pulse",
+		},
+		{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(tenantDataDir, "billing.json"),
+			Target:   "/etc/pulse/billing.json",
+			ReadOnly: true,
+		},
+		{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(tenantDataDir, "secrets", "handoff.key"),
+			Target:   "/etc/pulse/secrets/handoff.key",
+			ReadOnly: true,
+		},
+		{
+			Type:     mount.TypeBind,
+			Source:   filepath.Join(tenantDataDir, ".cloud_handoff_key"),
+			Target:   "/etc/pulse/.cloud_handoff_key",
+			ReadOnly: true,
+		},
+	}
 }
 
 // Stop stops a tenant container gracefully.

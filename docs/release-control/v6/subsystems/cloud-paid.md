@@ -215,6 +215,11 @@ Hosted control-plane plan resolution is now part of the enforced ownership
 model: changes to hosted entitlement issuance, control-plane registry
 canonicalization, or Stripe provisioning plan resolution must carry this
 contract and the path-specific proof files that verify those boundaries.
+Hosted tenant container bootstrap is part of that same boundary as well: the
+control plane may bind-mount billing and handoff files into `/etc/pulse` as
+read-only inputs, but runtime startup ownership repair must treat those paths
+as immutable and skip `chown` attempts against them instead of aborting tenant
+provisioning.
 JWT-backed entitlement claim evaluation and activation-grant translation now
 follow the same explicit proof model instead of relying only on the broad cloud
 runtime catch-all policy.

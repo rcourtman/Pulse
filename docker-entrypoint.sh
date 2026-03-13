@@ -4,6 +4,49 @@ set -e
 # Default UID/GID if not provided
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
+PULSE_IMMUTABLE_OWNERSHIP_PATHS=${PULSE_IMMUTABLE_OWNERSHIP_PATHS:-}
+
+is_immutable_ownership_path() {
+    target="$1"
+    [ -n "$target" ] || return 1
+
+    old_ifs=$IFS
+    IFS=:
+    set -- $PULSE_IMMUTABLE_OWNERSHIP_PATHS
+    IFS=$old_ifs
+
+    for path in "$@"; do
+        if [ -n "$path" ] && [ "$path" = "$target" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+chown_tree_skipping_immutable_paths() {
+    owner="$1"
+    root="$2"
+
+    if [ ! -e "$root" ]; then
+        return 0
+    fi
+
+    if [ -z "$PULSE_IMMUTABLE_OWNERSHIP_PATHS" ]; then
+        chown -R "$owner" "$root"
+        return 0
+    fi
+
+    find "$root" -mindepth 1 | while IFS= read -r path; do
+        if is_immutable_ownership_path "$path"; then
+            echo "Skipping immutable ownership path: $path"
+            continue
+        fi
+        chown "$owner" "$path"
+    done
+
+    chown "$owner" "$root"
+}
 
 # Only adjust permissions if running as root
 if [ "$(id -u)" = "0" ]; then
@@ -13,7 +56,8 @@ if [ "$(id -u)" = "0" ]; then
     if [ "$PUID" = "0" ]; then
         echo "Running as root user"
         # Fix ownership to root
-        chown -R root:root /data /app /etc/pulse /opt/pulse
+        chown -R root:root /data /app /opt/pulse
+        chown_tree_skipping_immutable_paths root:root /etc/pulse
         exec "$@"
     fi
     
@@ -33,7 +77,8 @@ if [ "$(id -u)" = "0" ]; then
     fi
     
     # Fix ownership of data directory
-    chown -R pulse:pulse /data /app /etc/pulse /opt/pulse
+    chown -R pulse:pulse /data /app /opt/pulse
+    chown_tree_skipping_immutable_paths pulse:pulse /etc/pulse
     
     # Switch to pulse user
     exec su-exec pulse "$@"
