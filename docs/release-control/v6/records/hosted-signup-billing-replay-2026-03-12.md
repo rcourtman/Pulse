@@ -55,6 +55,8 @@
 - Magic-link request flow remains available on the hosted public surface.
 - Stripe webhook handling fails closed before org linkage exists and succeeds on replay once the linked org exists.
 - Billing-admin state reflects the resulting trial and active subscription states coherently after both hosted signup and replayed checkout completion.
+- This remains `local-rehearsal` evidence because the full journey was exercised on a localhost hosted-mode runtime rather than the real external hosted checkout and webhook path.
+- The gate therefore remains pending until the same replay path is proven against the real external hosted surface.
 
 ## Notes
 

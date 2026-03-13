@@ -128,6 +128,8 @@ Observed:
   - Active monthly and annual grandfathered recurring subscriptions preserved their legacy price identity while active.
   - Completed cancellation removed paid access and removed the grandfathered continuity notice from the Pulse settings surface.
   - Post-cancel return flows landed on current public v6 monthly and annual prices with `plan_version=pro`, not `v5_pro_*_grandfathered`.
+  - This remains `managed-runtime-exercise` evidence because the proof used Stripe sandbox plus a local hosted-mode Pulse runtime, with a few portal and checkout steps falling back to the Stripe API equivalent in headless mode.
+  - The gate therefore remains pending until the same journey is exercised as a real external end-to-end browser flow.
 
 ## Evidence Captured
 

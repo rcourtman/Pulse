@@ -102,7 +102,9 @@
 - Hosted billing/admin and tenant-scoped entitlements reflect coherent hosted trial state after provisioning.
 - The post-provisioning tenant path lands in hosted entitlements (`hosted_mode=true`, valid trial state) instead of falling back to a self-hosted expired/free posture.
 - Privileged hosted admin surfaces remain protected while still functioning correctly for the platform admin.
-- Re-exercising the gate after it was reopened produced the same result on the persisted hosted runtime, so the pending status was no longer justified.
+- Re-exercising the gate after it was reopened produced the same result on the persisted hosted runtime, so the localhost hosted rehearsal remains valid supporting evidence.
+- This evidence is still below the gate's required `real-external-e2e` threshold because it was exercised on a live localhost hosted-mode runtime, not on the real external hosted service.
+- The gate therefore remains pending until the same flow is exercised on the real external hosted tier.
 
 ## Notes
 
