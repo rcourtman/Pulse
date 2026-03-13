@@ -808,7 +808,9 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/Settings.tsx",
+        "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
         "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
         "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
       ],
@@ -846,7 +848,9 @@
             "label": "settings shell framing proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/Settings.tsx",
+              "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
               "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
               "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
             ],

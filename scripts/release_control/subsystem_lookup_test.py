@@ -253,6 +253,34 @@ class SubsystemLookupTest(unittest.TestCase):
             ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
         )
 
+    def test_lookup_paths_assigns_network_settings_panel_to_frontend_primitives(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"frontend-primitives"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "settings-shell-and-framing",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+        )
+
     def test_lookup_paths_assigns_organization_sharing_panel_to_organization_settings(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

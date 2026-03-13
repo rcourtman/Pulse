@@ -1,5 +1,4 @@
 import { Component, Show, For, Accessor, Setter } from 'solid-js';
-import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
@@ -50,47 +49,41 @@ interface NetworkSettingsPanelProps {
 
 export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props) => {
   return (
-    <div class="space-y-6">
-      {/* Info Card */}
-      <Card
-        tone="info"
-        padding="md"
-        border={false}
-        class="border border-blue-200 dark:border-blue-800"
-      >
-        <div class="flex items-start gap-3">
-          <svg
-            class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div class="text-sm text-blue-800 dark:text-blue-200">
-            <p class="font-medium mb-1">Configuration Priority</p>
-            <ul class="space-y-1">
-              <li>• Some env vars override settings (PORTS, AUTH)</li>
-              <li>• Changes made here are saved to system.json immediately</li>
-              <li>• Settings persist unless overridden by env vars</li>
-            </ul>
+    <SettingsPanel
+      title="Network"
+      description="Configure discovery, CORS, embedding, and webhook network boundaries."
+      icon={<Network class="w-5 h-5" strokeWidth={2} />}
+      noPadding
+      bodyClass="divide-y divide-border"
+    >
+      <div class="p-4 sm:p-6">
+        <div class="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 p-4">
+          <div class="flex items-start gap-3">
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div class="text-sm text-blue-800 dark:text-blue-200">
+              <p class="font-medium mb-1">Configuration priority</p>
+              <ul class="space-y-1">
+                <li>• Some environment variables still override these settings.</li>
+                <li>• Changes made here are written to `system.json` immediately.</li>
+                <li>• Settings persist until an environment override replaces them.</li>
+              </ul>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
 
-      {/* Main Network Card */}
-      <SettingsPanel
-        title="Network"
-        description="Configure discovery, CORS, embedding, and webhook network boundaries."
-        icon={<Network class="w-5 h-5" strokeWidth={2} />}
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
         {/* Network Discovery Section */}
         <section class="p-4 sm:p-6 space-y-5">
           <SectionHeader
@@ -652,7 +645,6 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
             </p>
           </Card>
         </div>
-      </SettingsPanel>
-    </div>
+    </SettingsPanel>
   );
 };

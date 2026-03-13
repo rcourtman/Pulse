@@ -697,6 +697,30 @@ index 1111111..2222222 100644
             ],
         )
 
+    def test_frontend_primitive_network_settings_shell_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
+        requirements = build_verification_requirements(
+            rule,
+            ["frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "settings-shell-and-framing",
+                    "label": "settings shell framing proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                    ],
+                }
+            ],
+        )
+
     def test_cloud_paid_entitlement_lease_uses_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
         requirements = build_verification_requirements(

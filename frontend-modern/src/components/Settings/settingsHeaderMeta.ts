@@ -16,7 +16,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Manage appearance, layout, and default monitoring cadence.',
   },
   'system-network': {
-    title: 'Network Settings',
+    title: 'Network',
     description: 'Configure discovery, CORS, embedding, and webhook network boundaries.',
   },
   'system-updates': {

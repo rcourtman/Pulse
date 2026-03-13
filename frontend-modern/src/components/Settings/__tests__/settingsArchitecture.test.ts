@@ -91,6 +91,11 @@ const canonicalShellTitleExpectations = [
     source: generalSettingsPanelSource,
   },
   {
+    tab: 'system-network',
+    title: 'Network',
+    source: networkSettingsPanelSource,
+  },
+  {
     tab: 'system-ai',
     title: 'AI Services',
     source: aiSettingsPanelSource,
