@@ -13,11 +13,11 @@
    `pulse/v6`.
 4. The active control-plane target is still `v6-rc-stabilization`, not
    `v6-ga-promotion`.
-5. The active local `pulse/v6` branch currently reports `VERSION=6.0.0`, so a
-   local GA candidate exists even though the control plane is still explicitly
-   treating v6 as an RC-stabilization line.
+5. The active local `pulse/v6` branch currently reports `VERSION=6.0.0-rc.2`, so the
+   working line is still prerelease and there is not yet a governed local stable
+   `6.0.0` candidate.
 6. There is still no governed `RC-to-GA Rehearsal Record` proving a successful
-   non-publish `Release Dry Run` for the current `6.0.0` candidate.
+   non-publish `Release Dry Run` for the eventual stable `6.0.0` candidate.
 7. `docs/releases/RELEASE_NOTES_v6.md` and
    `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` already carry the
    exact governed dates:
@@ -33,8 +33,9 @@
 ## Why The Gate Cannot Be Cleared Yet
 
 The blocker is no longer missing governance text. The remaining problem is that
-the control plane still treats v6 as an RC-stabilization line, and there is
-still no exercised `Release Dry Run` record proving the exact `6.0.0`
+the control plane still treats v6 as an RC-stabilization line, the working
+version is still prerelease (`6.0.0-rc.2`), and there is still no exercised
+`Release Dry Run` record proving the eventual stable `6.0.0`
 candidate is ready for GA-style promotion. Until that rehearsal exists, stable
 users would still be the first real cohort for the final promotion path.
 
@@ -42,8 +43,9 @@ users would still be the first real cohort for the final promotion path.
 
 1. Promote the active target from `v6-rc-stabilization` to
    `v6-ga-promotion` only when that change is actually intended.
-2. Push the governed `pulse/v6` branch state, including the current
-   `VERSION=6.0.0` candidate and release-control records, to `origin/pulse/v6`.
+2. Push the governed `pulse/v6` branch state that is intended to become the
+   stable `6.0.0` candidate, including the eventual `VERSION=6.0.0`
+   change and release-control records, to `origin/pulse/v6`.
 3. Run `Release Dry Run` from `pulse/v6` with:
    - `version=6.0.0`
    - `promoted_from_tag=v6.0.0-rc.1`

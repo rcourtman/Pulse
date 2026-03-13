@@ -15,6 +15,7 @@ from repo_file_io import REPO_ROOT, git_env, read_repo_text
 
 GA_DATE_RE = re.compile(r"Pulse v5 entered maintenance-only support on `(\d{4}-\d{2}-\d{2})`\.")
 V5_EOS_RE = re.compile(r"existing v5 users until `(\d{4}-\d{2}-\d{2})`\.")
+PRERELEASE_RE = re.compile(r"^(?P<stable>\d+\.\d+\.\d+)-(?:rc|alpha|beta)\.\d+$")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -72,6 +73,13 @@ def latest_matching_rc_tag(version: str) -> str:
     return tags[-1]
 
 
+def stable_candidate_version(version: str) -> str:
+    match = PRERELEASE_RE.match(version)
+    if match:
+        return str(match.group("stable"))
+    return version
+
+
 def parse_release_dates() -> tuple[str, str]:
     content = read("docs/releases/RELEASE_NOTES_v6.md")
     ga_match = GA_DATE_RE.search(content)
@@ -84,13 +92,56 @@ def parse_release_dates() -> tuple[str, str]:
 def build_blocked_record(*, record_date: str) -> str:
     control_plane = read_json("docs/release-control/control_plane.json")
     version = read("VERSION").strip()
+    stable_version = stable_candidate_version(version)
+    version_is_prerelease = stable_version != version
     active_profile = next(
         profile for profile in control_plane["profiles"] if profile["id"] == control_plane["active_profile_id"]
     )
     active_target_id = str(control_plane["active_target_id"])
-    rc_tag = latest_matching_rc_tag(version)
+    rc_tag = latest_matching_rc_tag(stable_version)
     rc_commit = _run_git("rev-parse", rc_tag)
     ga_date, v5_eos_date = parse_release_dates()
+
+    if version_is_prerelease:
+        version_fact_lines = [
+            f"5. The active local `pulse/v6` branch currently reports `VERSION={version}`, so the",
+            f"   working line is still prerelease and there is not yet a governed local stable",
+            f"   `{stable_version}` candidate.",
+            "6. There is still no governed `RC-to-GA Rehearsal Record` proving a successful",
+            f"   non-publish `Release Dry Run` for the eventual stable `{stable_version}` candidate.",
+        ]
+        why_lines = [
+            "The blocker is no longer missing governance text. The remaining problem is that",
+            "the control plane still treats v6 as an RC-stabilization line, the working",
+            f"version is still prerelease (`{version}`), and there is still no exercised",
+            f"`Release Dry Run` record proving the eventual stable `{stable_version}`",
+            "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
+            "users would still be the first real cohort for the final promotion path.",
+        ]
+        step_two_lines = [
+            "2. Push the governed `pulse/v6` branch state that is intended to become the",
+            f"   stable `{stable_version}` candidate, including the eventual `VERSION={stable_version}`",
+            "   change and release-control records, to `origin/pulse/v6`.",
+        ]
+    else:
+        version_fact_lines = [
+            f"5. The active local `pulse/v6` branch currently reports `VERSION={version}`, so a",
+            "   local GA candidate exists even though the control plane is still explicitly",
+            "   treating v6 as an RC-stabilization line.",
+            "6. There is still no governed `RC-to-GA Rehearsal Record` proving a successful",
+            f"   non-publish `Release Dry Run` for the current `{version}` candidate.",
+        ]
+        why_lines = [
+            "The blocker is no longer missing governance text. The remaining problem is that",
+            "the control plane still treats v6 as an RC-stabilization line, and there is",
+            f"still no exercised `Release Dry Run` record proving the exact `{version}`",
+            "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
+            "users would still be the first real cohort for the final promotion path.",
+        ]
+        step_two_lines = [
+            "2. Push the governed `pulse/v6` branch state, including the current",
+            f"   `VERSION={version}` candidate and release-control records, to `origin/pulse/v6`.",
+        ]
 
     lines = [
         "# RC-to-GA Promotion Readiness Blocked Record",
@@ -108,11 +159,7 @@ def build_blocked_record(*, record_date: str) -> str:
         f"   `{active_profile['stable_branch']}`.",
         f"4. The active control-plane target is still `{active_target_id}`, not",
         "   `v6-ga-promotion`.",
-        f"5. The active local `pulse/v6` branch currently reports `VERSION={version}`, so a",
-        "   local GA candidate exists even though the control plane is still explicitly",
-        "   treating v6 as an RC-stabilization line.",
-        f"6. There is still no governed `RC-to-GA Rehearsal Record` proving a successful",
-        f"   non-publish `Release Dry Run` for the current `{version}` candidate.",
+        *version_fact_lines,
         "7. `docs/releases/RELEASE_NOTES_v6.md` and",
         "   `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` already carry the",
         "   exact governed dates:",
@@ -120,27 +167,22 @@ def build_blocked_record(*, record_date: str) -> str:
         f"   - `v5` end-of-support date: `{v5_eos_date}`",
         "8. There is still no governed `Release Dry Run` artifact or rehearsal record",
         "   exercising stable inputs for:",
-        f"   - `version={version}`",
+        f"   - `version={stable_version}`",
         f"   - `promoted_from_tag={rc_tag}`",
         "   - an explicit `rollback_version`",
         f"   - `v5_eos_date={v5_eos_date}`",
         "",
         "## Why The Gate Cannot Be Cleared Yet",
         "",
-        "The blocker is no longer missing governance text. The remaining problem is that",
-        "the control plane still treats v6 as an RC-stabilization line, and there is",
-        f"still no exercised `Release Dry Run` record proving the exact `{version}`",
-        "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
-        "users would still be the first real cohort for the final promotion path.",
+        *why_lines,
         "",
         "## Required Unblock Steps",
         "",
         f"1. Promote the active target from `{active_target_id}` to",
         "   `v6-ga-promotion` only when that change is actually intended.",
-        "2. Push the governed `pulse/v6` branch state, including the current",
-        f"   `VERSION={version}` candidate and release-control records, to `origin/pulse/v6`.",
+        *step_two_lines,
         "3. Run `Release Dry Run` from `pulse/v6` with:",
-        f"   - `version={version}`",
+        f"   - `version={stable_version}`",
         f"   - `promoted_from_tag={rc_tag}`",
         "   - an explicit stable `rollback_version`",
         f"   - `v5_eos_date={v5_eos_date}`",

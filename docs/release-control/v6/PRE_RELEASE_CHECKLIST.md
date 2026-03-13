@@ -14,8 +14,8 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - All `rc-ready` high-risk gates are now cleared in `status.json`.
 - The remaining release-control blocker is `rc-to-ga-promotion-readiness`, which
-  still needs a pushed `6.0.0` candidate plus a matching `Release Dry Run`
-  rehearsal artifact.
+  remains intentionally blocked until a governed stable candidate is actually
+  intended and a matching `Release Dry Run` rehearsal artifact exists.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
 - High-risk release confidence now lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
