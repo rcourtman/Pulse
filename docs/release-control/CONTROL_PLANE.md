@@ -128,12 +128,12 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-rc-stabilization` is the current active engineering target.
-   It is intentionally manual and declares `proof_scope: none`, so the repo
-   reports a human-held stabilization state without pretending that proof-scope
-   derivation failed.
-3. `v6-rc-cut` is complete and remains the immediate predecessor target.
-4. `v6-ga-promotion` is a planned follow-on target, not the current objective.
+2. `v6-ga-promotion` is the current active engineering target.
+   It is a governed `release_ready` target, so release-ready proofs now define
+   the remaining path to stable Pulse v6 promotion.
+3. `v6-rc-stabilization` is complete and remains the immediate predecessor
+   target.
+4. `v6-rc-cut` is complete and remains the predecessor release-cut target.
 5. Its files remain under `docs/release-control/v6/`.
 6. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole

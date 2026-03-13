@@ -13,14 +13,12 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - `status.json` is no longer overclaiming threshold-unmet gates as passed.
-- The remaining `rc-ready` high-risk blockers are:
-  - `cloud-hosted-tier-runtime-readiness`
-  - `commercial-cancellation-reactivation`
-  - `hosted-signup-billing-replay`
-  - `msp-provider-tenant-management`
+- There are no remaining `rc-ready` high-risk blockers; `rc_ready` now derives
+  true in `status.json`.
 - The remaining release-ready blocker is `rc-to-ga-promotion-readiness`, which
-  remains intentionally blocked until a governed stable candidate is actually
-  intended and a matching `Release Dry Run` rehearsal artifact exists.
+  now tracks the governed `v6-ga-promotion` target and remains blocked until
+  the `6.0.0` candidate completes a matching `Release Dry Run` rehearsal with
+  explicit rollback and v5 end-of-support inputs.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
 - High-risk release confidence now lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 

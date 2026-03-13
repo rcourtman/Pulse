@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import status_audit
 from status_audit import (
     RC_READY_ASSERTIONS_BLOCKER,
     RC_RELEASE_GATES_BLOCKER,
@@ -258,7 +259,7 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertEqual(
                 report["control_plane"]["active_target"]["blocking_levels"],
-                [],
+                ["repo-ready", "rc-ready", "release-ready"],
             )
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
@@ -314,7 +315,39 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
-                {"assertions": [], "open_decisions": [], "release_gates": []},
+                {
+                    "assertions": [
+                        {
+                            "id": "RA2",
+                            "blocking_level": "rc-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                            "release_gate_ids": ["g1"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g1",
+                            "blocking_level": "rc-ready",
+                            "status": "pending",
+                            "summary": "Need release verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA2"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                        }
+                    ],
+                },
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
 
@@ -359,7 +392,39 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
-                {"assertions": [], "open_decisions": [], "release_gates": []},
+                {
+                    "assertions": [
+                        {
+                            "id": "RA3",
+                            "blocking_level": "release-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                            "release_gate_ids": ["g2"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g2",
+                            "blocking_level": "release-ready",
+                            "status": "pending",
+                            "summary": "Need GA promotion verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA3"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                        }
+                    ],
+                },
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
 
@@ -446,11 +511,59 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["errors"], [])
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
-                {"assertions": [], "open_decisions": [], "release_gates": []},
+                {
+                    "assertions": [
+                        {
+                            "id": "RA2",
+                            "blocking_level": "rc-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": ["frontend-primitives"],
+                            "contract_paths": ["docs/release-control/v6/subsystems/frontend-primitives.md"],
+                            "release_gate_ids": ["g1"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g1",
+                            "blocking_level": "rc-ready",
+                            "status": "pending",
+                            "summary": "Need release verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA2"],
+                            "subsystem_ids": ["frontend-primitives"],
+                            "contract_paths": ["docs/release-control/v6/subsystems/frontend-primitives.md"],
+                        }
+                    ],
+                },
             )
-            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+            self.assertEqual(
+                report["readiness"]["current_target_workstreams"],
+                [
+                    {
+                        "subsystem_id": "frontend-primitives",
+                        "contract_path": "docs/release-control/v6/subsystems/frontend-primitives.md",
+                        "assertion_ids": ["RA2"],
+                        "release_gate_ids": ["g1"],
+                        "open_decision_ids": [],
+                        "proof_command_ids": [],
+                        "lane_ids": ["L1"],
+                        "repo_ids": ["pulse"],
+                        "blocker_count": 2,
+                    }
+                ],
+            )
             pretty = render_pretty(report)
-            self.assertNotIn("current_target_workstreams:", pretty)
+            self.assertIn("current_target_blockers:", pretty)
+            self.assertIn("current_target_workstreams:", pretty)
             self.assertNotIn("active target proof scope could not be derived", pretty)
 
     def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
@@ -583,7 +696,7 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(base_payload(release_gate_status="pending"))
 
             pretty = render_pretty(report)
-            self.assertIn("control_plane: profile=v6 target=v6-rc-stabilization", pretty)
+            self.assertIn("control_plane: profile=v6 target=v6-ga-promotion", pretty)
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("rc_ready=False", pretty)
             self.assertIn("completion=complete", pretty)
@@ -600,7 +713,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("release_blockers:", pretty)
             self.assertIn("release_blocker_details:", pretty)
             self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
-            self.assertNotIn("target_blocking_levels=", pretty)
+            self.assertIn("target_blocking_levels=repo-ready,rc-ready,release-ready", pretty)
             self.assertNotIn("active target proof scope could not be derived", pretty)
 
     def test_stable_version_on_rc_hold_emits_warning(self) -> None:
@@ -614,6 +727,15 @@ class StatusAuditTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
                 return_value=[],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-rc-stabilization",
+                    "kind": "stabilization",
+                    "completion_rule": "manual",
+                },
             ):
                 report = audit_status_payload(
                     base_payload(release_gate_status="pending"),

@@ -88,7 +88,8 @@ class DocumentationCurrentnessTest(unittest.TestCase):
     def test_control_plane_doc_reflects_current_active_target(self) -> None:
         content = read("docs/release-control/CONTROL_PLANE.md")
         self.assertIn(f"`{ACTIVE_TARGET_ID}` is the current active engineering target.", content)
-        self.assertNotIn("`v6-ga-promotion` is the current active engineering target.", content)
+        inactive_target_id = "v6-ga-promotion" if ACTIVE_TARGET_ID != "v6-ga-promotion" else "v6-rc-stabilization"
+        self.assertNotIn(f"`{inactive_target_id}` is the current active engineering target.", content)
 
     def test_source_of_truth_keeps_supporting_docs_as_evidence_only(self) -> None:
         content = read("docs/release-control/v6/SOURCE_OF_TRUTH.md")
