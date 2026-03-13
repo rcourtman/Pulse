@@ -358,12 +358,20 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["release_gates"][0]["status"], "passed")
             self.assertEqual(report["release_gates"][0]["effective_status"], "threshold-unmet")
             self.assertEqual(report["release_gates"][0]["highest_evidence_tier"], "local-rehearsal")
+            self.assertEqual(report["summary"]["overclosed_release_gate_count"], 1)
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["overclosed_release_gates"]],
+                ["g1"],
+            )
             self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
             self.assertEqual(
                 [item["id"] for item in report["readiness"]["rc_blocker_details"]["release_gates"]],
                 ["g1"],
             )
             pretty = render_pretty(report)
+            self.assertIn("overclosed_release_gates=1", pretty)
+            self.assertIn("overclosed_release_gates:", pretty)
+            self.assertIn("raw_status=passed", pretty)
             self.assertIn("effective=threshold-unmet", pretty)
             self.assertIn("min_tier=real-external-e2e", pretty)
 
@@ -551,8 +559,10 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("rc_ready=False", pretty)
             self.assertIn("proof_commands=1", pretty)
+            self.assertIn("overclosed_release_gates=0", pretty)
             self.assertIn("release_gates:", pretty)
             self.assertIn("effective=pending", pretty)
+            self.assertNotIn("overclosed_release_gates:", pretty)
             self.assertIn("current_target_blockers:", pretty)
             self.assertNotIn("current_target_workstreams:", pretty)
             self.assertIn("rc_blockers:", pretty)

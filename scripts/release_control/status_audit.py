@@ -1667,6 +1667,18 @@ def audit_status_payload(
                 "the repo is carrying a GA candidate on an RC-held line."
             )
 
+    overclosed_release_gates = [
+        {
+            **_blocker_detail(gate, summary_key="summary", status_key="effective_status"),
+            "raw_status": gate["status"],
+            "effective_status": gate["effective_status"],
+            "highest_evidence_tier": gate["highest_evidence_tier"],
+            "minimum_evidence_tier": gate["minimum_evidence_tier"],
+        }
+        for gate in release_gates
+        if gate["status"] == "passed" and gate["effective_status"] != "passed"
+    ]
+
     return {
         "errors": errors,
         "warnings": warnings,
@@ -1712,6 +1724,7 @@ def audit_status_payload(
             ),
             "release_gate_count": len(release_gates),
             "release_gates_passed": sum(1 for gate in release_gates if gate["effective_status"] == "passed"),
+            "overclosed_release_gate_count": len(overclosed_release_gates),
             "rc_ready_release_gate_count": sum(
                 1 for gate in release_gates if gate["blocking_level"] == "rc-ready"
             ),
@@ -1764,6 +1777,7 @@ def audit_status_payload(
             "rc_blocker_details": rc_blocker_details,
             "release_blockers": release_blockers,
             "release_blocker_details": release_blocker_details,
+            "overclosed_release_gates": overclosed_release_gates,
         },
         "scope": {
             "active_repos": active_repos,
@@ -1849,6 +1863,7 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"assertions_passed={summary['readiness_assertions_passed']} "
             f"release_gates={summary['release_gate_count']} "
             f"release_gates_passed={summary['release_gates_passed']} "
+            f"overclosed_release_gates={summary['overclosed_release_gate_count']} "
             f"open_decisions={summary['open_decision_count']} "
             f"resolved_decisions={summary['resolved_decision_count']} "
             f"repo_ready={summary['repo_ready']} "
@@ -1894,6 +1909,18 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"lanes={','.join(gate['lane_ids']) or '-'}"
             )
     readiness = report.get("readiness", {})
+    overclosed_release_gates = readiness.get("overclosed_release_gates", [])
+    if overclosed_release_gates:
+        lines.append("overclosed_release_gates:")
+        for gate in overclosed_release_gates:
+            lines.append(
+                f"  - {gate['id']} raw_status={gate['raw_status']} "
+                f"effective={gate['effective_status']} "
+                f"tier={gate['highest_evidence_tier'] or '-'} "
+                f"min_tier={gate['minimum_evidence_tier']} "
+                f"repos={','.join(gate['repo_ids']) or '-'} "
+                f"lanes={','.join(gate['lane_ids']) or '-'}"
+            )
     current_target_blockers = readiness.get("current_target_blockers", {})
     if current_target_blockers:
         lines.append("current_target_blockers:")
