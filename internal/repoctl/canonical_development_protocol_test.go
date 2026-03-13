@@ -306,6 +306,8 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"Did the user state a durable product truth or change the current priority?",
 		"consistency, seamlessness, drift, bypass",
 		"Did the user casually raise a new quality bar or product invariant?",
+		"status.json.lanes[*].completion",
+		"references must also reference the same lane",
 	})
 }
 
@@ -488,6 +490,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"When a user states a durable product truth",
 		"classify that as an active-target update or another control-plane",
 		"Do not wait for a special governance prompt",
+		"Lanes that are at target but intentionally not closed must record a",
+		"Those references must belong to that same lane",
 		"consistency, seamlessness, drift, bypass",
 		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
@@ -542,6 +546,8 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"## Source Domains",
 		"It is not a live progress dashboard.",
 		"Current lane scores, evidence references, and typed operational decision",
+		"Lane completion state, residual-gap summaries, and normalized follow-up",
+		"Those references must belong to that same lane",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",
