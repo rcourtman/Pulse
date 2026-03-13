@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,6 +35,11 @@ type Manager struct {
 
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
 
+const (
+	tenantRuntimeUID = 1000
+	tenantRuntimeGID = 1000
+)
+
 // NewManager creates a Docker manager connected to the local daemon.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -57,6 +63,10 @@ func (m *Manager) Close() error {
 // CreateAndStart creates and starts a tenant container.
 // tenantDataDir is the host path that gets bind-mounted to /etc/pulse in the container.
 func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
+	if err := prepareImmutableMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
+		return "", fmt.Errorf("prepare immutable tenant mounts for %s: %w", tenantID, err)
+	}
+
 	labels := TraefikLabels(tenantID, m.cfg.BaseDomain, m.cfg.ContainerPort)
 	labels["pulse.managed"] = "true"
 
@@ -113,6 +123,8 @@ func tenantEnv() []string {
 	return []string{
 		"PULSE_DATA_DIR=/etc/pulse",
 		"PULSE_HOSTED_MODE=true",
+		fmt.Sprintf("PUID=%d", tenantRuntimeUID),
+		fmt.Sprintf("PGID=%d", tenantRuntimeGID),
 		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
 	}
 }
@@ -143,6 +155,23 @@ func tenantMounts(tenantDataDir string) []mount.Mount {
 			ReadOnly: true,
 		},
 	}
+}
+
+func prepareImmutableMountSources(tenantDataDir string, uid, gid int) error {
+	for _, relPath := range []string{
+		"billing.json",
+		filepath.Join("secrets", "handoff.key"),
+		".cloud_handoff_key",
+	} {
+		path := filepath.Join(tenantDataDir, relPath)
+		if err := os.Chmod(path, 0o600); err != nil {
+			return fmt.Errorf("chmod %s: %w", path, err)
+		}
+		if err := os.Chown(path, uid, gid); err != nil {
+			return fmt.Errorf("chown %s to %d:%d: %w", path, uid, gid, err)
+		}
+	}
+	return nil
 }
 
 // Stop stops a tenant container gracefully.

@@ -1,7 +1,9 @@
 package docker
 
 import (
+	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -66,6 +68,8 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse": true,
 		"PULSE_HOSTED_MODE=true":    true,
+		"PUID=1000":                 true,
+		"PGID=1000":                 true,
 		immutableOwnershipPathsEnv + "=/etc/pulse/billing.json:/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
 	if len(env) != len(want) {
@@ -74,6 +78,53 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	for _, item := range env {
 		if !want[item] {
 			t.Fatalf("unexpected env item %q", item)
+		}
+	}
+}
+
+func TestPrepareImmutableMountSourcesAlignsOwnershipAndPermissions(t *testing.T) {
+	t.Parallel()
+
+	tenantDataDir := t.TempDir()
+	secretsDir := filepath.Join(tenantDataDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("mkdir secrets: %v", err)
+	}
+
+	paths := []string{
+		filepath.Join(tenantDataDir, "billing.json"),
+		filepath.Join(secretsDir, "handoff.key"),
+		filepath.Join(tenantDataDir, ".cloud_handoff_key"),
+	}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("secret"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	uid := os.Getuid()
+	gid := os.Getgid()
+	if err := prepareImmutableMountSources(tenantDataDir, uid, gid); err != nil {
+		t.Fatalf("prepareImmutableMountSources: %v", err)
+	}
+
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s perms = %o, want %o", path, info.Mode().Perm(), 0o600)
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			t.Fatalf("%s stat type %T, want *syscall.Stat_t", path, info.Sys())
+		}
+		if int(stat.Uid) != uid {
+			t.Fatalf("%s uid = %d, want %d", path, stat.Uid, uid)
+		}
+		if int(stat.Gid) != gid {
+			t.Fatalf("%s gid = %d, want %d", path, stat.Gid, gid)
 		}
 	}
 }
