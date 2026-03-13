@@ -231,6 +231,8 @@ scripts/release_control/*
 !scripts/release_control/mobile_relay_auth_approvals_proof_test.py
 !scripts/release_control/hosted_signup_billing_replay_rehearsal.py
 !scripts/release_control/hosted_signup_billing_replay_rehearsal_test.py
+!scripts/release_control/msp_provider_tenant_management_rehearsal.py
+!scripts/release_control/msp_provider_tenant_management_rehearsal_test.py
 !scripts/release_control/registry_audit.py
 !scripts/release_control/registry_audit_test.py
 !scripts/release_control/repo_file_io.py

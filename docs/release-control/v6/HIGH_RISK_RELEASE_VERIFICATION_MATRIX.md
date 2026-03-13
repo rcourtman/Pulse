@@ -436,6 +436,8 @@ Companion drill:
   `go test ./internal/cloudcp -run 'TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup' -count=1`
   `go test ./pkg/licensing -run 'TestMSPPlanAliasCanonicalizationContract' -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx src/pages/__tests__/CloudPricing.test.tsx`
+- Live rehearsal helper:
+  `python3 scripts/release_control/msp_provider_tenant_management_rehearsal.py --base-url <control-plane-url> --account-id <account> ...`
 - Manual scenario:
   1. Create or enter an MSP account in a staging-like environment.
   2. Provision at least two client workspaces or tenants under that MSP
