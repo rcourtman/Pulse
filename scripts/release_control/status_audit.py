@@ -791,12 +791,18 @@ def audit_lanes(
             errors.append(f"{context} cannot be target-met while evidence is missing")
         if completion_state == "open" and status == "target-met":
             errors.append(f"{context} open completion must not pair with status='target-met'")
+        if status == "not-started" and current != 0:
+            errors.append(f"{context} not-started lanes must keep current_score at 0")
+        if status == "not-started" and completion_state != "open":
+            errors.append(f"{context} not-started lanes must use completion.state='open'")
+        if status == "blocked" and completion_state != "open":
+            errors.append(f"{context} blocked lanes must use completion.state='open'")
+        if status == "blocked" and at_target:
+            errors.append(f"{context} blocked lanes must stay below target_score")
         if completion_state == "bounded-residual" and status != "partial":
             errors.append(f"{context} bounded-residual completion must pair with status='partial'")
         if completion_state == "complete" and status != "target-met":
             errors.append(f"{context} complete completion must pair with status='target-met'")
-        if status == "not-started" and current > 0:
-            warnings.append(f"{context} is not-started but current_score is already {current:g}")
         if status == "target-met" and completion_state != "complete":
             errors.append(f"{context} target-met lanes must use completion.state='complete'")
         if at_target and status == "partial" and completion_state != "bounded-residual":

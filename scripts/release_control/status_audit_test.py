@@ -789,6 +789,107 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_not_started_lane_must_keep_zero_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="not-started",
+                        current_score=1,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] not-started lanes must keep current_score at 0",
+                report["errors"],
+            )
+
+    def test_not_started_lane_must_use_open_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="not-started",
+                        current_score=0,
+                        completion_state="complete",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] not-started lanes must use completion.state='open'",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_use_open_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="bounded-residual",
+                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must use completion.state='open'",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_stay_below_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=8,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must stay below target_score",
+                report["errors"],
+            )
+
     def test_bounded_residual_lane_must_use_partial_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"

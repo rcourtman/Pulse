@@ -324,6 +324,49 @@
         {
           "if": {
             "properties": {
+              "status": {
+                "const": "not-started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_score": {
+                "const": 0
+              },
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
               "completion": {
                 "properties": {
                   "state": {

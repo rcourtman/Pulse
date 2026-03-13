@@ -534,6 +534,8 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"const\": \"bounded-residual\"",
 		"\"const\": \"target-met\"",
 		"\"const\": \"partial\"",
+		"\"const\": \"not-started\"",
+		"\"const\": \"blocked\"",
 		"\"minItems\": 1",
 		"\"maxItems\": 0",
 	})
@@ -558,6 +560,8 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"status.json.lane_followups",
 		"`complete` goes with",
 		"`bounded-residual` goes with",
+		"`not-started` means zero score",
+		"`blocked` remains an `open`",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"open or complete lanes",
@@ -802,6 +806,18 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		}
 		if completionState == "open" && statusValue == "target-met" {
 			t.Fatalf("status.json lane %q must not pair completion.state open with status target-met", laneID)
+		}
+		if statusValue == "not-started" && currentScore != 0 {
+			t.Fatalf("status.json lane %q must keep current_score at 0 while status is not-started", laneID)
+		}
+		if statusValue == "not-started" && completionState != "open" {
+			t.Fatalf("status.json lane %q must pair status not-started with completion.state open", laneID)
+		}
+		if statusValue == "blocked" && completionState != "open" {
+			t.Fatalf("status.json lane %q must pair status blocked with completion.state open", laneID)
+		}
+		if statusValue == "blocked" && currentScore >= targetScore {
+			t.Fatalf("status.json lane %q must stay below target_score while status is blocked", laneID)
 		}
 		if completionState == "bounded-residual" && statusValue != "partial" {
 			t.Fatalf("status.json lane %q must pair completion.state bounded-residual with status partial", laneID)
