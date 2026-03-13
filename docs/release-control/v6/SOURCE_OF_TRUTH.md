@@ -143,10 +143,15 @@ Assertion design rules:
    intended tenant boundary.
 5. Do not ship MSP support if one provider account cannot safely onboard,
    manage, and separate multiple client tenants from one control surface.
-6. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
-7. Do not keep polishing strong lanes while weak lanes remain behind.
-8. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
-9. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
+6. Do not ship if API tokens can exceed assigned user, org, or scope
+   boundaries, survive revocation, or silently widen authority through legacy
+   alias handling.
+7. Do not ship if a low-privilege user can view, mutate, or destroy beyond the
+   permissions granted by their effective org membership and role.
+8. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
+9. Do not keep polishing strong lanes while weak lanes remain behind.
+10. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+11. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
 
 ## Locked Decisions
 

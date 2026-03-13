@@ -1144,6 +1144,185 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA14",
+      "summary": "API tokens remain least-privilege and correctly scoped: every token stays bound to its intended user, org, and scope, cannot silently widen authority through legacy alias handling, and stops working when revoked.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L1",
+        "L6",
+        "L11"
+      ],
+      "subsystem_ids": [
+        "api-contracts"
+      ],
+      "release_gate_ids": [
+        "api-token-scope-and-assignment"
+      ],
+      "proof_commands": [
+        {
+          "id": "api-token-scope-backend",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "Test(APIToken|SecurityTokens|SystemSettings|MultiTenant)|TestNormalizeRequestedScopesCanonicalizesLegacyHostAgentAliases|TestHostAgentEndpointsRequireHostReportScope|TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias|TestMultiTenantAPITokenRemainsScopedToIssuingOrg|TestContract_APITokenScopeAliasNormalization",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "api-token-scope-frontend",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/components/Settings/__tests__/APITokenManager.test.tsx",
+            "src/utils/__tests__/apiClient.org.test.ts",
+            "src/utils/__tests__/apiTokenPresentation.test.ts"
+          ],
+          "cwd": "frontend-modern"
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/api-token-scope-and-assignment-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/apiClient.org.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/api_token_org_scope_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/security_regression_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/security_tokens_test.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA15",
+      "summary": "Assigned user privileges fail closed: a user cannot view, mutate, or destroy anything beyond the permissions granted by their effective organization membership and role, including cross-org and destructive paths.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L4",
+        "L6",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "organization-settings"
+      ],
+      "release_gate_ids": [
+        "organization-user-scope-and-rbac"
+      ],
+      "proof_commands": [
+        {
+          "id": "user-privilege-backend",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestOrgHandlersViewerCannotManageOrg|TestOrgHandlersTokenListAllowedButWriteForbidden|TestOrgHandlersCrossOrgIsolation|TestOrgHandlersShareIsolationAcrossOrganizations|TestMultiTenantRBACRoleUpdateChangesPermissions",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "user-privilege-frontend",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+            "src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+            "src/utils/__tests__/organizationRolePresentation.test.ts",
+            "src/utils/__tests__/organizationSettingsPresentation.test.ts",
+            "src/utils/__tests__/rbacPermissions.test.ts",
+            "src/utils/__tests__/rbacPresentation.test.ts"
+          ],
+          "cwd": "frontend-modern"
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/organization-user-scope-and-rbac-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/rbacPermissions.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/org_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/rbac_handlers_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
