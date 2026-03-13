@@ -735,6 +735,156 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_bounded_residual_lane_rejects_unrelated_release_gate_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 8,
+                    "status": "partial",
+                    "completion": {
+                        "state": "bounded-residual",
+                        "summary": "Second lane still has governed residual work.",
+                        "tracking": [{"kind": "release-gate", "id": "g2"}],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking release gate 'g1' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_unrelated_open_decision_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "open-decision", "id": "d1"}],
+                open_decisions=[
+                    {
+                        "id": "d1",
+                        "summary": "Open decision owned by another lane",
+                        "owner": "project-owner",
+                        "blocking_level": "rc-ready",
+                        "status": "open",
+                        "opened_at": "2026-03-12",
+                        "lane_ids": ["L2"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 4,
+                    "status": "partial",
+                    "completion": {
+                        "state": "open",
+                        "summary": "Second lane is still open.",
+                        "tracking": [],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking open decision 'd1' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_unrelated_assertion_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "readiness-assertion", "id": "RA2"}],
+                readiness_assertions=[
+                    automated_assertion(),
+                    hybrid_assertion(assertion_id="RA2", lane_id="L2"),
+                    hybrid_assertion(assertion_id="RA3", lane_id="L2", gate_id="g2", blocking_level="release-ready"),
+                ],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 8,
+                    "status": "partial",
+                    "completion": {
+                        "state": "bounded-residual",
+                        "summary": "Second lane still has governed residual work.",
+                        "tracking": [{"kind": "release-gate", "id": "g1"}],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking readiness assertion 'RA2' does not reference that lane",
+                report["errors"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

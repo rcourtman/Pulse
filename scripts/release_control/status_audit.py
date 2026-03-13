@@ -816,16 +816,25 @@ def validate_lane_completion_tracking(
     open_decisions: list[dict[str, Any]],
     errors: list[str],
 ) -> None:
-    readiness_assertion_ids = {str(assertion["id"]) for assertion in readiness_assertions}
-    release_gate_ids = {str(gate["id"]) for gate in release_gates}
-    open_decision_ids = {str(decision["id"]) for decision in open_decisions}
+    readiness_assertions_by_id = {
+        str(assertion["id"]): set(str(lane_id) for lane_id in assertion.get("lane_ids", []))
+        for assertion in readiness_assertions
+    }
+    release_gates_by_id = {
+        str(gate["id"]): set(str(lane_id) for lane_id in gate.get("lane_ids", []))
+        for gate in release_gates
+    }
+    open_decisions_by_id = {
+        str(decision["id"]): set(str(lane_id) for lane_id in decision.get("lane_ids", []))
+        for decision in open_decisions
+    }
     target_ids = set(DEFAULT_CONTROL_PLANE["targets_by_id"])
 
     known_by_kind = {
         "target": target_ids,
-        "readiness-assertion": readiness_assertion_ids,
-        "release-gate": release_gate_ids,
-        "open-decision": open_decision_ids,
+        "readiness-assertion": set(readiness_assertions_by_id),
+        "release-gate": set(release_gates_by_id),
+        "open-decision": set(open_decisions_by_id),
     }
     labels = {
         "target": "target",
@@ -845,6 +854,22 @@ def validate_lane_completion_tracking(
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking references unknown "
                     f"{labels.get(tracking_kind, tracking_kind)} {tracking_id!r}"
+                )
+                continue
+            if tracking_kind == "readiness-assertion" and lane_id not in readiness_assertions_by_id[tracking_id]:
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking readiness assertion {tracking_id!r} "
+                    "does not reference that lane"
+                )
+            if tracking_kind == "release-gate" and lane_id not in release_gates_by_id[tracking_id]:
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking release gate {tracking_id!r} "
+                    "does not reference that lane"
+                )
+            if tracking_kind == "open-decision" and lane_id not in open_decisions_by_id[tracking_id]:
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking open decision {tracking_id!r} "
+                    "does not reference that lane"
                 )
 
 
