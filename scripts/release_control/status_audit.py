@@ -789,6 +789,12 @@ def audit_lanes(
             errors.append(f"{context} cannot be target-met when current_score is below target_score")
         if status == "target-met" and not all_evidence_present:
             errors.append(f"{context} cannot be target-met while evidence is missing")
+        if completion_state == "open" and status == "target-met":
+            errors.append(f"{context} open completion must not pair with status='target-met'")
+        if completion_state == "bounded-residual" and status != "partial":
+            errors.append(f"{context} bounded-residual completion must pair with status='partial'")
+        if completion_state == "complete" and status != "target-met":
+            errors.append(f"{context} complete completion must pair with status='target-met'")
         if status == "not-started" and current > 0:
             warnings.append(f"{context} is not-started but current_score is already {current:g}")
         if status == "target-met" and completion_state != "complete":

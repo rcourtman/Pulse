@@ -164,6 +164,9 @@ Every substantial task must finish by checking these questions:
     or an explicit open decision instead of letting this task expand forever.
 11. If I am recording a bounded residual, do the tracking references point to
     the same lane and stay genuinely unresolved?
+    Pair lane `status` and `completion.state` coherently: `complete` goes with
+    `target-met`, `bounded-residual` goes with `partial`, and `open` must not
+    be paired with `target-met`.
     `completion.tracking` is only for bounded residuals; if the lane is still
     `open` or already `complete`, leave that list empty until the lane reaches
     its current floor and the remaining work becomes a governed residual.

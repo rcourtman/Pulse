@@ -179,6 +179,9 @@ Assertion design rules:
 16. Lanes that are at target but intentionally not closed must record a
     bounded residual in `status.json` with a short rationale and explicit
     tracking references to the governing follow-up surface.
+    Pair lane `status` and `completion.state` coherently: `complete` goes with
+    `target-met`, `bounded-residual` goes with `partial`, and `open` must not
+    be paired with `target-met`.
     `completion.tracking` is only for bounded residuals; open or complete lanes
     should keep that list empty until the lane reaches its current floor and
     the remaining work becomes a governed residual.

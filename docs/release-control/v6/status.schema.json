@@ -320,6 +320,70 @@
     "lane": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "complete"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "target-met"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "bounded-residual"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "partial"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "not": {
+                  "const": "target-met"
+                }
+              }
+            }
+          }
+        }
+      ],
       "required": [
         "id",
         "name",

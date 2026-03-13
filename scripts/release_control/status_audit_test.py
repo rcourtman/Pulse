@@ -764,6 +764,82 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_open_lane_must_not_use_target_met_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="target-met",
+                        current_score=6,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] open completion must not pair with status='target-met'",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_must_use_partial_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=8,
+                        completion_state="bounded-residual",
+                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] bounded-residual completion must pair with status='partial'",
+                report["errors"],
+            )
+
+    def test_complete_lane_must_use_target_met_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="complete",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] complete completion must pair with status='target-met'",
+                report["errors"],
+            )
+
     def test_bounded_residual_lane_rejects_unrelated_release_gate_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"

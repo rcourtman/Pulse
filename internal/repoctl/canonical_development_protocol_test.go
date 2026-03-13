@@ -532,6 +532,8 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"lane_ids\"",
 		"\"direct-repo-sessions\"",
 		"\"const\": \"bounded-residual\"",
+		"\"const\": \"target-met\"",
+		"\"const\": \"partial\"",
 		"\"minItems\": 1",
 		"\"maxItems\": 0",
 	})
@@ -554,6 +556,8 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"Current lane scores, evidence references, and typed operational decision",
 		"Lane completion state, residual-gap summaries, and normalized follow-up",
 		"status.json.lane_followups",
+		"`complete` goes with",
+		"`bounded-residual` goes with",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"open or complete lanes",
@@ -774,7 +778,8 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if currentScore > targetScore {
 			t.Fatalf("status.json lane %q current_score %.0f exceeds target_score %.0f", laneID, currentScore, targetScore)
 		}
-		if statusValue, ok := lane["status"].(string); !ok || !slices.Contains([]string{"not-started", "partial", "target-met", "blocked"}, statusValue) {
+		statusValue, ok := lane["status"].(string)
+		if !ok || !slices.Contains([]string{"not-started", "partial", "target-met", "blocked"}, statusValue) {
 			t.Fatalf("status.json lane %q has invalid status %#v", laneID, lane["status"])
 		}
 		completion, ok := lane["completion"].(map[string]any)
@@ -795,8 +800,17 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if completionState == "open" && len(rawTracking) != 0 {
 			t.Fatalf("status.json lane %q must not declare completion.tracking while completion.state is open", laneID)
 		}
+		if completionState == "open" && statusValue == "target-met" {
+			t.Fatalf("status.json lane %q must not pair completion.state open with status target-met", laneID)
+		}
+		if completionState == "bounded-residual" && statusValue != "partial" {
+			t.Fatalf("status.json lane %q must pair completion.state bounded-residual with status partial", laneID)
+		}
 		if completionState == "complete" && len(rawTracking) != 0 {
 			t.Fatalf("status.json lane %q must not declare completion.tracking while completion.state is complete", laneID)
+		}
+		if completionState == "complete" && statusValue != "target-met" {
+			t.Fatalf("status.json lane %q must pair completion.state complete with status target-met", laneID)
 		}
 		for _, rawTrackingRef := range rawTracking {
 			trackingRef, ok := rawTrackingRef.(map[string]any)
