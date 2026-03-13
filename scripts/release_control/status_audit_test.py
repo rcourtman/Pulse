@@ -204,6 +204,14 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["readiness"]["rc_blockers"], [])
             self.assertEqual(report["readiness"]["release_blockers"], [])
             self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                report["readiness"]["release_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
                 report["control_plane"]["active_target"]["blocking_levels"],
                 [],
             )
@@ -243,6 +251,22 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
             self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["assertions"]],
+                ["RA2"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["assertions"]],
+                ["RA2"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            self.assertEqual(
                 report["readiness"]["current_target_blockers"],
                 {"assertions": [], "open_decisions": [], "release_gates": []},
             )
@@ -275,6 +299,18 @@ class StatusAuditTest(unittest.TestCase):
                 [RELEASE_READY_ASSERTIONS_BLOCKER, RELEASE_GATES_BLOCKER],
             )
             self.assertEqual(report["readiness_assertions"][2]["derived_status"], "gates-pending")
+            self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["assertions"]],
+                ["RA3"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["release_gates"]],
+                ["g2"],
+            )
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
                 {"assertions": [], "open_decisions": [], "release_gates": []},
@@ -361,6 +397,14 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["readiness_assertions"][0]["derived_status"], "evidence-missing")
             self.assertEqual(report["readiness"]["rc_blockers"], [REPO_READY_BLOCKER])
             self.assertEqual(report["readiness"]["release_blockers"], [REPO_READY_BLOCKER])
+            self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                report["readiness"]["release_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
 
     def test_automated_assertion_requires_proof_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -464,7 +508,9 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("current_target_blockers:", pretty)
             self.assertNotIn("current_target_workstreams:", pretty)
             self.assertIn("rc_blockers:", pretty)
+            self.assertIn("rc_blocker_details:", pretty)
             self.assertIn("release_blockers:", pretty)
+            self.assertIn("release_blocker_details:", pretty)
             self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
             self.assertNotIn("target_blocking_levels=", pretty)
             self.assertIn(

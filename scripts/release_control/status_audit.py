@@ -115,6 +115,32 @@ def _blocker_detail(
     }
 
 
+def _phase_blocker_details(
+    *,
+    assertions: list[dict[str, Any]],
+    open_decisions: list[dict[str, Any]],
+    release_gates: list[dict[str, Any]],
+    blocking_levels: set[str],
+) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "assertions": [
+            _blocker_detail(assertion, summary_key="summary", status_key="derived_status")
+            for assertion in assertions
+            if assertion["blocking_level"] in blocking_levels and not assertion["derived_pass"]
+        ],
+        "open_decisions": [
+            _blocker_detail(decision, summary_key="summary", status_key="status")
+            for decision in open_decisions
+            if decision["blocking_level"] in blocking_levels
+        ],
+        "release_gates": [
+            _blocker_detail(gate, summary_key="summary", status_key="status")
+            for gate in release_gates
+            if gate["blocking_level"] in blocking_levels and gate["status"] != "passed"
+        ],
+    }
+
+
 def load_status_schema(*, staged: bool = False) -> dict[str, Any]:
     return load_repo_json(STATUS_SCHEMA_PATH, staged=staged)
 
@@ -1497,6 +1523,18 @@ def audit_status_payload(
         release_blockers.append(RELEASE_OPEN_DECISIONS_BLOCKER)
     if not release_ready_release_gates_cleared:
         release_blockers.append(RELEASE_GATES_BLOCKER)
+    rc_blocker_details = _phase_blocker_details(
+        assertions=readiness_assertions,
+        open_decisions=open_decisions,
+        release_gates=release_gates,
+        blocking_levels={"rc-ready"},
+    )
+    release_blocker_details = _phase_blocker_details(
+        assertions=readiness_assertions,
+        open_decisions=open_decisions,
+        release_gates=release_gates,
+        blocking_levels={"rc-ready", "release-ready"},
+    )
 
     active_target_completion_met = False
     completion_rule = str(ACTIVE_TARGET.get("completion_rule", "")).strip()
@@ -1609,7 +1647,9 @@ def audit_status_payload(
             },
             "current_target_workstreams": current_target_workstreams,
             "rc_blockers": rc_blockers,
+            "rc_blocker_details": rc_blocker_details,
             "release_blockers": release_blockers,
+            "release_blocker_details": release_blocker_details,
         },
         "scope": {
             "active_repos": active_repos,
@@ -1790,10 +1830,64 @@ def render_pretty(report: dict[str, Any]) -> str:
         lines.append("rc_blockers:")
         for blocker in readiness["rc_blockers"]:
             lines.append(f"  - {blocker}")
+    rc_blocker_details = readiness.get("rc_blocker_details", {})
+    if rc_blocker_details and any(rc_blocker_details.values()):
+        lines.append("rc_blocker_details:")
+        if rc_blocker_details.get("assertions"):
+            lines.append("  assertions:")
+            for assertion in rc_blocker_details["assertions"]:
+                lines.append(
+                    f"    - {assertion['id']} status={assertion['status']} "
+                    f"repos={','.join(assertion['repo_ids']) or '-'} "
+                    f"lanes={','.join(assertion['lane_ids']) or '-'}"
+                )
+        if rc_blocker_details.get("open_decisions"):
+            lines.append("  open_decisions:")
+            for decision in rc_blocker_details["open_decisions"]:
+                lines.append(
+                    f"    - {decision['id']} status={decision['status']} "
+                    f"repos={','.join(decision['repo_ids']) or '-'} "
+                    f"lanes={','.join(decision['lane_ids']) or '-'}"
+                )
+        if rc_blocker_details.get("release_gates"):
+            lines.append("  release_gates:")
+            for gate in rc_blocker_details["release_gates"]:
+                lines.append(
+                    f"    - {gate['id']} status={gate['status']} "
+                    f"repos={','.join(gate['repo_ids']) or '-'} "
+                    f"lanes={','.join(gate['lane_ids']) or '-'}"
+                )
     if readiness.get("release_blockers"):
         lines.append("release_blockers:")
         for blocker in readiness["release_blockers"]:
             lines.append(f"  - {blocker}")
+    release_blocker_details = readiness.get("release_blocker_details", {})
+    if release_blocker_details and any(release_blocker_details.values()):
+        lines.append("release_blocker_details:")
+        if release_blocker_details.get("assertions"):
+            lines.append("  assertions:")
+            for assertion in release_blocker_details["assertions"]:
+                lines.append(
+                    f"    - {assertion['id']} status={assertion['status']} "
+                    f"repos={','.join(assertion['repo_ids']) or '-'} "
+                    f"lanes={','.join(assertion['lane_ids']) or '-'}"
+                )
+        if release_blocker_details.get("open_decisions"):
+            lines.append("  open_decisions:")
+            for decision in release_blocker_details["open_decisions"]:
+                lines.append(
+                    f"    - {decision['id']} status={decision['status']} "
+                    f"repos={','.join(decision['repo_ids']) or '-'} "
+                    f"lanes={','.join(decision['lane_ids']) or '-'}"
+                )
+        if release_blocker_details.get("release_gates"):
+            lines.append("  release_gates:")
+            for gate in release_blocker_details["release_gates"]:
+                lines.append(
+                    f"    - {gate['id']} status={gate['status']} "
+                    f"repos={','.join(gate['repo_ids']) or '-'} "
+                    f"lanes={','.join(gate['lane_ids']) or '-'}"
+                )
     if report.get("warnings"):
         lines.append("warnings:")
         for warning in report["warnings"]:
