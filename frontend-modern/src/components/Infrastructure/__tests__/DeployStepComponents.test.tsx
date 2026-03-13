@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { DeployTarget } from '@/types/agentDeploy';
 

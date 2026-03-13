@@ -175,7 +175,7 @@ interface FilterSegmentOption {
   disabled?: boolean;
 }
 
-interface FilterSegmentedControlProps extends JSX.HTMLAttributes<HTMLDivElement> {
+interface FilterSegmentedControlProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   value: string;
   onChange: (value: string) => void;
   options: FilterSegmentOption[];

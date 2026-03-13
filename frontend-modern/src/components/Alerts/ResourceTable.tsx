@@ -121,7 +121,7 @@ export interface Resource {
 }
 
 export interface GroupHeaderMeta {
-  type?: 'node' | 'default';
+  type?: 'agent' | 'node' | 'default';
   displayName?: string;
   rawName?: string;
   host?: string;

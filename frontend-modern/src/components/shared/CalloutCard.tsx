@@ -3,7 +3,7 @@ import { Card } from '@/components/shared/Card';
 
 type CalloutTone = 'danger' | 'info' | 'success' | 'warning';
 
-interface CalloutCardProps extends JSX.HTMLAttributes<HTMLDivElement> {
+interface CalloutCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'title'> {
   tone?: CalloutTone;
   title?: JSX.Element;
   description?: JSX.Element;

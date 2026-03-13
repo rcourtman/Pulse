@@ -20,8 +20,8 @@ const createHybridHostResource = (): Resource =>
     status: 'online',
     lastSeen: Date.now(),
     cpu: { current: 15 },
-    memory: { total: 1024, used: 256, free: 768 },
-    disk: { total: 2048, used: 512, free: 1536 },
+    memory: { current: 0.25, total: 1024, used: 256, free: 768 },
+    disk: { current: 0.25, total: 2048, used: 512, free: 1536 },
     platformData: {
       proxmox: {
         nodeName: 'pve-node-1',
@@ -34,7 +34,7 @@ const createHybridHostResource = (): Resource =>
         kernelVersion: '6.1.0',
       },
     },
-  }) as Resource;
+  }) as unknown as Resource;
 
 describe('resourceDetailMappers', () => {
   describe('formatInteger', () => {

@@ -25,7 +25,7 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource =>
 
 describe('resourceStoragePresentation', () => {
   it('normalizes canonical storage platform keys and labels', () => {
-    const resource = makeResource({ platformType: 'pbs' });
+    const resource = makeResource({ platformType: 'proxmox-pbs' });
 
     expect(getCanonicalStoragePlatformKey(resource)).toBe('proxmox-pbs');
     expect(getResourceStoragePlatformLabel('proxmox-pbs')).toBe('PBS');

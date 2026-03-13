@@ -46,7 +46,7 @@ describe('aiIntelligenceStore', () => {
           title: 'CPU high',
           description: 'CPU usage is high',
           detected_at: '2026-03-01T00:00:00Z',
-          alert_identifier: 'instance:node:100::metric/cpu',
+          alertIdentifier: 'instance:node:100::metric/cpu',
         },
       ],
       count: 1,

@@ -3,6 +3,7 @@ import { render, waitFor } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import {
+  buildStatusOptions,
   filterResources,
   sortResources,
   groupResources,
@@ -221,7 +222,7 @@ describe('UnifiedResourceTable performance contract', () => {
   describe('Infrastructure derivation contracts', () => {
     it('filterResources returns correct count after source filter on Profile S', () => {
       const resources = makeResources(PROFILES.S);
-      const proxmoxOnly = filterResources(resources, new Set(['proxmox']), new Set(), []);
+      const proxmoxOnly = filterResources(resources, new Set(['proxmox-pve']), new Set(), []);
       expect(proxmoxOnly.length).toBe(PROFILES.S);
     });
 

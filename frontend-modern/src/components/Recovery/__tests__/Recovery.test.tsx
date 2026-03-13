@@ -62,6 +62,10 @@ const pointsByRollupId: Record<string, any[]> = {
 };
 
 let facetsPayload: any;
+type RecoveryPointsResponse = {
+  data: any[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetch: apiFetchMock,
@@ -219,12 +223,8 @@ describe('Recovery', () => {
     mockLocationSearch = '?rollupId=res%3Avm-123';
     facetsPayload.clusters = ['dev-cluster'];
 
-    let resolveDelayedPoints:
-      | ((value: {
-          data: any[];
-          meta: { page: number; limit: number; total: number; totalPages: number };
-        }) => void)
-      | null = null;
+    let delayedPointsReady = false;
+    let resolveDelayedPoints!: (value: RecoveryPointsResponse) => void;
 
     apiFetchMock.mockImplementation(async (url: string) => {
       const u = new URL(url, 'http://localhost');
@@ -238,8 +238,9 @@ describe('Recovery', () => {
         const rid = u.searchParams.get('rollupId') || '';
         const data = pointsByRollupId[rid] || [];
         if (u.searchParams.get('cluster') === 'dev-cluster') {
-          return await new Promise((resolve) => {
-            resolveDelayedPoints = resolve as typeof resolveDelayedPoints;
+          return await new Promise<RecoveryPointsResponse>((resolve) => {
+            delayedPointsReady = true;
+            resolveDelayedPoints = resolve as (value: RecoveryPointsResponse) => void;
           });
         }
         return {
@@ -284,7 +285,10 @@ describe('Recovery', () => {
     expect(screen.getByText('Backups By Date')).toBeInTheDocument();
     expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
-    resolveDelayedPoints?.({
+    if (!delayedPointsReady) {
+      throw new Error('Expected delayed recovery points request to be pending');
+    }
+    resolveDelayedPoints({
       data: pointsByRollupId['res:vm-123'],
       meta: { page: 1, limit: 500, total: 1, totalPages: 1 },
     });

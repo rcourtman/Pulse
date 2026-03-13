@@ -29,7 +29,7 @@ export const Login: Component<LoginProps> = (props) => {
   const [loadingAuth, setLoadingAuth] = createSignal(
     props.hasAuth === undefined && !props.securityStatus,
   );
-  const [oidcLoading, setOidcLoading] = createSignal(false);
+  const [oidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
 

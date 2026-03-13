@@ -225,7 +225,6 @@ import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx
 import auditWebhookPresentationSource from '@/utils/auditWebhookPresentation.ts?raw';
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import auditLogPresentationSource from '@/utils/auditLogPresentation.ts?raw';
-import settingsShellPresentationSource from '@/utils/settingsShellPresentation.ts?raw';
 import ssoProvidersPanelSource from '@/components/Settings/SSOProvidersPanel.tsx?raw';
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';

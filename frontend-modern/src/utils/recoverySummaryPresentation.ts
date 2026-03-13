@@ -378,7 +378,7 @@ export function buildRecoveryAttentionItems(summary: {
   stale: number;
   neverSucceeded: number;
 }): RecoveryAttentionItem[] {
-  return [
+  const items: RecoveryAttentionItem[] = [
     {
       key: 'failed',
       label: 'Failed',
@@ -414,5 +414,6 @@ export function buildRecoveryAttentionItems(summary: {
       tone: 'blue',
       detail: 'Protection jobs are currently in flight.',
     },
-  ].filter((item) => item.count > 0);
+  ];
+  return items.filter((item) => item.count > 0);
 }

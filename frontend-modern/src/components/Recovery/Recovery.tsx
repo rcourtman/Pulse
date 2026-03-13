@@ -38,11 +38,11 @@ import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
 import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
 import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
+import type { RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   getRecoveryOutcomeBadgeClass,
   normalizeRecoveryOutcome as normalizeOutcome,
-  type RecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import {
   getRecoveryArtifactModePresentation,

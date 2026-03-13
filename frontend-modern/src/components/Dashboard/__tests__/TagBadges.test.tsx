@@ -21,7 +21,7 @@ vi.mock('@/components/shared/Tooltip', () => ({
   hideTooltip: hideTooltipMock,
 }));
 
-const getTagColorWithSpecialMock = vi.fn((tag: string, isDark: boolean) => ({
+const getTagColorWithSpecialMock = vi.fn((_tag: string, isDark: boolean) => ({
   bg: isDark ? 'rgb(30, 30, 30)' : 'rgb(200, 200, 200)',
   text: isDark ? 'rgb(240, 240, 240)' : 'rgb(20, 20, 20)',
   border: isDark ? 'rgb(80, 80, 80)' : 'rgb(150, 150, 150)',

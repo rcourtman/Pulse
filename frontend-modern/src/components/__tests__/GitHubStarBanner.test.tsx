@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /*  Mocks                                                              */
 /* ------------------------------------------------------------------ */
 
-const mockResources = vi.hoisted(() => vi.fn(() => []));
+type BannerResource = { id: string; name: string };
+
+const mockResources = vi.hoisted(() => vi.fn<() => BannerResource[]>(() => []));
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({

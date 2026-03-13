@@ -13,8 +13,8 @@ const reinvestigateFindingMock = vi.hoisted(() => vi.fn());
 const loadFindingsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/patrol', () => ({
-  getInvestigation: (...args: unknown[]) => getInvestigationMock(...args),
-  reinvestigateFinding: (...args: unknown[]) => reinvestigateFindingMock(...args),
+  getInvestigation: getInvestigationMock,
+  reinvestigateFinding: reinvestigateFindingMock,
   formatTimestamp: (value: string) => value,
 }));
 

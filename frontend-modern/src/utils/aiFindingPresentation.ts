@@ -286,7 +286,7 @@ export const isPatrolInvestigationFixApproval = (
 
 export const doesFindingNeedAttention = (
   finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome'>,
-  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId'>[] = [],
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
 ): boolean => {
   if (finding.status !== 'active' || !finding.investigationOutcome) {
     return false;

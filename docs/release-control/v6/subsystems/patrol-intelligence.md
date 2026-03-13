@@ -66,3 +66,9 @@ outside the governed subsystem map even though they are the top-level runtime
 surface for Patrol intelligence. This contract now owns that orchestration and
 presentation boundary while leaving transport and payload-shape ownership in
 `api-contracts`.
+
+Patrol finding state must now also consume the canonical camelCase
+`alertIdentifier` field and pending-approval expiry metadata end to end.
+Frontend Patrol helpers may not keep shadow `alert_identifier` fallbacks or
+drop `expiresAt` when deciding whether queued investigation fixes still need
+operator attention.

@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { ValidComponent } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   DASHBOARD_COMPOSITION_EMPTY_STATE,
@@ -14,7 +15,7 @@ interface CompositionPanelProps {
 
 function DistributionItem(props: { type: string; count: number; total: number }) {
   const percent = () => Math.round((props.count / props.total) * 100);
-  const Icon = () => getDashboardCompositionIcon(props.type);
+  const Icon = (): ValidComponent => getDashboardCompositionIcon(props.type);
 
   return (
     <div class="space-y-1">

@@ -85,6 +85,7 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource => ({
   type: 'agent',
   name: 'Resource One',
   displayName: 'Resource One',
+  platformId: 'agent-1',
   platformType: 'agent',
   sourceType: 'agent',
   status: 'online',

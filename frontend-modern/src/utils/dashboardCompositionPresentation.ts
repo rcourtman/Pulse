@@ -3,9 +3,10 @@ import AppWindow from 'lucide-solid/icons/app-window';
 import Database from 'lucide-solid/icons/database';
 import Box from 'lucide-solid/icons/box';
 import Container from 'lucide-solid/icons/container';
+import type { ValidComponent } from 'solid-js';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 
-const COMPOSITION_ICONS: Record<string, unknown> = {
+const COMPOSITION_ICONS: Record<string, ValidComponent> = {
   vm: Server,
   'system-container': Box,
   'app-container': Container,
@@ -40,7 +41,7 @@ export const getDashboardCompositionLabel = (resourceType: string): string => {
   return titleize(normalized);
 };
 
-export const getDashboardCompositionIcon = (resourceType: string): unknown => {
+export const getDashboardCompositionIcon = (resourceType: string): ValidComponent => {
   const normalized = (resourceType || '').trim().toLowerCase();
   return COMPOSITION_ICONS[normalized] ?? Server;
 };

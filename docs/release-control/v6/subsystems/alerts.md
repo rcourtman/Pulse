@@ -95,3 +95,9 @@ Alert threshold and schedule surfaces must now also treat
 the canonical `node` group-header contract. Frontend alert pages may not
 assume discovery metadata is always present when deriving override IDs or
 toggle styling.
+
+Alert filter metadata and grouped header consumers must also preserve the
+canonical `agent` and `node` header boundary when reusing shared filter
+primitives. Frontend alert tables may not drift back to ad hoc host-key
+grouping or narrow filter key predicates that drop optional hostname values
+before alert group metadata is derived.

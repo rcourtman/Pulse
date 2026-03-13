@@ -39,7 +39,7 @@ export const getStorageRecordNodeHints = (record: StorageRecord): string[] => {
     record.location.label,
     record.refs?.platformEntityId,
   ]
-    .map((value) => value.toLowerCase().trim())
+    .map((value) => (value ? value.toLowerCase().trim() : ''))
     .filter((value) => value.length > 0);
 };
 

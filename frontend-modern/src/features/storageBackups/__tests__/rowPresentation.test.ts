@@ -23,8 +23,11 @@ const baseRecord = (): StorageRecord =>
     statusLabel: 'Healthy',
     health: 'healthy',
     capacity: { totalBytes: 0, usedBytes: 0, freeBytes: 0 },
+    location: { label: 'tower', scope: 'node' },
+    capabilities: ['capacity'],
+    observedAt: Date.now(),
     refs: {},
-  }) as StorageRecord;
+  }) as unknown as StorageRecord;
 
 describe('storage row presentation', () => {
   it('returns rebuild protection tone when storage is rebuilding', () => {
@@ -77,7 +80,7 @@ describe('storage row presentation', () => {
           checksumErrors: 1,
         },
       },
-    } as StorageRecord;
+    } as unknown as StorageRecord;
     expect(getCompactStoragePoolIssueLabel(record)).toBe('DEGRADED');
     expect(getCompactStoragePoolIssueSummary(record)).toBe('2 read, 1 checksum errors');
   });

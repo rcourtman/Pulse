@@ -24,7 +24,12 @@ const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint
   pulseError: optionalTrimmedString(endpoint.pulseError),
 });
 
+const nodeHasClusterEndpoints = (
+  node: NodeConfig,
+): node is NodeConfig & { type: 'pve'; clusterEndpoints?: RawClusterEndpoint[] } => node.type === 'pve';
+
 const normalizeNodeConfig = (node: NodeConfig): NodeConfig => {
+  if (!nodeHasClusterEndpoints(node)) return node;
   const clusterEndpoints = arrayOrUndefined<RawClusterEndpoint>(node.clusterEndpoints);
   if (!clusterEndpoints) return node;
   return {

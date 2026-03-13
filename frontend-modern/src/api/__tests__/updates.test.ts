@@ -5,6 +5,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 import { UpdatesAPI } from '@/api/updates';
+import type { UpdateChannel } from '@/types/config';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 describe('UpdatesAPI', () => {
@@ -23,7 +24,7 @@ describe('UpdatesAPI', () => {
 
   it('omits blank channel for update checks', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
-    await UpdatesAPI.checkForUpdates('   ');
+    await UpdatesAPI.checkForUpdates('   ' as UpdateChannel);
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check');
   });

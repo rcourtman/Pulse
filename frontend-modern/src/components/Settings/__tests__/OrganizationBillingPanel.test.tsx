@@ -3,22 +3,22 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { OrganizationBillingPanel } from '../OrganizationBillingPanel';
 
-const getStatusMock = vi.fn();
-const listOrgsMock = vi.fn();
-const listMembersMock = vi.fn();
-const errorMock = vi.fn();
-const eventBusOnMock = vi.fn(() => () => {});
+const getStatusMock = vi.hoisted(() => vi.fn());
+const listOrgsMock = vi.hoisted(() => vi.fn());
+const listMembersMock = vi.hoisted(() => vi.fn());
+const errorMock = vi.hoisted(() => vi.fn());
+const eventBusOnMock = vi.hoisted(() => vi.fn(() => () => {}));
 
 vi.mock('@/api/license', () => ({
   LicenseAPI: {
-    getStatus: (...args: unknown[]) => getStatusMock(...args),
+    getStatus: getStatusMock,
   },
 }));
 
 vi.mock('@/api/orgs', () => ({
   OrgsAPI: {
-    list: (...args: unknown[]) => listOrgsMock(...args),
-    listMembers: (...args: unknown[]) => listMembersMock(...args),
+    list: listOrgsMock,
+    listMembers: listMembersMock,
   },
 }));
 
@@ -32,13 +32,13 @@ vi.mock('@/stores/license', () => ({
 
 vi.mock('@/stores/events', () => ({
   eventBus: {
-    on: (...args: unknown[]) => eventBusOnMock(...args),
+    on: eventBusOnMock,
   },
 }));
 
 vi.mock('@/stores/notifications', () => ({
   notificationStore: {
-    error: (...args: unknown[]) => errorMock(...args),
+    error: errorMock,
   },
 }));
 

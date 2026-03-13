@@ -118,3 +118,10 @@ event-handler unions. Shared search primitives still need to accept the real
 input/button event targets, but direct invocation inside the primitive must
 stay type-safe so consumers do not reintroduce union-call regressions while
 adding history, shortcut, or trailing-control behavior.
+
+Shared shared-shell primitives that expose semantic `title` or value-level
+`onChange` props must now explicitly omit the conflicting DOM attribute names
+from their inherited HTML props. `CalloutCard`, `FilterSegmentedControl`, and
+`Subtabs` may still forward ordinary div attributes, but their canonical API
+must preserve JSX element titles and value-callback handlers instead of
+widening back to raw DOM attribute unions.

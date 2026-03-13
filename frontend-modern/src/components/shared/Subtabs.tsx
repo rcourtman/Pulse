@@ -6,7 +6,7 @@ export interface SubtabOption {
   disabled?: boolean;
 }
 
-interface SubtabsProps extends JSX.HTMLAttributes<HTMLDivElement> {
+interface SubtabsProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   value: string;
   onChange: (value: string) => void;
   tabs: SubtabOption[];

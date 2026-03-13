@@ -584,7 +584,7 @@ export function useThresholdsData(
 
       const hostname = getPreferredResourceHostname(host);
       [friendlyName, originalName, hostname, host.id]
-        .filter((key: string): key is string => Boolean(key && key.trim()))
+        .filter((key: string | undefined): key is string => Boolean(key && key.trim()))
         .forEach((key: string) => {
           meta[key.trim()] = headerMeta;
         });

@@ -307,7 +307,7 @@ describe('buildWorkloadsHref', () => {
       'ceph',
       'truenas',
     ] as const)('returns null for %s', (type) => {
-      const resource = makeResource({ type });
+      const resource = makeResource({ type } as Partial<Resource>);
       expect(buildWorkloadsHref(resource)).toBeNull();
     });
   });

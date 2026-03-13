@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 
 const navigateMock = vi.fn();
 
@@ -8,7 +9,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/components/shared/Dialog', () => ({
-  Dialog: (props: { isOpen: boolean; children: unknown }) =>
+  Dialog: (props: { isOpen: boolean; children: JSX.Element }) =>
     props.isOpen ? <div>{props.children}</div> : null,
 }));
 

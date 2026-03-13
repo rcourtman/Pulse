@@ -50,7 +50,7 @@ describe('storage pools table presentation', () => {
           },
         } as StorageGroupedRecords,
       ],
-      'host',
+      'node',
       new Set(['pve1']),
     );
 

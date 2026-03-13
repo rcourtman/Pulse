@@ -1,13 +1,10 @@
-import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
+import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import {
   getWorkloadTypePresentation,
   normalizeWorkloadTypePresentationKey,
 } from '@/utils/workloadTypePresentation';
-import {
-  normalizeRecoveryOutcome,
-  type RecoveryOutcome,
-} from '@/utils/recoveryOutcomePresentation';
+import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;

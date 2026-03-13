@@ -388,7 +388,12 @@ export function Infrastructure() {
                       selectClass="min-w-[8rem]"
                     >
                       <option value="">All</option>
-                      <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
+                      <For
+                        each={sourceOptions.filter((source) => {
+                          const normalized = normalizeInfrastructureSource(source.key);
+                          return normalized ? availableSources().has(normalized) : false;
+                        })}
+                      >
                         {(source) => <option value={source.key}>{source.label}</option>}
                       </For>
                     </LabeledFilterSelect>

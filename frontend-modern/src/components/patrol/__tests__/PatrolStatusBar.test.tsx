@@ -6,7 +6,7 @@ import { PatrolStatusBar } from '../PatrolStatusBar';
 const getPatrolRunHistoryMock = vi.hoisted(() => vi.fn<() => Promise<PatrolRunRecord[]>>());
 
 vi.mock('@/api/patrol', () => ({
-  getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
+  getPatrolRunHistory: getPatrolRunHistoryMock,
 }));
 
 vi.mock('@/stores/aiIntelligence', () => ({

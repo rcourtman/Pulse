@@ -134,3 +134,9 @@ Infrastructure selector consumers must also preserve the canonical
 status facets. The selector layer may accept arbitrary user-visible filter
 strings, but it must not widen the canonical unified-resource source/status
 contracts that feed the infrastructure table and workload links.
+
+The same source-filter boundary now also applies to infrastructure filter UI
+options: `frontend-modern/src/pages/Infrastructure.tsx` may render friendly
+string keys, but membership checks against available sources must normalize
+through the canonical selector helper before consulting `KnownSourcePlatform`
+sets.

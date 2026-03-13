@@ -242,7 +242,7 @@ export const aiIntelligenceStore = {
       const now = Date.now();
 
       const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
-        const alertIdentifier = item.alert_identifier;
+        const alertIdentifier = item.alertIdentifier;
         let status = item.status as UnifiedFinding['status'] | undefined;
         if (!status) {
           if (item.resolved_at) {

@@ -10,7 +10,6 @@ import {
   formatSpeed,
   getBackupInfo,
   getShortImageName,
-  type BackupStatus,
 } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';

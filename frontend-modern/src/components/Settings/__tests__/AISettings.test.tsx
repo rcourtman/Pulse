@@ -80,7 +80,6 @@ const baseSettings = (): AISettingsType => ({
   enabled: false,
   model: '',
   configured: false,
-  autonomous_mode: false,
   custom_context: '',
   auth_method: 'api_key',
   oauth_connected: false,

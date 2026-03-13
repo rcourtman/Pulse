@@ -1,13 +1,30 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NodesAPI } from '../nodes';
 import { apiFetchJSON } from '@/utils/apiClient';
-import type { NodeConfig } from '@/types/nodes';
+import type { NodeConfig, PVENodeConfig } from '@/types/nodes';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
 describe('NodesAPI', () => {
+  const makePveNode = (
+    overrides: Partial<PVENodeConfig & { type: 'pve' }> = {},
+  ): PVENodeConfig & { type: 'pve' } => ({
+    id: 'pve-1',
+    type: 'pve',
+    name: 'PVE 1',
+    host: 'https://pve.local:8006',
+    user: 'root@pam',
+    verifySSL: true,
+    monitorVMs: true,
+    monitorContainers: true,
+    monitorStorage: true,
+    monitorBackups: true,
+    monitorPhysicalDisks: false,
+    ...overrides,
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -25,10 +42,7 @@ describe('NodesAPI', () => {
 
     it('normalizes canonical cluster endpoint fields', async () => {
       const mockNodes = [
-        {
-          id: 'pve-1',
-          type: 'pve',
-          name: 'PVE 1',
+        makePveNode({
           clusterEndpoints: [
             {
               nodeId: ' node-1 ',
@@ -45,7 +59,7 @@ describe('NodesAPI', () => {
               pulseError: ' timeout ',
             },
           ],
-        } as NodeConfig,
+        }),
       ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
 
@@ -72,9 +86,8 @@ describe('NodesAPI', () => {
 
     it('uses canonical scalar coercion for non-string and invalid cluster endpoint fields', async () => {
       const mockNodes = [
-        {
+        makePveNode({
           id: 'pve-2',
-          type: 'pve',
           name: 'PVE 2',
           clusterEndpoints: [
             {
@@ -87,8 +100,8 @@ describe('NodesAPI', () => {
               lastSeen: undefined,
               pulseReachable: false,
             },
-          ],
-        } as NodeConfig,
+          ] as unknown as PVENodeConfig['clusterEndpoints'],
+        }),
       ];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
 

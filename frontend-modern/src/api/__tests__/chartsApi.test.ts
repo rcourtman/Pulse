@@ -68,15 +68,15 @@ describe('ChartsAPI', () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
 
     await ChartsAPI.getMetricsHistory({
-      resourceType: 'node',
-      resourceId: 'node-1',
+      resourceType: 'agent',
+      resourceId: 'agent-1',
       metric: 'cpu',
       range: '7d',
       maxPoints: 321.4,
     });
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/metrics-store/history?resourceType=node&resourceId=node-1&metric=cpu&range=7d&maxPoints=321',
+      '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=7d&maxPoints=321',
     );
   });
 

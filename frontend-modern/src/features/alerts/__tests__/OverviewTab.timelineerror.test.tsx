@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import type { Alert } from '@/types/api';
 
 const mockGetIncidentTimeline = vi.fn();
 
@@ -45,7 +46,7 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
         startTime: '2026-01-01T00:00:00Z',
         acknowledged: false,
       },
-    } as Record<string, never>,
+    } as Record<string, Alert>,
     updateAlert: vi.fn(),
     showQuickTip: () => false,
     dismissQuickTip: vi.fn(),

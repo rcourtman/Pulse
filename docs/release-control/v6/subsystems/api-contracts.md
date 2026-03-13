@@ -210,6 +210,12 @@ string/boolean/number helper stacks.
 The same shared scalar coercion rule now also applies to monitoring agent
 lookup timestamps so `lastSeen` normalization does not live as a module-local
 `typeof`/`Date.parse(...)` branch in `frontend-modern/src/api/monitoring.ts`.
+The same scalar-coercion contract now also covers optional Proxmox
+`clusterEndpoints` collections in `frontend-modern/src/api/nodes.ts`:
+frontend consumers may normalize endpoint fields, but they must not fork the
+canonical collection-shape guard or reintroduce legacy `alert_identifier`
+field access once camelCase `alertIdentifier` has been promoted by the shared
+response helpers.
 Hosted signup and magic-link error payload normalization must now also route
 through shared structured error normalization helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through module-local

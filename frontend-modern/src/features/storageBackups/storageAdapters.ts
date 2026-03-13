@@ -1,6 +1,5 @@
 import type { Resource } from '@/types/resource';
 import type {
-  StorageBackupPlatform,
   StorageRecord,
   StorageAdapter,
   StorageAdapterContext,
@@ -36,7 +35,6 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
   const storageMeta = readResourceStorageMeta(resource, platformData);
   const resourceType = (resource.type || '').toLowerCase();
-  const platform = (resource.platformType || 'generic') as StorageBackupPlatform;
   const isDatastore = resourceType === 'datastore';
   const storageType =
     storageMeta?.type ||

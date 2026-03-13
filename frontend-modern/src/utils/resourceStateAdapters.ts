@@ -405,7 +405,8 @@ const mapPMGNodeStatus = (value: unknown): PMGNodeStatus | null => {
           hold: asNumber(queue.hold) ?? 0,
           incoming: asNumber(queue.incoming) ?? 0,
           total: asNumber(queue.total) ?? 0,
-          oldestAge: asNumber(queue.oldestAge),
+          oldestAge: asNumber(queue.oldestAge) ?? 0,
+          updatedAt: asString(queue.updatedAt) || '',
         }
       : undefined,
   };
