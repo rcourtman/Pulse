@@ -808,12 +808,18 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+        "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+        "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/Settings.tsx",
         "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
         "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
-        "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
+        "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+        "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+        "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -849,12 +855,18 @@
             "label": "settings shell framing proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+              "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+              "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
               "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
               "frontend-modern/src/components/Settings/Settings.tsx",
               "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
               "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
-              "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
+              "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+              "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

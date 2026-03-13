@@ -86,6 +86,11 @@ const topLevelSettingsPanelSources = {
 
 const canonicalShellTitleExpectations = [
   {
+    tab: 'api',
+    title: 'API Access',
+    source: apiAccessPanelSource,
+  },
+  {
     tab: 'system-general',
     title: 'General',
     source: generalSettingsPanelSource,
@@ -94,6 +99,16 @@ const canonicalShellTitleExpectations = [
     tab: 'system-network',
     title: 'Network',
     source: networkSettingsPanelSource,
+  },
+  {
+    tab: 'system-updates',
+    title: 'Updates',
+    source: updatesSettingsPanelSource,
+  },
+  {
+    tab: 'system-recovery',
+    title: 'Recovery',
+    source: recoverySettingsPanelSource,
   },
   {
     tab: 'system-ai',
@@ -124,6 +139,16 @@ const canonicalShellTitleExpectations = [
     tab: 'security-sso',
     title: 'Single Sign-On Providers',
     source: ssoProvidersPanelSource,
+  },
+  {
+    tab: 'security-audit',
+    title: 'Audit Log',
+    source: auditLogPanelSource,
+  },
+  {
+    tab: 'security-webhooks',
+    title: 'Audit Webhooks',
+    source: auditWebhookPanelSource,
   },
 ] as const;
 

@@ -24,14 +24,22 @@ work extends shared components instead of creating new local variants.
 2. `frontend-modern/src/components/Settings/Settings.tsx`
 3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-5. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-6. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-7. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-8. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-9. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-10. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-11. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-12. `frontend-modern/src/features/`
+5. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
+6. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
+7. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
+8. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+9. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+10. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+11. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+12. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+13. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+14. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+15. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+16. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+17. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+18. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+19. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+20. `frontend-modern/src/features/`
 
 ## Shared Boundaries
 
@@ -150,8 +158,14 @@ reintroducing bespoke outer page headers or one-off top-level panel framing.
 The shell metadata driving those surfaces is part of the same boundary as
 well: `frontend-modern/src/components/Settings/settingsHeaderMeta.ts` and
 representative top-level panels such as
+`frontend-modern/src/components/Settings/APIAccessPanel.tsx`,
+`frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
+`frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` must keep
 `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` must keep
+`frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`,
+`frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`, and
+`frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
 The release-ready shell proof now also includes a representative desktop
