@@ -554,6 +554,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"rather than a broad target reference",
+		"active residual records",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",
@@ -1101,6 +1102,37 @@ func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
 func TestStatusJSONLaneFollowupsAreTypedRecords(t *testing.T) {
 	status := statusJSON(t)
 	laneIDs := statusLaneIDs(t, status)
+	laneTrackingByLane := make(map[string][]map[string]any)
+	rawLanes, ok := status["lanes"].([]any)
+	if !ok {
+		t.Fatalf("status.json missing lanes list")
+	}
+	for _, rawLane := range rawLanes {
+		lane, ok := rawLane.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lanes contains non-object entry")
+		}
+		laneID, _ := lane["id"].(string)
+		completion, ok := lane["completion"].(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lane %q missing completion object", laneID)
+		}
+		completionState, _ := completion["state"].(string)
+		if completionState != "bounded-residual" {
+			continue
+		}
+		rawTracking, ok := completion["tracking"].([]any)
+		if !ok {
+			t.Fatalf("status.json lane %q missing completion.tracking list", laneID)
+		}
+		for _, rawTrackingRef := range rawTracking {
+			trackingRef, ok := rawTrackingRef.(map[string]any)
+			if !ok {
+				t.Fatalf("status.json lane %q completion.tracking contains non-object entry", laneID)
+			}
+			laneTrackingByLane[laneID] = append(laneTrackingByLane[laneID], trackingRef)
+		}
+	}
 
 	rawFollowups, ok := status["lane_followups"].([]any)
 	if !ok {
@@ -1158,6 +1190,19 @@ func TestStatusJSONLaneFollowupsAreTypedRecords(t *testing.T) {
 			}
 			if _, ok := laneIDs[laneID]; !ok {
 				t.Fatalf("status.json lane_followup %q references unknown lane_id %q", id, laneID)
+			}
+			refs := laneTrackingByLane[laneID]
+			found := false
+			for _, trackingRef := range refs {
+				kind, _ := trackingRef["kind"].(string)
+				trackingID, _ := trackingRef["id"].(string)
+				if kind == "lane-followup" && trackingID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("status.json lane_followup %q is not referenced by lane %q bounded-residual completion.tracking", id, laneID)
 			}
 		}
 	}

@@ -898,6 +898,9 @@ def validate_lane_completion_tracking(
         followup_id: set(str(lane_id) for lane_id in followup.get("lane_ids", []))
         for followup_id, followup in lane_followups_by_id.items()
     }
+    lane_followup_refs: dict[str, set[str]] = {
+        followup_id: set() for followup_id in lane_followups_by_id
+    }
     known_by_kind = {
         "lane-followup": set(lane_followups_by_id),
         "readiness-assertion": set(readiness_assertions_by_id),
@@ -930,6 +933,8 @@ def validate_lane_completion_tracking(
                     "does not reference that lane"
                 )
                 continue
+            if tracking_kind == "lane-followup":
+                lane_followup_refs[tracking_id].add(lane_id)
             if tracking_kind == "readiness-assertion" and lane_id not in readiness_assertion_lane_ids[tracking_id]:
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking readiness assertion {tracking_id!r} "
@@ -960,6 +965,18 @@ def validate_lane_completion_tracking(
                     f"lanes[{lane_id}].completion.tracking {labels.get(tracking_kind, tracking_kind)} "
                     f"{tracking_id!r} is already resolved and cannot keep a bounded residual open"
                 )
+    for followup_id, expected_lane_ids in lane_followup_lane_ids.items():
+        referenced_lane_ids = lane_followup_refs.get(followup_id, set())
+        if not referenced_lane_ids:
+            errors.append(
+                f"lane_followups[{followup_id}] is not referenced by any bounded-residual lane completion.tracking"
+            )
+            continue
+        if referenced_lane_ids != expected_lane_ids:
+            errors.append(
+                f"lane_followups[{followup_id}] is referenced by lanes {sorted(referenced_lane_ids)!r} "
+                f"but declares lane_ids {sorted(expected_lane_ids)!r}"
+            )
 
 
 def subsystem_lane_map(*, use_staged_registry: bool = False) -> dict[str, str]:

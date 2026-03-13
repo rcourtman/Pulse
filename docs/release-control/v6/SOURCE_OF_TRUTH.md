@@ -184,6 +184,9 @@ Assertion design rules:
     already-passed assertions, gates, or completed targets.
     Bounded residual tracking must use a lane followup, readiness assertion,
     release gate, or open decision rather than a broad target reference.
+    `lane_followups` are active residual records, not a loose backlog: each one
+    should stay referenced by the owning lane's `bounded-residual`
+    `completion.tracking`.
 
 ## Locked Decisions
 

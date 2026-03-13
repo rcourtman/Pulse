@@ -168,6 +168,9 @@ Every substantial task must finish by checking these questions:
     assertions, cleared release gates, or completed targets.
     Bounded residual tracking must use a lane followup, readiness assertion,
     release gate, or open decision rather than a broad target reference.
+    Treat `lane_followups` as active residual records rather than loose backlog
+    notes: each one should stay referenced by the owning lane's
+    `bounded-residual` `completion.tracking`.
 
 This is the minimum update set for canonical work:
 
