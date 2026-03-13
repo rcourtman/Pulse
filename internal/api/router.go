@@ -3447,11 +3447,26 @@ func (r *Router) StopAIChat(ctx context.Context) {
 // RestartAIChat restarts the AI chat service with updated configuration
 // Call this when AI settings change that affect the service (e.g., model selection)
 func (r *Router) RestartAIChat(ctx context.Context) {
-	if r.aiHandler != nil {
-		if err := r.aiHandler.Restart(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to restart AI chat service")
-		} else {
-			log.Info().Msg("AI chat service restarted with new configuration")
+	if r.aiHandler == nil {
+		return
+	}
+
+	wasRunning := r.aiHandler.IsRunning(ctx)
+
+	if err := r.aiHandler.Restart(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to restart AI chat service")
+		return
+	}
+
+	log.Info().Msg("AI chat service restarted with new configuration")
+
+	// If the service just started for the first time (was not running before),
+	// perform the full post-start wiring that StartAIChat normally handles.
+	if !wasRunning && r.aiHandler.IsRunning(ctx) {
+		r.wireAIChatProviders()
+		r.wireChatServiceToAI()
+		if r.aiSettingsHandler != nil {
+			r.aiSettingsHandler.WireOrchestratorAfterChatStart()
 		}
 	}
 }

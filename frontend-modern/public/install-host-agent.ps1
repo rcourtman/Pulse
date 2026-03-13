@@ -473,7 +473,7 @@ if (-not $NoService) {
             
             for ($i = 1; $i -le $maxRetries; $i++) {
                 Start-Sleep -Seconds $retryDelay
-                $hostname = $env:COMPUTERNAME
+                $hostname = if ($Hostname) { $Hostname } else { $env:COMPUTERNAME }
                 $lookupHost = Test-AgentRegistration -PulseUrl $PulseUrl -Hostname $hostname -Token $Token
                 
                 if ($lookupHost) {
