@@ -445,6 +445,8 @@ Companion drill:
   MSP mode behaves as a real operator workflow: one provider account can manage
   multiple client tenants coherently, with canonical MSP plan handling and no
   cross-client leakage or scope confusion.
+- Latest exercised record:
+  `docs/release-control/v6/records/msp-provider-tenant-management-2026-03-13.md`
 - Block release if:
   MSP support exists only as pricing or partial provisioning, or a provider
   cannot safely manage multiple client tenants from one place.

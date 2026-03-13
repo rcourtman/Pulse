@@ -1115,6 +1115,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/msp-provider-tenant-management-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -2046,7 +2051,7 @@
       "summary": "Confirm MSP mode behaves as a real provider workflow: one account can manage multiple client tenants coherently without cross-client leakage or MSP/public-plan confusion.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
