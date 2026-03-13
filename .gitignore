@@ -222,6 +222,7 @@ scripts/release_control/*
 !scripts/release_control/canonical_completion_guard_test.py
 !scripts/release_control/contract_audit.py
 !scripts/release_control/contract_audit_test.py
+!scripts/release_control/documentation_currentness_test.py
 !scripts/release_control/format_staged_go.py
 !scripts/release_control/format_staged_go_test.py
 !scripts/release_control/governance_stage_guard.py

@@ -66,6 +66,42 @@ Companion drill:
   Any hosted checkout, org linkage, magic-link, billing-admin, or webhook
   replay path is unconfirmed or inconsistent.
 
+## Gate: `cloud-hosted-tier-runtime-readiness`
+
+- Why this is risky:
+  Hosted signup alone is not enough. If the real hosted Pulse tier cannot be
+  entered, authenticated, navigated, or administered after provisioning, users
+  will pay for a product tier that exists in pricing and billing but not in
+  dependable runtime behavior.
+- Primary runtime surfaces:
+  `internal/cloudcp/...`
+  `internal/hosted/...`
+  `internal/api/public_signup_handlers.go`
+  `internal/api/hosted_org_admin_handlers.go`
+  `frontend-modern/src/pages/HostedSignup.tsx`
+  `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+  `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+- Automated proof:
+  `go test ./internal/cloudcp/... -count=1`
+  `go test ./internal/hosted/... -count=1`
+  `go test ./internal/api -run 'TestHostedLifecycle|TestHostedOrgAdminHandlers|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_' -count=1`
+  `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx`
+- Manual scenario:
+  1. Start from a real hosted Pulse signup or an existing hosted tenant.
+  2. Confirm the user can authenticate into the hosted Pulse app and reach a
+     working hosted runtime instead of a self-hosted setup or dead-end state.
+  3. Confirm hosted billing/admin and organization billing surfaces render
+     coherent plan, seat, and entitlement state for the hosted tenant.
+  4. Confirm hosted-only admin actions and normal post-signup navigation work
+     without self-hosted license prompts or broken hosted assumptions.
+- Pass when:
+  A real hosted Pulse customer can sign up or sign in, land in a working
+  hosted runtime, and use the hosted billing/admin surfaces without self-hosted
+  fallbacks or broken post-provisioning behavior.
+- Block release if:
+  Hosted Pulse can be sold or provisioned but not entered and used as a
+  coherent hosted product tier afterward.
+
 ## Gate: `commercial-cancellation-reactivation`
 
 - Why this is risky:
@@ -98,6 +134,36 @@ Companion drill:
   The scenario is unexercised, a returning canceled customer can re-enter on a
   legacy recurring price, or cancellation/reactivation leaves pricing and
   entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
+
+## Gate: `documentation-currentness-and-legacy-cleanup`
+
+- Why this is risky:
+  Stale release-control or upgrade guidance creates invisible operational
+  drift. Agents and humans will follow whatever the docs say is current, even
+  when the runtime has already moved on.
+- Primary runtime surfaces:
+  `docs/release-control/CONTROL_PLANE.md`
+  `docs/release-control/control_plane.json`
+  `docs/release-control/v6/SOURCE_OF_TRUTH.md`
+  `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+  `docs/release-control/v6/README.md`
+  `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`
+- Automated proof:
+  `python3 scripts/release_control/documentation_currentness_test.py`
+- Manual scenario:
+  1. Review the active v6 guidance surface used by agents and release work.
+  2. Confirm the docs describe the current active target, release phase, and
+     canonical workflow rather than superseded guidance.
+  3. Confirm any remaining legacy, audit, or historical docs are clearly
+     framed as records or reference material instead of current instructions.
+  4. Confirm any stale active doc is updated, archived, or removed rather than
+     left to drift.
+- Pass when:
+  Active v6-facing guidance matches the current governed state of the repo, and
+  historical docs no longer present themselves as current guidance.
+- Block release if:
+  Agents or humans can still follow stale v6 guidance, or legacy/historical
+  docs remain mixed into the active v6 instruction surface.
 
 ## Gate: `paid-feature-entitlement-gating`
 

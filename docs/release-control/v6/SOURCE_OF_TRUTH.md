@@ -129,12 +129,15 @@ Assertion design rules:
 8. Treat casual user language about consistency, seamlessness, drift, bypass
    resistance, or things that "should always be true" as candidate governance
    input, not only explicit requests to add a formal assertion.
+9. Active v6-facing guidance must stay current; legacy or historical docs may
+   exist only as clearly marked reference material, not as current instructions.
 
 ## Non-Negotiable Release Gates
 
 1. Do not ship with open trust-critical P0s.
 2. Do not ship when paywalls and runtime gates disagree.
-3. Do not ship hosted flows that break signup, auth, provision, or revocation.
+3. Do not ship hosted Pulse flows that break signup, auth, provision, hosted
+   runtime access, billing/admin visibility, or revocation.
 4. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
 5. Do not keep polishing strong lanes while weak lanes remain behind.
 6. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.

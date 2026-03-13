@@ -711,6 +711,176 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA10",
+      "summary": "Active Pulse v6 guidance reflects the current governed behavior of the codebase, and legacy or historical documentation does not remain part of the active v6 guidance surface.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L9"
+      ],
+      "subsystem_ids": [],
+      "release_gate_ids": [
+        "documentation-currentness-and-legacy-cleanup"
+      ],
+      "proof_commands": [
+        {
+          "id": "documentation-currentness-tests",
+          "run": [
+            "python3",
+            "scripts/release_control/documentation_currentness_test.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/control_plane.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/CONTROL_PLANE.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/README.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/documentation_currentness_test.py",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA11",
+      "summary": "Pulse Hosted works as a real offered v6 tier: customers can sign up or sign in to a hosted tenant, enter a working hosted runtime, and use hosted billing/admin surfaces without self-hosted fallback paths or broken post-provisioning behavior.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L3",
+        "L4",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "release_gate_ids": [
+        "cloud-hosted-tier-runtime-readiness"
+      ],
+      "proof_commands": [
+        {
+          "id": "cloud-hosted-tier-runtime-api",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestHostedLifecycle|TestHostedOrgAdminHandlers|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "cloud-hosted-tier-runtime-frontend",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/pages/__tests__/HostedSignup.test.tsx",
+            "src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
+            "src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx"
+          ],
+          "cwd": "frontend-modern"
+        },
+        {
+          "id": "cloud-hosted-tier-runtime-go",
+          "run": [
+            "go",
+            "test",
+            "./internal/cloudcp/...",
+            "./internal/hosted/...",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_lifecycle_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_org_admin_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_signup_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/stripe/cloud_lifecycle_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hosted/provisioner_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -1173,6 +1343,19 @@
       ]
     },
     {
+      "id": "cloud-hosted-tier-runtime-readiness",
+      "summary": "Confirm the actual hosted Pulse tier works end to end after provisioning: hosted auth, runtime entry, and hosted billing/admin surfaces all function coherently.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L3",
+        "L4",
+        "L12"
+      ]
+    },
+    {
       "id": "commercial-cancellation-reactivation",
       "summary": "Confirm grandfathered v5 recurring continuity holds while active, completed cancellation revokes paid state, and re-entry after cancellation uses current public v6 pricing.",
       "owner": "project-owner",
@@ -1184,6 +1367,17 @@
         "L3",
         "L11",
         "L12"
+      ]
+    },
+    {
+      "id": "documentation-currentness-and-legacy-cleanup",
+      "summary": "Confirm active v6-facing guidance is current, and any legacy or historical docs are clearly archived or demoted instead of remaining current guidance.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L9"
       ]
     },
     {
