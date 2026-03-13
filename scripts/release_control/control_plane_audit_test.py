@@ -38,6 +38,7 @@ VALID_PAYLOAD = {
             "status": "active",
             "summary": "Drive Pulse v6 to a governed RC cut.",
             "completion_rule": "rc_ready",
+            "proof_scope": "derived",
         },
         {
             "id": "v6-ga-promotion",
@@ -46,6 +47,7 @@ VALID_PAYLOAD = {
             "status": "planned",
             "summary": "Promote Pulse v6 from validated RC to governed GA.",
             "completion_rule": "release_ready",
+            "proof_scope": "derived",
         }
     ],
 }

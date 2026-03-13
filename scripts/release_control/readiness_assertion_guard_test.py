@@ -167,13 +167,13 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
 
-    def test_main_skips_manual_active_target_phase(self) -> None:
+    def test_main_skips_active_target_with_no_machine_proof_scope(self) -> None:
         payload = base_payload()
 
         with mock.patch.object(readiness_assertion_guard, "load_status_payload", return_value=payload), mock.patch.object(
             readiness_assertion_guard,
             "active_target_blocking_levels",
-            side_effect=ValueError("manual completion_rule does not map to derived readiness blocking levels"),
+            return_value=(),
         ), mock.patch.object(readiness_assertion_guard, "run_selected_proof_commands") as runner:
             exit_code = readiness_assertion_guard.main(["--active-target", "--proof-type", "automated"])
 

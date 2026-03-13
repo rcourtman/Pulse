@@ -365,10 +365,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
             pretty = render_pretty(report)
             self.assertNotIn("current_target_workstreams:", pretty)
-            self.assertIn(
-                "active target proof scope could not be derived: manual completion_rule does not map to derived readiness blocking levels",
-                pretty,
-            )
+            self.assertNotIn("active target proof scope could not be derived", pretty)
 
     def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -513,10 +510,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("release_blocker_details:", pretty)
             self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
             self.assertNotIn("target_blocking_levels=", pretty)
-            self.assertIn(
-                "active target proof scope could not be derived: manual completion_rule does not map to derived readiness blocking levels",
-                pretty,
-            )
+            self.assertNotIn("active target proof scope could not be derived", pretty)
 
     def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

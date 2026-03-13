@@ -430,6 +430,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"\"id\": \"v6-rc-stabilization\"",
 		"\"status\": \"active\"",
 		"\"completion_rule\": \"manual\"",
+		"\"proof_scope\": \"none\"",
 		"\"id\": \"v6-ga-promotion\"",
 		"\"status\": \"planned\"",
 		"\"completion_rule\": \"rc_ready\"",

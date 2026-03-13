@@ -49,6 +49,9 @@ model that active and future release profiles reuse.
    Local hooks and CI should resolve readiness-assertion proof scope from the
    active target completion rule instead of hard-coding only repo-ready or
    future-phase release-ready proof surfaces.
+   Manual targets may declare an explicit proof scope when they should still
+   pull machine proofs, or `none` when the hold is intentionally human-owned
+   and should not emit derivation warnings.
 9. Direction changes must be normalized.
    When the user states a durable product truth or changes the current product
    priority, the agent must classify that direction as a readiness assertion,
@@ -112,6 +115,8 @@ validation.
 Executable readiness proof runs should follow that same phase boundary: the
 active target should pull in only the readiness blocking levels required for
 its completion rule, not future-phase proof suites by default.
+When a target is intentionally human-held, declare that explicitly in
+`control_plane.json` rather than relying on a derivation failure to signal it.
 Do not wait for a special governance prompt before checking whether informal
 user language should update the control plane.
 
@@ -119,6 +124,9 @@ user language should update the control plane.
 
 1. v6 is the current active release profile.
 2. `v6-rc-stabilization` is the current active engineering target.
+   It is intentionally manual and declares `proof_scope: none`, so the repo
+   reports a human-held stabilization state without pretending that proof-scope
+   derivation failed.
 3. `v6-rc-cut` is complete and remains the immediate predecessor target.
 4. `v6-ga-promotion` is a planned follow-on target, not the current objective.
 5. Its files remain under `docs/release-control/v6/`.

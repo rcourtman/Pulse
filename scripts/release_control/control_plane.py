@@ -69,6 +69,12 @@ COMPLETION_RULE_BLOCKING_LEVELS = {
     "rc_ready": ("repo-ready", "rc-ready"),
     "release_ready": ("repo-ready", "rc-ready", "release-ready"),
 }
+PROOF_SCOPE_BLOCKING_LEVELS = {
+    "none": (),
+    "repo_ready": ("repo-ready",),
+    "rc_ready": ("repo-ready", "rc-ready"),
+    "release_ready": ("repo-ready", "rc-ready", "release-ready"),
+}
 
 
 def _clean_relative_path(path: str, *, context: str) -> str:
@@ -207,6 +213,21 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 f"control plane target {target_id!r} has invalid completion_rule {target['completion_rule']!r}"
             )
+        proof_scope = raw.get("proof_scope", "derived")
+        if not isinstance(proof_scope, str) or not proof_scope.strip():
+            raise ValueError(
+                f"control plane targets[{index}].proof_scope must be a non-empty string when declared"
+            )
+        proof_scope = str(proof_scope)
+        if proof_scope not in {"derived", "none", "repo_ready", "rc_ready", "release_ready"}:
+            raise ValueError(
+                f"control plane target {target_id!r} has invalid proof_scope {proof_scope!r}"
+            )
+        if target["completion_rule"] != "manual" and proof_scope == "none":
+            raise ValueError(
+                f"control plane target {target_id!r} may only use proof_scope 'none' with completion_rule 'manual'"
+            )
+        target["proof_scope"] = proof_scope
         targets_by_id[target_id] = target
 
     active_target = targets_by_id.get(active_target_id)
@@ -294,6 +315,15 @@ def blocking_levels_for_completion_rule(completion_rule: str) -> tuple[str, ...]
         raise ValueError(f"unsupported completion_rule {completion_rule!r}") from exc
 
 
+def blocking_levels_for_proof_scope(proof_scope: str) -> tuple[str, ...]:
+    if proof_scope == "derived":
+        raise ValueError("derived proof_scope requires completion_rule resolution")
+    try:
+        return PROOF_SCOPE_BLOCKING_LEVELS[proof_scope]
+    except KeyError as exc:
+        raise ValueError(f"unsupported proof_scope {proof_scope!r}") from exc
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Resolve Pulse control-plane values.")
     parser.add_argument(
@@ -322,7 +352,11 @@ if __name__ == "__main__":
 
 def active_target_blocking_levels(*, staged: bool = False) -> tuple[str, ...]:
     control_plane = active_control_plane(staged=staged)
-    return blocking_levels_for_completion_rule(str(control_plane["active_target"]["completion_rule"]))
+    active_target = control_plane["active_target"]
+    proof_scope = str(active_target.get("proof_scope", "derived"))
+    if proof_scope != "derived":
+        return blocking_levels_for_proof_scope(proof_scope)
+    return blocking_levels_for_completion_rule(str(active_target["completion_rule"]))
 
 
 DEFAULT_CONTROL_PLANE = active_control_plane()

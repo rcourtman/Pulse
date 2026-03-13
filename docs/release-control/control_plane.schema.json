@@ -193,6 +193,16 @@
             "repo_ready",
             "manual"
           ]
+        },
+        "proof_scope": {
+          "type": "string",
+          "enum": [
+            "derived",
+            "none",
+            "repo_ready",
+            "rc_ready",
+            "release_ready"
+          ]
         }
       }
     }
