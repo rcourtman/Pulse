@@ -1857,6 +1857,13 @@ def audit_status_payload(
         ),
         key=lambda item: _lane_sort_key(str(item["lane_id"])),
     )
+    for residual in lane_residuals:
+        tracking_details = list(residual.get("tracking_details", []))
+        if tracking_details and all(str(detail.get("kind")) == "target" for detail in tracking_details):
+            warnings.append(
+                f"lane {residual['lane_id']} uses only broad target tracking for its bounded residual; "
+                "normalize the remaining same-lane work into a readiness assertion, release gate, or open decision when it becomes concrete"
+            )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)

@@ -309,6 +309,7 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"status.json.lanes[*].completion",
 		"references must also reference the same lane",
 		"already-passed",
+		"temporary fallback",
 	})
 }
 
@@ -550,6 +551,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"Lane completion state, residual-gap summaries, and normalized follow-up",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
+		"temporary fallback",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",

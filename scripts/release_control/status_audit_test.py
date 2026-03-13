@@ -964,6 +964,35 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("L1 unresolved=1 tracking=target:v6-rc-stabilization[active]", pretty)
             self.assertIn("Lane still has a governed residual.", pretty)
 
+    def test_target_only_bounded_residual_emits_normalization_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane is at floor but only broader GA work is currently tracked.",
+                completion_tracking=[{"kind": "target", "id": "v6-rc-stabilization"}],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lane L1 uses only broad target tracking for its bounded residual; normalize the remaining same-lane work into a readiness assertion, release gate, or open decision when it becomes concrete",
+                report["warnings"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("uses only broad target tracking for its bounded residual", pretty)
+
 
 if __name__ == "__main__":
     unittest.main()

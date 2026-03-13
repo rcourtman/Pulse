@@ -180,6 +180,10 @@ Assertion design rules:
     Those references must belong to that same lane and must still be
     unresolved rather than pointing at unrelated governance objects or
     already-passed assertions, gates, or completed targets.
+    A broad target reference may be used only as a temporary fallback when the
+    next same-lane governance object is not concrete yet; normalize it into a
+    readiness assertion, release gate, or open decision as soon as the
+    remaining work is clear enough to name directly.
 
 ## Locked Decisions
 
