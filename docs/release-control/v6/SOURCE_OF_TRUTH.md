@@ -182,6 +182,7 @@ Assertion design rules:
     Pair lane `status` and `completion.state` coherently: `complete` goes with
     `target-met`, `bounded-residual` goes with `partial`, and `open` must not
     be paired with `target-met`.
+    `partial` means measurable progress, so it must not sit at zero score.
     `not-started` means zero score and `open`. `blocked` remains an `open`
     lane below target rather than a residual or complete state.
     `completion.tracking` is only for bounded residuals; open or complete lanes

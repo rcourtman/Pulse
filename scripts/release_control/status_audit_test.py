@@ -814,6 +814,31 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_partial_lane_must_keep_non_zero_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=0,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] partial lanes must keep current_score above 0",
+                report["errors"],
+            )
+
     def test_not_started_lane_must_use_open_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"

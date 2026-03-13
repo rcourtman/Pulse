@@ -325,6 +325,24 @@
           "if": {
             "properties": {
               "status": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_score": {
+                "not": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
                 "const": "not-started"
               }
             }

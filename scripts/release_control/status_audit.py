@@ -791,6 +791,8 @@ def audit_lanes(
             errors.append(f"{context} cannot be target-met while evidence is missing")
         if completion_state == "open" and status == "target-met":
             errors.append(f"{context} open completion must not pair with status='target-met'")
+        if status == "partial" and current == 0:
+            errors.append(f"{context} partial lanes must keep current_score above 0")
         if status == "not-started" and current != 0:
             errors.append(f"{context} not-started lanes must keep current_score at 0")
         if status == "not-started" and completion_state != "open":
