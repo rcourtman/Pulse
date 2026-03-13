@@ -94,6 +94,18 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
             ],
         ),
         CommandSpec(
+            name="relay-managed-runtime",
+            cwd=str(pulse_dir),
+            command=[
+                "go",
+                "test",
+                "./internal/relay",
+                "-run",
+                "TestManagedRuntimeRelayRegistrationReconnectDrain",
+                "-count=1",
+            ],
+        ),
+        CommandSpec(
             name="relay-mobile-client",
             cwd=str(pulse_mobile_dir),
             command=[

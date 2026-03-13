@@ -1496,7 +1496,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-12.md",
+          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-13.md",
           "kind": "file"
         },
         {
@@ -1511,7 +1511,7 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/relay/client_e2e_test.go",
+          "path": "internal/relay/client_managed_runtime_test.go",
           "kind": "file"
         },
         {
@@ -2234,9 +2234,9 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-12.md",
+          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-13.md",
           "kind": "file",
-          "evidence_tier": "test-proof"
+          "evidence_tier": "managed-runtime-exercise"
         }
       ]
     },
