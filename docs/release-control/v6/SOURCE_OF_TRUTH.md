@@ -185,6 +185,8 @@ Assertion design rules:
     `partial` means measurable progress, so it must not sit at zero score.
     `not-started` means zero score and `open`. `blocked` remains an `open`
     lane below target rather than a residual or complete state.
+    Blocked lanes must declare typed same-lane blocker references to unresolved
+    readiness assertions, release gates, or open decisions.
     `completion.tracking` is only for bounded residuals; open or complete lanes
     should keep that list empty until the lane reaches its current floor and
     the remaining work becomes a governed residual.

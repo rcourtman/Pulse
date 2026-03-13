@@ -536,6 +536,7 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"const\": \"partial\"",
 		"\"const\": \"not-started\"",
 		"\"const\": \"blocked\"",
+		"\"lane_blocker_ref\"",
 		"\"not\": {",
 		"\"minItems\": 1",
 		"\"maxItems\": 0",
@@ -564,6 +565,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"`partial` means measurable progress",
 		"`not-started` means zero score",
 		"`blocked` remains an `open`",
+		"typed same-lane blocker references",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"open or complete lanes",
@@ -803,6 +805,10 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if !ok {
 			t.Fatalf("status.json lane %q missing completion.tracking list", laneID)
 		}
+		rawBlockers, ok := lane["blockers"].([]any)
+		if !ok {
+			t.Fatalf("status.json lane %q missing blockers list", laneID)
+		}
 		if completionState == "open" && len(rawTracking) != 0 {
 			t.Fatalf("status.json lane %q must not declare completion.tracking while completion.state is open", laneID)
 		}
@@ -823,6 +829,12 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		}
 		if statusValue == "blocked" && currentScore >= targetScore {
 			t.Fatalf("status.json lane %q must stay below target_score while status is blocked", laneID)
+		}
+		if statusValue == "blocked" && len(rawBlockers) == 0 {
+			t.Fatalf("status.json lane %q must declare blockers while status is blocked", laneID)
+		}
+		if statusValue != "blocked" && len(rawBlockers) != 0 {
+			t.Fatalf("status.json lane %q must not declare blockers while status is %s", laneID, statusValue)
 		}
 		if completionState == "bounded-residual" && statusValue != "partial" {
 			t.Fatalf("status.json lane %q must pair completion.state bounded-residual with status partial", laneID)
@@ -845,6 +857,20 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 			id, ok := trackingRef["id"].(string)
 			if !ok || strings.TrimSpace(id) == "" {
 				t.Fatalf("status.json lane %q completion.tracking missing non-empty id", laneID)
+			}
+		}
+		for _, rawBlockerRef := range rawBlockers {
+			blockerRef, ok := rawBlockerRef.(map[string]any)
+			if !ok {
+				t.Fatalf("status.json lane %q blockers contains non-object entry", laneID)
+			}
+			kind, ok := blockerRef["kind"].(string)
+			if !ok || !slices.Contains([]string{"readiness-assertion", "release-gate", "open-decision"}, kind) {
+				t.Fatalf("status.json lane %q has invalid blocker kind %#v", laneID, blockerRef["kind"])
+			}
+			id, ok := blockerRef["id"].(string)
+			if !ok || strings.TrimSpace(id) == "" {
+				t.Fatalf("status.json lane %q blocker missing non-empty id", laneID)
 			}
 		}
 

@@ -84,6 +84,7 @@ def base_payload(
     completion_state: str | None = None,
     completion_summary: str | None = None,
     completion_tracking: list[dict[str, str]] | None = None,
+    blockers: list[dict[str, str]] | None = None,
     release_gate_status: str = "passed",
     readiness_assertions: list[dict[str, object]] | None = None,
     lane_followups: list[dict[str, object]] | None = None,
@@ -103,6 +104,7 @@ def base_payload(
         else:
             resolved_completion_summary = "Lane still requires additional in-scope work."
     resolved_completion_tracking = list(completion_tracking or [])
+    resolved_blockers = list(blockers or [])
     return {
         "version": "6.0",
         "updated_at": "2026-03-12",
@@ -165,6 +167,7 @@ def base_payload(
                     "summary": resolved_completion_summary,
                     "tracking": resolved_completion_tracking,
                 },
+                "blockers": resolved_blockers,
                 "subsystems": [],
                 "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
             }
@@ -881,7 +884,7 @@ class StatusAuditTest(unittest.TestCase):
                         lane_status="blocked",
                         current_score=4,
                         completion_state="bounded-residual",
-                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
                     )
                 )
 
@@ -907,11 +910,139 @@ class StatusAuditTest(unittest.TestCase):
                         lane_status="blocked",
                         current_score=8,
                         completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
                     )
                 )
 
             self.assertIn(
                 "lanes[0] blocked lanes must stay below target_score",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_declare_blocker_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must declare at least one blocker reference",
+                report["errors"],
+            )
+
+    def test_non_blocked_lane_must_not_declare_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=4,
+                        completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] only blocked lanes may declare blocker references",
+                report["errors"],
+            )
+
+    def test_blocked_lane_rejects_resolved_blocker_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                        release_gate_status="passed",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[L1].blockers release gate 'g1' is already resolved and cannot keep a blocked lane open",
+                report["errors"],
+            )
+
+    def test_blocked_lane_rejects_lane_external_blocker_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="blocked",
+                current_score=4,
+                completion_state="open",
+                blockers=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="pending",
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 4,
+                    "status": "blocked",
+                    "completion": {
+                        "state": "open",
+                        "summary": "Second lane is blocked by its own gate.",
+                        "tracking": [],
+                    },
+                    "blockers": [{"kind": "release-gate", "id": "g2"}],
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][0]["status"] = "pending"
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["status"] = "passed"
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].blockers release gate 'g1' does not reference that lane",
                 report["errors"],
             )
 

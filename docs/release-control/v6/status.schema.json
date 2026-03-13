@@ -372,12 +372,35 @@
           },
           "then": {
             "properties": {
+              "blockers": {
+                "minItems": 1
+              },
               "completion": {
                 "properties": {
                   "state": {
                     "const": "open"
                   }
                 }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "not-started",
+                  "partial",
+                  "target-met"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "maxItems": 0
               }
             }
           }
@@ -452,6 +475,7 @@
         "current_score",
         "status",
         "completion",
+        "blockers",
         "subsystems",
         "evidence"
       ],
@@ -485,6 +509,12 @@
         },
         "completion": {
           "$ref": "#/$defs/lane_completion"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lane_blocker_ref"
+          }
         },
         "subsystems": {
           "type": "array",
@@ -581,6 +611,28 @@
           "type": "string",
           "enum": [
             "lane-followup",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "lane_blocker_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
             "readiness-assertion",
             "release-gate",
             "open-decision"

@@ -715,6 +715,8 @@ def audit_lanes(
         completion_summary = ""
         completion_tracking: list[dict[str, str]] = []
         completion_tracking_keys: list[tuple[str, str]] = []
+        blockers: list[dict[str, str]] = []
+        blocker_keys: list[tuple[str, str]] = []
         if not isinstance(raw_completion, dict):
             errors.append(f"{context}.completion must be an object")
         else:
@@ -740,9 +742,29 @@ def audit_lanes(
                     continue
                 completion_tracking.append({"kind": tracking_kind, "id": tracking_id})
                 completion_tracking_keys.append((tracking_kind, tracking_id))
+        raw_blockers = raw_lane.get("blockers")
+        if not isinstance(raw_blockers, list):
+            errors.append(f"{context}.blockers must be a list")
+            raw_blockers = []
+        for blocker_index, raw_blocker_ref in enumerate(raw_blockers):
+            blocker_context = f"{context}.blockers[{blocker_index}]"
+            if not isinstance(raw_blocker_ref, dict):
+                errors.append(f"{blocker_context} must be an object")
+                continue
+            blocker_kind = _require_string(raw_blocker_ref, "kind", errors, context=blocker_context)
+            blocker_id = _require_string(raw_blocker_ref, "id", errors, context=blocker_context)
+            if blocker_kind is None or blocker_id is None:
+                continue
+            blockers.append({"kind": blocker_kind, "id": blocker_id})
+            blocker_keys.append((blocker_kind, blocker_id))
         valid_completion_states = {"open", "bounded-residual", "complete"}
         valid_tracking_kinds = {
             "lane-followup",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision",
+        }
+        valid_blocker_kinds = {
             "readiness-assertion",
             "release-gate",
             "open-decision",
@@ -754,6 +776,11 @@ def audit_lanes(
                 errors.append(
                     f"{context}.completion.tracking kind {tracking['kind']!r} is not supported"
                 )
+        for blocker in blockers:
+            if blocker["kind"] not in valid_blocker_kinds:
+                errors.append(
+                    f"{context}.blockers kind {blocker['kind']!r} is not supported"
+                )
         if len(completion_tracking_keys) != len(set(completion_tracking_keys)):
             errors.append(f"{context}.completion.tracking must not contain duplicate kind/id pairs")
         if completion_tracking_keys != sorted(
@@ -761,6 +788,13 @@ def audit_lanes(
             key=_lane_completion_tracking_sort_key,
         ):
             errors.append(f"{context}.completion.tracking must be sorted by kind then id")
+        if len(blocker_keys) != len(set(blocker_keys)):
+            errors.append(f"{context}.blockers must not contain duplicate kind/id pairs")
+        if blocker_keys != sorted(
+            blocker_keys,
+            key=_lane_completion_tracking_sort_key,
+        ):
+            errors.append(f"{context}.blockers must be sorted by kind then id")
         subsystems = _require_string_list(raw_lane, "subsystems", errors, context=context)
         if len(subsystems) != len(set(subsystems)):
             errors.append(f"{context}.subsystems must not contain duplicates")
@@ -801,6 +835,10 @@ def audit_lanes(
             errors.append(f"{context} blocked lanes must use completion.state='open'")
         if status == "blocked" and at_target:
             errors.append(f"{context} blocked lanes must stay below target_score")
+        if status == "blocked" and not blockers:
+            errors.append(f"{context} blocked lanes must declare at least one blocker reference")
+        if status != "blocked" and blockers:
+            errors.append(f"{context} only blocked lanes may declare blocker references")
         if completion_state == "bounded-residual" and status != "partial":
             errors.append(f"{context} bounded-residual completion must pair with status='partial'")
         if completion_state == "complete" and status != "target-met":
@@ -832,6 +870,7 @@ def audit_lanes(
                 "completion_state": completion_state,
                 "completion_summary": completion_summary,
                 "completion_tracking": completion_tracking,
+                "blockers": blockers,
                 "subsystems": subsystems,
                 "repo_ids": repo_ids,
                 "cross_repo": len(repo_ids) > 1,
@@ -993,6 +1032,91 @@ def validate_lane_completion_tracking(
                 f"lane_followups[{followup_id}] is referenced by lanes {sorted(referenced_lane_ids)!r} "
                 f"but declares lane_ids {sorted(expected_lane_ids)!r}"
             )
+
+
+def validate_lane_blockers(
+    lane_reports: list[dict[str, Any]],
+    *,
+    readiness_assertions: list[dict[str, Any]],
+    release_gates: list[dict[str, Any]],
+    open_decisions: list[dict[str, Any]],
+    errors: list[str],
+) -> None:
+    readiness_assertions_by_id = {
+        str(assertion["id"]): assertion for assertion in readiness_assertions
+    }
+    release_gates_by_id = {
+        str(gate["id"]): gate for gate in release_gates
+    }
+    open_decisions_by_id = {
+        str(decision["id"]): decision for decision in open_decisions
+    }
+    readiness_assertion_lane_ids = {
+        assertion_id: set(str(lane_id) for lane_id in assertion.get("lane_ids", []))
+        for assertion_id, assertion in readiness_assertions_by_id.items()
+    }
+    release_gate_lane_ids = {
+        gate_id: set(str(lane_id) for lane_id in gate.get("lane_ids", []))
+        for gate_id, gate in release_gates_by_id.items()
+    }
+    open_decision_lane_ids = {
+        decision_id: set(str(lane_id) for lane_id in decision.get("lane_ids", []))
+        for decision_id, decision in open_decisions_by_id.items()
+    }
+    known_by_kind = {
+        "readiness-assertion": set(readiness_assertions_by_id),
+        "release-gate": set(release_gates_by_id),
+        "open-decision": set(open_decisions_by_id),
+    }
+    labels = {
+        "readiness-assertion": "readiness assertion",
+        "release-gate": "release gate",
+        "open-decision": "open decision",
+    }
+
+    for lane in lane_reports:
+        lane_id = lane["id"]
+        if lane.get("status") != "blocked":
+            continue
+        for blocker in lane.get("blockers", []):
+            blocker_kind = str(blocker["kind"])
+            blocker_id = str(blocker["id"])
+            if blocker_id not in known_by_kind.get(blocker_kind, set()):
+                errors.append(
+                    f"lanes[{lane_id}].blockers references unknown "
+                    f"{labels.get(blocker_kind, blocker_kind)} {blocker_id!r}"
+                )
+                continue
+            if blocker_kind == "readiness-assertion" and lane_id not in readiness_assertion_lane_ids[blocker_id]:
+                errors.append(
+                    f"lanes[{lane_id}].blockers readiness assertion {blocker_id!r} "
+                    "does not reference that lane"
+                )
+                continue
+            if blocker_kind == "release-gate" and lane_id not in release_gate_lane_ids[blocker_id]:
+                errors.append(
+                    f"lanes[{lane_id}].blockers release gate {blocker_id!r} "
+                    "does not reference that lane"
+                )
+                continue
+            if blocker_kind == "open-decision" and lane_id not in open_decision_lane_ids[blocker_id]:
+                errors.append(
+                    f"lanes[{lane_id}].blockers open decision {blocker_id!r} "
+                    "does not reference that lane"
+                )
+                continue
+            detail = _lane_tracking_detail(
+                blocker,
+                lane_followups_by_id={},
+                readiness_assertions_by_id=readiness_assertions_by_id,
+                release_gates_by_id=release_gates_by_id,
+                open_decisions_by_id=open_decisions_by_id,
+            )
+            if detail["resolved"]:
+                errors.append(
+                    f"lanes[{lane_id}].blockers {labels.get(blocker_kind, blocker_kind)} "
+                    f"{blocker_id!r} is already resolved and cannot keep a blocked lane open"
+                )
 
 
 def subsystem_lane_map(*, use_staged_registry: bool = False) -> dict[str, str]:
@@ -1729,6 +1853,13 @@ def audit_status_payload(
         open_decisions=open_decisions,
         errors=errors,
     )
+    validate_lane_blockers(
+        lane_reports,
+        readiness_assertions=readiness_assertions,
+        release_gates=release_gates,
+        open_decisions=open_decisions,
+        errors=errors,
+    )
     resolved_decisions = validate_resolved_decisions(
         payload,
         lane_ids=lane_ids,
@@ -2283,6 +2414,8 @@ def render_pretty(report: dict[str, Any]) -> str:
         )
         if lane["completion_summary"]:
             lines.append(f"  completion_summary: {lane['completion_summary']}")
+        for blocker in lane.get("blockers", []):
+            lines.append(f"  blocker: {blocker['kind']}:{blocker['id']}")
         for tracking in lane["completion_tracking"]:
             lines.append(f"  tracking: {tracking['kind']}:{tracking['id']}")
         for missing in lane["missing_evidence"]:

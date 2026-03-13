@@ -1626,6 +1626,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -1651,6 +1652,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -1691,6 +1693,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [
         "cloud-paid"
       ],
@@ -1723,6 +1726,7 @@
         "summary": "Hosted MSP support is at the current tracked RC floor, including real tenant-management behavior and the shared hosted commercial replay proof.",
         "tracking": []
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -1748,6 +1752,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -1783,6 +1788,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [
         "alerts",
         "api-contracts",
@@ -1855,6 +1861,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [
         "relay-runtime"
       ],
@@ -1897,6 +1904,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [
         "frontend-primitives"
       ],
@@ -1938,6 +1946,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -1978,6 +1987,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [
         "performance-and-scalability"
       ],
@@ -2054,6 +2064,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
@@ -2124,6 +2135,7 @@
           }
         ]
       },
+      "blockers": [],
       "subsystems": [],
       "evidence": [
         {
