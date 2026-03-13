@@ -12,6 +12,8 @@ target are machine-selected by `docs/release-control/control_plane.json`.
 
 Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
+Lane completion state, residual-gap summaries, and normalized follow-up
+tracking also live only in `docs/release-control/v6/status.json`.
 Current repo/release readiness is derived by
 `python3 scripts/release_control/status_audit.py --pretty` from
 `status.json`, not hand-maintained in this file. The human runbook for
@@ -45,8 +47,8 @@ This file must not contain:
 3. `docs/release-control/control_plane.schema.json`
    Machine-readable contract for `control_plane.json`.
 4. `docs/release-control/v6/status.json`
-   Live lane state, structured evidence references, and typed operational
-   decision records.
+   Live lane state, lane completion records, structured evidence references,
+   and typed operational decision records.
 5. `docs/release-control/v6/status.schema.json`
    Machine-readable contract for the `status.json` shape.
 6. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
@@ -172,6 +174,9 @@ Assertion design rules:
     check landed. If obvious same-lane gaps still keep the outcome from being
     coherent, trustworthy, or realistically shippable, that lane is not done
     yet.
+16. Lanes that are at target but intentionally not closed must record a
+    bounded residual in `status.json` with a short rationale and explicit
+    tracking references to the governing follow-up surface.
 
 ## Locked Decisions
 
@@ -245,8 +250,8 @@ For canonical subsystem work:
 4. Then read the relevant subsystem contract under
    `docs/release-control/v6/subsystems/`.
 5. Update `status.json` when live lane state, readiness derivation rules,
-   assertion proof routes, evidence references, or typed operational decision
-   records change.
+   lane completion records, assertion proof routes, evidence references, or
+   typed operational decision records change.
 6. Update this file only when stable governance, scope, locked decisions, or
    the readiness-assertion design rules change.
 7. When a canonical path replaces an old path, add or tighten a guardrail so

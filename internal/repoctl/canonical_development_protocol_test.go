@@ -757,6 +757,35 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if statusValue, ok := lane["status"].(string); !ok || !slices.Contains([]string{"not-started", "partial", "target-met", "blocked"}, statusValue) {
 			t.Fatalf("status.json lane %q has invalid status %#v", laneID, lane["status"])
 		}
+		completion, ok := lane["completion"].(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lane %q missing completion object", laneID)
+		}
+		completionState, ok := completion["state"].(string)
+		if !ok || !slices.Contains([]string{"open", "bounded-residual", "complete"}, completionState) {
+			t.Fatalf("status.json lane %q has invalid completion.state %#v", laneID, completion["state"])
+		}
+		if completionSummary, ok := completion["summary"].(string); !ok || strings.TrimSpace(completionSummary) == "" {
+			t.Fatalf("status.json lane %q missing non-empty completion.summary", laneID)
+		}
+		rawTracking, ok := completion["tracking"].([]any)
+		if !ok {
+			t.Fatalf("status.json lane %q missing completion.tracking list", laneID)
+		}
+		for _, rawTrackingRef := range rawTracking {
+			trackingRef, ok := rawTrackingRef.(map[string]any)
+			if !ok {
+				t.Fatalf("status.json lane %q completion.tracking contains non-object entry", laneID)
+			}
+			kind, ok := trackingRef["kind"].(string)
+			if !ok || !slices.Contains([]string{"target", "readiness-assertion", "release-gate", "open-decision"}, kind) {
+				t.Fatalf("status.json lane %q has invalid completion.tracking kind %#v", laneID, trackingRef["kind"])
+			}
+			id, ok := trackingRef["id"].(string)
+			if !ok || strings.TrimSpace(id) == "" {
+				t.Fatalf("status.json lane %q completion.tracking missing non-empty id", laneID)
+			}
+		}
 
 		validateEvidenceRefs(t, activeRepos, allowedKinds, rawEvidence, "status.json lane "+laneID)
 	}
@@ -1181,6 +1210,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"open_decisions",
 		"resolved_decisions",
 		"subsystem_ids",
+		"completion_state",
 		"derived_status",
 		"--check",
 	})

@@ -129,6 +129,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "metrics-hot-path",
                 "agent-update-runtime",
                 "host-agent-runtime",
+                "container-entrypoint-runtime",
                 "unified-agent-installer-runtime",
                 "monitoring-runtime",
                 "unified-agent-settings-surface",
@@ -175,6 +176,35 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "scripts/installtests/install_sh_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_docker_entrypoint_change_uses_container_entrypoint_policy(self):
+        required = infer_impacted_subsystems(["docker-entrypoint.sh"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["docker-entrypoint.sh"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "container-entrypoint-runtime",
+                    "label": "container entrypoint runtime proof",
+                    "touched_runtime_files": ["docker-entrypoint.sh"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "scripts/installtests/docker_entrypoint_test.go",
                     ],
                 }
             ],

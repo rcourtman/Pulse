@@ -81,10 +81,27 @@ def base_payload(
     *,
     lane_status: str = "target-met",
     current_score: int = 8,
+    completion_state: str | None = None,
+    completion_summary: str | None = None,
+    completion_tracking: list[dict[str, str]] | None = None,
     release_gate_status: str = "passed",
     readiness_assertions: list[dict[str, object]] | None = None,
     open_decisions: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
+    resolved_completion_state = completion_state
+    if resolved_completion_state is None:
+        resolved_completion_state = "complete" if lane_status == "target-met" else "open"
+    resolved_completion_summary = completion_summary
+    if resolved_completion_summary is None:
+        if resolved_completion_state == "complete":
+            resolved_completion_summary = "Lane reached a coherent and complete stop point."
+        elif resolved_completion_state == "bounded-residual":
+            resolved_completion_summary = (
+                "Lane reached the current governed floor and has normalized residual work."
+            )
+        else:
+            resolved_completion_summary = "Lane still requires additional in-scope work."
+    resolved_completion_tracking = list(completion_tracking or [])
     return {
         "version": "6.0",
         "updated_at": "2026-03-12",
@@ -142,6 +159,11 @@ def base_payload(
                 "target_score": 8,
                 "current_score": current_score,
                 "status": lane_status,
+                "completion": {
+                    "state": resolved_completion_state,
+                    "summary": resolved_completion_summary,
+                    "tracking": resolved_completion_tracking,
+                },
                 "subsystems": [],
                 "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
             }
@@ -239,6 +261,7 @@ class StatusAuditTest(unittest.TestCase):
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
             self.assertEqual(report["lanes"][0]["derived_status"], "target-met")
+            self.assertEqual(report["lanes"][0]["completion_state"], "complete")
             self.assertEqual(report["readiness_assertions"][0]["proof_command_count"], 1)
 
     def test_rc_ready_gate_pending_blocks_rc_ready_and_release_ready(self) -> None:
@@ -558,6 +581,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("control_plane: profile=v6 target=v6-rc-stabilization", pretty)
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("rc_ready=False", pretty)
+            self.assertIn("completion=complete", pretty)
             self.assertIn("proof_commands=1", pretty)
             self.assertIn("overclosed_release_gates=0", pretty)
             self.assertIn("release_gates:", pretty)
@@ -659,6 +683,57 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["lanes"][0]["repo_ids"], ["pulse", "pulse-pro"])
             self.assertEqual(report["open_decisions"][0]["repo_ids"], ["pulse", "pulse-pro"])
             self.assertEqual(report["release_gates"][0]["repo_ids"], ["pulse", "pulse-pro"])
+
+    def test_partial_lane_at_target_requires_bounded_residual_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] partial lanes that already meet target_score must use completion.state='bounded-residual'",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_requires_known_tracking_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="bounded-residual",
+                        completion_tracking=[{"kind": "target", "id": "missing-target"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[L1].completion.tracking references unknown target 'missing-target'",
+                report["errors"],
+            )
 
 
 if __name__ == "__main__":

@@ -319,6 +319,7 @@
         "target_score",
         "current_score",
         "status",
+        "completion",
         "subsystems",
         "evidence"
       ],
@@ -350,6 +351,9 @@
             "blocked"
           ]
         },
+        "completion": {
+          "$ref": "#/$defs/lane_completion"
+        },
         "subsystems": {
           "type": "array",
           "uniqueItems": true,
@@ -364,6 +368,58 @@
           "items": {
             "$ref": "#/$defs/evidence_reference"
           }
+        }
+      }
+    },
+    "lane_completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "summary",
+        "tracking"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "bounded-residual",
+            "complete"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tracking": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lane_completion_tracking_ref"
+          }
+        }
+      }
+    },
+    "lane_completion_tracking_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "target",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

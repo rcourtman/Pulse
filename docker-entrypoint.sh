@@ -10,16 +10,11 @@ is_immutable_ownership_path() {
     target="$1"
     [ -n "$target" ] || return 1
 
-    old_ifs=$IFS
-    IFS=:
-    set -- $PULSE_IMMUTABLE_OWNERSHIP_PATHS
-    IFS=$old_ifs
-
-    for path in "$@"; do
-        if [ -n "$path" ] && [ "$path" = "$target" ]; then
+    case ":$PULSE_IMMUTABLE_OWNERSHIP_PATHS:" in
+        *:"$target":*)
             return 0
-        fi
-    done
+            ;;
+    esac
 
     return 1
 }

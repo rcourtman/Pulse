@@ -1150,6 +1150,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/msp-provider-tenant-management-production-fixed-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -1592,6 +1597,20 @@
       "target_score": 9,
       "current_score": 9,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Self-hosted RC confidence is at the current floor; GA promotion still depends on the governed RC-to-GA promotion proof and rollback package.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "rc-to-ga-promotion-readiness"
+          },
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1607,6 +1626,20 @@
       "target_score": 9,
       "current_score": 9,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Commercial conversion surfaces are at the RC floor, but real checkout, billing replay, and cancellation/reactivation proof still gate broader lane closure.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "commercial-cancellation-reactivation"
+          },
+          {
+            "kind": "release-gate",
+            "id": "hosted-signup-billing-replay"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1637,6 +1670,20 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but hosted-tier end-to-end and MSP commercial proof remain governed residual gaps.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "cloud-hosted-tier-runtime-readiness"
+          },
+          {
+            "kind": "release-gate",
+            "id": "msp-provider-tenant-management"
+          }
+        ]
+      },
       "subsystems": [
         "cloud-paid"
       ],
@@ -1664,6 +1711,20 @@
       "target_score": 6,
       "current_score": 6,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "MSP support is only at the minimum tracked floor; full hosted MSP provider behavior remains bounded by the hosted/runtime and tenant-management governance work.",
+        "tracking": [
+          {
+            "kind": "readiness-assertion",
+            "id": "RA13"
+          },
+          {
+            "kind": "release-gate",
+            "id": "msp-provider-tenant-management"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1679,6 +1740,16 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Mobile is at the RC usefulness floor; broader go-live hardening beyond pairing, auth, reconnect, and approvals remains post-RC follow-up.",
+        "tracking": [
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1704,6 +1775,16 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Architecture coherence reached the current governed floor, while broader cleanup and post-RC canonicalization continue under the later promotion target.",
+        "tracking": [
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [
         "alerts",
         "api-contracts",
@@ -1766,6 +1847,16 @@
       "target_score": 9,
       "current_score": 9,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Relay infrastructure is at the RC floor, while broader hardening and non-blocking resilience work stay bounded to later promotion work.",
+        "tracking": [
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [
         "relay-runtime"
       ],
@@ -1798,6 +1889,16 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "First-session UX reached the RC floor; broader polish and parity work remain intentionally outside the current stabilization target.",
+        "tracking": [
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [
         "frontend-primitives"
       ],
@@ -1825,6 +1926,20 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Documentation is current enough for the RC floor, but GA-facing promotion and release communication work remain bounded residual follow-up.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "rc-to-ga-promotion-readiness"
+          },
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1855,6 +1970,16 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Performance is at the current release floor, but additional scalability headroom and non-blocking performance polish remain post-RC follow-up.",
+        "tracking": [
+          {
+            "kind": "target",
+            "id": "v6-ga-promotion"
+          }
+        ]
+      },
       "subsystems": [
         "performance-and-scalability"
       ],
@@ -1917,6 +2042,20 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Migration safety is at the RC floor, while GA promotion proof and any further commercial continuity coverage remain governed residual work.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "commercial-cancellation-reactivation"
+          },
+          {
+            "kind": "release-gate",
+            "id": "rc-to-ga-promotion-readiness"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -1977,6 +2116,24 @@
       "target_score": 8,
       "current_score": 8,
       "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "The end-to-end journey suite covers the RC floor, but remaining real hosted, MSP, and promotion journeys stay as governed residual proof work.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "cloud-hosted-tier-runtime-readiness"
+          },
+          {
+            "kind": "release-gate",
+            "id": "msp-provider-tenant-management"
+          },
+          {
+            "kind": "release-gate",
+            "id": "rc-to-ga-promotion-readiness"
+          }
+        ]
+      },
       "subsystems": [],
       "evidence": [
         {
@@ -2148,7 +2305,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2165,6 +2322,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/msp-provider-tenant-management-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/msp-provider-tenant-management-production-fixed-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }

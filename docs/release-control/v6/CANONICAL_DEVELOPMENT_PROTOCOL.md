@@ -41,10 +41,11 @@ and the active target.
 guard for that evergreen layer.
 `SOURCE_OF_TRUTH.md` owns profile-specific governance, scope, locked decisions,
 and the readiness-assertion design rules.
-`status.json` owns live lane state, lane-to-subsystem ownership, the active
-readiness assertion catalog, readiness derivation rules, executable
-proof commands, structured evidence references, typed lane/subsystem
-decision records, and the canonical machine-readable workspace repo catalog.
+`status.json` owns live lane state, lane-to-subsystem ownership, lane
+completion records, the active readiness assertion catalog, readiness
+derivation rules, executable proof commands, structured evidence references,
+typed lane/subsystem decision records, and the canonical machine-readable
+workspace repo catalog.
 Lane scores reaching target in `status.json` mean the tracked architecture and
 governance work for those lanes is at target; they are not, by themselves,
 approval to cut an RC or promote stable/GA if phase-blocking readiness
@@ -131,7 +132,7 @@ Every substantial task must finish by checking these questions:
 
 1. Did I change a canonical contract?
    If yes: update the relevant subsystem contract.
-2. Did I change live lane state, readiness derivation rules, readiness assertion proof routes, evidence references, or typed operational decision records?
+2. Did I change live lane state, lane completion records, readiness derivation rules, readiness assertion proof routes, evidence references, or typed operational decision records?
    If yes: update `status.json`.
 3. Did I change stable governance, scope, evergreen readiness assertions, or lock a new architectural/release decision?
    If yes: update `SOURCE_OF_TRUTH.md`.
@@ -170,6 +171,11 @@ This is the minimum update set for canonical work:
 This minimum update set is a floor.
 It does not mean the task should stop at the first minimally valid patch when
 the next obvious same-lane work is still required for a coherent outcome.
+When a lane reaches its current target but still has intentionally bounded
+residual work, the same slice must record that residual in
+`status.json.lanes[*].completion` with a short rationale and explicit tracking
+references to the governing target, readiness assertion, release gate, or open
+decision that owns the follow-up.
 
 This protocol is enforced locally at commit time by the canonical completion
 guard in `scripts/release_control/canonical_completion_guard.py` and by the

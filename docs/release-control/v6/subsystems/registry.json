@@ -892,6 +892,7 @@
         "internal/monitoring/"
       ],
       "owned_files": [
+        "docker-entrypoint.sh",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "scripts/install.sh"
       ],
@@ -946,6 +947,19 @@
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/send_report_test.go"
+            ]
+          },
+          {
+            "id": "container-entrypoint-runtime",
+            "label": "container entrypoint runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docker-entrypoint.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/docker_entrypoint_test.go"
             ]
           },
           {

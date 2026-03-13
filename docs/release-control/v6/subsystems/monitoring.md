@@ -30,7 +30,8 @@ truth for live infrastructure data.
 6. `internal/agentupdate/update.go`
 7. `internal/hostagent/agent.go`
 8. `scripts/install.sh`
-9. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+9. `docker-entrypoint.sh`
+10. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Shared Boundaries
 
@@ -44,7 +45,8 @@ truth for live infrastructure data.
 4. Add or change unified agent download, self-update, and persisted version handoff through `internal/agentupdate/update.go`
 5. Add or change unified agent startup, update continuity, and first-report assembly through `internal/hostagent/agent.go`
 6. Add or change unified agent installer runtime flags, persisted service args, and update-safe install defaults through `scripts/install.sh`
-7. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+7. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
+8. Add or change unified agent inventory, reconnect, removal, and scope presentation through `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 
 ## Forbidden Paths
 
@@ -90,6 +92,11 @@ That installer surface must also preserve input parity with the persisted
 service contract: explicitly supplied runtime flags like `--state-dir` cannot
 be written into service definitions without also being accepted on installer
 re-entry or upgrade paths.
+The container entrypoint in `docker-entrypoint.sh` now also lives under this
+boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
+when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
+may not reintroduce ownership mutation against those read-only files during
+container boot.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary

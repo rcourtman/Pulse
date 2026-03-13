@@ -138,6 +138,34 @@ class SubsystemLookupTest(unittest.TestCase):
             ["scripts/installtests/install_sh_test.go"],
         )
 
+    def test_lookup_paths_assigns_docker_entrypoint_to_monitoring(self) -> None:
+        result = lookup_paths(["docker-entrypoint.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"monitoring"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"monitoring"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/monitoring.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "container-entrypoint-runtime",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["scripts/installtests/docker_entrypoint_test.go"],
+        )
+
     def test_lookup_paths_assigns_relay_client_to_relay_runtime(self) -> None:
         result = lookup_paths(["internal/relay/client.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

@@ -125,6 +125,11 @@ def _decision_sort_key(value: tuple[str, str]) -> tuple[str, str]:
     return (date_value, decision_id.casefold())
 
 
+def _lane_completion_tracking_sort_key(value: tuple[str, str]) -> tuple[str, str]:
+    kind, entry_id = value
+    return (kind.casefold(), entry_id.casefold())
+
+
 def _blocker_detail(
     item: dict[str, Any],
     *,
@@ -650,6 +655,7 @@ def audit_lanes(
         target = _require_number(raw_lane, "target_score", errors, context=context) or 0.0
         current = _require_number(raw_lane, "current_score", errors, context=context) or 0.0
         status = _require_string(raw_lane, "status", errors, context=context) or "partial"
+        raw_completion = raw_lane.get("completion")
 
         if target < 0 or target > 10 or current < 0 or current > 10:
             errors.append(f"{context} score values must stay within 0-10")
@@ -657,6 +663,51 @@ def audit_lanes(
             errors.append(f"{context} current_score {current:g} exceeds target_score {target:g}")
         if status not in valid_lane_statuses:
             errors.append(f"{context} has invalid status {status!r}")
+        completion_state = "open"
+        completion_summary = ""
+        completion_tracking: list[dict[str, str]] = []
+        completion_tracking_keys: list[tuple[str, str]] = []
+        if not isinstance(raw_completion, dict):
+            errors.append(f"{context}.completion must be an object")
+        else:
+            completion_state = (
+                _require_string(raw_completion, "state", errors, context=f"{context}.completion") or "open"
+            )
+            completion_summary = (
+                _require_string(raw_completion, "summary", errors, context=f"{context}.completion")
+                or ""
+            )
+            raw_tracking = raw_completion.get("tracking")
+            if not isinstance(raw_tracking, list):
+                errors.append(f"{context}.completion.tracking must be a list")
+                raw_tracking = []
+            for tracking_index, raw_tracking_ref in enumerate(raw_tracking):
+                tracking_context = f"{context}.completion.tracking[{tracking_index}]"
+                if not isinstance(raw_tracking_ref, dict):
+                    errors.append(f"{tracking_context} must be an object")
+                    continue
+                tracking_kind = _require_string(raw_tracking_ref, "kind", errors, context=tracking_context)
+                tracking_id = _require_string(raw_tracking_ref, "id", errors, context=tracking_context)
+                if tracking_kind is None or tracking_id is None:
+                    continue
+                completion_tracking.append({"kind": tracking_kind, "id": tracking_id})
+                completion_tracking_keys.append((tracking_kind, tracking_id))
+        valid_completion_states = {"open", "bounded-residual", "complete"}
+        valid_tracking_kinds = {"target", "readiness-assertion", "release-gate", "open-decision"}
+        if completion_state not in valid_completion_states:
+            errors.append(f"{context}.completion.state has invalid value {completion_state!r}")
+        for tracking in completion_tracking:
+            if tracking["kind"] not in valid_tracking_kinds:
+                errors.append(
+                    f"{context}.completion.tracking kind {tracking['kind']!r} is not supported"
+                )
+        if len(completion_tracking_keys) != len(set(completion_tracking_keys)):
+            errors.append(f"{context}.completion.tracking must not contain duplicate kind/id pairs")
+        if completion_tracking_keys != sorted(
+            completion_tracking_keys,
+            key=_lane_completion_tracking_sort_key,
+        ):
+            errors.append(f"{context}.completion.tracking must be sorted by kind then id")
         subsystems = _require_string_list(raw_lane, "subsystems", errors, context=context)
         if len(subsystems) != len(set(subsystems)):
             errors.append(f"{context}.subsystems must not contain duplicates")
@@ -687,6 +738,18 @@ def audit_lanes(
             errors.append(f"{context} cannot be target-met while evidence is missing")
         if status == "not-started" and current > 0:
             warnings.append(f"{context} is not-started but current_score is already {current:g}")
+        if status == "target-met" and completion_state != "complete":
+            errors.append(f"{context} target-met lanes must use completion.state='complete'")
+        if at_target and status == "partial" and completion_state != "bounded-residual":
+            errors.append(
+                f"{context} partial lanes that already meet target_score must use completion.state='bounded-residual'"
+            )
+        if not at_target and completion_state != "open":
+            errors.append(f"{context} lanes below target_score must use completion.state='open'")
+        if completion_state == "bounded-residual" and not completion_tracking:
+            errors.append(f"{context} bounded-residual completion must declare at least one tracking reference")
+        if completion_state == "complete" and completion_tracking:
+            errors.append(f"{context} complete lanes must not declare residual tracking references")
 
         lane_reports.append(
             {
@@ -697,6 +760,9 @@ def audit_lanes(
                 "gap": max(0.0, target - current),
                 "at_target": at_target,
                 "status": status,
+                "completion_state": completion_state,
+                "completion_summary": completion_summary,
+                "completion_tracking": completion_tracking,
                 "subsystems": subsystems,
                 "repo_ids": repo_ids,
                 "cross_repo": len(repo_ids) > 1,
@@ -740,6 +806,46 @@ def validate_lane_subsystem_bindings(
             errors.append(
                 f"lanes[{lane_id}].subsystems = {declared!r}, want {expected!r} from subsystem registry"
             )
+
+
+def validate_lane_completion_tracking(
+    lane_reports: list[dict[str, Any]],
+    *,
+    readiness_assertions: list[dict[str, Any]],
+    release_gates: list[dict[str, Any]],
+    open_decisions: list[dict[str, Any]],
+    errors: list[str],
+) -> None:
+    readiness_assertion_ids = {str(assertion["id"]) for assertion in readiness_assertions}
+    release_gate_ids = {str(gate["id"]) for gate in release_gates}
+    open_decision_ids = {str(decision["id"]) for decision in open_decisions}
+    target_ids = set(DEFAULT_CONTROL_PLANE["targets_by_id"])
+
+    known_by_kind = {
+        "target": target_ids,
+        "readiness-assertion": readiness_assertion_ids,
+        "release-gate": release_gate_ids,
+        "open-decision": open_decision_ids,
+    }
+    labels = {
+        "target": "target",
+        "readiness-assertion": "readiness assertion",
+        "release-gate": "release gate",
+        "open-decision": "open decision",
+    }
+
+    for lane in lane_reports:
+        lane_id = lane["id"]
+        if lane.get("completion_state") != "bounded-residual":
+            continue
+        for tracking in lane.get("completion_tracking", []):
+            tracking_kind = str(tracking["kind"])
+            tracking_id = str(tracking["id"])
+            if tracking_id not in known_by_kind.get(tracking_kind, set()):
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking references unknown "
+                    f"{labels.get(tracking_kind, tracking_kind)} {tracking_id!r}"
+                )
 
 
 def subsystem_lane_map(*, use_staged_registry: bool = False) -> dict[str, str]:
@@ -1388,6 +1494,13 @@ def audit_status_payload(
         valid_open_decision_statuses=valid_open_decision_statuses,
         errors=errors,
     )
+    validate_lane_completion_tracking(
+        lane_reports,
+        readiness_assertions=readiness_assertions,
+        release_gates=release_gates,
+        open_decisions=open_decisions,
+        errors=errors,
+    )
     resolved_decisions = validate_resolved_decisions(
         payload,
         lane_ids=lane_ids,
@@ -1694,6 +1807,11 @@ def audit_status_payload(
         "summary": {
             "lane_count": len(lane_reports),
             "lanes_at_target": sum(1 for lane in lane_reports if lane["at_target"]),
+            "lanes_complete": sum(1 for lane in lane_reports if lane["completion_state"] == "complete"),
+            "lanes_bounded_residual": sum(
+                1 for lane in lane_reports if lane["completion_state"] == "bounded-residual"
+            ),
+            "lanes_open": sum(1 for lane in lane_reports if lane["completion_state"] == "open"),
             "lanes_missing_evidence": sum(1 for lane in lane_reports if not lane["all_evidence_present"]),
             "all_evidence_present": all(lane["all_evidence_present"] for lane in lane_reports),
             "readiness_assertion_count": len(readiness_assertions),
@@ -1858,6 +1976,9 @@ def render_pretty(report: dict[str, Any]) -> str:
             "summary: "
             f"lanes={summary['lane_count']} "
             f"at_target={summary['lanes_at_target']} "
+            f"complete={summary['lanes_complete']} "
+            f"bounded_residual={summary['lanes_bounded_residual']} "
+            f"open={summary['lanes_open']} "
             f"missing_evidence={summary['lanes_missing_evidence']} "
             f"assertions={summary['readiness_assertion_count']} "
             f"assertions_passed={summary['readiness_assertions_passed']} "
@@ -1873,10 +1994,15 @@ def render_pretty(report: dict[str, Any]) -> str:
     for lane in report.get("lanes", []):
         lines.append(
             f"{lane['id']}: gap={lane['gap']:.0f} status={lane['status']} "
+            f"completion={lane['completion_state']} "
             f"derived={lane['derived_status']} evidence_count={lane['evidence_count']} "
             f"repos={','.join(lane['repo_ids']) or '-'} "
             f"subsystems={','.join(lane['subsystems']) or '-'}"
         )
+        if lane["completion_summary"]:
+            lines.append(f"  completion_summary: {lane['completion_summary']}")
+        for tracking in lane["completion_tracking"]:
+            lines.append(f"  tracking: {tracking['kind']}:{tracking['id']}")
         for missing in lane["missing_evidence"]:
             lines.append(f"  missing {missing}")
     for assertion in report.get("readiness_assertions", []):
