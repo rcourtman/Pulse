@@ -14,6 +14,7 @@ export async function sendStripeWebhook(
   webhookSecret: string,
   eventType: string,
   objectPayload: Record<string, unknown>,
+  options: { path?: string } = {},
 ) {
   const eventPayload = {
     id: `evt_e2e_${Date.now()}_${randomBytes(4).toString('hex')}`,
@@ -25,7 +26,8 @@ export async function sendStripeWebhook(
     pending_webhooks: 1,
   };
   const body = JSON.stringify(eventPayload);
-  const response = await request.post(`${baseURL}/api/webhooks/stripe`, {
+  const webhookPath = options.path?.trim() || '/api/stripe/webhook';
+  const response = await request.post(`${baseURL}${webhookPath}`, {
     headers: {
       'Content-Type': 'application/json',
       'Stripe-Signature': webhookSignature(webhookSecret, body),

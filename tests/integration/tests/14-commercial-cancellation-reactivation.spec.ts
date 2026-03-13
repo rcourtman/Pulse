@@ -81,6 +81,10 @@ function commercialWebhookBaseURL(): string {
   return raw.replace(/\/+$/, '');
 }
 
+function commercialWebhookPath(): string {
+  return (process.env.PULSE_CCR_WEBHOOK_PATH || '/api/stripe/webhook').trim() || '/api/stripe/webhook';
+}
+
 function commercialOrgID(): string {
   return (process.env.PULSE_CCR_ORG_ID || 'default').trim() || 'default';
 }
@@ -202,6 +206,7 @@ async function replaySubscriptionStateIntoPulse(
     webhookSecret,
     eventType,
     subscriptionObjectForWebhook(subscription),
+    { path: commercialWebhookPath() },
   );
 }
 

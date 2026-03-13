@@ -154,7 +154,7 @@ test.describe.serial('Cloud billing lifecycle (post-checkout)', () => {
       customer_email: identity.email,
       customer_details: { email: identity.email },
       metadata: session.metadata || { account_display_name: identity.orgName },
-    });
+    }, { path: '/api/stripe/webhook' });
 
     let tenantID = '';
     await expect.poll(async () => {
@@ -180,7 +180,7 @@ test.describe.serial('Cloud billing lifecycle (post-checkout)', () => {
       status: 'canceled',
       items: subscription.items || { data: [] },
       metadata: subscription.metadata || {},
-    });
+    }, { path: '/api/stripe/webhook' });
 
     await expect.poll(async () => {
       const tenants = await listTenants(page.request, baseURL, adminKey);
