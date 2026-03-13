@@ -25,21 +25,24 @@ work extends shared components instead of creating new local variants.
 3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 5. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
-6. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
-7. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
-8. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-9. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
-10. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-11. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-12. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
-13. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-14. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-15. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-16. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-17. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-18. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-19. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-20. `frontend-modern/src/features/`
+6. `frontend-modern/src/components/Settings/AISettings.tsx`
+7. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
+8. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
+9. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+10. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+11. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+12. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+13. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+14. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+15. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+16. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+17. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+18. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+19. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+20. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+21. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+22. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+23. `frontend-modern/src/features/`
 
 ## Shared Boundaries
 
@@ -159,10 +162,13 @@ The shell metadata driving those surfaces is part of the same boundary as
 well: `frontend-modern/src/components/Settings/settingsHeaderMeta.ts` and
 representative top-level panels such as
 `frontend-modern/src/components/Settings/APIAccessPanel.tsx`,
+`frontend-modern/src/components/Settings/AISettings.tsx`,
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
+`frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` must keep
 `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` must keep
+`frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`, and
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep

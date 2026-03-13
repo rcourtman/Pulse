@@ -749,9 +749,12 @@ index 1111111..2222222 100644
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
         runtime_files = [
             "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+            "frontend-modern/src/components/Settings/AISettings.tsx",
             "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
             "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+            "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
             "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+            "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
             "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
         ]
