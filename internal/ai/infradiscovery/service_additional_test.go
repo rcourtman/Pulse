@@ -292,6 +292,7 @@ func (m *mockReadState) DockerContainers() []*unifiedresources.DockerContainerVi
 	return m.dockerContainers
 }
 func (m *mockReadState) StoragePools() []*unifiedresources.StoragePoolView     { return nil }
+func (m *mockReadState) PhysicalDisks() []*unifiedresources.PhysicalDiskView   { return nil }
 func (m *mockReadState) PBSInstances() []*unifiedresources.PBSInstanceView     { return nil }
 func (m *mockReadState) PMGInstances() []*unifiedresources.PMGInstanceView     { return nil }
 func (m *mockReadState) K8sClusters() []*unifiedresources.K8sClusterView       { return nil }
