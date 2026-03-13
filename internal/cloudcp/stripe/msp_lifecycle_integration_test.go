@@ -142,6 +142,9 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if strings.TrimSpace(raw.EntitlementJWT) == "" || strings.TrimSpace(raw.EntitlementRefreshToken) == "" {
 			t.Fatalf("workspace %s: expected raw hosted entitlement lease state, got %+v", ws.ID, raw)
 		}
+		if strings.TrimSpace(raw.Integrity) == "" {
+			t.Fatalf("workspace %s: expected raw hosted billing integrity, got %+v", ws.ID, raw)
+		}
 		if raw.SubscriptionState != "" || len(raw.Capabilities) != 0 {
 			t.Fatalf("workspace %s: expected raw lease-only state, got %+v", ws.ID, raw)
 		}

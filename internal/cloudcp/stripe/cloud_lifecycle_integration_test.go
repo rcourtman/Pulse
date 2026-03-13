@@ -202,6 +202,9 @@ func TestCloudLifecycle_CheckoutToBillingToAgentLimits(t *testing.T) {
 			if strings.TrimSpace(raw.EntitlementRefreshToken) == "" {
 				t.Fatal("raw billing state missing EntitlementRefreshToken")
 			}
+			if strings.TrimSpace(raw.Integrity) == "" {
+				t.Fatal("raw billing state missing Integrity")
+			}
 			if raw.SubscriptionState != "" || len(raw.Capabilities) != 0 {
 				t.Fatalf("expected raw lease-only state (no SubscriptionState/Capabilities), got sub_state=%q caps=%v", raw.SubscriptionState, raw.Capabilities)
 			}

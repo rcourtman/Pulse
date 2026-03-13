@@ -164,6 +164,14 @@ func (p *Provisioner) ensureHostedRuntimeFileOwnership(path string) error {
 	return nil
 }
 
+func (p *Provisioner) ensureHostedDefaultPersistence(tenantDataDir string) error {
+	mtp := config.NewMultiTenantPersistence(tenantDataDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		return fmt.Errorf("initialize hosted default persistence: %w", err)
+	}
+	return nil
+}
+
 func mapAccountRoleToOrganizationRole(role registry.MemberRole) models.OrganizationRole {
 	switch role {
 	case registry.MemberRoleOwner:
@@ -696,6 +704,9 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
 		return fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
+	if err := p.ensureHostedDefaultPersistence(tenantDataDir); err != nil {
+		return fmt.Errorf("initialize hosted default persistence for tenant %s: %w", tenantID, err)
+	}
 	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, tenantID, email); err != nil {
 		return fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
 	}
@@ -843,6 +854,9 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	}
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
 		return nil, fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
+	}
+	if err := p.ensureHostedDefaultPersistence(tenantDataDir); err != nil {
+		return nil, fmt.Errorf("initialize hosted default persistence for tenant %s: %w", tenantID, err)
 	}
 	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, displayName, ""); err != nil {
 		return nil, fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
