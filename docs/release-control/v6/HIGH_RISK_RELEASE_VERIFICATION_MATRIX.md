@@ -122,6 +122,8 @@ Companion drill:
   Stripe customer portal / recurring subscription state
 - Automated proof:
   `python3 scripts/release_control/commercial_cancellation_reactivation_proof.py`
+  For the live external rehearsal path, use
+  `python3 scripts/release_control/commercial_cancellation_reactivation_rehearsal.py`.
   Manual command detail remains documented in
   `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`.
 - Manual scenario:
