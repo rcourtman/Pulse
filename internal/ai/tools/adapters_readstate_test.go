@@ -26,6 +26,7 @@ func (f *fakeReadState) Hosts() []*ur.HostView                       { return f.
 func (f *fakeReadState) DockerHosts() []*ur.DockerHostView           { return f.dockerHosts }
 func (f *fakeReadState) DockerContainers() []*ur.DockerContainerView { return f.dockerContainers }
 func (f *fakeReadState) StoragePools() []*ur.StoragePoolView         { return nil }
+func (f *fakeReadState) PhysicalDisks() []*ur.PhysicalDiskView       { return nil }
 func (f *fakeReadState) PBSInstances() []*ur.PBSInstanceView         { return nil }
 func (f *fakeReadState) PMGInstances() []*ur.PMGInstanceView         { return nil }
 func (f *fakeReadState) K8sClusters() []*ur.K8sClusterView           { return nil }
