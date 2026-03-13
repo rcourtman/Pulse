@@ -91,7 +91,6 @@ import {
   getAlertResourceIncidentNoteSavedLabel,
   getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentPanelTitle,
-  getAlertResourceIncidentRecentEventsSummary,
   getAlertResourceIncidentRefreshLabel,
   getAlertResourceIncidentSaveNoteLabel,
   getAlertResourceIncidentSummaryRowClass,
@@ -145,7 +144,6 @@ import {
   getAlertDestinationsLoadErrorBanner,
   getAlertDestinationsAppriseTargetsHelp,
   getAlertDestinationsAppriseTestLabel,
-  getAlertDestinationsAppriseTestError,
   getAlertDestinationsAppriseTestFailure,
   getAlertDestinationsAppriseTestSuccess,
   getAlertDestinationsAppriseValidationError,
@@ -214,6 +212,7 @@ import {
   ALERT_CONFIG_COOLDOWN_PERIOD_LABEL,
   ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX,
   ALERT_CONFIG_COOLDOWN_TITLE,
+  ALERT_CONFIG_ESCALATION_ADD_LABEL,
   ALERT_CONFIG_ESCALATION_AFTER_LABEL,
   ALERT_CONFIG_ESCALATION_DESCRIPTION,
   ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX,
@@ -260,7 +259,6 @@ import {
   getAlertConfigToggleStatusLabel,
   getAlertConfigUnsavedChangesLabel,
   getAlertConfigLeaveConfirmation,
-  getAlertConfigSwarmGapValidationError,
 } from '@/utils/alertConfigPresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
@@ -585,13 +583,14 @@ export function Alerts() {
   const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
     const data = pd(resource);
     const docker = asRecord(data?.docker);
+    const discoveryTarget = resource.discoveryTarget;
     return uniqueIds(
-      isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
-        ? resource.discoveryTarget.resourceId
+      isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+        ? discoveryTarget?.resourceId
         : undefined,
       docker?.hostSourceId,
       data?.hostSourceId,
-      resource.discoveryTarget?.agentId,
+      discoveryTarget?.agentId,
       resource.id,
     );
   };
@@ -3548,7 +3547,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={getAlertGroupingCardClass(grouping().byNode)}
+                    class={getAlertGroupingCardClass(grouping().byNode ?? false)}
                   >
                     <input
                       type="checkbox"
@@ -3559,7 +3558,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div class={getAlertGroupingCheckboxClass(grouping().byNode)}>
+                    <div class={getAlertGroupingCheckboxClass(grouping().byNode ?? false)}>
                       <Show when={grouping().byNode}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -3578,7 +3577,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </label>
 
                   <label
-                    class={getAlertGroupingCardClass(grouping().byGuest)}
+                    class={getAlertGroupingCardClass(grouping().byGuest ?? false)}
                   >
                     <input
                       type="checkbox"
@@ -3589,7 +3588,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div class={getAlertGroupingCheckboxClass(grouping().byGuest)}>
+                    <div class={getAlertGroupingCheckboxClass(grouping().byGuest ?? false)}>
                       <Show when={grouping().byGuest}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -3808,11 +3807,11 @@ function ScheduleTab(props: ScheduleTabProps) {
           </Show>
           <Show when={grouping().enabled}>
             <p>
-              {getAlertConfigSummaryGrouping(
-                grouping().window,
-                grouping().byNode,
-                grouping().byGuest,
-              )}
+                {getAlertConfigSummaryGrouping(
+                  grouping().window,
+                  grouping().byNode ?? false,
+                  grouping().byGuest ?? false,
+                )}
             </p>
           </Show>
           <Show when={notifyOnResolve()}>
@@ -5051,7 +5050,9 @@ function HistoryTab(props: {
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
                               <p class={getAlertIncidentTimelineOutputClass()}>
-                                {getAlertResourceIncidentAcknowledgedByLabel(incident.ackUser)}
+                                {getAlertResourceIncidentAcknowledgedByLabel(
+                                  incident.ackUser ?? '',
+                                )}
                               </p>
                             </Show>
                             <Show when={events.length > 0}>

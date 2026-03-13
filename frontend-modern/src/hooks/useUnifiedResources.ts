@@ -8,7 +8,9 @@ import type {
   Resource,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
+  ResourcePBSMeta,
   ResourceStatus,
+  ResourceStorageMeta,
   ResourceType,
 } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
@@ -482,7 +484,7 @@ const resolveDiscoveryResourceType = (
     case 'app-container':
       return 'app-container';
     case 'k8s':
-      return 'k8s';
+      return 'pod';
     case 'disk':
       return 'disk';
     case 'ceph':
@@ -566,9 +568,9 @@ const toResource = (v2: APIResource): Resource => {
     incidentAction: v2.incidentAction,
     agent: v2.agent,
     kubernetes: v2.kubernetes,
-    pbs: v2.pbs,
+    pbs: v2.pbs as ResourcePBSMeta | undefined,
     physicalDisk: v2.physicalDisk,
-    storage: v2.storage,
+    storage: v2.storage as ResourceStorageMeta | undefined,
     proxmox: v2.proxmox
       ? {
           vmid: v2.proxmox.vmid,

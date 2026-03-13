@@ -26,7 +26,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
           {(array) => {
             const label = () =>
               (array.name || '').trim() || (array.device || '').trim() || 'RAID array';
-            const variant = () => raidStateVariant(array.state);
+            const variant = () => getRaidStateVariant(array.state);
             const stateText = () => (array.state || '').trim() || 'unknown';
             const levelText = () => (array.level || '').trim() || 'unknown';
             const rebuilding = () =>
@@ -55,7 +55,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                       size="xs"
                       ariaLabel={`RAID state: ${stateText()}`}
                     />
-                    <span class={`text-[10px] font-medium ${raidStateTextClass(array.state)}`}>
+                    <span class={`text-[10px] font-medium ${getRaidStateTextClass(array.state)}`}>
                       {stateText()}
                     </span>
                   </div>

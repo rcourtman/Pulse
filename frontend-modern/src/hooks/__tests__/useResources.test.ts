@@ -31,9 +31,9 @@ describe('useResources - Resource Filtering Logic', () => {
     const resources: Resource[] = [
       createMockResource({ id: '1', type: 'vm' }),
       createMockResource({ id: '2', type: 'vm' }),
-      createMockResource({ id: '3', type: 'container' }),
+      createMockResource({ id: '3', type: 'system-container' }),
       createMockResource({ id: '4', type: 'agent' }),
-      createMockResource({ id: '5', type: 'docker-container' }),
+      createMockResource({ id: '5', type: 'app-container' }),
     ];
 
     it('filters resources by single type', () => {
@@ -91,13 +91,13 @@ describe('useResources - Resource Filtering Logic', () => {
       createMockResource({ id: '2', type: 'vm', status: 'stopped', platformType: 'proxmox-pve' }),
       createMockResource({
         id: '3',
-        type: 'container',
+        type: 'system-container',
         status: 'running',
         platformType: 'proxmox-pve',
       }),
       createMockResource({
         id: '4',
-        type: 'docker-container',
+        type: 'app-container',
         status: 'running',
         platformType: 'docker',
       }),

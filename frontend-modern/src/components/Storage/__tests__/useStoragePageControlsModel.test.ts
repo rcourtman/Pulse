@@ -9,7 +9,7 @@ describe('useStoragePageControlsModel', () => {
     const [view] = createSignal<'pools' | 'disks'>('pools');
     const setGroupBy = vi.fn();
     const setSortKey = vi.fn();
-    const [storageFilterGroupBy] = createSignal<'none' | 'host'>('host');
+    const [storageFilterGroupBy] = createSignal<'none' | 'node'>('node');
 
     const { result } = renderHook(() =>
       useStoragePageControlsModel({
@@ -23,12 +23,12 @@ describe('useStoragePageControlsModel', () => {
 
     expect(result.showControls()).toBe(true);
     expect(result.sortDisabled()).toBe(false);
-    expect(result.groupBy()?.()).toBe('host');
+    expect(result.groupBy()?.()).toBe('node');
 
-    result.setGroupBy()?.('host');
-    expect(setGroupBy).toHaveBeenCalledWith('host');
+    result.setGroupBy()?.('node');
+    expect(setGroupBy).toHaveBeenCalledWith('node');
 
-    result.setNormalizedSortKey('status');
+    result.setNormalizedSortKey('type');
     expect(setSortKey).toHaveBeenCalledWith('priority');
   });
 });

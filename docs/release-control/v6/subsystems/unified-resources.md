@@ -122,3 +122,9 @@ merged payload state. `parentId`, `parentName`, and `childCount` must be
 re-derived from the live per-source parent map on every ingest/build pass so
 same-source reparenting, orphaning, and parent removal clear old lineage
 instead of leaking stale topology into API and typed-view consumers.
+
+Frontend unified-resource consumers must now also normalize legacy discovery
+resource type aliases before storing `discoveryTarget`. Backend `k8s`
+discovery coordinates collapse to the canonical frontend `pod` target, and
+typed PBS/storage facets must be preserved as the explicit frontend resource
+meta interfaces instead of floating as untyped platform-data consumers.

@@ -1,15 +1,14 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { StorageControls } from '@/components/Storage/StorageControls';
 
 describe('StorageControls', () => {
   it('renders the shared storage controls and node filter', () => {
     const [view, setView] = createSignal<'pools' | 'disks'>('pools');
     const [search, setSearch] = createSignal('');
-    const [groupBy, setGroupBy] = createSignal<'none' | 'host'>('host');
-    const [sortKey, setSortKey] =
-      createSignal<'name' | 'usage' | 'health' | 'platform' | 'host'>('name');
+    const [groupBy, setGroupBy] = createSignal<'none' | 'node'>('node');
+    const [sortKey, setSortKey] = createSignal<'priority' | 'name' | 'usage' | 'type'>('name');
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
     const [statusFilter, setStatusFilter] =
       createSignal<'all' | 'warning' | 'critical'>('all');
@@ -33,8 +32,8 @@ describe('StorageControls', () => {
         sourceFilter={sourceFilter}
         setSourceFilter={setSourceFilter}
         sourceOptions={[
-          { value: 'all', label: 'All Sources' },
-          { value: 'agent', label: 'Agent' },
+          { key: 'all', label: 'All Sources', tone: 'slate' },
+          { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
         ]}
         nodeFilterOptions={[
           { value: 'all', label: 'All Nodes' },

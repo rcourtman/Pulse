@@ -290,7 +290,9 @@ export function stringRecordOrUndefined(value: unknown): Record<string, string> 
     return undefined;
   }
 
-  const entries = Object.entries(value).filter(([, item]): item is string => typeof item === 'string');
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
   if (entries.length === 0) {
     return undefined;
   }
@@ -321,7 +323,7 @@ export function normalizeStructuredAPIError(
 }
 
 export function promoteLegacyAlertIdentifier<
-  T extends { alertIdentifier?: string } & Record<string, unknown>,
+  T extends { alertIdentifier?: string } & object,
 >(record: T & { alert_identifier?: string }): T {
   const alertIdentifier =
     optionalTrimmedString(record.alertIdentifier) ??

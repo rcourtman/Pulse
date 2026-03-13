@@ -23,7 +23,30 @@ import {
   getPhysicalDiskSourceBadgePresentation,
   hasPhysicalDiskSmartWarning,
   matchesPhysicalDiskSearch,
+  type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
+
+function makeDiskData(
+  overrides: Partial<PhysicalDiskPresentationData> = {},
+): PhysicalDiskPresentationData {
+  return {
+    node: '',
+    instance: '',
+    devPath: '',
+    model: '',
+    serial: '',
+    wwn: '',
+    size: 0,
+    health: 'UNKNOWN',
+    riskReasons: [],
+    wearout: -1,
+    type: '',
+    temperature: 0,
+    rpm: 0,
+    used: '',
+    ...overrides,
+  };
+}
 
 describe('diskPresentation', () => {
   it('returns critical presentation for failed disks', () => {
@@ -37,10 +60,11 @@ describe('diskPresentation', () => {
 
     expect(
       getPhysicalDiskHealthStatus({
-        health: 'FAILED',
-        wearout: 20,
-        riskReasons: [],
-        type: 'ssd',
+        ...makeDiskData({
+          health: 'FAILED',
+          wearout: 20,
+          type: 'ssd',
+        }),
       }),
     ).toEqual({
       label: 'Replace Now',
@@ -52,10 +76,11 @@ describe('diskPresentation', () => {
   it('detects SMART warnings from counters', () => {
     expect(
       hasPhysicalDiskSmartWarning({
-        health: 'PASSED',
-        wearout: 50,
-        riskReasons: [],
-        type: 'hdd',
+        ...makeDiskData({
+          health: 'PASSED',
+          wearout: 50,
+          type: 'hdd',
+        }),
         smartAttributes: { pendingSectors: 2 },
       }),
     ).toBe(true);
@@ -64,19 +89,21 @@ describe('diskPresentation', () => {
   it('returns role, parent, and platform labels canonically', () => {
     expect(
       getPhysicalDiskRoleLabel({
-        health: 'PASSED',
-        wearout: 50,
-        riskReasons: [],
-        type: 'ssd',
+        ...makeDiskData({
+          health: 'PASSED',
+          wearout: 50,
+          type: 'ssd',
+        }),
         storageRole: 'cache_pool',
       }),
     ).toBe('Cache Pool');
     expect(
       getPhysicalDiskParentLabel({
-        health: 'PASSED',
-        wearout: 50,
-        riskReasons: [],
-        type: 'ssd',
+        ...makeDiskData({
+          health: 'PASSED',
+          wearout: 50,
+          type: 'ssd',
+        }),
         storageGroup: 'tank',
       }),
     ).toBe('tank');
@@ -98,10 +125,11 @@ describe('diskPresentation', () => {
     expect(
       getPhysicalDiskHostLabel(
         {
-          health: 'PASSED',
-          wearout: 50,
-          riskReasons: [],
-          type: 'ssd',
+          ...makeDiskData({
+            health: 'PASSED',
+            wearout: 50,
+            type: 'ssd',
+          }),
           node: 'tower',
         },
         { parentName: 'fallback-host' } as Resource,

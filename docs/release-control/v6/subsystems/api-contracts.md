@@ -248,6 +248,10 @@ no-body `POST` actions and success-envelope command triggers through canonical
 local helpers in `frontend-modern/src/api/monitoring.ts` rather than
 duplicating identical `POST` transport logic across reenroll and runtime
 command endpoints.
+Those monitoring command helpers must also preserve the canonical frontend
+fetch-options contract: governed callers pass string-keyed headers only, and
+empty-body success responses normalize through the shared success-envelope
+parsing path rather than local `response.ok` branches.
 Legacy persisted host-agent token scopes from v5 and early v6 installs must
 also canonicalize to the current `agent:*` scope identifiers at the backend
 contract boundary, so existing installed agents continue to satisfy

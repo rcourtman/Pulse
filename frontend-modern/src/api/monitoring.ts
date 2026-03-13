@@ -11,7 +11,6 @@ import {
   assertAPIResponseOKOrAllowedStatus,
   assertAPIResponseOKOrThrowStatus,
   coerceTimestampMillis,
-  parseOptionalAPIResponse,
   parseOptionalAPIResponseOrAllowedStatus,
   parseOptionalSuccessAPIResponse,
   parseOptionalAPIResponseOrNull,
@@ -71,10 +70,14 @@ async function runManagedResourceAction(url: string): Promise<void> {
   await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 }
 
-async function triggerManagedResourceCommand<T>(
+type ManagedResourceCommandInit = Omit<RequestInit, 'headers'> & {
+  headers?: Record<string, string>;
+};
+
+async function triggerManagedResourceCommand<T extends { success?: boolean }>(
   url: string,
   parseErrorMessage: string,
-  init?: RequestInit,
+  init?: ManagedResourceCommandInit,
 ): Promise<T> {
   const response = await apiFetch(url, {
     method: 'POST',

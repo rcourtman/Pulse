@@ -145,7 +145,7 @@ function makeProps(
     editingId: () => null,
     editingThresholds: () => ({}),
     setEditingThresholds: vi.fn(),
-    formatMetricValue: vi.fn((metric: string, value: number | undefined) =>
+    formatMetricValue: vi.fn((_metric: string, value: number | undefined) =>
       value !== undefined ? String(value) : '-',
     ),
     hasActiveAlert: vi.fn(() => false),
@@ -399,7 +399,7 @@ describe('ResourceTable', () => {
     });
 
     it('shows "Off" text for disabled metrics (value -1) with disabled styling', () => {
-      const formatMetricValue = vi.fn((metric: string, value: number | undefined) =>
+      const formatMetricValue = vi.fn((_metric: string, value: number | undefined) =>
         value !== undefined ? String(value) : '-',
       );
       const props = makeProps({
@@ -416,19 +416,19 @@ describe('ResourceTable', () => {
 
       // formatMetricValue should NOT be called for disabled metrics (they show "Off" directly)
       const cpuCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'cpu',
+        ([metric]) => metric === 'cpu',
       );
       expect(cpuCalls.length).toBe(0);
 
       // Memory (85) should still be formatted normally
       const memoryCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'memory',
+        ([metric]) => metric === 'memory',
       );
       expect(memoryCalls.length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows active alert indicator dot when hasActiveAlert returns true', () => {
-      const hasActiveAlert = vi.fn((resourceId: string, metric: string) => metric === 'cpu');
+      const hasActiveAlert = vi.fn((_resourceId: string, metric: string) => metric === 'cpu');
       const props = makeProps({
         resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 90, memory: 85 } })],
         hasActiveAlert,
@@ -827,7 +827,7 @@ describe('ResourceTable', () => {
 
   describe('resource type-specific metric support', () => {
     it('only formats supported metrics for storage type (usage only)', () => {
-      const formatMetricValue = vi.fn(() => '80');
+      const formatMetricValue = vi.fn((_metric: string, _value: number | undefined) => '80');
       const props = makeProps({
         resources: [
           makeResource({ id: 'st-1', name: 'Storage', type: 'storage', thresholds: { usage: 80 } }),
@@ -839,22 +839,18 @@ describe('ResourceTable', () => {
 
       // Storage only supports 'usage' — cpu and memory should NOT be formatted
       const usageCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'usage',
+        (args) => args[0] === 'usage',
       );
       expect(usageCalls.length).toBeGreaterThanOrEqual(1);
 
-      const cpuCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'cpu',
-      );
-      const memoryCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'memory',
-      );
+      const cpuCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'cpu');
+      const memoryCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'memory');
       expect(cpuCalls.length).toBe(0);
       expect(memoryCalls.length).toBe(0);
     });
 
     it('hides disk/network metrics for node type', () => {
-      const formatMetricValue = vi.fn(() => '80');
+      const formatMetricValue = vi.fn((_metric: string, _value: number | undefined) => '80');
       const props = makeProps({
         resources: [
           makeResource({
@@ -870,20 +866,18 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       // formatMetricValue should only be called for 'cpu', not for unsupported network/disk metrics
-      const cpuCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'cpu',
-      );
+      const cpuCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'cpu');
       expect(cpuCalls.length).toBeGreaterThanOrEqual(1);
 
       // Unsupported metrics should not call formatMetricValue
-      const unsupportedCalls = formatMetricValue.mock.calls.filter(([metric]: [string]) =>
-        ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric),
+      const unsupportedCalls = formatMetricValue.mock.calls.filter((args) =>
+        ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(args[0] ?? ''),
       );
       expect(unsupportedCalls.length).toBe(0);
     });
 
     it('shows only cpu and memory for pbs type', () => {
-      const formatMetricValue = vi.fn(() => '80');
+      const formatMetricValue = vi.fn((_metric: string, _value: number | undefined) => '80');
       const props = makeProps({
         resources: [
           makeResource({
@@ -899,9 +893,7 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       // Disk should not call formatMetricValue since PBS doesn't support it
-      const diskCalls = formatMetricValue.mock.calls.filter(
-        ([metric]: [string]) => metric === 'disk',
-      );
+      const diskCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'disk');
       expect(diskCalls.length).toBe(0);
     });
   });

@@ -7,8 +7,7 @@ import {
   STORAGE_CONTENT_CARD_HEADER_CLASS,
 } from '@/features/storageBackups/storagePagePresentation';
 import type { Resource } from '@/types/resource';
-import type { StorageRecord } from '@/features/storageBackups/models';
-import type { StorageGroupKey } from './useStorageModel';
+import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
 import { useStorageContentCardModel } from './useStorageContentCardModel';
@@ -19,12 +18,12 @@ type StorageContentCardProps = {
   nodes: () => Resource[];
   selectedNodeId: () => string;
   search: () => string;
-  groupedRecords: () => Array<{ key: string; title: string; records: StorageRecord[] }>;
+  groupedRecords: () => StorageGroupedRecords[];
   groupBy: () => StorageGroupKey;
   expandedGroups: () => Set<string>;
   toggleGroup: (key: string) => void;
   expandedPoolId: () => string | null;
-  setExpandedPoolId: (value: string | null) => void;
+  setExpandedPoolId: (value: string | ((current: string | null) => string | null) | null) => void;
   nodeOnlineByLabel: () => Map<string, boolean>;
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;

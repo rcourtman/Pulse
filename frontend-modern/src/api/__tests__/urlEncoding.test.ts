@@ -64,10 +64,10 @@ describe('API URL encoding', () => {
   it('builds update query strings safely', async () => {
     apiFetchJSONMock.mockResolvedValue({} as never);
 
-    await UpdatesAPI.checkForUpdates('stable&next');
+    await UpdatesAPI.checkForUpdates('stable&next' as never);
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?channel=stable%26next');
 
-    await UpdatesAPI.getUpdatePlan('v1.2.3&x=1', 'beta/dev');
+    await UpdatesAPI.getUpdatePlan('v1.2.3&x=1', 'beta/dev' as never);
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/updates/plan?version=v1.2.3%26x%3D1&channel=beta%2Fdev',
     );

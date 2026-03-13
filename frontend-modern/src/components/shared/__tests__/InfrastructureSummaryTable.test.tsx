@@ -66,12 +66,20 @@ vi.mock('@/components/shared/InfrastructureDetailsDrawer', () => ({
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: 'node-1',
   name: 'pve1',
+  instance: 'main',
+  host: 'https://pve1:8006',
   pveVersion: '8.0',
   status: 'online',
+  type: 'node',
   uptime: 123,
   cpu: 0.21,
   memory: { total: 8, used: 4, free: 4, usage: 50 },
   disk: { total: 100, used: 25, free: 75, usage: 25 },
+  loadAverage: [0.1, 0.2, 0.3],
+  kernelVersion: '6.8.0',
+  cpuInfo: { model: 'Test CPU', cores: 8, sockets: 1, mhz: '3200' },
+  lastSeen: '2026-01-01T00:00:00Z',
+  connectionHealth: 'online',
   linkedAgentId: undefined,
   ...overrides,
 });
@@ -80,6 +88,7 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
   id: 'agent-1',
   hostname: 'pve1.local',
   displayName: 'Agent 1',
+  memory: { total: 8, used: 4, free: 4, usage: 50 },
   status: 'online',
   lastSeen: Date.now(),
   ...overrides,
@@ -133,13 +142,16 @@ describe('InfrastructureSummaryTable', () => {
         agents={[
           makeAgent({
             id: 'agent-explicit',
+            linkedNodeId: 'node-1',
+            platform: 'linux',
+            memory: { total: 16, used: 8, free: 8, usage: 50 },
             platformData: {
               linkedAgentId: 'agent-linked',
               agent: {
                 hostname: 'pve1.internal',
               },
             },
-          }) as Agent,
+          } as Partial<Agent> & { platformData: { linkedAgentId: string; agent: { hostname: string } } }),
         ]}
         selectedNode="node-1"
         currentTab="dashboard"

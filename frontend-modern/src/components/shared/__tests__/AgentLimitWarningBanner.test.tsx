@@ -1,8 +1,21 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockEntitlements = vi.hoisted(() => vi.fn(() => ({ overflow_days_remaining: undefined })));
-const mockGetLimit = vi.hoisted(() => vi.fn(() => undefined));
+type MockEntitlements = {
+  overflow_days_remaining?: number;
+};
+const mockEntitlements = vi.hoisted(() =>
+  vi.fn<() => MockEntitlements>(() => ({ overflow_days_remaining: undefined })),
+);
+type MockLimitRecord = {
+  key: string;
+  limit: number;
+  current: number;
+  state: string;
+};
+const mockGetLimit = vi.hoisted(() =>
+  vi.fn<(key: string) => MockLimitRecord | undefined>(() => undefined),
+);
 const mockHasMigrationGap = vi.hoisted(() => vi.fn(() => false));
 const mockLegacyConnections = vi.hoisted(() =>
   vi.fn(() => ({

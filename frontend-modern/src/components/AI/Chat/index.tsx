@@ -206,7 +206,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setControlLevel(resolved);
       if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       aiChatStore.notifySettingsChanged();
-      notificationStore.success(`Control mode set to ${labelForControlLevel(resolved)}`, 2000);
+      notificationStore.success(
+        `Control mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
+        2000,
+      );
     } catch (error) {
       logger.error('[AIChat] Failed to update control level:', error);
       setControlLevel(previous);
@@ -384,13 +387,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const getDockerActionId = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       const platformDocker = asRecord(platformData?.docker);
+      const discoveryTarget = resource.discoveryTarget;
       return (
-        (isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
-          ? resource.discoveryTarget.resourceId
+        (isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+          ? discoveryTarget?.resourceId
           : undefined) ||
         asString(platformDocker?.hostSourceId) ||
         asString(platformData?.hostSourceId) ||
-        resource.discoveryTarget?.agentId ||
+        discoveryTarget?.agentId ||
         resource.id
       );
     };

@@ -125,7 +125,7 @@ const titleize = (value: string | undefined | null): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-export function getPhysicalDiskPlatformLabel(resource: Resource, fallbackLabel: string): string {
+export function getPhysicalDiskPlatformLabel(_resource: Resource, fallbackLabel: string): string {
   return fallbackLabel || 'Unknown';
 }
 
@@ -156,8 +156,11 @@ export function extractPhysicalDiskPresentationData(resource: Resource): Physica
   const diskNode = getPhysicalDiskNodeIdentity(resource);
   const riskReasons = Array.isArray(pd.risk?.reasons)
     ? pd.risk.reasons
-        .map((reason) => reason?.summary)
-        .filter((summary): summary is string => typeof summary === 'string' && summary.length > 0)
+        .map((reason: { summary?: unknown }) => reason?.summary)
+        .filter(
+          (summary: unknown): summary is string =>
+            typeof summary === 'string' && summary.length > 0,
+        )
     : [];
 
   return {

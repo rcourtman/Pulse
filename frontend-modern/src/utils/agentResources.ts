@@ -47,7 +47,7 @@ export const getExplicitAgentIdFromResource = (resource: Resource): string | und
 
 export const getActionableAgentIdFromResource = (resource: Resource): string | undefined =>
   getExplicitAgentIdFromResource(resource) ||
-  getAgentDiscoveryResourceId(resource.discoveryTarget) ||
+  getAgentDiscoveryResourceId(resource.discoveryTarget ?? null) ||
   asTrimmedString(resource.discoveryTarget?.agentId);
 
 export const getActionableDockerRuntimeIdFromResource = (
@@ -84,7 +84,7 @@ export const getActionableKubernetesClusterIdFromResource = (
   const platformData = getPlatformDataRecord(resource);
   const kubernetes = asRecord(platformData?.kubernetes);
 
-  if (resource.discoveryTarget?.resourceType === 'k8s' && resource.discoveryTarget.resourceId) {
+  if (resource.discoveryTarget?.resourceType === 'pod' && resource.discoveryTarget.resourceId) {
     return resource.discoveryTarget.resourceId;
   }
 
@@ -112,14 +112,15 @@ export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): st
   return Array.from(new Set(candidates));
 };
 
-export const hasAgentFacet = (resource: Resource): boolean =>
-  Boolean(
+export const hasAgentFacet = (resource: Resource): boolean => {
+  const discoveryTarget = resource.discoveryTarget;
+  return Boolean(
     resource.agent ||
-    getPlatformAgentRecord(resource) ||
-    getExplicitAgentIdFromResource(resource) ||
-    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-      resource.discoveryTarget.agentId),
+      getPlatformAgentRecord(resource) ||
+      getExplicitAgentIdFromResource(resource) ||
+      (isAgentDiscoveryResourceType(discoveryTarget?.resourceType) && discoveryTarget?.agentId),
   );
+};
 
 export const isAgentFacetInfrastructureResource = (resource: Resource): boolean =>
   AGENT_FACET_INFRASTRUCTURE_TYPES.has(resource.type) && hasAgentFacet(resource);

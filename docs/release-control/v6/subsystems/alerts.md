@@ -89,3 +89,9 @@ Active alert card state, acknowledged badge, and primary/secondary action
 button presentation now route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
 inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+
+Alert threshold and schedule surfaces must now also treat
+`discoveryTarget` as optional frontend input and keep grouping-card state on
+the canonical `node` group-header contract. Frontend alert pages may not
+assume discovery metadata is always present when deriving override IDs or
+toggle styling.

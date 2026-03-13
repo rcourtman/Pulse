@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 
 import type { AgentLedgerResponse } from '@/api/agentLedger';
 
@@ -12,7 +13,7 @@ vi.mock('@/api/agentLedger', () => ({
 }));
 
 vi.mock('@/components/shared/Card', () => ({
-  Card: (props: { children: unknown }) => <div data-testid="card">{props.children}</div>,
+  Card: (props: { children?: JSX.Element }) => <div data-testid="card">{props.children}</div>,
 }));
 
 vi.mock('@/components/shared/StatusDot', () => ({
@@ -20,12 +21,12 @@ vi.mock('@/components/shared/StatusDot', () => ({
 }));
 
 vi.mock('@/components/shared/Table', () => ({
-  Table: (props: { children: unknown }) => <table>{props.children}</table>,
-  TableHeader: (props: { children: unknown }) => <thead>{props.children}</thead>,
-  TableBody: (props: { children: unknown }) => <tbody>{props.children}</tbody>,
-  TableRow: (props: { children: unknown }) => <tr>{props.children}</tr>,
-  TableHead: (props: { children: unknown }) => <th>{props.children}</th>,
-  TableCell: (props: { children: unknown }) => <td>{props.children}</td>,
+  Table: (props: { children?: JSX.Element }) => <table>{props.children}</table>,
+  TableHeader: (props: { children?: JSX.Element }) => <thead>{props.children}</thead>,
+  TableBody: (props: { children?: JSX.Element }) => <tbody>{props.children}</tbody>,
+  TableRow: (props: { children?: JSX.Element }) => <tr>{props.children}</tr>,
+  TableHead: (props: { children?: JSX.Element }) => <th>{props.children}</th>,
+  TableCell: (props: { children?: JSX.Element }) => <td>{props.children}</td>,
 }));
 
 vi.mock('@/utils/format', () => ({

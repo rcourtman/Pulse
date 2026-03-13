@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /* ------------------------------------------------------------------ */
@@ -17,13 +18,13 @@ vi.mock('@/utils/logger', () => ({
 /* ------------------------------------------------------------------ */
 
 /** Component that throws on render to trigger error boundaries. */
-function ThrowingComponent(props: { error?: Error }) {
+function ThrowingComponent(props: { error?: Error }): JSX.Element {
   const err = props.error ?? new Error('Test explosion');
   throw err;
 }
 
 /** Simple child that renders normally. */
-function GoodChild() {
+function GoodChild(): JSX.Element {
   return <div data-testid="good-child">All good</div>;
 }
 
@@ -33,7 +34,7 @@ function GoodChild() {
  * the re-render succeeds.
  */
 let throwOnceFlag = true;
-function ThrowOnceComponent() {
+function ThrowOnceComponent(): JSX.Element {
   if (throwOnceFlag) {
     throwOnceFlag = false;
     throw new Error('First render fails');

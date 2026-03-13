@@ -1,4 +1,4 @@
-import { Component, For, JSX, Show } from 'solid-js';
+import { Component, For, JSX } from 'solid-js';
 import { Subtabs } from '@/components/shared/Subtabs';
 import {
   STORAGE_CONTROLS_NODE_DIVIDER_CLASS,
@@ -13,6 +13,7 @@ import type { StorageView } from './storagePageState';
 import type { StorageSortKey } from './useStorageModel';
 import { DEFAULT_STORAGE_SORT_OPTIONS } from './storagePageState';
 import { useStorageControlsModel } from './useStorageControlsModel';
+import type { StorageSourceOption } from '@/utils/storageSources';
 
 type StorageControlsProps = {
   view: StorageView;
@@ -30,7 +31,7 @@ type StorageControlsProps = {
   setStatusFilter: (value: StorageStatusFilter) => void;
   sourceFilter: () => string;
   setSourceFilter: (value: string) => void;
-  sourceOptions: Array<{ value: string; label: string }>;
+  sourceOptions: StorageSourceOption[];
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
@@ -74,7 +75,7 @@ export const StorageControls: Component<StorageControlsProps> = (props) => {
         groupBy={props.groupBy}
         setGroupBy={props.setGroupBy}
         sortKey={props.sortKey}
-        setSortKey={props.setSortKey}
+        setSortKey={(value) => props.setSortKey(value as StorageSortKey)}
         sortDirection={props.sortDirection}
         setSortDirection={props.setSortDirection}
         sortOptions={DEFAULT_STORAGE_SORT_OPTIONS}

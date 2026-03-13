@@ -102,6 +102,11 @@ through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside
 `frontend-modern/src/pages/Alerts.tsx`.
 
+Shared primitive consumers that split status-dot tone and status-text tone
+must now keep both values routed through the same exported presentation helper.
+Feature cards such as RAID status may not call shadow local aliases that drift
+from the canonical shared class/variant helpers.
+
 Active alert card state and action-button presentation must also route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of leaving
 feature-local alert card styling inside

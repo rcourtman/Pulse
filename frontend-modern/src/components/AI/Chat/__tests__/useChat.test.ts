@@ -29,7 +29,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { useChat } from '../hooks/useChat';
-import { AIChatAPI, type StreamEvent } from '@/api/aiChat';
+import { AIChatAPI, type ChatMention, type StreamEvent } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 
 const mockCreateSession = AIChatAPI.createSession as ReturnType<typeof vi.fn>;
@@ -37,6 +37,16 @@ const mockChat = AIChatAPI.chat as ReturnType<typeof vi.fn>;
 const mockGetMessages = AIChatAPI.getMessages as ReturnType<typeof vi.fn>;
 const mockAnswerQuestion = AIChatAPI.answerQuestion as ReturnType<typeof vi.fn>;
 const mockNotifyError = notificationStore.error as ReturnType<typeof vi.fn>;
+
+type TestStreamEvent = StreamEvent | { type: string; data?: unknown };
+type TestStreamDispatch = (event: TestStreamEvent) => void;
+
+function dispatchTestStreamEvent(
+  onEvent: (event: StreamEvent) => void,
+  event: TestStreamEvent,
+): void {
+  onEvent(event as StreamEvent);
+}
 
 /**
  * Helper: run a callback inside a SolidJS reactive root so
@@ -192,7 +202,9 @@ describe('useChat', () => {
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 'sess', model: 'claude-3' }),
       );
-      const mentions = [{ id: 'vm-100', name: 'test-vm', type: 'vm', node: 'node1' }];
+      const mentions: ChatMention[] = [
+        { id: 'vm-100', name: 'test-vm', type: 'vm', node: 'node1' },
+      ];
       await chat.sendMessage('check this', mentions, 'finding-42');
 
       const chatCall = mockChat.mock.calls[0];
@@ -261,7 +273,7 @@ describe('useChat', () => {
   describe('processEvent (via stream callback)', () => {
     /** Helper that captures the onEvent callback from AIChatAPI.chat */
     function setupWithEventCapture() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (
           _prompt: string,
@@ -269,7 +281,7 @@ describe('useChat', () => {
           _model: string | undefined,
           onEvent: (e: StreamEvent) => void,
         ) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -737,7 +749,6 @@ describe('useChat', () => {
       await chat.sendMessage('hi');
       const fire = getFireEvent();
 
-      // @ts-expect-error testing unknown type
       fire({ type: 'unknown_event', data: 'mystery' });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
@@ -791,10 +802,10 @@ describe('useChat', () => {
     });
 
     it('preserves existing content when stopping', async () => {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return new Promise(() => {}); // never resolves
         },
       );
@@ -920,10 +931,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('updateApproval', () => {
     async function setupWithApproval() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1023,10 +1034,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('updateQuestion', () => {
     async function setupWithQuestion() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1085,10 +1096,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('answerQuestion', () => {
     it('sends answer to API and removes question on success', async () => {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1118,12 +1129,12 @@ describe('useChat', () => {
     });
 
     it('re-initiates stream when idle after answering (reconnection path)', async () => {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       let chatCallCount = 0;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
           chatCallCount++;
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1155,10 +1166,10 @@ describe('useChat', () => {
     });
 
     it('handles answer failure — resets isAnswering, shows notification', async () => {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1243,10 +1254,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('extractTokens edge cases', () => {
     function setupWithEventCapture() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1313,10 +1324,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('tool_end with no matching pending tool', () => {
     it('still appends tool to toolCalls even without matching pending', async () => {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1343,10 +1354,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('tool name normalization', () => {
     function setupWithEventCapture() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );
@@ -1379,10 +1390,10 @@ describe('useChat', () => {
   // ──────────────────────────────────────────────
   describe('parallel tool handling', () => {
     function setupWithEventCapture() {
-      let fireEvent!: (event: StreamEvent) => void;
+      let fireEvent!: TestStreamDispatch;
       mockChat.mockImplementation(
         (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
-          fireEvent = onEvent;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },
       );

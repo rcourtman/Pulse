@@ -1,6 +1,5 @@
 import { Component, For, Index, Show } from 'solid-js';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
-import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   getStorageEmptyStateMessage,
   getStorageLoadingMessage,
@@ -12,6 +11,7 @@ import {
   STORAGE_POOLS_TABLE_CLASS,
   STORAGE_POOL_TABLE_COLUMNS,
 } from '@/features/storageBackups/storagePagePresentation';
+import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
@@ -28,10 +28,7 @@ type StoragePoolsTableProps = {
   physicalDisks: Resource[];
   nodeOnlineByLabel: Map<string, boolean>;
   highlightedRecordId: string | null;
-  getRecordAlertState: (recordId: string) => {
-    state: 'none' | 'acknowledged' | 'active';
-    severity: 'none' | 'warning' | 'critical';
-  };
+  getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
 };
 

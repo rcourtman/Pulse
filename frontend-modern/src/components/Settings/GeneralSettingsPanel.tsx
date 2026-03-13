@@ -12,7 +12,11 @@ import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
-import { PVE_POLLING_PRESETS } from '@/utils/systemSettingsPresentation';
+import {
+  PVE_POLLING_MAX_SECONDS,
+  PVE_POLLING_MIN_SECONDS,
+  PVE_POLLING_PRESETS,
+} from '@/utils/systemSettingsPresentation';
 
 import Laptop from 'lucide-solid/icons/laptop';
 

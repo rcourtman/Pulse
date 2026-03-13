@@ -27,6 +27,9 @@ const v2Resource = {
   },
 };
 
+const asWsResource = <T extends object>(resource: T): State['resources'][number] =>
+  resource as unknown as State['resources'][number];
+
 const flushAsync = async () => {
   await Promise.resolve();
   await Promise.resolve();
@@ -94,7 +97,7 @@ describe('useUnifiedResources', () => {
       },
       activeAlerts: [],
       recentlyResolved: [],
-      resources: [v2Resource],
+      resources: [asWsResource(v2Resource)],
       lastUpdate: '',
     });
     setWsState = _setWsState;
@@ -160,13 +163,13 @@ describe('useUnifiedResources', () => {
         'resources',
         reconcile(
           [
-            {
+            asWsResource({
               ...v2Resource,
               metrics: {
                 ...v2Resource.metrics,
                 cpu: { percent: 42 },
               },
-            },
+            }),
           ],
           { key: 'id' },
         ),
@@ -257,6 +260,43 @@ describe('useUnifiedResources', () => {
       agentId: 'agent-discovery-1',
       resourceId: 'agent-discovery-1',
       hostname: 'pve1',
+    });
+
+    dispose();
+  });
+
+  it('normalizes legacy k8s discovery targets to pod for frontend consumers', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            type: 'pod',
+            discoveryTarget: {
+              resourceType: 'k8s',
+              agentId: 'cluster-agent-1',
+              resourceId: 'pod/default/nginx',
+              hostname: 'cluster-a',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].discoveryTarget).toEqual({
+      resourceType: 'pod',
+      agentId: 'cluster-agent-1',
+      resourceId: 'pod/default/nginx',
+      hostname: 'cluster-a',
     });
 
     dispose();

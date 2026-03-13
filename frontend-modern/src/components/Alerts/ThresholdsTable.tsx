@@ -120,9 +120,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const hostOverrideIdCandidates = (resource: Resource): string[] => {
     const platformData = pd(resource);
     const agent = asRecord(platformData?.agent);
+    const discoveryTarget = resource.discoveryTarget ?? null;
     return uniqueIds(
-      getAgentDiscoveryResourceId(resource.discoveryTarget),
-      resource.discoveryTarget?.agentId,
+      getAgentDiscoveryResourceId(discoveryTarget),
+      discoveryTarget?.agentId,
       resource.agent?.agentId,
       agent?.agentId,
       platformData?.agentId,
@@ -134,13 +135,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
     const platformData = pd(resource);
     const docker = asRecord(platformData?.docker);
+    const discoveryTarget = resource.discoveryTarget;
     return uniqueIds(
-      isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
-        ? resource.discoveryTarget.resourceId
+      isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+        ? discoveryTarget?.resourceId
         : undefined,
       docker?.hostSourceId,
       platformData?.hostSourceId,
-      resource.discoveryTarget?.agentId,
+      discoveryTarget?.agentId,
       resource.id,
     );
   };
@@ -352,7 +354,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
 
     const headerMeta: GroupHeaderMeta = {
-      type: 'agent',
+      type: 'node',
       displayName: friendlyName,
       rawName: originalDisplayName,
       host,
