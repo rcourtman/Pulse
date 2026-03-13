@@ -959,6 +959,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/multi-tenant-runtime-isolation-and-coherence-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/subsystems/organization-settings.md",
           "kind": "file"
         },
@@ -2049,7 +2054,7 @@
       "summary": "Confirm multi-tenant Pulse behaves as a coherent tenant-isolated product across org scope, runtime state, sharing, and migration.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L4",

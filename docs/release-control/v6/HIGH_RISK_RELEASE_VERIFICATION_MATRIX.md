@@ -485,6 +485,8 @@ Companion drill:
   Multi-tenant Pulse behaves as a coherent tenant-isolated product: org scope,
   RBAC, runtime state, sharing, and migration all stay within the intended
   tenant boundary.
+- Latest exercised record:
+  `docs/release-control/v6/records/multi-tenant-runtime-isolation-and-coherence-2026-03-13.md`
 - Block release if:
   A tenant can see or mutate data, runtime state, or shared resources outside
   the intended tenant boundary, or multi-tenant mode still behaves like a
