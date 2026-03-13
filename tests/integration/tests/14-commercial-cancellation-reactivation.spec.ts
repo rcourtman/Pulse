@@ -1,7 +1,11 @@
+import { writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { apiRequest, ensureAuthenticated, navigateToSettings } from './helpers';
 import { completeStripeSandboxCheckout } from './stripe-sandbox';
+import { sendStripeWebhook } from './stripe-webhooks';
 
 type StripeSubscription = {
   id: string;
@@ -41,6 +45,17 @@ type EntitlementPayload = {
   plan_version?: string;
 };
 
+type BillingStatePayload = {
+  capabilities?: string[];
+  limits?: Record<string, number>;
+  meters_enabled?: string[];
+  plan_version?: string;
+  subscription_state?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  stripe_price_id?: string;
+};
+
 function requiredEnv(name: string): string {
   const value = (process.env[name] || '').trim();
   if (value === '') {
@@ -56,6 +71,30 @@ function commercialBaseURL(): string {
     process.env.PLAYWRIGHT_BASE_URL ||
     'http://localhost:7655';
   return base.replace(/\/+$/, '');
+}
+
+function commercialWebhookBaseURL(): string {
+  const raw =
+    process.env.PULSE_CCR_WEBHOOK_BASE_URL ||
+    process.env.PULSE_COMMERCIAL_WEBHOOK_BASE_URL ||
+    commercialBaseURL();
+  return raw.replace(/\/+$/, '');
+}
+
+function commercialOrgID(): string {
+  return (process.env.PULSE_CCR_ORG_ID || 'default').trim() || 'default';
+}
+
+function allowBillingStateSeed(): boolean {
+  return /^(1|true|yes)$/i.test((process.env.PULSE_CCR_ALLOW_BILLING_STATE_SEED || '').trim());
+}
+
+function entitlementWriteCommand(): string {
+  return (process.env.PULSE_E2E_ENTITLEMENT_WRITE_COMMAND || '').trim();
+}
+
+function entitlementBillingStatePath(): string {
+  return (process.env.PULSE_E2E_BILLING_STATE_PATH || '').trim();
 }
 
 function checkoutBaseURL(): string {
@@ -123,6 +162,130 @@ async function fetchSubscription(
     stripeSecretKey,
     `/v1/subscriptions/${encodeURIComponent(subscriptionID)}`,
   );
+}
+
+function subscriptionObjectForWebhook(subscription: StripeSubscription): Record<string, unknown> {
+  return {
+    id: subscription.id,
+    customer:
+      typeof subscription.customer === 'string'
+        ? subscription.customer.trim()
+        : subscription.customer,
+    status: subscription.status || '',
+    cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+    canceled_at:
+      typeof subscription.canceled_at === 'number' ? subscription.canceled_at : null,
+    current_period_end:
+      typeof subscription.current_period_end === 'number'
+        ? subscription.current_period_end
+        : null,
+    test_clock:
+      typeof subscription.test_clock === 'string'
+        ? subscription.test_clock
+        : subscription.test_clock?.id || null,
+    items: subscription.items || { data: [] },
+    metadata: {},
+  };
+}
+
+async function replaySubscriptionStateIntoPulse(
+  page: Page,
+  stripeSecretKey: string,
+  webhookSecret: string,
+  subscriptionID: string,
+  eventType: 'customer.subscription.updated' | 'customer.subscription.deleted',
+) {
+  const subscription = await fetchSubscription(page.request, stripeSecretKey, subscriptionID);
+  await sendStripeWebhook(
+    page.request,
+    commercialWebhookBaseURL(),
+    webhookSecret,
+    eventType,
+    subscriptionObjectForWebhook(subscription),
+  );
+}
+
+async function fetchBillingState(page: Page, orgID: string): Promise<BillingStatePayload> {
+  const response = await apiRequest(page, `/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`);
+  expect(response.ok(), `GET billing state failed: HTTP ${response.status()}`).toBeTruthy();
+  return (await response.json()) as BillingStatePayload;
+}
+
+async function putBillingState(page: Page, orgID: string, payload: BillingStatePayload) {
+  const response = await apiRequest(page, `/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: payload,
+  });
+  expect(response.ok(), `PUT billing state failed: HTTP ${response.status()}`).toBeTruthy();
+}
+
+async function seedStripeCustomerMapping(
+  page: Page,
+  orgID: string,
+  customerID: string,
+  subscriptionID: string,
+  priceID: string,
+) {
+  if (!allowBillingStateSeed()) {
+    return;
+  }
+  const seededStateFromCurrent = async (current: BillingStatePayload) => ({
+    capabilities: current.capabilities || [],
+    limits: current.limits || {},
+    meters_enabled: current.meters_enabled || [],
+    plan_version: current.plan_version || 'expired',
+    subscription_state: current.subscription_state || 'expired',
+    stripe_customer_id: customerID,
+    stripe_subscription_id: subscriptionID,
+    stripe_price_id: priceID,
+  });
+
+  const writeCommand = entitlementWriteCommand();
+  const billingPath = entitlementBillingStatePath();
+  let current: BillingStatePayload | null = null;
+  try {
+    current = await fetchBillingState(page, orgID);
+  } catch (error) {
+    if (writeCommand === '' && billingPath === '') {
+      throw error;
+    }
+  }
+
+  const payload = JSON.stringify(
+    await seededStateFromCurrent(current || {
+      capabilities: [],
+      limits: {},
+      meters_enabled: [],
+      plan_version: 'expired',
+      subscription_state: 'expired',
+    }),
+    null,
+    2,
+  ) + '\n';
+
+  if (current) {
+    await putBillingState(page, orgID, JSON.parse(payload) as BillingStatePayload);
+    return;
+  }
+
+  if (billingPath !== '') {
+    writeFileSync(billingPath, payload, 'utf8');
+    return;
+  }
+
+  if (writeCommand !== '') {
+    const result = spawnSync('sh', ['-lc', writeCommand], {
+      input: payload,
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      throw new Error(
+        `billing state write command failed: ${result.stderr || result.stdout || `exit ${result.status}`}`,
+      );
+    }
+    return;
+  }
 }
 
 async function advanceTestClock(
@@ -304,6 +467,7 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial coverage');
 
     const stripeSecretKey = requiredEnv('PULSE_E2E_STRIPE_API_KEY');
+    const webhookSecret = requiredEnv('PULSE_E2E_STRIPE_WEBHOOK_SECRET');
     const customerID = requiredEnv('PULSE_CCR_MONTHLY_CUSTOMER_ID');
     const subscriptionID = requiredEnv('PULSE_CCR_MONTHLY_SUBSCRIPTION_ID');
     const legacyPriceID = requiredEnv('PULSE_CCR_MONTHLY_LEGACY_PRICE_ID');
@@ -311,8 +475,18 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     const v6PlanKey = process.env.PULSE_CCR_V6_MONTHLY_PLAN_KEY || 'price_pro_monthly';
     const returnerEmail = requiredEnv('PULSE_CCR_RETURNER_EMAIL');
     const baseURL = commercialBaseURL();
+    const orgID = commercialOrgID();
 
     await ensureAuthenticated(page);
+    await seedStripeCustomerMapping(page, orgID, customerID, subscriptionID, legacyPriceID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
+
     await openPulseProPanel(page);
 
     const activeSubscription = await fetchSubscription(page.request, stripeSecretKey, subscriptionID);
@@ -322,6 +496,13 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     await expectGrandfatheredState(page, 'v5_pro_monthly_grandfathered', legacyPriceID);
 
     await portalScheduleCancellation(page, page.request, stripeSecretKey, customerID, subscriptionID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
 
     let scheduledSubscription = await fetchSubscription(page.request, stripeSecretKey, subscriptionID);
     expect(scheduledSubscription.cancel_at_period_end).toBe(true);
@@ -334,6 +515,13 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     await expect(page.getByText(/grandfathered v5 pricing/i)).toBeVisible();
 
     await portalResumeCancellation(page, page.request, stripeSecretKey, customerID, subscriptionID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
 
     scheduledSubscription = await fetchSubscription(page.request, stripeSecretKey, subscriptionID);
     expect(scheduledSubscription.cancel_at_period_end).toBe(false);
@@ -343,6 +531,13 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     expect(typeof currentPeriodEnd).toBe('number');
 
     await portalScheduleCancellation(page, page.request, stripeSecretKey, customerID, subscriptionID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
     await advanceTestClock(page.request, stripeSecretKey, testClockID, Number(currentPeriodEnd) + 3600);
 
     await expect
@@ -351,6 +546,13 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
         return canceled.status;
       }, { timeout: 120_000 })
       .toMatch(/canceled|incomplete_expired|unpaid/);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.deleted',
+    );
 
     await openPulseProPanel(page);
     await expect
@@ -399,20 +601,37 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial coverage');
 
     const stripeSecretKey = requiredEnv('PULSE_E2E_STRIPE_API_KEY');
+    const webhookSecret = requiredEnv('PULSE_E2E_STRIPE_WEBHOOK_SECRET');
     const customerID = requiredEnv('PULSE_CCR_ANNUAL_CUSTOMER_ID');
     const subscriptionID = requiredEnv('PULSE_CCR_ANNUAL_SUBSCRIPTION_ID');
     const legacyPriceID = requiredEnv('PULSE_CCR_ANNUAL_LEGACY_PRICE_ID');
     const testClockID = requiredEnv('PULSE_CCR_ANNUAL_TEST_CLOCK_ID');
     const v6PlanKey = process.env.PULSE_CCR_V6_ANNUAL_PLAN_KEY || 'price_pro_annual';
     const returnerEmail = requiredEnv('PULSE_CCR_RETURNER_EMAIL');
+    const orgID = commercialOrgID();
 
     await ensureAuthenticated(page);
+    await seedStripeCustomerMapping(page, orgID, customerID, subscriptionID, legacyPriceID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
     await openPulseProPanel(page);
 
     const activeSubscription = await fetchSubscription(page.request, stripeSecretKey, subscriptionID);
     expect(activeSubscription.items?.data?.[0]?.price?.id).toBe(legacyPriceID);
 
     await portalScheduleCancellation(page, page.request, stripeSecretKey, customerID, subscriptionID);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.updated',
+    );
     const currentPeriodEnd = (await fetchSubscription(page.request, stripeSecretKey, subscriptionID)).current_period_end;
     expect(typeof currentPeriodEnd).toBe('number');
     await advanceTestClock(page.request, stripeSecretKey, testClockID, Number(currentPeriodEnd) + 3600);
@@ -423,6 +642,13 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
         return canceled.status;
       }, { timeout: 120_000 })
       .toMatch(/canceled|incomplete_expired|unpaid/);
+    await replaySubscriptionStateIntoPulse(
+      page,
+      stripeSecretKey,
+      webhookSecret,
+      subscriptionID,
+      'customer.subscription.deleted',
+    );
 
     const checkout = await createCheckoutSession(page.request, v6PlanKey);
     expect(checkout.plan_key).toBe(v6PlanKey);
