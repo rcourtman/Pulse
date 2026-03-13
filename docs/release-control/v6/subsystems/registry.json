@@ -807,7 +807,11 @@
       "owned_prefixes": [
         "frontend-modern/src/components/shared/"
       ],
-      "owned_files": [],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/Settings.tsx",
+        "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+        "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
+      ],
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
@@ -831,9 +835,25 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
               "frontend-modern/src/components/shared/PageControls.test.tsx"
+            ]
+          },
+          {
+            "id": "settings-shell-and-framing",
+            "label": "settings shell framing proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/Settings.tsx",
+              "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+              "frontend-modern/src/components/Settings/settingsPanelRegistry.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]
           },
           {

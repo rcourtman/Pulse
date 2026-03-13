@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
+import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
+import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
+import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
+import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
+import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
+import aiSettingsPanelSource from '../AISettings.tsx?raw';
+import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
+import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
+import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
+import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
+import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
+import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
+import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
+import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
+import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
+import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
+import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
+import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
+import rolesPanelSource from '../RolesPanel.tsx?raw';
+import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 
 const extractedModules = [
   '../settingsTypes.ts',
@@ -38,6 +58,30 @@ const requiredImportSources = [
   './useSystemSettingsState',
   './useSettingsNavigation',
 ] as const;
+
+const topLevelSettingsPanelSources = {
+  APIAccessPanel: apiAccessPanelSource,
+  AuditLogPanel: auditLogPanelSource,
+  AuditWebhookPanel: auditWebhookPanelSource,
+  BillingAdminPanel: billingAdminPanelSource,
+  GeneralSettingsPanel: generalSettingsPanelSource,
+  AISettings: aiSettingsPanelSource,
+  InfrastructureWorkspace: infrastructureWorkspaceSource,
+  NetworkSettingsPanel: networkSettingsPanelSource,
+  UpdatesSettingsPanel: updatesSettingsPanelSource,
+  RecoverySettingsPanel: recoverySettingsPanelSource,
+  RelaySettingsPanel: relaySettingsPanelSource,
+  ProLicensePanel: proLicensePanelSource,
+  OrganizationOverviewPanel: organizationOverviewPanelSource,
+  OrganizationAccessPanel: organizationAccessPanelSource,
+  OrganizationSharingPanel: organizationSharingPanelSource,
+  OrganizationBillingPanel: organizationBillingPanelSource,
+  SecurityOverviewPanel: securityOverviewPanelSource,
+  SecurityAuthPanel: securityAuthPanelSource,
+  SSOProvidersPanel: ssoProvidersPanelSource,
+  RolesPanel: rolesPanelSource,
+  UserAssignmentsPanel: userAssignmentsPanelSource,
+} as const;
 
 describe('Settings architecture guardrails', () => {
   it('keeps extracted settings modules present on disk', () => {
@@ -125,5 +169,14 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toMatch(/<h[12][^>]*>/);
     expect(infrastructureWorkspaceSource).not.toContain('Add and manage infrastructure');
     expect(infrastructureWorkspaceSource).not.toContain('tracking-[0.22em]');
+  });
+
+  it('routes every top-level settings surface through the canonical SettingsPanel framing', () => {
+    for (const [panelName, source] of Object.entries(topLevelSettingsPanelSources)) {
+      expect(source, `${panelName} should use SettingsPanel`).toContain('SettingsPanel');
+      expect(source, `${panelName} should not introduce page-level header chrome`).not.toContain(
+        '<PageHeader',
+      );
+    }
   });
 });

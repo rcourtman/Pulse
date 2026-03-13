@@ -664,9 +664,34 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
                         "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
                         "frontend-modern/src/components/shared/PageControls.test.tsx",
+                    ],
+                }
+            ],
+        )
+
+    def test_frontend_primitive_settings_shell_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
+        requirements = build_verification_requirements(
+            rule,
+            ["frontend-modern/src/components/Settings/SettingsPageShell.tsx"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "settings-shell-and-framing",
+                    "label": "settings shell framing proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/SettingsPageShell.tsx"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
             ],

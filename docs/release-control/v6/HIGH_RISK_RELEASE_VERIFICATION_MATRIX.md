@@ -175,6 +175,42 @@ Companion drill:
   Agents or humans can still follow stale v6 guidance, or legacy/historical
   docs remain mixed into the active v6 instruction surface.
 
+## Gate: `settings-surface-layout-consistency`
+
+- Why this is risky:
+  Settings surfaces are one of the densest trust surfaces in Pulse. If
+  top-level settings pages drift in shell framing, header treatment, or
+  section rhythm, the product feels unfinished and users stop trusting that
+  comparable admin and paid surfaces behave to the same standard.
+- Primary runtime surfaces:
+  `frontend-modern/src/components/Settings/Settings.tsx`
+  `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+  `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+  `frontend-modern/src/components/shared/SettingsPanel.tsx`
+  representative top-level settings panels under
+  `frontend-modern/src/components/Settings/`
+- Automated proof:
+  `cd frontend-modern && npx vitest run src/components/Settings/__tests__/settingsArchitecture.test.ts`
+- Manual scenario:
+  1. Run the release build or a staging-like runtime and click through
+     representative top-level settings surfaces across general, billing,
+     relay, organization, security, AI, updates, and recovery panels.
+  2. Confirm each comparable surface uses the same outer settings shell
+     instead of introducing a bespoke page-level header or outer frame.
+  3. Confirm the title, description, and top-level section framing stay
+     visually consistent across those panels.
+  4. Confirm any intentional deviation is rare, product-justified, and
+     documented rather than an accidental local fork.
+- Pass when:
+  Comparable top-level settings surfaces route through the canonical settings
+  shell and present consistent top-level framing and header treatment, with no
+  ad hoc page chrome left behind.
+- Latest exercised record:
+  None yet.
+- Block release if:
+  Settings surfaces still mix multiple top-level shells, inconsistent header
+  framing, or bespoke page chrome across otherwise comparable panels.
+
 ## Gate: `paid-feature-entitlement-gating`
 
 - Why this is risky:

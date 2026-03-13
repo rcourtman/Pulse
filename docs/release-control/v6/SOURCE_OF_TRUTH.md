@@ -138,7 +138,10 @@ Assertion design rules:
    resistance, or things that "should always be true" as candidate governance
    input, not only explicit requests to add a formal assertion.
 10. Active v6-facing guidance must stay current; legacy or historical docs may
-   exist only as clearly marked reference material, not as current instructions.
+    exist only as clearly marked reference material, not as current instructions.
+11. Comparable settings surfaces should be normalized into canonical
+    page-shell rules when the user raises consistency drift, rather than
+    treated as vague polish notes.
 
 ## Non-Negotiable Release Gates
 
@@ -167,16 +170,19 @@ Assertion design rules:
     lost inflight work.
 11. Do not ship upgrades that reset paid state, licensing continuity, or
     first-session flow.
-12. Do not keep polishing strong lanes while weak lanes remain behind.
-13. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
-14. Do not promote v6 to stable or GA without an exercised RC, a real
+12. Do not ship if comparable settings surfaces drift away from the canonical
+    page-shell contract and still present inconsistent top-level framing,
+    header chrome, or section treatment without explicit justification.
+13. Do not keep polishing strong lanes while weak lanes remain behind.
+14. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+15. Do not promote v6 to stable or GA without an exercised RC, a real
     release-pipeline proof run, a recorded rollback target, and a written v5
     maintenance-only support policy.
-15. Do not declare a lane or blocker complete just because the first passing
+16. Do not declare a lane or blocker complete just because the first passing
     check landed. If obvious same-lane gaps still keep the outcome from being
     coherent, trustworthy, or realistically shippable, that lane is not done
     yet.
-16. Lanes that are at target but intentionally not closed must record a
+17. Lanes that are at target but intentionally not closed must record a
     bounded residual in `status.json` with a short rationale and explicit
     tracking references to the governing follow-up surface.
     Pair lane `status` and `completion.state` coherently: `complete` goes with

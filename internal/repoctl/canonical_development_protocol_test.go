@@ -420,6 +420,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
 		"stable or GA promotion readiness",
+		"v6-ga-promotion",
 		"v6-rc-stabilization",
 		"should always be true",
 	})
@@ -429,20 +430,69 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	assertContainsAll(t, jsonRel, jsonContent, []string{
 		"\"system\": \"pulse-release-control\"",
 		"\"active_profile_id\": \"v6\"",
-		"\"active_target_id\": \"v6-rc-stabilization\"",
-		"\"id\": \"v6-rc-cut\"",
-		"\"status\": \"completed\"",
-		"\"id\": \"v6-rc-stabilization\"",
-		"\"status\": \"active\"",
-		"\"completion_rule\": \"manual\"",
-		"\"proof_scope\": \"none\"",
-		"\"id\": \"v6-ga-promotion\"",
-		"\"status\": \"planned\"",
-		"\"completion_rule\": \"rc_ready\"",
-		"\"completion_rule\": \"release_ready\"",
 		"\"prerelease_branch\": \"pulse/v6\"",
 		"\"stable_branch\": \"pulse/v6\"",
+		"\"completion_rule\": \"rc_ready\"",
+		"\"completion_rule\": \"manual\"",
+		"\"completion_rule\": \"release_ready\"",
+		"\"proof_scope\": \"none\"",
 	})
+
+	var controlPlane map[string]any
+	if err := json.Unmarshal([]byte(jsonContent), &controlPlane); err != nil {
+		t.Fatalf("failed to parse %s: %v", jsonRel, err)
+	}
+	activeTargetID, ok := controlPlane["active_target_id"].(string)
+	if !ok || activeTargetID == "" {
+		t.Fatalf("%s missing active_target_id", jsonRel)
+	}
+	if activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" {
+		t.Fatalf("%s has unexpected active_target_id %q", jsonRel, activeTargetID)
+	}
+
+	rawTargets, ok := controlPlane["targets"].([]any)
+	if !ok || len(rawTargets) == 0 {
+		t.Fatalf("%s missing targets", jsonRel)
+	}
+
+	targetsByID := map[string]map[string]any{}
+	activeCount := 0
+	for _, rawTarget := range rawTargets {
+		target, ok := rawTarget.(map[string]any)
+		if !ok {
+			t.Fatalf("%s contains non-object target", jsonRel)
+		}
+		id, ok := target["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("%s target missing id", jsonRel)
+		}
+		targetsByID[id] = target
+		status, _ := target["status"].(string)
+		if status == "active" {
+			activeCount++
+		}
+	}
+
+	for _, requiredID := range []string{"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion"} {
+		if _, ok := targetsByID[requiredID]; !ok {
+			t.Fatalf("%s missing target %q", jsonRel, requiredID)
+		}
+	}
+	if activeCount != 1 {
+		t.Fatalf("%s must contain exactly one active target, found %d", jsonRel, activeCount)
+	}
+	if status, _ := targetsByID[activeTargetID]["status"].(string); status != "active" {
+		t.Fatalf("%s active_target_id %q is not marked active", jsonRel, activeTargetID)
+	}
+	if status, _ := targetsByID["v6-rc-cut"]["status"].(string); status != "completed" {
+		t.Fatalf("%s v6-rc-cut must remain completed", jsonRel)
+	}
+	if rule, _ := targetsByID["v6-rc-stabilization"]["completion_rule"].(string); rule != "manual" {
+		t.Fatalf("%s v6-rc-stabilization must keep completion_rule=manual", jsonRel)
+	}
+	if scope, _ := targetsByID["v6-rc-stabilization"]["proof_scope"].(string); scope != "none" {
+		t.Fatalf("%s v6-rc-stabilization must keep proof_scope=none", jsonRel)
+	}
 
 	schemaRel := "docs/release-control/control_plane.schema.json"
 	schemaContent := readRepoFile(t, schemaRel)

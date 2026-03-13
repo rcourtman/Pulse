@@ -15,15 +15,19 @@
 
 ## Purpose
 
-Own reusable frontend primitives and presentational patterns so feature work
-extends shared components instead of creating new local variants.
+Own reusable frontend primitives and canonical page-shell patterns so feature
+work extends shared components instead of creating new local variants.
 
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`
-2. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-3. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-4. `frontend-modern/src/features/`
+2. `frontend-modern/src/components/Settings/Settings.tsx`
+3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+5. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+6. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+7. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+8. `frontend-modern/src/features/`
 
 ## Shared Boundaries
 
@@ -32,20 +36,27 @@ extends shared components instead of creating new local variants.
 ## Extension Points
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
-2. Add feature-specific presentation only when no shared primitive should own it
-3. Add guardrail tests when a new shared pattern is introduced
+2. Route new top-level settings surfaces through the canonical settings shell
+   instead of introducing page-local framing
+3. Add feature-specific presentation only when no shared primitive should own it
+4. Add guardrail tests when a new shared pattern is introduced
 
 ## Forbidden Paths
 
 1. Reinventing table/filter/toggle primitives when a shared version exists
 2. Feature-local styling forks of canonical shared components without explicit justification
 3. Direct imports that bypass shared presentation helpers where guardrails exist
+4. Top-level settings panels introducing bespoke page-level headers or outer
+   framing instead of the canonical settings shell and `SettingsPanel`
+   contract
 
 ## Completion Obligations
 
 1. Update guardrail tests when new shared primitives are added
-2. Update this contract when a new canonical UI pattern is adopted
-3. Remove local forks after the shared primitive is introduced
+2. Keep top-level settings surfaces routed through the canonical settings shell
+   and maintain `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+3. Update this contract when a new canonical UI pattern is adopted
+4. Remove local forks after the shared primitive is introduced
 
 ## Current State
 
@@ -125,3 +136,9 @@ from their inherited HTML props. `CalloutCard`, `FilterSegmentedControl`, and
 `Subtabs` may still forward ordinary div attributes, but their canonical API
 must preserve JSX element titles and value-callback handlers instead of
 widening back to raw DOM attribute unions.
+
+The settings shell is now also a governed frontend primitive boundary.
+Top-level settings surfaces must route through `Settings.tsx`,
+`SettingsPageShell.tsx`, and
+`frontend-modern/src/components/shared/SettingsPanel.tsx` instead of
+reintroducing bespoke outer page headers or one-off top-level panel framing.

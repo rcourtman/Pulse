@@ -1580,6 +1580,61 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA19",
+      "summary": "Comparable Pulse settings surfaces use the canonical settings page-shell contract: shared SettingsPanel framing, consistent header structure, and no ad hoc top-level layout chrome unless explicitly approved.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L8"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "settings-surface-layout-consistency"
+      ],
+      "proof_commands": [
+        {
+          "id": "settings-architecture-guardrails",
+          "cwd": "frontend-modern",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/components/Settings/__tests__/settingsArchitecture.test.ts"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -2471,6 +2526,26 @@
           "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
+        }
+      ]
+    },
+    {
+      "id": "settings-surface-layout-consistency",
+      "summary": "Confirm comparable settings surfaces present the canonical page shell, with consistent header framing and no ad hoc top-level layout chrome.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "local-rehearsal",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L8"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     },
