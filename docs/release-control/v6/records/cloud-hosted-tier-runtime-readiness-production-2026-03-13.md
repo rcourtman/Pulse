@@ -24,19 +24,23 @@
 4. Confirmed the operator path itself was healthy once the real SSH target was used:
    - SSH to `root@pulse-cloud` succeeded
    - compose, digest pinning, and backup/restore guardrails passed
-5. Confirmed production still has a concrete live blocker on the post-checkout hosted path:
-   - `/opt/pulse-cloud/.env` is missing `CP_TRIAL_ACTIVATION_PRIVATE_KEY`
-   - recent control-plane logs show repeated `checkout.session.completed` failures with `tenant <id> container failed health check`
-6. Did not generate a runtime login against an existing production tenant:
+5. Corrected the live production control-plane env mismatch and revalidated preflight:
+   - `/opt/pulse-cloud/.env` now contains `CP_TRIAL_ACTIVATION_PRIVATE_KEY`
+   - restarted `pulse-cloud-control-plane-1` cleanly via `docker compose up -d control-plane`
+   - rerunning `deploy/cloud/preflight-live.sh` passed with `failures=0` and `warnings=0`
+6. Confirmed the external hosted entry path now reaches live Stripe checkout creation:
+   - `POST /api/public/signup` with a fresh dedicated production test email returned a real `checkout_url=https://checkout.stripe.com/...`
+   - this is stronger than the earlier broken-env state because the live public hosted surface now reaches the external billing boundary successfully
+7. Did not generate a runtime login against an existing production tenant:
    - no clearly dedicated internal hosted tenant was identified for a safe rehearsal
    - using an admin-generated magic link against a real customer tenant would amount to impersonating a live customer workspace for release proof
-   - because the production signup/provisioning path is already showing live failures, that additional intrusion was not justified
+   - a fresh production checkout was not completed because it would create real finance-visible side effects on the live Stripe environment
 
 ## Outcome
 
 - This is real external production evidence, not localhost rehearsal.
-- The live hosted surface is reachable, but the gate still cannot pass honestly because new post-checkout provisioning is already failing on production.
+- The live hosted surface is reachable and the hosted signup path now reaches real checkout creation on production.
+- The gate still cannot pass honestly because there is not yet fresh external evidence that a completed production checkout leads to a healthy tenant runtime that can actually be entered and used.
 - `cloud-hosted-tier-runtime-readiness` remains pending until:
-  - production trial/signup env wiring is corrected
-  - checkout-driven provisioning succeeds on the real external service
+  - checkout-driven provisioning is re-exercised successfully on the real external service
   - a safe hosted runtime-entry drill can be completed without relying on a real customer workspace

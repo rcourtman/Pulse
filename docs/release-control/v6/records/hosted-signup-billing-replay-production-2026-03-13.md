@@ -25,24 +25,29 @@
 3. Confirmed the real admin control surface was reachable:
    - `GET /status` with the production admin key returned `{"version":"dev","total_tenants":16,"healthy":16,"unhealthy":0,"by_state":{"active":16}}`
    - SSH to `root@pulse-cloud` succeeded
-4. Confirmed the live production env is not actually ready for a clean hosted checkout/trial replay:
-   - `/opt/pulse-cloud/.env` contains `CP_TRIAL_SIGNUP_PRICE_ID`
-   - `/opt/pulse-cloud/.env` does not contain `CP_TRIAL_ACTIVATION_PRIVATE_KEY`
-   - this is a real env mismatch, not a local-doc artifact
-5. Pulled recent production control-plane logs and confirmed repeated real checkout completion failures on the external service:
+4. Corrected the live production control-plane env mismatch and revalidated preflight:
+   - `/opt/pulse-cloud/.env` now contains `CP_TRIAL_SIGNUP_PRICE_ID`
+   - `/opt/pulse-cloud/.env` now contains `CP_TRIAL_ACTIVATION_PRIVATE_KEY`
+   - `docker compose up -d control-plane` completed cleanly on `root@pulse-cloud`
+   - rerunning `deploy/cloud/preflight-live.sh` passed with `failures=0` and `warnings=0`
+5. Confirmed the real public hosted-signup surface now reaches live Stripe checkout creation on production:
+   - `POST /api/public/signup` with a fresh dedicated test email returned `200`
+   - response contained a real `checkout_url=https://checkout.stripe.com/...`
+   - response message was `Checkout session created. Continue in Stripe to provision your Pulse Cloud tenant.`
+6. Pulled recent production control-plane logs and confirmed there is still unresolved evidence on completed checkout execution from earlier live traffic:
    - multiple `checkout.session.completed` events in the last 12 hours logged `Stripe webhook processing failed`
    - the concrete failure was `tenant <id> container failed health check`
    - observed failing tenant IDs included `t-KPXEWNB56Z`, `t-P1QD6QHHWK`, `t-N6BEJKY9AW`, `t-SJY27FXC1V`, `t-1GGB3EX439`, `t-5PAARCDCJM`, `t-S5MPK98VM7`, `t-CJTV56H46F`, `t-YBP562AM1E`, `t-JRDF96FXTB`, and `t-0Y0C9NG6PR`
-6. Did not initiate a fresh live checkout from production:
+7. Did not complete a fresh live checkout on production:
    - production is configured for live Stripe
-   - the existing external evidence already shows real checkout completion failures
-   - creating an additional live billing flow would add customer-visible or finance-visible side effects without improving confidence
+   - creating a completed live billing flow would introduce real finance-visible side effects
+   - the new evidence proves checkout-session creation is healthy again, but not yet successful webhook completion through to a healthy tenant runtime
 
 ## Outcome
 
 - This is real external production evidence, not localhost rehearsal.
-- The hosted public signup surface is up, but the real paid provisioning path is not healthy enough to close the gate.
+- The hosted public signup surface is up and can now create a real Stripe checkout session on production.
 - `hosted-signup-billing-replay` remains pending because production currently shows:
-  - missing `CP_TRIAL_ACTIVATION_PRIVATE_KEY` in the control-plane env
-  - repeated real `checkout.session.completed` failures ending in tenant container health-check failure
-- The gate should only move after the production env is corrected and a fresh external hosted checkout plus replay path succeeds cleanly.
+  - no fresh external proof yet that a completed production checkout now replays cleanly through webhook handling into a healthy provisioned tenant
+  - historical real `checkout.session.completed` failures still exist in the production evidence set and have not yet been displaced by a successful completed run
+- The gate should only move after a fresh external hosted checkout plus replay path succeeds cleanly on production.
