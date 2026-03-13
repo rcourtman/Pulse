@@ -153,6 +153,52 @@ def _blocker_detail(
     return detail
 
 
+def _lane_tracking_detail(
+    tracking: dict[str, str],
+    *,
+    readiness_assertions_by_id: dict[str, dict[str, Any]],
+    release_gates_by_id: dict[str, dict[str, Any]],
+    open_decisions_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    tracking_kind = str(tracking["kind"])
+    tracking_id = str(tracking["id"])
+    detail: dict[str, Any] = {
+        "kind": tracking_kind,
+        "id": tracking_id,
+        "status": "unknown",
+        "resolved": False,
+    }
+    if tracking_kind == "target":
+        target = DEFAULT_CONTROL_PLANE["targets_by_id"].get(tracking_id)
+        if target:
+            detail["status"] = str(target.get("status", "unknown"))
+            detail["resolved"] = detail["status"] == "completed"
+            detail["summary"] = str(target.get("summary", ""))
+        return detail
+    if tracking_kind == "readiness-assertion":
+        assertion = readiness_assertions_by_id.get(tracking_id)
+        if assertion:
+            detail["status"] = str(assertion.get("derived_status", "unknown"))
+            detail["resolved"] = bool(assertion.get("derived_pass"))
+            detail["summary"] = str(assertion.get("summary", ""))
+        return detail
+    if tracking_kind == "release-gate":
+        gate = release_gates_by_id.get(tracking_id)
+        if gate:
+            detail["status"] = str(gate.get("effective_status", gate.get("status", "unknown")))
+            detail["resolved"] = detail["status"] == "passed"
+            detail["summary"] = str(gate.get("summary", ""))
+        return detail
+    if tracking_kind == "open-decision":
+        decision = open_decisions_by_id.get(tracking_id)
+        if decision:
+            detail["status"] = str(decision.get("status", "unknown"))
+            detail["resolved"] = False
+            detail["summary"] = str(decision.get("summary", ""))
+        return detail
+    return detail
+
+
 def _phase_blocker_details(
     *,
     assertions: list[dict[str, Any]],
@@ -1740,6 +1786,9 @@ def audit_status_payload(
         ),
         key=lambda entry: (-entry["blocker_count"], str(entry["subsystem_id"]).casefold()),
     )
+    readiness_assertions_by_id = {str(assertion["id"]): assertion for assertion in readiness_assertions}
+    release_gates_by_id = {str(gate["id"]): gate for gate in release_gates}
+    open_decisions_by_id = {str(decision["id"]): decision for decision in open_decisions}
     lane_residuals = sorted(
         (
             {
@@ -1747,8 +1796,36 @@ def audit_status_payload(
                 "lane_name": lane["name"],
                 "summary": lane["completion_summary"],
                 "tracking": [
-                    f"{tracking['kind']}:{tracking['id']}" for tracking in lane["completion_tracking"]
+                    f"{detail['kind']}:{detail['id']}[{detail['status']}]"
+                    for detail in (
+                        _lane_tracking_detail(
+                            tracking,
+                            readiness_assertions_by_id=readiness_assertions_by_id,
+                            release_gates_by_id=release_gates_by_id,
+                            open_decisions_by_id=open_decisions_by_id,
+                        )
+                        for tracking in lane["completion_tracking"]
+                    )
                 ],
+                "tracking_details": [
+                    _lane_tracking_detail(
+                        tracking,
+                        readiness_assertions_by_id=readiness_assertions_by_id,
+                        release_gates_by_id=release_gates_by_id,
+                        open_decisions_by_id=open_decisions_by_id,
+                    )
+                    for tracking in lane["completion_tracking"]
+                ],
+                "unresolved_tracking_count": sum(
+                    1
+                    for tracking in lane["completion_tracking"]
+                    if not _lane_tracking_detail(
+                        tracking,
+                        readiness_assertions_by_id=readiness_assertions_by_id,
+                        release_gates_by_id=release_gates_by_id,
+                        open_decisions_by_id=open_decisions_by_id,
+                    )["resolved"]
+                ),
                 "repo_ids": list(lane["repo_ids"]),
                 "subsystem_ids": list(lane["subsystems"]),
             }
@@ -2149,6 +2226,7 @@ def render_pretty(report: dict[str, Any]) -> str:
         for residual in lane_residuals:
             lines.append(
                 f"  - {residual['lane_id']} "
+                f"unresolved={residual['unresolved_tracking_count']} "
                 f"tracking={','.join(residual['tracking']) or '-'} "
                 f"repos={','.join(residual['repo_ids']) or '-'} "
                 f"subsystems={','.join(residual['subsystem_ids']) or '-'}"

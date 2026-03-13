@@ -916,7 +916,17 @@ class StatusAuditTest(unittest.TestCase):
                         "lane_id": "L1",
                         "lane_name": "Lane 1",
                         "summary": "Lane still has a governed residual.",
-                        "tracking": ["target:v6-rc-stabilization"],
+                        "tracking": ["target:v6-rc-stabilization[active]"],
+                        "tracking_details": [
+                            {
+                                "kind": "target",
+                                "id": "v6-rc-stabilization",
+                                "status": "active",
+                                "resolved": False,
+                                "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed, while broader post-RC polish stays out of the release floor by default.",
+                            }
+                        ],
+                        "unresolved_tracking_count": 1,
                         "repo_ids": ["pulse"],
                         "subsystem_ids": [],
                     }
@@ -924,7 +934,7 @@ class StatusAuditTest(unittest.TestCase):
             )
             pretty = render_pretty(report)
             self.assertIn("lane_residuals:", pretty)
-            self.assertIn("L1 tracking=target:v6-rc-stabilization", pretty)
+            self.assertIn("L1 unresolved=1 tracking=target:v6-rc-stabilization[active]", pretty)
             self.assertIn("Lane still has a governed residual.", pretty)
 
 
