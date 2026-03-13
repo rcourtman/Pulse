@@ -163,6 +163,8 @@ Companion drill:
 - Pass when:
   Active v6-facing guidance matches the current governed state of the repo, and
   historical docs no longer present themselves as current guidance.
+- Latest exercised record:
+  `docs/release-control/v6/records/documentation-currentness-and-legacy-cleanup-2026-03-13.md`
 - Block release if:
   Agents or humans can still follow stale v6 guidance, or legacy/historical
   docs remain mixed into the active v6 instruction surface.

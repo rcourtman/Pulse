@@ -735,16 +735,16 @@
         }
       ],
       "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/control_plane.json",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/CONTROL_PLANE.md",
-          "kind": "file"
-        },
+      {
+        "repo": "pulse",
+        "path": "docs/release-control/control_plane.json",
+        "kind": "file"
+      },
+      {
+        "repo": "pulse",
+        "path": "docs/release-control/CONTROL_PLANE.md",
+        "kind": "file"
+      },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
@@ -760,21 +760,26 @@
           "path": "docs/release-control/v6/README.md",
           "kind": "file"
         },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/status.json",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "scripts/release_control/documentation_currentness_test.py",
-          "kind": "file"
-        }
+      {
+        "repo": "pulse",
+        "path": "docs/release-control/v6/records/documentation-currentness-and-legacy-cleanup-2026-03-13.md",
+        "kind": "file"
+      },
+      {
+        "repo": "pulse",
+        "path": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+        "kind": "file"
+      },
+      {
+        "repo": "pulse",
+        "path": "docs/release-control/v6/status.json",
+        "kind": "file"
+      },
+      {
+        "repo": "pulse",
+        "path": "scripts/release_control/documentation_currentness_test.py",
+        "kind": "file"
+      }
       ]
     },
     {
@@ -2013,7 +2018,7 @@
       "summary": "Confirm active v6-facing guidance is current, and any legacy or historical docs are clearly archived or demoted instead of remaining current guidance.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L9"
