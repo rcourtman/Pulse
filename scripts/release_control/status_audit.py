@@ -863,16 +863,25 @@ def validate_lane_completion_tracking(
     errors: list[str],
 ) -> None:
     readiness_assertions_by_id = {
-        str(assertion["id"]): set(str(lane_id) for lane_id in assertion.get("lane_ids", []))
-        for assertion in readiness_assertions
+        str(assertion["id"]): assertion for assertion in readiness_assertions
     }
     release_gates_by_id = {
-        str(gate["id"]): set(str(lane_id) for lane_id in gate.get("lane_ids", []))
-        for gate in release_gates
+        str(gate["id"]): gate for gate in release_gates
     }
     open_decisions_by_id = {
-        str(decision["id"]): set(str(lane_id) for lane_id in decision.get("lane_ids", []))
-        for decision in open_decisions
+        str(decision["id"]): decision for decision in open_decisions
+    }
+    readiness_assertion_lane_ids = {
+        assertion_id: set(str(lane_id) for lane_id in assertion.get("lane_ids", []))
+        for assertion_id, assertion in readiness_assertions_by_id.items()
+    }
+    release_gate_lane_ids = {
+        gate_id: set(str(lane_id) for lane_id in gate.get("lane_ids", []))
+        for gate_id, gate in release_gates_by_id.items()
+    }
+    open_decision_lane_ids = {
+        decision_id: set(str(lane_id) for lane_id in decision.get("lane_ids", []))
+        for decision_id, decision in open_decisions_by_id.items()
     }
     target_ids = set(DEFAULT_CONTROL_PLANE["targets_by_id"])
 
@@ -902,20 +911,34 @@ def validate_lane_completion_tracking(
                     f"{labels.get(tracking_kind, tracking_kind)} {tracking_id!r}"
                 )
                 continue
-            if tracking_kind == "readiness-assertion" and lane_id not in readiness_assertions_by_id[tracking_id]:
+            if tracking_kind == "readiness-assertion" and lane_id not in readiness_assertion_lane_ids[tracking_id]:
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking readiness assertion {tracking_id!r} "
                     "does not reference that lane"
                 )
-            if tracking_kind == "release-gate" and lane_id not in release_gates_by_id[tracking_id]:
+                continue
+            if tracking_kind == "release-gate" and lane_id not in release_gate_lane_ids[tracking_id]:
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking release gate {tracking_id!r} "
                     "does not reference that lane"
                 )
-            if tracking_kind == "open-decision" and lane_id not in open_decisions_by_id[tracking_id]:
+                continue
+            if tracking_kind == "open-decision" and lane_id not in open_decision_lane_ids[tracking_id]:
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking open decision {tracking_id!r} "
                     "does not reference that lane"
+                )
+                continue
+            detail = _lane_tracking_detail(
+                tracking,
+                readiness_assertions_by_id=readiness_assertions_by_id,
+                release_gates_by_id=release_gates_by_id,
+                open_decisions_by_id=open_decisions_by_id,
+            )
+            if detail["resolved"]:
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking {labels.get(tracking_kind, tracking_kind)} "
+                    f"{tracking_id!r} is already resolved and cannot keep a bounded residual open"
                 )
 
 

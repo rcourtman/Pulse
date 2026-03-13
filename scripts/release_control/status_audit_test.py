@@ -886,6 +886,33 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_bounded_residual_lane_rejects_resolved_tracking_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="passed",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking release gate 'g1' is already resolved and cannot keep a bounded residual open",
+                report["errors"],
+            )
+
     def test_bounded_residual_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"

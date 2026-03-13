@@ -308,6 +308,7 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"Did the user casually raise a new quality bar or product invariant?",
 		"status.json.lanes[*].completion",
 		"references must also reference the same lane",
+		"already-passed",
 	})
 }
 
@@ -548,6 +549,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"Current lane scores, evidence references, and typed operational decision",
 		"Lane completion state, residual-gap summaries, and normalized follow-up",
 		"Those references must belong to that same lane",
+		"already-passed assertions, gates, or completed targets",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",

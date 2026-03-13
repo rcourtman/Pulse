@@ -160,6 +160,10 @@ Every substantial task must finish by checking these questions:
 10. Is the remaining work still part of this lane?
     If not, stop cleanly and normalize it into the next target, another lane,
     or an explicit open decision instead of letting this task expand forever.
+11. If I am recording a bounded residual, do the tracking references point to
+    the same lane and stay genuinely unresolved?
+    Do not keep a lane in `bounded-residual` by pointing at already-passed
+    assertions, cleared release gates, or completed targets.
 
 This is the minimum update set for canonical work:
 
