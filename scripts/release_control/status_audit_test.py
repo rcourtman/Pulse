@@ -1071,6 +1071,40 @@ class StatusAuditTest(unittest.TestCase):
             pretty = render_pretty(report)
             self.assertIn("uses only broad target tracking for its bounded residual", pretty)
 
+    def test_mixed_target_and_concrete_bounded_residual_emits_cleanup_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane is at floor and has both a concrete gate and a leftover broad target fallback.",
+                completion_tracking=[
+                    {"kind": "release-gate", "id": "g1"},
+                    {"kind": "target", "id": "v6-rc-stabilization"},
+                ],
+                release_gate_status="pending",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual([], report["errors"])
+            self.assertIn(
+                "lane L1 mixes broad target tracking with concrete bounded-residual references; drop the target fallback once a same-lane lane followup, readiness assertion, release gate, or open decision exists",
+                report["warnings"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("mixes broad target tracking with concrete bounded-residual references", pretty)
+
 
 if __name__ == "__main__":
     unittest.main()

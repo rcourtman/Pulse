@@ -1981,6 +1981,13 @@ def audit_status_payload(
                 f"lane {residual['lane_id']} uses only broad target tracking for its bounded residual; "
                 "normalize the remaining same-lane work into a lane followup, readiness assertion, release gate, or open decision when it becomes concrete"
             )
+        if any(str(detail.get("kind")) == "target" for detail in tracking_details) and any(
+            str(detail.get("kind")) != "target" for detail in tracking_details
+        ):
+            warnings.append(
+                f"lane {residual['lane_id']} mixes broad target tracking with concrete bounded-residual references; "
+                "drop the target fallback once a same-lane lane followup, readiness assertion, release gate, or open decision exists"
+            )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)

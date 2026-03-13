@@ -186,6 +186,7 @@ Assertion design rules:
     next same-lane governance object is not concrete yet; normalize it into a
     lane followup, readiness assertion, release gate, or open decision as soon
     as the remaining work is clear enough to name directly.
+    Once a concrete same-lane follow-up surface exists, remove the broad target fallback instead of tracking both.
 
 ## Locked Decisions
 

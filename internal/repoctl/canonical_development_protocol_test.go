@@ -554,6 +554,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"temporary fallback",
+		"remove the broad target fallback",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",

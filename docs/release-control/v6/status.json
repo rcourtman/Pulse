@@ -1604,15 +1604,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Self-hosted RC confidence is at the current floor; GA promotion still depends on the governed RC-to-GA promotion proof and rollback package.",
+        "summary": "Self-hosted RC confidence is at the current floor; GA promotion still depends on the shared RC-to-GA gate plus the lane-local self-hosted promotion package follow-up.",
         "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "self-hosted-ga-promotion-package"
+          },
           {
             "kind": "release-gate",
             "id": "rc-to-ga-promotion-readiness"
-          },
-          {
-            "kind": "target",
-            "id": "v6-ga-promotion"
           }
         ]
       },
@@ -1925,15 +1925,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Documentation is current enough for the RC floor, but GA-facing promotion and release communication work remain bounded residual follow-up.",
+        "summary": "Documentation is current enough for the RC floor, but GA-facing promotion and release communication stay as a lane-local follow-up alongside the shared RC-to-GA gate.",
         "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "documentation-ga-promotion-package"
+          },
           {
             "kind": "release-gate",
             "id": "rc-to-ga-promotion-readiness"
-          },
-          {
-            "kind": "target",
-            "id": "v6-ga-promotion"
           }
         ]
       },
@@ -2510,6 +2510,17 @@
       ]
     },
     {
+      "id": "documentation-ga-promotion-package",
+      "summary": "Track the GA-facing documentation and release communication package that should only be finalized when promotion is actually being executed.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L9"
+      ],
+      "subsystem_ids": []
+    },
+    {
       "id": "first-session-post-rc-polish",
       "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor.",
       "owner": "project-owner",
@@ -2558,6 +2569,17 @@
       "subsystem_ids": [
         "relay-runtime"
       ]
+    },
+    {
+      "id": "self-hosted-ga-promotion-package",
+      "summary": "Track the lane-local self-hosted GA promotion package: stable candidate inputs, rollback clarity, and dry-run capture once GA promotion is actually being executed.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": []
     }
   ],
   "open_decisions": [],

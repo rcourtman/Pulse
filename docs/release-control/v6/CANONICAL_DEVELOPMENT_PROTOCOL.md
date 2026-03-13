@@ -170,6 +170,7 @@ Every substantial task must finish by checking these questions:
     and normalize it into a lane followup, readiness assertion, release gate, or
     open decision once the remaining same-lane work is concrete enough to
     name.
+    Once I have a concrete same-lane follow-up surface, remove the broad target fallback instead of tracking both.
 
 This is the minimum update set for canonical work:
 
