@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,5 +149,47 @@ func TestPrepareImmutableMountSourcesAlignsOwnershipAndPermissions(t *testing.T)
 		if int(stat.Gid) != gid {
 			t.Fatalf("%s gid = %d, want %d", path, stat.Gid, gid)
 		}
+	}
+}
+
+func TestCreateAndStartFailsBeforeImmutablePrepWhenDockerUnavailable(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-missing-docker.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{
+		Image:      "pulse:test",
+		Network:    "bridge",
+		BaseDomain: "cloud.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	tenantDataDir := t.TempDir()
+	secretsDir := filepath.Join(tenantDataDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("mkdir secrets: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(tenantDataDir, "billing.json"),
+		filepath.Join(secretsDir, "handoff.key"),
+		filepath.Join(tenantDataDir, ".cloud_handoff_key"),
+	} {
+		if err := os.WriteFile(path, []byte("secret"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	_, err = mgr.CreateAndStart(context.Background(), "t-unavailable", tenantDataDir)
+	if err == nil {
+		t.Fatal("expected docker daemon error")
+	}
+	if !strings.Contains(err.Error(), "ping docker daemon") {
+		t.Fatalf("CreateAndStart error = %v, want ping docker daemon failure", err)
+	}
+	if strings.Contains(err.Error(), "prepare immutable tenant mounts") {
+		t.Fatalf("CreateAndStart error = %v, want daemon failure before mount preparation", err)
 	}
 }

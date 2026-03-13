@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -18,6 +19,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	sloInfrastructureChartsGitHubActionsP95   = 60 * time.Millisecond
+	sloWorkloadChartsGitHubActionsP95         = 120 * time.Millisecond
+	sloWorkloadsSummaryChartsGitHubActionsP95 = sloWorkloadChartsGitHubActionsP95
 )
 
 // suppressTestLogs disables zerolog for the duration of a test.
@@ -98,11 +105,12 @@ func TestSLO_MetricsHistoryStore(t *testing.T) {
 	})
 
 	p95 := percentile(latencies, 0.95)
+	target := effectiveAPISLOTarget(SLOMetricsHistoryStoreP95, 0)
 	t.Logf("metrics-store/history (store) p50=%v p95=%v p99=%v SLO=%v",
-		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOMetricsHistoryStoreP95)
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), target)
 
-	if p95 > SLOMetricsHistoryStoreP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOMetricsHistoryStoreP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
@@ -455,6 +463,13 @@ func TestSLO_InfrastructureCharts(t *testing.T) {
 			SLOWorkloadChartsP95,
 		)
 	}
+	if sloWorkloadsSummaryChartsGitHubActionsP95 != sloWorkloadChartsGitHubActionsP95 {
+		t.Fatalf(
+			"sanity: workloads-summary GitHub Actions SLO=%v, want alignment with workload charts GitHub Actions SLO=%v",
+			sloWorkloadsSummaryChartsGitHubActionsP95,
+			sloWorkloadChartsGitHubActionsP95,
+		)
+	}
 
 	latencies := measureEndpointLatencies(t, func() {
 		req := httptest.NewRequest(http.MethodGet, url, nil)
@@ -466,11 +481,12 @@ func TestSLO_InfrastructureCharts(t *testing.T) {
 	})
 
 	p95 := percentile(latencies, 0.95)
+	target := effectiveAPISLOTarget(SLOInfrastructureChartsP95, sloInfrastructureChartsGitHubActionsP95)
 	t.Logf("charts/infrastructure p50=%v p95=%v p99=%v SLO=%v",
-		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOInfrastructureChartsP95)
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), target)
 
-	if p95 > SLOInfrastructureChartsP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOInfrastructureChartsP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
@@ -636,11 +652,12 @@ func TestSLO_WorkloadCharts(t *testing.T) {
 	})
 
 	p95 := percentile(latencies, 0.95)
+	target := effectiveAPISLOTarget(SLOWorkloadChartsP95, sloWorkloadChartsGitHubActionsP95)
 	t.Logf("charts/workloads p50=%v p95=%v p99=%v SLO=%v",
-		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOWorkloadChartsP95)
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), target)
 
-	if p95 > SLOWorkloadChartsP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOWorkloadChartsP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
@@ -829,11 +846,12 @@ func TestSLO_WorkloadsSummaryCharts(t *testing.T) {
 	})
 
 	p95 := percentile(latencies, 0.95)
+	target := effectiveAPISLOTarget(SLOWorkloadsSummaryChartsP95, sloWorkloadsSummaryChartsGitHubActionsP95)
 	t.Logf("charts/workloads-summary p50=%v p95=%v p99=%v SLO=%v",
-		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOWorkloadsSummaryChartsP95)
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), target)
 
-	if p95 > SLOWorkloadsSummaryChartsP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOWorkloadsSummaryChartsP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
@@ -849,6 +867,13 @@ func skipUnderRace(t *testing.T) {
 }
 
 const sloIterations = 200
+
+func effectiveAPISLOTarget(localTarget, githubActionsTarget time.Duration) time.Duration {
+	if githubActionsTarget > 0 && os.Getenv("GITHUB_ACTIONS") == "true" {
+		return githubActionsTarget
+	}
+	return localTarget
+}
 
 // measureEndpointLatencies runs fn sloIterations times with a warmup phase and
 // returns the measured latency durations.

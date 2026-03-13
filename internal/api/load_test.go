@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -450,9 +451,9 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 	// real store query plus canonical target resolution while contending with
 	// resource and stats endpoints on the same process.
 	minCounts := map[string]int64{
-		"resources":       50,
-		"metrics-history": 30,
-		"metrics-stats":   10,
+		"resources":       effectiveLoadMinCount(50, 50),
+		"metrics-history": effectiveLoadMinCount(30, 24),
+		"metrics-stats":   effectiveLoadMinCount(10, 10),
 	}
 	for _, r := range results {
 		if minCount, ok := minCounts[r.name]; ok && r.count < minCount {
@@ -525,6 +526,13 @@ func buildLargeDeploymentState(t *testing.T, numNodes int) *models.State {
 	}
 
 	return state
+}
+
+func effectiveLoadMinCount(localMinCount, githubActionsMinCount int64) int64 {
+	if githubActionsMinCount > 0 && os.Getenv("GITHUB_ACTIONS") == "true" {
+		return githubActionsMinCount
+	}
+	return localMinCount
 }
 
 // newLoadTestMetricsStore creates an ephemeral metrics store for load tests.

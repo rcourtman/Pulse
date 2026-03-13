@@ -60,9 +60,22 @@ func (m *Manager) Close() error {
 	return nil
 }
 
+func (m *Manager) ensureDaemonReachable(ctx context.Context) error {
+	if m == nil || m.cli == nil {
+		return fmt.Errorf("docker client unavailable")
+	}
+	if _, err := m.cli.Ping(ctx); err != nil {
+		return fmt.Errorf("ping docker daemon: %w", err)
+	}
+	return nil
+}
+
 // CreateAndStart creates and starts a tenant container.
 // tenantDataDir is the host path that gets bind-mounted to /etc/pulse in the container.
 func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return "", err
+	}
 	if err := prepareImmutableMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
 		return "", fmt.Errorf("prepare immutable tenant mounts for %s: %w", tenantID, err)
 	}
