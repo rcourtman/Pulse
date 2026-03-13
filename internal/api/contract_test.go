@@ -407,6 +407,23 @@ func TestContract_APITokenScopeAliasNormalization(t *testing.T) {
 	}
 }
 
+func TestContract_HostedSubscriptionRequiredErrorJSONSnapshot(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	writeHostedSubscriptionRequiredError(rec)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusPaymentRequired)
+	}
+
+	const want = `{
+		"error":"subscription_required",
+		"message":"Your Cloud subscription is not active. Please check your billing status."
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
 func TestContract_InstallScriptReleaseAssetURL(t *testing.T) {
 	router := &Router{serverVersion: "v6.0.0-rc.1"}
 

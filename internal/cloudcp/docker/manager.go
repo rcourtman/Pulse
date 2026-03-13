@@ -76,7 +76,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		&container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env:    tenantEnv(),
+			Env:    tenantEnv(tenantID, m.cfg.BaseDomain),
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -119,14 +119,27 @@ func tenantImmutableOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv() []string {
-	return []string{
+func tenantEnv(tenantID, baseDomain string) []string {
+	publicURL := ""
+	tenantID = strings.TrimSpace(tenantID)
+	baseDomain = strings.TrimSpace(baseDomain)
+	if tenantID != "" && baseDomain != "" {
+		publicURL = fmt.Sprintf("https://%s.%s", tenantID, baseDomain)
+	}
+
+	env := []string{
 		"PULSE_DATA_DIR=/etc/pulse",
 		"PULSE_HOSTED_MODE=true",
+		"PULSE_TENANT_ID=" + tenantID,
+		"PULSE_MULTI_TENANT_ENABLED=true",
 		fmt.Sprintf("PUID=%d", tenantRuntimeUID),
 		fmt.Sprintf("PGID=%d", tenantRuntimeGID),
 		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
 	}
+	if publicURL != "" {
+		env = append(env, "PULSE_PUBLIC_URL="+publicURL)
+	}
+	return env
 }
 
 func tenantMounts(tenantDataDir string) []mount.Mount {

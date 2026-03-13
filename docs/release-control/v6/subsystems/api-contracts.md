@@ -216,6 +216,12 @@ frontend consumers may normalize endpoint fields, but they must not fork the
 canonical collection-shape guard or reintroduce legacy `alert_identifier`
 field access once camelCase `alertIdentifier` has been promoted by the shared
 response helpers.
+Hosted organization-route gating now also falls under this API payload
+boundary: when hosted tenants hit organization membership or billing surfaces
+through `internal/api/org_handlers.go` and `internal/api/router.go`, inactive
+subscriptions must fail with the canonical hosted `402 subscription_required`
+payload instead of reusing the self-hosted `multi_tenant_disabled` contract or
+falling through to an untyped transport error.
 Hosted signup and magic-link error payload normalization must now also route
 through shared structured error normalization helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through module-local

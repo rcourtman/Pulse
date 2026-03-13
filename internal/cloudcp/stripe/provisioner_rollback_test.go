@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -249,6 +250,105 @@ func TestHandleCheckoutSetsHostedRuntimeOwnershipForImmutableFiles(t *testing.T)
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing hosted runtime ownership paths: %v", want)
+	}
+}
+
+func TestBuildSeededTenantOrganization_UsesDeterministicOldestOwnerFallback(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	createOwner := func(email string, createdAt int64) {
+		t.Helper()
+		userID, err := registry.GenerateUserID()
+		if err != nil {
+			t.Fatalf("GenerateUserID: %v", err)
+		}
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
+			t.Fatalf("CreateUser(%s): %v", email, err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{
+			AccountID: accountID,
+			UserID:    userID,
+			Role:      registry.MemberRoleOwner,
+			CreatedAt: time.Unix(createdAt, 0).UTC(),
+		}); err != nil {
+			t.Fatalf("CreateMembership(%s): %v", email, err)
+		}
+	}
+
+	createOwner("new-owner@example.com", 200)
+	createOwner("old-owner@example.com", 100)
+
+	org, err := p.buildSeededTenantOrganization(accountID, "t-example", "Example", "")
+	if err != nil {
+		t.Fatalf("buildSeededTenantOrganization: %v", err)
+	}
+	if org.OwnerUserID != "old-owner@example.com" {
+		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "old-owner@example.com")
+	}
+}
+
+func TestBuildSeededTenantOrganization_PrefersExplicitFallbackOwner(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	createMember := func(email string, role registry.MemberRole, createdAt int64) {
+		t.Helper()
+		userID, err := registry.GenerateUserID()
+		if err != nil {
+			t.Fatalf("GenerateUserID: %v", err)
+		}
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
+			t.Fatalf("CreateUser(%s): %v", email, err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{
+			AccountID: accountID,
+			UserID:    userID,
+			Role:      role,
+			CreatedAt: time.Unix(createdAt, 0).UTC(),
+		}); err != nil {
+			t.Fatalf("CreateMembership(%s): %v", email, err)
+		}
+	}
+
+	createMember("legacy-owner@example.com", registry.MemberRoleOwner, 100)
+	createMember("operator@example.com", registry.MemberRoleAdmin, 200)
+
+	org, err := p.buildSeededTenantOrganization(accountID, "t-example", "Example", "operator@example.com")
+	if err != nil {
+		t.Fatalf("buildSeededTenantOrganization: %v", err)
+	}
+	if org.OwnerUserID != "operator@example.com" {
+		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@example.com")
+	}
+	if org.GetMemberRole("operator@example.com") != models.OrgRoleOwner {
+		t.Fatalf("org role for operator@example.com = %q, want %q", org.GetMemberRole("operator@example.com"), models.OrgRoleOwner)
 	}
 }
 

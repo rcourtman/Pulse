@@ -244,6 +244,19 @@ MSP tenant provisioning must seed a canonical tenant-scoped `org.json` under
 hosted runtime user; otherwise hosted magic-link handoff can preserve the
 correct tenant org cookie while the tenant API still fails closed with
 `invalid_org` because no tenant organization metadata exists on disk.
+Hosted tenant runtime env is part of the same contract too: provisioned
+containers must carry hosted-safe tenant context such as
+`PULSE_TENANT_ID=<tenant-id>`, `PULSE_MULTI_TENANT_ENABLED=true`, and an explicit
+`PULSE_PUBLIC_URL=https://<tenant-id>.<base-domain>` so the tenant-scoped org
+surface is actually enabled after handoff instead of failing closed under a
+paid hosted session.
+Hosted MSP workspace org seeding is part of that same boundary too: when the
+control plane provisions a new workspace under an existing account, it must
+seed `org.OwnerUserID` from the authenticated creator email when that actor is
+known on the request path instead of inferring a canonical owner from
+membership query order. If the creator is not available, fallback owner
+selection must still be deterministic rather than depending on newest-row
+ordering in the registry.
 Hosted tenant entitlement evaluation is part of that same boundary too: when a
 hosted tenant lands in a tenant-scoped org like `t-...`, the runtime must
 still honor the instance-level hosted billing lease in `default` until or

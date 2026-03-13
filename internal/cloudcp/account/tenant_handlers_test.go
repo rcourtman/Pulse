@@ -17,6 +17,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
@@ -133,6 +135,65 @@ func TestCreateWorkspace(t *testing.T) {
 	}
 	if len(b) != 32 {
 		t.Fatalf("handoff.key size = %d, want 32", len(b))
+	}
+}
+
+func TestCreateWorkspace_SeedsOwnerFromAuthenticatedUserEmail(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, _ := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
+
+	existingOwnerID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: existingOwnerID, Email: "legacy-owner@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    existingOwnerID,
+		Role:      registry.MemberRoleOwner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"display_name":"Acme Dental"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	req.Header.Set("X-User-Email", "operator@example.com")
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var got registry.Tenant
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	mtp := config.NewMultiTenantPersistence(filepath.Join(tenantsDir, got.ID))
+	org, err := mtp.LoadOrganizationStrict(got.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(%s): %v", got.ID, err)
+	}
+	if org.OwnerUserID != "operator@example.com" {
+		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@example.com")
+	}
+	if org.GetMemberRole("operator@example.com") != models.OrgRoleOwner {
+		t.Fatalf("org role for operator@example.com = %q, want %q", org.GetMemberRole("operator@example.com"), models.OrgRoleOwner)
+	}
+	if org.GetMemberRole("legacy-owner@example.com") != models.OrgRoleOwner {
+		t.Fatalf("org role for legacy-owner@example.com = %q, want %q", org.GetMemberRole("legacy-owner@example.com"), models.OrgRoleOwner)
 	}
 }
 

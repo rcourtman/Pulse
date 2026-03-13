@@ -3,6 +3,7 @@ package docker
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -64,12 +65,15 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv()
+	env := tenantEnv("t-example", "cloud.pulserelay.pro")
 	want := map[string]bool{
-		"PULSE_DATA_DIR=/etc/pulse": true,
-		"PULSE_HOSTED_MODE=true":    true,
-		"PUID=1000":                 true,
-		"PGID=1000":                 true,
+		"PULSE_DATA_DIR=/etc/pulse":       true,
+		"PULSE_HOSTED_MODE=true":          true,
+		"PULSE_TENANT_ID=t-example":       true,
+		"PULSE_MULTI_TENANT_ENABLED=true": true,
+		"PUID=1000":                       true,
+		"PGID=1000":                       true,
+		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                                            true,
 		immutableOwnershipPathsEnv + "=/etc/pulse/billing.json:/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
 	if len(env) != len(want) {
@@ -79,6 +83,24 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 		if !want[item] {
 			t.Fatalf("unexpected env item %q", item)
 		}
+	}
+}
+
+func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("", "")
+	sawTenantID := false
+	for _, item := range env {
+		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
+			t.Fatalf("unexpected public URL env item %q", item)
+		}
+		if item == "PULSE_TENANT_ID=" {
+			sawTenantID = true
+		}
+	}
+	if !sawTenantID {
+		t.Fatalf("expected explicit empty tenant id env item, got %v", env)
 	}
 }
 

@@ -59,6 +59,7 @@ type OrgHandlers struct {
 	mtMonitor    *monitoring.MultiTenantMonitor
 	rbacProvider *TenantRBACProvider
 	onDelete     func(ctx context.Context, orgID string) error
+	hostedMode   bool
 }
 
 func NewOrgHandlers(
@@ -84,6 +85,15 @@ func (h *OrgHandlers) SetOnDelete(callback func(ctx context.Context, orgID strin
 		return
 	}
 	h.onDelete = callback
+}
+
+// SetHostedMode controls whether organization routes should follow hosted
+// subscription gating instead of the self-hosted multi-tenant feature gate.
+func (h *OrgHandlers) SetHostedMode(enabled bool) {
+	if h == nil {
+		return
+	}
+	h.hostedMode = enabled
 }
 
 type createOrganizationRequest struct {
@@ -854,6 +864,16 @@ func (h *OrgHandlers) loadOrganization(orgID string) (*models.Organization, erro
 }
 
 func (h *OrgHandlers) requireMultiTenantGate(w http.ResponseWriter, r *http.Request) bool {
+	if h != nil && h.hostedMode {
+		orgID := GetOrgID(r.Context())
+		checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+		if !isHostedSubscriptionValid(checkCtx) {
+			writeHostedSubscriptionRequiredError(w)
+			return false
+		}
+		return true
+	}
+
 	if !IsMultiTenantEnabled() {
 		writeMultiTenantDisabledError(w)
 		return false

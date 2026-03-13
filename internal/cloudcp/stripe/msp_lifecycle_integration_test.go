@@ -541,6 +541,78 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	}
 }
 
+func TestMSPLifecycle_CreateWorkspaceViaAPISeedsCreatorAsOwner(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_msp_creator_seed",
+		PlanVersion:       "msp_starter",
+		SubscriptionState: "active",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	legacyOwnerID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: legacyOwnerID, Email: "legacy-owner@acmemsp.com"}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    legacyOwnerID,
+		Role:      registry.MemberRoleOwner,
+	}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+
+	tenantMux := newTenantMux(reg, provisioner)
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(`{"display_name":"Creator Seeded Workspace"}`))
+	req.Header.Set("X-Admin-Key", "secret-key")
+	req.Header.Set("X-User-Email", "operator@acmemsp.com")
+	rec := httptest.NewRecorder()
+	tenantMux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create workspace via API: status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var tenant registry.Tenant
+	if err := json.Unmarshal(rec.Body.Bytes(), &tenant); err != nil {
+		t.Fatalf("decode tenant: %v", err)
+	}
+
+	mtp := config.NewMultiTenantPersistence(provisioner.tenantDataDir(tenant.ID))
+	org, err := mtp.LoadOrganizationStrict(tenant.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
+	}
+	if org.OwnerUserID != "operator@acmemsp.com" {
+		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "operator@acmemsp.com")
+	}
+	if org.GetMemberRole("operator@acmemsp.com") != "owner" {
+		t.Fatalf("operator role = %q, want owner", org.GetMemberRole("operator@acmemsp.com"))
+	}
+	if org.GetMemberRole("legacy-owner@acmemsp.com") != "owner" {
+		t.Fatalf("legacy owner role = %q, want owner", org.GetMemberRole("legacy-owner@acmemsp.com"))
+	}
+}
+
 // TestMSPLifecycle_TenantIsolation verifies that workspaces from one MSP
 // account cannot be accessed or modified through another MSP's account context.
 func TestMSPLifecycle_TenantIsolation(t *testing.T) {

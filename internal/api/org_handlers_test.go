@@ -15,9 +15,47 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func TestOrgHandlersRequireMultiTenantGate_HostedModeBypassesFeatureLicense(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(false)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
+
+	h := NewOrgHandlers(config.NewMultiTenantPersistence(t.TempDir()), nil)
+	h.SetHostedMode(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/orgs/t-tenant/members", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-tenant"))
+	rec := httptest.NewRecorder()
+
+	if !h.requireMultiTenantGate(rec, req) {
+		t.Fatalf("expected hosted org gate to allow active hosted subscription, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOrgHandlersRequireMultiTenantGate_HostedModeBlocksInactiveSubscription(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
+
+	h := NewOrgHandlers(config.NewMultiTenantPersistence(t.TempDir()), nil)
+	h.SetHostedMode(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/orgs/t-tenant/members", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-tenant"))
+	rec := httptest.NewRecorder()
+
+	if h.requireMultiTenantGate(rec, req) {
+		t.Fatalf("expected hosted org gate to block expired subscription")
+	}
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
 
 func TestOrgHandlersDeleteInvokesOnDeleteCallback(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")

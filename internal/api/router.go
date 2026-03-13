@@ -381,6 +381,7 @@ func (r *Router) setupRoutes() {
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
+	orgHandlers.SetHostedMode(r.hostedMode)
 	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
 		return r.CleanupTenant(ctx, orgID)
 	})

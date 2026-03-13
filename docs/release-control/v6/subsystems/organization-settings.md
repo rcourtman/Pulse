@@ -87,3 +87,11 @@ Incoming share visibility is part of that same boundary as well: a recipient
 must only see inbound shares whose requested `accessRole` is satisfied by the
 user's effective membership role in the target organization, using the shared
 role comparator instead of handler-local owner/admin shortcuts.
+Hosted organization membership and billing routes now also follow this owned
+semantics boundary: for hosted tenant orgs, `internal/api/org_handlers.go`
+must authorize organization operations from the seeded org membership and the
+hosted subscription state rather than requiring the self-hosted
+`multi_tenant` feature flag. Provisioned hosted workspaces must therefore keep
+`org.OwnerUserID` aligned with the authenticated creator when that actor is
+known, so organization-owner checks stay consistent across runtime auth and the
+settings surfaces.

@@ -203,9 +203,14 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 		email string
 		role  models.OrganizationRole
 	}
+	type ownerCandidate struct {
+		email     string
+		createdAt time.Time
+	}
 
 	memberSeeds := map[string]memberSeed{}
 	ownerEmail := strings.ToLower(strings.TrimSpace(fallbackOwnerEmail))
+	var fallbackOwner *ownerCandidate
 
 	if p.registry != nil && strings.TrimSpace(accountID) != "" {
 		memberships, err := p.registry.ListMembersByAccount(accountID)
@@ -231,10 +236,21 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 			if existing, ok := memberSeeds[email]; !ok || models.OrganizationRoleAtLeast(role, existing.role) {
 				memberSeeds[email] = memberSeed{email: email, role: role}
 			}
-			if membership.Role == registry.MemberRoleOwner && ownerEmail == "" {
-				ownerEmail = email
+			if membership.Role == registry.MemberRoleOwner {
+				candidate := ownerCandidate{
+					email:     email,
+					createdAt: membership.CreatedAt.UTC(),
+				}
+				if fallbackOwner == nil ||
+					candidate.createdAt.Before(fallbackOwner.createdAt) ||
+					(candidate.createdAt.Equal(fallbackOwner.createdAt) && candidate.email < fallbackOwner.email) {
+					fallbackOwner = &candidate
+				}
 			}
 		}
+	}
+	if ownerEmail == "" && fallbackOwner != nil {
+		ownerEmail = fallbackOwner.email
 	}
 
 	if ownerEmail != "" {
@@ -819,6 +835,12 @@ func canonicalizeProvisionedPlanVersion(planVersion string) string {
 
 // ProvisionWorkspace provisions a new workspace (tenant) under an account, without Stripe checkout.
 func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, displayName string) (tenant *registry.Tenant, err error) {
+	return p.ProvisionWorkspaceForOwner(ctx, accountID, displayName, "")
+}
+
+// ProvisionWorkspaceForOwner provisions a new workspace under an account and
+// seeds the acting owner identity when it is known at creation time.
+func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID, displayName, ownerEmail string) (tenant *registry.Tenant, err error) {
 	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
 	cleanup := provisioningCleanupState{}
 	defer func() {
@@ -858,7 +880,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	if err := p.ensureHostedDefaultPersistence(tenantDataDir); err != nil {
 		return nil, fmt.Errorf("initialize hosted default persistence for tenant %s: %w", tenantID, err)
 	}
-	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, displayName, ""); err != nil {
+	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, displayName, ownerEmail); err != nil {
 		return nil, fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
 	}
 

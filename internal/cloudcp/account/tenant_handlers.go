@@ -30,6 +30,10 @@ type WorkspaceProvisioner interface {
 	DeprovisionWorkspaceContainer(ctx context.Context, tenant *registry.Tenant) error
 }
 
+type ownerAwareWorkspaceProvisioner interface {
+	ProvisionWorkspaceForOwner(ctx context.Context, accountID, displayName, ownerEmail string) (*registry.Tenant, error)
+}
+
 // HandleListTenants lists all tenants for an account.
 // Route: GET /api/accounts/{account_id}/tenants
 func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
@@ -145,7 +149,16 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			if le := enforceWorkspaceLimit(reg, a, accountID); le != nil {
 				return le, nil, nil
 			}
-			t, pErr := provisioner.ProvisionWorkspace(r.Context(), accountID, displayName)
+			ownerEmail := strings.ToLower(strings.TrimSpace(r.Header.Get("X-User-Email")))
+			var (
+				t    *registry.Tenant
+				pErr error
+			)
+			if ownerAware, ok := provisioner.(ownerAwareWorkspaceProvisioner); ok {
+				t, pErr = ownerAware.ProvisionWorkspaceForOwner(r.Context(), accountID, displayName, ownerEmail)
+			} else {
+				t, pErr = provisioner.ProvisionWorkspace(r.Context(), accountID, displayName)
+			}
 			return nil, t, pErr
 		}()
 		if limitErr != nil {
