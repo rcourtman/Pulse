@@ -28,6 +28,52 @@ func TestMultiTenantMonitorRemoveTenant(t *testing.T) {
 	mtm.RemoveTenant("missing")
 }
 
+func TestMultiTenantMonitorRemoveTenantCancelsTenantRuntime(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	baseCfg := &config.Config{DataPath: t.TempDir()}
+	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-stop",
+		DisplayName: "Org Stop",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(org-stop) error = %v", err)
+	}
+
+	monitor, err := mtm.GetMonitor("org-stop")
+	if err != nil {
+		t.Fatalf("GetMonitor(org-stop) error = %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for monitor.runtimeCtx == nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if monitor.runtimeCtx == nil {
+		t.Fatal("expected tenant monitor runtime context to be initialized")
+	}
+
+	runtimeDone := monitor.runtimeCtx.Done()
+	select {
+	case <-runtimeDone:
+		t.Fatal("expected tenant runtime context to be active before removal")
+	default:
+	}
+
+	mtm.RemoveTenant("org-stop")
+
+	select {
+	case <-runtimeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected RemoveTenant to cancel the tenant runtime context")
+	}
+
+	if _, ok := mtm.monitors["org-stop"]; ok {
+		t.Fatal("expected org-stop to be removed from monitor cache")
+	}
+}
+
 func TestMultiTenantMonitorGetMonitor_MetricsIsolationByTenant(t *testing.T) {
 	orgAMonitor := &Monitor{
 		metricsHistory: NewMetricsHistory(32, time.Hour),

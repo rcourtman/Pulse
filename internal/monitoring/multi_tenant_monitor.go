@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
@@ -16,6 +17,8 @@ import (
 type MultiTenantMonitor struct {
 	mu           sync.RWMutex
 	monitors     map[string]*Monitor
+	tenantCancel map[string]context.CancelFunc
+	tenantDone   map[string]chan struct{}
 	persistence  *config.MultiTenantPersistence
 	baseConfig   *config.Config
 	wsHub        *websocket.Hub
@@ -30,6 +33,8 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MultiTenantMonitor{
 		monitors:     make(map[string]*Monitor),
+		tenantCancel: make(map[string]context.CancelFunc),
+		tenantDone:   make(map[string]chan struct{}),
 		persistence:  persistence,
 		baseConfig:   baseCfg, // Used as a template or for global settings
 		wsHub:        wsHub,
@@ -37,6 +42,8 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 		globalCancel: cancel,
 	}
 }
+
+const tenantMonitorShutdownTimeout = 2 * time.Second
 
 // SetRecoveryManager wires a recovery store manager into all existing and future tenant monitors.
 func (mtm *MultiTenantMonitor) SetRecoveryManager(manager *recoverymanager.Manager) {
@@ -95,6 +102,16 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 
 	mtm.mu.Lock()
 	defer mtm.mu.Unlock()
+
+	if mtm.monitors == nil {
+		mtm.monitors = make(map[string]*Monitor)
+	}
+	if mtm.tenantCancel == nil {
+		mtm.tenantCancel = make(map[string]context.CancelFunc)
+	}
+	if mtm.tenantDone == nil {
+		mtm.tenantDone = make(map[string]chan struct{})
+	}
 
 	// Double-check locking pattern
 	if monitor, exists = mtm.monitors[orgID]; exists {
@@ -164,13 +181,17 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 		mtm.initializer(monitor)
 	}
 
-	// 3. Start Monitor
-	// We pass the global context, but maybe we should give it a derived one?
-	// Using globalCtx ensures all monitors stop when MultiTenantMonitor stops.
-	// NOTE: Monitor.Start is async
-	go monitor.Start(mtm.globalCtx, mtm.wsHub)
+	// 3. Start Monitor with a tenant-scoped runtime so RemoveTenant can stop it cleanly.
+	tenantCtx, tenantCancel := context.WithCancel(mtm.globalCtx)
+	tenantDone := make(chan struct{})
+	go func() {
+		defer close(tenantDone)
+		monitor.Start(tenantCtx, mtm.wsHub)
+	}()
 
 	mtm.monitors[orgID] = monitor
+	mtm.tenantCancel[orgID] = tenantCancel
+	mtm.tenantDone[orgID] = tenantDone
 	return monitor, nil
 }
 
@@ -190,17 +211,37 @@ func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
 
 // Stop stops all tenant monitors.
 func (mtm *MultiTenantMonitor) Stop() {
-	mtm.mu.Lock()
-	defer mtm.mu.Unlock()
-
 	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
+
+	mtm.mu.Lock()
 	mtm.globalCancel()
 
-	for _, monitor := range mtm.monitors {
+	monitors := make([]*Monitor, 0, len(mtm.monitors))
+	cancels := make([]context.CancelFunc, 0, len(mtm.tenantCancel))
+	doneSignals := make([]chan struct{}, 0, len(mtm.tenantDone))
+	for orgID, monitor := range mtm.monitors {
+		if cancel := mtm.tenantCancel[orgID]; cancel != nil {
+			cancels = append(cancels, cancel)
+		}
+		if done := mtm.tenantDone[orgID]; done != nil {
+			doneSignals = append(doneSignals, done)
+		}
+		monitors = append(monitors, monitor)
+	}
+	mtm.tenantCancel = make(map[string]context.CancelFunc)
+	mtm.tenantDone = make(map[string]chan struct{})
+	mtm.monitors = make(map[string]*Monitor)
+	mtm.mu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+	for _, done := range doneSignals {
+		waitForTenantMonitorShutdown("", done)
+	}
+	for _, monitor := range monitors {
 		monitor.Stop()
 	}
-	// Clear map
-	mtm.monitors = make(map[string]*Monitor)
 }
 
 // RemoveTenant stops and removes a specific tenant's monitor.
@@ -212,12 +253,42 @@ func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
 	}
 
 	mtm.mu.Lock()
-	defer mtm.mu.Unlock()
+	monitor, exists := mtm.monitors[orgID]
+	cancel := mtm.tenantCancel[orgID]
+	done := mtm.tenantDone[orgID]
+	delete(mtm.monitors, orgID)
+	delete(mtm.tenantCancel, orgID)
+	delete(mtm.tenantDone, orgID)
+	mtm.mu.Unlock()
 
-	if monitor, exists := mtm.monitors[orgID]; exists {
-		log.Info().Str("org_id", orgID).Msg("stopping and removing tenant monitor")
-		monitor.Stop()
-		delete(mtm.monitors, orgID)
+	if !exists {
+		return
+	}
+
+	log.Info().Str("org_id", orgID).Msg("stopping and removing tenant monitor")
+	if cancel != nil {
+		cancel()
+	}
+	waitForTenantMonitorShutdown(orgID, done)
+	monitor.Stop()
+}
+
+func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) {
+	if done == nil {
+		return
+	}
+
+	timer := time.NewTimer(tenantMonitorShutdownTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+	case <-timer.C:
+		logger := log.Warn().Dur("timeout", tenantMonitorShutdownTimeout)
+		if orgID != "" {
+			logger = logger.Str("org_id", orgID)
+		}
+		logger.Msg("timed out waiting for tenant monitor loop to exit")
 	}
 }
 

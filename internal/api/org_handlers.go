@@ -331,6 +331,10 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.mtMonitor != nil {
+		h.mtMonitor.RemoveTenant(orgID)
+	}
+
 	if err := h.persistence.DeleteOrganization(orgID); err != nil {
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, errOrgNotFound) {
 			writeErrorResponse(w, http.StatusNotFound, "not_found", "Organization not found", nil)
@@ -340,9 +344,6 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.mtMonitor != nil {
-		h.mtMonitor.RemoveTenant(orgID)
-	}
 	if h.rbacProvider != nil && h.onDelete == nil {
 		_ = h.rbacProvider.RemoveTenant(orgID)
 	}

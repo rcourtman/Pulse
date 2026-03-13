@@ -2001,7 +2001,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2133,7 +2133,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "managed-runtime-exercise",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L4",

@@ -55,6 +55,31 @@
 - Cross-org sharing preserved the intended access role and did not widen source-org visibility.
 - The live HTTP surface enforced tenant isolation consistently across org creation, membership, role changes, runtime lookup, and share visibility.
 
+## Lifecycle Regression Revalidation
+
+1. After the same-day rehearsal exposed shutdown-time alert-history save errors during org deletion, I patched tenant removal so it cancels the tenant runtime, waits for the monitor loop to exit, and only then flushes tenant state and removes the org directory.
+2. Re-ran the automated proof surfaces that own this boundary:
+   - `go test ./internal/api -run 'TestOrgHandlers|TestMultiTenant|TestResourceHandlers_NonDefaultOrg|TestSetMultiTenantMonitor_WiresHandlers|TestMultiTenantStateProvider|TestMultiTenantAPITokenRemainsScopedToIssuingOrg|TestRBACLifecycle' -count=1`
+   - `go test ./internal/monitoring -run 'TestMultiTenantMonitor' -count=1`
+   - `go test ./tests/migration -run 'TestV5DataDir_MultiTenantMigration' -count=1`
+3. Re-ran the managed-runtime deletion path on a fresh local backend at `http://127.0.0.1:59231`:
+   - created `mtfix-live-1773396128` as `alice`
+   - forced tenant monitor initialization through `GET /api/alerts/config` with `X-Pulse-Org-ID: mtfix-live-1773396128`
+   - deleted the org with `DELETE /api/orgs/mtfix-live-1773396128`
+4. Verified the live server log showed the corrected shutdown order for the initialized tenant:
+   - `stopping and removing tenant monitor`
+   - `monitoring loop stopped`
+   - `stopping monitor`
+   - `monitor stopped`
+5. Verified the previous shutdown fault did not recur:
+   - no `Failed to save alert history on shutdown`
+   - no missing `alerts/alert-history.json.tmp*` write errors during tenant deletion
+
+## Gate Decision
+
+- `multi-tenant-runtime-isolation-and-coherence` is now satisfied at the required `managed-runtime-exercise` tier.
+- The earlier org-deletion cleanup fault was reproduced, fixed, and revalidated on the live managed-runtime surface before closing the gate.
+
 ## Notes
 
 - The browser-level multi-tenant suite passed separately on a fresh managed local backend, including CRUD, cross-org token isolation, self-role denial, cross-org share handling, and scoped permission updates.

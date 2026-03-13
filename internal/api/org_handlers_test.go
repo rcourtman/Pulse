@@ -6,11 +6,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestOrgHandlersDeleteInvokesOnDeleteCallback(t *testing.T) {
@@ -44,6 +50,55 @@ func TestOrgHandlersDeleteInvokesOnDeleteCallback(t *testing.T) {
 	}
 	if callbackOrgID != "acme" {
 		t.Fatalf("expected delete callback org ID acme, got %q", callbackOrgID)
+	}
+}
+
+func TestOrgHandlersDeleteStopsTenantMonitorBeforeDeletingOrgDir(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	var logOutput bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&logOutput).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{DataPath: baseDir}, persistence, nil)
+	t.Cleanup(mtm.Stop)
+
+	h := NewOrgHandlers(persistence, mtm)
+
+	createBody := bytes.NewBufferString(`{"id":"acme","displayName":"Acme Corp"}`)
+	createReq := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", createBody), "alice")
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from create, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	if _, err := mtm.GetMonitor("acme"); err != nil {
+		t.Fatalf("GetMonitor(acme) failed: %v", err)
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "alice")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	if strings.Contains(logOutput.String(), "Failed to save alert history on shutdown") {
+		t.Fatalf("expected org deletion to stop tenant monitor before removing history dir, got logs: %s", logOutput.String())
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "acme")
+	if _, err := os.Stat(orgDir); !os.IsNotExist(err) {
+		t.Fatalf("expected deleted org dir %s to be removed, stat err = %v", orgDir, err)
 	}
 }
 
