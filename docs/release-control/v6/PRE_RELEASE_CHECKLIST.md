@@ -12,8 +12,13 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
-- All `rc-ready` high-risk gates are now cleared in `status.json`.
-- The remaining release-control blocker is `rc-to-ga-promotion-readiness`, which
+- `status.json` is no longer overclaiming threshold-unmet gates as passed.
+- The remaining `rc-ready` high-risk blockers are:
+  - `cloud-hosted-tier-runtime-readiness`
+  - `commercial-cancellation-reactivation`
+  - `hosted-signup-billing-replay`
+  - `msp-provider-tenant-management`
+- The remaining release-ready blocker is `rc-to-ga-promotion-readiness`, which
   remains intentionally blocked until a governed stable candidate is actually
   intended and a matching `Release Dry Run` rehearsal artifact exists.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
@@ -82,7 +87,7 @@ npx vitest run src/utils/__tests__/frontendResourceTypeBoundaries.test.ts
 - [x] Verify replay succeeds once the linked org exists.
 - [ ] Verify the normal hosted provisioning path still succeeds.
 - [x] Confirm commit `8b3a5d30246a86005d363b405126b0e9bfdda8d3` is present.
-- [x] Clear gate `hosted-signup-billing-replay` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
+- [ ] Clear gate `hosted-signup-billing-replay` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 Run:
 
@@ -239,14 +244,16 @@ Mobile automated checks completed:
 - [x] Clear gate `mobile-relay-auth-approvals` in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 
 ## High-Risk Trust Gates
-- [x] Clear gate `commercial-cancellation-reactivation`.
-- [x] Clear gate `hosted-signup-billing-replay`.
+- [ ] Clear gate `commercial-cancellation-reactivation`.
+- [ ] Clear gate `hosted-signup-billing-replay`.
 - [x] Clear gate `paid-feature-entitlement-gating`.
 - [ ] Clear gate `rc-to-ga-promotion-readiness`.
 - [x] Clear gate `relay-registration-reconnect-drain`.
 - [x] Clear gate `mobile-relay-auth-approvals`.
 - [x] Clear gate `organization-user-scope-and-rbac`.
 - [x] Clear gate `api-token-scope-and-assignment`.
+- [ ] Clear gate `cloud-hosted-tier-runtime-readiness`.
+- [ ] Clear gate `msp-provider-tenant-management`.
 
 ## Release Decision
 Mark Pulse v6 pre-release ready only if all of the following are true:
