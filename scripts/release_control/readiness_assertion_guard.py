@@ -261,6 +261,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             active_levels = set(active_target_blocking_levels(staged=args.staged))
         except ValueError as exc:
+            if "manual completion_rule" in str(exc):
+                print("Readiness assertion guard: active target uses manual completion; skipping phase-derived proof selection.")
+                return 0
             print(f"BLOCKED: {exc}")
             return 1
         if blocking_levels:

@@ -11,7 +11,7 @@ class SubsystemLookupTest(unittest.TestCase):
         impacted = {entry["subsystem"] for entry in result["impacted_subsystems"]}
         self.assertEqual(impacted, {"api-contracts", "unified-resources"})
         self.assertEqual(result["status_audit_errors"], [])
-        self.assertEqual(result["control_plane"]["active_target"]["id"], "v6-ga-promotion")
+        self.assertEqual(result["control_plane"]["active_target"]["id"], "v6-rc-stabilization")
         self.assertEqual(result["scope"]["control_plane_repo"], "pulse")
         self.assertEqual(result["status_summary"]["lane_count"], 12)
 

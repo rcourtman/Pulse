@@ -118,11 +118,12 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-ga-promotion` is the current active engineering target.
+2. `v6-rc-stabilization` is the current active engineering target.
 3. `v6-rc-cut` is complete and remains the immediate predecessor target.
-4. Its files remain under `docs/release-control/v6/`.
-5. The existing v6 control surfaces are still live, but they now sit underneath
+4. `v6-ga-promotion` is a planned follow-on target, not the current objective.
+5. Its files remain under `docs/release-control/v6/`.
+6. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
-6. Until the explicit post-GA branch cutover happens, both prerelease and
+7. Until the explicit post-GA branch cutover happens, both prerelease and
    stable v6 promotions resolve to `pulse/v6` via `control_plane.json`.

@@ -5,7 +5,7 @@
   "control_plane_doc": "docs/release-control/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-ga-promotion",
+  "active_target_id": "v6-rc-stabilization",
   "profiles": [
     {
       "id": "v6",
@@ -34,10 +34,18 @@
       "completion_rule": "rc_ready"
     },
     {
+      "id": "v6-rc-stabilization",
+      "profile_id": "v6",
+      "kind": "stabilization",
+      "status": "active",
+      "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed.",
+      "completion_rule": "manual"
+    },
+    {
       "id": "v6-ga-promotion",
       "profile_id": "v6",
       "kind": "release",
-      "status": "active",
+      "status": "planned",
       "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
       "completion_rule": "release_ready"
     }
