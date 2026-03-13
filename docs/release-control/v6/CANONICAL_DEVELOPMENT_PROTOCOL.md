@@ -165,8 +165,8 @@ Every substantial task must finish by checking these questions:
 11. If I am recording a bounded residual, do the tracking references point to
     the same lane and stay genuinely unresolved?
     `completion.tracking` is only for bounded residuals; if the lane is still
-    `open`, leave that list empty until the lane reaches its current floor and
-    the remaining work becomes a governed residual.
+    `open` or already `complete`, leave that list empty until the lane reaches
+    its current floor and the remaining work becomes a governed residual.
     Do not keep a lane in `bounded-residual` by pointing at already-passed
     assertions, cleared release gates, or completed targets.
     Bounded residual tracking must use a lane followup, readiness assertion,

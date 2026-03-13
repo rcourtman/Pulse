@@ -381,6 +381,43 @@
     "lane_completion": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "bounded-residual"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tracking": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "open",
+                  "complete"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tracking": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "required": [
         "state",
         "summary",

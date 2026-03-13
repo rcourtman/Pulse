@@ -531,6 +531,9 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"resolved_decision\"",
 		"\"lane_ids\"",
 		"\"direct-repo-sessions\"",
+		"\"const\": \"bounded-residual\"",
+		"\"minItems\": 1",
+		"\"maxItems\": 0",
 	})
 }
 
@@ -553,6 +556,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"status.json.lane_followups",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
+		"open or complete lanes",
 		"rather than a broad target reference",
 		"active residual records",
 	})
