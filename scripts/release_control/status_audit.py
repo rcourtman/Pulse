@@ -16,8 +16,8 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import load_subsystem_rules
-from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels
-from repo_file_io import load_repo_json
+from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels, is_prerelease_version
+from repo_file_io import load_repo_json, read_repo_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1188,6 +1188,7 @@ def audit_status_payload(
     *,
     schema_contract: dict[str, Any] | None = None,
     use_staged_registry: bool = False,
+    current_version: str | None = None,
 ) -> dict[str, Any]:
     contract = schema_contract or DEFAULT_STATUS_SCHEMA_CONTRACT
     required_top_level_fields = set(contract["required_top_level_fields"])
@@ -1554,6 +1555,22 @@ def audit_status_payload(
             "docs/release-control/control_plane.json"
         )
 
+    normalized_current_version = (current_version or "").strip()
+    if normalized_current_version:
+        active_target_id = str(ACTIVE_TARGET.get("id", "")).strip()
+        active_target_kind = str(ACTIVE_TARGET.get("kind", "")).strip()
+        if (
+            not is_prerelease_version(normalized_current_version)
+            and active_target_id != "v6-ga-promotion"
+            and active_target_kind in {"release", "stabilization"}
+            and not release_ready_derived
+        ):
+            warnings.append(
+                "VERSION is a stable release string while the active target is still a non-GA "
+                f"{active_target_id or 'target'} and release_ready is false; "
+                "the repo is carrying a GA candidate on an RC-held line."
+            )
+
     return {
         "errors": errors,
         "warnings": warnings,
@@ -1564,6 +1581,7 @@ def audit_status_payload(
                 "completion_met": active_target_completion_met,
                 "blocking_levels": active_target_levels,
             },
+            "current_version": normalized_current_version,
         },
         "summary": {
             "lane_count": len(lane_reports),
@@ -1698,6 +1716,8 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"completion_rule={active_target.get('completion_rule') or '-'} "
             f"completion_met={active_target.get('completion_met')}"
         )
+        if control_plane.get("current_version"):
+            lines.append(f"  current_version={control_plane['current_version']}")
         if active_target.get("summary"):
             lines.append(f"  target_summary={active_target['summary']}")
         blocking_levels = active_target.get("blocking_levels", [])
@@ -1905,6 +1925,7 @@ def main(argv: list[str] | None = None) -> int:
         load_status_payload(staged=args.staged),
         schema_contract=status_schema_contract(staged=args.staged),
         use_staged_registry=args.staged,
+        current_version=read_repo_text("VERSION", staged=args.staged).strip(),
     )
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)

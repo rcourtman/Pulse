@@ -512,6 +512,31 @@ class StatusAuditTest(unittest.TestCase):
             self.assertNotIn("target_blocking_levels=", pretty)
             self.assertNotIn("active target proof scope could not be derived", pretty)
 
+    def test_stable_version_on_rc_hold_emits_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(release_gate_status="pending"),
+                    current_version="6.0.0",
+                )
+
+            self.assertIn(
+                "VERSION is a stable release string while the active target is still a non-GA v6-rc-stabilization and release_ready is false; the repo is carrying a GA candidate on an RC-held line.",
+                report["warnings"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("current_version=6.0.0", pretty)
+            self.assertIn("repo is carrying a GA candidate on an RC-held line", pretty)
+
     def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
