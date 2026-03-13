@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -122,6 +123,33 @@ class MSPProviderTenantManagementRehearsalTest(unittest.TestCase):
             )
         self.assertEqual(exit_code, 1)
 
+    def test_main_returns_failure_when_workspace_create_raises_runtime_error(self) -> None:
+        def fake_fetch_json(method: str, url: str, **kwargs):
+            if url.endswith("/api/accounts/acct_1/tenants") and method == "GET":
+                return 200, []
+            if url.endswith("/api/accounts/acct_1/tenants") and method == "POST":
+                raise RuntimeError("POST https://pulse.example.com/api/accounts/acct_1/tenants returned non-JSON body: internal error")
+            if url.endswith("/api/accounts/acct_1/members") and method == "GET":
+                return 200, []
+            if url.endswith("/api/portal/dashboard?account_id=acct_1"):
+                return 200, {"account": {"kind": "msp"}, "summary": {"total": 1}}
+            raise AssertionError(f"unexpected call: {method} {url}")
+
+        with mock.patch.object(mod, "fetch_json", side_effect=fake_fetch_json):
+            exit_code = run_main(
+                [
+                    "--base-url",
+                    "https://pulse.example.com",
+                    "--account-id",
+                    "acct_1",
+                    "--api-token",
+                    "token",
+                    "--workspace-name",
+                    "Client Three",
+                ]
+            )
+        self.assertEqual(exit_code, 1)
+
     def test_render_markdown_report(self) -> None:
         report = mod.render_markdown_report(
             title="MSP Provider Tenant Management Rehearsal",
@@ -163,6 +191,20 @@ class MSPProviderTenantManagementRehearsalTest(unittest.TestCase):
                 )
             self.assertEqual(exit_code, 0)
             self.assertIn("# MSP Provider Tenant Management Rehearsal", report_path.read_text(encoding="utf-8"))
+
+    def test_main_returns_failure_on_timeout_without_traceback(self) -> None:
+        with mock.patch.object(mod.request, "urlopen", side_effect=socket.timeout("timed out")):
+            exit_code = run_main(
+                [
+                    "--base-url",
+                    "https://pulse.example.com",
+                    "--account-id",
+                    "acct_1",
+                    "--api-token",
+                    "token",
+                ]
+            )
+        self.assertEqual(exit_code, 1)
 
 
 if __name__ == "__main__":

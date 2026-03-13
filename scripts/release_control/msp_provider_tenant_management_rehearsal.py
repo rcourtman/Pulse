@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,8 @@ def fetch(
     except error.HTTPError as exc:
         payload = exc.read()
         return exc.code, payload, {key.lower(): value for key, value in exc.headers.items()}
+    except socket.timeout as exc:
+        raise RuntimeError(f"{method} {url} timed out after {timeout:.1f}s") from exc
     except error.URLError as exc:
         raise RuntimeError(f"{method} {url} failed: {exc.reason}") from exc
 
@@ -376,7 +379,10 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
     results.append(safe_check("msp-tenant-list", lambda: list_tenants_check(args, headers)))
 
     for workspace_name in args.workspace_name:
-        result = create_workspace_check(args, headers, workspace_name)
+        result = safe_check(
+            f"msp-create-workspace:{workspace_name}",
+            lambda workspace_name=workspace_name: create_workspace_check(args, headers, workspace_name),
+        )
         results.append(result)
         if result.ok:
             detail_parts = result.detail.split()
@@ -384,11 +390,15 @@ def run_rehearsal(args: argparse.Namespace) -> list[CheckResult]:
             created_workspace_ids.append((tenant_id, workspace_name))
 
     if headers:
-        status, tenants = check_account_tenants(args.base_url, args.timeout, headers, args.account_id)
-        if status == 200:
-            expected_total = len(tenants)
-        else:
+        try:
+            status, tenants = check_account_tenants(args.base_url, args.timeout, headers, args.account_id)
+        except Exception:
             expected_total = max(1, len(created_workspace_ids))
+        else:
+            if status == 200:
+                expected_total = len(tenants)
+            else:
+                expected_total = max(1, len(created_workspace_ids))
     else:
         expected_total = max(1, len(created_workspace_ids))
 

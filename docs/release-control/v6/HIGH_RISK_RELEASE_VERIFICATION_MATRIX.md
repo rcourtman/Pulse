@@ -455,7 +455,7 @@ Companion drill:
   multiple client tenants coherently, with canonical MSP plan handling and no
   cross-client leakage or scope confusion.
 - Latest exercised record:
-  `docs/release-control/v6/records/msp-provider-tenant-management-2026-03-13.md`
+  `docs/release-control/v6/records/msp-provider-tenant-management-production-2026-03-13.md`
 - Block release if:
   MSP support exists only as pricing or partial provisioning, or a provider
   cannot safely manage multiple client tenants from one place.
