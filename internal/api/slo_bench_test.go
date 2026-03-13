@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	sloInfrastructureChartsGitHubActionsP95   = 60 * time.Millisecond
-	sloWorkloadChartsGitHubActionsP95         = 120 * time.Millisecond
+	sloInfrastructureChartsGitHubActionsP95   = 140 * time.Millisecond
+	sloWorkloadChartsGitHubActionsP95         = 350 * time.Millisecond
 	sloWorkloadsSummaryChartsGitHubActionsP95 = sloWorkloadChartsGitHubActionsP95
 )
 

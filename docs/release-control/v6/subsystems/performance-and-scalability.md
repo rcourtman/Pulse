@@ -88,3 +88,10 @@ strings without widening the canonical hot-path order tuple. Unknown statuses
 must sort after the governed status order instead of forcing the selector path
 to abandon the typed canonical order used by the infrastructure table and its
 performance proof surface.
+
+GitHub-hosted runner proof for the API performance surface now intentionally
+uses a looser budget envelope than local/staging benchmark runs for the
+mixed-endpoint load test and the infrastructure/workload chart p95 checks.
+Those CI targets remain regression guardrails, but they are calibrated to the
+observed contention and CPU variability of the public release workflow rather
+than to workstation-class latency.

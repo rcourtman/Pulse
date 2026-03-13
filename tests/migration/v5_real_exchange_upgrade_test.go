@@ -196,8 +196,15 @@ func managedLicenseServerDir(t *testing.T) string {
 		t.Fatal("resolve caller for managed license server test")
 	}
 	pulseRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	licenseServerDir := filepath.Join(filepath.Dir(pulseRoot), "pulse-pro", "license-server")
+	pulseProRoot := os.Getenv("PULSE_REPO_ROOT_PULSE_PRO")
+	if pulseProRoot == "" {
+		pulseProRoot = filepath.Join(filepath.Dir(pulseRoot), "pulse-pro")
+	}
+	licenseServerDir := filepath.Join(pulseProRoot, "license-server")
 	if _, err := os.Stat(filepath.Join(licenseServerDir, "main.go")); err != nil {
+		if os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("PULSE_REPO_ROOT_PULSE_PRO") == "" {
+			t.Skipf("managed license-server proof requires sibling pulse-pro license-server; skipping in GitHub Actions without PULSE_REPO_ROOT_PULSE_PRO override: %v", err)
+		}
 		t.Fatalf("managed license-server proof requires sibling pulse-pro license-server at %s: %v", licenseServerDir, err)
 	}
 	return licenseServerDir

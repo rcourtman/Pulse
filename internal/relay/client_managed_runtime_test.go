@@ -186,8 +186,15 @@ func managedRelayWorkspaceRoots(t *testing.T) (string, string) {
 		t.Fatal("resolve runtime caller for managed relay test")
 	}
 	pulseRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	pulseProRelayDir := filepath.Join(filepath.Dir(pulseRoot), "pulse-pro", "relay-server")
+	pulseProRoot := os.Getenv("PULSE_REPO_ROOT_PULSE_PRO")
+	if pulseProRoot == "" {
+		pulseProRoot = filepath.Join(filepath.Dir(pulseRoot), "pulse-pro")
+	}
+	pulseProRelayDir := filepath.Join(pulseProRoot, "relay-server")
 	if _, err := os.Stat(filepath.Join(pulseProRelayDir, "main.go")); err != nil {
+		if os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("PULSE_REPO_ROOT_PULSE_PRO") == "" {
+			t.Skipf("managed relay runtime proof requires sibling pulse-pro relay-server; skipping in GitHub Actions without PULSE_REPO_ROOT_PULSE_PRO override: %v", err)
+		}
 		t.Fatalf("managed relay runtime proof requires sibling pulse-pro relay-server at %s: %v", pulseProRelayDir, err)
 	}
 	return pulseRoot, pulseProRelayDir

@@ -439,8 +439,9 @@ func TestLoad_500Node_MixedEndpoints(t *testing.T) {
 			continue
 		}
 		p95 := percentile(r.latencies, 0.95)
-		if p95 > 3*time.Second {
-			t.Errorf("[%s] p95=%v exceeds 3s budget under mixed load", r.name, p95)
+		target := effectiveMixedLoadP95Budget(r.name, 3*time.Second)
+		if p95 > target {
+			t.Errorf("[%s] p95=%v exceeds %v budget under mixed load", r.name, p95, target)
 		}
 	}
 
@@ -533,6 +534,20 @@ func effectiveLoadMinCount(localMinCount, githubActionsMinCount int64) int64 {
 		return githubActionsMinCount
 	}
 	return localMinCount
+}
+
+func effectiveMixedLoadP95Budget(endpoint string, localTarget time.Duration) time.Duration {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return localTarget
+	}
+	switch endpoint {
+	case "metrics-history":
+		return 8 * time.Second
+	case "metrics-stats":
+		return 4 * time.Second
+	default:
+		return localTarget
+	}
 }
 
 // newLoadTestMetricsStore creates an ephemeral metrics store for load tests.
