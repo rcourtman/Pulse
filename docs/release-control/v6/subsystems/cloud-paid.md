@@ -244,6 +244,11 @@ MSP tenant provisioning must seed a canonical tenant-scoped `org.json` under
 hosted runtime user; otherwise hosted magic-link handoff can preserve the
 correct tenant org cookie while the tenant API still fails closed with
 `invalid_org` because no tenant organization metadata exists on disk.
+Hosted tenant entitlement evaluation is part of that same boundary too: when a
+hosted tenant lands in a tenant-scoped org like `t-...`, the runtime must
+still honor the instance-level hosted billing lease in `default` until or
+unless an org-local billing state exists, rather than collapsing a freshly
+provisioned paid tenant into `subscription_required` on first entry.
 JWT-backed entitlement claim evaluation and activation-grant translation now
 follow the same explicit proof model instead of relying only on the broad cloud
 runtime catch-all policy.

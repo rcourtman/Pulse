@@ -80,3 +80,38 @@ func TestLicenseHandlersService_SelfHostedNonDefaultBillingStateOverridesDefault
 		t.Fatalf("expected explicit non-default billing state to take precedence over default fallback")
 	}
 }
+
+func TestLicenseHandlersService_HostedNonDefaultFallbackToDefaultBillingState(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	if _, err := mtp.GetPersistence("t-tenant"); err != nil {
+		t.Fatalf("init tenant persistence: %v", err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
+		Capabilities:      []string{pkglicensing.FeatureRBAC, pkglicensing.FeatureRelay},
+		PlanVersion:       "msp_starter",
+		SubscriptionState: pkglicensing.SubStateActive,
+	}); err != nil {
+		t.Fatalf("save default billing state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, true)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "t-tenant")
+	service := handlers.Service(ctx)
+	if service == nil {
+		t.Fatalf("service is nil")
+	}
+
+	if service.SubscriptionState() != string(pkglicensing.SubStateActive) {
+		t.Fatalf("subscription_state = %q, want %q", service.SubscriptionState(), pkglicensing.SubStateActive)
+	}
+	if !service.HasFeature(pkglicensing.FeatureRBAC) {
+		t.Fatalf("expected hosted tenant org to inherit default hosted billing state")
+	}
+}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -230,6 +231,59 @@ func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_HostedTenantEntitlementsFallbackToDefaultBillingState(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	if _, err := mtp.GetPersistence("t-tenant"); err != nil {
+		t.Fatalf("init tenant persistence: %v", err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		Capabilities:      []string{pkglicensing.FeatureRelay, pkglicensing.FeatureRBAC},
+		Limits:            map[string]int64{"max_agents": 50},
+		PlanVersion:       "msp_starter",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("save default billing state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, true)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "t-tenant")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	handlers.HandleEntitlements(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode entitlements payload: %v", err)
+	}
+	if payload.SubscriptionState != string(pkglicensing.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, pkglicensing.SubStateActive)
+	}
+	if !sliceContainsString(payload.Capabilities, pkglicensing.FeatureRelay) {
+		t.Fatalf("expected hosted tenant payload to include %q from default hosted billing state", pkglicensing.FeatureRelay)
+	}
+	foundAgentLimit := false
+	for _, limit := range payload.Limits {
+		if limit.Key == pkglicensing.MaxAgentsLicenseGateKey {
+			foundAgentLimit = true
+			if limit.Limit != 50 {
+				t.Fatalf("max_agents limit=%d, want 50", limit.Limit)
+			}
+		}
+	}
+	if !foundAgentLimit {
+		t.Fatalf("expected max_agents limit in payload, got %+v", payload.Limits)
+	}
 }
 
 func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {

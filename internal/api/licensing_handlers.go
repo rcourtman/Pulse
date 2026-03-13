@@ -336,9 +336,28 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseSe
 
 	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
 
-	// Hosted non-default tenants always consult billing state (fail-open).
+	// Hosted tenant runtimes still carry instance-scoped billing state in the
+	// root billing.json. If a tenant-scoped org has no org-local billing state,
+	// inherit the default-org lease so hosted auth handoff can preserve tenant
+	// org context without dropping entitlements on first runtime entry.
 	if h.hostedMode && orgID != "default" && orgID != "" {
-		evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, time.Hour, entitlementExpectedInstanceHost(h.cfg))
+		evaluatorOrgID := orgID
+		state, err := billingStore.GetBillingState(orgID)
+		if err != nil {
+			return fmt.Errorf("load hosted billing state for org %q: %w", orgID, err)
+		}
+		if state == nil || state.SubscriptionState == "" {
+			defaultState, defaultErr := billingStore.GetBillingState("default")
+			if defaultErr != nil {
+				return fmt.Errorf("load hosted default billing state fallback: %w", defaultErr)
+			}
+			if defaultState == nil || defaultState.SubscriptionState == "" {
+				service.SetEvaluator(nil)
+				return nil
+			}
+			evaluatorOrgID = "default"
+		}
+		evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, evaluatorOrgID, time.Hour, entitlementExpectedInstanceHost(h.cfg))
 		service.SetEvaluator(evaluator)
 		return nil
 	}

@@ -367,3 +367,9 @@ single-snapshot aggregation invariant: canonical `aggregations.byType` must be
 derived from the same registry list snapshot used for that request's response
 path, so the contract stays deterministic without paying for duplicate
 registry-clone work on the hot path.
+Hosted licensing handlers now also carry a tenant-scoped fallback contract:
+when hosted auth handoff preserves a non-default tenant org like `t-...`,
+`/api/license/status` and `/api/license/entitlements` must still evaluate the
+instance-level hosted billing lease from `default` if that tenant org has no
+org-local billing state of its own, rather than failing closed into
+`subscription_required` on first entry.
