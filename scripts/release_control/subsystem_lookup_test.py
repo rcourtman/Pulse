@@ -414,10 +414,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         lane_context = match["lane_context"]
         self.assertEqual(lane_context["lane_id"], "L3")
-        self.assertEqual(
-            {decision["id"] for decision in lane_context["open_decisions"]},
-            {"cloud-msp-stripe-prices", "cloud-msp-price-id-propagation"},
-        )
+        self.assertEqual(lane_context["open_decisions"], [])
         self.assertEqual(
             {gate["id"] for gate in lane_context["release_gates"]},
             {
@@ -440,6 +437,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             {decision["id"] for decision in lane_context["resolved_decisions"]},
             {
+                "cloud-msp-price-id-propagation",
+                "cloud-msp-stripe-prices",
                 "stable-release-promotion-model",
                 "stripe-mapping-contract-lock",
                 "trial-authority-saas-controlled",

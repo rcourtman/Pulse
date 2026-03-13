@@ -218,6 +218,11 @@ The runtime entitlement surface now follows the same rule: evaluator/token
 source accessors, hosted-subscription validity rules, and frontend entitlement
 payload construction should move behind explicit proof routes rather than being
 implicitly trusted as part of the catch-all cloud runtime layer.
+Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
+record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
+verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the
+governed `pulse-pro` operational docs and license-server env template, and that
+each ID resolves to an active live recurring Stripe price object.
 Activation service runtime, license-server transport, encrypted activation
 persistence, and hosted trial activation now follow the same ratchet. Changes
 to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,

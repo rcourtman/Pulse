@@ -776,6 +776,11 @@
           "kind": "file"
         },
         {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md",
+          "kind": "file"
+        },
+        {
           "repo": "pulse-pro",
           "path": "V6_LAUNCH_CHECKLIST.md",
           "kind": "file"
@@ -1283,40 +1288,7 @@
       ]
     }
   ],
-  "open_decisions": [
-    {
-      "id": "cloud-msp-price-id-propagation",
-      "summary": "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "status": "open",
-      "opened_at": "2026-02-27",
-      "subsystem_ids": [
-        "cloud-paid"
-      ],
-      "lane_ids": [
-        "L2",
-        "L3",
-        "L4"
-      ]
-    },
-    {
-      "id": "cloud-msp-stripe-prices",
-      "summary": "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "status": "open",
-      "opened_at": "2026-02-27",
-      "subsystem_ids": [
-        "cloud-paid"
-      ],
-      "lane_ids": [
-        "L2",
-        "L3",
-        "L4"
-      ]
-    }
-  ],
+  "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
@@ -1481,6 +1453,34 @@
         "L2",
         "L3",
         "L11"
+      ]
+    },
+    {
+      "id": "cloud-msp-price-id-propagation",
+      "summary": "The 13 canonical Cloud/MSP v6 price IDs are populated in the governed pulse-pro operations doc, launch checklist, and license-server env mapping template.",
+      "kind": "contract",
+      "decided_at": "2026-03-13",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4"
+      ]
+    },
+    {
+      "id": "cloud-msp-stripe-prices",
+      "summary": "The 13 canonical Cloud/MSP v6 price IDs already exist as active live recurring Stripe prices and match the governed commercial mappings.",
+      "kind": "pricing",
+      "decided_at": "2026-03-13",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4"
       ]
     }
   ]

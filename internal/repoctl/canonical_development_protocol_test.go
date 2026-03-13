@@ -967,7 +967,7 @@ func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
 	laneIDs := statusLaneIDs(t, status)
 
 	rawDecisions, ok := status["open_decisions"].([]any)
-	if !ok || len(rawDecisions) == 0 {
+	if !ok {
 		t.Fatalf("status.json missing open_decisions list")
 	}
 
