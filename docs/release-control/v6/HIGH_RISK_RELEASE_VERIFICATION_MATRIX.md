@@ -407,6 +407,49 @@ Companion drill:
   Mobile can keep stale access, lose approval state, or fail to recover from
   reconnect/auth transitions.
 
+## Gate: `multi-tenant-runtime-isolation-and-coherence`
+
+- Why this is risky:
+  Multi-tenant support is not just an org settings feature. If tenant
+  isolation, tenant-scoped runtime state, or cross-org sharing drifts, Pulse
+  will expose the wrong data to the wrong tenant while still looking healthy in
+  narrower UI-only checks.
+- Primary runtime surfaces:
+  `internal/api/org_handlers*.go`
+  `internal/api/rbac_handlers*.go`
+  `internal/api/resources_tenant_security_test.go`
+  `internal/api/router_helpers_more_test.go`
+  `internal/api/api_token_org_scope_integration_test.go`
+  `internal/monitoring/...`
+  `frontend-modern/src/components/Settings/Organization*.tsx`
+  `frontend-modern/src/components/Settings/RolesPanel.tsx`
+  `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
+  `tests/integration/tests/03-multi-tenant.spec.ts`
+- Automated proof:
+  `go test ./internal/api -run 'TestOrgHandlers|TestMultiTenant|TestResourceHandlers_NonDefaultOrg|TestSetMultiTenantMonitor_WiresHandlers|TestMultiTenantStateProvider|TestMultiTenantAPITokenRemainsScopedToIssuingOrg' -count=1`
+  `go test ./internal/monitoring -run 'TestMultiTenantMonitor' -count=1`
+  `go test ./tests/migration -run 'TestV5DataDir_MultiTenantMigration' -count=1`
+  `cd frontend-modern && npx vitest run src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/utils/__tests__/rbacPermissions.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/organizationRolePresentation.test.ts src/utils/__tests__/organizationSettingsPresentation.test.ts`
+- Manual scenario:
+  1. Enable multi-tenant mode and create at least two organizations with
+     different users and roles.
+  2. Confirm each user only sees the orgs, resources, and runtime state they
+     are explicitly allowed to see.
+  3. Confirm role changes and tenant membership changes immediately affect UI
+     and API scope.
+  4. Confirm tenant-scoped runtime paths do not fall back to default or
+     single-tenant state when a non-default org is requested.
+  5. Confirm cross-org sharing grants only the intended access and does not
+     widen tenant visibility.
+- Pass when:
+  Multi-tenant Pulse behaves as a coherent tenant-isolated product: org scope,
+  RBAC, runtime state, sharing, and migration all stay within the intended
+  tenant boundary.
+- Block release if:
+  A tenant can see or mutate data, runtime state, or shared resources outside
+  the intended tenant boundary, or multi-tenant mode still behaves like a
+  partially upgraded single-tenant system.
+
 ## Gate: `organization-user-scope-and-rbac`
 
 - Why this is risky:

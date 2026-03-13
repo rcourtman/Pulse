@@ -881,6 +881,158 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA12",
+      "summary": "Multi-tenant Pulse is sound: tenant isolation, organization membership, RBAC scope, tenant-scoped runtime state, sharing, and migration all fail closed outside the intended tenant boundary instead of partially behaving like a single-tenant system.",
+      "kind": "invariant",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L4",
+        "L6",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "monitoring",
+        "organization-settings"
+      ],
+      "release_gate_ids": [
+        "multi-tenant-runtime-isolation-and-coherence"
+      ],
+      "proof_commands": [
+        {
+          "id": "multi-tenant-runtime-api",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestOrgHandlers|TestMultiTenant|TestResourceHandlers_NonDefaultOrg|TestSetMultiTenantMonitor_WiresHandlers|TestMultiTenantStateProvider|TestMultiTenantAPITokenRemainsScopedToIssuingOrg",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "multi-tenant-runtime-frontend",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+            "src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+            "src/utils/__tests__/rbacPermissions.test.ts",
+            "src/utils/__tests__/rbacPresentation.test.ts",
+            "src/utils/__tests__/organizationRolePresentation.test.ts",
+            "src/utils/__tests__/organizationSettingsPresentation.test.ts"
+          ],
+          "cwd": "frontend-modern"
+        },
+        {
+          "id": "multi-tenant-runtime-migration",
+          "run": [
+            "go",
+            "test",
+            "./tests/migration",
+            "-run",
+            "TestV5DataDir_MultiTenantMigration",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "multi-tenant-runtime-monitoring",
+          "run": [
+            "go",
+            "test",
+            "./internal/monitoring",
+            "-run",
+            "TestMultiTenantMonitor",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/subsystems/organization-settings.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/rbacPermissions.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/api_token_org_scope_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/org_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/rbac_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources_tenant_security_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/router_helpers_more_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/multi_tenant_monitor_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/03-multi-tenant.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_to_v6_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -1404,6 +1556,19 @@
       "lane_ids": [
         "L5",
         "L7",
+        "L12"
+      ]
+    },
+    {
+      "id": "multi-tenant-runtime-isolation-and-coherence",
+      "summary": "Confirm multi-tenant Pulse behaves as a coherent tenant-isolated product across org scope, runtime state, sharing, and migration.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L4",
+        "L6",
         "L12"
       ]
     },

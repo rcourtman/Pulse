@@ -138,10 +138,13 @@ Assertion design rules:
 2. Do not ship when paywalls and runtime gates disagree.
 3. Do not ship hosted Pulse flows that break signup, auth, provision, hosted
    runtime access, billing/admin visibility, or revocation.
-4. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
-5. Do not keep polishing strong lanes while weak lanes remain behind.
-6. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
-7. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
+4. Do not ship multi-tenant support if tenant isolation, organization scope,
+   tenant-scoped runtime state, or cross-org sharing can leak outside the
+   intended tenant boundary.
+5. Do not ship upgrades that reset paid state, licensing continuity, or first-session flow.
+6. Do not keep polishing strong lanes while weak lanes remain behind.
+7. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
+8. Do not promote v6 to stable or GA without an exercised RC, a real release-pipeline proof run, a recorded rollback target, and a written v5 maintenance-only support policy.
 
 ## Locked Decisions
 
