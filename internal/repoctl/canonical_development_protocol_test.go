@@ -310,6 +310,7 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"references must also reference the same lane",
 		"already-passed",
 		"temporary fallback",
+		"lane followup",
 	})
 }
 
@@ -549,6 +550,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"It is not a live progress dashboard.",
 		"Current lane scores, evidence references, and typed operational decision",
 		"Lane completion state, residual-gap summaries, and normalized follow-up",
+		"status.json.lane_followups",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
 		"temporary fallback",
@@ -601,6 +603,9 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	}
 	if _, ok := status["open_decisions"].([]any); !ok {
 		t.Fatalf("status.json missing open_decisions list")
+	}
+	if _, ok := status["lane_followups"].([]any); !ok {
+		t.Fatalf("status.json missing lane_followups list")
 	}
 	if _, ok := status["resolved_decisions"].([]any); !ok {
 		t.Fatalf("status.json missing resolved_decisions list")
@@ -788,7 +793,7 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 				t.Fatalf("status.json lane %q completion.tracking contains non-object entry", laneID)
 			}
 			kind, ok := trackingRef["kind"].(string)
-			if !ok || !slices.Contains([]string{"target", "readiness-assertion", "release-gate", "open-decision"}, kind) {
+			if !ok || !slices.Contains([]string{"target", "lane-followup", "readiness-assertion", "release-gate", "open-decision"}, kind) {
 				t.Fatalf("status.json lane %q has invalid completion.tracking kind %#v", laneID, trackingRef["kind"])
 			}
 			id, ok := trackingRef["id"].(string)
@@ -1093,6 +1098,71 @@ func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
 	}
 }
 
+func TestStatusJSONLaneFollowupsAreTypedRecords(t *testing.T) {
+	status := statusJSON(t)
+	laneIDs := statusLaneIDs(t, status)
+
+	rawFollowups, ok := status["lane_followups"].([]any)
+	if !ok {
+		t.Fatalf("status.json missing lane_followups list")
+	}
+
+	seenIDs := make(map[string]struct{}, len(rawFollowups))
+	dateRe := regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+	for _, rawFollowup := range rawFollowups {
+		followup, ok := rawFollowup.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lane_followups contains non-object entry")
+		}
+
+		id, ok := followup["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json lane_followup missing id")
+		}
+		if _, exists := seenIDs[id]; exists {
+			t.Fatalf("status.json lane_followup id %q duplicated", id)
+		}
+		seenIDs[id] = struct{}{}
+
+		if summary, ok := followup["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
+			t.Fatalf("status.json lane_followup %q missing summary", id)
+		}
+		if owner, ok := followup["owner"].(string); !ok || strings.TrimSpace(owner) == "" {
+			t.Fatalf("status.json lane_followup %q missing owner", id)
+		}
+		if statusValue, ok := followup["status"].(string); !ok || !slices.Contains([]string{"planned", "active", "parked", "done"}, statusValue) {
+			t.Fatalf("status.json lane_followup %q has invalid status %#v", id, followup["status"])
+		}
+		recordedAt, ok := followup["recorded_at"].(string)
+		if !ok || !dateRe.MatchString(recordedAt) {
+			t.Fatalf("status.json lane_followup %q missing valid recorded_at date", id)
+		}
+		rawLaneIDs, ok := followup["lane_ids"].([]any)
+		if !ok || len(rawLaneIDs) != 1 {
+			t.Fatalf("status.json lane_followup %q must carry exactly one lane_id", id)
+		}
+		if rawSubsystemIDs, ok := followup["subsystem_ids"].([]any); !ok {
+			t.Fatalf("status.json lane_followup %q missing subsystem_ids", id)
+		} else {
+			for _, rawSubsystemID := range rawSubsystemIDs {
+				subsystemID, ok := rawSubsystemID.(string)
+				if !ok || subsystemID == "" {
+					t.Fatalf("status.json lane_followup %q subsystem_ids contains invalid entry", id)
+				}
+			}
+		}
+		for _, rawLaneID := range rawLaneIDs {
+			laneID, ok := rawLaneID.(string)
+			if !ok || laneID == "" {
+				t.Fatalf("status.json lane_followup %q lane_ids contains invalid entry", id)
+			}
+			if _, ok := laneIDs[laneID]; !ok {
+				t.Fatalf("status.json lane_followup %q references unknown lane_id %q", id, laneID)
+			}
+		}
+	}
+}
+
 func TestStatusJSONResolvedDecisionsAreTypedRecords(t *testing.T) {
 	status := statusJSON(t)
 	laneIDs := statusLaneIDs(t, status)
@@ -1217,6 +1287,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"audit_status_payload",
 		"readiness_assertions",
 		"release_gates",
+		"lane_followups",
 		"open_decisions",
 		"resolved_decisions",
 		"subsystem_ids",

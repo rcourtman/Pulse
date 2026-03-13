@@ -16,6 +16,7 @@
     "priority_engine",
     "lanes",
     "release_gates",
+    "lane_followups",
     "open_decisions",
     "source_of_truth_file",
     "resolved_decisions"
@@ -96,6 +97,12 @@
       "minItems": 1,
       "items": {
         "$ref": "#/$defs/release_gate"
+      }
+    },
+    "lane_followups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lane_followup"
       }
     },
     "open_decisions": {
@@ -412,6 +419,7 @@
           "type": "string",
           "enum": [
             "target",
+            "lane-followup",
             "readiness-assertion",
             "release-gate",
             "open-decision"
@@ -695,6 +703,64 @@
         "lane_ids": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "lane_followup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "status",
+        "recorded_at",
+        "lane_ids",
+        "subsystem_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "active",
+            "parked",
+            "done"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
           "uniqueItems": true,
           "items": {
             "type": "string",

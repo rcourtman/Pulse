@@ -14,6 +14,8 @@ Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
 Lane completion state, residual-gap summaries, and normalized follow-up
 tracking also live only in `docs/release-control/v6/status.json`.
+Non-blocking same-lane residuals that are concrete enough to name directly
+live in `status.json.lane_followups`.
 Current repo/release readiness is derived by
 `python3 scripts/release_control/status_audit.py --pretty` from
 `status.json`, not hand-maintained in this file. The human runbook for
@@ -182,8 +184,8 @@ Assertion design rules:
     already-passed assertions, gates, or completed targets.
     A broad target reference may be used only as a temporary fallback when the
     next same-lane governance object is not concrete yet; normalize it into a
-    readiness assertion, release gate, or open decision as soon as the
-    remaining work is clear enough to name directly.
+    lane followup, readiness assertion, release gate, or open decision as soon
+    as the remaining work is clear enough to name directly.
 
 ## Locked Decisions
 

@@ -86,6 +86,7 @@ def base_payload(
     completion_tracking: list[dict[str, str]] | None = None,
     release_gate_status: str = "passed",
     readiness_assertions: list[dict[str, object]] | None = None,
+    lane_followups: list[dict[str, object]] | None = None,
     open_decisions: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     resolved_completion_state = completion_state
@@ -212,6 +213,7 @@ def base_payload(
                 ],
             }
         ],
+        "lane_followups": lane_followups or [],
         "open_decisions": open_decisions or [],
         "resolved_decisions": [],
     }
@@ -913,6 +915,82 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
+    def test_bounded_residual_lane_accepts_lane_followup_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane still has a named non-blocking same-lane follow-up.",
+                completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
+                lane_followups=[
+                    {
+                        "id": "mobile-post-rc-hardening",
+                        "summary": "Track post-RC hardening for the lane.",
+                        "owner": "project-owner",
+                        "status": "planned",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["lane_residuals"][0]["tracking"],
+                ["lane-followup:mobile-post-rc-hardening[planned]"],
+            )
+
+    def test_bounded_residual_lane_rejects_resolved_lane_followup_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
+                lane_followups=[
+                    {
+                        "id": "mobile-post-rc-hardening",
+                        "summary": "Track post-RC hardening for the lane.",
+                        "owner": "project-owner",
+                        "status": "done",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking lane followup 'mobile-post-rc-hardening' is already resolved and cannot keep a bounded residual open",
+                report["errors"],
+            )
+
     def test_bounded_residual_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
@@ -987,7 +1065,7 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(payload)
 
             self.assertIn(
-                "lane L1 uses only broad target tracking for its bounded residual; normalize the remaining same-lane work into a readiness assertion, release gate, or open decision when it becomes concrete",
+                "lane L1 uses only broad target tracking for its bounded residual; normalize the remaining same-lane work into a lane followup, readiness assertion, release gate, or open decision when it becomes concrete",
                 report["warnings"],
             )
             pretty = render_pretty(report)

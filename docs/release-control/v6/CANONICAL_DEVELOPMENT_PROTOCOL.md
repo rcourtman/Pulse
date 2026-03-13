@@ -134,6 +134,8 @@ Every substantial task must finish by checking these questions:
    If yes: update the relevant subsystem contract.
 2. Did I change live lane state, lane completion records, readiness derivation rules, readiness assertion proof routes, evidence references, or typed operational decision records?
    If yes: update `status.json`.
+   This includes `lane_followups` when a bounded residual becomes concrete
+   enough to name directly without making it a blocker.
 3. Did I change stable governance, scope, evergreen readiness assertions, or lock a new architectural/release decision?
    If yes: update `SOURCE_OF_TRUTH.md`.
 4. Did I replace an old path with a new canonical path?
@@ -165,7 +167,7 @@ Every substantial task must finish by checking these questions:
     Do not keep a lane in `bounded-residual` by pointing at already-passed
     assertions, cleared release gates, or completed targets.
     If I only have a broad target reference, treat that as a temporary fallback
-    and normalize it into a readiness assertion, release gate, or
+    and normalize it into a lane followup, readiness assertion, release gate, or
     open decision once the remaining same-lane work is concrete enough to
     name.
 
@@ -182,11 +184,11 @@ the next obvious same-lane work is still required for a coherent outcome.
 When a lane reaches its current target but still has intentionally bounded
 residual work, the same slice must record that residual in
 `status.json.lanes[*].completion` with a short rationale and explicit tracking
-references to the governing target, readiness assertion, release gate, or open
-decision that owns the follow-up.
-For readiness assertions, release gates, and open decisions, those tracking
-references must also reference the same lane; unrelated governance objects are
-not valid residual placeholders.
+references to the governing target, lane followup, readiness assertion,
+release gate, or open decision that owns the follow-up.
+For lane followups, readiness assertions, release gates, and open decisions,
+those tracking references must also reference the same lane; unrelated
+governance objects are not valid residual placeholders.
 
 This protocol is enforced locally at commit time by the canonical completion
 guard in `scripts/release_control/canonical_completion_guard.py` and by the

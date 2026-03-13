@@ -156,6 +156,7 @@ def _blocker_detail(
 def _lane_tracking_detail(
     tracking: dict[str, str],
     *,
+    lane_followups_by_id: dict[str, dict[str, Any]],
     readiness_assertions_by_id: dict[str, dict[str, Any]],
     release_gates_by_id: dict[str, dict[str, Any]],
     open_decisions_by_id: dict[str, dict[str, Any]],
@@ -174,6 +175,13 @@ def _lane_tracking_detail(
             detail["status"] = str(target.get("status", "unknown"))
             detail["resolved"] = detail["status"] == "completed"
             detail["summary"] = str(target.get("summary", ""))
+        return detail
+    if tracking_kind == "lane-followup":
+        followup = lane_followups_by_id.get(tracking_id)
+        if followup:
+            detail["status"] = str(followup.get("status", "unknown"))
+            detail["resolved"] = detail["status"] == "done"
+            detail["summary"] = str(followup.get("summary", ""))
         return detail
     if tracking_kind == "readiness-assertion":
         assertion = readiness_assertions_by_id.get(tracking_id)
@@ -254,6 +262,7 @@ def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
         ),
         "valid_release_gate_blocking_levels": schema_enum(schema, "release_gate", "blocking_level"),
         "valid_release_gate_statuses": schema_enum(schema, "release_gate", "status"),
+        "valid_lane_followup_statuses": schema_enum(schema, "lane_followup", "status"),
         "valid_open_decision_blocking_levels": schema_enum(schema, "open_decision", "blocking_level"),
         "valid_open_decision_statuses": schema_enum(schema, "open_decision", "status"),
         "valid_resolved_decision_kinds": schema_enum(schema, "resolved_decision", "kind"),
@@ -739,7 +748,13 @@ def audit_lanes(
                 completion_tracking.append({"kind": tracking_kind, "id": tracking_id})
                 completion_tracking_keys.append((tracking_kind, tracking_id))
         valid_completion_states = {"open", "bounded-residual", "complete"}
-        valid_tracking_kinds = {"target", "readiness-assertion", "release-gate", "open-decision"}
+        valid_tracking_kinds = {
+            "target",
+            "lane-followup",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision",
+        }
         if completion_state not in valid_completion_states:
             errors.append(f"{context}.completion.state has invalid value {completion_state!r}")
         for tracking in completion_tracking:
@@ -857,11 +872,15 @@ def validate_lane_subsystem_bindings(
 def validate_lane_completion_tracking(
     lane_reports: list[dict[str, Any]],
     *,
+    lane_followups: list[dict[str, Any]],
     readiness_assertions: list[dict[str, Any]],
     release_gates: list[dict[str, Any]],
     open_decisions: list[dict[str, Any]],
     errors: list[str],
 ) -> None:
+    lane_followups_by_id = {
+        str(followup["id"]): followup for followup in lane_followups
+    }
     readiness_assertions_by_id = {
         str(assertion["id"]): assertion for assertion in readiness_assertions
     }
@@ -883,16 +902,22 @@ def validate_lane_completion_tracking(
         decision_id: set(str(lane_id) for lane_id in decision.get("lane_ids", []))
         for decision_id, decision in open_decisions_by_id.items()
     }
+    lane_followup_lane_ids = {
+        followup_id: set(str(lane_id) for lane_id in followup.get("lane_ids", []))
+        for followup_id, followup in lane_followups_by_id.items()
+    }
     target_ids = set(DEFAULT_CONTROL_PLANE["targets_by_id"])
 
     known_by_kind = {
         "target": target_ids,
+        "lane-followup": set(lane_followups_by_id),
         "readiness-assertion": set(readiness_assertions_by_id),
         "release-gate": set(release_gates_by_id),
         "open-decision": set(open_decisions_by_id),
     }
     labels = {
         "target": "target",
+        "lane-followup": "lane followup",
         "readiness-assertion": "readiness assertion",
         "release-gate": "release gate",
         "open-decision": "open decision",
@@ -909,6 +934,12 @@ def validate_lane_completion_tracking(
                 errors.append(
                     f"lanes[{lane_id}].completion.tracking references unknown "
                     f"{labels.get(tracking_kind, tracking_kind)} {tracking_id!r}"
+                )
+                continue
+            if tracking_kind == "lane-followup" and lane_id not in lane_followup_lane_ids[tracking_id]:
+                errors.append(
+                    f"lanes[{lane_id}].completion.tracking lane followup {tracking_id!r} "
+                    "does not reference that lane"
                 )
                 continue
             if tracking_kind == "readiness-assertion" and lane_id not in readiness_assertion_lane_ids[tracking_id]:
@@ -931,6 +962,7 @@ def validate_lane_completion_tracking(
                 continue
             detail = _lane_tracking_detail(
                 tracking,
+                lane_followups_by_id=lane_followups_by_id,
                 readiness_assertions_by_id=readiness_assertions_by_id,
                 release_gates_by_id=release_gates_by_id,
                 open_decisions_by_id=open_decisions_by_id,
@@ -1406,6 +1438,77 @@ def validate_open_decisions(
     return records
 
 
+def validate_lane_followups(
+    payload: dict[str, Any],
+    *,
+    lane_ids: set[str],
+    lane_repo_ids: dict[str, list[str]],
+    subsystem_to_lane: dict[str, str],
+    valid_lane_followup_statuses: set[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    followups = _require_object_list(payload, "lane_followups", errors, context="status.json")
+    seen_ids: set[str] = set()
+    records: list[dict[str, Any]] = []
+
+    for index, raw in enumerate(followups):
+        context = f"lane_followups[{index}]"
+        followup_id = _require_string(raw, "id", errors, context=context)
+        if followup_id:
+            if followup_id in seen_ids:
+                errors.append(f"{context} duplicates id {followup_id}")
+            seen_ids.add(followup_id)
+        summary = _require_string(raw, "summary", errors, context=context)
+        owner = _require_string(raw, "owner", errors, context=context)
+        status = _require_string(raw, "status", errors, context=context)
+        recorded_at = _require_string(raw, "recorded_at", errors, context=context)
+        lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
+        subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
+
+        if recorded_at:
+            _validate_date(recorded_at, errors, context=f"{context}.recorded_at")
+        if status and status not in valid_lane_followup_statuses:
+            errors.append(f"{context} has invalid status {status!r}")
+        if len(lane_refs) != len(set(lane_refs)):
+            errors.append(f"{context}.lane_ids must not contain duplicates")
+        if lane_refs != sorted(lane_refs, key=_lane_sort_key):
+            errors.append(f"{context}.lane_ids must be sorted by lane id")
+        if len(lane_refs) != 1:
+            errors.append(f"{context}.lane_ids must contain exactly one lane id")
+        for lane_id in lane_refs:
+            if lane_id not in lane_ids:
+                errors.append(f"{context} references unknown lane_id {lane_id!r}")
+        validate_decision_subsystems(
+            subsystem_ids=subsystem_refs,
+            lane_refs=lane_refs,
+            subsystem_to_lane=subsystem_to_lane,
+            errors=errors,
+            context=context,
+        )
+
+        if followup_id and summary and owner and status and recorded_at and len(lane_refs) == 1:
+            repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
+            records.append(
+                {
+                    "id": followup_id,
+                    "summary": summary,
+                    "owner": owner,
+                    "status": status,
+                    "recorded_at": recorded_at,
+                    "lane_ids": lane_refs,
+                    "subsystem_ids": subsystem_refs,
+                    "repo_ids": repo_ids,
+                    "cross_repo": len(repo_ids) > 1,
+                }
+            )
+
+    order = [(record["recorded_at"], record["id"]) for record in records]
+    if len(records) == len(followups) and order != sorted(order, key=_decision_sort_key):
+        errors.append("status.json lane_followups must be sorted by recorded_at then id")
+
+    return records
+
+
 def validate_resolved_decisions(
     payload: dict[str, Any],
     *,
@@ -1489,6 +1592,7 @@ def audit_status_payload(
     valid_readiness_assertion_proof_types = set(contract["valid_readiness_assertion_proof_types"])
     valid_release_gate_blocking_levels = set(contract["valid_release_gate_blocking_levels"])
     valid_release_gate_statuses = set(contract["valid_release_gate_statuses"])
+    valid_lane_followup_statuses = set(contract["valid_lane_followup_statuses"])
     valid_open_decision_blocking_levels = set(contract["valid_open_decision_blocking_levels"])
     valid_open_decision_statuses = set(contract["valid_open_decision_statuses"])
     valid_resolved_decision_kinds = set(contract["valid_resolved_decision_kinds"])
@@ -1588,8 +1692,17 @@ def audit_status_payload(
         valid_open_decision_statuses=valid_open_decision_statuses,
         errors=errors,
     )
+    lane_followups = validate_lane_followups(
+        payload,
+        lane_ids=lane_ids,
+        lane_repo_ids=lane_repo_ids,
+        subsystem_to_lane=subsystem_to_lane,
+        valid_lane_followup_statuses=valid_lane_followup_statuses,
+        errors=errors,
+    )
     validate_lane_completion_tracking(
         lane_reports,
+        lane_followups=lane_followups,
         readiness_assertions=readiness_assertions,
         release_gates=release_gates,
         open_decisions=open_decisions,
@@ -1811,6 +1924,7 @@ def audit_status_payload(
     )
     readiness_assertions_by_id = {str(assertion["id"]): assertion for assertion in readiness_assertions}
     release_gates_by_id = {str(gate["id"]): gate for gate in release_gates}
+    lane_followups_by_id = {str(followup["id"]): followup for followup in lane_followups}
     open_decisions_by_id = {str(decision["id"]): decision for decision in open_decisions}
     lane_residuals = sorted(
         (
@@ -1823,6 +1937,7 @@ def audit_status_payload(
                     for detail in (
                         _lane_tracking_detail(
                             tracking,
+                            lane_followups_by_id=lane_followups_by_id,
                             readiness_assertions_by_id=readiness_assertions_by_id,
                             release_gates_by_id=release_gates_by_id,
                             open_decisions_by_id=open_decisions_by_id,
@@ -1833,6 +1948,7 @@ def audit_status_payload(
                 "tracking_details": [
                     _lane_tracking_detail(
                         tracking,
+                        lane_followups_by_id=lane_followups_by_id,
                         readiness_assertions_by_id=readiness_assertions_by_id,
                         release_gates_by_id=release_gates_by_id,
                         open_decisions_by_id=open_decisions_by_id,
@@ -1844,6 +1960,7 @@ def audit_status_payload(
                     for tracking in lane["completion_tracking"]
                     if not _lane_tracking_detail(
                         tracking,
+                        lane_followups_by_id=lane_followups_by_id,
                         readiness_assertions_by_id=readiness_assertions_by_id,
                         release_gates_by_id=release_gates_by_id,
                         open_decisions_by_id=open_decisions_by_id,
@@ -1862,7 +1979,7 @@ def audit_status_payload(
         if tracking_details and all(str(detail.get("kind")) == "target" for detail in tracking_details):
             warnings.append(
                 f"lane {residual['lane_id']} uses only broad target tracking for its bounded residual; "
-                "normalize the remaining same-lane work into a readiness assertion, release gate, or open decision when it becomes concrete"
+                "normalize the remaining same-lane work into a lane followup, readiness assertion, release gate, or open decision when it becomes concrete"
             )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
@@ -2056,6 +2173,7 @@ def audit_status_payload(
         "lanes": lane_reports,
         "readiness_assertions": readiness_assertions,
         "release_gates": release_gates,
+        "lane_followups": lane_followups,
         "open_decisions": open_decisions,
         "resolved_decisions": resolved_decisions,
     }
@@ -2165,6 +2283,15 @@ def render_pretty(report: dict[str, Any]) -> str:
         )
         for missing in assertion["missing_evidence"]:
             lines.append(f"  missing {missing}")
+    if report.get("lane_followups"):
+        lines.append("lane_followups:")
+        for followup in report["lane_followups"]:
+            lines.append(
+                f"  - {followup['id']} status={followup['status']} "
+                f"repos={','.join(followup['repo_ids']) or '-'} "
+                f"lanes={','.join(followup['lane_ids']) or '-'} "
+                f"subsystems={','.join(followup['subsystem_ids']) or '-'}"
+            )
     if report.get("open_decisions"):
         lines.append("open_decisions:")
         for decision in report["open_decisions"]:

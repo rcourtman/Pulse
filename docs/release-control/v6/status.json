@@ -1742,8 +1742,8 @@
         "summary": "Mobile is at the RC usefulness floor; broader go-live hardening beyond pairing, auth, reconnect, and approvals remains post-RC follow-up.",
         "tracking": [
           {
-            "kind": "target",
-            "id": "v6-ga-promotion"
+            "kind": "lane-followup",
+            "id": "mobile-post-rc-hardening"
           }
         ]
       },
@@ -1777,8 +1777,8 @@
         "summary": "Architecture coherence reached the current governed floor, while broader cleanup and post-RC canonicalization continue under the later promotion target.",
         "tracking": [
           {
-            "kind": "target",
-            "id": "v6-ga-promotion"
+            "kind": "lane-followup",
+            "id": "architecture-post-rc-canonicalization"
           }
         ]
       },
@@ -1849,8 +1849,8 @@
         "summary": "Relay infrastructure is at the RC floor, while broader hardening and non-blocking resilience work stay bounded to later promotion work.",
         "tracking": [
           {
-            "kind": "target",
-            "id": "v6-ga-promotion"
+            "kind": "lane-followup",
+            "id": "relay-post-rc-hardening"
           }
         ]
       },
@@ -1891,8 +1891,8 @@
         "summary": "First-session UX reached the RC floor; broader polish and parity work remain intentionally outside the current stabilization target.",
         "tracking": [
           {
-            "kind": "target",
-            "id": "v6-ga-promotion"
+            "kind": "lane-followup",
+            "id": "first-session-post-rc-polish"
           }
         ]
       },
@@ -1972,8 +1972,8 @@
         "summary": "Performance is at the current release floor, but additional scalability headroom and non-blocking performance polish remain post-RC follow-up.",
         "tracking": [
           {
-            "kind": "target",
-            "id": "v6-ga-promotion"
+            "kind": "lane-followup",
+            "id": "performance-post-rc-headroom"
           }
         ]
       },
@@ -2487,6 +2487,76 @@
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }
+      ]
+    }
+  ],
+  "lane_followups": [
+    {
+      "id": "architecture-post-rc-canonicalization",
+      "summary": "Track broader cleanup and post-RC canonicalization work that still belongs to architecture coherence but sits outside the current RC floor.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "organization-settings",
+        "patrol-intelligence",
+        "unified-resources"
+      ]
+    },
+    {
+      "id": "first-session-post-rc-polish",
+      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L8"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives"
+      ]
+    },
+    {
+      "id": "mobile-post-rc-hardening",
+      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including work above pairing, auth, reconnect, and approvals recovery.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L5"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "performance-post-rc-headroom",
+      "summary": "Track additional scalability headroom and non-blocking performance polish beyond the current release floor.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L10"
+      ],
+      "subsystem_ids": [
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "id": "relay-post-rc-hardening",
+      "summary": "Track broader relay hardening and non-blocking resilience work that remains outside the current RC floor.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-13",
+      "lane_ids": [
+        "L7"
+      ],
+      "subsystem_ids": [
+        "relay-runtime"
       ]
     }
   ],
