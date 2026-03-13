@@ -1135,6 +1135,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "tests/integration/tests/journeys",
           "kind": "dir"
         }
@@ -1160,7 +1165,7 @@
       "summary": "Confirm grandfathered v5 recurring continuity holds while active, completed cancellation revokes paid state, and re-entry after cancellation uses current public v6 pricing.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
