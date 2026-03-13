@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -110,6 +112,27 @@ func TestCloudLifecycle_CheckoutToBillingToAgentLimits(t *testing.T) {
 				t.Fatalf("tenant.PlanVersion = %q, want %q", tenant.PlanVersion, tc.planVersion)
 			}
 
+			mtp := config.NewMultiTenantPersistence(provisioner.tenantDataDir(tenant.ID))
+			org, err := mtp.LoadOrganizationStrict(tenant.ID)
+			if err != nil {
+				t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
+			}
+			if org.ID != tenant.ID {
+				t.Fatalf("org.ID = %q, want %q", org.ID, tenant.ID)
+			}
+			if org.DisplayName != tenant.ID {
+				t.Fatalf("org.DisplayName = %q, want %q", org.DisplayName, tenant.ID)
+			}
+			if org.OwnerUserID != session.CustomerEmail {
+				t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, session.CustomerEmail)
+			}
+			if org.GetMemberRole(session.CustomerEmail) != models.OrgRoleOwner {
+				t.Fatalf("org role for %q = %q, want %q", session.CustomerEmail, org.GetMemberRole(session.CustomerEmail), models.OrgRoleOwner)
+			}
+			if time.Since(org.CreatedAt) > time.Minute {
+				t.Fatalf("org.CreatedAt looks stale: %s", org.CreatedAt)
+			}
+
 			// ── Verify account creation and Stripe mapping ──────────────
 			if strings.TrimSpace(tenant.AccountID) == "" {
 				t.Fatal("tenant.AccountID is empty — account was not created")
@@ -184,9 +207,12 @@ func TestCloudLifecycle_CheckoutToBillingToAgentLimits(t *testing.T) {
 			}
 
 			wantOwnership := map[string]bool{
-				filepath.Join(tenantsDir, tenant.ID, "billing.json"):           true,
-				filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):     true,
-				filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"): true,
+				filepath.Join(tenantsDir, tenant.ID, "orgs"):                        true,
+				filepath.Join(tenantsDir, tenant.ID, "orgs", tenant.ID):             true,
+				filepath.Join(tenantsDir, tenant.ID, "orgs", tenant.ID, "org.json"): true,
+				filepath.Join(tenantsDir, tenant.ID, "billing.json"):                true,
+				filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):          true,
+				filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"):      true,
 			}
 			for _, path := range chowned {
 				delete(wantOwnership, path)

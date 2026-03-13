@@ -238,6 +238,12 @@ the tenant Pulse runtime user at the moment they are written. Fixing startup
 `chown` behavior alone is not enough if the mounted files stay `root:root`
 after provisioning, because hosted auth handoff and hosted lease reads will
 then fail closed inside an otherwise healthy tenant.
+Hosted tenant org bootstrap is part of that same runtime boundary. Cloud and
+MSP tenant provisioning must seed a canonical tenant-scoped `org.json` under
+`orgs/<tenant-id>/` and leave both the directory tree and file readable by the
+hosted runtime user; otherwise hosted magic-link handoff can preserve the
+correct tenant org cookie while the tenant API still fails closed with
+`invalid_org` because no tenant organization metadata exists on disk.
 JWT-backed entitlement claim evaluation and activation-grant translation now
 follow the same explicit proof model instead of relying only on the broad cloud
 runtime catch-all policy.

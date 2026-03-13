@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
@@ -158,6 +160,121 @@ func (p *Provisioner) ensureHostedRuntimeFileOwnership(path string) error {
 	}
 	if err := chownFile(path, hostedTenantRuntimeUID, hostedTenantRuntimeGID); err != nil {
 		return err
+	}
+	return nil
+}
+
+func mapAccountRoleToOrganizationRole(role registry.MemberRole) models.OrganizationRole {
+	switch role {
+	case registry.MemberRoleOwner:
+		return models.OrgRoleOwner
+	case registry.MemberRoleAdmin:
+		return models.OrgRoleAdmin
+	case registry.MemberRoleTech:
+		return models.OrgRoleEditor
+	case registry.MemberRoleReadOnly:
+		return models.OrgRoleViewer
+	default:
+		return models.OrgRoleViewer
+	}
+}
+
+func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, displayName, fallbackOwnerEmail string) (*models.Organization, error) {
+	now := time.Now().UTC()
+	org := &models.Organization{
+		ID:          tenantID,
+		DisplayName: strings.TrimSpace(displayName),
+		Status:      models.OrgStatusActive,
+		CreatedAt:   now,
+	}
+	if org.DisplayName == "" {
+		org.DisplayName = tenantID
+	}
+
+	type memberSeed struct {
+		email string
+		role  models.OrganizationRole
+	}
+
+	memberSeeds := map[string]memberSeed{}
+	ownerEmail := strings.ToLower(strings.TrimSpace(fallbackOwnerEmail))
+
+	if p.registry != nil && strings.TrimSpace(accountID) != "" {
+		memberships, err := p.registry.ListMembersByAccount(accountID)
+		if err != nil {
+			return nil, fmt.Errorf("list account members for %s: %w", accountID, err)
+		}
+		for _, membership := range memberships {
+			if membership == nil || strings.TrimSpace(membership.UserID) == "" {
+				continue
+			}
+			user, err := p.registry.GetUser(membership.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("get account user %s: %w", membership.UserID, err)
+			}
+			if user == nil {
+				return nil, fmt.Errorf("account membership references missing user %s", membership.UserID)
+			}
+			email := strings.ToLower(strings.TrimSpace(user.Email))
+			if email == "" {
+				return nil, fmt.Errorf("account member %s has empty email", membership.UserID)
+			}
+			role := mapAccountRoleToOrganizationRole(membership.Role)
+			if existing, ok := memberSeeds[email]; !ok || models.OrganizationRoleAtLeast(role, existing.role) {
+				memberSeeds[email] = memberSeed{email: email, role: role}
+			}
+			if membership.Role == registry.MemberRoleOwner && ownerEmail == "" {
+				ownerEmail = email
+			}
+		}
+	}
+
+	if ownerEmail != "" {
+		memberSeeds[ownerEmail] = memberSeed{email: ownerEmail, role: models.OrgRoleOwner}
+		org.OwnerUserID = ownerEmail
+	}
+
+	memberEmails := make([]string, 0, len(memberSeeds))
+	for email := range memberSeeds {
+		memberEmails = append(memberEmails, email)
+	}
+	sort.Strings(memberEmails)
+
+	members := make([]models.OrganizationMember, 0, len(memberEmails))
+	for _, email := range memberEmails {
+		seed := memberSeeds[email]
+		addedBy := org.OwnerUserID
+		if addedBy == "" {
+			addedBy = seed.email
+		}
+		members = append(members, models.OrganizationMember{
+			UserID:  seed.email,
+			Role:    seed.role,
+			AddedAt: now,
+			AddedBy: addedBy,
+		})
+	}
+	org.Members = members
+	return org, nil
+}
+
+func (p *Provisioner) seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, displayName, fallbackOwnerEmail string) error {
+	mtp := config.NewMultiTenantPersistence(tenantDataDir)
+	org, err := p.buildSeededTenantOrganization(accountID, tenantID, displayName, fallbackOwnerEmail)
+	if err != nil {
+		return err
+	}
+	if err := mtp.SaveOrganization(org); err != nil {
+		return fmt.Errorf("save tenant organization metadata: %w", err)
+	}
+
+	orgsDir := filepath.Join(tenantDataDir, "orgs")
+	orgDir := filepath.Join(orgsDir, tenantID)
+	orgFile := filepath.Join(orgDir, "org.json")
+	for _, path := range []string{orgsDir, orgDir, orgFile} {
+		if err := p.ensureHostedRuntimeFileOwnership(path); err != nil {
+			return fmt.Errorf("set tenant organization ownership for %s: %w", path, err)
+		}
 	}
 	return nil
 }
@@ -579,6 +696,9 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
 		return fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
+	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, tenantID, email); err != nil {
+		return fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
+	}
 
 	// Insert registry record
 	tenant := &registry.Tenant{
@@ -723,6 +843,9 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	}
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
 		return nil, fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
+	}
+	if err := p.seedTenantOrganizationMetadata(tenantDataDir, accountID, tenantID, displayName, ""); err != nil {
+		return nil, fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
 	}
 
 	// Look up the account's actual plan version from its Stripe billing record.

@@ -102,6 +102,24 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 			t.Fatalf("workspace %s: PlanVersion = %q, want %q", ws.ID, ws.PlanVersion, "msp_starter")
 		}
 
+		mtp := config.NewMultiTenantPersistence(provisioner.tenantDataDir(ws.ID))
+		org, err := mtp.LoadOrganizationStrict(ws.ID)
+		if err != nil {
+			t.Fatalf("workspace %s: LoadOrganizationStrict: %v", ws.ID, err)
+		}
+		if org.ID != ws.ID {
+			t.Fatalf("workspace %s: org.ID = %q, want %q", ws.ID, org.ID, ws.ID)
+		}
+		if org.DisplayName != ws.DisplayName {
+			t.Fatalf("workspace %s: org.DisplayName = %q, want %q", ws.ID, org.DisplayName, ws.DisplayName)
+		}
+		if org.OwnerUserID != "" {
+			t.Fatalf("workspace %s: org.OwnerUserID = %q, want empty before members exist", ws.ID, org.OwnerUserID)
+		}
+		if len(org.Members) != 0 {
+			t.Fatalf("workspace %s: expected no seeded org members before account members exist, got %+v", ws.ID, org.Members)
+		}
+
 		// Verify billing state was written.
 		store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
 		bs, err := store.GetBillingState("default")
@@ -129,12 +147,18 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		}
 	}
 	wantOwnership := map[string]bool{
-		filepath.Join(tenantsDir, ws1.ID, "billing.json"):           true,
-		filepath.Join(tenantsDir, ws1.ID, ".cloud_handoff_key"):     true,
-		filepath.Join(tenantsDir, ws1.ID, "secrets", "handoff.key"): true,
-		filepath.Join(tenantsDir, ws2.ID, "billing.json"):           true,
-		filepath.Join(tenantsDir, ws2.ID, ".cloud_handoff_key"):     true,
-		filepath.Join(tenantsDir, ws2.ID, "secrets", "handoff.key"): true,
+		filepath.Join(tenantsDir, ws1.ID, "orgs"):                     true,
+		filepath.Join(tenantsDir, ws1.ID, "orgs", ws1.ID):             true,
+		filepath.Join(tenantsDir, ws1.ID, "orgs", ws1.ID, "org.json"): true,
+		filepath.Join(tenantsDir, ws1.ID, "billing.json"):             true,
+		filepath.Join(tenantsDir, ws1.ID, ".cloud_handoff_key"):       true,
+		filepath.Join(tenantsDir, ws1.ID, "secrets", "handoff.key"):   true,
+		filepath.Join(tenantsDir, ws2.ID, "orgs"):                     true,
+		filepath.Join(tenantsDir, ws2.ID, "orgs", ws2.ID):             true,
+		filepath.Join(tenantsDir, ws2.ID, "orgs", ws2.ID, "org.json"): true,
+		filepath.Join(tenantsDir, ws2.ID, "billing.json"):             true,
+		filepath.Join(tenantsDir, ws2.ID, ".cloud_handoff_key"):       true,
+		filepath.Join(tenantsDir, ws2.ID, "secrets", "handoff.key"):   true,
 	}
 	for _, path := range chowned {
 		delete(wantOwnership, path)

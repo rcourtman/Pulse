@@ -11,6 +11,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func newStripeTestRegistry(t *testing.T) *registry.TenantRegistry {
@@ -235,15 +237,97 @@ func TestHandleCheckoutSetsHostedRuntimeOwnershipForImmutableFiles(t *testing.T)
 	}
 
 	want := map[string]bool{
-		filepath.Join(tenantsDir, tenant.ID, "billing.json"):           true,
-		filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):     true,
-		filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"): true,
+		filepath.Join(tenantsDir, tenant.ID, "orgs"):                        true,
+		filepath.Join(tenantsDir, tenant.ID, "orgs", tenant.ID):             true,
+		filepath.Join(tenantsDir, tenant.ID, "orgs", tenant.ID, "org.json"): true,
+		filepath.Join(tenantsDir, tenant.ID, "billing.json"):                true,
+		filepath.Join(tenantsDir, tenant.ID, ".cloud_handoff_key"):          true,
+		filepath.Join(tenantsDir, tenant.ID, "secrets", "handoff.key"):      true,
 	}
 	for _, path := range chowned {
 		delete(want, path)
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing hosted runtime ownership paths: %v", want)
+	}
+}
+
+func TestProvisionWorkspaceSeedsOrganizationMembershipsFromAccountMembers(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:            accountID,
+		PlanVersion:          "msp_starter",
+		SubscriptionState:    "active",
+		StripeCustomerID:     "cus_test_msp_members",
+		StripeSubscriptionID: "sub_test_msp_members",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	createMember := func(email string, role registry.MemberRole) {
+		t.Helper()
+		userID, err := registry.GenerateUserID()
+		if err != nil {
+			t.Fatalf("GenerateUserID: %v", err)
+		}
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
+			t.Fatalf("CreateUser(%s): %v", email, err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{
+			AccountID: accountID,
+			UserID:    userID,
+			Role:      role,
+		}); err != nil {
+			t.Fatalf("CreateMembership(%s): %v", email, err)
+		}
+	}
+
+	createMember("owner@acmemsp.com", registry.MemberRoleOwner)
+	createMember("admin@acmemsp.com", registry.MemberRoleAdmin)
+	createMember("tech@acmemsp.com", registry.MemberRoleTech)
+	createMember("viewer@acmemsp.com", registry.MemberRoleReadOnly)
+
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	tenant, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One")
+	if err != nil {
+		t.Fatalf("ProvisionWorkspace: %v", err)
+	}
+
+	mtp := config.NewMultiTenantPersistence(p.tenantDataDir(tenant.ID))
+	org, err := mtp.LoadOrganizationStrict(tenant.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(%s): %v", tenant.ID, err)
+	}
+	if org.OwnerUserID != "owner@acmemsp.com" {
+		t.Fatalf("org.OwnerUserID = %q, want %q", org.OwnerUserID, "owner@acmemsp.com")
+	}
+
+	wantRoles := map[string]models.OrganizationRole{
+		"owner@acmemsp.com":  models.OrgRoleOwner,
+		"admin@acmemsp.com":  models.OrgRoleAdmin,
+		"tech@acmemsp.com":   models.OrgRoleEditor,
+		"viewer@acmemsp.com": models.OrgRoleViewer,
+	}
+	if len(org.Members) != len(wantRoles) {
+		t.Fatalf("org members = %+v, want %d entries", org.Members, len(wantRoles))
+	}
+	for email, wantRole := range wantRoles {
+		if got := org.GetMemberRole(email); got != wantRole {
+			t.Fatalf("org role for %q = %q, want %q", email, got, wantRole)
+		}
 	}
 }
 
