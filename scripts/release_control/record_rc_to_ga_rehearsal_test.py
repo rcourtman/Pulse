@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -100,6 +101,61 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
 
         self.assertEqual(content, artifact_text)
         self.assertTrue(source.endswith("rc-to-ga-rehearsal-summary.md"))
+
+    def test_download_summary_artifact_raises_clear_error_when_artifact_missing(self) -> None:
+        error = subprocess.CalledProcessError(
+            1,
+            ["gh", "run", "download", "123"],
+            stderr="no valid artifacts found to download",
+        )
+
+        with mock.patch.object(mod, "_run_gh", side_effect=error):
+            with self.assertRaisesRegex(FileNotFoundError, "may be missing or expired"):
+                mod.download_summary_artifact("123")
+
+    def test_main_normalizes_relative_summary_file_and_validates_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path = tmp_path / "summary.md"
+            summary_path.write_text(SUMMARY, encoding="utf-8")
+            output_path = tmp_path / "record.md"
+
+            with mock.patch.object(mod, "REPO_ROOT", tmp_path):
+                exit_code = mod.main(
+                    [
+                        "--summary-file",
+                        "summary.md",
+                        "--output",
+                        str(output_path),
+                        "--rollback-command",
+                        "./scripts/install.sh --version v5.1.23",
+                        "--ga-date",
+                        "2026-03-15",
+                        "--v5-eos-date",
+                        "2026-06-13",
+                        "--record-date",
+                        "2026-03-12",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("2026-06-13", output_path.read_text(encoding="utf-8"))
+
+    def test_main_raises_clear_error_for_missing_summary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            with mock.patch.object(mod, "REPO_ROOT", tmp_path):
+                with self.assertRaisesRegex(FileNotFoundError, "summary file does not exist"):
+                    mod.main(
+                        [
+                            "--summary-file",
+                            "missing.md",
+                            "--output",
+                            str(tmp_path / "record.md"),
+                            "--rollback-command",
+                            "./scripts/install.sh --version v5.1.23",
+                        ]
+                    )
 
 
 if __name__ == "__main__":

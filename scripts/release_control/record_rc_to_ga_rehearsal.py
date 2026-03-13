@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -91,7 +92,22 @@ def load_run_metadata(run_id: str) -> dict[str, Any]:
 def download_summary_artifact(run_id: str) -> tuple[str, str]:
     with tempfile.TemporaryDirectory(prefix="rc-to-ga-rehearsal.") as tmp:
         tmp_path = Path(tmp)
-        _run_gh("run", "download", run_id, "-n", "rc-to-ga-rehearsal-summary", "-D", str(tmp_path))
+        try:
+            _run_gh(
+                "run",
+                "download",
+                run_id,
+                "-n",
+                "rc-to-ga-rehearsal-summary",
+                "-D",
+                str(tmp_path),
+            )
+        except subprocess.CalledProcessError as exc:
+            message = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+            raise FileNotFoundError(
+                "rc-to-ga-rehearsal-summary artifact could not be downloaded for "
+                f"run {run_id}; it may be missing or expired: {message}"
+            ) from exc
         matches = sorted(tmp_path.rglob("rc-to-ga-rehearsal-summary.md"))
         if not matches:
             raise FileNotFoundError(
@@ -115,6 +131,13 @@ def parse_summary_markdown(content: str) -> dict[str, str]:
 
 
 def normalize_output_path(path_text: str) -> Path:
+    path = Path(path_text)
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def normalize_input_path(path_text: str) -> Path:
     path = Path(path_text)
     if path.is_absolute():
         return path
@@ -215,12 +238,20 @@ def render_record(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.ga_date:
+        date.fromisoformat(args.ga_date)
+    if args.v5_eos_date:
+        date.fromisoformat(args.v5_eos_date)
+    date.fromisoformat(args.record_date)
+
     run_metadata: dict[str, Any] | None = None
     if args.run_id:
         run_metadata = load_run_metadata(args.run_id)
         summary_markdown, summary_source = download_summary_artifact(args.run_id)
     else:
-        summary_path = Path(args.summary_file)
+        summary_path = normalize_input_path(args.summary_file)
+        if not summary_path.is_file():
+            raise FileNotFoundError(f"summary file does not exist: {summary_path}")
         summary_markdown = summary_path.read_text(encoding="utf-8")
         summary_source = str(summary_path)
 
@@ -248,4 +279,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
