@@ -3,11 +3,14 @@ package relay
 import (
 	"context"
 	"crypto/ecdh"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -308,6 +311,11 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: wsHandshakeWait,
 	}
+	tlsConfig, err := relayTLSConfig()
+	if err != nil {
+		return false, fmt.Errorf("build relay tls config: %w", err)
+	}
+	dialer.TLSClientConfig = tlsConfig
 
 	c.logger.Info().Str("url", c.config.ServerURL).Msg("connecting to relay server")
 
@@ -382,6 +390,31 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	dataLimiter := make(chan struct{}, maxConcurrentDataHandlers)
 
 	return true, c.readPump(connCtx, conn, sendCh, dataLimiter)
+}
+
+func relayTLSConfig() (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	caBundle := strings.TrimSpace(os.Getenv("SSL_CERT_FILE"))
+	if caBundle == "" {
+		return tlsConfig, nil
+	}
+
+	caData, err := os.ReadFile(caBundle)
+	if err != nil {
+		return nil, fmt.Errorf("read relay CA bundle %s: %w", caBundle, err)
+	}
+
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if ok := pool.AppendCertsFromPEM(caData); !ok {
+		return nil, fmt.Errorf("relay CA bundle %s does not contain any certificates", caBundle)
+	}
+
+	tlsConfig.RootCAs = pool
+	return tlsConfig, nil
 }
 
 func (c *Client) register(conn *websocket.Conn) error {
@@ -664,27 +697,29 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		return
 	}
 
+	payload := frame.Payload
+	// Preserve relay frame arrival order through decryption. The channel nonce
+	// guard is strictly monotonic; decrypting in background goroutines lets
+	// later frames win the race and falsely trip replay protection.
+	if enc != nil {
+		decrypted, err := enc.Decrypt(payload)
+		if err != nil {
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
+			return
+		}
+		payload = decrypted
+	}
+
 	select {
 	case dataLimiter <- struct{}{}:
 	default:
-		c.handleOverloadedData(channelID, frame.Payload, enc, sendCh)
+		c.handleOverloadedData(channelID, payload, enc, sendCh)
 		return
 	}
 
 	// Handle in background goroutine so we don't block the read pump
-	go func() {
+	go func(payload []byte) {
 		defer func() { <-dataLimiter }()
-		payload := frame.Payload
-
-		// Decrypt incoming if encryption is active
-		if enc != nil {
-			decrypted, err := enc.Decrypt(payload)
-			if err != nil {
-				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
-				return
-			}
-			payload = decrypted
-		}
 
 		// Derive from the connection context so streams are cancelled on disconnect.
 		// The 15-minute timeout is a safety net for runaway streams.
@@ -706,19 +741,10 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		if err != nil && connCtx.Err() == nil {
 			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("stream proxy error")
 		}
-	}()
+	}(payload)
 }
 
 func (c *Client) handleOverloadedData(channelID uint32, payload []byte, enc *ChannelEncryption, sendCh chan<- []byte) {
-	if enc != nil {
-		decrypted, err := enc.Decrypt(payload)
-		if err != nil {
-			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to decrypt overloaded DATA payload")
-			return
-		}
-		payload = decrypted
-	}
-
 	requestID := extractProxyRequestID(payload)
 	respPayload := c.proxy.errorResponse(requestID, http.StatusServiceUnavailable, relayOverloadedReason)
 	if enc != nil {

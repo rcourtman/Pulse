@@ -89,6 +89,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "organization-settings",
                 "patrol-intelligence",
                 "performance-and-scalability",
+                "relay-runtime",
                 "unified-resources",
             },
         )
@@ -1243,6 +1244,7 @@ index 1111111..2222222 100644
                 "organization-settings",
                 "patrol-intelligence",
                 "performance-and-scalability",
+                "relay-runtime",
                 "unified-resources",
             },
         )

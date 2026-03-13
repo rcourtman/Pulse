@@ -1264,6 +1264,54 @@
       }
     },
     {
+      "id": "relay-runtime",
+      "lane": "L7",
+      "contract": "docs/release-control/v6/subsystems/relay-runtime.md",
+      "owned_prefixes": [
+        "internal/relay/"
+      ],
+      "owned_files": [
+        "internal/config/persistence_relay.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/config/persistence_relay_test.go",
+          "internal/relay/client_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "relay-client-runtime",
+            "label": "desktop relay runtime proof",
+            "match_prefixes": [
+              "internal/relay/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/relay/client_test.go"
+            ]
+          },
+          {
+            "id": "relay-config-persistence",
+            "label": "relay config persistence proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/persistence_relay.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/config/persistence_relay_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "id": "unified-resources",
       "lane": "L6",
       "contract": "docs/release-control/v6/subsystems/unified-resources.md",

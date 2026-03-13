@@ -138,6 +138,62 @@ class SubsystemLookupTest(unittest.TestCase):
             ["scripts/installtests/install_sh_test.go"],
         )
 
+    def test_lookup_paths_assigns_relay_client_to_relay_runtime(self) -> None:
+        result = lookup_paths(["internal/relay/client.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"relay-runtime"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"relay-runtime"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/relay-runtime.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L7")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "relay-client-runtime",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["internal/relay/client_test.go"],
+        )
+
+    def test_lookup_paths_assigns_relay_config_persistence_to_relay_runtime(self) -> None:
+        result = lookup_paths(["internal/config/persistence_relay.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"relay-runtime"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"relay-runtime"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/relay-runtime.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L7")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "relay-config-persistence",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["internal/config/persistence_relay_test.go"],
+        )
+
     def test_lookup_paths_assigns_organization_sharing_panel_to_organization_settings(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

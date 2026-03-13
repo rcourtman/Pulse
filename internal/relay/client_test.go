@@ -3,10 +3,15 @@ package relay
 import (
 	"bytes"
 	"context"
+	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -38,6 +43,54 @@ func mockRelayServer(t *testing.T, handler func(conn *websocket.Conn)) *httptest
 func wsURL(server *httptest.Server) string {
 	return "ws" + strings.TrimPrefix(server.URL, "http")
 }
+
+func wssURL(server *httptest.Server) string {
+	return "wss" + strings.TrimPrefix(server.URL, "https")
+}
+
+func writeServerCertPEM(t *testing.T, server *httptest.Server) string {
+	t.Helper()
+
+	if len(server.TLS.Certificates) == 0 || len(server.TLS.Certificates[0].Certificate) == 0 {
+		t.Fatal("test server missing TLS certificate")
+	}
+
+	block := &pem.Block{Type: "CERTIFICATE", Bytes: server.TLS.Certificates[0].Certificate[0]}
+	if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+		t.Fatalf("parse test certificate: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "relay-ca.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0600); err != nil {
+		t.Fatalf("write relay CA bundle: %v", err)
+	}
+	return path
+}
+
+type blockingTestAEAD struct {
+	openStarted chan struct{}
+	releaseOpen chan struct{}
+}
+
+func (a *blockingTestAEAD) NonceSize() int { return nonceSize }
+
+func (a *blockingTestAEAD) Overhead() int { return 0 }
+
+func (a *blockingTestAEAD) Seal(_ []byte, _ []byte, plaintext []byte, _ []byte) []byte {
+	return append([]byte(nil), plaintext...)
+}
+
+func (a *blockingTestAEAD) Open(_ []byte, _ []byte, ciphertext []byte, _ []byte) ([]byte, error) {
+	select {
+	case <-a.openStarted:
+	default:
+		close(a.openStarted)
+	}
+	<-a.releaseOpen
+	return append([]byte(nil), ciphertext...), nil
+}
+
+var _ cipher.AEAD = (*blockingTestAEAD)(nil)
 
 func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
@@ -293,6 +346,95 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 
 	cancel()
 	<-errCh
+}
+
+func TestClient_UsesRelayCABundleFromEnvironment(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer mockAPI.Close()
+
+	relayServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := testUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Logf("upgrade error: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Logf("read register: %v", err)
+			return
+		}
+		frame, err := DecodeFrame(msg)
+		if err != nil {
+			t.Logf("decode register: %v", err)
+			return
+		}
+		if frame.Type != FrameRegister {
+			t.Logf("expected REGISTER, got %s", FrameTypeName(frame.Type))
+			return
+		}
+
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_tls",
+			SessionToken: "sess_tls",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		<-time.After(250 * time.Millisecond)
+	}))
+	defer relayServer.Close()
+
+	t.Setenv("SSL_CERT_FILE", writeServerCertPEM(t, relayServer))
+
+	client := NewClient(
+		Config{
+			Enabled:   true,
+			ServerURL: wssURL(relayServer),
+		},
+		ClientDeps{
+			LicenseTokenFunc: func() string { return "test-license-jwt" },
+			TokenValidator:   func(string) bool { return true },
+			LocalAddr:        strings.TrimPrefix(mockAPI.URL, "http://"),
+			ServerVersion:    "1.0.0-test",
+			IdentityPubKey:   "test-identity-pub-key",
+		},
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if status := client.Status(); status.Connected && status.InstanceID == "inst_tls" {
+			cancel()
+			select {
+			case <-errCh:
+			case <-time.After(time.Second):
+				t.Fatal("client.Run didn't return after cancel")
+			}
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	status := client.Status()
+	cancel()
+	select {
+	case <-errCh:
+	case <-time.After(time.Second):
+		t.Fatal("client.Run didn't return after cancel")
+	}
+	t.Fatalf("expected TLS relay client to connect, got status=%+v", status)
 }
 
 func TestClient_DrainTriggersReconnect(t *testing.T) {
@@ -735,6 +877,67 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 	case <-errCh:
 	case <-time.After(3 * time.Second):
 		t.Fatal("client.Run didn't return after cancel")
+	}
+}
+
+func TestClient_HandleDataDecryptsBeforeReturning(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer mockAPI.Close()
+
+	blockingAEAD := &blockingTestAEAD{
+		openStarted: make(chan struct{}),
+		releaseOpen: make(chan struct{}),
+	}
+
+	client := &Client{
+		proxy:  NewHTTPProxy(strings.TrimPrefix(mockAPI.URL, "http://"), logger),
+		logger: logger,
+		channels: map[uint32]*channelState{
+			7: {
+				apiToken: "valid-token",
+				encryption: &ChannelEncryption{
+					sendCipher: &channelCipher{aead: blockingAEAD},
+					recvCipher: &channelCipher{aead: blockingAEAD},
+				},
+			},
+		},
+	}
+	defer client.proxy.Close()
+
+	// Any payload with a zero nonce works with the blocking AEAD.
+	ciphertext := append(make([]byte, nonceSize), []byte(`{"id":"req-1","method":"GET","path":"/api/ai/approvals"}`)...)
+	frame := NewFrame(FrameData, 7, ciphertext)
+	sendCh := make(chan []byte, 1)
+	dataLimiter := make(chan struct{}, 1)
+
+	done := make(chan struct{})
+	go func() {
+		client.handleData(context.Background(), frame, sendCh, dataLimiter)
+		close(done)
+	}()
+
+	select {
+	case <-blockingAEAD.openStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for DATA decrypt to start")
+	}
+
+	select {
+	case <-done:
+		t.Fatal("handleData returned before encrypted payload decryption completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(blockingAEAD.releaseOpen)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("handleData did not return after decrypt completed")
 	}
 }
 
