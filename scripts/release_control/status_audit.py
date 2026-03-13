@@ -169,13 +169,6 @@ def _lane_tracking_detail(
         "status": "unknown",
         "resolved": False,
     }
-    if tracking_kind == "target":
-        target = DEFAULT_CONTROL_PLANE["targets_by_id"].get(tracking_id)
-        if target:
-            detail["status"] = str(target.get("status", "unknown"))
-            detail["resolved"] = detail["status"] == "completed"
-            detail["summary"] = str(target.get("summary", ""))
-        return detail
     if tracking_kind == "lane-followup":
         followup = lane_followups_by_id.get(tracking_id)
         if followup:
@@ -749,7 +742,6 @@ def audit_lanes(
                 completion_tracking_keys.append((tracking_kind, tracking_id))
         valid_completion_states = {"open", "bounded-residual", "complete"}
         valid_tracking_kinds = {
-            "target",
             "lane-followup",
             "readiness-assertion",
             "release-gate",
@@ -906,17 +898,13 @@ def validate_lane_completion_tracking(
         followup_id: set(str(lane_id) for lane_id in followup.get("lane_ids", []))
         for followup_id, followup in lane_followups_by_id.items()
     }
-    target_ids = set(DEFAULT_CONTROL_PLANE["targets_by_id"])
-
     known_by_kind = {
-        "target": target_ids,
         "lane-followup": set(lane_followups_by_id),
         "readiness-assertion": set(readiness_assertions_by_id),
         "release-gate": set(release_gates_by_id),
         "open-decision": set(open_decisions_by_id),
     }
     labels = {
-        "target": "target",
         "lane-followup": "lane followup",
         "readiness-assertion": "readiness assertion",
         "release-gate": "release gate",
@@ -1974,20 +1962,6 @@ def audit_status_payload(
         ),
         key=lambda item: _lane_sort_key(str(item["lane_id"])),
     )
-    for residual in lane_residuals:
-        tracking_details = list(residual.get("tracking_details", []))
-        if tracking_details and all(str(detail.get("kind")) == "target" for detail in tracking_details):
-            warnings.append(
-                f"lane {residual['lane_id']} uses only broad target tracking for its bounded residual; "
-                "normalize the remaining same-lane work into a lane followup, readiness assertion, release gate, or open decision when it becomes concrete"
-            )
-        if any(str(detail.get("kind")) == "target" for detail in tracking_details) and any(
-            str(detail.get("kind")) != "target" for detail in tracking_details
-        ):
-            warnings.append(
-                f"lane {residual['lane_id']} mixes broad target tracking with concrete bounded-residual references; "
-                "drop the target fallback once a same-lane lane followup, readiness assertion, release gate, or open decision exists"
-            )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)

@@ -309,8 +309,8 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"status.json.lanes[*].completion",
 		"references must also reference the same lane",
 		"already-passed",
-		"temporary fallback",
 		"lane followup",
+		"rather than a broad target reference",
 	})
 }
 
@@ -553,8 +553,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"status.json.lane_followups",
 		"Those references must belong to that same lane",
 		"already-passed assertions, gates, or completed targets",
-		"temporary fallback",
-		"remove the broad target fallback",
+		"rather than a broad target reference",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",
@@ -794,7 +793,7 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 				t.Fatalf("status.json lane %q completion.tracking contains non-object entry", laneID)
 			}
 			kind, ok := trackingRef["kind"].(string)
-			if !ok || !slices.Contains([]string{"target", "lane-followup", "readiness-assertion", "release-gate", "open-decision"}, kind) {
+			if !ok || !slices.Contains([]string{"lane-followup", "readiness-assertion", "release-gate", "open-decision"}, kind) {
 				t.Fatalf("status.json lane %q has invalid completion.tracking kind %#v", laneID, trackingRef["kind"])
 			}
 			id, ok := trackingRef["id"].(string)

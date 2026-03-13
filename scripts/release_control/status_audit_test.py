@@ -1004,7 +1004,18 @@ class StatusAuditTest(unittest.TestCase):
                 current_score=8,
                 completion_state="bounded-residual",
                 completion_summary="Lane still has a governed residual.",
-                completion_tracking=[{"kind": "target", "id": "v6-rc-stabilization"}],
+                completion_tracking=[{"kind": "lane-followup", "id": "lane-1-followup"}],
+                lane_followups=[
+                    {
+                        "id": "lane-1-followup",
+                        "summary": "Track the remaining named lane follow-up.",
+                        "owner": "project-owner",
+                        "status": "planned",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
             )
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
@@ -1021,14 +1032,14 @@ class StatusAuditTest(unittest.TestCase):
                         "lane_id": "L1",
                         "lane_name": "Lane 1",
                         "summary": "Lane still has a governed residual.",
-                        "tracking": ["target:v6-rc-stabilization[active]"],
+                        "tracking": ["lane-followup:lane-1-followup[planned]"],
                         "tracking_details": [
                             {
-                                "kind": "target",
-                                "id": "v6-rc-stabilization",
-                                "status": "active",
+                                "kind": "lane-followup",
+                                "id": "lane-1-followup",
+                                "status": "planned",
                                 "resolved": False,
-                                "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed, while broader post-RC polish stays out of the release floor by default.",
+                                "summary": "Track the remaining named lane follow-up.",
                             }
                         ],
                         "unresolved_tracking_count": 1,
@@ -1039,10 +1050,10 @@ class StatusAuditTest(unittest.TestCase):
             )
             pretty = render_pretty(report)
             self.assertIn("lane_residuals:", pretty)
-            self.assertIn("L1 unresolved=1 tracking=target:v6-rc-stabilization[active]", pretty)
+            self.assertIn("L1 unresolved=1 tracking=lane-followup:lane-1-followup[planned]", pretty)
             self.assertIn("Lane still has a governed residual.", pretty)
 
-    def test_target_only_bounded_residual_emits_normalization_warning(self) -> None:
+    def test_target_only_bounded_residual_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1065,13 +1076,11 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(payload)
 
             self.assertIn(
-                "lane L1 uses only broad target tracking for its bounded residual; normalize the remaining same-lane work into a lane followup, readiness assertion, release gate, or open decision when it becomes concrete",
-                report["warnings"],
+                "lanes[0].completion.tracking kind 'target' is not supported",
+                report["errors"],
             )
-            pretty = render_pretty(report)
-            self.assertIn("uses only broad target tracking for its bounded residual", pretty)
 
-    def test_mixed_target_and_concrete_bounded_residual_emits_cleanup_warning(self) -> None:
+    def test_mixed_target_and_concrete_bounded_residual_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1097,13 +1106,10 @@ class StatusAuditTest(unittest.TestCase):
             ):
                 report = audit_status_payload(payload)
 
-            self.assertEqual([], report["errors"])
             self.assertIn(
-                "lane L1 mixes broad target tracking with concrete bounded-residual references; drop the target fallback once a same-lane lane followup, readiness assertion, release gate, or open decision exists",
-                report["warnings"],
+                "lanes[0].completion.tracking kind 'target' is not supported",
+                report["errors"],
             )
-            pretty = render_pretty(report)
-            self.assertIn("mixes broad target tracking with concrete bounded-residual references", pretty)
 
 
 if __name__ == "__main__":

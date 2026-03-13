@@ -418,7 +418,6 @@
         "kind": {
           "type": "string",
           "enum": [
-            "target",
             "lane-followup",
             "readiness-assertion",
             "release-gate",

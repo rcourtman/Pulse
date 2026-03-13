@@ -166,11 +166,8 @@ Every substantial task must finish by checking these questions:
     the same lane and stay genuinely unresolved?
     Do not keep a lane in `bounded-residual` by pointing at already-passed
     assertions, cleared release gates, or completed targets.
-    If I only have a broad target reference, treat that as a temporary fallback
-    and normalize it into a lane followup, readiness assertion, release gate, or
-    open decision once the remaining same-lane work is concrete enough to
-    name.
-    Once I have a concrete same-lane follow-up surface, remove the broad target fallback instead of tracking both.
+    Bounded residual tracking must use a lane followup, readiness assertion,
+    release gate, or open decision rather than a broad target reference.
 
 This is the minimum update set for canonical work:
 

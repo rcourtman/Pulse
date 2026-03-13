@@ -182,11 +182,8 @@ Assertion design rules:
     Those references must belong to that same lane and must still be
     unresolved rather than pointing at unrelated governance objects or
     already-passed assertions, gates, or completed targets.
-    A broad target reference may be used only as a temporary fallback when the
-    next same-lane governance object is not concrete yet; normalize it into a
-    lane followup, readiness assertion, release gate, or open decision as soon
-    as the remaining work is clear enough to name directly.
-    Once a concrete same-lane follow-up surface exists, remove the broad target fallback instead of tracking both.
+    Bounded residual tracking must use a lane followup, readiness assertion,
+    release gate, or open decision rather than a broad target reference.
 
 ## Locked Decisions
 
