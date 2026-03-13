@@ -93,14 +93,61 @@
    hanging in loading:
    - screenshot: `/tmp/pulse-mobile-approvals-pending.png`
 
+## Manual Exercise E: Real Android Approve and Deny Actions Through Live Relay
+
+1. Kept the same paired Android device and enterprise-backed Pulse test
+   container from Exercise D:
+   - backend under test: `http://192.168.0.106:7655`
+   - live managed relay endpoint: `wss://relay.pulserelay.pro/ws/instance`
+   - mobile onboarding endpoint presented to the app:
+     `wss://relay.pulserelay.pro/ws/app`
+2. Seeded a fresh plain pending approval into the live approval store on the
+   test container and restarted `pulse.service` so the running backend reloaded
+   it, then confirmed the backend approval API returned:
+   - `GET /api/ai/approvals`
+   - response stats: `pending=1`, `approved=1`, `denied=0`
+3. Opened that approval on the physical Android device and confirmed the detail
+   screen now rendered the idle action state correctly before confirmation:
+   - both `Approve` and `Deny` buttons were idle
+   - the earlier premature `Approving...` state no longer appeared before the
+     confirm dialog
+4. Triggered `Approve` on-device and confirmed the native `Approve Fix`
+   confirmation dialog rendered before the action committed.
+5. Confirmed the approval on-device and verified both sides converged to the
+   expected approved terminal state:
+   - backend `GET /api/ai/approvals` response stats: `pending=0`, `approved=2`,
+     `denied=0`
+   - mobile detail screen showed `Status: Approved`
+   - mobile detail screen rendered the inline success copy:
+     `This fix has been approved`
+   - screenshot: `/tmp/pulse-after-approve.png`
+6. Seeded a second fresh plain pending approval into the same live approval
+   store, restarted `pulse.service`, and confirmed the backend returned:
+   - `GET /api/ai/approvals`
+   - response stats: `pending=1`, `approved=2`, `denied=0`
+7. Reopened the approval list on the physical Android device, opened the new
+   pending item, and triggered `Deny`.
+8. Confirmed the mobile app rendered the dedicated `Deny Fix` sheet with the
+   optional reason field before the action committed.
+9. Confirmed the denial on-device and verified both sides converged to the
+   expected denied terminal state:
+   - backend `GET /api/ai/approvals` response stats: `pending=0`, `approved=2`,
+     `denied=1`
+   - mobile detail screen showed `Status: Denied`
+   - mobile detail screen rendered the inline success copy:
+     `This fix has been denied`
+   - screenshot: `/tmp/pulse-after-deny.png`
+
 ## Approval Coverage Note
 
 - Approval routing, approval list visibility, and scoped approval state are now
   covered both by the audited `pulse-mobile` automated proof bundle and by the
   live Android exercise above against the enterprise-backed approval runtime.
-- Approval action execution remains covered by the targeted
-  `pulse-enterprise/internal/aiautofix` approval handler tests from the
-  automated baseline above.
+- Approval action execution is now covered in three layers:
+  - governed `pulse-mobile` approval-action tests
+  - governed `pulse-enterprise/internal/aiautofix` approval handler tests
+  - the real Android approve and deny executions above against the
+    enterprise-backed approval runtime
 
 ## Outcome
 
@@ -109,7 +156,11 @@
 - Revoked credentials fail closed back to a safe disconnected state.
 - Real approval list visibility now succeeds on a physical Android device for
   both the empty state and a live pending approval.
+- Real approval action execution now succeeds on a physical Android device for
+  both `Approve` and `Deny`, with correct confirm-sheet behavior and correct
+  approved/denied terminal states instead of hanging or forcing the user back
+  through a stale loading loop.
 - The onboarding payload now gives mobile the canonical app endpoint instead of
   the instance-only relay endpoint that previously caused immediate disconnects.
-- Approval action handling remains covered by the governed mobile and
-  enterprise proof suites for the enterprise approval runtime.
+- Approval action handling is now covered by both the governed proof suites and
+  the live physical-device exercise against the enterprise approval runtime.
