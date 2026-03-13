@@ -349,17 +349,13 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 	// Load fresh config from persistence to get latest settings
 	newCfg := h.loadAIConfig(ctx)
 
-	if h.legacyService == nil {
-		return nil
-	}
-
-	if !h.legacyService.IsRunning() {
-		// If not running but enabled, try to start
+	// If service was never started (first-time configure) or has stopped, start it
+	// when AI is now enabled. Handles both the nil case (Pulse started before AI
+	// was configured) and the stopped case (previous start failed or was stopped).
+	if h.legacyService == nil || !h.legacyService.IsRunning() {
 		if newCfg != nil && newCfg.Enabled {
 			log.Info().Msg("Starting AI service via restart trigger")
 
-			// We need a state provider to start
-			// Try to get default state provider from existing map if available
 			var sp AIStateProvider
 			h.stateProvidersMu.RLock()
 			for _, p := range h.stateProviders {
@@ -368,10 +364,9 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 			}
 			h.stateProvidersMu.RUnlock()
 
-			// Reuse start logic
 			return h.Start(ctx, sp)
 		}
-		return nil // Not running and not enabled, nothing to do
+		return nil
 	}
 
 	return h.legacyService.Restart(ctx, newCfg)

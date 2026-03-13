@@ -773,6 +773,12 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	case "ollama":
 		baseURL := s.cfg.OllamaBaseURL
 		if baseURL == "" {
+			// Ollama not explicitly configured. If the user has a custom OpenAI-compatible
+			// base URL set, route there instead — this handles bare model names (e.g.
+			// "qwen3-omni") typed manually for self-hosted OpenAI-compatible endpoints.
+			if s.cfg.OpenAIAPIKey != "" && s.cfg.OpenAIBaseURL != "" {
+				return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, timeout), nil
+			}
 			baseURL = "http://localhost:11434"
 		}
 		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
