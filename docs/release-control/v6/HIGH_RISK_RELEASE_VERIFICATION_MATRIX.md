@@ -45,6 +45,8 @@ Companion drill:
   `go test ./internal/hosted/... -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
+- Live rehearsal helper:
+  `python3 scripts/release_control/hosted_signup_billing_replay_rehearsal.py --base-url <hosted-url> --signup-email <email> --org-name <org> ...`
 - Manual scenario:
   1. Start a hosted signup from the self-hosted trial/upgrade path.
   2. Confirm a missing hosted public URL fails closed before any org or RBAC
