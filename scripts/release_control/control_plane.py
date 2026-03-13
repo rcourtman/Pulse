@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
+import re
+import sys
 from typing import Any
 
 from repo_file_io import REPO_ROOT, load_repo_json
@@ -28,6 +31,8 @@ REQUIRED_PROFILE_FIELDS = (
     "id",
     "lifecycle",
     "root",
+    "prerelease_branch",
+    "stable_branch",
     "source_of_truth",
     "status",
     "status_schema",
@@ -46,6 +51,19 @@ REQUIRED_TARGET_FIELDS = (
     "summary",
     "completion_rule",
 )
+PROFILE_PATH_FIELDS = {
+    "root",
+    "source_of_truth",
+    "status",
+    "status_schema",
+    "development_protocol",
+    "high_risk_matrix",
+    "subsystems_dir",
+    "registry",
+    "registry_schema",
+    "subsystem_contract_template",
+}
+PRERELEASE_VERSION_PATTERN = re.compile(r"-(?:rc|alpha|beta)\.[0-9]+$")
 COMPLETION_RULE_BLOCKING_LEVELS = {
     "repo_ready": ("repo-ready",),
     "rc_ready": ("repo-ready", "rc-ready"),
@@ -61,6 +79,18 @@ def _clean_relative_path(path: str, *, context: str) -> str:
     if normalized != path or path.startswith("../") or "/../" in path:
         raise ValueError(f"{context} must be a clean relative path, got {path!r}")
     return path
+
+
+def _clean_branch_name(branch: str, *, context: str) -> str:
+    if branch != branch.strip():
+        raise ValueError(f"{context} must not have surrounding whitespace, got {branch!r}")
+    if not branch:
+        raise ValueError(f"{context} must be non-empty")
+    if branch.startswith("refs/") or branch.startswith("/") or branch.endswith("/"):
+        raise ValueError(f"{context} must be a clean branch name, got {branch!r}")
+    if any(ch.isspace() for ch in branch):
+        raise ValueError(f"{context} must not contain whitespace, got {branch!r}")
+    return branch
 
 
 def load_control_plane(*, staged: bool = False) -> dict[str, Any]:
@@ -128,7 +158,10 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for field in REQUIRED_PROFILE_FIELDS:
             if field in {"id", "lifecycle"}:
                 continue
-            _clean_relative_path(profile[field], context=f"profile {profile_id}.{field}")
+            if field in PROFILE_PATH_FIELDS:
+                _clean_relative_path(profile[field], context=f"profile {profile_id}.{field}")
+            else:
+                _clean_branch_name(profile[field], context=f"profile {profile_id}.{field}")
         profiles_by_id[profile_id] = profile
 
     active_profile = profiles_by_id.get(active_profile_id)
@@ -202,10 +235,13 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "targets": targets,
         "targets_by_id": targets_by_id,
         "active_profile_id": active_profile_id,
+        "active_profile": active_profile,
         "active_target_id": active_target_id,
         "active_target": active_target,
         "profile_root_rel": active_profile["root"],
         "profile_root_path": REPO_ROOT / active_profile["root"],
+        "prerelease_branch": active_profile["prerelease_branch"],
+        "stable_branch": active_profile["stable_branch"],
         "source_of_truth_rel": active_profile["source_of_truth"],
         "status_rel": active_profile["status"],
         "status_schema_rel": active_profile["status_schema"],
@@ -231,6 +267,24 @@ def active_control_plane(*, staged: bool = False) -> dict[str, Any]:
     return validate_control_plane_payload(load_control_plane(staged=staged))
 
 
+def is_prerelease_version(version: str) -> bool:
+    return bool(PRERELEASE_VERSION_PATTERN.search(version))
+
+
+def release_branch_for_version(
+    version: str,
+    *,
+    control_plane: dict[str, Any] | None = None,
+    staged: bool = False,
+) -> str:
+    resolved = control_plane
+    if resolved is None:
+        resolved = active_control_plane(staged=staged)
+    elif "profiles_by_id" not in resolved:
+        resolved = validate_control_plane_payload(control_plane)
+    return resolved["prerelease_branch"] if is_prerelease_version(version) else resolved["stable_branch"]
+
+
 def blocking_levels_for_completion_rule(completion_rule: str) -> tuple[str, ...]:
     if completion_rule == "manual":
         raise ValueError("manual completion_rule does not map to derived readiness blocking levels")
@@ -238,6 +292,32 @@ def blocking_levels_for_completion_rule(completion_rule: str) -> tuple[str, ...]
         return COMPLETION_RULE_BLOCKING_LEVELS[completion_rule]
     except KeyError as exc:
         raise ValueError(f"unsupported completion_rule {completion_rule!r}") from exc
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Resolve Pulse control-plane values.")
+    parser.add_argument(
+        "--branch-for-version",
+        help="Print the governed release branch for the supplied version.",
+    )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Read control-plane data from the git index when available.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(list(argv or []))
+    if args.branch_for_version:
+        print(release_branch_for_version(args.branch_for_version, staged=args.staged))
+        return 0
+    raise SystemExit("no action requested")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
 
 
 def active_target_blocking_levels(*, staged: bool = False) -> tuple[str, ...]:

@@ -53,22 +53,31 @@ jobs:
       hotfix_reason: ${{ steps.rehearsal.outputs.hotfix_reason }}
 
     steps:
-      - name: Validate release branch
+      - name: Validate release ref
         run: |
-          case "${GITHUB_REF_NAME}" in
-            main|pulse/v6)
-              echo "[OK] Dry run executing on release branch ${GITHUB_REF_NAME}"
-              ;;
-            *)
-              echo "::error::Release dry run must be executed from main or pulse/v6. Current ref: ${GITHUB_REF_NAME}"
-              exit 1
-              ;;
-          esac
+          if [[ "${GITHUB_REF}" != refs/heads/* ]]; then
+            echo "::error::Release dry run must be executed from a branch ref. Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+          echo "[OK] Dry run executing on branch ${GITHUB_REF_NAME}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Resolve required release branch
+        id: branch_policy
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          VERSION="${VERSION_INPUT:-}"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(tr -d '\r\n' < VERSION)"
+          fi
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
+          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Governed release branch for ${VERSION} is ${REQUIRED_BRANCH}"
 
       - name: Resolve rehearsal metadata
         id: rehearsal
@@ -105,11 +114,7 @@ jobs:
             IS_PRERELEASE="true"
           fi
 
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            REQUIRED_BRANCH="pulse/v6"
-          else
-            REQUIRED_BRANCH="main"
-          fi
+          REQUIRED_BRANCH="${{ steps.branch_policy.outputs.required_branch }}"
 
           if [ "${GITHUB_REF_NAME}" != "$REQUIRED_BRANCH" ]; then
             echo "::error::Rehearsal version ${VERSION} requires branch ${REQUIRED_BRANCH}, but workflow ran on ${GITHUB_REF_NAME}."

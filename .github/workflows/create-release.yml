@@ -53,7 +53,7 @@ jobs:
       tag: ${{ steps.extract.outputs.tag }}
       is_prerelease: ${{ steps.extract.outputs.is_prerelease }}
       source_branch: ${{ steps.extract.outputs.source_branch }}
-      required_branch: ${{ steps.extract.outputs.required_branch }}
+      required_branch: ${{ steps.branch_policy.outputs.required_branch }}
       promoted_from_tag: ${{ steps.promotion.outputs.promoted_from_tag }}
       rollback_tag: ${{ steps.promotion.outputs.rollback_tag }}
       hotfix_exception: ${{ steps.promotion.outputs.hotfix_exception }}
@@ -81,22 +81,10 @@ jobs:
           fi
 
           SOURCE_BRANCH="${GITHUB_REF_NAME}"
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            REQUIRED_BRANCH="pulse/v6"
-          else
-            REQUIRED_BRANCH="main"
-          fi
-
-          if [ "$SOURCE_BRANCH" != "$REQUIRED_BRANCH" ]; then
-            echo "::error::Invalid release line. Version ${VERSION} must run from ${REQUIRED_BRANCH}, but workflow ref is ${SOURCE_BRANCH}."
-            exit 1
-          fi
-
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
-          echo "required_branch=${REQUIRED_BRANCH}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}"
 
       - name: Checkout repository
@@ -105,6 +93,20 @@ jobs:
           fetch-depth: 0
           sparse-checkout: |
             VERSION
+            docs/release-control/control_plane.json
+            scripts/release_control/control_plane.py
+            scripts/release_control/repo_file_io.py
+
+      - name: Resolve required release branch
+        id: branch_policy
+        run: |
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${{ steps.extract.outputs.version }}")"
+          if [ "${{ steps.extract.outputs.source_branch }}" != "$REQUIRED_BRANCH" ]; then
+            echo "::error::Invalid release line. Version ${{ steps.extract.outputs.version }} must run from ${REQUIRED_BRANCH}, but workflow ref is ${{ steps.extract.outputs.source_branch }}."
+            exit 1
+          fi
+          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Governed release branch for ${{ steps.extract.outputs.version }} is ${REQUIRED_BRANCH}"
 
       - name: Validate VERSION file
         run: |

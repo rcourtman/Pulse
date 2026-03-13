@@ -52,11 +52,7 @@ echo "✓ Working directory is clean"
 
 # Check 3: On required branch
 CURRENT_BRANCH=$(git branch --show-current)
-if [ "$IS_PRERELEASE" = "true" ]; then
-  REQUIRED_BRANCH="pulse/v6"
-else
-  REQUIRED_BRANCH="main"
-fi
+REQUIRED_BRANCH=$(python3 scripts/release_control/control_plane.py --branch-for-version "$VERSION")
 
 if [ "$CURRENT_BRANCH" != "$REQUIRED_BRANCH" ]; then
   echo "❌ Wrong release branch"

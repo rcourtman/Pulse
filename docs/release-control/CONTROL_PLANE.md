@@ -27,6 +27,9 @@ model that active and future release profiles reuse.
 3. There must be one active profile at a time.
    `control_plane.json` is the machine authority for which release profile is
    currently active and where its files live.
+   The active profile also owns the governed prerelease and stable release
+   branches for that line, so workflows and local release tooling must resolve
+   branch requirements from the control plane instead of hard-coding `main`.
 4. Profile changes must reuse the same control-plane machinery.
    Future releases should switch or add profiles rather than fork the guardrail
    system.
@@ -74,6 +77,7 @@ The active release profile owns:
 3. active release gates and open decisions
 4. subsystem registry and contracts
 5. release-specific runbooks and checklists
+6. the governed prerelease and stable release branches for that profile
 
 The evergreen control plane owns:
 
@@ -120,3 +124,5 @@ user language should update the control plane.
 5. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
+6. Until the explicit post-GA branch cutover happens, both prerelease and
+   stable v6 promotions resolve to `pulse/v6` via `control_plane.json`.

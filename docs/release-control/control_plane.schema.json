@@ -67,6 +67,8 @@
         "id",
         "lifecycle",
         "root",
+        "prerelease_branch",
+        "stable_branch",
         "source_of_truth",
         "status",
         "status_schema",
@@ -91,6 +93,14 @@
           ]
         },
         "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prerelease_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stable_branch": {
           "type": "string",
           "minLength": 1
         },

@@ -36,6 +36,10 @@ Cloud, and self-hosted production users.
 3. Channel promotion is the primary customer-safety boundary.
 4. Branch topology may change over time; the `stable` versus `rc` customer
    contract must not.
+5. The active release profile in `docs/release-control/control_plane.json`
+   owns the governed prerelease and stable release branches for the current
+   line; release automation must resolve branch requirements from that file
+   instead of assuming `main`.
 
 ## RC Rules
 

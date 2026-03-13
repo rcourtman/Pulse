@@ -11,6 +11,8 @@
       "id": "v6",
       "lifecycle": "active",
       "root": "docs/release-control/v6",
+      "prerelease_branch": "pulse/v6",
+      "stable_branch": "pulse/v6",
       "source_of_truth": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
       "status": "docs/release-control/v6/status.json",
       "status_schema": "docs/release-control/v6/status.schema.json",

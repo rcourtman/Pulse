@@ -416,6 +416,8 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"\"status\": \"active\"",
 		"\"completion_rule\": \"rc_ready\"",
 		"\"completion_rule\": \"release_ready\"",
+		"\"prerelease_branch\": \"pulse/v6\"",
+		"\"stable_branch\": \"pulse/v6\"",
 	})
 
 	schemaRel := "docs/release-control/control_plane.schema.json"
@@ -426,6 +428,8 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"\"active_target_id\"",
 		"\"targets\"",
 		"\"completion_rule\"",
+		"\"prerelease_branch\"",
+		"\"stable_branch\"",
 	})
 }
 

@@ -71,6 +71,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("maintenance-only window lasts 90 calendar days", content)
         self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
         self.assertIn("Exact v6 GA and v5 end-of-support dates", content)
+        self.assertIn("governed prerelease and stable release branches", content)
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/PRE_RELEASE_CHECKLIST.md")
@@ -95,13 +96,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         workflow = read(".github/workflows/release-dry-run.yml")
         self.assertIn("GitHub Actions run URL", template)
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
+        self.assertIn("control_plane.py --branch-for-version", workflow)
         self.assertIn("Stable rehearsal requires promoted_from_tag", workflow)
         self.assertIn("Stable v6.0.0 rehearsal requires v5_eos_date", workflow)
 
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
-        self.assertIn('REQUIRED_BRANCH="pulse/v6"', content)
-        self.assertIn('REQUIRED_BRANCH="main"', content)
+        self.assertIn("control_plane.py --branch-for-version", content)
         self.assertIn("Stable promotions require promoted_from_tag", content)
         self.assertIn("rollback_version is required for every release", content)
         self.assertIn("minimum is 72 hours unless hotfix_exception is true", content)

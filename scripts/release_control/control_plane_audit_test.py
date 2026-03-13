@@ -1,5 +1,6 @@
 import unittest
 
+from control_plane import release_branch_for_version
 from control_plane_audit import audit_control_plane_payload, parse_args
 
 
@@ -16,6 +17,8 @@ VALID_PAYLOAD = {
             "id": "v6",
             "lifecycle": "active",
             "root": "docs/release-control/v6",
+            "prerelease_branch": "pulse/v6",
+            "stable_branch": "pulse/v6",
             "source_of_truth": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
             "status": "docs/release-control/v6/status.json",
             "status_schema": "docs/release-control/v6/status.schema.json",
@@ -79,6 +82,10 @@ class ControlPlaneAuditTest(unittest.TestCase):
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["summary"]["profile_count"], 1)
         self.assertFalse(report["summary"]["active_target_completion_met"])
+
+    def test_release_branch_for_version_uses_profile_branch_policy(self) -> None:
+        self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6")
+        self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6")
 
     def test_audit_flags_stale_active_target(self) -> None:
         report = audit_control_plane_payload(
