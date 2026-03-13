@@ -25,9 +25,10 @@ work extends shared components instead of creating new local variants.
 3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 5. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-6. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-7. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-8. `frontend-modern/src/features/`
+6. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+7. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+8. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+9. `frontend-modern/src/features/`
 
 ## Shared Boundaries
 
@@ -54,7 +55,8 @@ work extends shared components instead of creating new local variants.
 
 1. Update guardrail tests when new shared primitives are added
 2. Keep top-level settings surfaces routed through the canonical settings shell
-   and maintain `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+   and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+   plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 3. Update this contract when a new canonical UI pattern is adopted
 4. Remove local forks after the shared primitive is introduced
 
@@ -142,3 +144,8 @@ Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of
 reintroducing bespoke outer page headers or one-off top-level panel framing.
+The release-ready shell proof now also includes a representative desktop
+Playwright rehearsal in
+`tests/integration/tests/15-settings-shell-consistency.spec.ts` so general,
+organization, billing, relay, security, AI, updates, and recovery panels are
+all exercised through the built app shell under a seeded multi-tenant runtime.

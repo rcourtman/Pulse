@@ -206,7 +206,7 @@ Companion drill:
   shell and present consistent top-level framing and header treatment, with no
   ad hoc page chrome left behind.
 - Latest exercised record:
-  None yet.
+  `docs/release-control/v6/records/settings-surface-layout-consistency-2026-03-13.md`
 - Block release if:
   Settings surfaces still mix multiple top-level shells, inconsistent header
   framing, or bespoke page chrome across otherwise comparable panels.

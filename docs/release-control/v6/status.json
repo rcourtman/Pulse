@@ -1616,6 +1616,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/settings-surface-layout-consistency-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
           "kind": "file"
         },
@@ -1632,6 +1637,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/15-settings-shell-consistency.spec.ts",
           "kind": "file"
         }
       ]
@@ -2535,12 +2545,18 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "local-rehearsal",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L8"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/settings-surface-layout-consistency-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
