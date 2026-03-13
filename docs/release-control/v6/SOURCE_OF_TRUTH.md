@@ -168,6 +168,10 @@ Assertion design rules:
 14. Do not promote v6 to stable or GA without an exercised RC, a real
     release-pipeline proof run, a recorded rollback target, and a written v5
     maintenance-only support policy.
+15. Do not declare a lane or blocker complete just because the first passing
+    check landed. If obvious same-lane gaps still keep the outcome from being
+    coherent, trustworthy, or realistically shippable, that lane is not done
+    yet.
 
 ## Locked Decisions
 
@@ -206,6 +210,11 @@ Assertion design rules:
     clearly in the main shell, fail closed into a recoverable disconnected
     state on stale or revoked access, and keep live approvals useful and
     recoverable. Broader parity and expansion remain post-RC scope.
+11. The minimum required update set for canonical work is a floor, not a lane
+    closure rule. Agents should push the current lane to a coherent,
+    defensible stop point and complete the next obvious same-lane work when it
+    is necessary for trustworthy results, then normalize any remaining valid
+    gap instead of calling the lane done by default.
 
 ## Cross-Repo Contracts
 
@@ -253,6 +262,13 @@ For canonical subsystem work:
     difficult to bypass, free of drift, or always true, decide whether it
     belongs in a readiness assertion, release gate, open decision, or active
     target before ending the task.
+11. Do not stop at the first narrow success inside a lane.
+    When the next obvious same-lane work is still required for a coherent and
+    trustworthy result, complete it in the same slice when feasible.
+12. Keep that standard bounded.
+    If the remaining work clearly belongs to another lane, another active
+    target, a larger redesign, or a separately governed open decision, record
+    that state explicitly instead of expanding the current slice without end.
 
 For readiness assertion work:
 

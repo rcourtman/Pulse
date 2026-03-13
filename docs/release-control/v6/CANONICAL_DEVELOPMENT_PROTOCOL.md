@@ -151,6 +151,14 @@ Every substantial task must finish by checking these questions:
 8. Did the user casually raise a new quality bar or product invariant?
    If yes: before ending the task, either normalize it into the control plane
    or explain clearly why existing governance already covers it.
+9. Am I stopping because the lane is actually coherent, or only because the
+   first passing check landed?
+   If the result still has obvious same-lane gaps that make it feel partial,
+   fragile, or not realistically shippable, continue the slice or record the
+   remaining blocker/open decision before stopping.
+10. Is the remaining work still part of this lane?
+    If not, stop cleanly and normalize it into the next target, another lane,
+    or an explicit open decision instead of letting this task expand forever.
 
 This is the minimum update set for canonical work:
 
@@ -158,6 +166,10 @@ This is the minimum update set for canonical work:
 2. verification
 3. contract update
 4. guardrail/ratchet update when an old path is retired
+
+This minimum update set is a floor.
+It does not mean the task should stop at the first minimally valid patch when
+the next obvious same-lane work is still required for a coherent outcome.
 
 This protocol is enforced locally at commit time by the canonical completion
 guard in `scripts/release_control/canonical_completion_guard.py` and by the
