@@ -23,7 +23,7 @@ const buildDisk = (): Resource =>
     sourceType: 'api',
     status: 'online',
     lastSeen: Date.now(),
-    metricsTarget: { resourceId: 'agent-tower:sda' },
+    metricsTarget: { resourceType: 'disk', resourceId: 'agent-tower:sda' },
     identity: { hostname: 'tower' },
     canonicalIdentity: { hostname: 'tower' },
     platformData: {
@@ -40,7 +40,7 @@ const buildDisk = (): Resource =>
         reallocatedSectors: 0,
       },
     },
-  }) as Resource;
+  }) as unknown as Resource;
 
 describe('useDiskDetailModel', () => {
   it('builds canonical disk detail model state', () => {

@@ -233,6 +233,14 @@ describe('UnifiedResourceTable performance contract', () => {
       }
     });
 
+    it('buildStatusOptions keeps canonical statuses ahead of unknown filters', () => {
+      expect(buildStatusOptions(new Set(['custom-state', 'paused', 'degraded']))).toEqual([
+        { key: 'degraded', label: 'Degraded' },
+        { key: 'paused', label: 'Paused' },
+        { key: 'custom-state', label: 'custom-state' },
+      ]);
+    });
+
     it('groupResources produces correct total resource count in grouped mode', () => {
       const resources = makeResources(PROFILES.S, (i) => ({
         clusterId: `cluster-${i % 3}`,

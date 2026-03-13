@@ -21,7 +21,7 @@ export const StorageCephSection: Component<StorageCephSectionProps> = (props) =>
 
   return (
     <Show when={model.showSummary()}>
-      <StorageCephSummaryCard summary={props.summary()} />
+      <StorageCephSummaryCard summary={props.summary()!} />
     </Show>
   );
 };

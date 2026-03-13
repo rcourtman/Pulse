@@ -1,5 +1,5 @@
 import { createSignal, onMount, createEffect, onCleanup } from 'solid-js';
-import type { Accessor, JSX } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
 export interface SearchTip {
@@ -23,8 +23,23 @@ export interface SearchTipsConfig {
 interface SearchInputEnhancementsOptions {
   history?: SearchHistoryConfig;
   tips?: SearchTipsConfig;
-  onFieldKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
+  onFieldKeyDown?: (event: SearchInputKeyboardEvent) => void;
 }
+
+type SearchInputKeyboardEvent = KeyboardEvent & {
+  currentTarget: HTMLInputElement;
+  target: Element;
+};
+
+type SearchInputFocusEvent = FocusEvent & {
+  currentTarget: HTMLInputElement;
+  target: Element;
+};
+
+type SearchInputMouseEvent = MouseEvent & {
+  currentTarget: HTMLButtonElement;
+  target: Element;
+};
 
 export interface SearchInputEnhancementsState {
   hasHistory: Accessor<boolean>;
@@ -34,7 +49,7 @@ export interface SearchInputEnhancementsState {
   isHistoryOpen: Accessor<boolean>;
   emptyHistoryMessage: Accessor<string>;
   tipsPopoverId: Accessor<string>;
-  onClearMouseDown?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+  onClearMouseDown?: (event: SearchInputMouseEvent) => void;
   setHistoryMenuRef: (el: HTMLDivElement | undefined) => void;
   setHistoryToggleRef: (el: HTMLButtonElement | undefined) => void;
   toggleHistory: () => void;
@@ -42,8 +57,8 @@ export interface SearchInputEnhancementsState {
   clearHistory: () => void;
   deleteHistoryEntry: (term: string) => void;
   selectHistoryEntry: (term: string) => void;
-  onFieldKeyDown: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
-  onFieldBlur: JSX.EventHandlerUnion<HTMLInputElement, FocusEvent>;
+  onFieldKeyDown: (event: SearchInputKeyboardEvent) => void;
+  onFieldBlur: (event: SearchInputFocusEvent) => void;
 }
 
 export const useSearchInputEnhancements = (

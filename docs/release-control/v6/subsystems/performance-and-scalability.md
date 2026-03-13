@@ -82,3 +82,9 @@ The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
 store-backed mixed-workload benchmark coverage drifts.
+
+Infrastructure selector status ordering must now tolerate arbitrary filter-set
+strings without widening the canonical hot-path order tuple. Unknown statuses
+must sort after the governed status order instead of forcing the selector path
+to abandon the typed canonical order used by the infrastructure table and its
+performance proof surface.

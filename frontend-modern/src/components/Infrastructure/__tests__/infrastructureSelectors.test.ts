@@ -105,6 +105,15 @@ describe('infrastructureSelectors', () => {
         { key: 'foo', label: 'foo' },
       ]);
     });
+
+    it('keeps unknown statuses sortable without widening the canonical order contract', () => {
+      const statuses = new Set(['custom-state', 'paused', 'degraded']);
+      expect(buildStatusOptions(statuses)).toEqual([
+        { key: 'degraded', label: 'Degraded' },
+        { key: 'paused', label: 'Paused' },
+        { key: 'custom-state', label: 'custom-state' },
+      ]);
+    });
   });
 
   describe('filterResources', () => {

@@ -69,4 +69,28 @@ describe('SearchField', () => {
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Extra' })).toBeInTheDocument();
   });
+
+  it('invokes explicit keyboard and blur handlers with the input event target', async () => {
+    const onKeyDown = vi.fn();
+    const onBlur = vi.fn();
+
+    render(() => (
+      <SearchField
+        value="alpha"
+        onChange={vi.fn()}
+        placeholder="Handler field"
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText('Handler field');
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await fireEvent.blur(input);
+
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(onKeyDown.mock.calls[0][0].currentTarget).toBe(input);
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    expect(onBlur.mock.calls[0][0].currentTarget).toBe(input);
+  });
 });

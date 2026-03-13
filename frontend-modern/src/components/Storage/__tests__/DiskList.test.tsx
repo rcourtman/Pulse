@@ -19,7 +19,7 @@ const buildNode = (id: string, name: string): Resource =>
     status: 'online',
     lastSeen: Date.now(),
     platformData: { proxmox: { instance: 'cluster-main' } },
-  }) as Resource;
+  }) as unknown as Resource;
 
 const buildDisk = (
   id: string,
@@ -37,7 +37,7 @@ const buildDisk = (
     status: 'online',
     parentId: `node-${nodeName}`,
     lastSeen: Date.now(),
-    metricsTarget: { resourceId: `agent-${nodeName}:${id}` },
+    metricsTarget: { resourceType: 'disk', resourceId: `agent-${nodeName}:${id}` },
     identity: { hostname: nodeName },
     canonicalIdentity: { hostname: nodeName },
     platformData: {
@@ -55,7 +55,7 @@ const buildDisk = (
       storageGroup: 'Tower Array',
       ...overrides,
     },
-  }) as Resource;
+  }) as unknown as Resource;
 
 describe('DiskList', () => {
   afterEach(() => {

@@ -5,7 +5,7 @@ import { createSignal } from 'solid-js';
 import { ThresholdsTable } from '../ThresholdsTable';
 import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helpers';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
-import type { Agent } from '@/types/api';
+import type { Agent, Alert } from '@/types/api';
 
 const [getPathname, setPathname] = createSignal('/alerts/thresholds/containers');
 const mockNavigate = vi.fn();

@@ -277,11 +277,13 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
                 {finding.title}
               </p>
               <Show when={finding.investigationOutcome}>
-                <span
-                  class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome)}`}
-                >
-                  {getInvestigationOutcomeLabel(finding.investigationOutcome)}
-                </span>
+                {(outcome) => (
+                  <span
+                    class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getInvestigationOutcomeBadgeClasses(outcome())}`}
+                  >
+                    {getInvestigationOutcomeLabel(outcome())}
+                  </span>
+                )}
               </Show>
               <div class="shrink-0 flex items-center gap-1">
                 <button

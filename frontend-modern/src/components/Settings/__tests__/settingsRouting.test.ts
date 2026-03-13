@@ -16,6 +16,7 @@ import {
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
+  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',

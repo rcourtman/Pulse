@@ -128,3 +128,9 @@ resource type aliases before storing `discoveryTarget`. Backend `k8s`
 discovery coordinates collapse to the canonical frontend `pod` target, and
 typed PBS/storage facets must be preserved as the explicit frontend resource
 meta interfaces instead of floating as untyped platform-data consumers.
+
+Infrastructure selector consumers must also preserve the canonical
+`KnownSourcePlatform` normalization boundary when collecting source filters and
+status facets. The selector layer may accept arbitrary user-visible filter
+strings, but it must not widen the canonical unified-resource source/status
+contracts that feed the infrastructure table and workload links.

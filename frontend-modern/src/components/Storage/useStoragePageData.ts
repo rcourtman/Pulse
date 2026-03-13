@@ -1,6 +1,7 @@
 import { Accessor, createMemo } from 'solid-js';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import type { NormalizedHealth } from '@/features/storageBackups/models';
+import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useStorageAlertState } from './useStorageAlertState';
 import { useStorageCephModel } from './useStorageCephModel';
@@ -16,7 +17,7 @@ import {
 } from './useStorageModel';
 
 type UseStoragePageDataOptions = {
-  state: Accessor<unknown>;
+  state: Accessor<State>;
   resources: Accessor<Resource[]>;
   activeAlerts: Accessor<unknown> | unknown;
   alertsEnabled: Accessor<boolean>;
@@ -80,4 +81,3 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     cephSummaryStats,
   };
 };
-

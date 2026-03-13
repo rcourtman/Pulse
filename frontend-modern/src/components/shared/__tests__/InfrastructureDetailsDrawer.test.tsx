@@ -55,7 +55,7 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
   loadAverage: [0.1, 0.2, 0.3],
   kernelVersion: '6.8.12',
   pveVersion: 'pve-manager/8.3.0',
-  cpuInfo: { model: 'EPYC', cores: 8, sockets: 1 },
+  cpuInfo: { model: 'EPYC', cores: 8, sockets: 1, mhz: '3200' },
   lastSeen: new Date().toISOString(),
   connectionHealth: 'online',
   linkedAgentId: undefined,
@@ -128,15 +128,13 @@ describe('InfrastructureDetailsDrawer', () => {
     render(() => (
       <InfrastructureDetailsDrawer
         node={makeNode({ linkedAgentId: 'agent-linked-1' })}
-        agent={
-          makeAgent({
-            id: 'agent-explicit-1',
-            hostname: 'pve1.explicit',
-            platformData: {
-              linkedAgentId: 'agent-linked-1',
-            },
-          }) as Agent
-        }
+        agent={makeAgent({
+          id: 'agent-explicit-1',
+          hostname: 'pve1.explicit',
+          platformData: {
+            linkedAgentId: 'agent-linked-1',
+          },
+        } as Partial<Agent> & { platformData: { linkedAgentId: string } })}
       />
     ));
 

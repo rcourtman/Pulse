@@ -25,8 +25,8 @@ const startProTrialMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
-    getInvestigation: (...args: unknown[]) => getInvestigationMock(...args),
-    reapproveInvestigationFix: (...args: unknown[]) => reapproveInvestigationFixMock(...args),
+    getInvestigation: getInvestigationMock,
+    reapproveInvestigationFix: reapproveInvestigationFixMock,
   },
 }));
 

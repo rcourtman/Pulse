@@ -1,17 +1,40 @@
 import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
+import type { CephSummaryStats } from '@/features/storageBackups/cephSummaryPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import { useStorageCephSectionModel } from '@/components/Storage/useStorageCephSectionModel';
 
 describe('useStorageCephSectionModel', () => {
   it('derives canonical Ceph summary visibility', () => {
     const [view] = createSignal<'pools' | 'disks'>('pools');
-    const [summary] = createSignal({
+    const [summary] = createSignal<CephSummaryStats | null>({
       totalBytes: 100,
       usedBytes: 50,
+      availableBytes: 50,
       usagePercent: 50,
-      clusters: [{ key: 'ceph-1', name: 'ceph-1', pools: 1, totalBytes: 100, usedBytes: 50, usagePercent: 50, health: 'healthy' }],
+      clusters: [
+        {
+          id: 'ceph-1',
+          instance: 'cluster-a',
+          name: 'ceph-1',
+          totalBytes: 100,
+          usedBytes: 50,
+          availableBytes: 50,
+          usagePercent: 50,
+          health: 'HEALTH_OK',
+          healthMessage: '',
+          numMons: 1,
+          numMgrs: 1,
+          numOsds: 3,
+          numOsdsUp: 3,
+          numOsdsIn: 3,
+          numPGs: 64,
+          pools: [],
+          services: [],
+          lastUpdated: 0,
+        },
+      ],
     });
     const [filteredRecords] = createSignal<StorageRecord[]>([
       {

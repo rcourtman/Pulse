@@ -3,7 +3,6 @@ import {
   buildStoragePoolsTableGroups,
   buildStoragePoolsTableRowModel,
 } from '@/features/storageBackups/storagePoolsTablePresentation';
-import type { Resource } from '@/types/resource';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 
@@ -27,7 +26,7 @@ export const useStoragePoolsTableModel = (options: UseStoragePoolsTableModelOpti
     ),
   );
 
-  const buildRowModel = (recordId: string, record: Parameters<typeof buildStoragePoolsTableRowModel>[0]) =>
+  const buildRowModel = (_recordId: string, record: Parameters<typeof buildStoragePoolsTableRowModel>[0]) =>
     buildStoragePoolsTableRowModel(record, {
       expandedPoolId: options.expandedPoolId(),
       highlightedRecordId: options.highlightedRecordId(),

@@ -5,6 +5,7 @@ import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settin
 import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
 
 const canonicalTabPaths = {
+  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',

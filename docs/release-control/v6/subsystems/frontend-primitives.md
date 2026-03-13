@@ -111,3 +111,10 @@ Active alert card state and action-button presentation must also route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of leaving
 feature-local alert card styling inside
 `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+
+Shared search inputs must now keep their forwarded keyboard, blur, and clear
+handlers as explicit callable functions instead of relying on loose Solid
+event-handler unions. Shared search primitives still need to accept the real
+input/button event targets, but direct invocation inside the primitive must
+stay type-safe so consumers do not reintroduce union-call regressions while
+adding history, shortcut, or trailing-control behavior.

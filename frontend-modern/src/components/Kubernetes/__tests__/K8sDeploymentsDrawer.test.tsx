@@ -616,8 +616,8 @@ describe('K8sDeploymentsDrawer', () => {
       render(() => <K8sDeploymentsDrawer cluster="" />);
 
       // Flush multiple microtask cycles to let SolidJS evaluate source signal
-      await new Promise((r) => queueMicrotask(r));
-      await new Promise((r) => queueMicrotask(r));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 
       expect(apiFetchJSONMock).not.toHaveBeenCalled();
     });

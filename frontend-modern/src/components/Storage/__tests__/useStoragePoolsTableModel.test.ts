@@ -12,8 +12,9 @@ const baseRecord = (): StorageRecord =>
     name: 'tank',
     source: {
       platform: 'truenas',
-      type: 'storage',
-      label: 'TrueNAS',
+      family: 'onprem',
+      origin: 'resource',
+      adapterId: 'truenas-storage',
     },
     category: 'pool',
     health: 'healthy',
@@ -24,7 +25,7 @@ const baseRecord = (): StorageRecord =>
     capabilities: [],
     observedAt: 0,
     details: { node: 'tower' },
-  }) as StorageRecord;
+  }) as unknown as StorageRecord;
 
 const baseAlertState = (): StorageAlertRowState => ({
   hasAlert: false,
@@ -50,7 +51,7 @@ describe('useStoragePoolsTableModel', () => {
         },
       } as StorageGroupedRecords,
     ]);
-    const [groupBy] = createSignal<'host'>('host');
+    const [groupBy] = createSignal<'node'>('node');
     const [expandedGroups] = createSignal(new Set(['tower']));
     const [expandedPoolId] = createSignal<string | null>('storage-1');
     const [highlightedRecordId] = createSignal<string | null>(null);

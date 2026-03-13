@@ -123,9 +123,9 @@ const makeKubernetesClusterResource = (overrides: Partial<Resource> = {}): Resou
   name: 'cluster-1',
   displayName: 'Cluster One',
   platformId: 'cluster-1',
-  platformType: 'k8s',
+  platformType: 'kubernetes',
   sourceType: 'agent',
-  status: 'healthy',
+  status: 'online',
   lastSeen: Date.now(),
   identity: { hostname: 'cluster-1' },
   kubernetes: {

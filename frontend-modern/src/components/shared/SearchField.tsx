@@ -1,5 +1,19 @@
 import { Component, Show } from 'solid-js';
-import type { JSX } from 'solid-js';
+
+type SearchFieldKeyboardEvent = KeyboardEvent & {
+  currentTarget: HTMLInputElement;
+  target: Element;
+};
+
+type SearchFieldFocusEvent = FocusEvent & {
+  currentTarget: HTMLInputElement;
+  target: Element;
+};
+
+type SearchFieldMouseEvent = MouseEvent & {
+  currentTarget: HTMLButtonElement;
+  target: Element;
+};
 
 export interface SearchFieldProps {
   value: string;
@@ -10,14 +24,14 @@ export interface SearchFieldProps {
   class?: string;
   inputClass?: string;
   disabled?: boolean;
-  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
-  onBlur?: JSX.EventHandlerUnion<HTMLInputElement, FocusEvent>;
+  onKeyDown?: (event: SearchFieldKeyboardEvent) => void;
+  onBlur?: (event: SearchFieldFocusEvent) => void;
   showClearButton?: boolean;
   clearOnFocusedEscape?: boolean;
   shortcutHint?: string;
   hasTrailingControls?: boolean;
-  trailingControls?: JSX.Element;
-  onClearMouseDown?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+  trailingControls?: import('solid-js').JSX.Element;
+  onClearMouseDown?: (event: SearchFieldMouseEvent) => void;
 }
 
 export const SearchField: Component<SearchFieldProps> = (props) => {

@@ -17,7 +17,7 @@ describe('useStorageFilterState', () => {
     const [selectedNodeId, setSelectedNodeId] = createSignal('node-1');
     const [sourceOptions] = createSignal(['all', 'proxmox-pve', 'agent']);
     const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
-    const [groupBy] = createSignal<StorageGroupKey>('host');
+    const [groupBy] = createSignal<StorageGroupKey>('node');
 
     const { result } = renderHook(() =>
       useStorageFilterState({

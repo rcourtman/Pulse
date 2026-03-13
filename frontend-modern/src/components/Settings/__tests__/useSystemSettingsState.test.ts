@@ -104,7 +104,6 @@ describe('useSystemSettingsState', () => {
 
       hookState = useSystemSettingsState({
         activeTab: () => 'system-updates' as SettingsTab,
-        currentTab: () => 'system-updates' as SettingsTab,
         loadSecurityStatus: async () => {},
         setDiscoveryEnabled,
         applySavedDiscoverySubnet: () => {},

@@ -6,8 +6,6 @@ import {
   DISK_DETAIL_HISTORY_RANGE_OPTIONS,
   DISK_DETAIL_LIVE_CHARTS,
   getDiskAttributeValueTextClass,
-  getDiskDetailAttributeCards,
-  getDiskDetailHistoryCharts,
   getDiskDetailHistoryFallbackMessage,
   getDiskDetailLiveBadgeLabel,
 } from '@/features/storageBackups/diskDetailPresentation';

@@ -1,7 +1,7 @@
 import { createMemo } from 'solid-js';
 import { normalizeStorageSortKey, type StorageView } from './storagePageState';
 import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
-import type { StorageGroupByFilter, StorageStatusFilter } from './StorageFilter';
+import type { StorageGroupByFilter } from './StorageFilter';
 
 type UseStoragePageControlsModelOptions = {
   kioskMode: () => boolean;

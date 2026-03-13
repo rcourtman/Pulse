@@ -175,9 +175,15 @@ export const buildStatusOptions = (
   statuses: Set<string>,
 ): Array<{ key: string; label: string }> => {
   const items = Array.from(statuses);
+  const getStatusSortIndex = (status: string): number => {
+    if (STATUS_SORT_ORDER.includes(status as (typeof STATUS_SORT_ORDER)[number])) {
+      return STATUS_SORT_ORDER.indexOf(status as (typeof STATUS_SORT_ORDER)[number]);
+    }
+    return -1;
+  };
   items.sort((a, b) => {
-    const indexA = STATUS_SORT_ORDER.indexOf(a);
-    const indexB = STATUS_SORT_ORDER.indexOf(b);
+    const indexA = getStatusSortIndex(a);
+    const indexB = getStatusSortIndex(b);
     if (indexA === -1 && indexB === -1) return a.localeCompare(b);
     if (indexA === -1) return 1;
     if (indexB === -1) return -1;

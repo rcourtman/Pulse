@@ -166,11 +166,11 @@ export const AgentProfilesPanel: Component = () => {
       .filter((resource) => {
         if (resource.type === 'docker-host') {
           const runtimeId = getActionableDockerRuntimeIdFromResource(resource);
-          return !removedDockerHostIds().has(runtimeId);
+          return !runtimeId || !removedDockerHostIds().has(runtimeId);
         }
         if (resource.type === 'k8s-cluster') {
           const clusterId = getActionableKubernetesClusterIdFromResource(resource);
-          return !removedKubernetesClusterIds().has(clusterId);
+          return !clusterId || !removedKubernetesClusterIds().has(clusterId);
         }
         return true;
       })

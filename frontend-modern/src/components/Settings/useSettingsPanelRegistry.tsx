@@ -110,12 +110,7 @@ interface UseSettingsPanelRegistryParams {
   hideLocalLoginLocked: Accessor<boolean>;
   savingHideLocalLogin: Accessor<boolean>;
   handleHideLocalLoginChange: (enabled: boolean) => Promise<void>;
-  getInfrastructurePanelProps: () => ProxmoxSettingsPanelProps & {
-    disableDockerUpdateActions: Accessor<boolean>;
-    disableDockerUpdateActionsLocked: Accessor<boolean>;
-    savingDockerUpdateActions: Accessor<boolean>;
-    handleDisableDockerUpdateActionsChange: (disabled: boolean) => Promise<void>;
-  };
+  getInfrastructurePanelProps: () => ProxmoxSettingsPanelProps;
 }
 
 export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams) {

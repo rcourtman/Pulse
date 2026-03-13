@@ -460,7 +460,7 @@ export function useSystemSettingsState({
     }
   };
 
-  const handleInstallUpdate = () => {
+  const handleInstallUpdate = async () => {
     setShowUpdateConfirmation(true);
   };
 

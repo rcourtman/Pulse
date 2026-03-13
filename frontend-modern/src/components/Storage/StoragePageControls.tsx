@@ -4,6 +4,7 @@ import type { StorageView } from './storagePageState';
 import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
 import type { StorageGroupByFilter, StorageStatusFilter } from './StorageFilter';
 import { useStoragePageControlsModel } from './useStoragePageControlsModel';
+import type { StorageSourceOption } from '@/utils/storageSources';
 
 type StoragePageControlsProps = {
   kioskMode: () => boolean;
@@ -21,7 +22,7 @@ type StoragePageControlsProps = {
   setStatusFilter: (value: StorageStatusFilter) => void;
   sourceFilter: () => string;
   setSourceFilter: (value: string) => void;
-  sourceOptions: Array<{ value: string; label: string }>;
+  sourceOptions: StorageSourceOption[];
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;

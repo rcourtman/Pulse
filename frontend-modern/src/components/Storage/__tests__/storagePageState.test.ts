@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import type { StorageRecord } from '@/features/storageBackups/models';
+import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import type { StorageGroupKey, StorageSortKey } from '@/components/Storage/useStorageModel';
 import {
   buildStorageNodeFilterOptions,

@@ -11,6 +11,8 @@ import {
   type SettingsTab,
 } from './settingsRouting';
 
+type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
+
 type SettingsLocation = {
   pathname: string;
   search: string;
@@ -33,7 +35,10 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
   );
-  const activeTab = () => currentTab();
+  const activeTab = (): SettingsDispatchableTab => {
+    const tab = currentTab();
+    return tab === 'proxmox' ? 'agents' : tab;
+  };
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 

@@ -3,7 +3,6 @@ import type { StorageRecord } from '@/features/storageBackups/models';
 import type { CephCluster } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
-  getCephClusterKeyFromStorageRecord,
   getCephPoolsText,
   getCephSummaryText,
 } from '@/features/storageBackups/cephRecordPresentation';

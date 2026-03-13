@@ -39,8 +39,6 @@ function toMetricResourceKind(
 ): MetricResourceKind {
   const targetType = resource.metricsTarget?.resourceType;
   switch (targetType) {
-    case 'node':
-      return 'node';
     case 'vm':
       return 'vm';
     case 'system-container':
@@ -49,7 +47,6 @@ function toMetricResourceKind(
       return 'container';
     case 'docker-host':
       return 'dockerHost';
-    case 'k8s':
     case 'k8s-cluster':
     case 'k8s-node':
     case 'pod':

@@ -11,14 +11,19 @@ type UseStorageCephSectionModelOptions = {
 };
 
 export const useStorageCephSectionModel = (options: UseStorageCephSectionModelOptions) => {
-  const showSummary = createMemo(() =>
-    shouldShowCephSummaryCard(
+  const showSummary = createMemo(() => {
+    const summary = options.summary();
+    if (!summary) {
+      return false;
+    }
+
+    return shouldShowCephSummaryCard(
       options.view(),
-      options.summary(),
+      summary,
       options.filteredRecords(),
       options.isCephRecord,
-    ),
-  );
+    );
+  });
 
   return {
     showSummary,

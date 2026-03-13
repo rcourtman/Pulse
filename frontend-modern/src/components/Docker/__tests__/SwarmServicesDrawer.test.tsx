@@ -763,8 +763,8 @@ describe('SwarmServicesDrawer', () => {
       render(() => <SwarmServicesDrawer cluster="" />);
 
       // Flush multiple microtask cycles to let SolidJS evaluate source signal
-      await new Promise((r) => queueMicrotask(r));
-      await new Promise((r) => queueMicrotask(r));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 
       // Empty cluster = falsy source signal = fetcher not called
       expect(apiFetchJSONMock).not.toHaveBeenCalled();

@@ -1,5 +1,9 @@
 import { Component } from 'solid-js';
-import type { JSX } from 'solid-js';
+
+type SearchInputKeyboardEvent = KeyboardEvent & {
+  currentTarget: HTMLInputElement;
+  target: Element;
+};
 import { SearchField } from '@/components/shared/SearchField';
 import {
   SearchInputHistoryDropdown,
@@ -23,7 +27,7 @@ export interface SearchInputProps {
   class?: string;
   inputClass?: string;
   disabled?: boolean;
-  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
+  onKeyDown?: (event: SearchInputKeyboardEvent) => void;
   /** When false, disables the default type-to-search behavior for this search input. */
   typeToSearch?: boolean;
   /** When true, pressing Escape clears the search even if focus is elsewhere on the page. */
