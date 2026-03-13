@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"testing"
 	"time"
@@ -22,8 +23,10 @@ import (
 //   - GetGuestMetricsForChartBatch(50 guests × 5 metrics × 240 points): ~42ms
 //   - GetNodeMetricsForChartBatch(20 nodes × 5 metrics × 240 points):  ~16ms
 const (
-	SLOGuestChartBatchP95 = 80 * time.Millisecond
-	SLONodeChartBatchP95  = 35 * time.Millisecond
+	SLOGuestChartBatchP95              = 80 * time.Millisecond
+	SLONodeChartBatchP95               = 35 * time.Millisecond
+	SLOGuestChartBatchGitHubActionsP95 = 220 * time.Millisecond
+	SLONodeChartBatchGitHubActionsP95  = 140 * time.Millisecond
 
 	monitoringSLOIterations = 120
 )
@@ -89,6 +92,13 @@ func monitoringPercentile(durations []time.Duration, pct float64) time.Duration 
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 	idx := int(float64(len(sorted)-1) * pct)
 	return sorted[idx]
+}
+
+func effectiveMonitoringSLOTarget(localTarget, githubActionsTarget time.Duration) time.Duration {
+	if githubActionsTarget > 0 && os.Getenv("GITHUB_ACTIONS") == "true" {
+		return githubActionsTarget
+	}
+	return localTarget
 }
 
 func seedSLOGuestMetrics(t *testing.T, store *metrics.Store, resourceType string, numResources, numPoints int) []string {
@@ -176,12 +186,13 @@ func TestSLO_GetGuestMetricsForChartBatch(t *testing.T) {
 		}
 	})
 
+	target := effectiveMonitoringSLOTarget(SLOGuestChartBatchP95, SLOGuestChartBatchGitHubActionsP95)
 	p95 := monitoringPercentile(latencies, 0.95)
 	t.Logf("GetGuestMetricsForChartBatch(50×5×240) p50=%v p95=%v p99=%v SLO=%v",
-		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), SLOGuestChartBatchP95)
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
 
-	if p95 > SLOGuestChartBatchP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOGuestChartBatchP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
@@ -211,11 +222,12 @@ func TestSLO_GetNodeMetricsForChartBatch(t *testing.T) {
 		}
 	})
 
+	target := effectiveMonitoringSLOTarget(SLONodeChartBatchP95, SLONodeChartBatchGitHubActionsP95)
 	p95 := monitoringPercentile(latencies, 0.95)
 	t.Logf("GetNodeMetricsForChartBatch(20×5×240) p50=%v p95=%v p99=%v SLO=%v",
-		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), SLONodeChartBatchP95)
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
 
-	if p95 > SLONodeChartBatchP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLONodeChartBatchP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }

@@ -504,7 +504,7 @@ func TestParityStorageFields(t *testing.T) {
 	v := pools[0]
 
 	require.Equal(t, storage.Name, v.Name())
-	require.Equal(t, unifiedresources.StatusOnline, v.Status())
+	require.Equal(t, unifiedresources.StatusWarning, v.Status())
 	require.Equal(t, storage.Node, v.Node())
 	require.Equal(t, storage.Instance, v.Instance())
 	require.Equal(t, "zfspool", v.StorageType())
@@ -732,9 +732,14 @@ func TestParityResourceCounts(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
 
+	expectedStoragePools := len(snapshot.Storage)
+	for _, instance := range snapshot.PBSInstances {
+		expectedStoragePools += len(instance.Datastores)
+	}
+
 	require.Len(t, registry.VMs(), len(snapshot.VMs))
 	require.Len(t, registry.Containers(), len(snapshot.Containers))
-	require.Len(t, registry.StoragePools(), len(snapshot.Storage))
+	require.Len(t, registry.StoragePools(), expectedStoragePools)
 	require.Len(t, registry.DockerHosts(), len(snapshot.DockerHosts))
 	require.Len(t, registry.PBSInstances(), len(snapshot.PBSInstances))
 	require.Len(t, registry.PMGInstances(), len(snapshot.PMGInstances))

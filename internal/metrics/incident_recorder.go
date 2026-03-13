@@ -236,6 +236,10 @@ func (r *IncidentRecorder) Stop() {
 		<-loopDone
 	}
 
+	// Flush any async save goroutine triggered before shutdown so TempDir cleanup
+	// and final persistence do not race a background rename/write.
+	r.waitForPendingSaves()
+
 	// Save to disk
 	if err := r.saveToDisk(); err != nil {
 		log.Warn().
