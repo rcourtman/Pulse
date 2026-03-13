@@ -230,6 +230,8 @@ scripts/release_control/*
 !scripts/release_control/registry_audit_test.py
 !scripts/release_control/repo_file_io.py
 !scripts/release_control/repo_file_io_test.py
+!scripts/release_control/record_rc_to_ga_rehearsal.py
+!scripts/release_control/record_rc_to_ga_rehearsal_test.py
 !scripts/release_control/release_promotion_policy_test.py
 !scripts/release_control/status_audit.py
 !scripts/release_control/status_audit_test.py

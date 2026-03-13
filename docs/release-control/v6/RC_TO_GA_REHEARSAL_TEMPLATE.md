@@ -3,6 +3,10 @@
 Use this template to capture the human-side evidence for
 `rc-to-ga-promotion-readiness` after running the `Release Dry Run` workflow.
 
+Prefer generating the record with
+`python3 scripts/release_control/record_rc_to_ga_rehearsal.py ...` rather than
+hand-writing it.
+
 The matching GitHub Actions artifact should be the machine-generated
 `rc-to-ga-rehearsal-summary`.
 
