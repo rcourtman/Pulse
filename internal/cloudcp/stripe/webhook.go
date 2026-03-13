@@ -1,6 +1,7 @@
 package stripe
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 )
 
 const webhookBodyLimit = 1024 * 1024 // 1 MiB
+const checkoutProvisioningTimeout = 2 * time.Minute
 
 // WebhookHandler handles incoming Stripe webhook events.
 type WebhookHandler struct {
@@ -126,34 +128,37 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) error {
+	ctx, cancel := webhookEventContext(r, event.Type)
+	defer cancel()
+
 	switch event.Type {
 	case "checkout.session.completed":
 		var session CheckoutSession
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return fmt.Errorf("decode checkout.session: %w", err)
 		}
-		return h.provisioner.HandleCheckout(r.Context(), session)
+		return h.provisioner.HandleCheckout(ctx, session)
 
 	case "customer.subscription.updated":
 		var sub Subscription
 		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 			return fmt.Errorf("decode subscription: %w", err)
 		}
-		return h.routeSubscriptionUpdated(r, sub)
+		return h.routeSubscriptionUpdated(ctx, sub)
 
 	case "customer.subscription.deleted":
 		var sub Subscription
 		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 			return fmt.Errorf("decode subscription: %w", err)
 		}
-		return h.routeSubscriptionDeleted(r, sub)
+		return h.routeSubscriptionDeleted(ctx, sub)
 
 	case "invoice.payment_failed":
 		var inv Invoice
 		if err := json.Unmarshal(event.Data.Raw, &inv); err != nil {
 			return fmt.Errorf("decode invoice.payment_failed: %w", err)
 		}
-		return h.routeInvoicePaymentFailed(r, inv)
+		return h.routeInvoicePaymentFailed(ctx, inv)
 
 	default:
 		log.Info().
@@ -164,7 +169,17 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 	}
 }
 
-func (h *WebhookHandler) routeSubscriptionUpdated(r *http.Request, sub Subscription) error {
+func webhookEventContext(r *http.Request, eventType stripelib.EventType) (context.Context, context.CancelFunc) {
+	if eventType == stripelib.EventType("checkout.session.completed") {
+		return context.WithTimeout(context.Background(), checkoutProvisioningTimeout)
+	}
+	if r == nil {
+		return context.WithCancel(context.Background())
+	}
+	return context.WithCancel(r.Context())
+}
+
+func (h *WebhookHandler) routeSubscriptionUpdated(ctx context.Context, sub Subscription) error {
 	customerID := strings.TrimSpace(sub.Customer)
 	if customerID != "" {
 		sa, err := h.provisioner.registry.GetStripeAccountByCustomerID(customerID)
@@ -177,14 +192,14 @@ func (h *WebhookHandler) routeSubscriptionUpdated(r *http.Request, sub Subscript
 				return fmt.Errorf("lookup account: %w", err)
 			}
 			if acct != nil && acct.Kind == registry.AccountKindMSP {
-				return h.provisioner.HandleMSPSubscriptionUpdated(r.Context(), sub)
+				return h.provisioner.HandleMSPSubscriptionUpdated(ctx, sub)
 			}
 		}
 	}
-	return h.provisioner.HandleSubscriptionUpdated(r.Context(), sub)
+	return h.provisioner.HandleSubscriptionUpdated(ctx, sub)
 }
 
-func (h *WebhookHandler) routeSubscriptionDeleted(r *http.Request, sub Subscription) error {
+func (h *WebhookHandler) routeSubscriptionDeleted(ctx context.Context, sub Subscription) error {
 	customerID := strings.TrimSpace(sub.Customer)
 	if customerID != "" {
 		sa, err := h.provisioner.registry.GetStripeAccountByCustomerID(customerID)
@@ -197,14 +212,14 @@ func (h *WebhookHandler) routeSubscriptionDeleted(r *http.Request, sub Subscript
 				return fmt.Errorf("lookup account: %w", err)
 			}
 			if acct != nil && acct.Kind == registry.AccountKindMSP {
-				return h.provisioner.HandleMSPSubscriptionDeleted(r.Context(), sub)
+				return h.provisioner.HandleMSPSubscriptionDeleted(ctx, sub)
 			}
 		}
 	}
-	return h.provisioner.HandleSubscriptionDeleted(r.Context(), sub)
+	return h.provisioner.HandleSubscriptionDeleted(ctx, sub)
 }
 
-func (h *WebhookHandler) routeInvoicePaymentFailed(r *http.Request, inv Invoice) error {
+func (h *WebhookHandler) routeInvoicePaymentFailed(ctx context.Context, inv Invoice) error {
 	customerID := strings.TrimSpace(inv.Customer)
 	if customerID == "" {
 		return fmt.Errorf("invoice missing customer")
@@ -214,7 +229,7 @@ func (h *WebhookHandler) routeInvoicePaymentFailed(r *http.Request, inv Invoice)
 		Customer: customerID,
 		Status:   "past_due",
 	}
-	return h.routeSubscriptionUpdated(r, sub)
+	return h.routeSubscriptionUpdated(ctx, sub)
 }
 
 // CheckoutSession is a minimal representation of a Stripe checkout.session event.

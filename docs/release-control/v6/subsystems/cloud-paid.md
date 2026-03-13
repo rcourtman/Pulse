@@ -248,3 +248,8 @@ canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_agents` derived from canonical
 plan resolution, and when paid state is revoked they must clear those stored
 limits instead of preserving stale paid capacity.
+That same webhook boundary now also owns request-lifetime decoupling for
+checkout provisioning: long-running `checkout.session.completed` tenant
+provisioning must complete under an explicit background timeout instead of
+depending on the inbound Stripe request context surviving long enough for first
+boot and health polling.

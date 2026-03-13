@@ -2,12 +2,14 @@ package stripe
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	stripelib "github.com/stripe/stripe-go/v82"
 	stripewebhook "github.com/stripe/stripe-go/v82/webhook"
 )
 
@@ -34,6 +36,41 @@ func TestWebhookRetriesFailedEventInsteadOfSkippingDuplicate(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusInternalServerError {
 		t.Fatalf("duplicate delivery status=%d, want=%d, body=%q", rec2.Code, http.StatusInternalServerError, rec2.Body.String())
+	}
+}
+
+func TestWebhookEventContext_DetachesCheckoutFromRequestContext(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/stripe/webhook", nil)
+	ctx, cancelReq := context.WithCancel(req.Context())
+	cancelReq()
+	req = req.WithContext(ctx)
+
+	gotCtx, cancel := webhookEventContext(req, stripelib.EventType("checkout.session.completed"))
+	defer cancel()
+
+	if err := gotCtx.Err(); err != nil {
+		t.Fatalf("checkout context should not inherit request cancellation: %v", err)
+	}
+	deadline, ok := gotCtx.Deadline()
+	if !ok {
+		t.Fatal("checkout context should carry a timeout deadline")
+	}
+	if remaining := time.Until(deadline); remaining <= time.Minute || remaining > checkoutProvisioningTimeout {
+		t.Fatalf("checkout context deadline window=%v, want within (1m,%v]", remaining, checkoutProvisioningTimeout)
+	}
+}
+
+func TestWebhookEventContext_PreservesRequestContextForNonCheckout(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/stripe/webhook", nil)
+	ctx, cancelReq := context.WithCancel(req.Context())
+	cancelReq()
+	req = req.WithContext(ctx)
+
+	gotCtx, cancel := webhookEventContext(req, stripelib.EventType("customer.subscription.updated"))
+	defer cancel()
+
+	if err := gotCtx.Err(); err == nil {
+		t.Fatal("non-checkout context should preserve request cancellation")
 	}
 }
 
