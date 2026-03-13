@@ -586,6 +586,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/RELEASE_PROMOTION_POLICY.md",
           "kind": "file"
         },
@@ -1239,7 +1244,7 @@
       "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
-      "status": "pending",
+      "status": "blocked",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",

@@ -181,6 +181,8 @@ Companion drill:
   release-pipeline proof, explicit rollback instructions, and the published v5
   maintenance policy plus exact end-of-support date, with a linked rehearsal
   run URL and dry-run artifact.
+- Current blocked record:
+  `docs/release-control/v6/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md`
 - Block release if:
   Stable users would become the first real validation cohort, the rollback
   target is unclear, or the v5 maintenance-only policy is still undecided.
