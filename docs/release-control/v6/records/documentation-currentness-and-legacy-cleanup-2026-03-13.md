@@ -13,6 +13,13 @@
 - `python3 scripts/release_control/documentation_currentness_test.py`
 - Result: pass
 
+## Same-Day Revalidation
+
+- Re-ran `python3 scripts/release_control/documentation_currentness_test.py`
+  after the `RA12` multi-tenant closeout and the current control-plane target
+  still derives as `v6-rc-stabilization`.
+- Result: pass
+
 ## Manual Review Surface
 
 Active v6 guidance reviewed in `pulse`:

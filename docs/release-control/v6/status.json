@@ -2046,7 +2046,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "local-rehearsal",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L9"
