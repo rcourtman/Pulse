@@ -39,6 +39,23 @@ describe('apiClient org context', () => {
     expect(window.sessionStorage.getItem('pulse_org_id')).toBe('acme');
   });
 
+  it('reuses a server-issued org cookie when storage is empty', async () => {
+    document.cookie = 'pulse_org_id=tenant-1; Path=/; SameSite=Lax';
+    mockFetch.mockResolvedValue(new Response('{}', { status: 200 }));
+
+    const modulePath = '@/utils/apiClient';
+    vi.resetModules();
+    const reloaded = await import(modulePath);
+
+    await reloaded.apiFetch('/api/state');
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-Pulse-Org-ID']).toBe('tenant-1');
+    expect(reloaded.getOrgID()).toBe('tenant-1');
+    expect(window.sessionStorage.getItem('pulse_org_id')).toBe('tenant-1');
+  });
+
   it('uses default org context when skipOrgContext is enabled', async () => {
     mockFetch.mockResolvedValue(new Response('[]', { status: 200 }));
 

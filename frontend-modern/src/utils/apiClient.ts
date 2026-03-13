@@ -35,6 +35,27 @@ const sanitizeApiToken = (value: unknown): string | null => {
   return sanitizeBoundedText(value, MAX_API_TOKEN_LENGTH);
 };
 
+const readOrgCookie = (): string | null => {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.trim().split('=');
+    if (name !== ORG_COOKIE_NAME) {
+      continue;
+    }
+    try {
+      return sanitizeOrgID(decodeURIComponent(rest.join('=') || ''));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
     return undefined;
@@ -223,20 +244,40 @@ class ApiClient {
 
   private loadStoredOrgContext() {
     const storage = getSessionStorage();
-    if (!storage) return;
+    let storageOrgID: string | null = null;
 
-    try {
-      const stored = storage.getItem(ORG_STORAGE_KEY);
-      const normalizedOrgID = sanitizeOrgID(stored);
-      this.orgID = normalizedOrgID;
-      if (stored && !normalizedOrgID) {
-        storage.removeItem(ORG_STORAGE_KEY);
-      } else if (normalizedOrgID && stored !== normalizedOrgID) {
-        storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
+    if (storage) {
+      try {
+        const stored = storage.getItem(ORG_STORAGE_KEY);
+        storageOrgID = sanitizeOrgID(stored);
+        if (stored && !storageOrgID) {
+          storage.removeItem(ORG_STORAGE_KEY);
+        } else if (storageOrgID && stored !== storageOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, storageOrgID);
+        }
+      } catch {
+        storageOrgID = null;
       }
-      this.syncOrgCookie(this.orgID);
-    } catch {
-      this.orgID = null;
+    }
+
+    const cookieOrgID = readOrgCookie();
+    const resolvedOrgID = storageOrgID || cookieOrgID;
+    this.orgID = resolvedOrgID;
+
+    if (storage) {
+      try {
+        if (resolvedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, resolvedOrgID);
+        } else {
+          storage.removeItem(ORG_STORAGE_KEY);
+        }
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    if (resolvedOrgID) {
+      this.syncOrgCookie(resolvedOrgID);
     }
   }
 
@@ -309,6 +350,20 @@ class ApiClient {
     } catch {
       // Ignore storage errors
     }
+
+    const cookieOrgID = readOrgCookie();
+    if (cookieOrgID) {
+      this.orgID = cookieOrgID;
+      if (storage) {
+        try {
+          storage.setItem(ORG_STORAGE_KEY, cookieOrgID);
+        } catch {
+          // Ignore storage errors.
+        }
+      }
+      return cookieOrgID;
+    }
+
     return null;
   }
 

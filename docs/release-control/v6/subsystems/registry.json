@@ -322,6 +322,7 @@
         "pkg/licensing/"
       ],
       "owned_files": [
+        "frontend-modern/src/App.tsx",
         "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
@@ -329,6 +330,7 @@
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
+        "frontend-modern/src/utils/apiClient.ts",
         "internal/api/public_signup_handlers.go",
         "internal/cloudcp/entitlements/service.go",
         "internal/cloudcp/registry/registry.go",
@@ -763,6 +765,20 @@
               "internal/api/hosted_signup_handlers_test.go",
               "internal/hosted/provisioner_additional_test.go",
               "internal/hosted/provisioner_test.go"
+            ]
+          },
+          {
+            "id": "hosted-browser-org-bootstrap",
+            "label": "hosted browser org bootstrap proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/App.tsx",
+              "frontend-modern/src/utils/apiClient.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/apiClient.org.test.ts"
             ]
           },
           {

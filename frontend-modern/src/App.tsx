@@ -95,7 +95,13 @@ import {
   buildWorkloadsPath,
 } from './routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
-import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import {
+  isHostedModeEnabled,
+  isMultiTenantEnabled,
+  isPro,
+  licenseLoaded,
+  loadLicenseStatus,
+} from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
 import {
@@ -405,9 +411,19 @@ function App() {
       }
 
       if (!isMultiTenantEnabled()) {
-        setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
-        setSelectedOrgID('default');
-        setActiveOrgID('default');
+        const storedOrgID = getSelectedOrgID();
+        const hostedOrgID =
+          isHostedModeEnabled() && storedOrgID && storedOrgID !== 'default'
+            ? storedOrgID
+            : 'default';
+        setOrganizations([
+          {
+            id: hostedOrgID,
+            displayName: hostedOrgID === 'default' ? 'Default Organization' : hostedOrgID,
+          },
+        ]);
+        setSelectedOrgID(hostedOrgID);
+        setActiveOrgID(hostedOrgID);
         return;
       }
 

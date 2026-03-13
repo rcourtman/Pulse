@@ -41,12 +41,14 @@ agreement, and cloud-specific enforcement rules.
 19. `internal/cloudcp/registry/registry.go`
 20. `internal/cloudcp/stripe/provisioner.go`
 21. `internal/hosted/provisioner.go`
-22. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-23. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-24. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-25. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-26. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-27. `frontend-modern/src/pages/CloudPricing.tsx`
+22. `frontend-modern/src/App.tsx`
+23. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+24. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+25. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+26. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+27. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+28. `frontend-modern/src/pages/CloudPricing.tsx`
+29. `frontend-modern/src/utils/apiClient.ts`
 
 ## Shared Boundaries
 
@@ -72,6 +74,7 @@ agreement, and cloud-specific enforcement rules.
 13. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
 14. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 15. Add contract tests where runtime and pricing need to stay aligned
+16. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx` and `frontend-modern/src/utils/apiClient.ts`
 
 ## Forbidden Paths
 
@@ -147,6 +150,14 @@ to `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` must
 carry this contract and the dedicated organization-billing proof file instead
 of remaining an unowned consumer of plan tier, entitlement limits, and
 usage-versus-cap presentation.
+Hosted tenant browser bootstrap is part of that same cloud-paid boundary as
+well. After control-plane or magic-link handoff, the browser client must
+preserve the tenant-scoped `pulse_org_id` context that the server issued
+instead of clearing it on first page load or collapsing back to `default`
+simply because hosted tenants do not expose self-hosted multi-tenant admin
+capabilities. Hosted runtime entry must therefore treat tenant org context as
+infrastructure state, not a paid UI toggle that can be discarded during app
+bootstrap.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an
