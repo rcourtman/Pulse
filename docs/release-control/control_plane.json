@@ -38,7 +38,7 @@
       "profile_id": "v6",
       "kind": "stabilization",
       "status": "active",
-      "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed.",
+      "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed, including the Pulse Mobile usefulness floor around navigation, relay-state feedback, and approval recovery.",
       "completion_rule": "manual"
     },
     {

@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-03-12",
+  "updated_at": "2026-03-13",
   "scope": {
     "active_repos": [
       "pulse",
@@ -1295,7 +1295,26 @@
       ]
     }
   ],
-  "open_decisions": [],
+  "open_decisions": [
+    {
+      "id": "mobile-usefulness-floor",
+      "summary": "Pulse Mobile still needs a clearer usefulness floor for runtime navigation, relay-state feedback, and approval recovery before v6 RC stabilization can be considered complete.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "blocked",
+      "opened_at": "2026-03-13",
+      "lane_ids": [
+        "L5",
+        "L7",
+        "L8",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives",
+        "relay-runtime"
+      ]
+    }
+  ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
