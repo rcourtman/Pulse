@@ -1991,7 +1991,7 @@
       "summary": "Confirm the actual hosted Pulse tier works end to end after provisioning: hosted auth, runtime entry, and hosted billing/admin surfaces all function coherently.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "passed",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2018,7 +2018,7 @@
       "summary": "Confirm active v6-facing guidance is current, and any legacy or historical docs are clearly archived or demoted instead of remaining current guidance.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
-      "status": "passed",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L9"
@@ -2056,7 +2056,7 @@
       "summary": "Confirm MSP mode behaves as a real provider workflow: one account can manage multiple client tenants coherently without cross-client leakage or MSP/public-plan confusion.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "passed",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2069,7 +2069,7 @@
       "summary": "Confirm multi-tenant Pulse behaves as a coherent tenant-isolated product across org scope, runtime state, sharing, and migration.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "passed",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L4",
