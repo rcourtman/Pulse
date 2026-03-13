@@ -2154,26 +2154,7 @@
       ]
     }
   ],
-  "open_decisions": [
-    {
-      "id": "mobile-usefulness-floor",
-      "summary": "Pulse Mobile still needs a clearer usefulness floor for runtime navigation, relay-state feedback, and approval recovery before v6 RC stabilization can be considered complete.",
-      "owner": "project-owner",
-      "blocking_level": "rc-ready",
-      "status": "blocked",
-      "opened_at": "2026-03-13",
-      "lane_ids": [
-        "L5",
-        "L7",
-        "L8",
-        "L12"
-      ],
-      "subsystem_ids": [
-        "frontend-primitives",
-        "relay-runtime"
-      ]
-    }
-  ],
+  "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
@@ -2366,6 +2347,22 @@
         "L2",
         "L3",
         "L4"
+      ]
+    },
+    {
+      "id": "mobile-usefulness-floor",
+      "summary": "Pulse Mobile is considered useful enough for the v6 RC line when it preserves at least one trusted paired instance across relaunches, surfaces relay/runtime state clearly in the main shell, fails closed into a recoverable disconnected state on stale or revoked access, and supports live approval visibility and action recovery; broader parity remains post-RC scope.",
+      "kind": "release-policy",
+      "decided_at": "2026-03-13",
+      "subsystem_ids": [
+        "frontend-primitives",
+        "relay-runtime"
+      ],
+      "lane_ids": [
+        "L5",
+        "L7",
+        "L8",
+        "L12"
       ]
     }
   ]

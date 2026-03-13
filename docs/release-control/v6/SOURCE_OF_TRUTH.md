@@ -196,6 +196,12 @@ Assertion design rules:
    v6 pricing change until they cancel. Renewal and entitlement continuity
    must preserve that grandfathered price state; any return after cancellation
    must use current v6 pricing.
+10. Pulse Mobile does not need desktop parity to stop blocking the v6 RC line.
+    The mobile usefulness floor for RC is narrower: preserve at least one
+    trusted paired instance across relaunches, expose relay/runtime state
+    clearly in the main shell, fail closed into a recoverable disconnected
+    state on stale or revoked access, and keep live approvals useful and
+    recoverable. Broader parity and expansion remain post-RC scope.
 
 ## Cross-Repo Contracts
 
