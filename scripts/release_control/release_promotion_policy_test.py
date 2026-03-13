@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import unittest
 
@@ -87,9 +88,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("maintenance-only support immediately on the v6 GA date", policy)
         self.assertIn("90 calendar days from the v6 GA", policy)
         self.assertIn("pulse/v5-maintenance", policy)
-        self.assertIn("[v5-eos-date]", release_notes)
         self.assertIn("Pulse v5 Support Transition", release_notes)
         self.assertIn("publish an explicit exception", release_notes)
+        self.assertRegex(
+            release_notes,
+            re.compile(r"Pulse v5 entered maintenance-only support on `(?:\[v6-ga-date\]|\d{4}-\d{2}-\d{2})`\.")
+        )
+        self.assertRegex(
+            release_notes,
+            re.compile(r"existing v5 users until `(?:\[v5-eos-date\]|\d{4}-\d{2}-\d{2})`\.")
+        )
 
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
         template = read("docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md")

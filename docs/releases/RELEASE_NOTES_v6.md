@@ -6,14 +6,13 @@ Pulse v6 is the largest release in the project's history — 1,200+ commits touc
 
 ## Pulse v5 Support Transition
 
-Replace the placeholders below with exact calendar dates before publishing the
-first stable `v6.0.0` release:
+The first stable `v6.0.0` release publishes these exact calendar dates:
 
-- Pulse v5 entered maintenance-only support on `[v6-ga-date]`.
+- Pulse v5 entered maintenance-only support on `2026-03-13`.
 - I will ship only critical security, critical correctness or data-loss,
   installer or updater failure, licensing or billing blocker, and safe
-  migration blocker fixes for existing v5 users until `[v5-eos-date]`.
-- After `[v5-eos-date]`, Pulse v5 is end-of-support and new fixes land on v6
+  migration blocker fixes for existing v5 users until `2026-06-11`.
+- After `2026-06-11`, Pulse v5 is end-of-support and new fixes land on v6
   unless I publish an explicit exception.
 
 This notice must stay aligned with
