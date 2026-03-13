@@ -47,7 +47,7 @@ function makeTarget(overrides: Partial<DeployTarget> = {}): DeployTarget {
 
 /** Creates a minimal mock wizard with only the signals needed by the component. */
 function createMockWizard(overrides: Record<string, unknown> = {}) {
-  const sig = <T>(key: string, def: T): Accessor<T> => {
+  const sig = <T,>(key: string, def: T): Accessor<T> => {
     const val = overrides[key] as T | undefined;
     return () => val ?? def;
   };
