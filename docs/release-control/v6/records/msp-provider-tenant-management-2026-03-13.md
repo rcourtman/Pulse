@@ -9,6 +9,8 @@
   - Seeded MSP account: `a_mspgate20260313` (`Acme MSP Rehearsal`)
   - Provider owner session: `owner@acmemsp.test`
   - Canonical MSP plan: `msp_starter`
+  - Revalidation workspace: `t-1WDFA6HW01` (`Client Three`)
+  - Revalidation member: `readonly@acmemsp.test` (`read_only`)
 
 ## Automated Proof Baseline
 
@@ -63,12 +65,47 @@
    - unauthenticated `GET /cloud/signup` rendered the public “Start Pulse Cloud” page
    - unauthenticated `POST /api/public/signup` did not create or route into MSP provisioning; it failed closed with `400 {"code":"tier_unavailable","message":"The selected plan tier is not currently available"}`
 
+## Revalidation After Evidence-Tier Tightening
+
+1. Reused the persisted localhost control-plane rehearsal on `http://127.0.0.1:18443` with the same MSP account, provider owner identity, and stateless bearer session contract.
+2. Reconfirmed the provider account still exposed coherent account-scoped state before mutation:
+   - authenticated `GET /api/accounts/a_mspgate20260313/tenants` returned the existing `Client One` and `Client Two` workspaces
+   - authenticated `GET /api/accounts/a_mspgate20260313/members` returned `owner@acmemsp.test` as `owner` and `tech@acmemsp.test` as `tech`
+   - authenticated `GET /api/portal/dashboard?account_id=a_mspgate20260313` returned `account.kind="msp"` with `summary.total=2` and `summary.active=2`
+3. Exercised fresh provider mutation on the same live account surface:
+   - authenticated `POST /api/accounts/a_mspgate20260313/tenants` with `{"display_name":"Client Three"}`
+   - returned `201`
+   - returned `id=t-1WDFA6HW01`
+   - returned `state=active`
+   - returned `plan_version=msp_starter`
+4. Confirmed the new workspace stayed attached to the MSP account instead of drifting into individual-cloud state:
+   - authenticated `GET /api/accounts/a_mspgate20260313/tenants` returned `Client One`, `Client Two`, and `Client Three`
+   - all three workspaces remained attached to `account_id=a_mspgate20260313`
+5. Exercised fresh provider member management on the same account:
+   - authenticated `POST /api/accounts/a_mspgate20260313/members` with `{"email":"readonly@acmemsp.test","role":"read_only"}`
+   - returned `201`
+   - authenticated `GET /api/accounts/a_mspgate20260313/members` returned `owner@acmemsp.test`, `tech@acmemsp.test`, and `readonly@acmemsp.test`
+6. Confirmed the provider portal stayed coherent after the new workspace was added:
+   - authenticated `GET /api/portal/dashboard?account_id=a_mspgate20260313` returned `summary.total=3` and `summary.active=3`
+   - authenticated `GET /api/portal/workspaces/t-1WDFA6HW01?account_id=a_mspgate20260313` returned the expected `Client Three` workspace under the MSP account with `plan_version=msp_starter`
+7. Reconfirmed the public individual-cloud path still failed closed instead of collapsing into MSP provisioning:
+   - unauthenticated `GET /cloud/signup` still rendered the public cloud signup page
+   - unauthenticated `POST /api/public/signup` with `{"email":"public-msp-boundary-20260313@example.com","org_name":"Public MSP Boundary 20260313","tier":"power"}` returned `400 {"code":"tier_unavailable","message":"The selected plan tier is not currently available"}`
+8. Re-ran the governed automated proof bundle after the manual revalidation:
+   - `go test ./internal/cloudcp/account ./internal/cloudcp/registry -count=1`
+   - `go test ./internal/cloudcp/stripe -run 'TestMSPLifecycle_AccountToPortal' -count=1`
+   - `go test ./internal/cloudcp -run 'TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup' -count=1`
+   - `go test ./pkg/licensing -run 'TestMSPPlanAliasCanonicalizationContract' -count=1`
+   - `cd frontend-modern && npx vitest run src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx src/pages/__tests__/CloudPricing.test.tsx`
+   - Result: pass
+
 ## Outcome
 
 - One provider account can create, view, and manage multiple client tenants from one live control surface.
 - MSP workspace provisioning stays on the canonical MSP plan (`msp_starter`) and does not drift into individual-cloud semantics.
 - Provider membership and dashboard visibility remain coherent across the same account and the same set of workspaces.
 - The public individual cloud signup surface stays separate from MSP operator provisioning instead of silently collapsing the two modes together.
+- The rerun remains a localhost control-plane rehearsal, so under the current evidence-tier policy it strengthens the record but does not honestly clear the gate until a real external E2E exercise exists.
 
 ## Notes
 
