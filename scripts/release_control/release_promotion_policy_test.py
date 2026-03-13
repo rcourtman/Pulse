@@ -9,6 +9,7 @@ import subprocess
 import unittest
 import json
 
+import record_rc_to_ga_blocked as blocked_record
 from release_promotion_policy_support import (
     slice_requires_staged_governance_inputs,
     staged_governance_input_errors,
@@ -140,13 +141,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
         blocked = read("docs/release-control/v6/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md")
-        control_plane = read_json("docs/release-control/control_plane.json")
-        version = read("VERSION").strip()
-
-        self.assertIn(f"`{control_plane['active_target_id']}`", blocked)
-        self.assertIn(f"`VERSION={version}`", blocked)
-        self.assertIn("There is still no governed `RC-to-GA Rehearsal Record`", blocked)
-        self.assertIn("The blocker is no longer missing governance text.", blocked)
+        expected = blocked_record.build_blocked_record(record_date="2026-03-13")
+        self.assertEqual(blocked, expected)
 
 
 if __name__ == "__main__":

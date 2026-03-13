@@ -7,7 +7,7 @@
 ## Blocking Facts
 
 1. The only shipped Pulse v6 RC tag is `v6.0.0-rc.1`.
-2. That RC tag resolves to commit `7ac2fd682cb2facc48950371ea4fce4c885c4ea1`.
+2. That RC tag resolves to commit `ceb23d19a6241efbb548a1f21dccba14de5821dc`.
 3. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6`.
