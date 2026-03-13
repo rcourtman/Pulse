@@ -1,54 +1,87 @@
 # Commercial Cancellation/Reactivation External E2E 2026-03-13
 
 - Gate: `commercial-cancellation-reactivation`
-- Assertion: `RA16`
+- Assertions:
+  - `RA2`
+  - `RA4`
+  - `RA7`
+  - `RA16`
 - Evidence tier: `real-external-e2e`
 - Operator date: `2026-03-13`
-- Runtime topology:
-  - Hosted-mode Pulse runtime: `http://192.168.0.106:17655`
-  - Staging commercial checkout runtime: `http://127.0.0.1:18080`
-  - External payment/provider surface: Stripe-hosted checkout and Stripe customer portal in sandbox/test mode
+- Operator: `Codex on local workspace driving real public HTTPS surfaces`
 
-## Why This Rehearsal Replaced The Earlier Record
+## Topology
 
-The prior 2026-03-12 record proved the behavior floor, but parts of the repurchase path fell back to Stripe API equivalents because the browser journey was still too brittle. This rehearsal reran the governed path with:
+- Hosted-mode Pulse runtime:
+  - URL: `https://ccr-runtime.cloud.pulserelay.pro`
+  - Host: temporary public Traefik-routed container on `pulse-cloud`
+  - Stripe webhook ingress used by Pulse: `POST /api/webhooks/stripe`
+- Commercial checkout runtime:
+  - URL: `https://ccr-checkout.cloud.pulserelay.pro`
+  - Runtime: temporary public Traefik-routed `pulse-pro/license-server` container on `pulse-cloud`
+  - Stripe mode: `sandbox/test`
+- External payment/provider surfaces:
+  - Stripe-hosted billing portal
+  - Stripe-hosted checkout
 
-- the real hosted-mode Pulse runtime still carrying the entitlement and webhook state transitions
-- the real `pulse-pro/license-server` binary running in Stripe test mode
-- real Stripe-hosted checkout and customer-portal browser flows
-- no API-equivalent fallback for the repurchase or cancellation/resume journey
+## Why This Record Replaces The Older External Narrative
 
-That lifts the gate from `managed-runtime-exercise` to `real-external-e2e`.
+The gate was already marked `passed`, but the existing 2026-03-13 record still described an older local/HTTP staging topology. This replacement records the actual public HTTPS rehearsal that passed:
 
-## Runtime Setup
+- the real Pulse hosted-mode runtime was reachable on a public external URL
+- the real checkout runtime was reachable on a public external URL
+- cancellation/resume used the real Stripe billing portal in the browser
+- repurchase used the real Stripe-hosted checkout in the browser
+- no API-equivalent fallback was used for the cancellation/resume or repurchase path
 
-### Pulse Runtime
+## Fixtures
 
-- Base URL: `http://192.168.0.106:17655`
-- Mode: hosted-mode Pulse runtime for commercial continuity entitlement checks
-- Auth: local admin login on the rehearsal runtime
-- Stripe webhook ingress used by Pulse runtime:
-  `POST /api/webhooks/stripe`
-
-### Commercial Checkout Runtime
-
-- Binary: locally built `pulse-pro/license-server`
-- Base URL: `http://127.0.0.1:18080`
-- Stripe mode: sandbox/test mode
+- Monthly grandfathered customer:
+  - Email: `ccr-1773408158270@example.com`
+  - Stripe customer ID: `cus_U8nGR5FZJgraIQ`
+  - Stripe subscription ID: `sub_1TAVfnPZ0VLEY1aVS8AP2UUV`
+  - Legacy price ID: `price_1TAVYiPZ0VLEY1aV17RZUocW`
+  - Test clock ID: `clock_1TAVfmPZ0VLEY1aVpvkB8r2d`
+- Annual grandfathered customer:
+  - Email: `ccr-1773408158270@example.com`
+  - Stripe customer ID: `cus_U8nG0zDM1XM0qZ`
+  - Stripe subscription ID: `sub_1TAVfsPZ0VLEY1aVpiG1wb1B`
+  - Legacy price ID: `price_1TAVYjPZ0VLEY1aVZYR0taZL`
+  - Test clock ID: `clock_1TAVfrPZ0VLEY1aVFni8FenJ`
 - Public v6 checkout plan keys:
-  - Monthly: current test-mode Pro monthly v6 plan key served by the staging commercial runtime
-  - Annual: current test-mode Pro annual v6 plan key served by the staging commercial runtime
-- Legacy rejection plan key:
+  - Monthly: current test-mode Pro monthly v6 plan key configured on the temporary checkout runtime
+  - Annual: current test-mode Pro annual v6 plan key configured on the temporary checkout runtime
+- Direct legacy rejection key:
   - `price_v5_pro_monthly`
+
+## Commands And Proof
+
+Automated proof floor:
+
+- `python3 scripts/release_control/commercial_cancellation_reactivation_proof.py --json`
+- Result: `pass`
+
+Live browser rehearsal:
+
+```bash
+cd /Volumes/Development/pulse/repos/pulse/tests/integration
+PULSE_E2E_SKIP_DOCKER=1 \
+PULSE_BASE_URL=https://ccr-runtime.cloud.pulserelay.pro \
+PULSE_CCR_CHECKOUT_BASE_URL=https://ccr-checkout.cloud.pulserelay.pro \
+PULSE_CCR_CHECKOUT_RESULT_BASE_URL=https://ccr-checkout.cloud.pulserelay.pro \
+PULSE_CCR_WEBHOOK_BASE_URL=https://ccr-runtime.cloud.pulserelay.pro \
+PULSE_CCR_WEBHOOK_PATH=/api/webhooks/stripe \
+PULSE_CCR_ALLOW_BILLING_STATE_SEED=true \
+npm test -- tests/14-commercial-cancellation-reactivation.spec.ts --project=chromium
+```
+
+Live browser result:
+
+- `2 passed (2.2m)`
 
 ## Executed Scenarios
 
 ### `CCR-1` through `CCR-5` Monthly Path
-
-Executed with Playwright against:
-
-- Pulse runtime: `http://192.168.0.106:17655`
-- Checkout/result/landing override: `http://127.0.0.1:18080`
 
 Observed:
 
@@ -56,51 +89,48 @@ Observed:
 - Cancel-at-period-end did not rewrite the customer early.
 - Resume-before-lapse preserved the same legacy recurring identity.
 - Completed cancellation revoked paid state cleanly in Pulse.
-- Post-cancel re-entry completed through real Stripe-hosted checkout and landed on the current v6 monthly plan, not a revived grandfathered plan.
+- Post-cancel repurchase completed through real Stripe-hosted checkout and the fulfillment returned the current public v6 monthly plan key, not a revived grandfathered plan.
+
+Monthly v6 re-entry evidence:
+
+- Fulfilled checkout session recorded by the checkout runtime:
+  - License ID: `lic_04b25c69447890d3237874cdded92f3a`
+  - Plan key: current test-mode Pro monthly v6 plan key configured on the temporary checkout runtime
+  - Checkout session ID: `cs_test_b1iqGMKvA5bk27C2TaUdxsP7K1YqE6m9ufR7lmmlEge1BVDiaScj8TzHv1`
 
 ### `CCR-6` Annual Parity
-
-Executed in the same topology with the annual public v6 checkout plan key.
 
 Observed:
 
 - Annual grandfathered continuity stayed intact while active.
 - Completed annual cancellation revoked paid state cleanly.
-- Post-cancel annual re-entry completed through real Stripe-hosted checkout and landed on the current v6 annual plan, not a revived grandfathered plan.
+- Post-cancel repurchase completed through real Stripe-hosted checkout and the fulfillment returned the current public v6 annual plan key, not a revived grandfathered plan.
+
+Annual v6 re-entry evidence:
+
+- Fulfilled checkout session recorded by the checkout runtime:
+  - License ID: `lic_1aeed899e926c9200d3cc5c57e9a9fe9`
+  - Plan key: current test-mode Pro annual v6 plan key configured on the temporary checkout runtime
+  - Checkout session ID: `cs_test_b1uEc0cXgNW9OvsuMD04izn7cqb6MDzGRpfyopCyjZfp5M2IN8tTDc0AS7`
 
 ### `CCR-7` Direct Legacy Checkout Rejection
 
-Observed against the staging commercial runtime:
+Observed against `https://ccr-checkout.cloud.pulserelay.pro`:
 
-- `POST /v1/checkout/session` with `plan_key=price_v5_pro_monthly`
-  returned `400`
+- `POST /v1/checkout/session` with `plan_key=price_v5_pro_monthly` returned `400`
 - Response body contained `not a v6 checkout plan`
 - No Stripe checkout session was created
 
-## Commands And Proof
+## Evidence Captured
 
-Automated proof floor:
-
-- `python3 scripts/release_control/commercial_cancellation_reactivation_proof.py --json`
-
-Browser rehearsal:
-
-```bash
-cd /Volumes/Development/pulse/repos/pulse/tests/integration
-PULSE_E2E_SKIP_DOCKER=1 npx playwright test tests/14-commercial-cancellation-reactivation.spec.ts --project=chromium
-```
-
-Required env overrides for the successful external rehearsal:
-
-- `PULSE_COMMERCIAL_BASE_URL=http://192.168.0.106:17655`
-- `PULSE_CCR_WEBHOOK_BASE_URL=http://192.168.0.106:17655`
-- `PULSE_CCR_WEBHOOK_PATH=/api/webhooks/stripe`
-- `PULSE_CCR_ALLOW_BILLING_STATE_SEED=1`
-- `PULSE_CCR_CHECKOUT_BASE_URL=http://127.0.0.1:18080`
-- `PULSE_CCR_CHECKOUT_RESULT_BASE_URL=http://127.0.0.1:18080`
-- `PULSE_CCR_LANDING_BASE_URL=http://127.0.0.1:18080`
-- `PULSE_CCR_V6_MONTHLY_PLAN_KEY=<current test-mode monthly v6 plan key>`
-- `PULSE_CCR_V6_ANNUAL_PLAN_KEY=<current test-mode annual v6 plan key>`
+- Playwright result bundle:
+  - `tests/integration/test-results/junit.xml`
+- Playwright browser artifact:
+  - `tests/integration/test-results/.playwright-artifacts-0/106d1b678691c13eace08d6de5972835.webm`
+- Hosted runtime evidence:
+  - runtime login, billing-state seed, and webhook replays observed on `https://ccr-runtime.cloud.pulserelay.pro`
+- Checkout runtime evidence:
+  - `docker logs pulse-ccr-license` on `pulse-cloud` recorded the fulfilled monthly and annual v6 checkout sessions above
 
 ## Outcome
 
@@ -111,4 +141,4 @@ Required env overrides for the successful external rehearsal:
 
 ## Release Impact
 
-`commercial-cancellation-reactivation` is now satisfied at the required `real-external-e2e` tier. `RA16` can derive as passed again from governed evidence rather than from a weaker local/manual closure.
+`commercial-cancellation-reactivation` remains satisfied at the required `real-external-e2e` tier, and the governed record now matches the actual public HTTPS rehearsal that passed on `2026-03-13`.
