@@ -1434,6 +1434,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-external-e2e-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
           "kind": "file"
         },
@@ -1646,16 +1651,11 @@
       "name": "Conversion/commercial readiness",
       "target_score": 9,
       "current_score": 9,
-      "status": "partial",
+      "status": "target-met",
       "completion": {
-        "state": "bounded-residual",
-        "summary": "Commercial conversion surfaces are at the RC floor, but real cancellation/reactivation continuity proof still gates broader lane closure.",
-        "tracking": [
-          {
-            "kind": "release-gate",
-            "id": "commercial-cancellation-reactivation"
-          }
-        ]
+        "state": "complete",
+        "summary": "Commercial conversion surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity through the governed external Stripe rehearsal.",
+        "tracking": []
       },
       "blockers": [],
       "subsystems": [],
@@ -1687,16 +1687,11 @@
       "name": "Cloud paid readiness",
       "target_score": 8,
       "current_score": 8,
-      "status": "partial",
+      "status": "target-met",
       "completion": {
-        "state": "bounded-residual",
-        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but real commercial continuity proof remains the governed residual gap.",
-        "tracking": [
-          {
-            "kind": "release-gate",
-            "id": "commercial-cancellation-reactivation"
-          }
-        ]
+        "state": "complete",
+        "summary": "Cloud-paid runtime and billing surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity across checkout, portal, and entitlement boundaries.",
+        "tracking": []
       },
       "blockers": [],
       "subsystems": [
@@ -2057,12 +2052,8 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Migration safety is at the RC floor, while GA promotion proof and any further commercial continuity coverage remain governed residual work.",
+        "summary": "Migration safety is at the RC floor, while GA promotion proof remains the only governed residual work.",
         "tracking": [
-          {
-            "kind": "release-gate",
-            "id": "commercial-cancellation-reactivation"
-          },
           {
             "kind": "release-gate",
             "id": "rc-to-ga-promotion-readiness"
@@ -2230,7 +2221,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
@@ -2244,6 +2235,12 @@
           "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-2026-03-12.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-external-e2e-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },

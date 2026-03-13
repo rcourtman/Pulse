@@ -11,18 +11,25 @@ type StripeSubscription = {
   id: string;
   customer?: string;
   status?: string;
+  metadata?: Record<string, string>;
   cancel_at_period_end?: boolean;
   canceled_at?: number | null;
   current_period_end?: number | null;
   test_clock?: string | { id?: string } | null;
   items?: {
-    data?: Array<{ price?: { id?: string } }>;
+    data?: Array<{ price?: { id?: string; metadata?: Record<string, string> } }>;
   };
 };
 
 type StripePortalSession = {
   id: string;
   url: string;
+};
+
+type StripeTestClock = {
+  id?: string;
+  status?: string;
+  frozen_time?: number;
 };
 
 type CheckoutCreateResponse = {
@@ -55,6 +62,9 @@ type BillingStatePayload = {
   stripe_subscription_id?: string;
   stripe_price_id?: string;
 };
+
+const DEFAULT_PUBLIC_V6_MONTHLY_PLAN_KEY = 'price_1T47OVBrHBocJIGHg4sMHMV7';
+const DEFAULT_PUBLIC_V6_ANNUAL_PLAN_KEY = 'price_1T47OVBrHBocJIGHQv65Mrkb';
 
 function requiredEnv(name: string): string {
   const value = (process.env[name] || '').trim();
@@ -102,11 +112,19 @@ function entitlementBillingStatePath(): string {
 }
 
 function checkoutBaseURL(): string {
-  return (process.env.PULSE_CCR_CHECKOUT_BASE_URL || 'https://pulserelay.pro').replace(/\/+$/, '');
+  return (
+    process.env.PULSE_CCR_CHECKOUT_BASE_URL ||
+    process.env.PULSE_LICENSE_SERVER_URL ||
+    'https://license.pulserelay.pro'
+  ).replace(/\/+$/, '');
 }
 
 function checkoutResultBaseURL(): string {
   return (process.env.PULSE_CCR_CHECKOUT_RESULT_BASE_URL || checkoutBaseURL()).replace(/\/+$/, '');
+}
+
+function commercialLandingBaseURL(): string {
+  return (process.env.PULSE_CCR_LANDING_BASE_URL || 'https://pulserelay.pro').replace(/\/+$/, '');
 }
 
 function successURL(baseURL: string): string {
@@ -188,7 +206,7 @@ function subscriptionObjectForWebhook(subscription: StripeSubscription): Record<
         ? subscription.test_clock
         : subscription.test_clock?.id || null,
     items: subscription.items || { data: [] },
-    metadata: {},
+    metadata: subscription.metadata || {},
   };
 }
 
@@ -308,6 +326,17 @@ async function advanceTestClock(
       form: { frozen_time: String(frozenTime) },
     },
   );
+
+  await expect
+    .poll(async () => {
+      const clock = await stripeRequest<StripeTestClock>(
+        request,
+        stripeSecretKey,
+        `/v1/test_helpers/test_clocks/${encodeURIComponent(testClockID)}`,
+      );
+      return clock.status || '';
+    }, { timeout: 120_000 })
+    .toBe('ready');
 }
 
 async function createBillingPortalSession(
@@ -319,7 +348,7 @@ async function createBillingPortalSession(
     method: 'POST',
     form: {
       customer: customerID,
-      return_url: `${checkoutBaseURL()}/manage`,
+      return_url: `${commercialLandingBaseURL()}/manage.html`,
     },
   });
 }
@@ -332,12 +361,12 @@ async function createCheckoutSession(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      Origin: checkoutBaseURL(),
+      Origin: commercialLandingBaseURL(),
     },
     data: {
       plan_key: planKey,
-      success_url: successURL(checkoutBaseURL()),
-      cancel_url: cancelURL(checkoutBaseURL()),
+      success_url: successURL(commercialLandingBaseURL()),
+      cancel_url: cancelURL(commercialLandingBaseURL()),
     },
   });
   expect(response.ok(), `checkout session creation failed: HTTP ${response.status()}`).toBeTruthy();
@@ -353,7 +382,7 @@ async function fetchCheckoutFulfillment(
     {
       headers: {
         Accept: 'application/json',
-        Origin: checkoutBaseURL(),
+        Origin: commercialLandingBaseURL(),
       },
     },
   );
@@ -429,6 +458,7 @@ async function portalScheduleCancellation(
   ]);
   await clickFirstVisible(page, [
     /confirm/i,
+    /cancel subscription/i,
     /cancel plan/i,
     /confirm cancellation/i,
   ]);
@@ -451,13 +481,14 @@ async function portalResumeCancellation(
   const portal = await createBillingPortalSession(request, stripeSecretKey, customerID);
   await page.goto(portal.url);
   const clickedResume = await clickFirstVisible(page, [
+    /don't cancel subscription/i,
     /resume subscription/i,
     /resume plan/i,
     /reactivate/i,
     /keep subscription/i,
   ]);
   expect(clickedResume, 'expected to find a resume action in Stripe billing portal').toBeTruthy();
-  await clickFirstVisible(page, [/confirm/i, /resume/i, /reactivate/i]);
+  await clickFirstVisible(page, [/confirm/i, /resume/i, /renew subscription/i, /reactivate/i]);
 
   await expect
     .poll(async () => {
@@ -468,6 +499,8 @@ async function portalResumeCancellation(
 }
 
 test.describe.serial('Commercial cancellation/reactivation', () => {
+  test.describe.configure({ timeout: 180_000 });
+
   test('monthly grandfathered continuity, cancel/resume, cancellation, and v6 re-entry', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial coverage');
 
@@ -477,7 +510,8 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     const subscriptionID = requiredEnv('PULSE_CCR_MONTHLY_SUBSCRIPTION_ID');
     const legacyPriceID = requiredEnv('PULSE_CCR_MONTHLY_LEGACY_PRICE_ID');
     const testClockID = requiredEnv('PULSE_CCR_MONTHLY_TEST_CLOCK_ID');
-    const v6PlanKey = process.env.PULSE_CCR_V6_MONTHLY_PLAN_KEY || 'price_pro_monthly';
+    const v6PlanKey =
+      process.env.PULSE_CCR_V6_MONTHLY_PLAN_KEY || DEFAULT_PUBLIC_V6_MONTHLY_PLAN_KEY;
     const returnerEmail = requiredEnv('PULSE_CCR_RETURNER_EMAIL');
     const baseURL = commercialBaseURL();
     const orgID = commercialOrgID();
@@ -592,7 +626,7 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Origin: checkoutBaseURL(),
+        Origin: commercialLandingBaseURL(),
       },
       data: { plan_key: 'price_v5_pro_monthly' },
     });
@@ -611,7 +645,8 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
     const subscriptionID = requiredEnv('PULSE_CCR_ANNUAL_SUBSCRIPTION_ID');
     const legacyPriceID = requiredEnv('PULSE_CCR_ANNUAL_LEGACY_PRICE_ID');
     const testClockID = requiredEnv('PULSE_CCR_ANNUAL_TEST_CLOCK_ID');
-    const v6PlanKey = process.env.PULSE_CCR_V6_ANNUAL_PLAN_KEY || 'price_pro_annual';
+    const v6PlanKey =
+      process.env.PULSE_CCR_V6_ANNUAL_PLAN_KEY || DEFAULT_PUBLIC_V6_ANNUAL_PLAN_KEY;
     const returnerEmail = requiredEnv('PULSE_CCR_RETURNER_EMAIL');
     const orgID = commercialOrgID();
 

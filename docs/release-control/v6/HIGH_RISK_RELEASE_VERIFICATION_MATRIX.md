@@ -136,6 +136,8 @@ Companion drill:
   subscription remains continuous, completed cancellation revokes paid access,
   and any later public re-entry lands on current public v6 pricing rather than
   reviving the legacy recurring rate.
+- Latest exercised record:
+  `docs/release-control/v6/records/commercial-cancellation-reactivation-external-e2e-2026-03-13.md`
 - Block release if:
   The scenario is unexercised, a returning canceled customer can re-enter on a
   legacy recurring price, or cancellation/reactivation leaves pricing and

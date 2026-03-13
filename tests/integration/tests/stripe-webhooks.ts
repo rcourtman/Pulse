@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
-import { expect, type APIRequestContext } from '@playwright/test';
+import { expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 
 export function webhookSignature(secret: string, payload: string) {
   const ts = Math.floor(Date.now() / 1000);
@@ -14,7 +14,7 @@ export async function sendStripeWebhook(
   webhookSecret: string,
   eventType: string,
   objectPayload: Record<string, unknown>,
-  options: { path?: string } = {},
+  options: { path?: string; isolated?: boolean } = {},
 ) {
   const eventPayload = {
     id: `evt_e2e_${Date.now()}_${randomBytes(4).toString('hex')}`,
@@ -27,12 +27,25 @@ export async function sendStripeWebhook(
   };
   const body = JSON.stringify(eventPayload);
   const webhookPath = options.path?.trim() || '/api/stripe/webhook';
-  const response = await request.post(`${baseURL}${webhookPath}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Stripe-Signature': webhookSignature(webhookSecret, body),
-    },
-    data: body,
-  });
-  expect(response.ok(), `Webhook ${eventType} failed: HTTP ${response.status()}`).toBeTruthy();
+  const useIsolatedContext = options.isolated !== false;
+  const webhookRequest = useIsolatedContext
+    ? await playwrightRequest.newContext({ baseURL })
+    : request;
+  try {
+    const response = await webhookRequest.post(
+      useIsolatedContext ? webhookPath : `${baseURL}${webhookPath}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Stripe-Signature': webhookSignature(webhookSecret, body),
+        },
+        data: body,
+      },
+    );
+    expect(response.ok(), `Webhook ${eventType} failed: HTTP ${response.status()}`).toBeTruthy();
+  } finally {
+    if (useIsolatedContext) {
+      await webhookRequest.dispose();
+    }
+  }
 }
