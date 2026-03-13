@@ -116,6 +116,11 @@ const canonicalShellTitleExpectations = [
     source: securityOverviewPanelSource,
   },
   {
+    tab: 'security-auth',
+    title: 'Authentication',
+    source: securityAuthPanelSource,
+  },
+  {
     tab: 'security-sso',
     title: 'Single Sign-On Providers',
     source: ssoProvidersPanelSource,

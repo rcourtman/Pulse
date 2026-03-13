@@ -1,7 +1,6 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import {
@@ -18,6 +17,7 @@ import {
 } from '@/utils/securityAuthPresentation';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import Lock from 'lucide-solid/icons/lock';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import type { VersionInfo } from '@/api/updates';
 
 interface SecurityStatusInfo {
@@ -52,89 +52,57 @@ interface SecurityAuthPanelProps {
 export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
   const restartInstruction = () =>
     getSecurityAuthRestartInstruction(props.versionInfo()?.deploymentType);
+  const showAuthenticationControls = () =>
+    !props.securityStatusLoading() &&
+    (props.securityStatus()?.hasAuthentication || props.securityStatus()?.apiTokenConfigured);
 
   return (
-    <div class="space-y-6">
-      {/* Show message when auth is disabled */}
+    <SettingsPanel
+      title="Authentication"
+      description="Manage password-based authentication, login visibility, and credential rotation."
+      icon={<Lock class="w-5 h-5" strokeWidth={2} />}
+      noPadding={showAuthenticationControls()}
+      bodyClass={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6'}
+    >
       <Show when={!props.securityStatus()?.hasAuthentication}>
-        <Card
-          padding="none"
-          class="overflow-hidden border border-amber-200 dark:border-amber-800"
-          border={false}
+        <CalloutCard
+          tone="warning"
+          title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
+          description={SECURITY_AUTH_DISABLED_MESSAGE}
+          icon={<AlertTriangle class="h-5 w-5" />}
+          class="space-y-4"
         >
-          {/* Header */}
-          <div class="bg-amber-50 dark:bg-amber-900 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-amber-100 dark:bg-amber-900 rounded-md">
-                <svg
-                  class="w-5 h-5 text-amber-600 dark:text-amber-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <SectionHeader
-                title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
-                size="sm"
-                class="flex-1"
-              />
-              <button
-                type="button"
-                onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-                disabled={!props.canManage}
-                class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
-              >
-                {SECURITY_AUTH_SETUP_LABEL}
-              </button>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div class="p-6">
-            <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
-              {SECURITY_AUTH_DISABLED_MESSAGE}
-            </p>
-
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <Show when={!props.canManage}>
-              <p class="text-xs text-amber-700 dark:text-amber-300 mb-4">
+              <p class="text-xs text-amber-700 dark:text-amber-300">
                 {SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE}
               </p>
             </Show>
+            <button
+              type="button"
+              onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
+              disabled={!props.canManage}
+              class="w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800"
+            >
+              {SECURITY_AUTH_SETUP_LABEL}
+            </button>
+          </div>
 
-            <Show when={props.canManage && props.showQuickSecuritySetup()}>
+          <Show when={props.canManage && props.showQuickSecuritySetup()}>
+            <div class="border-t border-amber-200 pt-4 dark:border-amber-700">
               <QuickSecuritySetup
                 onConfigured={() => {
                   props.setShowQuickSecuritySetup(false);
                   props.loadSecurityStatus();
                 }}
               />
-            </Show>
-          </div>
-        </Card>
+            </div>
+          </Show>
+        </CalloutCard>
       </Show>
 
-      {/* Authentication */}
-      <Show
-        when={
-          !props.securityStatusLoading() &&
-          (props.securityStatus()?.hasAuthentication || props.securityStatus()?.apiTokenConfigured)
-        }
-      >
-        <SettingsPanel
-          title="Authentication"
-          description="Manage password authentication and credential rotation."
-          icon={<Lock class="w-5 h-5" strokeWidth={2} />}
-          noPadding
-          bodyClass="divide-y divide-border"
-        >
-          {/* Content */}
+      <Show when={showAuthenticationControls()}>
+        <div>
           <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
             <Show when={!props.canManage}>
               <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
@@ -197,103 +165,84 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               />
             </div>
           </Show>
-        </SettingsPanel>
-      </Show>
-
-      {/* Show pending restart message if configured but not loaded */}
-      <Show when={props.securityStatus()?.configuredButPendingRestart}>
-        <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-4">
-          <div class="flex items-start space-x-3">
-            <div class="flex-shrink-0">
-              <svg
-                class="h-6 w-6 text-amber-600 dark:text-amber-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <div class="flex-1">
-              <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                {SECURITY_AUTH_RESTART_REQUIRED_TITLE}
-              </h4>
-              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                {SECURITY_AUTH_RESTART_REQUIRED_MESSAGE}
-              </p>
-              <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                {SECURITY_AUTH_RESTART_FOOTER}
-              </p>
-
-              <div class="mt-4 bg-surface rounded-md p-3 border border-amber-200 dark:border-amber-700">
-                <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
-
-                <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
-                  <div class="space-y-2">
-                    <p class="text-xs text-base-content">
-                      Type <code class="px-1 py-0.5 bg-surface-hover rounded">update</code> in your
-                      ProxmoxVE console
-                    </p>
-                    <p class="text-xs text-muted italic">
-                      {restartInstruction().secondaryLabel}{' '}
-                      <code class="text-xs">{restartInstruction().command}</code>
-                    </p>
-                  </div>
-                </Show>
-
-                <Show when={props.versionInfo()?.deploymentType === 'docker'}>
-                  <div class="space-y-1">
-                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                    <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      {restartInstruction().command}
-                    </code>
-                  </div>
-                </Show>
-
-                <Show
-                  when={
-                    props.versionInfo()?.deploymentType === 'systemd' ||
-                    props.versionInfo()?.deploymentType === 'manual'
-                  }
-                >
-                  <div class="space-y-1">
-                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                    <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      {restartInstruction().command}
-                    </code>
-                  </div>
-                </Show>
-
-                <Show when={props.versionInfo()?.deploymentType === 'development'}>
-                  <div class="space-y-1">
-                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                    <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      {restartInstruction().command}
-                    </code>
-                  </div>
-                </Show>
-
-                <Show when={!props.versionInfo()?.deploymentType}>
-                  <div class="space-y-1">
-                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                  </div>
-                </Show>
-              </div>
-
-              <div class="mt-3 p-2 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded">
-                <p class="text-xs text-green-700 dark:text-green-300">
-                  <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </Show>
-    </div>
+
+      <Show when={props.securityStatus()?.configuredButPendingRestart}>
+        <CalloutCard
+          tone="warning"
+          title={SECURITY_AUTH_RESTART_REQUIRED_TITLE}
+          description={
+            <>
+              <p>{SECURITY_AUTH_RESTART_REQUIRED_MESSAGE}</p>
+              <p class="mt-2">{SECURITY_AUTH_RESTART_FOOTER}</p>
+            </>
+          }
+          icon={<AlertTriangle class="h-5 w-5" />}
+          class="space-y-4"
+        >
+          <div class="rounded-md border border-amber-200 bg-surface p-3 dark:border-amber-700">
+            <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
+
+            <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
+              <div class="space-y-2">
+                <p class="text-xs text-base-content">
+                  Type <code class="px-1 py-0.5 bg-surface-hover rounded">update</code> in your
+                  ProxmoxVE console
+                </p>
+                <p class="text-xs text-muted italic">
+                  {restartInstruction().secondaryLabel}{' '}
+                  <code class="text-xs">{restartInstruction().command}</code>
+                </p>
+              </div>
+            </Show>
+
+            <Show when={props.versionInfo()?.deploymentType === 'docker'}>
+              <div class="space-y-1">
+                <p class="text-xs text-base-content">{restartInstruction().label}</p>
+                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                  {restartInstruction().command}
+                </code>
+              </div>
+            </Show>
+
+            <Show
+              when={
+                props.versionInfo()?.deploymentType === 'systemd' ||
+                props.versionInfo()?.deploymentType === 'manual'
+              }
+            >
+              <div class="space-y-1">
+                <p class="text-xs text-base-content">{restartInstruction().label}</p>
+                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                  {restartInstruction().command}
+                </code>
+              </div>
+            </Show>
+
+            <Show when={props.versionInfo()?.deploymentType === 'development'}>
+              <div class="space-y-1">
+                <p class="text-xs text-base-content">{restartInstruction().label}</p>
+                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                  {restartInstruction().command}
+                </code>
+              </div>
+            </Show>
+
+            <Show when={!props.versionInfo()?.deploymentType}>
+              <div class="space-y-1">
+                <p class="text-xs text-base-content">{restartInstruction().label}</p>
+              </div>
+            </Show>
+          </div>
+
+          <div class="rounded border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900">
+            <p class="text-xs text-green-700 dark:text-green-300">
+              <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
+            </p>
+          </div>
+        </CalloutCard>
+      </Show>
+    </SettingsPanel>
   );
 };

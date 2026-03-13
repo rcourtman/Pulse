@@ -25,12 +25,13 @@ work extends shared components instead of creating new local variants.
 3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 5. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-6. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-7. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-8. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-9. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-10. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-11. `frontend-modern/src/features/`
+6. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+7. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+8. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+9. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+10. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+11. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+12. `frontend-modern/src/features/`
 
 ## Shared Boundaries
 
@@ -150,6 +151,7 @@ The shell metadata driving those surfaces is part of the same boundary as
 well: `frontend-modern/src/components/Settings/settingsHeaderMeta.ts` and
 representative top-level panels such as
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` must keep
+`frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
 The release-ready shell proof now also includes a representative desktop

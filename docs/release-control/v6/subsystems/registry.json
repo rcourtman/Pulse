@@ -809,6 +809,7 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/Settings.tsx",
         "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
         "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
@@ -849,6 +850,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
               "frontend-modern/src/components/Settings/Settings.tsx",
               "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
               "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
