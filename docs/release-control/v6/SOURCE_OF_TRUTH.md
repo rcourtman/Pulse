@@ -187,6 +187,8 @@ Assertion design rules:
     `lane_followups` are active residual records, not a loose backlog: each one
     should stay referenced by the owning lane's `bounded-residual`
     `completion.tracking`.
+    Once a lane followup is no longer active residual work, remove it from
+    `lane_followups` instead of leaving it behind with a completed status.
 
 ## Locked Decisions
 

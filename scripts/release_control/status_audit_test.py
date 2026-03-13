@@ -954,7 +954,7 @@ class StatusAuditTest(unittest.TestCase):
                 ["lane-followup:mobile-post-rc-hardening[planned]"],
             )
 
-    def test_bounded_residual_lane_rejects_resolved_lane_followup_reference(self) -> None:
+    def test_bounded_residual_lane_rejects_done_lane_followup_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -986,6 +986,10 @@ class StatusAuditTest(unittest.TestCase):
             ):
                 report = audit_status_payload(payload)
 
+            self.assertIn(
+                "lane_followups[0] has invalid status 'done'",
+                report["errors"],
+            )
             self.assertIn(
                 "lanes[L1].completion.tracking lane followup 'mobile-post-rc-hardening' is already resolved and cannot keep a bounded residual open",
                 report["errors"],

@@ -171,6 +171,8 @@ Every substantial task must finish by checking these questions:
     Treat `lane_followups` as active residual records rather than loose backlog
     notes: each one should stay referenced by the owning lane's
     `bounded-residual` `completion.tracking`.
+    Once a lane followup is no longer active residual work, remove it from
+    `lane_followups` instead of leaving it behind with a completed status.
 
 This is the minimum update set for canonical work:
 

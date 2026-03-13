@@ -748,8 +748,7 @@
           "enum": [
             "planned",
             "active",
-            "parked",
-            "done"
+            "parked"
           ]
         },
         "recorded_at": {

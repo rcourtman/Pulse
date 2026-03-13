@@ -1162,7 +1162,7 @@ func TestStatusJSONLaneFollowupsAreTypedRecords(t *testing.T) {
 		if owner, ok := followup["owner"].(string); !ok || strings.TrimSpace(owner) == "" {
 			t.Fatalf("status.json lane_followup %q missing owner", id)
 		}
-		if statusValue, ok := followup["status"].(string); !ok || !slices.Contains([]string{"planned", "active", "parked", "done"}, statusValue) {
+		if statusValue, ok := followup["status"].(string); !ok || !slices.Contains([]string{"planned", "active", "parked"}, statusValue) {
 			t.Fatalf("status.json lane_followup %q has invalid status %#v", id, followup["status"])
 		}
 		recordedAt, ok := followup["recorded_at"].(string)
