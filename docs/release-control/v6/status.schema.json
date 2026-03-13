@@ -390,6 +390,16 @@
             "file",
             "dir"
           ]
+        },
+        "evidence_tier": {
+          "type": "string",
+          "enum": [
+            "test-proof",
+            "local-rehearsal",
+            "managed-runtime-exercise",
+            "real-external-e2e",
+            "production-observed"
+          ]
         }
       }
     },
@@ -515,9 +525,11 @@
         "summary",
         "owner",
         "blocking_level",
+        "minimum_evidence_tier",
         "status",
         "verification_doc",
-        "lane_ids"
+        "lane_ids",
+        "evidence"
       ],
       "properties": {
         "id": {
@@ -539,6 +551,16 @@
             "release-ready"
           ]
         },
+        "minimum_evidence_tier": {
+          "type": "string",
+          "enum": [
+            "test-proof",
+            "local-rehearsal",
+            "managed-runtime-exercise",
+            "real-external-e2e",
+            "production-observed"
+          ]
+        },
         "status": {
           "type": "string",
           "enum": [
@@ -558,6 +580,13 @@
           "items": {
             "type": "string",
             "pattern": "^L[0-9]+$"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
           }
         }
       }

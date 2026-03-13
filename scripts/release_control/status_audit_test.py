@@ -158,18 +158,36 @@ def base_payload(
                 "summary": "Need release verification",
                 "owner": "project-owner",
                 "blocking_level": "rc-ready",
+                "minimum_evidence_tier": "local-rehearsal",
                 "status": release_gate_status,
                 "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
                 "lane_ids": ["L1"],
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/lane-proof.md",
+                        "kind": "file",
+                        "evidence_tier": "local-rehearsal",
+                    }
+                ],
             },
             {
                 "id": "g2",
                 "summary": "Need GA promotion verification",
                 "owner": "project-owner",
                 "blocking_level": "release-ready",
+                "minimum_evidence_tier": "local-rehearsal",
                 "status": "passed",
                 "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
                 "lane_ids": ["L1"],
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/lane-proof.md",
+                        "kind": "file",
+                        "evidence_tier": "local-rehearsal",
+                    }
+                ],
             }
         ],
         "open_decisions": open_decisions or [],
@@ -316,6 +334,38 @@ class StatusAuditTest(unittest.TestCase):
                 {"assertions": [], "open_decisions": [], "release_gates": []},
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+
+    def test_passed_gate_without_required_evidence_tier_stays_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload()
+            payload["release_gates"][0]["minimum_evidence_tier"] = "real-external-e2e"
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["release_gates"][0]["status"], "passed")
+            self.assertEqual(report["release_gates"][0]["effective_status"], "threshold-unmet")
+            self.assertEqual(report["release_gates"][0]["highest_evidence_tier"], "local-rehearsal")
+            self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("effective=threshold-unmet", pretty)
+            self.assertIn("min_tier=real-external-e2e", pretty)
 
     def test_current_target_blockers_include_subsystem_contract_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -502,6 +552,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("rc_ready=False", pretty)
             self.assertIn("proof_commands=1", pretty)
             self.assertIn("release_gates:", pretty)
+            self.assertIn("effective=pending", pretty)
             self.assertIn("current_target_blockers:", pretty)
             self.assertNotIn("current_target_workstreams:", pretty)
             self.assertIn("rc_blockers:", pretty)

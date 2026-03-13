@@ -1978,12 +1978,21 @@
       "summary": "Confirm API tokens are assigned to the correct user and org context, enforce scope boundaries including legacy persisted host-agent scope aliases, and revoke cleanly.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
         "L6",
         "L11"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/api-token-scope-and-assignment-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     },
     {
@@ -1991,12 +2000,21 @@
       "summary": "Confirm the actual hosted Pulse tier works end to end after provisioning: hosted auth, runtime entry, and hosted billing/admin surfaces all function coherently.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "passed",
+      "minimum_evidence_tier": "real-external-e2e",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
         "L4",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
       ]
     },
     {
@@ -2004,6 +2022,7 @@
       "summary": "Confirm grandfathered v5 recurring continuity holds while active, completed cancellation revokes paid state, and re-entry after cancellation uses current public v6 pricing.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -2011,6 +2030,14 @@
         "L3",
         "L11",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/commercial-cancellation-reactivation-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     },
     {
@@ -2018,10 +2045,19 @@
       "summary": "Confirm active v6-facing guidance is current, and any legacy or historical docs are clearly archived or demoted instead of remaining current guidance.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
+      "minimum_evidence_tier": "local-rehearsal",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L9"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/documentation-currentness-and-legacy-cleanup-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
       ]
     },
     {
@@ -2029,6 +2065,7 @@
       "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -2036,6 +2073,14 @@
         "L3",
         "L4",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
       ]
     },
     {
@@ -2043,12 +2088,21 @@
       "summary": "Confirm pulse-mobile pairing, persistence, relay reconnect, auth transitions, and approval flows work against a real instance.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L5",
         "L7",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/mobile-relay-auth-approvals-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        }
       ]
     },
     {
@@ -2056,12 +2110,21 @@
       "summary": "Confirm MSP mode behaves as a real provider workflow: one account can manage multiple client tenants coherently without cross-client leakage or MSP/public-plan confusion.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
         "L4",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/msp-provider-tenant-management-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
       ]
     },
     {
@@ -2069,12 +2132,21 @@
       "summary": "Confirm multi-tenant Pulse behaves as a coherent tenant-isolated product across org scope, runtime state, sharing, and migration.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L4",
         "L6",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/multi-tenant-runtime-isolation-and-coherence-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     },
     {
@@ -2082,12 +2154,21 @@
       "summary": "Confirm user creation, organization membership, RBAC scope, and cross-org sharing fail closed outside intended access.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L4",
         "L9",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/organization-user-scope-and-rbac-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     },
     {
@@ -2095,6 +2176,7 @@
       "summary": "Confirm free-versus-paid feature gating and agent allocation accounting match entitlements across UI, API, hosted, and upgrade surfaces.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -2103,6 +2185,14 @@
         "L6",
         "L9",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/paid-feature-entitlement-gating-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     },
     {
@@ -2110,6 +2200,7 @@
       "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "blocked",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -2117,6 +2208,14 @@
         "L9",
         "L11",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
       ]
     },
     {
@@ -2124,12 +2223,21 @@
       "summary": "Confirm relay fresh registration, reconnect, stale-session recovery, and disconnect drain behavior hold under real pressure.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L5",
         "L7",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
       ]
     },
     {
@@ -2137,12 +2245,21 @@
       "summary": "Confirm a real v5-installed Pulse Unified Agent upgrades through candidate v6 RC assets into one canonical v6 agent identity without duplicate registration, stale fallback or legacy-scope breakage, or agent-count drift.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L6",
         "L11",
         "L12"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/unified-agent-v5-upgrade-continuity-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        }
       ]
     },
     {
@@ -2150,12 +2267,21 @@
       "summary": "Confirm supported upgrades preserve state, entitlements, and first-session continuity without repair flows.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
         "L5",
         "L8"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
       ]
     }
   ],

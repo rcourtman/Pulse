@@ -52,7 +52,12 @@ model that active and future release profiles reuse.
    Manual targets may declare an explicit proof scope when they should still
    pull machine proofs, or `none` when the hold is intentionally human-owned
    and should not emit derivation warnings.
-9. Direction changes must be normalized.
+9. High-risk closure must respect evidence quality.
+   A passed release gate is not enough by itself. `status.json.release_gates`
+   must declare the minimum evidence tier needed for closure, and the audit
+   layer must treat lower-tier evidence as rehearsal only rather than as
+   high-confidence completion.
+10. Direction changes must be normalized.
    When the user states a durable product truth or changes the current product
    priority, the agent must classify that direction as a readiness assertion,
    release gate, open decision, or active-target update instead of leaving it

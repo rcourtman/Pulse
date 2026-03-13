@@ -55,6 +55,14 @@ REQUIRED_SOURCE_PRECEDENCE = [
     DEFAULT_CONTROL_PLANE["registry_schema_rel"],
 ]
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+EVIDENCE_TIER_ORDER = [
+    "test-proof",
+    "local-rehearsal",
+    "managed-runtime-exercise",
+    "real-external-e2e",
+    "production-observed",
+]
+EVIDENCE_TIER_RANK = {tier: index for index, tier in enumerate(EVIDENCE_TIER_ORDER)}
 
 
 def _lane_sort_key(value: str) -> tuple[int, str]:
@@ -90,6 +98,24 @@ def _proof_command_sort_key(value: str) -> str:
     return value.casefold()
 
 
+def _evidence_tier_rank(value: str | None) -> int:
+    if value is None:
+        return -1
+    return EVIDENCE_TIER_RANK.get(value, -1)
+
+
+def _highest_evidence_tier(values: list[str]) -> str | None:
+    if not values:
+        return None
+    return max(values, key=_evidence_tier_rank)
+
+
+def _evidence_tier_meets_minimum(highest: str | None, minimum: str | None) -> bool:
+    if minimum is None:
+        return True
+    return _evidence_tier_rank(highest) >= _evidence_tier_rank(minimum)
+
+
 def _repo_sort_key(value: str) -> str:
     return value.casefold()
 
@@ -105,7 +131,7 @@ def _blocker_detail(
     summary_key: str,
     status_key: str,
 ) -> dict[str, Any]:
-    return {
+    detail = {
         "id": item["id"],
         "blocking_level": item["blocking_level"],
         "status": item[status_key],
@@ -113,6 +139,13 @@ def _blocker_detail(
         "repo_ids": list(item["repo_ids"]),
         "lane_ids": list(item.get("lane_ids", [])),
     }
+    if "effective_status" in item:
+        detail["effective_status"] = item["effective_status"]
+    if "highest_evidence_tier" in item:
+        detail["highest_evidence_tier"] = item["highest_evidence_tier"]
+    if "minimum_evidence_tier" in item:
+        detail["minimum_evidence_tier"] = item["minimum_evidence_tier"]
+    return detail
 
 
 def _phase_blocker_details(
@@ -134,9 +167,9 @@ def _phase_blocker_details(
             if decision["blocking_level"] in blocking_levels
         ],
         "release_gates": [
-            _blocker_detail(gate, summary_key="summary", status_key="status")
+            _blocker_detail(gate, summary_key="summary", status_key="effective_status")
             for gate in release_gates
-            if gate["blocking_level"] in blocking_levels and gate["status"] != "passed"
+            if gate["blocking_level"] in blocking_levels and gate["effective_status"] != "passed"
         ],
     }
 
@@ -160,6 +193,7 @@ def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
     return {
         "schema": schema,
         "valid_lane_statuses": schema_enum(schema, "lane", "status"),
+        "valid_evidence_tiers": schema_enum(schema, "evidence_reference", "evidence_tier"),
         "valid_readiness_assertion_blocking_levels": schema_enum(
             schema, "readiness_assertion", "blocking_level"
         ),
@@ -297,6 +331,7 @@ def audit_evidence_refs(
     context: str,
     active_repos: set[str],
     allowed_kinds: set[str],
+    valid_evidence_tiers: set[str],
     errors: list[str],
 ) -> dict[str, Any]:
     if not isinstance(raw_evidence, list) or not raw_evidence:
@@ -306,6 +341,7 @@ def audit_evidence_refs(
     missing_evidence: list[str] = []
     resolved_evidence: list[str] = []
     evidence_refs: list[tuple[str, str, str]] = []
+    evidence_tiers: list[str] = []
 
     for evidence_index, raw_evidence_ref in enumerate(raw_evidence):
         evidence_context = f"{context}.evidence[{evidence_index}]"
@@ -316,9 +352,19 @@ def audit_evidence_refs(
         repo = _require_string(raw_evidence_ref, "repo", errors, context=evidence_context)
         path = _require_string(raw_evidence_ref, "path", errors, context=evidence_context)
         kind = _require_string(raw_evidence_ref, "kind", errors, context=evidence_context)
+        evidence_tier = raw_evidence_ref.get("evidence_tier")
+        if evidence_tier is not None:
+            if not isinstance(evidence_tier, str) or not evidence_tier.strip():
+                errors.append(f"{evidence_context}.evidence_tier must be a non-empty string when declared")
+                evidence_tier = None
+            elif evidence_tier not in valid_evidence_tiers:
+                errors.append(f"{evidence_context}.evidence_tier has invalid value {evidence_tier!r}")
+                evidence_tier = None
         if repo is None or path is None or kind is None:
             continue
         evidence_refs.append((repo, path, kind))
+        if evidence_tier:
+            evidence_tiers.append(evidence_tier)
         if repo not in active_repos:
             errors.append(f"{evidence_context} repo {repo!r} is not in active_repos")
             continue
@@ -359,6 +405,7 @@ def audit_evidence_refs(
         "missing_evidence": missing_evidence,
         "resolved_evidence": resolved_evidence,
         "evidence_refs": evidence_refs,
+        "highest_evidence_tier": _highest_evidence_tier(evidence_tiers),
         "all_evidence_present": len(missing_evidence) == 0,
     }
 
@@ -570,6 +617,7 @@ def audit_lanes(
     *,
     active_repos: set[str],
     allowed_kinds: set[str],
+    valid_evidence_tiers: set[str],
     valid_lane_statuses: set[str],
     errors: list[str],
     warnings: list[str],
@@ -621,6 +669,7 @@ def audit_lanes(
             context=context,
             active_repos=active_repos,
             allowed_kinds=allowed_kinds,
+            valid_evidence_tiers=valid_evidence_tiers,
             errors=errors,
         )
 
@@ -760,6 +809,9 @@ def validate_release_gates(
     *,
     lane_ids: set[str],
     lane_repo_ids: dict[str, list[str]],
+    active_repos: set[str],
+    allowed_kinds: set[str],
+    valid_evidence_tiers: set[str],
     valid_release_gate_blocking_levels: set[str],
     valid_release_gate_statuses: set[str],
     errors: list[str],
@@ -778,12 +830,15 @@ def validate_release_gates(
         summary = _require_string(raw, "summary", errors, context=context)
         owner = _require_string(raw, "owner", errors, context=context)
         blocking_level = _require_string(raw, "blocking_level", errors, context=context)
+        minimum_evidence_tier = _require_string(raw, "minimum_evidence_tier", errors, context=context)
         status = _require_string(raw, "status", errors, context=context)
         verification_doc = _require_string(raw, "verification_doc", errors, context=context)
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
 
         if blocking_level and blocking_level not in valid_release_gate_blocking_levels:
             errors.append(f"{context} has invalid blocking_level {blocking_level!r}")
+        if minimum_evidence_tier and minimum_evidence_tier not in valid_evidence_tiers:
+            errors.append(f"{context} has invalid minimum_evidence_tier {minimum_evidence_tier!r}")
         if status and status not in valid_release_gate_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         if verification_doc and verification_doc != HIGH_RISK_RELEASE_MATRIX:
@@ -798,17 +853,50 @@ def validate_release_gates(
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
 
-        if gate_id and summary and owner and blocking_level and status and verification_doc:
+        evidence_report = audit_evidence_refs(
+            raw.get("evidence"),
+            context=context,
+            active_repos=active_repos,
+            allowed_kinds=allowed_kinds,
+            valid_evidence_tiers=valid_evidence_tiers,
+            errors=errors,
+        )
+        evidence_threshold_met = _evidence_tier_meets_minimum(
+            evidence_report["highest_evidence_tier"],
+            minimum_evidence_tier,
+        )
+        if status == "passed":
+            if not evidence_report["all_evidence_present"]:
+                effective_status = "evidence-missing"
+            elif not evidence_threshold_met:
+                effective_status = "threshold-unmet"
+            else:
+                effective_status = "passed"
+        else:
+            effective_status = status
+
+        if gate_id and summary and owner and blocking_level and minimum_evidence_tier and status and verification_doc:
             repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
+            repo_ids = sorted(
+                set(repo_ids) | {repo for repo, _, _ in evidence_report["evidence_refs"]},
+                key=_repo_sort_key,
+            )
             records.append(
                 {
                     "id": gate_id,
                     "summary": summary,
                     "owner": owner,
                     "blocking_level": blocking_level,
+                    "minimum_evidence_tier": minimum_evidence_tier,
                     "status": status,
+                    "effective_status": effective_status,
                     "verification_doc": verification_doc,
                     "lane_ids": lane_refs,
+                    "all_evidence_present": evidence_report["all_evidence_present"],
+                    "evidence_count": len(evidence_report["resolved_evidence"]),
+                    "highest_evidence_tier": evidence_report["highest_evidence_tier"],
+                    "evidence_threshold_met": evidence_threshold_met,
+                    "missing_evidence": evidence_report["missing_evidence"],
                     "repo_ids": repo_ids,
                     "cross_repo": len(repo_ids) > 1,
                 }
@@ -887,6 +975,7 @@ def validate_readiness_assertions(
     subsystem_to_lane: dict[str, str],
     active_repos: set[str],
     allowed_kinds: set[str],
+    valid_evidence_tiers: set[str],
     valid_readiness_assertion_kinds: set[str],
     valid_readiness_assertion_blocking_levels: set[str],
     valid_readiness_assertion_proof_types: set[str],
@@ -896,7 +985,7 @@ def validate_readiness_assertions(
     seen_ids: set[str] = set()
     records: list[dict[str, Any]] = []
     release_gate_statuses = {
-        str(gate["id"]).strip(): str(gate["status"]).strip()
+        str(gate["id"]).strip(): str(gate["effective_status"]).strip()
         for gate in release_gates
         if str(gate.get("id", "")).strip()
     }
@@ -980,6 +1069,7 @@ def validate_readiness_assertions(
             context=context,
             active_repos=active_repos,
             allowed_kinds=allowed_kinds,
+            valid_evidence_tiers=valid_evidence_tiers,
             errors=errors,
         )
         has_executable_proof = any(
@@ -1193,6 +1283,7 @@ def audit_status_payload(
     contract = schema_contract or DEFAULT_STATUS_SCHEMA_CONTRACT
     required_top_level_fields = set(contract["required_top_level_fields"])
     valid_lane_statuses = set(contract["valid_lane_statuses"])
+    valid_evidence_tiers = set(contract["valid_evidence_tiers"])
     valid_readiness_assertion_blocking_levels = set(contract["valid_readiness_assertion_blocking_levels"])
     valid_readiness_assertion_kinds = set(contract["valid_readiness_assertion_kinds"])
     valid_readiness_assertion_proof_types = set(contract["valid_readiness_assertion_proof_types"])
@@ -1248,6 +1339,7 @@ def audit_status_payload(
         payload,
         active_repos=active_repo_set,
         allowed_kinds=allowed_kinds,
+        valid_evidence_tiers=valid_evidence_tiers,
         valid_lane_statuses=valid_lane_statuses,
         errors=errors,
         warnings=warnings,
@@ -1267,6 +1359,9 @@ def audit_status_payload(
         payload,
         lane_ids=lane_ids,
         lane_repo_ids=lane_repo_ids,
+        active_repos=active_repo_set,
+        allowed_kinds=allowed_kinds,
+        valid_evidence_tiers=valid_evidence_tiers,
         valid_release_gate_blocking_levels=valid_release_gate_blocking_levels,
         valid_release_gate_statuses=valid_release_gate_statuses,
         errors=errors,
@@ -1278,6 +1373,7 @@ def audit_status_payload(
         subsystem_to_lane=subsystem_to_lane,
         active_repos=active_repo_set,
         allowed_kinds=allowed_kinds,
+        valid_evidence_tiers=valid_evidence_tiers,
         valid_readiness_assertion_kinds=valid_readiness_assertion_kinds,
         valid_readiness_assertion_blocking_levels=valid_readiness_assertion_blocking_levels,
         valid_readiness_assertion_proof_types=valid_readiness_assertion_proof_types,
@@ -1321,12 +1417,12 @@ def audit_status_payload(
         and repo_ready_assertions_cleared
     )
     rc_ready_release_gates_cleared = all(
-        gate["status"] == "passed"
+        gate["effective_status"] == "passed"
         for gate in release_gates
         if gate["blocking_level"] == "rc-ready"
     )
     release_ready_release_gates_cleared = all(
-        gate["status"] == "passed"
+        gate["effective_status"] == "passed"
         for gate in release_gates
         if gate["blocking_level"] == "release-ready"
     )
@@ -1391,7 +1487,7 @@ def audit_status_payload(
     ]
     current_target_release_gate_blockers = [
         {
-            **_blocker_detail(gate, summary_key="summary", status_key="status"),
+            **_blocker_detail(gate, summary_key="summary", status_key="effective_status"),
             "linked_assertion_ids": list(gate_to_current_target_assertions.get(gate["id"], [])),
             "subsystem_ids": sorted(
                 {
@@ -1420,7 +1516,7 @@ def audit_status_payload(
             ),
         }
         for gate in release_gates
-        if gate["blocking_level"] in active_target_level_set and gate["status"] != "passed"
+        if gate["blocking_level"] in active_target_level_set and gate["effective_status"] != "passed"
     ]
     current_target_open_decision_blockers = [
         {
@@ -1615,14 +1711,14 @@ def audit_status_payload(
                 if assertion["blocking_level"] == "release-ready" and assertion["derived_pass"]
             ),
             "release_gate_count": len(release_gates),
-            "release_gates_passed": sum(1 for gate in release_gates if gate["status"] == "passed"),
+            "release_gates_passed": sum(1 for gate in release_gates if gate["effective_status"] == "passed"),
             "rc_ready_release_gate_count": sum(
                 1 for gate in release_gates if gate["blocking_level"] == "rc-ready"
             ),
             "rc_ready_release_gates_passed": sum(
                 1
                 for gate in release_gates
-                if gate["blocking_level"] == "rc-ready" and gate["status"] == "passed"
+                if gate["blocking_level"] == "rc-ready" and gate["effective_status"] == "passed"
             ),
             "release_ready_release_gate_count": sum(
                 1 for gate in release_gates if gate["blocking_level"] == "release-ready"
@@ -1630,7 +1726,7 @@ def audit_status_payload(
             "release_ready_release_gates_passed": sum(
                 1
                 for gate in release_gates
-                if gate["blocking_level"] == "release-ready" and gate["status"] == "passed"
+                if gate["blocking_level"] == "release-ready" and gate["effective_status"] == "passed"
             ),
             "open_decision_count": len(open_decisions),
             "rc_ready_open_decision_count": sum(
@@ -1791,6 +1887,9 @@ def render_pretty(report: dict[str, Any]) -> str:
         for gate in report["release_gates"]:
             lines.append(
                 f"  - {gate['id']} blocking={gate['blocking_level']} status={gate['status']} "
+                f"effective={gate['effective_status']} "
+                f"tier={gate['highest_evidence_tier'] or '-'} "
+                f"min_tier={gate['minimum_evidence_tier']} "
                 f"repos={','.join(gate['repo_ids']) or '-'} "
                 f"lanes={','.join(gate['lane_ids']) or '-'}"
             )
@@ -1829,7 +1928,9 @@ def render_pretty(report: dict[str, Any]) -> str:
                 subsystem_ids = gate.get("subsystem_ids", [])
                 lines.append(
                     f"    - {gate['id']} blocking={gate['blocking_level']} "
-                    f"status={gate['status']} "
+                    f"status={gate['effective_status']} "
+                    f"tier={gate['highest_evidence_tier'] or '-'} "
+                    f"min_tier={gate['minimum_evidence_tier']} "
                     f"assertions={','.join(linked_assertions) or '-'} "
                     f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'}"
@@ -1874,6 +1975,8 @@ def render_pretty(report: dict[str, Any]) -> str:
             for gate in rc_blocker_details["release_gates"]:
                 lines.append(
                     f"    - {gate['id']} status={gate['status']} "
+                    f"tier={gate.get('highest_evidence_tier') or '-'} "
+                    f"min_tier={gate.get('minimum_evidence_tier') or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'} "
                     f"lanes={','.join(gate['lane_ids']) or '-'}"
                 )
@@ -1905,6 +2008,8 @@ def render_pretty(report: dict[str, Any]) -> str:
             for gate in release_blocker_details["release_gates"]:
                 lines.append(
                     f"    - {gate['id']} status={gate['status']} "
+                    f"tier={gate.get('highest_evidence_tier') or '-'} "
+                    f"min_tier={gate.get('minimum_evidence_tier') or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'} "
                     f"lanes={','.join(gate['lane_ids']) or '-'}"
                 )

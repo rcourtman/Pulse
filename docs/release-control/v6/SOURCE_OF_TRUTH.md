@@ -124,12 +124,16 @@ Assertion design rules:
    one-time migration item instead of keeping it in the evergreen set.
 6. After GA, keep using the same control plane and promote a new active target
    instead of cloning a new governance stack.
-7. When a user states a durable product truth, normalize it into a readiness
+7. Not all evidence classes are equal.
+   High-risk release gates must declare the minimum evidence tier required for
+   closure, and rehearsal evidence below that tier must remain blocking even
+   when a dated record already exists.
+8. When a user states a durable product truth, normalize it into a readiness
    assertion, release gate, or open decision rather than leaving it as chat.
-8. Treat casual user language about consistency, seamlessness, drift, bypass
+9. Treat casual user language about consistency, seamlessness, drift, bypass
    resistance, or things that "should always be true" as candidate governance
    input, not only explicit requests to add a formal assertion.
-9. Active v6-facing guidance must stay current; legacy or historical docs may
+10. Active v6-facing guidance must stay current; legacy or historical docs may
    exist only as clearly marked reference material, not as current instructions.
 
 ## Non-Negotiable Release Gates
