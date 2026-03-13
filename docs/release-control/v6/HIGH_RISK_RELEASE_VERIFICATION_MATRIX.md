@@ -101,7 +101,7 @@ Companion drill:
   hosted runtime, and use the hosted billing/admin surfaces without self-hosted
   fallbacks or broken post-provisioning behavior.
 - Latest exercised record:
-  `docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-followup-2026-03-13.md`
+  `docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-fixed-2026-03-13.md`
 - Block release if:
   Hosted Pulse can be sold or provisioned but not entered and used as a
   coherent hosted product tier afterward.

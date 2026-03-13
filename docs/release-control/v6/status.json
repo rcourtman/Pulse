@@ -867,6 +867,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-fixed-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-followup-2026-03-13.md",
           "kind": "file"
         },
@@ -1677,11 +1682,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but hosted-tier end-to-end runtime proof remains the governed residual gap.",
+        "summary": "Cloud-paid runtime and billing surfaces are at the RC floor, but hosted signup/billing replay and commercial continuity proof remain the governed residual gaps.",
         "tracking": [
           {
             "kind": "release-gate",
-            "id": "cloud-hosted-tier-runtime-readiness"
+            "id": "commercial-cancellation-reactivation"
+          },
+          {
+            "kind": "release-gate",
+            "id": "hosted-signup-billing-replay"
           }
         ]
       },
@@ -1714,11 +1723,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Hosted MSP support is at the current tracked floor for tenant-management behavior, but full hosted provider confidence remains bounded by the unresolved hosted-tier runtime proof.",
+        "summary": "Hosted MSP support is at the current tracked floor for tenant-management behavior, but hosted commercial signup and billing replay confidence still remains bounded by the shared hosted signup/billing replay proof.",
         "tracking": [
           {
             "kind": "release-gate",
-            "id": "cloud-hosted-tier-runtime-readiness"
+            "id": "hosted-signup-billing-replay"
           }
         ]
       },
@@ -2115,11 +2124,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The end-to-end journey suite covers the RC floor, but remaining hosted-tier runtime and RC-to-GA promotion journeys stay as governed residual proof work.",
+        "summary": "The end-to-end journey suite covers the RC floor, but remaining hosted signup/billing replay and RC-to-GA promotion journeys stay as governed residual proof work.",
         "tracking": [
           {
             "kind": "release-gate",
-            "id": "cloud-hosted-tier-runtime-readiness"
+            "id": "hosted-signup-billing-replay"
           },
           {
             "kind": "release-gate",
@@ -2176,7 +2185,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2193,6 +2202,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-fixed-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         },
