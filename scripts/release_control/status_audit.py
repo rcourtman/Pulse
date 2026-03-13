@@ -2126,6 +2126,54 @@ def audit_status_payload(
         ),
         key=lambda item: _lane_sort_key(str(item["lane_id"])),
     )
+    blocked_lanes = sorted(
+        (
+            {
+                "lane_id": lane["id"],
+                "lane_name": lane["name"],
+                "summary": lane["completion_summary"],
+                "blockers": [
+                    f"{detail['kind']}:{detail['id']}[{detail['status']}]"
+                    for detail in (
+                        _lane_tracking_detail(
+                            blocker,
+                            lane_followups_by_id=lane_followups_by_id,
+                            readiness_assertions_by_id=readiness_assertions_by_id,
+                            release_gates_by_id=release_gates_by_id,
+                            open_decisions_by_id=open_decisions_by_id,
+                        )
+                        for blocker in lane["blockers"]
+                    )
+                ],
+                "blocker_details": [
+                    _lane_tracking_detail(
+                        blocker,
+                        lane_followups_by_id=lane_followups_by_id,
+                        readiness_assertions_by_id=readiness_assertions_by_id,
+                        release_gates_by_id=release_gates_by_id,
+                        open_decisions_by_id=open_decisions_by_id,
+                    )
+                    for blocker in lane["blockers"]
+                ],
+                "unresolved_blocker_count": sum(
+                    1
+                    for blocker in lane["blockers"]
+                    if not _lane_tracking_detail(
+                        blocker,
+                        lane_followups_by_id=lane_followups_by_id,
+                        readiness_assertions_by_id=readiness_assertions_by_id,
+                        release_gates_by_id=release_gates_by_id,
+                        open_decisions_by_id=open_decisions_by_id,
+                    )["resolved"]
+                ),
+                "repo_ids": list(lane["repo_ids"]),
+                "subsystem_ids": list(lane["subsystems"]),
+            }
+            for lane in lane_reports
+            if lane["status"] == "blocked"
+        ),
+        key=lambda item: _lane_sort_key(str(item["lane_id"])),
+    )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)
@@ -2303,6 +2351,7 @@ def audit_status_payload(
             },
             "current_target_workstreams": current_target_workstreams,
             "lane_residuals": lane_residuals,
+            "blocked_lanes": blocked_lanes,
             "rc_blockers": rc_blockers,
             "rc_blocker_details": rc_blocker_details,
             "release_blockers": release_blockers,
@@ -2537,6 +2586,19 @@ def render_pretty(report: dict[str, Any]) -> str:
             )
             if residual.get("summary"):
                 lines.append(f"    {residual['summary']}")
+    blocked_lanes = readiness.get("blocked_lanes", [])
+    if blocked_lanes:
+        lines.append("blocked_lanes:")
+        for blocked_lane in blocked_lanes:
+            lines.append(
+                f"  - {blocked_lane['lane_id']} "
+                f"unresolved={blocked_lane['unresolved_blocker_count']} "
+                f"blockers={','.join(blocked_lane['blockers']) or '-'} "
+                f"repos={','.join(blocked_lane['repo_ids']) or '-'} "
+                f"subsystems={','.join(blocked_lane['subsystem_ids']) or '-'}"
+            )
+            if blocked_lane.get("summary"):
+                lines.append(f"    {blocked_lane['summary']}")
     if readiness.get("rc_blockers"):
         lines.append("rc_blockers:")
         for blocker in readiness["rc_blockers"]:

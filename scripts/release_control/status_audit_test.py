@@ -1453,6 +1453,58 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("L1 unresolved=1 tracking=lane-followup:lane-1-followup[planned]", pretty)
             self.assertIn("Lane still has a governed residual.", pretty)
 
+    def test_blocked_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="blocked",
+                current_score=4,
+                completion_state="open",
+                completion_summary="Lane is blocked on the hosted-tier verification gate.",
+                blockers=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="pending",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["blocked_lanes"],
+                [
+                    {
+                        "lane_id": "L1",
+                        "lane_name": "Lane 1",
+                        "summary": "Lane is blocked on the hosted-tier verification gate.",
+                        "blockers": ["release-gate:g1[pending]"],
+                        "blocker_details": [
+                            {
+                                "kind": "release-gate",
+                                "id": "g1",
+                                "status": "pending",
+                                "resolved": False,
+                                "summary": "Need release verification",
+                            }
+                        ],
+                        "unresolved_blocker_count": 1,
+                        "repo_ids": ["pulse"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("blocked_lanes:", pretty)
+            self.assertIn("L1 unresolved=1 blockers=release-gate:g1[pending]", pretty)
+            self.assertIn("Lane is blocked on the hosted-tier verification gate.", pretty)
+
     def test_target_only_bounded_residual_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
