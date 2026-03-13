@@ -3467,6 +3467,12 @@ func (r *Router) RestartAIChat(ctx context.Context) {
 		r.wireChatServiceToAI()
 		if r.aiSettingsHandler != nil {
 			r.aiSettingsHandler.WireOrchestratorAfterChatStart()
+			if patrolSvc := r.aiSettingsHandler.GetAIService(ctx).GetPatrolService(); patrolSvc != nil {
+				if breaker := r.aiSettingsHandler.GetCircuitBreaker(); breaker != nil {
+					patrolSvc.SetCircuitBreaker(breaker)
+					log.Info().Msg("AI patrol circuit breaker wired")
+				}
+			}
 		}
 	}
 }
