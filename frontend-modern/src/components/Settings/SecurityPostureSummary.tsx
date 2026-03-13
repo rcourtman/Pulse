@@ -13,6 +13,7 @@ import {
 
 interface SecurityPostureSummaryProps {
   status: SecurityPostureStatus;
+  embedded?: boolean;
 }
 
 export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (props) => {
@@ -40,7 +41,11 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   const scoreIcon = createMemo(() => getSecurityScoreIconComponent(securityScore()));
 
   return (
-    <Card padding="none" class="overflow-hidden border border-border" border={false}>
+    <Card
+      padding="none"
+      class={`overflow-hidden border border-border ${props.embedded ? 'rounded-md bg-surface' : ''}`.trim()}
+      border={false}
+    >
       {/* Header with Security Score */}
       <div
         class={`px-6 py-5 ${scorePresentation().tone.headerBg} ${scorePresentation().tone.headerBorder}`}

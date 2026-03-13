@@ -1,6 +1,4 @@
 import { Component, Show, Accessor } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import Shield from 'lucide-solid/icons/shield';
@@ -31,10 +29,14 @@ interface SecurityOverviewPanelProps {
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
   return (
-    <div class="space-y-6">
-      {/* Loading State */}
+    <SettingsPanel
+      title="Security Overview"
+      description="Review your security posture, authentication boundary, and the next hardening steps for this Pulse instance."
+      icon={<Shield class="w-5 h-5" strokeWidth={2} />}
+      bodyClass="space-y-6"
+    >
       <Show when={props.securityStatusLoading()}>
-        <Card padding="none" class="overflow-hidden border border-border" border={false}>
+        <div class="rounded-md border border-border overflow-hidden">
           <div class="bg-surface-alt px-6 py-5 animate-pulse">
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 bg-slate-300 rounded-md"></div>
@@ -58,32 +60,28 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
               ))}
             </div>
           </div>
-        </Card>
+        </div>
       </Show>
 
-      {/* Security Summary */}
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <SecurityPostureSummary status={props.securityStatus()!} />
+        <SecurityPostureSummary status={props.securityStatus()!} embedded />
       </Show>
 
-      {/* Proxy Auth Notice */}
       <Show when={!props.securityStatusLoading() && props.securityStatus()?.hasProxyAuth}>
-        <Card
-          padding="none"
-          class="overflow-hidden border border-blue-200 dark:border-blue-800"
-          border={false}
-        >
+        <div class="rounded-md border border-blue-200 dark:border-blue-800 overflow-hidden bg-blue-50/60 dark:bg-blue-950/40">
           <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
-            <div class="flex items-center gap-3">
+            <div class="flex items-start gap-3">
               <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                 <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
               </div>
-              <SectionHeader
-                title="Proxy Authentication Active"
-                description="Requests are validated by an upstream proxy"
-                size="sm"
-                class="flex-1"
-              />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  Proxy Authentication Active
+                </p>
+                <p class="text-sm text-blue-700 dark:text-blue-300">
+                  Requests are validated by an upstream proxy before Pulse applies its local authorization rules.
+                </p>
+              </div>
             </div>
           </div>
           <div class="p-4 text-sm text-blue-800 dark:text-blue-200 space-y-2">
@@ -133,24 +131,30 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
               </a>
             </div>
           </div>
-        </Card>
+        </div>
       </Show>
 
-      {/* Security Tips Card */}
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <SettingsPanel
-          title="Security Best Practices"
-          description="Recommended hardening actions for production deployments."
-          icon={<Info class="w-5 h-5" strokeWidth={2} />}
-        >
+        <div class="rounded-md border border-border p-4 sm:p-6 space-y-4">
+          <div class="flex items-start gap-3">
+            <div class="p-2 rounded-md border border-border bg-surface-alt">
+              <Info class="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="text-sm font-semibold text-base-content">Security best practices</h3>
+              <p class="text-sm text-muted">
+                Recommended hardening actions for production deployments.
+              </p>
+            </div>
+          </div>
           <ul class="space-y-1.5 list-disc list-inside text-sm text-muted">
             <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
             <li>Use strong, unique passwords and rotate credentials regularly</li>
             <li>Consider SSO/OIDC for centralized team authentication</li>
             <li>Review API token scopes and remove unused tokens</li>
           </ul>
-        </SettingsPanel>
+        </div>
       </Show>
-    </div>
+    </SettingsPanel>
   );
 };
