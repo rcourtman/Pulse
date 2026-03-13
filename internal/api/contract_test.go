@@ -232,6 +232,38 @@ func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
+	payload := onboardingQRResponse{
+		Schema:      onboardingSchemaVersion,
+		InstanceURL: "https://pulse.example.test",
+		InstanceID:  "relay_abc123",
+		Relay: onboardingRelayDetails{
+			Enabled:             true,
+			URL:                 "wss://relay.example.test/ws/app",
+			IdentityFingerprint: "AA:BB:CC",
+			IdentityPublicKey:   "base64-key",
+		},
+		AuthToken: "token-123",
+		DeepLink:  "pulse://connect?schema=pulse-mobile-onboarding-v1&instance_url=https%3A%2F%2Fpulse.example.test&instance_id=relay_abc123&relay_url=wss%3A%2F%2Frelay.example.test%2Fws%2Fapp&auth_token=token-123&identity_fingerprint=AA%3ABB%3ACC&identity_public_key=base64-key",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal onboarding qr response: %v", err)
+	}
+
+	const want = `{
+		"schema":"pulse-mobile-onboarding-v1",
+		"instance_url":"https://pulse.example.test",
+		"instance_id":"relay_abc123",
+		"relay":{"enabled":true,"url":"wss://relay.example.test/ws/app","identity_fingerprint":"AA:BB:CC","identity_public_key":"base64-key"},
+		"auth_token":"token-123",
+		"deep_link":"pulse://connect?schema=pulse-mobile-onboarding-v1\u0026instance_url=https%3A%2F%2Fpulse.example.test\u0026instance_id=relay_abc123\u0026relay_url=wss%3A%2F%2Frelay.example.test%2Fws%2Fapp\u0026auth_token=token-123\u0026identity_fingerprint=AA%3ABB%3ACC\u0026identity_public_key=base64-key"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_UpdatePlanManualFallbackJSONSnapshot(t *testing.T) {
 	payload := updates.UpdatePlan{
 		CanAutoUpdate:   false,

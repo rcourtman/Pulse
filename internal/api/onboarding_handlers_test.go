@@ -15,7 +15,8 @@ import (
 )
 
 func TestOnboardingQRPayloadStructure(t *testing.T) {
-	router, rawToken, relayCfg := newOnboardingContractRouter(t)
+	router, rawToken, _ := newOnboardingContractRouter(t)
+	wantRelayURL := "wss://relay.example.test/ws/app"
 
 	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/onboarding/qr", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -38,8 +39,8 @@ func TestOnboardingQRPayloadStructure(t *testing.T) {
 	if payload.InstanceURL != "https://pulse.example.test" {
 		t.Fatalf("unexpected instance_url: %q", payload.InstanceURL)
 	}
-	if payload.Relay.URL != relayCfg.ServerURL {
-		t.Fatalf("unexpected relay URL: got %q want %q", payload.Relay.URL, relayCfg.ServerURL)
+	if payload.Relay.URL != wantRelayURL {
+		t.Fatalf("unexpected relay URL: got %q want %q", payload.Relay.URL, wantRelayURL)
 	}
 	if !payload.Relay.Enabled {
 		t.Fatalf("expected relay.enabled=true")
@@ -53,9 +54,9 @@ func TestOnboardingQRPayloadStructure(t *testing.T) {
 }
 
 func TestOnboardingValidateSuccessAndFailure(t *testing.T) {
-	router, rawToken, relayCfg := newOnboardingContractRouter(t)
+	router, rawToken, _ := newOnboardingContractRouter(t)
 
-	successBody := fmt.Sprintf(`{"instance_id":"instance-local","relay_url":"%s","auth_token":"%s"}`, relayCfg.ServerURL, rawToken)
+	successBody := fmt.Sprintf(`{"instance_id":"instance-local","relay_url":"%s","auth_token":"%s"}`, "wss://relay.example.test/ws/app", rawToken)
 	successReq := httptest.NewRequest(http.MethodPost, "/api/onboarding/validate", strings.NewReader(successBody))
 	successRec := httptest.NewRecorder()
 	router.handleValidateOnboardingConnection(successRec, successReq)
@@ -100,7 +101,7 @@ func TestOnboardingValidateSuccessAndFailure(t *testing.T) {
 }
 
 func TestOnboardingDeepLinkFormat(t *testing.T) {
-	router, rawToken, relayCfg := newOnboardingContractRouter(t)
+	router, rawToken, _ := newOnboardingContractRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/onboarding/deep-link", nil)
 	req.Header.Set("Authorization", "Bearer "+rawToken)
@@ -137,11 +138,48 @@ func TestOnboardingDeepLinkFormat(t *testing.T) {
 	if query.Get("instance_url") != "https://pulse.example.test" {
 		t.Fatalf("unexpected deep-link instance_url: %q", query.Get("instance_url"))
 	}
-	if query.Get("relay_url") != relayCfg.ServerURL {
-		t.Fatalf("unexpected deep-link relay_url: got %q want %q", query.Get("relay_url"), relayCfg.ServerURL)
+	if query.Get("relay_url") != "wss://relay.example.test/ws/app" {
+		t.Fatalf("unexpected deep-link relay_url: got %q want %q", query.Get("relay_url"), "wss://relay.example.test/ws/app")
 	}
 	if query.Get("auth_token") != rawToken {
 		t.Fatalf("unexpected deep-link auth_token")
+	}
+}
+
+func TestNormalizeOnboardingRelayAppURL(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "instance endpoint becomes app endpoint",
+			in:   "wss://relay.example.test/ws/instance",
+			want: "wss://relay.example.test/ws/app",
+		},
+		{
+			name: "bare relay host appends app endpoint",
+			in:   "wss://relay.example.test",
+			want: "wss://relay.example.test/ws/app",
+		},
+		{
+			name: "existing app endpoint stays stable",
+			in:   "wss://relay.example.test/ws/app",
+			want: "wss://relay.example.test/ws/app",
+		},
+		{
+			name: "invalid values fail closed to trimmed original",
+			in:   "not-a-websocket-url",
+			want: "not-a-websocket-url",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeOnboardingRelayAppURL(tt.in); got != tt.want {
+				t.Fatalf("normalizeOnboardingRelayAppURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

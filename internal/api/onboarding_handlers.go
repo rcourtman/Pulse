@@ -157,7 +157,7 @@ func (r *Router) handleValidateOnboardingConnection(w http.ResponseWriter, req *
 				Message:  "relay_url must be a valid ws:// or wss:// URL.",
 			})
 		} else {
-			expectedRelayURL, expectedOK := normalizeRelayURL(relayCfg.ServerURL)
+			expectedRelayURL, expectedOK := normalizeRelayURL(normalizeOnboardingRelayAppURL(relayCfg.ServerURL))
 			if expectedOK && expectedRelayURL != providedRelayURL {
 				diagnostics = append(diagnostics, onboardingDiagnostic{
 					Code:     "relay_url_mismatch",
@@ -227,6 +227,7 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 	if relayURL == "" {
 		relayURL = relay.DefaultServerURL
 	}
+	mobileRelayURL := normalizeOnboardingRelayAppURL(relayURL)
 
 	payload := onboardingQRResponse{
 		Schema:      onboardingSchemaVersion,
@@ -234,7 +235,7 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 		InstanceID:  r.currentRelayInstanceID(),
 		Relay: onboardingRelayDetails{
 			Enabled:             relayCfg.Enabled,
-			URL:                 relayURL,
+			URL:                 mobileRelayURL,
 			IdentityFingerprint: strings.TrimSpace(relayCfg.IdentityFingerprint),
 			IdentityPublicKey:   strings.TrimSpace(relayCfg.IdentityPublicKey),
 		},
@@ -352,6 +353,28 @@ func normalizeRelayURL(raw string) (string, bool) {
 	}
 
 	return parsed.String(), true
+}
+
+func normalizeOnboardingRelayAppURL(raw string) string {
+	normalized, ok := normalizeRelayURL(raw)
+	if !ok {
+		return strings.TrimSpace(raw)
+	}
+
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return normalized
+	}
+
+	path := strings.TrimSuffix(parsed.Path, "/")
+	switch {
+	case path == "":
+		parsed.Path = "/ws/app"
+	case path == "/ws/instance":
+		parsed.Path = "/ws/app"
+	}
+
+	return parsed.String()
 }
 
 func hasOnboardingError(diagnostics []onboardingDiagnostic) bool {

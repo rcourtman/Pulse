@@ -328,7 +328,10 @@ The onboarding QR payload flow now also carries explicit token-bound auth
 semantics: when the frontend requests `/api/onboarding/qr` with a pairing
 token, the API client must send that token explicitly so the returned payload
 and deep link represent the exact minted pairing credential rather than the
-ambient browser session.
+ambient browser session, and the mobile-facing `relay.url`/`relay_url` fields
+must normalize the stored relay instance endpoint to the app endpoint
+(`/ws/app`) so mobile pairing never receives the instance-only `/ws/instance`
+route.
 Incoming organization-share payloads now also preserve requested access-role
 semantics at the API boundary: `/api/orgs/{id}/shares/incoming` must hide
 shares whose `accessRole` exceeds the caller's effective role in the target

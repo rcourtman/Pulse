@@ -400,7 +400,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
 		"stable or GA promotion readiness",
-		"v6-rc-cut",
+		"v6-ga-promotion",
 		"should always be true",
 	})
 
@@ -409,8 +409,11 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	assertContainsAll(t, jsonRel, jsonContent, []string{
 		"\"system\": \"pulse-release-control\"",
 		"\"active_profile_id\": \"v6\"",
-		"\"active_target_id\": \"v6-rc-cut\"",
+		"\"active_target_id\": \"v6-ga-promotion\"",
+		"\"id\": \"v6-rc-cut\"",
+		"\"status\": \"completed\"",
 		"\"id\": \"v6-ga-promotion\"",
+		"\"status\": \"active\"",
 		"\"completion_rule\": \"rc_ready\"",
 		"\"completion_rule\": \"release_ready\"",
 	})

@@ -205,7 +205,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["readiness"]["release_blockers"], [])
             self.assertEqual(
                 report["control_plane"]["active_target"]["blocking_levels"],
-                ["repo-ready", "rc-ready"],
+                ["repo-ready", "rc-ready", "release-ready"],
             )
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
@@ -307,7 +307,36 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["readiness_assertions"][2]["derived_status"], "gates-pending")
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
-                {"assertions": [], "open_decisions": [], "release_gates": []},
+                {
+                    "assertions": [
+                        {
+                            "id": "RA3",
+                            "blocking_level": "release-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                            "release_gate_ids": ["g2"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g2",
+                            "blocking_level": "release-ready",
+                            "status": "pending",
+                            "summary": "Need GA promotion verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "linked_assertion_ids": ["RA3"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                        }
+                    ],
+                },
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
 
@@ -509,8 +538,8 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(base_payload(release_gate_status="pending"))
 
             pretty = render_pretty(report)
-            self.assertIn("control_plane: profile=v6 target=v6-rc-cut", pretty)
-            self.assertIn("target_blocking_levels=repo-ready,rc-ready", pretty)
+            self.assertIn("control_plane: profile=v6 target=v6-ga-promotion", pretty)
+            self.assertIn("target_blocking_levels=repo-ready,rc-ready,release-ready", pretty)
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("rc_ready=False", pretty)
             self.assertIn("proof_commands=1", pretty)

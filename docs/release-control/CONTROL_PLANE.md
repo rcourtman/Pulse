@@ -114,8 +114,8 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-rc-cut` is the current active engineering target.
-3. `v6-ga-promotion` is the next planned target once the RC cut is genuinely ready.
+2. `v6-ga-promotion` is the current active engineering target.
+3. `v6-rc-cut` is complete and remains the immediate predecessor target.
 4. Its files remain under `docs/release-control/v6/`.
 5. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole

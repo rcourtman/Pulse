@@ -322,6 +322,7 @@ Companion drill:
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/api/__tests__/client.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/hooks/__tests__/useRelay.test.ts src/hooks/__tests__/relayPushRefresh.test.ts src/notifications/__tests__/notificationRouting.test.ts src/stores/__tests__/mobileAccessState.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-enterprise && go test ./internal/aiautofix -run 'TestHandleListApprovals|TestHandleApproveAndExecuteInvestigationFix|TestHandleApprove' -count=1`
 - Manual scenario:
   1. Pair the mobile app to a real instance through the relay onboarding path.
   2. Kill and relaunch the app to confirm secure persistence and reconnect.
@@ -332,6 +333,8 @@ Companion drill:
 - Pass when:
   Pairing, persistence, reconnect, approvals, and sign-out/revocation behavior
   all work without stale access.
+- Latest exercised record:
+  `docs/release-control/v6/records/mobile-relay-auth-approvals-2026-03-13.md`
 - Block release if:
   Mobile can keep stale access, lose approval state, or fail to recover from
   reconnect/auth transitions.
