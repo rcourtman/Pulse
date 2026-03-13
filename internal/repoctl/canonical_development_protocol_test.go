@@ -155,6 +155,17 @@ func repoRootForEvidence(t *testing.T, repo string) string {
 	return filepath.Join(filepath.Dir(currentRoot), repo)
 }
 
+func shouldSkipCrossRepoEvidenceExistenceCheck(repo string) bool {
+	if repo == "pulse" {
+		return false
+	}
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return false
+	}
+	envKey := "PULSE_REPO_ROOT_" + strings.ToUpper(strings.ReplaceAll(repo, "-", "_"))
+	return os.Getenv(envKey) == ""
+}
+
 func validateEvidenceRefs(t *testing.T, activeRepos map[string]struct{}, allowedKinds []string, rawEvidence []any, context string) {
 	t.Helper()
 
@@ -194,6 +205,10 @@ func validateEvidenceRefs(t *testing.T, activeRepos map[string]struct{}, allowed
 
 		repoRoot := repoRootForEvidence(t, repo)
 		if info, err := os.Stat(repoRoot); err != nil || !info.IsDir() {
+			if shouldSkipCrossRepoEvidenceExistenceCheck(repo) {
+				t.Logf("%s evidence repo %q not present in this CI checkout; skipping existence check", context, repo)
+				continue
+			}
 			t.Fatalf("%s evidence repo root for %q missing at %q (set %s to override): %v", context, repo, repoRoot, "PULSE_REPO_ROOT_"+strings.ToUpper(strings.ReplaceAll(repo, "-", "_")), err)
 		}
 

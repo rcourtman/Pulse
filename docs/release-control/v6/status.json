@@ -1571,7 +1571,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/v6-acceptance-tests.md",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
           "kind": "file"
         }
       ]
