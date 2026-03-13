@@ -11,6 +11,7 @@ param(
     [string]$PulseUrl = $env:PULSE_URL,
     [string]$Token = $env:PULSE_TOKEN,
     [string]$Interval = $env:PULSE_INTERVAL,
+    [string]$Hostname = $env:PULSE_HOSTNAME,
     [string]$InstallPath = "C:\Program Files\Pulse",
     [string]$Arch = $env:PULSE_ARCH,
     [switch]$NoService
@@ -253,6 +254,9 @@ PulseInfo "Configuration:"
 Write-Host "  Pulse URL: $PulseUrl"
 Write-Host "  Token: $(if ($Token) { '***' + $Token.Substring([Math]::Max(0, $Token.Length - 4)) } else { 'none' })"
 Write-Host "  Interval: $Interval"
+if ($Hostname) {
+    Write-Host "  Hostname Override: $Hostname"
+}
 Write-Host "  Install Path: $InstallPath"
 if ($Arch) {
     Write-Host "  Architecture Override: $Arch"
@@ -382,6 +386,9 @@ try {
     if ($Token) {
         $agentArgs += @("--token", "`"$Token`"")
     }
+    if ($Hostname) {
+        $agentArgs += @("--hostname", "`"$Hostname`"")
+    }
     $serviceBinaryPath = "`"$agentPath`" $($agentArgs -join ' ')"
     $manualCommand = "& `"$agentPath`" $($agentArgs -join ' ')"
 } catch {
@@ -397,6 +404,9 @@ $config = @{
 }
 if ($Token) {
     $config.token = $Token
+}
+if ($Hostname) {
+    $config.hostname = $Hostname
 }
 
 $config | ConvertTo-Json | Set-Content $configPath
