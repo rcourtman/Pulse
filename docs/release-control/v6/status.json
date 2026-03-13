@@ -837,6 +837,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -1976,7 +1981,7 @@
       "summary": "Confirm the actual hosted Pulse tier works end to end after provisioning: hosted auth, runtime entry, and hosted billing/admin surfaces all function coherently.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",

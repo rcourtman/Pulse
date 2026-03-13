@@ -98,6 +98,8 @@ Companion drill:
   A real hosted Pulse customer can sign up or sign in, land in a working
   hosted runtime, and use the hosted billing/admin surfaces without self-hosted
   fallbacks or broken post-provisioning behavior.
+- Latest exercised record:
+  `docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-2026-03-13.md`
 - Block release if:
   Hosted Pulse can be sold or provisioned but not entered and used as a
   coherent hosted product tier afterward.
