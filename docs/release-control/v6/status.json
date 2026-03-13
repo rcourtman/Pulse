@@ -1586,17 +1586,17 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/conversion-operations-runbook.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
+          "path": "docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
         {
@@ -1618,7 +1618,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/v6-pricing-and-tiering.md",
+          "path": "docs/release-control/v6/subsystems/cloud-paid.md",
           "kind": "file"
         },
         {
@@ -1643,7 +1643,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
+          "path": "docs/release-control/v6/records/msp-provider-tenant-management-2026-03-13.md",
           "kind": "file"
         }
       ]
@@ -1690,7 +1690,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/state-read-consolidation-progress-2026-02.md",
+          "path": "docs/release-control/v6/subsystems/unified-resources.md",
           "kind": "file"
         },
         {
