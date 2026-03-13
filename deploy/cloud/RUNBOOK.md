@@ -140,7 +140,7 @@ cd deploy/cloud
 Defaults:
 
 - `DOMAIN=cloud.pulserelay.pro`
-- `SSH_TARGET=root@cloud-host`
+- `SSH_TARGET=root@pulse-cloud`
 - `ADMIN_KEY_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/pulse-cloud/admin_key`
 - `EXPECT_CP_ENV=production`
 - `EXPECT_STRIPE_MODE=live`
@@ -205,7 +205,7 @@ cd deploy/cloud
 
 `preflight-staging.sh` defaults:
 - `DOMAIN=cloud-staging.pulserelay.pro`
-- `SSH_TARGET=root@cloud-staging-host`
+- `SSH_TARGET=root@pulse-cloud-staging`
 - `EXPECT_CP_ENV=staging`
 - `EXPECT_STRIPE_MODE=test`
 - `CHECK_STRIPE_CHECKOUT_PROBE=true`

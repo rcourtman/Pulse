@@ -147,6 +147,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-production-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
           "kind": "file"
         },
@@ -853,6 +858,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-2026-03-13.md",
           "kind": "file"
         },
         {
@@ -2024,6 +2034,12 @@
           "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/cloud-hosted-tier-runtime-readiness-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
@@ -2090,6 +2106,12 @@
           "path": "docs/release-control/v6/records/hosted-signup-billing-replay-2026-03-12.md",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-production-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
