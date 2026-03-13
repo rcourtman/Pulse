@@ -1033,6 +1033,117 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA13",
+      "summary": "MSP support works as a real v6 product mode: one provider account can onboard, view, and manage multiple client tenants from one control surface with canonical MSP plan handling and without cross-client leakage, scope confusion, or per-client operational drift.",
+      "kind": "journey",
+      "blocking_level": "rc-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L3",
+        "L4",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "release_gate_ids": [
+        "msp-provider-tenant-management"
+      ],
+      "proof_commands": [
+        {
+          "id": "msp-account-and-registry-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/cloudcp/account",
+            "./internal/cloudcp/registry",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "msp-frontend-tests",
+          "run": [
+            "npx",
+            "vitest",
+            "run",
+            "src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+            "src/pages/__tests__/CloudPricing.test.tsx"
+          ],
+          "cwd": "frontend-modern"
+        },
+        {
+          "id": "msp-lifecycle-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/cloudcp/stripe",
+            "-run",
+            "TestMSPLifecycle_AccountToPortal",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "msp-plan-guardrails",
+          "run": [
+            "go",
+            "test",
+            "./internal/cloudcp",
+            "./pkg/licensing",
+            "-run",
+            "TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup|TestMSPPlanAliasCanonicalizationContract",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/account/handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/public_cloud_signup_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/registry/registry_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/stripe/msp_lifecycle_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/grant_claims_contract_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -1556,6 +1667,19 @@
       "lane_ids": [
         "L5",
         "L7",
+        "L12"
+      ]
+    },
+    {
+      "id": "msp-provider-tenant-management",
+      "summary": "Confirm MSP mode behaves as a real provider workflow: one account can manage multiple client tenants coherently without cross-client leakage or MSP/public-plan confusion.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L3",
+        "L4",
         "L12"
       ]
     },

@@ -485,6 +485,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"rc-to-ga-promotion-readiness",
 		"relay-registration-reconnect-drain",
 		"mobile-relay-auth-approvals",
+		"msp-provider-tenant-management",
 		"organization-user-scope-and-rbac",
 		"api-token-scope-and-assignment",
 		"upgrade-state-and-entitlement-preservation",

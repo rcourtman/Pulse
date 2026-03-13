@@ -407,6 +407,46 @@ Companion drill:
   Mobile can keep stale access, lose approval state, or fail to recover from
   reconnect/auth transitions.
 
+## Gate: `msp-provider-tenant-management`
+
+- Why this is risky:
+  MSP mode is a distinct product promise, not just a pricing label. If one
+  provider account cannot safely manage multiple client tenants from one place,
+  Pulse will appear to support MSPs in billing and marketing while failing in
+  the real operator workflow.
+- Primary runtime surfaces:
+  `pkg/licensing/features.go`
+  `internal/cloudcp/account/...`
+  `internal/cloudcp/registry/...`
+  `internal/cloudcp/stripe/provisioner.go`
+  `internal/cloudcp/stripe/msp_lifecycle_integration_test.go`
+  `internal/cloudcp/public_cloud_signup_handlers_test.go`
+  `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+  `frontend-modern/src/pages/CloudPricing.tsx`
+- Automated proof:
+  `go test ./internal/cloudcp/account ./internal/cloudcp/registry -count=1`
+  `go test ./internal/cloudcp/stripe -run 'TestMSPLifecycle_AccountToPortal' -count=1`
+  `go test ./internal/cloudcp -run 'TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup' -count=1`
+  `go test ./pkg/licensing -run 'TestMSPPlanAliasCanonicalizationContract' -count=1`
+  `cd frontend-modern && npx vitest run src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx src/pages/__tests__/CloudPricing.test.tsx`
+- Manual scenario:
+  1. Create or enter an MSP account in a staging-like environment.
+  2. Provision at least two client workspaces or tenants under that MSP
+     account.
+  3. Confirm the provider can view and manage the intended client tenants from
+     one control surface without cross-client data leakage.
+  4. Confirm billing and plan presentation stays coherent per client and does
+     not collapse MSP and individual hosted flows together.
+  5. Confirm public individual signup cannot accidentally drop into MSP-only
+     provisioning semantics.
+- Pass when:
+  MSP mode behaves as a real operator workflow: one provider account can manage
+  multiple client tenants coherently, with canonical MSP plan handling and no
+  cross-client leakage or scope confusion.
+- Block release if:
+  MSP support exists only as pricing or partial provisioning, or a provider
+  cannot safely manage multiple client tenants from one place.
+
 ## Gate: `multi-tenant-runtime-isolation-and-coherence`
 
 - Why this is risky:

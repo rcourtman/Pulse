@@ -477,6 +477,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "cloud-hosted-tier-runtime-readiness",
                 "commercial-cancellation-reactivation",
                 "hosted-signup-billing-replay",
+                "msp-provider-tenant-management",
                 "paid-feature-entitlement-gating",
                 "upgrade-state-and-entitlement-preservation",
             },
