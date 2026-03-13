@@ -177,6 +177,8 @@ Assertion design rules:
 16. Lanes that are at target but intentionally not closed must record a
     bounded residual in `status.json` with a short rationale and explicit
     tracking references to the governing follow-up surface.
+    Those references must belong to that same lane rather than pointing at
+    unrelated governance objects.
 
 ## Locked Decisions
 

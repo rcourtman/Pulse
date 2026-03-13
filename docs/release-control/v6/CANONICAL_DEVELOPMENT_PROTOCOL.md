@@ -176,6 +176,9 @@ residual work, the same slice must record that residual in
 `status.json.lanes[*].completion` with a short rationale and explicit tracking
 references to the governing target, readiness assertion, release gate, or open
 decision that owns the follow-up.
+For readiness assertions, release gates, and open decisions, those tracking
+references must also reference the same lane; unrelated governance objects are
+not valid residual placeholders.
 
 This protocol is enforced locally at commit time by the canonical completion
 guard in `scripts/release_control/canonical_completion_guard.py` and by the
