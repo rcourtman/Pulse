@@ -73,7 +73,7 @@ func TestReportEngineQueryMetricsSpecificMetric(t *testing.T) {
 		t.Fatalf("queryMetrics failed: %v", err)
 	}
 
-	if data.Title != "node Report: node-1" {
+	if data.Title != "Node Report: node-1" {
 		t.Fatalf("expected default title, got %q", data.Title)
 	}
 
@@ -127,7 +127,7 @@ func TestReportEngineQueryMetricsNoData(t *testing.T) {
 	if len(data.Metrics) != 0 {
 		t.Fatalf("expected no metrics, got %d", len(data.Metrics))
 	}
-	if data.Title != "node Report: missing-node" {
+	if data.Title != "Node Report: missing-node" {
 		t.Fatalf("expected default title, got %q", data.Title)
 	}
 }
