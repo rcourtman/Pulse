@@ -108,3 +108,120 @@ func TestPollVMsAndContainersEfficient_PreservesPreviousTrustedVMMemoryForOneCyc
 		t.Fatalf("second poll memory used = %d, want fallback %d", vm.Memory.Used, fallbackUsed)
 	}
 }
+
+func TestShouldCarryForwardPreviousVMMemory_WhenTrustedGuestAgentMeminfoDropsToStatusMem(t *testing.T) {
+	const total = uint64(16 << 30)
+	const trustedUsed = uint64(4 << 30)
+	const fallbackUsed = uint64(15 << 30)
+
+	prev := models.VM{
+		Type:         "qemu",
+		Status:       "running",
+		MemorySource: "guest-agent-meminfo",
+		Memory: models.Memory{
+			Total: int64(total),
+			Used:  int64(trustedUsed),
+			Free:  int64(total - trustedUsed),
+			Usage: safePercentage(float64(trustedUsed), float64(total)),
+		},
+		LastSeen: time.Now(),
+	}
+
+	if !shouldCarryForwardPreviousVMMemory(prev, "running", "status-mem", total, fallbackUsed, time.Now()) {
+		t.Fatal("expected guest-agent meminfo reading to be preserved for one cycle when VM falls back to low-trust status-mem")
+	}
+}
+
+func TestShouldCarryForwardPreviousVMMemory(t *testing.T) {
+	now := time.Now()
+	const total = uint64(16 << 30)
+
+	makePrevVM := func(source string, used uint64, lastSeen time.Time) models.VM {
+		return models.VM{
+			Type:         "qemu",
+			Status:       "running",
+			MemorySource: source,
+			Memory: models.Memory{
+				Total: int64(total),
+				Used:  int64(used),
+				Free:  int64(total - used),
+				Usage: safePercentage(float64(used), float64(total)),
+			},
+			LastSeen: lastSeen,
+		}
+	}
+
+	tests := []struct {
+		name          string
+		prev          models.VM
+		currentStatus string
+		currentSource string
+		currentTotal  uint64
+		currentUsed   uint64
+		want          bool
+	}{
+		{
+			name:          "preserves trusted rrd memavailable when current poll falls back to status mem",
+			prev:          makePrevVM("rrd-memavailable", 4<<30, now),
+			currentStatus: "running",
+			currentSource: "status-mem",
+			currentTotal:  total,
+			currentUsed:   15 << 30,
+			want:          true,
+		},
+		{
+			name:          "does not preserve when both previous and current sources are low trust",
+			prev:          makePrevVM("status-mem", 12<<30, now),
+			currentStatus: "running",
+			currentSource: "status-mem",
+			currentTotal:  total,
+			currentUsed:   15 << 30,
+			want:          false,
+		},
+		{
+			name:          "does not preserve when VM total changed",
+			prev:          makePrevVM("guest-agent-meminfo", 4<<30, now),
+			currentStatus: "running",
+			currentSource: "status-mem",
+			currentTotal:  32 << 30,
+			currentUsed:   28 << 30,
+			want:          false,
+		},
+		{
+			name:          "does not preserve when previous sample is stale",
+			prev:          makePrevVM("guest-agent-meminfo", 4<<30, now.Add(-vmMemoryCarryForwardMaxAge-time.Second)),
+			currentStatus: "running",
+			currentSource: "status-mem",
+			currentTotal:  total,
+			currentUsed:   15 << 30,
+			want:          false,
+		},
+		{
+			name:          "does not preserve when VM is no longer running",
+			prev:          makePrevVM("guest-agent-meminfo", 4<<30, now),
+			currentStatus: "stopped",
+			currentSource: "status-mem",
+			currentTotal:  total,
+			currentUsed:   0,
+			want:          false,
+		},
+		{
+			name:          "does not preserve when usage delta is too small",
+			prev:          makePrevVM("guest-agent-meminfo", 4<<30, now),
+			currentStatus: "running",
+			currentSource: "status-mem",
+			currentTotal:  total,
+			currentUsed:   4476033511, // ~26.05% vs previous 25%, below the 5-point threshold
+			want:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldCarryForwardPreviousVMMemory(tt.prev, tt.currentStatus, tt.currentSource, tt.currentTotal, tt.currentUsed, now)
+			if got != tt.want {
+				t.Fatalf("shouldCarryForwardPreviousVMMemory() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
