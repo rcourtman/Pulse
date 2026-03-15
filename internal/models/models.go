@@ -39,6 +39,7 @@ type State struct {
 	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
+	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -2966,6 +2967,22 @@ func (s *State) SetConnectionHealth(instanceID string, healthy bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ConnectionHealth[instanceID] = healthy
+}
+
+// MergeTagColors merges tag→colour entries into the shared PVETagColors map.
+// Entries from the latest poll overwrite previous ones for the same tag name.
+func (s *State) MergeTagColors(colors map[string]string) {
+	if len(colors) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.PVETagColors == nil {
+		s.PVETagColors = make(map[string]string, len(colors))
+	}
+	for k, v := range colors {
+		s.PVETagColors[k] = v
+	}
 }
 
 // RemoveConnectionHealth removes a connection health entry if it exists.

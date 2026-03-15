@@ -93,13 +93,22 @@ const specialTagColors: Record<string, TagColorTheme> = {
 };
 
 /**
- * Get color for a tag, checking special colors first
+ * Get color for a tag.
+ * Priority: Proxmox-supplied hex color → special hardcoded colors → hash-based fallback.
+ * @param colorMap Optional map of lowercase tag name → "#rrggbb" from Proxmox datacenter config.
  */
 export function getTagColorWithSpecial(
   tag: string,
   isDarkMode: boolean,
+  colorMap?: Record<string, string>,
 ): { bg: string; text: string; border: string } {
   const lowerTag = tag.toLowerCase();
+
+  // Use Proxmox-supplied colour when available
+  if (colorMap?.[lowerTag]) {
+    const hex = colorMap[lowerTag];
+    return { bg: hex, text: '#ffffff', border: hex };
+  }
 
   // Check if it's a special tag
   if (specialTagColors[lowerTag]) {

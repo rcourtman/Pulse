@@ -83,6 +83,7 @@ export function createWebSocketStore(url: string) {
     activeAlerts: [],
     recentlyResolved: [],
     lastUpdate: '',
+    pveTagColors: {},
     // Unified resources for cross-platform monitoring
     resources: [],
   });

@@ -1788,6 +1788,48 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	return result.Data, nil
 }
 
+// ClusterOptions holds selected Proxmox datacenter configuration options.
+type ClusterOptions struct {
+	TagStyle string `json:"tag-style,omitempty"`
+}
+
+// GetClusterOptions fetches datacenter-level options (e.g. tag colour map).
+func (c *Client) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
+	resp, err := c.get(ctx, "/cluster/options")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data ClusterOptions `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// ParseTagColorMap parses a Proxmox tag-style string and returns a map of
+// lowercase tag name → "#rrggbb" hex colour string.
+// Example input: "color-map=production:ff0000;staging:ffaa00,ordering=config"
+func ParseTagColorMap(tagStyle string) map[string]string {
+	colors := make(map[string]string)
+	for _, part := range strings.Split(tagStyle, ",") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(part, "color-map=") {
+			continue
+		}
+		for _, pair := range strings.Split(strings.TrimPrefix(part, "color-map="), ";") {
+			kv := strings.SplitN(pair, ":", 2)
+			if len(kv) == 2 && len(kv[1]) == 6 {
+				colors[strings.ToLower(strings.TrimSpace(kv[0]))] = "#" + kv[1]
+			}
+		}
+	}
+	return colors
+}
+
 // ZFSPoolStatus represents the status of a ZFS pool (list endpoint)
 type ZFSPoolStatus struct {
 	Name   string  `json:"name"`

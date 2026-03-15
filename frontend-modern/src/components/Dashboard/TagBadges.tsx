@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { getTagColorWithSpecial } from '@/utils/tagColors';
 import { useDarkMode } from '@/App';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 
 interface TagBadgesProps {
   tags?: string[];
@@ -16,12 +17,14 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
   const maxVisible = () => props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3);
   const darkModeSignal = useDarkMode();
   const isDark = () => props.isDarkMode ?? darkModeSignal();
+  const ws = getGlobalWebSocketStore();
+  const pveTagColors = () => ws.state.pveTagColors;
 
   const visibleTags = () => props.tags?.slice(0, maxVisible()) || [];
   const hiddenTags = () => props.tags?.slice(maxVisible()) || [];
 
   const TagDot: Component<{ tag: string }> = (dotProps) => {
-    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark());
+    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark(), pveTagColors());
     const isActive = () => props.activeSearch?.includes(`tags:${dotProps.tag}`) || false;
 
     return (

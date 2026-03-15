@@ -586,6 +586,7 @@ type StateFrontend struct {
 	Stats                        map[string]any                     `json:"stats"`                        // Empty object for now
 	LastUpdate                   int64                              `json:"lastUpdate"`                   // Unix timestamp
 	TemperatureMonitoringEnabled bool                               `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	PVETagColors                 map[string]string                  `json:"pveTagColors,omitempty"`       // Tag name → "#rrggbb" from Proxmox datacenter config
 	// Unified resources - the new way to access all monitored entities
 	Resources []ResourceFrontend `json:"resources,omitempty"`
 }

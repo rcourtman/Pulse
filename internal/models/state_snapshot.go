@@ -31,6 +31,7 @@ type StateSnapshot struct {
 	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
+	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 }
 
 // GetSnapshot returns a snapshot of the current state without mutex
@@ -81,9 +82,15 @@ func (s *State) GetSnapshot() StateSnapshot {
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}
 
-	// Copy map
+	// Copy maps
 	for k, v := range s.ConnectionHealth {
 		snapshot.ConnectionHealth[k] = v
+	}
+	if len(s.PVETagColors) > 0 {
+		snapshot.PVETagColors = make(map[string]string, len(s.PVETagColors))
+		for k, v := range s.PVETagColors {
+			snapshot.PVETagColors[k] = v
+		}
 	}
 
 	return snapshot
@@ -418,5 +425,6 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		Stats:                        make(map[string]any),
 		LastUpdate:                   s.LastUpdate.Unix() * 1000, // JavaScript timestamp
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
+		PVETagColors:                 s.PVETagColors,
 	}
 }

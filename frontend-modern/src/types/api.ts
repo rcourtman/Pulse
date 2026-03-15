@@ -30,6 +30,7 @@ export interface State {
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
   temperatureMonitoringEnabled?: boolean;
+  pveTagColors?: Record<string, string>;
   // Unified resources (new data model - eventually replaces legacy arrays above)
   resources?: Resource[];
 }

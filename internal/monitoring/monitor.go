@@ -6380,6 +6380,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Reset auth failures on successful connection
 	m.resetAuthFailures(instanceName, "pve")
 
+	// Best-effort: fetch tag colour map from Proxmox datacenter config.
+	// Not all Proxmox versions expose this; errors are silently ignored.
+	type clusterOptionsGetter interface {
+		GetClusterOptions(ctx context.Context) (*proxmox.ClusterOptions, error)
+	}
+	if og, ok := client.(clusterOptionsGetter); ok {
+		if opts, err := og.GetClusterOptions(ctx); err == nil && opts != nil {
+			if colors := proxmox.ParseTagColorMap(opts.TagStyle); len(colors) > 0 {
+				m.state.MergeTagColors(colors)
+			}
+		}
+	}
+
 	// Check if client is a ClusterClient to determine health status
 	connectionHealthStr := "healthy"
 	if clusterClient, ok := client.(*proxmox.ClusterClient); ok {
