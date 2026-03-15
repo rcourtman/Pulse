@@ -560,16 +560,6 @@ export function Alerts() {
     }
   });
 
-  createEffect(() => {
-    const activation = alertsActivation.activationState();
-    if (activation === null) {
-      return;
-    }
-    if (activation !== 'active' && activeTab() !== 'overview') {
-      handleTabChange('overview');
-    }
-  });
-
   const handleTabChange = (tab: AlertTab) => {
     const targetPath = pathForTab(tab);
     if (location.pathname !== targetPath) {
@@ -2081,13 +2071,9 @@ export function Alerts() {
                             <button
                               type="button"
                               aria-current={activeTab() === item.id ? 'page' : undefined}
-                              aria-disabled={areAlertsDisabled()}
-                              disabled={areAlertsDisabled()}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
-                                ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-100/60 dark:bg-gray-800/60'
-                                : activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${activeTab() === item.id
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
                                 }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
@@ -2119,11 +2105,7 @@ export function Alerts() {
                       {(tab) => (
                         <button
                           type="button"
-                          aria-disabled={areAlertsDisabled()}
-                          disabled={areAlertsDisabled()}
-                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${areAlertsDisabled()
-                            ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-200/60 dark:bg-gray-800/60'
-                            : activeTab() === tab.id
+                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${activeTab() === tab.id
                               ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                             }`}
