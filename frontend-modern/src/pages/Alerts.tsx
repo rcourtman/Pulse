@@ -1115,10 +1115,12 @@ export function Alerts() {
         setDockerPoweredOffSeverity(
           config.dockerDefaults.statePoweredOffSeverity === 'critical' ? 'critical' : 'warning',
         );
+        setContainerUpdateAlertsEnabled(config.dockerDefaults.updateAlertDelayHours !== -1);
       } else {
         setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
         setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
         setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
+        setContainerUpdateAlertsEnabled(true);
       }
       setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
       setIgnoredGuestPrefixes(config.ignoredGuestPrefixes ?? []);
@@ -1558,6 +1560,7 @@ export function Alerts() {
   const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<'warning' | 'critical'>(
     FACTORY_DOCKER_STATE_SEVERITY,
   );
+  const [containerUpdateAlertsEnabled, setContainerUpdateAlertsEnabled] = createSignal(true);
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
   const [ignoredGuestPrefixes, setIgnoredGuestPrefixes] = createSignal<string[]>([]);
   const [guestTagWhitelist, setGuestTagWhitelist] = createSignal<string[]>([]);
@@ -1592,6 +1595,7 @@ export function Alerts() {
     setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
     setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
     setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
+    setContainerUpdateAlertsEnabled(true);
     setHasUnsavedChanges(true);
   };
 
@@ -1882,6 +1886,7 @@ export function Alerts() {
                         serviceCriticalGapPercent: dockerDefaultsValue.serviceCriticalGapPercent,
                         stateDisableConnectivity: dockerDisableConnectivity(),
                         statePoweredOffSeverity: dockerPoweredOffSeverity(),
+                        updateAlertDelayHours: containerUpdateAlertsEnabled() ? 24 : -1,
                       },
                       dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
                         .map((prefix) => prefix.trim())
@@ -2176,6 +2181,8 @@ export function Alerts() {
                   setDockerDisableConnectivity={setDockerDisableConnectivity}
                   dockerPoweredOffSeverity={dockerPoweredOffSeverity}
                   setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
+                  containerUpdateAlertsEnabled={containerUpdateAlertsEnabled}
+                  setContainerUpdateAlertsEnabled={setContainerUpdateAlertsEnabled}
                   setDockerDefaults={setDockerDefaults}
                   dockerIgnoredPrefixes={dockerIgnoredPrefixes}
                   setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
@@ -2911,6 +2918,7 @@ interface ThresholdsTabProps {
   };
   dockerDisableConnectivity: () => boolean;
   dockerPoweredOffSeverity: () => 'warning' | 'critical';
+  containerUpdateAlertsEnabled: () => boolean;
   dockerIgnoredPrefixes: () => string[];
   ignoredGuestPrefixes: () => string[];
   guestTagWhitelist: () => string[];
@@ -2987,6 +2995,7 @@ interface ThresholdsTabProps {
   ) => void;
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
+  setContainerUpdateAlertsEnabled: (value: boolean) => void;
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
@@ -3102,6 +3111,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       dockerDefaults={props.dockerDefaults()}
       dockerDisableConnectivity={props.dockerDisableConnectivity}
       dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
+      containerUpdateAlertsEnabled={props.containerUpdateAlertsEnabled}
+      setContainerUpdateAlertsEnabled={props.setContainerUpdateAlertsEnabled}
       setDockerDefaults={props.setDockerDefaults}
       setDockerDisableConnectivity={props.setDockerDisableConnectivity}
       setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}

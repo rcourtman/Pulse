@@ -221,6 +221,8 @@ interface ThresholdsTableProps {
   setDockerDisableConnectivity: (value: boolean) => void;
   dockerPoweredOffSeverity: () => 'warning' | 'critical';
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
+  containerUpdateAlertsEnabled: () => boolean;
+  setContainerUpdateAlertsEnabled: (value: boolean) => void;
   setDockerDefaults: (
     value:
       | {
@@ -3494,6 +3496,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               placeholder="runner-"
               rows={4}
               class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+            />
+          </Card>
+
+          <Card padding="md" tone="glass" class="mb-6">
+            <Toggle
+              checked={props.containerUpdateAlertsEnabled()}
+              onToggle={() => {
+                props.setContainerUpdateAlertsEnabled(!props.containerUpdateAlertsEnabled());
+                props.setHasUnsavedChanges(true);
+              }}
+              label={<span class="text-sm font-semibold text-gray-900 dark:text-gray-100">Container update alerts</span>}
+              description={<span class="text-xs text-gray-500 dark:text-gray-400">Alert when container images have updates available</span>}
+              size="sm"
             />
           </Card>
 

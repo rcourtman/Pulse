@@ -73,6 +73,7 @@ export interface DockerThresholdConfig {
   serviceCriticalGapPercent?: number;
   stateDisableConnectivity?: boolean;
   statePoweredOffSeverity?: 'warning' | 'critical';
+  updateAlertDelayHours?: number;
 }
 
 export interface PMGThresholdDefaults {
