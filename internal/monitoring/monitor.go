@@ -7254,6 +7254,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	var allVMs []models.VM
 	var allContainers []models.Container
+	templateNodeMap := make(map[int]string) // VMID -> node, for template backup orphan detection
 
 	for _, res := range resources {
 		// Generate canonical guest ID: instance:node:vmid
@@ -7279,8 +7280,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		var osName, osVersion, agentVersion string
 
 		if res.Type == "qemu" {
-			// Skip templates if configured
+			// Skip templates — they are not monitored but track their VMID→node so backup
+			// orphan detection does not flag backups of templates as orphaned.
 			if res.Template == 1 {
+				templateNodeMap[res.VMID] = res.Node
 				continue
 			}
 
@@ -8000,8 +8003,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			m.alertManager.CheckGuest(vm, instanceName)
 
 		} else if res.Type == "lxc" {
-			// Skip templates if configured
+			// Skip templates — same rationale as qemu above.
 			if res.Template == 1 {
+				templateNodeMap[res.VMID] = res.Node
 				continue
 			}
 
@@ -8240,7 +8244,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Int("prevContainers", prevContainerCount).
 			Msg("Cluster returned zero resources but had resources before - likely cluster health issue, preserving all previous resources")
 
-		// Preserve all previous VMs and containers for this instance
+		// Preserve all previous VMs, containers, and template VMIDs for this instance
 		for _, vm := range prevState.VMs {
 			if vm.Instance == instanceName {
 				allVMs = append(allVMs, vm)
@@ -8249,6 +8253,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		for _, container := range prevState.Containers {
 			if container.Instance == instanceName {
 				allContainers = append(allContainers, container)
+			}
+		}
+		if prevTemplates, ok := prevState.TemplateVMIDs[instanceName]; ok {
+			for vmid, node := range prevTemplates {
+				templateNodeMap[vmid] = node
 			}
 		}
 	}
@@ -8323,6 +8332,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// Always update state when using efficient polling path
 	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
+	m.state.UpdateTemplateVMIDsForInstance(instanceName, templateNodeMap)
 
 	// Check Docker presence for containers that need it (new, restarted, started)
 	allContainers = m.CheckContainersForDocker(ctx, allContainers)
@@ -9976,6 +9986,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			guestNodeMap[ct.VMID] = ct.Node
 		}
 	}
+	// Also map template VMIDs so backup node assignment is correct for template backups.
+	if templates, ok := snapshot.TemplateVMIDs[instanceName]; ok {
+		for vmid, node := range templates {
+			if _, exists := guestNodeMap[vmid]; !exists {
+				guestNodeMap[vmid] = node
+			}
+		}
+	}
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -10394,6 +10412,26 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 	// Augment byVMID with persisted metadata for deleted guests
 	if metadataStore != nil {
 		enrichWithPersistedMetadata(metadataStore, byVMID)
+	}
+
+	// Add template VMIDs so the backup orphan-detection check does not flag backups of
+	// existing templates as orphaned. Templates are excluded from the main VM/container
+	// lists (they are not monitored), so without this they would appear as unknown guests.
+	for instance, vmids := range snapshot.TemplateVMIDs {
+		for vmid, node := range vmids {
+			info := alerts.GuestLookup{
+				ResourceID: makeGuestID(instance, node, vmid),
+				Instance:   instance,
+				Node:       node,
+				VMID:       vmid,
+			}
+			key := alerts.BuildGuestKey(instance, node, vmid)
+			if _, exists := byKey[key]; !exists {
+				byKey[key] = info
+			}
+			vmidKey := strconv.Itoa(vmid)
+			byVMID[vmidKey] = append(byVMID[vmidKey], info)
+		}
 	}
 
 	return byKey, byVMID
@@ -10981,6 +11019,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 
 	// Remove all other resources associated with this instance
 	m.state.UpdateVMsForInstance(instanceName, []models.VM{})
+	m.state.UpdateTemplateVMIDsForInstance(instanceName, nil)
 	m.state.UpdateContainersForInstance(instanceName, []models.Container{})
 	m.state.UpdateStorageForInstance(instanceName, []models.Storage{})
 	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})

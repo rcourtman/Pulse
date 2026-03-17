@@ -32,6 +32,9 @@ type StateSnapshot struct {
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
+	// TemplateVMIDs holds Proxmox template VMID→node mappings per instance.
+	// Not serialised to JSON or the frontend API; used only for backup orphan detection.
+	TemplateVMIDs map[string]map[int]string `json:"-"`
 }
 
 // GetSnapshot returns a snapshot of the current state without mutex
@@ -90,6 +93,16 @@ func (s *State) GetSnapshot() StateSnapshot {
 		snapshot.PVETagColors = make(map[string]string, len(s.PVETagColors))
 		for k, v := range s.PVETagColors {
 			snapshot.PVETagColors[k] = v
+		}
+	}
+	if len(s.templateVMIDs) > 0 {
+		snapshot.TemplateVMIDs = make(map[string]map[int]string, len(s.templateVMIDs))
+		for instance, vmids := range s.templateVMIDs {
+			vmap := make(map[int]string, len(vmids))
+			for vmid, node := range vmids {
+				vmap[vmid] = node
+			}
+			snapshot.TemplateVMIDs[instance] = vmap
 		}
 	}
 

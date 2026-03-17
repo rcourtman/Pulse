@@ -40,6 +40,9 @@ type State struct {
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
+	// templateVMIDs tracks Proxmox template VMIDs (not shown in UI, used for backup orphan detection).
+	// Unexported so it is never serialised to JSON or the API.
+	templateVMIDs map[string]map[int]string // instance -> VMID -> node
 }
 
 // Alert represents an active alert (simplified for State)
@@ -3060,6 +3063,23 @@ func (s *State) GetContainers() []Container {
 	containers := make([]Container, len(s.Containers))
 	copy(containers, s.Containers)
 	return containers
+}
+
+// UpdateTemplateVMIDsForInstance stores the VMID→node mapping for Proxmox template guests
+// for a given instance. Templates are excluded from the main VM/container lists (they are not
+// monitored) but must be known to the backup orphan-detection logic so their backups are not
+// incorrectly flagged as orphaned. Pass nil or an empty map to clear the instance's entries.
+func (s *State) UpdateTemplateVMIDsForInstance(instance string, vmids map[int]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.templateVMIDs == nil {
+		s.templateVMIDs = make(map[string]map[int]string)
+	}
+	if len(vmids) == 0 {
+		delete(s.templateVMIDs, instance)
+	} else {
+		s.templateVMIDs[instance] = vmids
+	}
 }
 
 // UpdateContainerDockerStatus updates the Docker detection status for a specific container.
