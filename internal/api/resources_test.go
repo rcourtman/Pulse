@@ -917,6 +917,10 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 				Discoverer: "proxmox_adapter",
 				ObservedAt: now,
 				LastSeenAt: now,
+				Metadata: map[string]any{
+					"source":  "live",
+					"cluster": "pve-prod",
+				},
 			},
 		},
 	}
@@ -945,7 +949,7 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		Confidence:       unified.ConfidenceHigh,
 		Reason:           "vm started",
 		RelatedResources: []string{"node-1"},
-		Metadata:         map[string]any{"source": "snapshot"},
+		Metadata:         map[string]any{"source": "snapshot", "ticket": "INC-1234"},
 	}); err != nil {
 		t.Fatalf("RecordChange: %v", err)
 	}
@@ -991,6 +995,12 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		if payload.Counts.Capabilities != 1 || payload.Counts.Relationships != 1 {
 			t.Fatalf("unexpected facet counts: %#v", payload.Counts)
 		}
+		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
+			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
+		}
+		if got := payload.RecentChanges[0].Metadata["ticket"]; got != "INC-1234" {
+			t.Fatalf("unexpected change metadata: %#v", payload.RecentChanges[0].Metadata)
+		}
 	})
 
 	t.Run("capabilities", func(t *testing.T) {
@@ -1031,6 +1041,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.Relationships) != 1 {
 			t.Fatalf("unexpected relationships payload: %#v", payload)
 		}
+		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
+			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
+		}
 	})
 
 	t.Run("timeline", func(t *testing.T) {
@@ -1053,6 +1066,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {
 			t.Fatalf("unexpected timeline change: %#v", payload.RecentChanges[0])
+		}
+		if got := payload.RecentChanges[0].Metadata["ticket"]; got != "INC-1234" {
+			t.Fatalf("unexpected timeline metadata: %#v", payload.RecentChanges[0].Metadata)
 		}
 	})
 }

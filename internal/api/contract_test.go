@@ -3456,7 +3456,8 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						ObservedAt: now,
 						LastSeenAt: now,
 						Metadata: map[string]any{
-							"source": "live",
+							"source":  "live",
+							"cluster": "pve-prod",
 						},
 					},
 				},
@@ -3476,6 +3477,7 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						Reason:           "vm started",
 						Metadata: map[string]any{
 							"source": "snapshot",
+							"ticket": "INC-1234",
 						},
 					},
 				},
@@ -3543,7 +3545,7 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						"discoverer":"proxmox_adapter",
 						"observedAt":"2026-03-18T12:00:00Z",
 						"lastSeenAt":"2026-03-18T12:00:00Z",
-						"metadata":{"source":"live"}
+						"metadata":{"cluster":"pve-prod","source":"live"}
 					}
 				],
 				"recentChanges":[
@@ -3560,7 +3562,7 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						"confidence":"high",
 						"relatedResources":["node-1"],
 						"reason":"vm started",
-						"metadata":{"source":"snapshot"}
+						"metadata":{"source":"snapshot","ticket":"INC-1234"}
 					}
 				],
 				"facetCounts":{
@@ -3634,6 +3636,10 @@ func TestContract_ResourceRelationshipsJSONSnapshot(t *testing.T) {
 				Discoverer: "proxmox_adapter",
 				ObservedAt: now,
 				LastSeenAt: now,
+				Metadata: map[string]any{
+					"source":  "live",
+					"cluster": "pve-prod",
+				},
 			},
 		},
 		Count: 1,
@@ -3655,7 +3661,8 @@ func TestContract_ResourceRelationshipsJSONSnapshot(t *testing.T) {
 				"active":true,
 				"discoverer":"proxmox_adapter",
 				"observedAt":"2026-03-18T17:00:00Z",
-				"lastSeenAt":"2026-03-18T17:00:00Z"
+				"lastSeenAt":"2026-03-18T17:00:00Z",
+				"metadata":{"cluster":"pve-prod","source":"live"}
 			}
 		],
 		"count":1
@@ -3686,7 +3693,7 @@ func TestContract_ResourceTimelineJSONSnapshot(t *testing.T) {
 				Confidence:       unifiedresources.ConfidenceHigh,
 				RelatedResources: []string{"node-1"},
 				Reason:           "vm started",
-				Metadata:         map[string]any{"source": "snapshot"},
+				Metadata:         map[string]any{"source": "snapshot", "ticket": "INC-1234"},
 			},
 		},
 		Count: 1,
@@ -3713,7 +3720,7 @@ func TestContract_ResourceTimelineJSONSnapshot(t *testing.T) {
 				"confidence":"high",
 				"relatedResources":["node-1"],
 				"reason":"vm started",
-				"metadata":{"source":"snapshot"}
+				"metadata":{"source":"snapshot","ticket":"INC-1234"}
 			}
 		],
 		"count":1
@@ -3754,6 +3761,10 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 				Discoverer: "proxmox_adapter",
 				ObservedAt: now,
 				LastSeenAt: now,
+				Metadata: map[string]any{
+					"source":  "live",
+					"cluster": "pve-prod",
+				},
 			},
 		},
 		RecentChanges: []unifiedresources.ResourceChange{
@@ -3768,6 +3779,10 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 				SourceType:    unifiedresources.SourcePlatformEvent,
 				SourceAdapter: unifiedresources.AdapterProxmox,
 				Confidence:    unifiedresources.ConfidenceHigh,
+				Metadata: map[string]any{
+					"source": "snapshot",
+					"ticket": "INC-1234",
+				},
 			},
 		},
 		Counts: struct {
@@ -3805,7 +3820,8 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 				"active":true,
 				"discoverer":"proxmox_adapter",
 				"observedAt":"2026-03-18T17:00:00Z",
-				"lastSeenAt":"2026-03-18T17:00:00Z"
+				"lastSeenAt":"2026-03-18T17:00:00Z",
+				"metadata":{"cluster":"pve-prod","source":"live"}
 			}
 		],
 		"recentChanges":[
@@ -3819,7 +3835,8 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 				"to":"online",
 				"sourceType":"platform_event",
 				"sourceAdapter":"proxmox_adapter",
-				"confidence":"high"
+				"confidence":"high",
+				"metadata":{"source":"snapshot","ticket":"INC-1234"}
 			}
 		],
 		"counts":{
