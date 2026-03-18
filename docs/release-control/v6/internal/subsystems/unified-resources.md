@@ -95,6 +95,10 @@ The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead
 of flattening them into status-only noise.
+The same change emitter now also classifies canonical incident changes as
+`metric_anomaly` records when the incident rollup changes, so resource
+anomalies stay attached to the canonical incident surface instead of being
+inferred later from metric noise or alert-adjacent heuristics.
 That store also now migrates legacy `resource_changes` tables that still carry
 the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
 adding the newer `occurred_at` field, and preserving the legacy timestamp on

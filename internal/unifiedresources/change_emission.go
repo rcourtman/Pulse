@@ -113,6 +113,11 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		change.From = resourceRestartSummary(before)
 		change.To = resourceRestartSummary(after)
 		change.Reason = "resource restart detected"
+	case resourceIncidentChanged(before, after):
+		change.Kind = ChangeAnomaly
+		change.From = resourceIncidentSummary(before)
+		change.To = resourceIncidentSummary(after)
+		change.Reason = "resource incident changed"
 	case before.Status != after.Status || dockerCommandChanged(before, after) || dockerUpdateStatusChanged(before, after) || proxmoxLifecycleChanged(before, after):
 		change.Kind = ChangeStateTransition
 		change.From = resourceStateSummary(before)
@@ -175,6 +180,9 @@ func resourceChangedFields(before, after Resource) []string {
 	}
 	if !reflect.DeepEqual(before.Identity, after.Identity) {
 		changed = append(changed, "identity")
+	}
+	if resourceIncidentChanged(before, after) {
+		changed = append(changed, "incidents")
 	}
 	if dockerRestartChanged(before, after) {
 		changed = append(changed, "docker.restartCount", "docker.uptimeSeconds")
@@ -300,6 +308,68 @@ func resourceRestartSummary(resource Resource) string {
 		}
 	}
 	return strings.Join(parts, "|")
+}
+
+func resourceIncidentChanged(before, after Resource) bool {
+	return resourceIncidentFingerprint(before.Incidents) != resourceIncidentFingerprint(after.Incidents)
+}
+
+func resourceIncidentSummary(resource Resource) string {
+	return resourceIncidentSummaryFromSlice(resource.Incidents)
+}
+
+func resourceIncidentSummaryFromSlice(incidents []ResourceIncident) string {
+	if len(incidents) == 0 {
+		return "none"
+	}
+
+	labels := make([]string, 0, len(incidents))
+	for _, incident := range incidents {
+		labels = append(labels, resourceIncidentLabel(incident))
+	}
+
+	sort.Strings(labels)
+	if len(labels) == 1 {
+		return labels[0]
+	}
+	if len(labels) <= 3 {
+		return strings.Join(labels, ", ")
+	}
+	return fmt.Sprintf("%d incidents", len(labels))
+}
+
+func resourceIncidentFingerprint(incidents []ResourceIncident) string {
+	if len(incidents) == 0 {
+		return "none"
+	}
+
+	labels := make([]string, 0, len(incidents))
+	for _, incident := range incidents {
+		labels = append(labels, fmt.Sprintf("%s|%s|%s|%s|%s",
+			strings.TrimSpace(incident.Provider),
+			strings.TrimSpace(incident.NativeID),
+			strings.TrimSpace(incident.Code),
+			strings.TrimSpace(string(incident.Severity)),
+			strings.TrimSpace(incident.Summary),
+		))
+	}
+
+	sort.Strings(labels)
+	return strings.Join(labels, "||")
+}
+
+func resourceIncidentLabel(incident ResourceIncident) string {
+	code := strings.TrimSpace(incident.Code)
+	if code == "" {
+		code = "incident"
+	}
+	if severity := strings.TrimSpace(string(incident.Severity)); severity != "" {
+		code += fmt.Sprintf("[%s]", severity)
+	}
+	if summary := strings.TrimSpace(incident.Summary); summary != "" {
+		code += fmt.Sprintf(":%s", summary)
+	}
+	return code
 }
 
 func resourceRelationSummary(resource Resource) string {

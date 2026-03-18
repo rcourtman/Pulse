@@ -190,6 +190,39 @@ func TestBuildResourceChange_ClassifiesKubernetesRestartChange(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_ClassifiesIncidentAnomalyChange(t *testing.T) {
+	before := Resource{
+		ID:     "storage:1",
+		Type:   ResourceTypeStorage,
+		Name:   "storage-1",
+		Status: StatusOnline,
+	}
+	after := before
+	after.Incidents = []ResourceIncident{{
+		Provider: "pbs",
+		NativeID: "datastore:capacity_runway_low",
+		Code:     "capacity_runway_low",
+		Severity: "warning",
+		Source:   "pbs",
+		Summary:  "PBS datastore archive is READ_ONLY",
+	}}
+	refreshResourceIncidentRollup(&after)
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil {
+		t.Fatal("expected incident anomaly change, got nil")
+	}
+	if change.Kind != ChangeAnomaly {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeAnomaly)
+	}
+	if change.From != "none" || change.To != "capacity_runway_low[warning]:PBS datastore archive is READ_ONLY" {
+		t.Fatalf("From/To = %q/%q, want incident summaries", change.From, change.To)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"incidents"}) {
+		t.Fatalf("changedFields = %+v, want incidents", mustChangedFields(t, change))
+	}
+}
+
 func TestBuildResourceChange_ClassifiesConfigUpdate(t *testing.T) {
 	before := Resource{
 		ID:     "vm:1",

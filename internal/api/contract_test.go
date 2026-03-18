@@ -3866,6 +3866,64 @@ func TestContract_ResourceTimelineRestartJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceTimelineAnomalyJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 12, 0, 0, time.UTC)
+	payload := struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Count         int                               `json:"count"`
+	}{
+		ResourceID: "storage:1",
+		RecentChanges: []unifiedresources.ResourceChange{
+			{
+				ID:            "chg-anomaly-1",
+				ObservedAt:    now,
+				OccurredAt:    &now,
+				ResourceID:    "storage:1",
+				Kind:          unifiedresources.ChangeAnomaly,
+				From:          "none",
+				To:            "capacity_runway_low[warning]:PBS datastore archive is READ_ONLY",
+				SourceType:    unifiedresources.SourcePulseDiff,
+				SourceAdapter: unifiedresources.AdapterProxmox,
+				Confidence:    unifiedresources.ConfidenceHigh,
+				Reason:        "resource incident changed",
+				Metadata: map[string]any{
+					"changedFields": []string{"incidents"},
+				},
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource timeline anomaly response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"storage:1",
+		"recentChanges":[
+			{
+				"id":"chg-anomaly-1",
+				"observedAt":"2026-03-18T17:12:00Z",
+				"occurredAt":"2026-03-18T17:12:00Z",
+				"resourceId":"storage:1",
+				"kind":"metric_anomaly",
+				"from":"none",
+				"to":"capacity_runway_low[warning]:PBS datastore archive is READ_ONLY",
+				"sourceType":"pulse_diff",
+				"sourceAdapter":"proxmox_adapter",
+				"confidence":"high",
+				"reason":"resource incident changed",
+				"metadata":{"changedFields":["incidents"]}
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {
