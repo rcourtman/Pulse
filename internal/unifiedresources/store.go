@@ -26,6 +26,7 @@ type ResourceStore interface {
 	GetExclusions() ([]ResourceExclusion, error)
 	RecordChange(change ResourceChange) error
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error)
+	CountRecentChanges(canonicalID string, since time.Time) (int, error)
 	RecordActionAudit(record ActionAuditRecord) error
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -552,6 +553,25 @@ func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Ti
 	return changes, nil
 }
 
+func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.Time) (int, error) {
+	query := `SELECT COUNT(*) FROM resource_changes WHERE observed_at >= ?`
+	args := []any{since}
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID != "" {
+		query += ` AND canonical_id = ?`
+		args = append(args, canonicalID)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int
+	if err := s.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count resource changes: %w", err)
+	}
+	return count, nil
+}
+
 func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -873,6 +893,23 @@ func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limi
 		}
 	}
 	return out, nil
+}
+
+func (m *MemoryStore) CountRecentChanges(canonicalID string, since time.Time) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	canonicalID = CanonicalResourceID(canonicalID)
+	count := 0
+	for _, change := range m.changes {
+		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+			continue
+		}
+		if !since.IsZero() && change.ObservedAt.Before(since) {
+			continue
+		}
+		count++
+	}
+	return count, nil
 }
 
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {

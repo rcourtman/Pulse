@@ -270,6 +270,66 @@ func TestRecordChange_PreservesTimelineMetadata(t *testing.T) {
 	}
 }
 
+func TestCountRecentChanges_RespectsFilters(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:         "chg-count-1",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-30 * time.Minute),
+			Kind:       ChangeStateTransition,
+			SourceType: SourcePlatformEvent,
+			Confidence: ConfidenceHigh,
+		},
+		{
+			ID:         "chg-count-2",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-20 * time.Minute),
+			Kind:       ChangeAnomaly,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceMedium,
+		},
+		{
+			ID:         "chg-count-3",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-10 * time.Minute),
+			Kind:       ChangeRelationship,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceLow,
+		},
+		{
+			ID:         "chg-count-4",
+			ResourceID: "vm:2",
+			ObservedAt: base.Add(-5 * time.Minute),
+			Kind:       ChangeCapability,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceLow,
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	count, err := store.CountRecentChanges("vm:1", base.Add(-25*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChanges vm:1: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("CountRecentChanges vm:1 = %d, want 2", count)
+	}
+
+	allCount, err := store.CountRecentChanges("", base.Add(-15*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChanges all: %v", err)
+	}
+	if allCount != 2 {
+		t.Fatalf("CountRecentChanges all = %d, want 2", allCount)
+	}
+}
+
 func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 13, 0, 0, 0, time.UTC)

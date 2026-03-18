@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -912,6 +913,49 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RecordChange: %v", err)
 	}
+	for i, offset := range []time.Duration{2 * time.Minute, 4 * time.Minute} {
+		if err := store.RecordChange(unified.ResourceChange{
+			ID:            fmt.Sprintf("chg-42-extra-%d", i+1),
+			ResourceID:    "vm:42",
+			ObservedAt:    now.Add(-offset),
+			Kind:          unified.ChangeAnomaly,
+			SourceType:    unified.SourcePulseDiff,
+			SourceAdapter: unified.AdapterProxmox,
+			Confidence:    unified.ConfidenceMedium,
+			Reason:        "history backfill",
+		}); err != nil {
+			t.Fatalf("RecordChange extra %d: %v", i+1, err)
+		}
+	}
+
+	t.Run("facets", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/facets?limit=1", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                         `json:"resourceId"`
+			Capabilities  []unified.ResourceCapability   `json:"capabilities"`
+			Relationships []unified.ResourceRelationship `json:"relationships"`
+			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+			Counts        struct {
+				Capabilities  int `json:"capabilities"`
+				Relationships int `json:"relationships"`
+				RecentChanges int `json:"recentChanges"`
+			} `json:"counts"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode facets: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 3 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected facets payload: %#v", payload)
+		}
+		if payload.Counts.Capabilities != 1 || payload.Counts.Relationships != 1 {
+			t.Fatalf("unexpected facet counts: %#v", payload.Counts)
+		}
+	})
 
 	t.Run("capabilities", func(t *testing.T) {
 		rec := httptest.NewRecorder()
@@ -968,7 +1012,7 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode timeline: %v", err)
 		}
-		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.RecentChanges) != 1 {
+		if payload.ResourceID != "vm:42" || payload.Count != 3 || len(payload.RecentChanges) != 3 {
 			t.Fatalf("unexpected timeline payload: %#v", payload)
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {

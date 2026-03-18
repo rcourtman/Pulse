@@ -148,6 +148,11 @@ describe('UnifiedResourceTable performance contract', () => {
               lastSeenAt: '2026-03-18T12:05:00Z',
             },
           ]}
+          counts={{
+            capabilities: 1,
+            relationships: 1,
+            recentChanges: 3,
+          }}
           recentChanges={[
             {
               id: 'change-1',
@@ -163,7 +168,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(getByText('Capabilities 1')).toBeInTheDocument();
       expect(getByText('Relationships 1')).toBeInTheDocument();
-      expect(getByText('Timeline 1')).toBeInTheDocument();
+      expect(getByText('Timeline 3')).toBeInTheDocument();
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {

@@ -656,4 +656,8 @@ That same shared `internal/api/` resource boundary now also carries governed
 policy-aware metadata. Storage and recovery consumers that read canonical
 resource payloads must preserve backend-derived `policy` and `aiSafeSummary`
 fields for storage, backup, and data-bearing resources instead of rebuilding
-their own sensitivity or routing guesses in page-local presentation code.
+their own sensitivity or routing guesses in page-local presentation code. That
+same boundary now also owns the backend facet-bundle route for capability,
+relationship, and timeline history reads, so storage and recovery surfaces
+must continue to consume the shared bundle rather than issuing separate local
+resource-detail fetches.

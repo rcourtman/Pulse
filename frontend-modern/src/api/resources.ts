@@ -88,21 +88,8 @@ export class ResourceAPI {
     resourceId: string,
     options?: ResourceTimelineQueryOptions,
   ): Promise<ResourceFacetBundle> {
-    const [capabilities, relationships, recentChanges] = await Promise.all([
-      ResourceAPI.getCapabilities(resourceId),
-      ResourceAPI.getRelationships(resourceId),
-      ResourceAPI.getTimeline(resourceId, options),
-    ]);
-
-    return {
-      capabilities: capabilities.capabilities ?? [],
-      relationships: relationships.relationships ?? [],
-      recentChanges: recentChanges.recentChanges ?? [],
-      counts: {
-        capabilities: capabilities.count ?? 0,
-        relationships: relationships.count ?? 0,
-        recentChanges: recentChanges.count ?? 0,
-      },
-    };
+    return fetchFacet<ResourceFacetBundle>(
+      `${buildFacetPath(resourceId, 'facets')}${buildTimelineQuery(options)}`,
+    );
   }
 }

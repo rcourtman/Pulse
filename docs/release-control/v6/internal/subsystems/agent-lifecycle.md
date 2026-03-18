@@ -1009,4 +1009,7 @@ policy-aware resource metadata. Agent lifecycle and fleet-control surfaces may
 consume canonical `policy` and `aiSafeSummary` fields from unified resource
 payloads when they need resource context, but they must not fork their own
 sensitivity-classification or local-vs-cloud routing heuristics on the same
-runtime boundary.
+runtime boundary. The same shared resource boundary now also owns the canonical
+facet-bundle read path for capabilities, relationships, and timeline history,
+so fleet lifecycle surfaces that open resource drawers must continue to consume
+the backend bundle instead of reassembling a local multi-call summary.

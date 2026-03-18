@@ -277,8 +277,26 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(resourceCopy)
 }
 
+type resourceFacetCountsResponse struct {
+	Capabilities  int `json:"capabilities"`
+	Relationships int `json:"relationships"`
+	RecentChanges int `json:"recentChanges"`
+}
+
+type resourceFacetBundleResponse struct {
+	ResourceID    string                         `json:"resourceId"`
+	Capabilities  []unified.ResourceCapability   `json:"capabilities"`
+	Relationships []unified.ResourceRelationship `json:"relationships"`
+	RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+	Counts        resourceFacetCountsResponse    `json:"counts"`
+}
+
 // HandleResourceRoutes dispatches nested resource routes.
 func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/facets") {
+		h.HandleGetResourceFacets(w, r)
+		return
+	}
 	if strings.HasSuffix(r.URL.Path, "/capabilities") {
 		h.HandleGetResourceCapabilities(w, r)
 		return
@@ -312,6 +330,93 @@ func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.R
 		return
 	}
 	h.HandleGetResource(w, r)
+}
+
+// HandleGetResourceFacets handles GET /api/resources/{id}/facets.
+func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/facets")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	resource, ok := registry.Get(resourceID)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	since := time.Time{}
+	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, raw)
+		if parseErr != nil {
+			http.Error(w, "Invalid since value", http.StatusBadRequest)
+			return
+		}
+		since = parsed.UTC()
+	}
+	limit := 25
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed <= 0 {
+			http.Error(w, "Invalid limit value", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+
+	recentChanges, err := store.GetRecentChanges(resourceID, since, limit)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	changeCount, err := store.CountRecentChanges(resourceID, since)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	capabilities := resource.Capabilities
+	if capabilities == nil {
+		capabilities = []unified.ResourceCapability{}
+	}
+	relationships := resource.Relationships
+	if relationships == nil {
+		relationships = []unified.ResourceRelationship{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resourceFacetBundleResponse{
+		ResourceID:    resourceID,
+		Capabilities:  capabilities,
+		Relationships: relationships,
+		RecentChanges: recentChanges,
+		Counts: resourceFacetCountsResponse{
+			Capabilities:  len(capabilities),
+			Relationships: len(relationships),
+			RecentChanges: changeCount,
+		},
+	})
 }
 
 // HandleGetChildren handles GET /api/resources/{id}/children.
@@ -512,12 +617,17 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
+	changeCount, err := store.CountRecentChanges(resourceID, since)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"resourceId":    resourceID,
 		"recentChanges": changes,
-		"count":         len(changes),
+		"count":         changeCount,
 	})
 }
 
