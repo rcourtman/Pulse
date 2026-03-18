@@ -500,6 +500,11 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
+	sourceTypeCounts, err := store.CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
 
 	capabilities := resource.Capabilities
 	if capabilities == nil {
@@ -517,10 +522,11 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		Relationships: relationships,
 		RecentChanges: recentChanges,
 		Counts: resourceFacetCountsResponse{
-			Capabilities:      resource.FacetCounts.Capabilities,
-			Relationships:     resource.FacetCounts.Relationships,
-			RecentChanges:     changeCount,
-			RecentChangeKinds: changeKindCounts,
+			Capabilities:            resource.FacetCounts.Capabilities,
+			Relationships:           resource.FacetCounts.Relationships,
+			RecentChanges:           changeCount,
+			RecentChangeKinds:       changeKindCounts,
+			RecentChangeSourceTypes: sourceTypeCounts,
 		},
 	})
 }

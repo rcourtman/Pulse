@@ -69,10 +69,11 @@ type Resource struct {
 // ResourceFacetCounts captures the total count of each resource facet that
 // may be surfaced in row summaries or detail drawers.
 type ResourceFacetCounts struct {
-	Capabilities      int                `json:"capabilities"`
-	Relationships     int                `json:"relationships"`
-	RecentChanges     int                `json:"recentChanges"`
-	RecentChangeKinds map[ChangeKind]int `json:"recentChangeKinds,omitempty"`
+	Capabilities            int                      `json:"capabilities"`
+	Relationships           int                      `json:"relationships"`
+	RecentChanges           int                      `json:"recentChanges"`
+	RecentChangeKinds       map[ChangeKind]int       `json:"recentChangeKinds,omitempty"`
+	RecentChangeSourceTypes map[ChangeSourceType]int `json:"recentChangeSourceTypes,omitempty"`
 }
 
 // DiscoveryTarget describes the canonical discovery request coordinates

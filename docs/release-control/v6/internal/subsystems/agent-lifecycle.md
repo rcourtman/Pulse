@@ -143,6 +143,11 @@ That same shared facet bundle now also carries grouped `recentChangeKinds`
 counts by canonical change kind, so the lifecycle-adjacent detail surfaces can
 report restart, anomaly, relationship, and capability distribution without
 rebuilding timeline math in the browser.
+That same shared facet bundle now also carries grouped
+`recentChangeSourceTypes` counts by canonical source type, so the
+lifecycle-adjacent detail surfaces can distinguish platform events, pulse
+diffs, heuristics, user actions, and agent actions without re-inferencing the
+provenance mix in the browser.
 Timeline entries surfaced through that same boundary also preserve
 `relatedResources` graph context for non-relationship changes, so adjacent
 fleet and install surfaces can link the affected neighbors without trying to

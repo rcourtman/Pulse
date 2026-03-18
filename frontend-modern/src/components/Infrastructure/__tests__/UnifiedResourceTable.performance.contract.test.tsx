@@ -156,6 +156,10 @@ describe('UnifiedResourceTable performance contract', () => {
               restart: 2,
               metric_anomaly: 1,
             },
+            recentChangeSourceTypes: {
+              platform_event: 1,
+              pulse_diff: 2,
+            },
           }}
           recentChanges={[]}
         />
@@ -166,6 +170,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Timeline 3')).toBeInTheDocument();
       expect(getByText('Restart 2')).toBeInTheDocument();
       expect(getByText('Anomaly 1')).toBeInTheDocument();
+      expect(getByText('Platform event 1')).toBeInTheDocument();
+      expect(getByText('Pulse diff 2')).toBeInTheDocument();
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
@@ -199,6 +205,10 @@ describe('UnifiedResourceTable performance contract', () => {
                 recentChangeKinds: {
                   restart: 2,
                   metric_anomaly: 1,
+                },
+                recentChangeSourceTypes: {
+                  platform_event: 1,
+                  pulse_diff: 2,
                 },
               },
               recentChanges: [],

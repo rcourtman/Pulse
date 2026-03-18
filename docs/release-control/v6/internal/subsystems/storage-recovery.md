@@ -120,6 +120,11 @@ consume now also carries grouped `recentChangeKinds` counts by canonical change
 kind, so storage and recovery surfaces can show the distribution of restarts,
 anomalies, relationships, and capability changes without re-deriving their own
 timeline breakdowns.
+That same shared facet bundle now also carries grouped
+`recentChangeSourceTypes` counts by canonical source type, so storage and
+recovery surfaces can separate platform events, pulse diffs, heuristics,
+user actions, and agent actions without inferring provenance from the loaded
+slice.
 Those same resource timeline records also preserve `relatedResources` graph
 context for non-relationship changes, so storage and recovery views can still
 link neighboring resources when the timeline entry is a restart, anomaly, or

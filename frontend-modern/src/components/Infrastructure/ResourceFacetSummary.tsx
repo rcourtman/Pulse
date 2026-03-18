@@ -73,6 +73,52 @@ const recentChangeKindLabels: Record<
   },
 };
 
+type RecentChangeSourceType =
+  | 'platform_event'
+  | 'pulse_diff'
+  | 'heuristic'
+  | 'user_action'
+  | 'agent_action';
+
+const recentChangeSourceTypeOrder: RecentChangeSourceType[] = [
+  'platform_event',
+  'pulse_diff',
+  'heuristic',
+  'user_action',
+  'agent_action',
+];
+
+const recentChangeSourceTypeLabels: Record<
+  RecentChangeSourceType,
+  { label: string; plural: string; className: string }
+> = {
+  platform_event: {
+    label: 'Platform event',
+    plural: 'Platform events',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+  },
+  pulse_diff: {
+    label: 'Pulse diff',
+    plural: 'Pulse diffs',
+    className: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
+  },
+  heuristic: {
+    label: 'Heuristic',
+    plural: 'Heuristics',
+    className: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900 dark:text-fuchsia-300',
+  },
+  user_action: {
+    label: 'User action',
+    plural: 'User actions',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  },
+  agent_action: {
+    label: 'Agent action',
+    plural: 'Agent actions',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  },
+};
+
 const buildFacetBadges = (
   capabilities?: readonly ResourceCapability[] | null,
   relationships?: readonly ResourceRelationship[] | null,
@@ -118,6 +164,24 @@ const buildFacetBadges = (
         label: `${kindLabel.label} ${count}`,
         title: countLabel(count, kindLabel.label.toLowerCase(), kindLabel.plural.toLowerCase()),
         className: `${badgeBase} ${kindLabel.className}`,
+      });
+    }
+  }
+
+  const sourceTypeCounts = counts?.recentChangeSourceTypes;
+  if (sourceTypeCounts) {
+    for (const sourceType of recentChangeSourceTypeOrder) {
+      const count = sourceTypeCounts[sourceType];
+      if (!count || count <= 0) continue;
+      const sourceTypeLabel = recentChangeSourceTypeLabels[sourceType];
+      badges.push({
+        label: `${sourceTypeLabel.label} ${count}`,
+        title: countLabel(
+          count,
+          sourceTypeLabel.label.toLowerCase(),
+          sourceTypeLabel.plural.toLowerCase(),
+        ),
+        className: `${badgeBase} ${sourceTypeLabel.className}`,
       });
     }
   }

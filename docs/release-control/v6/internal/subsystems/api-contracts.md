@@ -131,6 +131,11 @@ The same facet bundle contract now also returns grouped `recentChangeKinds`
 counts by canonical `ChangeKind`, so the shared drawer and summary chips can
 show the distribution of restarts, anomalies, state transitions, and other
 timeline classes without guessing from the loaded slice.
+The same facet bundle contract now also returns grouped
+`recentChangeSourceTypes` counts by canonical source type, so the shared
+drawer and summary chips can distinguish platform events, pulse diffs,
+heuristics, user actions, and agent actions without inventing frontend-local
+provenance heuristics.
 Canonical timeline entries now also preserve graph context in
 `relatedResources`, so the history surface can explain which neighboring
 resources moved with restart, anomaly, config, state transition, and

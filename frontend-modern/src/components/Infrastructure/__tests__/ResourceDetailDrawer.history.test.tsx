@@ -110,6 +110,10 @@ describe('ResourceDetailDrawer history tab', () => {
           restart: 2,
           metric_anomaly: 1,
         },
+        recentChangeSourceTypes: {
+          platform_event: 1,
+          pulse_diff: 2,
+        },
       },
     });
 
@@ -130,6 +134,8 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(screen.getByText('Timeline 3')).toBeInTheDocument();
     expect(screen.getByText('Restart 2')).toBeInTheDocument();
     expect(screen.getByText('Anomaly 1')).toBeInTheDocument();
+    expect(screen.getByText('Platform event 1')).toBeInTheDocument();
+    expect(screen.getByText('Pulse diff 2')).toBeInTheDocument();
   });
 
   it('renders resource capability, relationship, and timeline facets', async () => {

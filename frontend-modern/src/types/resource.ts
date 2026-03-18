@@ -192,6 +192,7 @@ export interface ResourceFacetCounts {
   relationships: number;
   recentChanges: number;
   recentChangeKinds?: Partial<Record<ResourceChangeKind, number>>;
+  recentChangeSourceTypes?: Partial<Record<ResourceChangeSourceType, number>>;
 }
 
 export interface ResourceRelationship {

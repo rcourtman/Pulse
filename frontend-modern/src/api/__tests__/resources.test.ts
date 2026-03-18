@@ -44,6 +44,10 @@ describe('ResourceAPI', () => {
           metric_anomaly: 2,
           restart: 1,
         },
+        recentChangeSourceTypes: {
+          platform_event: 1,
+          pulse_diff: 2,
+        },
       },
     } as any);
 
@@ -74,6 +78,10 @@ describe('ResourceAPI', () => {
           metric_anomaly: 2,
           restart: 1,
         },
+        recentChangeSourceTypes: {
+          platform_event: 1,
+          pulse_diff: 2,
+        },
       },
     });
     expect(result.counts).toStrictEqual({
@@ -83,6 +91,10 @@ describe('ResourceAPI', () => {
       recentChangeKinds: {
         metric_anomaly: 2,
         restart: 1,
+      },
+      recentChangeSourceTypes: {
+        platform_event: 1,
+        pulse_diff: 2,
       },
     });
   });

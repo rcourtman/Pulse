@@ -732,6 +732,76 @@ func TestCountRecentChangesByKind_RespectsFilters(t *testing.T) {
 	}
 }
 
+func TestCountRecentChangesBySourceType_RespectsFilters(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:            "chg-source-1",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-30 * time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceHigh,
+		},
+		{
+			ID:            "chg-source-2",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-20 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceMedium,
+		},
+		{
+			ID:            "chg-source-3",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-10 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceLow,
+		},
+		{
+			ID:            "chg-source-4",
+			ResourceID:    "vm:2",
+			ObservedAt:    base.Add(-5 * time.Minute),
+			Kind:          ChangeCapability,
+			SourceType:    SourceAgentAction,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceLow,
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	counts, err := store.CountRecentChangesBySourceType("vm:1", base.Add(-35*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChangesBySourceType vm:1: %v", err)
+	}
+	wantCounts := map[ChangeSourceType]int{
+		SourcePlatformEvent: 1,
+		SourcePulseDiff:     2,
+	}
+	if !reflect.DeepEqual(counts, wantCounts) {
+		t.Fatalf("CountRecentChangesBySourceType vm:1 = %#v, want %#v", counts, wantCounts)
+	}
+
+	filteredCounts, err := store.CountRecentChangesBySourceTypeFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		SourceAdapters: []ChangeSourceAdapter{AdapterProxmox},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesBySourceTypeFiltered source adapters: %v", err)
+	}
+	if !reflect.DeepEqual(filteredCounts, map[ChangeSourceType]int{SourcePlatformEvent: 1, SourcePulseDiff: 1}) {
+		t.Fatalf("CountRecentChangesBySourceTypeFiltered source adapters = %#v, want %#v", filteredCounts, map[ChangeSourceType]int{SourcePlatformEvent: 1, SourcePulseDiff: 1})
+	}
+}
+
 func TestGetRecentChanges_RespectsFilters(t *testing.T) {
 	store := newTestStore(t)
 	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)

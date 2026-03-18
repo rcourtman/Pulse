@@ -121,6 +121,10 @@ The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, anomalies, relationships, and
 capabilities without recomputing timeline history in the browser.
+That same facet bundle now also returns grouped recent-change provenance
+counts by source type, so the detail drawer can distinguish platform events,
+pulse diffs, heuristics, user actions, and agent actions without re-deriving
+adapter provenance from the loaded slice.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home
