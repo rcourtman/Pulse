@@ -59,9 +59,10 @@ type ResourceExclusion struct {
 
 // SQLiteResourceStore stores overrides in SQLite.
 type SQLiteResourceStore struct {
-	db     *sql.DB
-	dbPath string
-	mu     sync.Mutex
+	db                          *sql.DB
+	dbPath                      string
+	resourceChangesHasTimestamp bool
+	mu                          sync.Mutex
 }
 
 const (
@@ -303,7 +304,6 @@ func (s *SQLiteResourceStore) initSchema() error {
 		related_resources TEXT,
 		metadata_json TEXT
 	);
-	CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC);
 
 	CREATE TABLE IF NOT EXISTS action_audits (
 		id TEXT PRIMARY KEY,
@@ -361,7 +361,16 @@ func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
 	if err != nil {
 		return err
 	}
+	if _, ok := columns["timestamp"]; ok {
+		s.resourceChangesHasTimestamp = true
+	}
 
+	if err := s.addResourceChangesColumnIfMissing(columns, "observed_at", "DATETIME"); err != nil {
+		return err
+	}
+	if err := s.addResourceChangesColumnIfMissing(columns, "occurred_at", "DATETIME"); err != nil {
+		return err
+	}
 	if err := s.addResourceChangesColumnIfMissing(columns, "source_type", "TEXT NOT NULL DEFAULT 'pulse_diff'"); err != nil {
 		return err
 	}
@@ -378,6 +387,9 @@ func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
 		return err
 	}
 
+	if err := s.backfillLegacyResourceChangeObservedAt(columns); err != nil {
+		return err
+	}
 	if err := s.normalizeResourceChangeRows(columns); err != nil {
 		return err
 	}
@@ -462,6 +474,23 @@ func (s *SQLiteResourceStore) normalizeResourceChangeRows(columns map[string]str
 	query := `UPDATE resource_changes SET ` + strings.Join(assignments, ", ")
 	if _, err := s.db.Exec(query); err != nil {
 		return fmt.Errorf("normalize resource_changes rows: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) backfillLegacyResourceChangeObservedAt(columns map[string]struct{}) error {
+	if _, ok := columns["observed_at"]; !ok {
+		return nil
+	}
+
+	expressions := []string{"observed_at = COALESCE(observed_at, CURRENT_TIMESTAMP)"}
+	if _, ok := columns["timestamp"]; ok {
+		expressions[0] = "observed_at = COALESCE(observed_at, timestamp, CURRENT_TIMESTAMP)"
+	}
+
+	query := `UPDATE resource_changes SET ` + expressions[0] + ` WHERE observed_at IS NULL OR TRIM(COALESCE(observed_at, '')) = ''`
+	if _, err := s.db.Exec(query); err != nil {
+		return fmt.Errorf("backfill resource_changes.observed_at: %w", err)
 	}
 	return nil
 }
@@ -603,10 +632,48 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 	relJSON, _ := json.Marshal(change.RelatedResources)
 	metaJSON, _ := json.Marshal(change.Metadata)
 
-	_, err := s.db.Exec(`
-		INSERT INTO resource_changes (id, canonical_id, observed_at, occurred_at, kind, from_state, to_state, source_type, source_adapter, actor, confidence, reason, related_resources, metadata_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, change.ID, CanonicalResourceID(change.ResourceID), change.ObservedAt, change.OccurredAt, string(change.Kind), change.From, change.To, change.SourceType, change.SourceAdapter, change.Actor, string(change.Confidence), change.Reason, string(relJSON), string(metaJSON))
+	columns := []string{"id", "canonical_id", "observed_at"}
+	values := []any{change.ID, CanonicalResourceID(change.ResourceID), change.ObservedAt}
+	if s.resourceChangesHasTimestamp {
+		columns = append(columns, "timestamp")
+		values = append(values, change.ObservedAt)
+	}
+	columns = append(columns,
+		"occurred_at",
+		"kind",
+		"from_state",
+		"to_state",
+		"source_type",
+		"source_adapter",
+		"actor",
+		"confidence",
+		"reason",
+		"related_resources",
+		"metadata_json",
+	)
+	values = append(values,
+		change.OccurredAt,
+		string(change.Kind),
+		change.From,
+		change.To,
+		change.SourceType,
+		change.SourceAdapter,
+		change.Actor,
+		string(change.Confidence),
+		change.Reason,
+		string(relJSON),
+		string(metaJSON),
+	)
+
+	placeholders := make([]string, len(columns))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+
+	_, err := s.db.Exec(
+		`INSERT INTO resource_changes (`+strings.Join(columns, ", ")+`) VALUES (`+strings.Join(placeholders, ", ")+`)`,
+		values...,
+	)
 	if err != nil {
 		return fmt.Errorf("insert resource change: %w", err)
 	}

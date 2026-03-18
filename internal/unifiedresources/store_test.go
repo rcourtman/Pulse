@@ -141,8 +141,7 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 		CREATE TABLE resource_changes (
 			id TEXT PRIMARY KEY,
 			canonical_id TEXT NOT NULL,
-			observed_at DATETIME NOT NULL,
-			occurred_at DATETIME,
+			timestamp DATETIME NOT NULL,
 			kind TEXT NOT NULL,
 			from_state TEXT,
 			to_state TEXT,
@@ -156,9 +155,9 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	}
 	if _, err := db.Exec(`
 		INSERT INTO resource_changes (
-			id, canonical_id, observed_at, occurred_at, kind, from_state, to_state, source, confidence, reason
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "chg-legacy", "vm:legacy", time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC), nil, string(ChangeStateTransition), "offline", "online", "proxmox", string(ConfidenceHigh), "legacy row"); err != nil {
+			id, canonical_id, timestamp, kind, from_state, to_state, source, confidence, reason
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, "chg-legacy", "vm:legacy", time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC), string(ChangeStateTransition), "offline", "online", "proxmox", string(ConfidenceHigh), "legacy row"); err != nil {
 		_ = db.Close()
 		t.Fatalf("insert legacy resource change failed: %v", err)
 	}
@@ -188,6 +187,12 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	if results[0].SourceAdapter != ChangeSourceAdapter("proxmox") {
 		t.Fatalf("legacy source adapter = %q, want proxmox", results[0].SourceAdapter)
 	}
+	if !results[0].ObservedAt.Equal(time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("legacy observed_at = %v, want 2026-03-18T12:00:00Z", results[0].ObservedAt)
+	}
+	if results[0].OccurredAt != nil {
+		t.Fatalf("legacy occurred_at = %v, want nil", results[0].OccurredAt)
+	}
 
 	if err := store.RecordChange(ResourceChange{
 		ID:            "chg-new",
@@ -209,6 +214,16 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 		t.Fatalf("GetRecentChanges after migration write returned %d rows, want 2", len(results))
 	}
 
+	columns, err := resourceChangeColumns(store.db)
+	if err != nil {
+		t.Fatalf("resourceChangeColumns: %v", err)
+	}
+	for _, want := range []string{"observed_at", "occurred_at", "source_type", "source_adapter", "actor", "related_resources", "metadata_json"} {
+		if _, ok := columns[want]; !ok {
+			t.Fatalf("expected migrated resource_changes column %q, got %#v", want, columns)
+		}
+	}
+
 	indexes, err := resourceChangesIndexes(store.db)
 	if err != nil {
 		t.Fatalf("resourceChangesIndexes: %v", err)
@@ -223,6 +238,34 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 			t.Fatalf("expected migrated resource_changes index %q, got %#v", want, indexes)
 		}
 	}
+}
+
+func resourceChangeColumns(db *sql.DB) (map[string]struct{}, error) {
+	rows, err := db.Query(`PRAGMA table_info(resource_changes)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			typ     string
+			notNull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		columns[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return columns, nil
 }
 
 func resourceChangesIndexes(db *sql.DB) (map[string]struct{}, error) {

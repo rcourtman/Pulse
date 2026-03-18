@@ -84,6 +84,10 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 `internal/unifiedresources/store.go` persists those changes so `RecentChanges`
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
+That store also now migrates legacy `resource_changes` tables that still carry
+the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
+adding the newer `occurred_at` field, and preserving the legacy timestamp on
+write when the target database still requires it.
 `internal/api/resources.go` now exposes that same history through dedicated
 `/api/resources/{id}/timeline` reads, while `/api/resources/{id}/capabilities`
 and `/api/resources/{id}/relationships` expose the current graph facets as
