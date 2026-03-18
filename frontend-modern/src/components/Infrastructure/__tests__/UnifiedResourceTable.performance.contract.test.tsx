@@ -128,9 +128,36 @@ describe('UnifiedResourceTable performance contract', () => {
     it('renders the shared facet summary component for canonical resource counts', async () => {
       const { getByText } = render(() => (
         <ResourceFacetSummary
-          capabilities={[{ id: 'capability-1' }]}
-          relationships={[{ id: 'relationship-1' }]}
-          recentChanges={[{ id: 'change-1' }]}
+          capabilities={[
+            {
+              name: 'restart',
+              type: 'native',
+              description: 'Restart the resource safely.',
+              minimumApprovalLevel: 'admin',
+            },
+          ]}
+          relationships={[
+            {
+              sourceId: 'node:pve-1',
+              targetId: 'vm:42',
+              type: 'runs_on',
+              confidence: 1,
+              active: true,
+              discoverer: 'proxmox_adapter',
+              observedAt: '2026-03-18T12:00:00Z',
+              lastSeenAt: '2026-03-18T12:05:00Z',
+            },
+          ]}
+          recentChanges={[
+            {
+              id: 'change-1',
+              observedAt: '2026-03-18T12:06:00Z',
+              resourceId: 'vm:42',
+              kind: 'restart',
+              sourceType: 'platform_event',
+              confidence: 'high',
+            },
+          ]}
         />
       ));
 

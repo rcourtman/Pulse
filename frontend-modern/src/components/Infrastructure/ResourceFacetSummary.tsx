@@ -1,4 +1,9 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
+import type {
+  ResourceCapability,
+  ResourceChange,
+  ResourceRelationship,
+} from '@/types/resource';
 
 type FacetBadge = {
   label: string;
@@ -7,9 +12,9 @@ type FacetBadge = {
 };
 
 export interface ResourceFacetSummaryProps {
-  capabilities?: readonly unknown[] | null;
-  relationships?: readonly unknown[] | null;
-  recentChanges?: readonly unknown[] | null;
+  capabilities?: readonly ResourceCapability[] | null;
+  relationships?: readonly ResourceRelationship[] | null;
+  recentChanges?: readonly ResourceChange[] | null;
   class?: string;
   testId?: string;
 }
@@ -21,9 +26,9 @@ const countLabel = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
 
 const buildFacetBadges = (
-  capabilities?: readonly unknown[] | null,
-  relationships?: readonly unknown[] | null,
-  recentChanges?: readonly unknown[] | null,
+  capabilities?: readonly ResourceCapability[] | null,
+  relationships?: readonly ResourceRelationship[] | null,
+  recentChanges?: readonly ResourceChange[] | null,
 ): FacetBadge[] => {
   const badges: FacetBadge[] = [];
   const capabilityCount = capabilities?.length ?? 0;
