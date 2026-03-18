@@ -38,33 +38,40 @@ func TestNewConfigWatcher_Scenarios(t *testing.T) {
 		cw.Stop()
 	})
 
-	// Option 2: PULSE_DATA_DIR matches production
-	t.Run("PULSE_DATA_DIR_production", func(t *testing.T) {
+	t.Run("ConfigPath_is_canonical_owner", func(t *testing.T) {
 		delete(mockEnv, "PULSE_AUTH_CONFIG_DIR")
-		mockEnv["PULSE_DATA_DIR"] = "/etc/pulse"
+		mockEnv["PULSE_DATA_DIR"] = "/tmp/mock-data"
 		cw, err := NewConfigWatcher(config)
 		require.NoError(t, err)
 		assert.Equal(t, "/etc/pulse/.env", cw.envPath)
 		cw.Stop()
 	})
 
-	// Option 5: Fallback to PULSE_DATA_DIR
 	t.Run("PULSE_DATA_DIR_fallback", func(t *testing.T) {
 		delete(mockEnv, "PULSE_AUTH_CONFIG_DIR")
 		mockEnv["PULSE_DATA_DIR"] = "/tmp/mock-data"
-		cw, err := NewConfigWatcher(config)
+		cw, err := NewConfigWatcher(&Config{})
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/mock-data/.env", cw.envPath)
 		cw.Stop()
 	})
 
-	// Docker mode
-	t.Run("Docker_mode", func(t *testing.T) {
+	t.Run("DataPath_fallback_when_ConfigPath_empty", func(t *testing.T) {
+		delete(mockEnv, "PULSE_AUTH_CONFIG_DIR")
+		delete(mockEnv, "PULSE_DATA_DIR")
+		cw, err := NewConfigWatcher(&Config{DataPath: "/var/lib/pulse"})
+		require.NoError(t, err)
+		assert.Equal(t, "/var/lib/pulse/.env", cw.envPath)
+		cw.Stop()
+	})
+
+	t.Run("Docker_mode_keeps_canonical_env_path", func(t *testing.T) {
 		mockEnv["PULSE_DOCKER"] = "true"
+		delete(mockEnv, "PULSE_AUTH_CONFIG_DIR")
 		mockEnv["PULSE_DATA_DIR"] = "/data"
 		cw, err := NewConfigWatcher(config)
 		require.NoError(t, err)
-		assert.Equal(t, "", cw.mockEnvPath)
+		assert.Equal(t, "/etc/pulse/.env", cw.envPath)
 		cw.Stop()
 	})
 }
@@ -72,7 +79,7 @@ func TestNewConfigWatcher_Scenarios(t *testing.T) {
 func TestConfigWatcher_Start_Options(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
-	os.WriteFile(envPath, []byte(""), 0644)
+	_ = os.WriteFile(envPath, []byte(""), 0644)
 
 	cfg := &Config{ConfigPath: tempDir}
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -82,8 +89,6 @@ func TestConfigWatcher_Start_Options(t *testing.T) {
 	defer cw.Stop()
 
 	cw.envPath = envPath
-	cw.mockEnvPath = filepath.Join(tempDir, "mock.env")
-	os.WriteFile(cw.mockEnvPath, []byte(""), 0644)
 
 	err = cw.Start()
 	assert.NoError(t, err)
@@ -92,7 +97,7 @@ func TestConfigWatcher_Start_Options(t *testing.T) {
 func TestConfigWatcher_PollForChanges_Coverage(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
-	os.WriteFile(envPath, []byte("V1"), 0644)
+	_ = os.WriteFile(envPath, []byte("V1"), 0644)
 
 	cw := &ConfigWatcher{
 		config:       &Config{},
@@ -108,7 +113,7 @@ func TestConfigWatcher_PollForChanges_Coverage(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// change file
-	os.WriteFile(envPath, []byte("V2"), 0644)
+	_ = os.WriteFile(envPath, []byte("V2"), 0644)
 
 	time.Sleep(50 * time.Millisecond)
 	close(cw.stopChan)

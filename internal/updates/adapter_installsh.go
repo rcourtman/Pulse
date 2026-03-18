@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -24,11 +25,37 @@ type InstallShAdapter struct {
 	logDir           string
 }
 
+const defaultInstallShReleaseRepo = "rcourtman/Pulse"
+
+func installShReleaseRepo() string {
+	repo := strings.TrimSpace(os.Getenv("PULSE_GITHUB_REPO"))
+	if repo == "" {
+		return defaultInstallShReleaseRepo
+	}
+	return repo
+}
+
+func installShReleaseDownloadPrefix() string {
+	return fmt.Sprintf("https://github.com/%s/releases/download/", installShReleaseRepo())
+}
+
+func resolveRollbackConfigDir() string {
+	return resolveUpdateDataDir()
+}
+
+func defaultInstallScriptLatestURL() string {
+	return fmt.Sprintf("https://github.com/%s/releases/latest/download/install.sh", installShReleaseRepo())
+}
+
+func installShReleaseAssetURL(version, assetName string) string {
+	return installShReleaseDownloadPrefix() + strings.TrimSpace(version) + "/" + assetName
+}
+
 // NewInstallShAdapter creates a new install.sh adapter
 func NewInstallShAdapter(history *UpdateHistory) *InstallShAdapter {
 	return &InstallShAdapter{
 		history:          history,
-		installScriptURL: "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh",
+		installScriptURL: defaultInstallScriptLatestURL(),
 		logDir:           "/var/log/pulse",
 	}
 }
@@ -79,7 +106,11 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
-	defer logFd.Close()
+	defer func() {
+		if closeErr := logFd.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("log_file", logFile).Msg("Failed to close update log file")
+		}
+	}()
 
 	// Download install script
 	progressCb(UpdateProgress{
@@ -88,12 +119,14 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		Message:  "Downloading installation script...",
 	})
 
-	log.Info().
-		Str("url", a.installScriptURL).
-		Str("version", request.Version).
-		Msg("Downloading install script")
+	installScriptURL := a.installScriptURLForVersion(request.Version)
 
-	installScript, err := a.downloadInstallScript(ctx)
+	log.Info().
+		Str("url", installScriptURL).
+		Str("version", request.Version).
+		Msg("downloading install script")
+
+	installScript, err := a.downloadInstallScript(ctx, request.Version)
 	if err != nil {
 		return fmt.Errorf("failed to download install script: %w", err)
 	}
@@ -112,11 +145,10 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		return fmt.Errorf("invalid version format: %s", request.Version)
 	}
 
-	// Build command: bash install.sh --version vX.Y.Z
+	// Build command: bash install.sh --version vX.Y.Z.
+	// The server installer does not expose a --force flag; piping the script
+	// with an explicit version is already a non-interactive install/update path.
 	args := []string{"-s", "--", "--version", request.Version}
-	if request.Force {
-		args = append(args, "--force")
-	}
 
 	cmd := exec.CommandContext(ctx, "bash", args...)
 	cmd.Stdin = strings.NewReader(installScript)
@@ -138,53 +170,83 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 
 	// Track backup path from output
 	var backupPath string
+	var backupPathMu sync.RWMutex
+	var progressMu sync.Mutex
+	emitProgress := func(progress UpdateProgress) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		progressCb(progress)
+	}
+
 	backupRe := regexp.MustCompile(`[Bb]ackup.*:\s*(.+)`)
+	var streamWG sync.WaitGroup
 
 	// Monitor output
+	streamWG.Add(1)
 	go func() {
+		defer streamWG.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
 
 			// Write to log file
-			fmt.Fprintln(logFd, line)
+			if _, writeErr := fmt.Fprintln(logFd, line); writeErr != nil {
+				log.Warn().Err(writeErr).Str("log_file", logFile).Msg("Failed to write update stdout line to log")
+			}
 
 			// Parse for backup path
 			if matches := backupRe.FindStringSubmatch(line); len(matches) > 1 {
+				backupPathMu.Lock()
 				backupPath = strings.TrimSpace(matches[1])
+				backupPathMu.Unlock()
 			}
 
 			// Emit progress based on output
 			progress := a.parseProgress(line)
 			if progress.Message != "" {
-				progressCb(progress)
+				emitProgress(progress)
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Debug().Err(err).Msg("Failed scanning install.sh stdout")
 		}
 	}()
 
 	// Also capture stderr
+	streamWG.Add(1)
 	go func() {
+		defer streamWG.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fmt.Fprintln(logFd, "STDERR:", line)
+			if _, writeErr := fmt.Fprintln(logFd, "STDERR:", line); writeErr != nil {
+				log.Warn().Err(writeErr).Str("log_file", logFile).Msg("Failed to write update stderr line to log")
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Debug().Err(err).Msg("Failed scanning install.sh stderr")
 		}
 	}()
 
 	// Wait for completion
-	progressCb(UpdateProgress{
+	emitProgress(UpdateProgress{
 		Stage:    "installing",
 		Progress: 50,
 		Message:  "Installing update...",
 	})
 
 	err = cmd.Wait()
+	streamWG.Wait()
+
+	backupPathMu.RLock()
+	finalBackupPath := backupPath
+	backupPathMu.RUnlock()
 
 	if err != nil {
 		// Read last few lines of log for error context
 		errorDetails := a.readLastLines(logFile, 10)
 
-		progressCb(UpdateProgress{
+		emitProgress(UpdateProgress{
 			Stage:      "failed",
 			Progress:   0,
 			Message:    "Update failed",
@@ -195,7 +257,7 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		return fmt.Errorf("install script failed: %w\n%s", err, errorDetails)
 	}
 
-	progressCb(UpdateProgress{
+	emitProgress(UpdateProgress{
 		Stage:      "completed",
 		Progress:   100,
 		Message:    "Update completed successfully",
@@ -204,7 +266,7 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 
 	log.Info().
 		Str("version", request.Version).
-		Str("backup", backupPath).
+		Str("backup", finalBackupPath).
 		Str("log", logFile).
 		Msg("Update completed successfully")
 
@@ -238,11 +300,11 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 		Str("backup", entry.BackupPath).
 		Str("current_version", entry.VersionTo).
 		Str("target_version", targetVersion).
-		Msg("Starting rollback")
+		Msg("starting rollback")
 
 	// Create rollback history entry
 	rollbackEventID, err := a.history.CreateEntry(ctx, UpdateHistoryEntry{
-		Action:         ActionRollback,
+		Action:         "rollback",
 		VersionFrom:    entry.VersionTo,
 		VersionTo:      targetVersion,
 		DeploymentType: a.GetDeploymentType(),
@@ -269,11 +331,16 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 		}
 	}
 
-	_ = a.history.UpdateEntry(ctx, rollbackEventID, func(e *UpdateHistoryEntry) error {
+	if err := a.history.UpdateEntry(ctx, rollbackEventID, func(e *UpdateHistoryEntry) error {
 		e.Status = finalStatus
 		e.Error = updateError
 		return nil
-	})
+	}); err != nil {
+		log.Warn().
+			Err(err).
+			Str("event_id", rollbackEventID).
+			Msg("Failed to update rollback history entry")
+	}
 
 	return rollbackErr
 }
@@ -286,10 +353,10 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 		return fmt.Errorf("failed to detect service name: %w", err)
 	}
 
-	log.Info().Str("service", serviceName).Msg("Detected Pulse service")
+	log.Info().Str("service", serviceName).Msg("detected Pulse service")
 
 	// Step 2: Download old binary
-	log.Info().Str("version", targetVersion).Msg("Downloading old binary")
+	log.Info().Str("version", targetVersion).Msg("downloading old binary")
 	binaryPath, err := a.downloadBinary(ctx, targetVersion)
 	if err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
@@ -297,49 +364,59 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	defer os.RemoveAll(filepath.Dir(binaryPath))
 
 	// Step 3: Stop service
-	log.Info().Msg("Stopping Pulse service")
+	log.Info().Msg("stopping Pulse service")
 	if err := a.stopService(ctx, serviceName); err != nil {
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
 
 	// Step 4: Backup current config (safety)
-	configDir := "/etc/pulse"
+	configDir := resolveRollbackConfigDir()
 	safetyBackup := fmt.Sprintf("%s.rollback-safety.%s", configDir, time.Now().Format("20060102-150405"))
-	log.Info().Str("backup", safetyBackup).Msg("Creating safety backup of current config")
+	log.Info().Str("backup", safetyBackup).Msg("creating safety backup of current config")
 	if err := exec.CommandContext(ctx, "cp", "-a", configDir, safetyBackup).Run(); err != nil {
-		log.Warn().Err(err).Msg("Failed to create safety backup")
+		log.Warn().Err(err).Msg("failed to create safety backup")
 	}
 
 	// Step 5: Restore config from backup
-	log.Info().Str("source", entry.BackupPath).Msg("Restoring configuration")
+	log.Info().Str("source", entry.BackupPath).Msg("restoring configuration")
 	if err := a.restoreConfig(ctx, entry.BackupPath, configDir); err != nil {
 		// Try to start service anyway
-		_ = a.startService(ctx, serviceName)
+		if startErr := a.startService(ctx, serviceName); startErr != nil {
+			log.Warn().
+				Err(startErr).
+				Str("service", serviceName).
+				Msg("Failed to restart Pulse service after configuration restore failure")
+		}
 		return fmt.Errorf("failed to restore config: %w", err)
 	}
 
 	// Step 6: Install old binary
-	log.Info().Str("version", targetVersion).Msg("Installing old binary")
+	log.Info().Str("version", targetVersion).Msg("installing old binary")
 	installDir := "/opt/pulse/bin/pulse"
 	if err := a.installBinary(ctx, binaryPath, installDir); err != nil {
 		// Try to start service anyway
-		_ = a.startService(ctx, serviceName)
+		if startErr := a.startService(ctx, serviceName); startErr != nil {
+			log.Warn().
+				Err(startErr).
+				Str("service", serviceName).
+				Msg("Failed to restart Pulse service after binary install failure")
+		}
 		return fmt.Errorf("failed to install binary: %w", err)
 	}
 
 	// Step 7: Start service
-	log.Info().Msg("Starting Pulse service")
+	log.Info().Msg("starting Pulse service")
 	if err := a.startService(ctx, serviceName); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
 	// Step 8: Health check
-	log.Info().Msg("Verifying service health")
+	log.Info().Msg("verifying service health")
 	if err := a.waitForHealth(ctx, 30*time.Second); err != nil {
 		return fmt.Errorf("service health check failed: %w", err)
 	}
 
-	log.Info().Str("version", targetVersion).Msg("Rollback completed successfully")
+	log.Info().Str("version", targetVersion).Msg("rollback completed successfully")
 	return nil
 }
 
@@ -371,21 +448,25 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	// Determine architecture
 	arch := "amd64"
 	if _, err := os.Stat("/proc/cpuinfo"); err == nil {
-		output, _ := exec.Command("uname", "-m").Output()
-		machine := strings.TrimSpace(string(output))
-		if machine == "aarch64" || machine == "arm64" {
-			arch = "arm64"
+		output, cmdErr := exec.Command("uname", "-m").Output()
+		if cmdErr != nil {
+			log.Debug().Err(cmdErr).Msg("Failed to detect CPU architecture with uname -m; using amd64")
+		} else {
+			machine := strings.TrimSpace(string(output))
+			if machine == "aarch64" || machine == "arm64" {
+				arch = "arm64"
+			}
 		}
 	}
 
 	// Download URL - tarball with version in filename
 	tarballName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", version, arch)
-	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/%s", version, tarballName)
+	url := installShReleaseAssetURL(version, tarballName)
 
 	// Create temp file
 	tmpDir, err := os.MkdirTemp("", "pulse-rollback-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create rollback temp directory: %w", err)
 	}
 
 	tarballPath := filepath.Join(tmpDir, tarballName)
@@ -423,7 +504,11 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		os.RemoveAll(tmpDir)
 		return "", fmt.Errorf("failed to open downloaded tarball: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", tarballPath).Msg("Failed to close downloaded tarball")
+		}
+	}()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
@@ -437,7 +522,9 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		return "", fmt.Errorf("checksum verification failed for %s", tarballName)
 	}
 
-	_ = os.Remove(checksumPath)
+	if removeErr := os.Remove(checksumPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		log.Debug().Err(removeErr).Str("path", checksumPath).Msg("Failed to remove checksum file")
+	}
 
 	// Extract tarball to get the binary
 	extractDir := filepath.Join(tmpDir, "extracted")
@@ -461,7 +548,9 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	}
 
 	// Remove tarball to save space
-	_ = os.Remove(tarballPath)
+	if removeErr := os.Remove(tarballPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		log.Debug().Err(removeErr).Str("path", tarballPath).Msg("Failed to remove downloaded tarball")
+	}
 
 	return binaryPath, nil
 }
@@ -495,28 +584,41 @@ func (a *InstallShAdapter) installBinary(ctx context.Context, sourcePath, target
 	// Backup current binary
 	if _, err := os.Stat(targetPath); err == nil {
 		backupPath := targetPath + ".pre-rollback"
-		_ = os.Rename(targetPath, backupPath)
+		if renameErr := os.Rename(targetPath, backupPath); renameErr != nil {
+			log.Warn().
+				Err(renameErr).
+				Str("target", targetPath).
+				Str("backup", backupPath).
+				Msg("Failed to back up existing binary before install")
+		}
 	}
 
 	// Copy new binary
 	if err := exec.CommandContext(ctx, "cp", sourcePath, targetPath).Run(); err != nil {
-		return err
+		return fmt.Errorf("copy binary to %s: %w", targetPath, err)
 	}
 
 	// Set permissions
 	if err := os.Chmod(targetPath, 0755); err != nil {
-		return err
+		return fmt.Errorf("set permissions on %s: %w", targetPath, err)
 	}
 
 	// Set ownership
-	return exec.CommandContext(ctx, "chown", "pulse:pulse", targetPath).Run()
+	if err := exec.CommandContext(ctx, "chown", "pulse:pulse", targetPath).Run(); err != nil {
+		return fmt.Errorf("set ownership on %s: %w", targetPath, err)
+	}
+	return nil
 }
 
 // waitForHealth waits for the service to become healthy
 func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+	retryTicker := time.NewTicker(2 * time.Second)
+	defer retryTicker.Stop()
 
-	for time.Now().Before(deadline) {
+	timeoutTimer := time.NewTimer(timeout)
+	defer timeoutTimer.Stop()
+
+	for {
 		// Try to hit health endpoint
 		cmd := exec.CommandContext(ctx, "curl", "-fsS", "http://localhost:7655/api/health")
 		if err := cmd.Run(); err == nil {
@@ -527,29 +629,40 @@ func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Durat
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-timeoutTimer.C:
+			return fmt.Errorf("service did not become healthy within %v", timeout)
+		case <-retryTicker.C:
 		}
 	}
+}
 
-	return fmt.Errorf("service did not become healthy within %v", timeout)
+func (a *InstallShAdapter) installScriptURLForVersion(version string) string {
+	if strings.TrimSpace(version) == "" {
+		return a.installScriptURL
+	}
+	if a.installScriptURL != defaultInstallScriptLatestURL() {
+		return a.installScriptURL
+	}
+	return installShReleaseAssetURL(version, "install.sh")
 }
 
 // downloadInstallScript downloads the install.sh script
-func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, error) {
+func (a *InstallShAdapter) downloadInstallScript(ctx context.Context, version string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "pulse-installsh-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create install.sh temp directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	scriptPath := filepath.Join(tmpDir, "install.sh")
+	installScriptURL := a.installScriptURLForVersion(version)
 
-	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", scriptPath, a.installScriptURL)
+	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", scriptPath, installScriptURL)
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to download install.sh: %w", err)
 	}
 
-	checksumURL := a.installScriptURL + ".sha256"
+	checksumURL := installScriptURL + ".sha256"
 	checksumPath := scriptPath + ".sha256"
 	cmd = exec.CommandContext(ctx, "curl", "-fsSL", "-o", checksumPath, checksumURL)
 	if err := cmd.Run(); err != nil {
@@ -570,7 +683,11 @@ func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, e
 	if err != nil {
 		return "", fmt.Errorf("failed to open install.sh for hashing: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", scriptPath).Msg("Failed to close install.sh file")
+		}
+	}()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
@@ -625,7 +742,11 @@ func (a *InstallShAdapter) readLastLines(filepath string, n int) string {
 	if err != nil {
 		return ""
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("path", filepath).Msg("Failed to close log file while reading last lines")
+		}
+	}()
 
 	// Read file backwards (simplified approach - read all lines and take last N)
 	var lines []string
@@ -649,6 +770,8 @@ func (a *InstallShAdapter) readLastLines(filepath string, n int) string {
 // DockerUpdater provides instructions for Docker deployments
 type DockerUpdater struct{}
 
+const defaultDockerImageRepo = "rcourtman/pulse"
+
 // NewDockerUpdater creates an updater for Docker deployments.
 func NewDockerUpdater() *DockerUpdater {
 	return &DockerUpdater{}
@@ -663,12 +786,17 @@ func (u *DockerUpdater) GetDeploymentType() string {
 }
 
 func (u *DockerUpdater) PrepareUpdate(ctx context.Context, request UpdateRequest) (*UpdatePlan, error) {
+	imageRepo := strings.TrimSpace(os.Getenv("PULSE_DOCKER_IMAGE_REPO"))
+	if imageRepo == "" {
+		imageRepo = defaultDockerImageRepo
+	}
+	imageRef := fmt.Sprintf("%s:%s", imageRepo, strings.TrimPrefix(request.Version, "v"))
 	return &UpdatePlan{
 		CanAutoUpdate: false,
 		Instructions: []string{
-			fmt.Sprintf("docker pull rcourtman/pulse:%s", strings.TrimPrefix(request.Version, "v")),
+			fmt.Sprintf("docker pull %s", imageRef),
 			"docker stop pulse",
-			fmt.Sprintf("docker run -d --name pulse rcourtman/pulse:%s", strings.TrimPrefix(request.Version, "v")),
+			fmt.Sprintf("docker run -d --name pulse %s", imageRef),
 		},
 		RequiresRoot:    false,
 		RollbackSupport: true,

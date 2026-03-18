@@ -58,7 +58,7 @@ func (s *GuestMetadataStore) Load() error {
 
 	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
 
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxGuestMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error
@@ -90,20 +90,8 @@ func (s *GuestMetadataStore) save() error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Ensure directory exists
-	if err := s.fs.MkdirAll(s.dataPath, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tempFile := filePath + ".tmp"
-	if err := s.fs.WriteFile(tempFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	// Rename temp file to actual file (atomic on most systems)
-	if err := s.fs.Rename(tempFile, filePath); err != nil {
-		return fmt.Errorf("failed to rename metadata file: %w", err)
+	if err := persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data); err != nil {
+		return err
 	}
 
 	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
@@ -130,7 +118,7 @@ func (s *GuestMetadataStore) Get(guestID string) *GuestMetadata {
 // 1. instance-node-vmid (e.g., "delly-minipc-201") - most specific legacy format
 // 2. instance-vmid (e.g., "delly-201") - old cluster format without node
 // 3. node-vmid (e.g., "minipc-201") - standalone format
-func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmid int) *GuestMetadata {
+func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmID int) *GuestMetadata {
 	s.mu.RLock()
 	meta, exists := s.metadata[guestID]
 	s.mu.RUnlock()
@@ -156,12 +144,10 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 			s.metadata[guestID] = legacyMeta
 			legacyMeta.ID = guestID
 			delete(s.metadata, legacyID)
-			// Save asynchronously
-			go func() {
-				if err := s.save(); err != nil {
-					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-				}
-			}()
+			// Persist while holding the store lock. save() assumes locked access.
+			if err := s.save(); err != nil {
+				log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+			}
 			s.mu.Unlock()
 
 			return legacyMeta
@@ -171,21 +157,21 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 
 	// Try legacy format 1: instance-node-vmid (most specific)
 	if instance != node {
-		if result := migrate(fmt.Sprintf("%s-%s-%d", instance, node, vmid)); result != nil {
+		if result := migrate(fmt.Sprintf("%s-%s-%d", instance, node, vmID)); result != nil {
 			return result
 		}
 	}
 
 	// Try legacy format 2: instance-vmid (old cluster format)
 	// This was used when cluster name was used without node differentiation
-	if result := migrate(fmt.Sprintf("%s-%d", instance, vmid)); result != nil {
+	if result := migrate(fmt.Sprintf("%s-%d", instance, vmID)); result != nil {
 		return result
 	}
 
 	// Try legacy format 3: node-vmid (standalone format or node-only reference)
 	// Only try if instance != node to avoid duplicate check
 	if instance != node {
-		if result := migrate(fmt.Sprintf("%s-%d", node, vmid)); result != nil {
+		if result := migrate(fmt.Sprintf("%s-%d", node, vmID)); result != nil {
 			return result
 		}
 	}

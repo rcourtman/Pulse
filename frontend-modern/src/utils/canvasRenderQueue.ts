@@ -15,9 +15,11 @@ const pending = new Set<() => void>();
  */
 const flush = (): void => {
   rafId = null;
-  const count = pending.size;
+  const batch = Array.from(pending);
+  pending.clear();
+  const count = batch.length;
 
-  pending.forEach((draw) => {
+  batch.forEach((draw) => {
     try {
       draw();
     } catch (error) {
@@ -25,7 +27,10 @@ const flush = (): void => {
     }
   });
 
-  pending.clear();
+  // Callbacks queued while this frame is flushing should run on the next frame.
+  if (pending.size > 0 && rafId === null) {
+    rafId = requestAnimationFrame(flush);
+  }
 
   if (import.meta.env.DEV) {
     logger.debug('[CanvasRenderQueue] Flushed render queue', { count });
@@ -39,6 +44,39 @@ const flush = (): void => {
  * @param draw - The draw callback to execute on next animation frame
  * @returns Cleanup function to unregister the callback
  */
+/**
+ * Set up a canvas for HiDPI rendering.
+ * Handles DPR scaling, resize detection (to avoid flicker), transform reset, and clearing.
+ * Returns the logical (CSS) width and height for drawing commands.
+ */
+export function setupCanvasDPR(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+): void {
+  const dpr = window.devicePixelRatio || 1;
+  const targetWidth = Math.round(w * dpr);
+  const targetHeight = Math.round(h * dpr);
+
+  const needsResize = canvas.width !== targetWidth || canvas.height !== targetHeight;
+
+  if (needsResize) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+  }
+
+  // Reset transform and apply DPR scale before drawing
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Clear canvas (if not already cleared by resize)
+  if (!needsResize) {
+    ctx.clearRect(0, 0, w, h);
+  }
+}
+
 export function scheduleSparkline(draw: () => void): () => void {
   pending.add(draw);
 
@@ -48,6 +86,10 @@ export function scheduleSparkline(draw: () => void): () => void {
 
   return () => {
     pending.delete(draw);
+    // If no callbacks remain, cancel the queued frame to avoid an orphaned flush.
+    if (pending.size === 0 && rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   };
 }
-

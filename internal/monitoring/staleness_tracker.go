@@ -201,7 +201,7 @@ type StalenessSnapshot struct {
 // Snapshot returns a copy of all staleness data for API exposure.
 func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
 	if t == nil {
-		return nil
+		return []StalenessSnapshot{}
 	}
 
 	t.mu.RLock()

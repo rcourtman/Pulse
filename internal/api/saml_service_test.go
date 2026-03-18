@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -84,7 +83,7 @@ func TestBuildManualMetadataAndCertificate(t *testing.T) {
 	}
 
 	cfg.IDPSSOURL = "http://idp/sso"
-	cfg.IDPSLOUrl = "http://idp/slo"
+	cfg.IDPSLOURL = "http://idp/slo"
 	cfg.IDPIssuer = "issuer"
 	certPEM, _, _ := generateTestCert(t)
 	cfg.IDPCertificate = string(certPEM)
@@ -194,7 +193,7 @@ func TestSAMLServiceBasicFlows(t *testing.T) {
 }
 
 func TestFetchMetadataFromURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`<?xml version="1.0"?>
 <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp-url">

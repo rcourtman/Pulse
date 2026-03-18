@@ -4,13 +4,13 @@
 # This script runs a local development environment with:
 # - Go backend with auto-rebuild on file changes (via inotifywait)
 # - Vite frontend dev server with HMR
-# - Auto-detection of pulse-pro module for Pro features
+# - Auto-detection of pulse-enterprise module for Pro features
 # - Snapshot watcher (if scripts/watch-snapshot.sh exists)
 #
 # Environment Variables:
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
 #   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
-#   PULSE_MOCK_MODE=true         Use isolated mock data directory
+#   PULSE_MOCK_MODE=true         Render mock UI data while keeping real metrics history intact
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
@@ -28,8 +28,9 @@
 #
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd -P)
+DEFAULT_PULSE_REPOS_DIR=$(cd "${ROOT_DIR}/.." && pwd -P)
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
 
@@ -273,8 +274,8 @@ mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 # Check if Pro module is available and use it for full audit logging support
-# Use PULSE_REPOS_DIR env var or default to /Volumes/Development/pulse/repos
-PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
+# Use PULSE_REPOS_DIR env var or default to the parent directory that contains sibling repos.
+PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
 PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
 if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
     log_info "Building Pro binary (includes persistent audit logging)..."
@@ -303,92 +304,96 @@ PULSE_AUTH_PASS='$2a$12$j9/pl2RCHGVGvtv4wocrx.FGBczUw97ZAeO8im0.Ty.fXDGFOviWS'
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
 
 # Data Directory Setup
-if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
-    export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
-    mkdir -p "$PULSE_DATA_DIR"
-    log_info "Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
-    # Set audit dir for Pro features (must be after PULSE_DATA_DIR is set)
-    if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
-        export PULSE_AUDIT_DIR="${PULSE_DATA_DIR}"
-        log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
-    fi
+# Keep one persistent data directory in both mock and real modes so real
+# metrics history continues to accumulate while mock UI mode is active.
+if [[ -n ${PULSE_DATA_DIR:-} ]]; then
+    log_info "Using preconfigured data directory: ${PULSE_DATA_DIR}"
+elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
+    export PULSE_DATA_DIR=/etc/pulse
+    log_info "HOT_DEV_USE_PROD_DATA=true – using production data directory: ${PULSE_DATA_DIR}"
 else
-    if [[ -n ${PULSE_DATA_DIR:-} ]]; then
-        log_info "Using preconfigured data directory: ${PULSE_DATA_DIR}"
-    elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
-        export PULSE_DATA_DIR=/etc/pulse
-        log_info "HOT_DEV_USE_PROD_DATA=true – using production data directory: ${PULSE_DATA_DIR}"
-    else
-        DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
-        mkdir -p "$DEV_CONFIG_DIR"
-        export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
-        log_info "Production mode: Using dev config directory: ${PULSE_DATA_DIR}"
-    fi
+    DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
+    mkdir -p "$DEV_CONFIG_DIR"
+    export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
+    log_info "Using dev config directory: ${PULSE_DATA_DIR}"
+fi
 
-    # Auto-restore encryption key from backup if missing
-    if [[ ! -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
-        BACKUP_KEY=$(find "${PULSE_DATA_DIR}" -maxdepth 1 -name '.encryption.key.bak*' -type f 2>/dev/null | head -1)
-        if [[ -n "${BACKUP_KEY}" ]] && [[ -f "${BACKUP_KEY}" ]]; then
-            echo ""
-            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            log_error "!! ENCRYPTION KEY WAS MISSING - AUTO-RESTORING FROM BACKUP !!"
-            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            log_error "!! Backup used: ${BACKUP_KEY}"
-            log_error "!! "
-            log_error "!! To find out what deleted the key:"
-            log_error "!!   Linux: sudo journalctl -u encryption-key-watcher -n 100"
-            log_error "!!   macOS: check /tmp/pulse-debug.log"
-            log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            echo ""
-            cp -f "${BACKUP_KEY}" "${PULSE_DATA_DIR}/.encryption.key"
-            chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
-            log_info "Restored encryption key from backup"
-        fi
+# Also check for mock.env in PULSE_DATA_DIR (where `pulse mock enable` writes it)
+# This allows the CLI command to work without manually copying files to the repo root.
+if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
+    load_env_file "${PULSE_DATA_DIR}/mock.env"
+    if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
+        load_env_file "${PULSE_DATA_DIR}/mock.env.local"
     fi
+fi
 
-    if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
-        if [[ -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
-            export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
-            log_info "Loaded encryption key from ${PULSE_DATA_DIR}/.encryption.key"
-        elif [[ ${PULSE_DATA_DIR} == "${ROOT_DIR}/tmp/dev-config" ]]; then
-            DEV_KEY_FILE="${PULSE_DATA_DIR}/.encryption.key"
-            if [[ ! -f "${DEV_KEY_FILE}" ]]; then
-                mapfile -t ENCRYPTED_FILES < <(detect_encrypted_files "${PULSE_DATA_DIR}")
-                if [[ ${#ENCRYPTED_FILES[@]} -gt 0 ]]; then
-                    log_error "Encryption key is missing but encrypted data exists."
-                    log_error "Restore ${DEV_KEY_FILE} from backup before continuing."
-                    log_error "Encrypted files: ${ENCRYPTED_FILES[*]}"
-                    exit 1
-                fi
-                openssl rand -base64 32 > "${DEV_KEY_FILE}"
-                chmod 600 "${DEV_KEY_FILE}"
-                log_info "Generated dev encryption key at ${DEV_KEY_FILE}"
-            fi
-            export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
-        elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
-            # Production data mode but no key - generate one to prevent orphaned encrypted data
+if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
+    log_info "Mock mode enabled: retaining shared data directory (${PULSE_DATA_DIR}) to preserve real history"
+fi
+
+# Auto-restore encryption key from backup if missing
+if [[ ! -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
+    BACKUP_KEY=$(find "${PULSE_DATA_DIR}" -maxdepth 1 -name '.encryption.key.bak*' -type f 2>/dev/null | head -1)
+    if [[ -n "${BACKUP_KEY}" ]] && [[ -f "${BACKUP_KEY}" ]]; then
+        echo ""
+        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        log_error "!! ENCRYPTION KEY WAS MISSING - AUTO-RESTORING FROM BACKUP !!"
+        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        log_error "!! Backup used: ${BACKUP_KEY}"
+        log_error "!! "
+        log_error "!! To find out what deleted the key:"
+        log_error "!!   Linux: sudo journalctl -u encryption-key-watcher -n 100"
+        log_error "!!   macOS: check /tmp/pulse-debug.log"
+        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo ""
+        cp -f "${BACKUP_KEY}" "${PULSE_DATA_DIR}/.encryption.key"
+        chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
+        log_info "Restored encryption key from backup"
+    fi
+fi
+
+if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
+    if [[ -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
+        export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
+        log_info "Loaded encryption key from ${PULSE_DATA_DIR}/.encryption.key"
+    elif [[ ${PULSE_DATA_DIR} == "${ROOT_DIR}/tmp/dev-config" ]]; then
+        DEV_KEY_FILE="${PULSE_DATA_DIR}/.encryption.key"
+        if [[ ! -f "${DEV_KEY_FILE}" ]]; then
             mapfile -t ENCRYPTED_FILES < <(detect_encrypted_files "${PULSE_DATA_DIR}")
             if [[ ${#ENCRYPTED_FILES[@]} -gt 0 ]]; then
                 log_error "Encryption key is missing but encrypted data exists."
-                log_error "Restore ${PULSE_DATA_DIR}/.encryption.key from backup before continuing."
+                log_error "Restore ${DEV_KEY_FILE} from backup before continuing."
                 log_error "Encrypted files: ${ENCRYPTED_FILES[*]}"
                 exit 1
             fi
-            log_warn "No encryption key found for ${PULSE_DATA_DIR}. Generating new key..."
-            openssl rand -base64 32 > "${PULSE_DATA_DIR}/.encryption.key"
-            chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
-            export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
-            log_info "Generated new encryption key at ${PULSE_DATA_DIR}/.encryption.key"
-        else
-            log_warn "No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
+            openssl rand -base64 32 > "${DEV_KEY_FILE}"
+            chmod 600 "${DEV_KEY_FILE}"
+            log_info "Generated dev encryption key at ${DEV_KEY_FILE}"
         fi
+        export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
+    elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
+        # Production data mode but no key - generate one to prevent orphaned encrypted data
+        mapfile -t ENCRYPTED_FILES < <(detect_encrypted_files "${PULSE_DATA_DIR}")
+        if [[ ${#ENCRYPTED_FILES[@]} -gt 0 ]]; then
+            log_error "Encryption key is missing but encrypted data exists."
+            log_error "Restore ${PULSE_DATA_DIR}/.encryption.key from backup before continuing."
+            log_error "Encrypted files: ${ENCRYPTED_FILES[*]}"
+            exit 1
+        fi
+        log_warn "No encryption key found for ${PULSE_DATA_DIR}. Generating new key..."
+        openssl rand -base64 32 > "${PULSE_DATA_DIR}/.encryption.key"
+        chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
+        export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
+        log_info "Generated new encryption key at ${PULSE_DATA_DIR}/.encryption.key"
+    else
+        log_warn "No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
     fi
+fi
 
-    # Set audit dir for Pro features (must be after PULSE_DATA_DIR is set)
-    if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
-        export PULSE_AUDIT_DIR="${PULSE_DATA_DIR}"
-        log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
-    fi
+# Set audit dir for Pro features (must be after PULSE_DATA_DIR is set)
+if [[ ${PRO_BUILD_SUCCESS:-false} == "true" ]]; then
+    export PULSE_AUDIT_DIR="${PULSE_DATA_DIR}"
+    log_info "Pro audit logging enabled (SQLite storage in ${PULSE_AUDIT_DIR})"
 fi
 
 LOG_LEVEL="${LOG_LEVEL:-debug}" \
@@ -436,7 +441,7 @@ log_info "Starting backend health monitor..."
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
             LOG_FILE="/tmp/pulse-debug.log" \
             LOG_MAX_SIZE="50" \
-            ./pulse > /dev/null 2>&1 &
+            ./pulse </dev/null > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -460,7 +465,7 @@ log_info "Starting backend health monitor..."
             ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
             LOG_FILE="/tmp/pulse-debug.log" \
             LOG_MAX_SIZE="50" \
-            ./pulse > /dev/null 2>&1 &
+            ./pulse </dev/null > /dev/null 2>&1 &
             NEW_PID=$!
             sleep 2
             if kill -0 "$NEW_PID" 2>/dev/null; then
@@ -479,8 +484,32 @@ log_info "Starting backend file watcher..."
 (
     cd "${ROOT_DIR}"
     
+    LAST_RESTART_TIME=0
+
     restart_backend() {
+        # Debounce: skip if we restarted less than 3 seconds ago
+        local now
+        now=$(date +%s)
+        if (( now - LAST_RESTART_TIME < 3 )); then
+            return
+        fi
+        LAST_RESTART_TIME=$now
+
         log_info "Restarting backend..."
+
+        # Re-source mock.env so that `pulse mock enable/disable` changes take
+        # effect without a full hot-dev restart.
+        if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
+            load_env_file "${PULSE_DATA_DIR}/mock.env"
+            if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
+                load_env_file "${PULSE_DATA_DIR}/mock.env.local"
+            fi
+        elif [[ -f "${ROOT_DIR}/mock.env" ]]; then
+            load_env_file "${ROOT_DIR}/mock.env"
+            if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
+                load_env_file "${ROOT_DIR}/mock.env.local"
+            fi
+        fi
 
         # Kill ALL pulse processes (not just one) to prevent duplicates
         pkill -f "^\./pulse$" 2>/dev/null || true
@@ -489,6 +518,8 @@ log_info "Starting backend file watcher..."
         pkill -9 -f "^\./pulse$" 2>/dev/null || true
         sleep 1
 
+        # Close inherited stdin (</dev/null) to prevent pipe fd leaks when
+        # this function is called from inside a piped while-read loop.
         LOG_LEVEL="${LOG_LEVEL:-debug}" \
         FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
         PORT="${PULSE_DEV_API_PORT:-7655}" \
@@ -501,7 +532,7 @@ log_info "Starting backend file watcher..."
         ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
         LOG_FILE="/tmp/pulse-debug.log" \
         LOG_MAX_SIZE="50" \
-        ./pulse > /dev/null 2>&1 &
+        ./pulse </dev/null > /dev/null 2>&1 &
         NEW_PID=$!
         sleep 1
 
@@ -517,26 +548,44 @@ log_info "Starting backend file watcher..."
         fi
     }
 
+    LAST_REBUILD_TIME=0
+
     rebuild_backend() {
         local changed_file=$1
+
+        # Debounce: skip if we rebuilt less than 2 seconds ago (batch saves)
+        local now
+        now=$(date +%s)
+        if (( now - LAST_REBUILD_TIME < 2 )); then
+            return
+        fi
+        LAST_REBUILD_TIME=$now
+
         echo ""
         log_info "🔄 Change detected: $(basename "$changed_file")"
         log_info "Rebuilding backend..."
 
         # Use the same build logic as the initial build
         local build_success=0
-        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-/Volumes/Development/pulse/repos}"
+        local build_output
+        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
         PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
         if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
             log_info "Building Pro binary..."
-            if (cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1 | grep -v "^#"); then
+            if build_output=$(cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1); then
+                printf "%s\n" "${build_output}" | grep -v "^#" || true
                 build_success=1
+            else
+                printf "%s\n" "${build_output}" | grep -v "^#" || true
             fi
         fi
         
         if [[ $build_success -eq 0 ]]; then
-            if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
+            if build_output=$(go build -o pulse ./cmd/pulse 2>&1); then
+                printf "%s\n" "${build_output}" | grep -v "^#" || true
                 build_success=1
+            else
+                printf "%s\n" "${build_output}" | grep -v "^#" || true
             fi
         fi
 
@@ -566,8 +615,23 @@ log_info "Starting backend file watcher..."
         done
     elif command -v fswatch >/dev/null 2>&1; then
         # macOS: fswatch
+        # Note: AttributeModified is needed because `touch` on macOS only fires
+        # that event (not Updated), and touch is the recommended way to trigger
+        # a manual rebuild.
         log_info "Using fswatch for file monitoring"
-        fswatch -r --event Created --event Updated --event Removed --event Renamed \
+
+        # Watch the pulse binary too — if someone does `go build -o pulse`
+        # manually, we should restart without rebuilding.
+        fswatch --event Created --event Updated --event Renamed --event AttributeModified \
+            "${ROOT_DIR}/pulse" 2>/dev/null | \
+        while read -r _; do
+            log_info "🚀 Manual build detected (pulse binary changed), restarting..."
+            restart_backend
+        done &
+        BINARY_WATCH_PID=$!
+
+        fswatch -r -L \
+            --event Created --event Updated --event Removed --event Renamed --event AttributeModified \
             --exclude '\.git/' --exclude 'vendor/' --exclude 'node_modules/' \
             --include '\.go$' \
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \

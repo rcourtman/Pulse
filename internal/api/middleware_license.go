@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 )
 
@@ -19,35 +17,18 @@ import (
 // AND properly licensed for non-default organizations to work.
 var multiTenantEnabled = strings.EqualFold(os.Getenv("PULSE_MULTI_TENANT_ENABLED"), "true")
 
-// v5 should behave as single-tenant in real runtime even if dormant multi-tenant
-// code remains in the branch. Tests can disable this to exercise legacy paths.
-var v5SingleTenantMode = !runningUnderGoTest()
-
 // IsMultiTenantEnabled returns whether multi-tenant functionality is enabled.
 func IsMultiTenantEnabled() bool {
 	return multiTenantEnabled
 }
 
-func isV5SingleTenantMode() bool {
-	return v5SingleTenantMode
-}
-
-func IsV5SingleTenantRuntime() bool {
-	return isV5SingleTenantMode()
-}
-
-func setV5SingleTenantModeForTests(enabled bool) {
-	v5SingleTenantMode = enabled
-}
-
-func runningUnderGoTest() bool {
-	return strings.HasSuffix(filepath.Base(os.Args[0]), ".test")
-}
-
 // DefaultMultiTenantChecker implements websocket.MultiTenantChecker for use with the WebSocket hub.
-type DefaultMultiTenantChecker struct{}
+type DefaultMultiTenantChecker struct {
+	hostedMode bool
+}
 
 // CheckMultiTenant checks if multi-tenant is enabled (feature flag) and licensed for the org.
+// In hosted mode, tenant routing uses subscription lifecycle checks instead of FeatureMultiTenant.
 // Uses the LicenseServiceProvider for proper per-tenant license lookup.
 func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID string) websocket.MultiTenantCheckResult {
 	// Default org is always allowed
@@ -59,7 +40,26 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 		}
 	}
 
-	// Check feature flag first
+	if c.hostedMode {
+		// Hosted mode: tenant routing is infrastructure. Check subscription lifecycle
+		// instead of FeatureMultiTenant so Cloud customers can connect.
+		checkCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
+		if isHostedSubscriptionValid(checkCtx) {
+			return websocket.MultiTenantCheckResult{
+				Allowed:        true,
+				FeatureEnabled: true,
+				Licensed:       true,
+			}
+		}
+		return websocket.MultiTenantCheckResult{
+			Allowed:        false,
+			FeatureEnabled: true,
+			Licensed:       false,
+			Reason:         "Cloud subscription is not active",
+		}
+	}
+
+	// Self-hosted mode: check feature flag first
 	if !multiTenantEnabled {
 		return websocket.MultiTenantCheckResult{
 			Allowed:        false,
@@ -71,7 +71,7 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 
 	// Feature is enabled, check license using the provider
 	service := getLicenseServiceForContext(ctx)
-	if !service.HasFeature(license.FeatureMultiTenant) {
+	if !hasMultiTenantLicense(service) {
 		return websocket.MultiTenantCheckResult{
 			Allowed:        false,
 			FeatureEnabled: true,
@@ -88,8 +88,8 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 }
 
 // NewMultiTenantChecker creates a new DefaultMultiTenantChecker.
-func NewMultiTenantChecker() *DefaultMultiTenantChecker {
-	return &DefaultMultiTenantChecker{}
+func NewMultiTenantChecker(hostedMode bool) *DefaultMultiTenantChecker {
+	return &DefaultMultiTenantChecker{hostedMode: hostedMode}
 }
 
 // SetMultiTenantEnabled allows programmatic control of the feature flag (for testing).
@@ -100,7 +100,7 @@ func SetMultiTenantEnabled(enabled bool) {
 // LicenseServiceProvider provides license service for a given context.
 // This allows the middleware to use the properly initialized per-tenant services.
 type LicenseServiceProvider interface {
-	Service(ctx context.Context) *license.Service
+	Service(ctx context.Context) *licenseService
 }
 
 var (
@@ -118,7 +118,7 @@ func SetLicenseServiceProvider(provider LicenseServiceProvider) {
 
 // getLicenseServiceForContext returns the license service for the given context.
 // Falls back to a new service if no provider is set (shouldn't happen in production).
-func getLicenseServiceForContext(ctx context.Context) *license.Service {
+func getLicenseServiceForContext(ctx context.Context) *licenseService {
 	licenseServiceMu.RLock()
 	provider := licenseServiceProvider
 	licenseServiceMu.RUnlock()
@@ -127,13 +127,13 @@ func getLicenseServiceForContext(ctx context.Context) *license.Service {
 		return provider.Service(ctx)
 	}
 	// Fallback: create a new service (won't have persisted license)
-	return license.NewService()
+	return newLicenseService()
 }
 
 // hasMultiTenantFeatureForContext checks if the multi-tenant feature is licensed for the context.
 func hasMultiTenantFeatureForContext(ctx context.Context) bool {
 	service := getLicenseServiceForContext(ctx)
-	return service.HasFeature(license.FeatureMultiTenant)
+	return hasMultiTenantLicense(service)
 }
 
 // RequireMultiTenant returns a middleware that checks if the multi-tenant feature is licensed.
@@ -195,12 +195,10 @@ func RequireMultiTenantHandler(next http.Handler) http.Handler {
 // writeMultiTenantRequiredError writes a 402 Payment Required response
 // indicating that multi-tenant requires an Enterprise license.
 func writeMultiTenantRequiredError(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusPaymentRequired)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writePaymentRequired(w, map[string]interface{}{
 		"error":   "license_required",
 		"message": "Multi-tenant access requires an Enterprise license",
-		"feature": license.FeatureMultiTenant,
+		"feature": featureMultiTenantKey,
 		"tier":    "enterprise",
 	})
 }
@@ -216,30 +214,11 @@ func writeMultiTenantDisabledError(w http.ResponseWriter) {
 	})
 }
 
-// CheckMultiTenantLicense checks if multi-tenant is licensed for the given org ID.
+// CheckMultiTenantLicense checks if multi-tenant is enabled and licensed for the given org ID.
 // Returns true if:
 // - The org ID is "default" or empty (always allowed)
 // - The feature flag is enabled AND the multi-tenant feature is licensed
-// Deprecated: Use CheckMultiTenantLicenseWithContext for proper per-tenant license checking.
-func CheckMultiTenantLicense(orgID string) bool {
-	if orgID == "" || orgID == "default" {
-		return true
-	}
-	// Feature flag must be enabled
-	if !multiTenantEnabled {
-		return false
-	}
-	// Without context, we can't look up the per-tenant license service properly.
-	// Fall back to a new service (won't have persisted license).
-	return license.NewService().HasFeature(license.FeatureMultiTenant)
-}
-
-// CheckMultiTenantLicenseWithContext checks if multi-tenant is enabled and licensed
-// using the proper per-tenant license service from the context.
-// Returns true if:
-// - The org ID is "default" or empty (always allowed)
-// - The feature flag is enabled AND the multi-tenant feature is licensed
-func CheckMultiTenantLicenseWithContext(ctx context.Context, orgID string) bool {
+func CheckMultiTenantLicense(ctx context.Context, orgID string) bool {
 	if orgID == "" || orgID == "default" {
 		return true
 	}

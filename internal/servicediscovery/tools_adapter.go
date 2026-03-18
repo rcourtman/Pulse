@@ -2,6 +2,8 @@ package servicediscovery
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -23,7 +25,7 @@ func NewToolsAdapter(service *Service) *ToolsAdapter {
 func (a *ToolsAdapter) GetDiscovery(id string) (tools.DiscoverySourceData, error) {
 	discovery, err := a.service.GetDiscovery(id)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("get discovery %q: %w", id, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil
@@ -32,10 +34,10 @@ func (a *ToolsAdapter) GetDiscovery(id string) (tools.DiscoverySourceData, error
 }
 
 // GetDiscoveryByResource implements tools.DiscoverySource
-func (a *ToolsAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID string) (tools.DiscoverySourceData, error) {
-	discovery, err := a.service.GetDiscoveryByResource(ResourceType(resourceType), hostID, resourceID)
+func (a *ToolsAdapter) GetDiscoveryByResource(resourceType, targetID, resourceID string) (tools.DiscoverySourceData, error) {
+	discovery, err := a.service.GetDiscoveryByResource(ResourceType(resourceType), targetID, resourceID)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, targetID, resourceID, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil
@@ -47,7 +49,7 @@ func (a *ToolsAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID s
 func (a *ToolsAdapter) ListDiscoveries() ([]tools.DiscoverySourceData, error) {
 	discoveries, err := a.service.ListDiscoveries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries: %w", err)
 	}
 	return a.convertList(discoveries), nil
 }
@@ -56,16 +58,16 @@ func (a *ToolsAdapter) ListDiscoveries() ([]tools.DiscoverySourceData, error) {
 func (a *ToolsAdapter) ListDiscoveriesByType(resourceType string) ([]tools.DiscoverySourceData, error) {
 	discoveries, err := a.service.ListDiscoveriesByType(ResourceType(resourceType))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
 	}
 	return a.convertList(discoveries), nil
 }
 
-// ListDiscoveriesByHost implements tools.DiscoverySource
-func (a *ToolsAdapter) ListDiscoveriesByHost(hostID string) ([]tools.DiscoverySourceData, error) {
-	discoveries, err := a.service.ListDiscoveriesByHost(hostID)
+// ListDiscoveriesByTarget implements tools.DiscoverySource
+func (a *ToolsAdapter) ListDiscoveriesByTarget(targetID string) ([]tools.DiscoverySourceData, error) {
+	discoveries, err := a.service.ListDiscoveriesByTarget(targetID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by target %q: %w", targetID, err)
 	}
 	return a.convertList(discoveries), nil
 }
@@ -81,17 +83,17 @@ func (a *ToolsAdapter) FormatForAIContext(sourceData []tools.DiscoverySourceData
 }
 
 // TriggerDiscovery implements tools.DiscoverySource - initiates discovery for a resource
-func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (tools.DiscoverySourceData, error) {
+func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (tools.DiscoverySourceData, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceType(resourceType),
-		HostID:       hostID,
+		TargetID:     targetID,
 		ResourceID:   resourceID,
 		Force:        false, // Don't force if recently discovered
 	}
 
 	discovery, err := a.service.DiscoverResource(ctx, req)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("trigger discovery for %s/%s/%s: %w", resourceType, targetID, resourceID, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil
@@ -132,11 +134,15 @@ func (a *ToolsAdapter) convertToSourceData(d *ResourceDiscovery) tools.Discovery
 		})
 	}
 
+	targetID := canonicalDiscoveryTargetID(d)
+	agentID := strings.TrimSpace(d.AgentID)
+
 	return tools.DiscoverySourceData{
 		ID:             d.ID,
 		ResourceType:   string(d.ResourceType),
 		ResourceID:     d.ResourceID,
-		HostID:         d.HostID,
+		TargetID:       targetID,
+		AgentID:        agentID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
 		ServiceName:    d.ServiceName,
@@ -190,11 +196,15 @@ func (a *ToolsAdapter) convertFromSourceData(sd tools.DiscoverySourceData) *Reso
 		})
 	}
 
+	targetID := strings.TrimSpace(sd.TargetID)
+	agentID := strings.TrimSpace(sd.AgentID)
+
 	return &ResourceDiscovery{
 		ID:             sd.ID,
 		ResourceType:   ResourceType(sd.ResourceType),
 		ResourceID:     sd.ResourceID,
-		HostID:         sd.HostID,
+		TargetID:       targetID,
+		AgentID:        agentID,
 		Hostname:       sd.Hostname,
 		ServiceType:    sd.ServiceType,
 		ServiceName:    sd.ServiceName,

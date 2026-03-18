@@ -356,9 +356,9 @@ func detectBackupIssues(tc *ToolCallRecord, thresholds SignalThresholds) []Detec
 	for _, task := range data.Tasks {
 		statusLower := strings.ToLower(strings.TrimSpace(task.Status))
 		errorLower := strings.ToLower(strings.TrimSpace(task.Error))
-		vmid := strings.TrimSpace(string(task.VMID))
-		if vmid == "0" {
-			vmid = ""
+		vmID := strings.TrimSpace(string(task.VMID))
+		if vmID == "0" {
+			vmID = ""
 		}
 		var taskEnd time.Time
 		if task.EndTime != "" {
@@ -396,10 +396,10 @@ func detectBackupIssues(tc *ToolCallRecord, thresholds SignalThresholds) []Detec
 			node = data.Node
 		}
 		resourceID := node
-		if vmid != "" {
-			resourceID = vmid
+		if vmID != "" {
+			resourceID = vmID
 		}
-		resourceName := vmid
+		resourceName := vmID
 		if task.VMName != "" {
 			resourceName = task.VMName
 		}
@@ -497,11 +497,11 @@ func detectBackupIssuesFromBackups(tc *ToolCallRecord, thresholds SignalThreshol
 			continue
 		}
 
-		vmid := strings.TrimSpace(fmt.Sprintf("%d", task.VMID))
-		if vmid == "0" {
-			vmid = ""
+		vmID := strings.TrimSpace(fmt.Sprintf("%d", task.VMID))
+		if vmID == "0" {
+			vmID = ""
 		}
-		resourceID := vmid
+		resourceID := vmID
 		if resourceID == "" {
 			resourceID = task.Node
 		}
@@ -542,16 +542,16 @@ func detectBackupIssuesFromBackups(tc *ToolCallRecord, thresholds SignalThreshol
 	}
 	latestByVM := make(map[string]time.Time)
 	for _, backup := range data.PBS {
-		vmid := strings.TrimSpace(backup.VMID)
-		if vmid == "" || vmid == "0" {
+		vmID := strings.TrimSpace(backup.VMID)
+		if vmID == "" || vmID == "0" {
 			continue
 		}
-		if !knownVMIDs[vmid] {
+		if !knownVMIDs[vmID] {
 			continue
 		}
 		if t, err := tryParseTime(backup.BackupTime); err == nil {
-			if prev, ok := latestByVM[vmid]; !ok || t.After(prev) {
-				latestByVM[vmid] = t
+			if prev, ok := latestByVM[vmID]; !ok || t.After(prev) {
+				latestByVM[vmID] = t
 			}
 		}
 	}
@@ -559,27 +559,27 @@ func detectBackupIssuesFromBackups(tc *ToolCallRecord, thresholds SignalThreshol
 		if backup.VMID == 0 {
 			continue
 		}
-		vmid := fmt.Sprintf("%d", backup.VMID)
-		if !knownVMIDs[vmid] {
+		vmID := fmt.Sprintf("%d", backup.VMID)
+		if !knownVMIDs[vmID] {
 			continue
 		}
 		if t, err := tryParseTime(backup.BackupTime); err == nil {
-			if prev, ok := latestByVM[vmid]; !ok || t.After(prev) {
-				latestByVM[vmid] = t
+			if prev, ok := latestByVM[vmID]; !ok || t.After(prev) {
+				latestByVM[vmID] = t
 			}
 		}
 	}
 
-	for vmid, newestEnd := range latestByVM {
+	for vmID, newestEnd := range latestByVM {
 		if now.Sub(newestEnd) > thresholds.BackupStaleThreshold {
 			signals = append(signals, DetectedSignal{
 				SignalType:        SignalBackupStale,
-				ResourceID:        vmid,
-				ResourceName:      vmid,
+				ResourceID:        vmID,
+				ResourceName:      vmID,
 				ResourceType:      "backup",
 				SuggestedSeverity: "warning",
 				Category:          string(FindingCategoryBackup),
-				Summary:           "No backup completed in 48+ hours for VM/CT " + vmid,
+				Summary:           "No backup completed in 48+ hours for VM/CT " + vmID,
 				Evidence:          truncateEvidence(tc.Output),
 				ToolCallID:        tc.ID,
 			})

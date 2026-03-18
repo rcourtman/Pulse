@@ -51,9 +51,9 @@ func TestIPsOnSameNetwork(t *testing.T) {
 
 func TestFindPreferredIP(t *testing.T) {
 	interfaces := []proxmox.NodeNetworkInterface{
-		{Active: 0, Address: "10.0.0.10", CIDR: "10.0.0.10/24"},
-		{Active: 1, Address: "10.0.0.11", CIDR: "10.0.0.11/24"},
-		{Active: 1, Address: "10.0.1.10", CIDR: "10.0.1.10/24"},
+		{Active: 0, Address: "10.0.0.10"},
+		{Active: 1, Address: "10.0.0.11"},
+		{Active: 1, Address: "10.0.1.10"},
 	}
 
 	ref := net.ParseIP("10.0.0.50")
@@ -63,30 +63,5 @@ func TestFindPreferredIP(t *testing.T) {
 
 	if got := findPreferredIP(nil, ref); got != "" {
 		t.Fatalf("findPreferredIP = %q, want empty", got)
-	}
-}
-
-func TestFindPreferredIP_UsesMostSpecificMatchingSubnet(t *testing.T) {
-	interfaces := []proxmox.NodeNetworkInterface{
-		{Active: 1, Address: "10.15.5.20", CIDR: "10.15.5.20/24"},
-		{Active: 1, Address: "10.15.2.20", CIDR: "10.15.2.20/24"},
-		{Active: 1, Address: "10.15.0.20", CIDR: "10.15.0.20/16"},
-	}
-
-	ref := net.ParseIP("10.15.2.99")
-	if got := findPreferredIP(interfaces, ref); got != "10.15.2.20" {
-		t.Fatalf("findPreferredIP = %q, want 10.15.2.20", got)
-	}
-}
-
-func TestFindPreferredIP_FallbackDoesNotTreatDifferentThirdOctetAsSameSubnet(t *testing.T) {
-	interfaces := []proxmox.NodeNetworkInterface{
-		{Active: 1, Address: "10.15.5.20"},
-		{Active: 1, Address: "10.15.2.20"},
-	}
-
-	ref := net.ParseIP("10.15.2.99")
-	if got := findPreferredIP(interfaces, ref); got != "10.15.2.20" {
-		t.Fatalf("findPreferredIP fallback = %q, want 10.15.2.20", got)
 	}
 }

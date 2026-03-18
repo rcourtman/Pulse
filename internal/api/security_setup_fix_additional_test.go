@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -43,7 +44,7 @@ func TestResponseCaptureWrites(t *testing.T) {
 	}
 }
 
-func TestHandleRegenerateAPIToken_MissingEnvFile(t *testing.T) {
+func TestHandleRegenerateAPIToken_DoesNotRequireEnvFile(t *testing.T) {
 	dataDir := t.TempDir()
 	cfg := &config.Config{
 		DataPath:   dataDir,
@@ -61,8 +62,19 @@ func TestHandleRegenerateAPIToken_MissingEnvFile(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["success"] != true {
+		t.Fatalf("expected success=true, got %#v", payload["success"])
+	}
+	if token, ok := payload["token"].(string); !ok || strings.TrimSpace(token) == "" {
+		t.Fatalf("expected non-empty token in response, got %#v", payload["token"])
 	}
 }
 
@@ -332,13 +344,9 @@ func TestQuickSecuritySetupAcceptsSetupTokenInBody(t *testing.T) {
 	router.initializeBootstrapToken()
 
 	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
-	content, err := os.ReadFile(tokenPath)
+	bootstrapToken, _, _, err := bootstrap.Load(cfg.DataPath)
 	if err != nil {
-		t.Fatalf("read bootstrap token: %v", err)
-	}
-	bootstrapToken := strings.TrimSpace(string(content))
-	if bootstrapToken == "" {
-		t.Fatalf("bootstrap token is empty")
+		t.Fatalf("load bootstrap token: %v", err)
 	}
 
 	handler := handleQuickSecuritySetupFixed(router)
@@ -408,6 +416,18 @@ func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected one API token, got %d", len(cfg.APITokens))
+	}
+
+	cookies := rec.Result().Cookies()
+	sessionCookie := findCookie(cookies, sessionCookieName(false))
+	if sessionCookie == nil || strings.TrimSpace(sessionCookie.Value) == "" {
+		t.Fatalf("expected credential rotation to refresh the session cookie")
+	}
+	if !ValidateSession(sessionCookie.Value) {
+		t.Fatalf("expected refreshed session to validate")
+	}
+	if got := GetSessionUsername(sessionCookie.Value); got != "newadmin" {
+		t.Fatalf("session username=%q, want %q", got, "newadmin")
 	}
 }
 

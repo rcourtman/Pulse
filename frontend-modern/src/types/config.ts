@@ -16,20 +16,21 @@
 export interface AuthConfig {
   PULSE_AUTH_USER: string; // Admin username
   PULSE_AUTH_PASS: string; // Bcrypt hashed password
-  API_TOKEN: string; // Legacy API authentication token (hashed)
-  API_TOKENS?: string; // Optional comma-separated list of hashed tokens
 }
 
 /**
  * System settings from system.json file
  * These are application behavior settings
  */
+export type UpdateChannel = 'stable' | 'rc';
+
 export interface SystemConfig {
   pvePollingInterval?: number; // PVE polling interval in seconds
   pbsPollingInterval?: number; // PBS polling interval in seconds
+  pmgPollingInterval?: number; // PMG polling interval in seconds
   connectionTimeout?: number; // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean; // Enable auto-updates
-  updateChannel?: string; // Update channel: 'stable' | 'rc' | 'beta'
+  updateChannel?: UpdateChannel; // Update channel: 'stable' | 'rc'
   autoUpdateCheckInterval?: number; // Hours between update checks
   autoUpdateTime?: string; // Time for updates (HH:MM format)
   backupPollingInterval?: number; // Backup polling interval in seconds (0 = default cadence)
@@ -46,8 +47,11 @@ export interface SystemConfig {
   allowedEmbedOrigins?: string; // Comma-separated list of allowed origins for embedding
   webhookAllowedPrivateCIDRs?: string; // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
   hideLocalLogin?: boolean; // Hide local login form (username/password)
-  publicURL?: string; // Public URL for email notifications (e.g., http://192.168.1.100:8080)
+  publicURL?: string; // Public URL for email notifications (e.g., http://198.51.100.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
+  reduceProUpsellNoise?: boolean; // Hide proactive Pro prompts; paywalls still appear when accessing gated features
+  disableLocalUpgradeMetrics?: boolean; // Disable local-only upgrade UX metrics collection
+  telemetryEnabled?: boolean; // Opt-in anonymous usage telemetry
 }
 
 /**
@@ -96,6 +100,23 @@ export interface PulseConfig {
 /**
  * API response for security status
  */
+export interface SecurityStatusSettingsCapabilities {
+  apiAccessRead: boolean;
+  apiAccessWrite: boolean;
+  authenticationRead: boolean;
+  authenticationWrite: boolean;
+  singleSignOnRead: boolean;
+  singleSignOnWrite: boolean;
+  roles: boolean;
+  users: boolean;
+  auditLog: boolean;
+  auditWebhooksRead: boolean;
+  auditWebhooksWrite: boolean;
+  relayRead: boolean;
+  relayWrite: boolean;
+  billingAdmin: boolean;
+}
+
 export interface SecurityStatus {
   hasAuthentication: boolean;
   apiTokenConfigured: boolean;
@@ -107,7 +128,7 @@ export interface SecurityStatus {
   configuredButPendingRestart: boolean;
   unprotectedExportAllowed?: boolean;
   hasHTTPS?: boolean;
-  oidcEnabled?: boolean;
+  ssoEnabled?: boolean;
   publicAccess?: boolean;
   isPrivateNetwork?: boolean;
   clientIP?: string;
@@ -117,9 +138,9 @@ export interface SecurityStatus {
   proxyAuthLogoutURL?: string;
   authUsername?: string;
   authLastModified?: string;
-  disabled?: boolean; // legacy field (removed backend support)
-  deprecatedDisableAuth?: boolean;
   message?: string;
+  ssoSessionUsername?: string;
+  ssoLogoutURL?: string;
   hideLocalLogin?: boolean; // Hide local login form
   agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)
   // First run setup fields
@@ -128,15 +149,11 @@ export interface SecurityStatus {
   inContainer?: boolean;
   lxcCtid?: string;
   dockerContainerName?: string;
-  // OIDC fields
-  oidcIssuer?: string;
-  oidcClientId?: string;
-  oidcEnvOverrides?: Record<string, boolean>;
-  oidcLogoutURL?: string;
   // Multi-provider SSO
   ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
+  settingsCapabilities?: SecurityStatusSettingsCapabilities;
 }
 
 /**
@@ -165,8 +182,8 @@ export interface SetupRequest {
 /**
  * Type guards for configuration validation
  */
-export const isValidUpdateChannel = (value: string): value is 'stable' | 'rc' | 'beta' => {
-  return ['stable', 'rc', 'beta'].includes(value);
+export const isValidUpdateChannel = (value: string): value is UpdateChannel => {
+  return value === 'stable' || value === 'rc';
 };
 
 export const isValidTimeFormat = (value: string): boolean => {
@@ -188,6 +205,7 @@ export const DEFAULT_CONFIG: {
     backupPollingEnabled: true,
     backupPollingInterval: 0,
     temperatureMonitoringEnabled: true,
+    telemetryEnabled: true,
     sshPort: 22,
     allowedOrigins: '',
     frontendPort: 7655,

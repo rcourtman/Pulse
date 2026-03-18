@@ -2,6 +2,8 @@
 
 This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kubernetes clusters, including immutable distributions like Talos Linux.
 
+> **Navigation note (v6):** Kubernetes cluster and node resources appear on the **Infrastructure** page, while pods appear on the **Workloads** page. The legacy `/kubernetes` URL redirects to `/workloads?type=k8s`.
+
 ## Prerequisites
 
 - A Kubernetes cluster (v1.19+)
@@ -52,11 +54,12 @@ kubectl apply -f pulse-server.yaml
 
 ## 2. Deploying the Pulse Agent
 
-### Important: Helm Chart Agent Is Legacy Docker-Only
+### Helm Chart Agent Mode
 
-The Helm chart includes an `agent` section, but it deploys the **deprecated** `pulse-docker-agent` (Docker socket metrics only). It does **not** deploy the unified `pulse-agent`.
+The Helm chart includes an optional `agent` section that deploys the unified `pulse-agent`.
+By default, this workload runs in container-monitoring mode (`--enable-docker --enable-host=false`).
 
-If you need the unified agent on Kubernetes, use a custom DaemonSet as shown below.
+For Kubernetes monitoring, use a custom DaemonSet as shown below.
 
 ### Unified Agent on Kubernetes (DaemonSet)
 
@@ -122,7 +125,7 @@ spec:
 
 Use a token scoped for the agent:
 - `kubernetes:report` for Kubernetes reporting
-- `host-agent:report` if you enable host metrics
+- `agent:report` if you enable host metrics
 
 #### Important DaemonSet Configuration
 
@@ -220,6 +223,15 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  # Optional (Recovery): VolumeSnapshots and Velero backups.
+  # These rules are safe to include even if the APIs are not installed; the agent will
+  # feature-detect and ignore 404/403 responses.
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["velero.io"]
+    resources: ["backups"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

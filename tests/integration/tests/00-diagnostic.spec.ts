@@ -2,11 +2,31 @@
  * Diagnostic test to understand why login is failing
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { waitForPulseReady } from './helpers';
 
 const truthy = (value: string | undefined) => {
   if (!value) return false;
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+};
+
+const gotoWithHealthRetry = async (page: Page, url: string, attempts = 3): Promise<void> => {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await waitForPulseReady(page, 30_000);
+      await page.goto(url);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        throw error;
+      }
+      console.log(`Navigation attempt ${attempt} failed, retrying...`);
+      await page.waitForTimeout(1_000);
+    }
+  }
+  throw lastError ?? new Error(`Failed to navigate to ${url}`);
 };
 
 test.describe('Login Diagnostic', () => {
@@ -53,7 +73,7 @@ test.describe('Login Diagnostic', () => {
     });
 
     console.log('\n=== Navigating to login page ===');
-    await page.goto('/');
+    await gotoWithHealthRetry(page, '/');
     console.log('Page loaded');
 
     // Wait a bit for any async operations

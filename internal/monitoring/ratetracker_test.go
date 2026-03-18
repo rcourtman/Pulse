@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestCalculateRates_FirstCallReturnsNegativeOnes(t *testing.T) {
 	rt := NewRateTracker()
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: time.Now(),
 	})
@@ -23,18 +23,18 @@ func TestCalculateRates_StaleDataReturnsCachedRates(t *testing.T) {
 	base := time.Unix(1000, 0)
 
 	// Seed
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base,
 	})
 	// Establish rates
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
 		Timestamp: base.Add(10 * time.Second),
 	})
 
 	// Send stale data (same counter values, different timestamp)
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
 		Timestamp: base.Add(20 * time.Second),
 	})
@@ -48,13 +48,13 @@ func TestCalculateRates_StaleDataWithoutCachedRatesReturnsZeros(t *testing.T) {
 	base := time.Unix(1000, 0)
 
 	// Seed with values
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base,
 	})
 
 	// Send identical values (stale) — no cached rates yet
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base.Add(10 * time.Second),
 	})
@@ -68,13 +68,13 @@ func TestCalculateRates_NormalRateCalculation(t *testing.T) {
 	base := time.Unix(1000, 0)
 
 	// Seed
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base,
 	})
 
 	// Second call — rate over 1 interval (ring only has 2 entries)
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
 		Timestamp: base.Add(10 * time.Second),
 	})
@@ -87,13 +87,13 @@ func TestCalculateRates_CounterRolloverReturnsZero(t *testing.T) {
 	rt := NewRateTracker()
 	base := time.Unix(1000, 0)
 
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 5000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base,
 	})
 
 	// DiskRead decreased (counter rollover)
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
 		Timestamp: base.Add(10 * time.Second),
 	})
@@ -109,12 +109,12 @@ func TestCalculateRates_AllCountersRollover(t *testing.T) {
 	rt := NewRateTracker()
 	base := time.Unix(1000, 0)
 
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
 		Timestamp: base,
 	})
 
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base.Add(10 * time.Second),
 	})
@@ -127,12 +127,12 @@ func TestCalculateRates_FractionalTimeDifference(t *testing.T) {
 	rt := NewRateTracker()
 	base := time.Unix(1000, 0)
 
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: base,
 	})
 
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1500, DiskWrite: 2500, NetworkIn: 3500, NetworkOut: 4500,
 		Timestamp: base.Add(500 * time.Millisecond),
 	})
@@ -146,12 +146,12 @@ func TestCalculateRates_LargeValues(t *testing.T) {
 	rt := NewRateTracker()
 	base := time.Unix(1000, 0)
 
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000000000, DiskWrite: 2000000000, NetworkIn: 3000000000, NetworkOut: 4000000000,
 		Timestamp: base,
 	})
 
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1100000000, DiskWrite: 2200000000, NetworkIn: 3300000000, NetworkOut: 4400000000,
 		Timestamp: base.Add(100 * time.Second),
 	})
@@ -169,24 +169,24 @@ func TestCalculateRates_WindowSmooths(t *testing.T) {
 	// But Proxmox distributes them unevenly across intervals.
 
 	// T=0: seed
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		NetworkIn: 0, Timestamp: base,
 	})
 
 	// T=10: normal interval (10000 bytes in 10s = 1000 B/s)
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		NetworkIn: 10000, Timestamp: base.Add(10 * time.Second),
 	})
 
 	// T=20: short-changed interval (only 5000 bytes reported)
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		NetworkIn: 15000, Timestamp: base.Add(20 * time.Second),
 	})
 
 	// T=30: lumpy interval (15000 bytes — makes up for the deficit + normal)
 	// Without windowing, raw rate would be 15000/10 = 1500 B/s (50% spike).
 	// With windowing (oldest=T=0, current=T=30), rate = 30000/30 = 1000 B/s.
-	_, _, ni, _ := rt.CalculateRates("vm-100", types.IOMetrics{
+	_, _, ni, _ := rt.CalculateRates("vm-100", models.IOMetrics{
 		NetworkIn: 30000, Timestamp: base.Add(30 * time.Second),
 	})
 
@@ -196,7 +196,7 @@ func TestCalculateRates_WindowSmooths(t *testing.T) {
 
 	// T=40: ring is now full (4 entries), oldest is T=10.
 	// Rate = (40000-10000)/(40-10) = 30000/30 = 1000 B/s
-	_, _, ni, _ = rt.CalculateRates("vm-100", types.IOMetrics{
+	_, _, ni, _ = rt.CalculateRates("vm-100", models.IOMetrics{
 		NetworkIn: 40000, Timestamp: base.Add(40 * time.Second),
 	})
 
@@ -210,7 +210,7 @@ func TestCalculateRates_MultipleGuestsTrackedIndependently(t *testing.T) {
 	baseTime := time.Unix(1000, 0)
 
 	// First call for guest A - should return -1 for all
-	diskReadA1, diskWriteA1, netInA1, netOutA1 := rt.CalculateRates("vm-100", types.IOMetrics{
+	diskReadA1, diskWriteA1, netInA1, netOutA1 := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: baseTime,
 	})
@@ -220,7 +220,7 @@ func TestCalculateRates_MultipleGuestsTrackedIndependently(t *testing.T) {
 	}
 
 	// First call for guest B - should also return -1 for all
-	diskReadB1, diskWriteB1, netInB1, netOutB1 := rt.CalculateRates("vm-200", types.IOMetrics{
+	diskReadB1, diskWriteB1, netInB1, netOutB1 := rt.CalculateRates("vm-200", models.IOMetrics{
 		DiskRead: 5000, DiskWrite: 6000, NetworkIn: 7000, NetworkOut: 8000,
 		Timestamp: baseTime,
 	})
@@ -230,7 +230,7 @@ func TestCalculateRates_MultipleGuestsTrackedIndependently(t *testing.T) {
 	}
 
 	// Second call for guest A
-	diskReadA2, diskWriteA2, netInA2, netOutA2 := rt.CalculateRates("vm-100", types.IOMetrics{
+	diskReadA2, diskWriteA2, netInA2, netOutA2 := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
 		Timestamp: baseTime.Add(10 * time.Second),
 	})
@@ -240,7 +240,7 @@ func TestCalculateRates_MultipleGuestsTrackedIndependently(t *testing.T) {
 	}
 
 	// Second call for guest B - different rates
-	diskReadB2, diskWriteB2, netInB2, netOutB2 := rt.CalculateRates("vm-200", types.IOMetrics{
+	diskReadB2, diskWriteB2, netInB2, netOutB2 := rt.CalculateRates("vm-200", models.IOMetrics{
 		DiskRead: 10000, DiskWrite: 16000, NetworkIn: 22000, NetworkOut: 28000,
 		Timestamp: baseTime.Add(5 * time.Second),
 	})
@@ -255,13 +255,13 @@ func TestCalculateRates_CachesRates(t *testing.T) {
 	baseTime := time.Unix(1000, 0)
 
 	// Seed
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
 		Timestamp: baseTime,
 	})
 
 	// Calculate rates
-	diskRead2, diskWrite2, netIn2, netOut2 := rt.CalculateRates("vm-100", types.IOMetrics{
+	diskRead2, diskWrite2, netIn2, netOut2 := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
 		Timestamp: baseTime.Add(10 * time.Second),
 	})
@@ -285,7 +285,7 @@ func TestCalculateRates_CachesRates(t *testing.T) {
 	}
 
 	// Stale data returns cached rates
-	diskRead3, diskWrite3, netIn3, netOut3 := rt.CalculateRates("vm-100", types.IOMetrics{
+	diskRead3, diskWrite3, netIn3, netOut3 := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
 		Timestamp: baseTime.Add(15 * time.Second),
 	})
@@ -300,17 +300,17 @@ func TestCalculateRates_DoesNotAddStaleDataToRing(t *testing.T) {
 	base := time.Unix(1000, 0)
 
 	// Seed
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, NetworkIn: 3000, Timestamp: base,
 	})
 
 	// Real data
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, NetworkIn: 18000, Timestamp: base.Add(10 * time.Second),
 	})
 
 	// Stale data — should not be added to ring
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 6000, NetworkIn: 18000, Timestamp: base.Add(20 * time.Second),
 	})
 
@@ -325,10 +325,10 @@ func TestClear(t *testing.T) {
 	rt := NewRateTracker()
 	base := time.Unix(1000, 0)
 
-	rt.CalculateRates("vm-100", types.IOMetrics{
+	rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, Timestamp: base,
 	})
-	rt.CalculateRates("vm-200", types.IOMetrics{
+	rt.CalculateRates("vm-200", models.IOMetrics{
 		DiskRead: 1000, Timestamp: base,
 	})
 
@@ -346,7 +346,7 @@ func TestClear(t *testing.T) {
 	}
 
 	// After clear, first call returns -1
-	d, w, ni, no := rt.CalculateRates("vm-100", types.IOMetrics{
+	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
 		DiskRead: 1000, Timestamp: base,
 	})
 	if d != -1 || w != -1 || ni != -1 || no != -1 {
@@ -358,10 +358,10 @@ func TestRateTrackerCleanup(t *testing.T) {
 	rt := NewRateTracker()
 	now := time.Now()
 
-	rt.CalculateRates("active-guest", types.IOMetrics{
+	rt.CalculateRates("active-guest", models.IOMetrics{
 		DiskRead: 1000, Timestamp: now.Add(-1 * time.Hour),
 	})
-	rt.CalculateRates("stale-guest", types.IOMetrics{
+	rt.CalculateRates("stale-guest", models.IOMetrics{
 		DiskRead: 1000, Timestamp: now.Add(-48 * time.Hour),
 	})
 

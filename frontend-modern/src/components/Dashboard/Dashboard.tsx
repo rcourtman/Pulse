@@ -1,69 +1,154 @@
-import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  For,
+  Index,
+  Show,
+  onMount,
+  onCleanup,
+  untrack,
+} from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import { GuestRow, GUEST_COLUMNS, type GuestColumnDef } from './GuestRow';
+import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import { GuestRow, GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './GuestRow';
 import { GuestDrawer } from './GuestDrawer';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
-import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
-import { buildMetricKey } from '@/utils/metricsKeys';
+import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
-import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
+import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
+import { useWorkloads } from '@/hooks/useWorkloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { getOrgID } from '@/utils/apiClient';
 import { aiChatStore } from '@/stores/aiChat';
-import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
+import { eventBus } from '@/stores/events';
+import { useKioskMode } from '@/hooks/useKioskMode';
+import {
+  getDashboardDisconnectedState,
+  getDashboardGuestsEmptyState,
+  getDashboardInfrastructureEmptyState,
+  getDashboardLoadingState,
+} from '@/utils/dashboardEmptyStatePresentation';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  WorkloadsSummary,
+  type WorkloadSummarySnapshot,
+} from '@/components/Workloads/WorkloadsSummary';
+import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import {
+  buildWorkloadsPath,
+  parseWorkloadsLinkSearch,
+  WORKLOADS_PATH,
+  WORKLOADS_QUERY_PARAMS,
+} from '@/routing/resourceLinks';
+import { areSearchParamsEquivalent } from '@/utils/searchParams';
+import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
+import {
+  workloadNodeScopeId,
+  getKubernetesContextKey,
+  filterWorkloads,
+  getDiskUsagePercent,
+  createWorkloadSortComparator,
+  getWorkloadGroupKey,
+  groupWorkloads,
+  computeWorkloadStats,
+  computeWorkloadIOEmphasis,
+  buildNodeByInstance,
+  buildGuestParentNodeMap,
+  type FilterWorkloadsParams,
+  type WorkloadStats,
+} from './workloadSelectors';
+import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
 type IdleCallback = (deadline?: { didTimeout: boolean; timeRemaining: () => number }) => void;
 type IdleCapableWindow = Window & {
-  requestIdleCallback?: (callback: IdleCallback, options?: { timeout?: number }) => IdleCallbackHandle;
+  requestIdleCallback?: (
+    callback: IdleCallback,
+    options?: { timeout?: number },
+  ) => IdleCallbackHandle;
   cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
 };
 
 let cachedGuestMetadata: GuestMetadataRecord | null = null;
+let cachedGuestMetadataStorageKey: string | null = null;
 let lastPersistedGuestMetadataJSON: string | null = null;
+let lastPersistedGuestMetadataStorageKey: string | null = null;
 let pendingPersistMetadata: GuestMetadataRecord | null = null;
+let pendingPersistStorageKey: string | null = null;
 let persistHandle: number | null = null;
 let persistHandleType: 'idle' | 'timeout' | null = null;
+const DEFAULT_ORG_SCOPE = 'default';
+
+const normalizeOrgScope = (orgID?: string | null): string => {
+  const normalized = (orgID || '').trim();
+  return normalized || DEFAULT_ORG_SCOPE;
+};
+
+const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
+  `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
+const DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT = 32;
 
-const readGuestMetadataCache = (): GuestMetadataRecord => {
-  if (cachedGuestMetadata) {
+const workloadMetricPercent = (value: number | null | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  if (value <= 1) return Math.max(0, value * 100);
+  return Math.max(0, value);
+};
+
+const workloadSummaryGuestId = (guest: WorkloadGuest): string => getCanonicalWorkloadId(guest);
+
+const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
+  if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
     return cachedGuestMetadata;
   }
 
   if (typeof window === 'undefined') {
     cachedGuestMetadata = {};
+    cachedGuestMetadataStorageKey = storageKey;
     return cachedGuestMetadata;
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.GUEST_METADATA);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) {
       cachedGuestMetadata = {};
+      cachedGuestMetadataStorageKey = storageKey;
       lastPersistedGuestMetadataJSON = null;
+      lastPersistedGuestMetadataStorageKey = storageKey;
       return cachedGuestMetadata;
     }
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
       cachedGuestMetadata = parsed as GuestMetadataRecord;
+      cachedGuestMetadataStorageKey = storageKey;
       lastPersistedGuestMetadataJSON = raw;
+      lastPersistedGuestMetadataStorageKey = storageKey;
       return cachedGuestMetadata;
     }
   } catch (err) {
@@ -71,7 +156,9 @@ const readGuestMetadataCache = (): GuestMetadataRecord => {
   }
 
   cachedGuestMetadata = {};
+  cachedGuestMetadataStorageKey = storageKey;
   lastPersistedGuestMetadataJSON = null;
+  lastPersistedGuestMetadataStorageKey = storageKey;
   return cachedGuestMetadata;
 };
 
@@ -91,13 +178,16 @@ const clearPendingPersistHandle = (idleWindow: IdleCapableWindow) => {
 };
 
 const runGuestMetadataPersist = () => {
-  if (typeof window === 'undefined' || !pendingPersistMetadata) {
+  if (typeof window === 'undefined' || !pendingPersistMetadata || !pendingPersistStorageKey) {
     pendingPersistMetadata = null;
+    pendingPersistStorageKey = null;
     return;
   }
 
   const metadata = pendingPersistMetadata;
+  const storageKey = pendingPersistStorageKey;
   pendingPersistMetadata = null;
+  pendingPersistStorageKey = null;
 
   const markBase = instrumentationEnabled ? `guest-metadata:persist:${Date.now()}` : null;
   if (markBase) {
@@ -119,7 +209,10 @@ const runGuestMetadataPersist = () => {
     return;
   }
 
-  if (serialized === lastPersistedGuestMetadataJSON) {
+  if (
+    serialized === lastPersistedGuestMetadataJSON &&
+    storageKey === lastPersistedGuestMetadataStorageKey
+  ) {
     if (markBase) {
       performance.mark(`${markBase}:end`);
       performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
@@ -138,8 +231,9 @@ const runGuestMetadataPersist = () => {
   }
 
   try {
-    window.localStorage.setItem(STORAGE_KEYS.GUEST_METADATA, serialized);
+    window.localStorage.setItem(storageKey, serialized);
     lastPersistedGuestMetadataJSON = serialized;
+    lastPersistedGuestMetadataStorageKey = storageKey;
     if (markBase) {
       performance.mark(`${markBase}:end`);
       performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
@@ -167,14 +261,16 @@ const runGuestMetadataPersist = () => {
   }
 };
 
-const queueGuestMetadataPersist = (metadata: GuestMetadataRecord) => {
+const queueGuestMetadataPersist = (storageKey: string, metadata: GuestMetadataRecord) => {
   cachedGuestMetadata = metadata;
+  cachedGuestMetadataStorageKey = storageKey;
 
   if (typeof window === 'undefined') {
     return;
   }
 
   pendingPersistMetadata = metadata;
+  pendingPersistStorageKey = storageKey;
   const idleWindow = window as IdleCapableWindow;
 
   clearPendingPersistHandle(idleWindow);
@@ -198,36 +294,88 @@ interface DashboardProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
+  useWorkloads?: boolean;
 }
 
-type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
+type WorkloadSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
-
-  // Kiosk mode - hide filter panel for clean dashboard display
-  // Usage: Add ?kiosk=1 to URL or use the toggle button in the header
-  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
-
-  // Subscribe to kiosk mode changes from toggle button or URL params
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskMode(enabled);
-    });
-    // Cleanup on unmount would go here, but Dashboard is always mounted
-    return unsubscribe;
-  });
-
+  const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
   const [search, setSearch] = createSignal('');
+
+  const kioskMode = useKioskMode();
+  const dashboardInfrastructureEmptyState = createMemo(() => getDashboardInfrastructureEmptyState());
+  const dashboardGuestsEmptyState = createMemo(() =>
+    getDashboardGuestsEmptyState(search()),
+  );
+  const dashboardLoadingState = createMemo(() => getDashboardLoadingState(reconnecting()));
+  const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
+
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
+    null,
+  );
+  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(
+    null,
+  );
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
+  const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
+  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  const [handledTypeParam, setHandledTypeParam] = createSignal<string>('');
+  const [handledRuntimeParam, setHandledRuntimeParam] = createSignal<string>('');
+  const [handledContextParam, setHandledContextParam] = createSignal('');
+  const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
+  const [handledAgentParam, setHandledAgentParam] = createSignal('');
+  const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
+
+  // URL-sync can legitimately require multiple reactive updates (e.g. normalizing
+  // type aliases, dropping irrelevant params). If we
+  // call navigate() synchronously for each intermediate state, Solid Router will
+  // treat it as a redirect chain and can throw "Too many redirects".
+  //
+  // Coalesce URL sync into a single replace-navigation per tick.
+  let pendingUrlSyncHandle: number | null = null;
+  let pendingUrlSyncPath: string | null = null;
+  const scheduleUrlSyncNavigate = (nextPath: string) => {
+    pendingUrlSyncPath = nextPath;
+    if (pendingUrlSyncHandle !== null) return;
+    pendingUrlSyncHandle = window.setTimeout(() => {
+      pendingUrlSyncHandle = null;
+      const target = pendingUrlSyncPath;
+      pendingUrlSyncPath = null;
+      if (!target) return;
+      const current = `${untrack(() => location.pathname)}${untrack(() => location.search)}`;
+      if (current === target) return;
+      navigate(target, { replace: true });
+    }, 0);
+  };
+  onCleanup(() => {
+    if (pendingUrlSyncHandle !== null) {
+      window.clearTimeout(pendingUrlSyncHandle);
+      pendingUrlSyncHandle = null;
+      pendingUrlSyncPath = null;
+    }
+  });
+
+  createEffect(() => {
+    const { resource: resourceId } = parseWorkloadsLinkSearch(location.search);
+    if (!resourceId || resourceId === handledResourceId()) return;
+    setSelectedGuestId(resourceId);
+    const [instance, node, vmid] = resourceId.split(':');
+    if (instance && node && vmid) {
+      setSelectedNode(`${instance}-${node}`);
+    }
+    setHandledResourceId(resourceId);
+  });
 
   // Wrap setSelectedGuestId to preserve scroll position. Opening/closing the
   // drawer mounts/unmounts GuestDrawer (which contains DiscoveryTab). The
@@ -235,12 +383,16 @@ export function Dashboard(props: DashboardProps) {
   // which detaches/reattaches DOM and resets the scroll container's scrollTop.
   // We find the scroll container, save its position, and restore it after.
   let tableRef: HTMLDivElement | undefined;
+  const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
   const setSelectedGuestId = (id: string | null) => {
     // Find the nearest ancestor scroll container from the table
     let scroller: HTMLElement | null = tableRef ?? null;
     while (scroller) {
       const { overflowY } = getComputedStyle(scroller);
-      if ((overflowY === 'auto' || overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight) {
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        scroller.scrollHeight > scroller.clientHeight
+      ) {
         break;
       }
       scroller = scroller.parentElement;
@@ -253,9 +405,16 @@ export function Dashboard(props: DashboardProps) {
       if (scroller) scroller.scrollTop = scrollTop;
     });
   };
+  const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
+  const guestMetadataStorageKey = createMemo(() => guestMetadataStorageKeyForOrg(orgScope()));
   const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
-    readGuestMetadataCache(),
+    readGuestMetadataCache(guestMetadataStorageKey()),
   );
+
+  createEffect(() => {
+    const storageKey = guestMetadataStorageKey();
+    setGuestMetadata(readGuestMetadataCache(storageKey));
+  });
 
   const updateGuestMetadataState = (updater: (prev: GuestMetadataRecord) => GuestMetadataRecord) =>
     setGuestMetadata((prev) => {
@@ -263,24 +422,375 @@ export function Dashboard(props: DashboardProps) {
       if (next === prev) {
         return prev;
       }
-      queueGuestMetadataPersist(next);
+      queueGuestMetadataPersist(guestMetadataStorageKey(), next);
       return next;
     });
 
-  // Combine VMs and containers into a single list for filtering
-  const allGuests = createMemo<(VM | Container)[]>(() => [...props.vms, ...props.containers]);
+  const workloadsEnabled = createMemo(() => props.useWorkloads === true);
+  const workloads = useWorkloads(workloadsEnabled);
+
+  // Keep workload identities stable across polling updates.
+  const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
+    const seen = new Set<string>();
+    const deduped: WorkloadGuest[] = [];
+    for (const guest of guests) {
+      const canonicalId = getCanonicalWorkloadId(guest);
+      if (seen.has(canonicalId)) continue;
+      seen.add(canonicalId);
+      deduped.push(guest);
+    }
+    return deduped;
+  };
+
+  const allGuests = createMemo<WorkloadGuest[]>(() =>
+    workloadsEnabled() ? dedupeGuests(workloads.workloads()) : [],
+  );
+
+  const workloadNodeOptions = createMemo(() => {
+    const labelsByScope = new Map<string, string>();
+    const nodeNameCounts = new Map<string, number>();
+
+    for (const guest of allGuests()) {
+      const type = resolveWorkloadType(guest);
+      if (type === 'pod') continue;
+      const scope = workloadNodeScopeId(guest);
+      if (!scope || scope === '-') continue;
+      const nodeName = (guest.node || '').trim();
+      if (!nodeName) continue;
+      nodeNameCounts.set(nodeName, (nodeNameCounts.get(nodeName) || 0) + 1);
+    }
+
+    for (const guest of allGuests()) {
+      const type = resolveWorkloadType(guest);
+      if (type === 'pod') continue;
+      const scope = workloadNodeScopeId(guest);
+      if (!scope || scope === '-' || labelsByScope.has(scope)) continue;
+      const nodeName = (guest.node || '').trim();
+      const instance = (guest.instance || '').trim();
+      if (!nodeName) continue;
+      const hasDuplicateNodeName = (nodeNameCounts.get(nodeName) || 0) > 1;
+      const label = hasDuplicateNodeName && instance ? `${nodeName} (${instance})` : nodeName;
+      labelsByScope.set(scope, label);
+    }
+
+    return Array.from(labelsByScope.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  createEffect(() => {
+    if (viewMode() === 'pod') return;
+    const hostHint = selectedHostHint();
+    if (!hostHint || selectedNode() !== null) return;
+    const normalizedHint = hostHint.trim().toLowerCase();
+    if (!normalizedHint) return;
+    const option = workloadNodeOptions().find((candidate) => {
+      const label = candidate.label.toLowerCase();
+      const value = candidate.value.toLowerCase();
+      return label === normalizedHint || value === normalizedHint || label.includes(normalizedHint);
+    });
+    if (!option) return;
+    setSelectedNode(option.value);
+    setSelectedHostHint(null);
+  });
+
+  const kubernetesContextOptions = createMemo(() => {
+    const contexts = new Set<string>();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'pod') continue;
+      const context = getKubernetesContextKey(guest);
+      if (context) {
+        contexts.add(context);
+      }
+    }
+    return Array.from(contexts).sort((a, b) => a.localeCompare(b));
+  });
+
+  const kubernetesNamespaceOptions = createMemo(() => {
+    const namespaces = new Set<string>();
+    const contextFilter = (selectedKubernetesContext() || '').trim();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'pod') continue;
+      if (contextFilter && getKubernetesContextKey(guest) !== contextFilter) continue;
+      const ns = (guest.namespace || '').trim();
+      if (ns) namespaces.add(ns);
+    }
+    return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'pod') return;
+    const selected = (selectedKubernetesNamespace() || '').trim();
+    if (!selected) return;
+    const normalized = selected.toLowerCase();
+    const exists = kubernetesNamespaceOptions().some((value) => value.toLowerCase() === normalized);
+    if (!exists) {
+      setSelectedKubernetesNamespace(null);
+    }
+  });
+
+  const containerRuntimeOptions = createMemo(() => {
+    const runtimes = new Set<string>();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'app-container') continue;
+      const runtime = (guest.containerRuntime || '').trim();
+      if (runtime) {
+        runtimes.add(runtime);
+      }
+    }
+    return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
+  });
+
+  function normalizeViewModeParam(value: string): ViewMode | null {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'all') return 'all';
+    if (normalized === 'vm') return 'vm';
+    if (normalized === 'system-container') return 'system-container';
+    if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
+    if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'pod';
+    return null;
+  }
 
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
-    deserialize: (raw) => (raw === 'all' || raw === 'vm' || raw === 'lxc' ? raw : 'all'),
+    deserialize: (raw) => normalizeViewModeParam(raw) ?? 'all',
   });
 
-  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
-    deserialize: (raw) =>
-      raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
-        ? (raw as StatusMode)
-        : 'all',
+  const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
+    'dashboardContainerRuntime',
+    '',
+    {
+      deserialize: (raw) => (typeof raw === 'string' ? raw : ''),
+      serialize: (value) => value,
+    },
+  );
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'app-container') return;
+    const selected = containerRuntime().trim();
+    if (!selected) return;
+    const normalized = selected.toLowerCase();
+    const exists = containerRuntimeOptions().some((value) => value.toLowerCase() === normalized);
+    if (!exists) {
+      setContainerRuntime('');
+    }
   });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() === 'pod') {
+      if (selectedNode() !== null) {
+        setSelectedNode(null);
+      }
+      if (selectedHostHint() !== null) {
+        setSelectedHostHint(null);
+      }
+      return;
+    }
+    if (selectedKubernetesContext() !== null) {
+      setSelectedKubernetesContext(null);
+    }
+    if (selectedKubernetesNamespace() !== null) {
+      setSelectedKubernetesNamespace(null);
+    }
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'app-container' && containerRuntime().trim() !== '') {
+      setContainerRuntime('');
+    }
+  });
+
+  createEffect(() => {
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const typeParam = parsed.type;
+    const normalizedType = typeParam ?? '';
+    if (normalizedType === handledTypeParam()) return;
+
+    if (!normalizedType) {
+      setHandledTypeParam('');
+      return;
+    }
+
+    // Context/namespace implies pod view; ignore conflicting type params.
+    const hasK8sScope =
+      Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
+    const nextMode = normalizeViewModeParam(normalizedType);
+    if (!nextMode) {
+      setHandledTypeParam(normalizedType);
+      return;
+    }
+    if (hasK8sScope && nextMode !== 'pod') {
+      setHandledTypeParam(normalizedType);
+      return;
+    }
+
+    setViewMode(nextMode);
+    setHandledTypeParam(normalizedType);
+  });
+
+  createEffect(() => {
+    const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
+    const normalized = contextParam ?? '';
+    if (normalized === handledContextParam()) return;
+
+    if (normalized) {
+      if (viewMode() !== 'pod') {
+        setViewMode('pod');
+      }
+      setSelectedKubernetesContext(normalized);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledContextParam(normalized);
+      return;
+    }
+
+    setSelectedKubernetesContext(null);
+    setHandledContextParam('');
+  });
+
+  createEffect(() => {
+    const { namespace: namespaceParam } = parseWorkloadsLinkSearch(location.search);
+    const normalized = namespaceParam ?? '';
+    if (normalized === handledNamespaceParam()) return;
+
+    if (normalized) {
+      if (viewMode() !== 'pod') {
+        setViewMode('pod');
+      }
+      setSelectedKubernetesNamespace(normalized);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledNamespaceParam(normalized);
+      return;
+    }
+
+    setSelectedKubernetesNamespace(null);
+    setHandledNamespaceParam('');
+  });
+
+  createEffect(() => {
+    const { agent: agentParam } = parseWorkloadsLinkSearch(location.search);
+    const normalized = agentParam ?? '';
+    if (normalized === handledAgentParam()) return;
+
+    if (normalized) {
+      setSelectedHostHint(normalized);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledAgentParam(normalized);
+      return;
+    }
+
+    setSelectedHostHint(null);
+    if (selectedNode() !== null) {
+      setSelectedNode(null);
+    }
+    setHandledAgentParam('');
+  });
+
+  createEffect(() => {
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const urlRuntime = parsed.runtime ?? '';
+    if (urlRuntime === handledRuntimeParam()) return;
+
+    const urlContext = parsed.context ?? '';
+    const hasContext = Boolean(urlContext.trim());
+    const hasNamespace = Boolean((parsed.namespace ?? '').trim());
+    const urlType = parsed.type ?? '';
+    const nextMode = normalizeViewModeParam(urlType);
+    const runtimeRelevant =
+      !hasContext && !hasNamespace && (nextMode === 'app-container' || !urlType.trim());
+
+    // Ignore runtime param outside of container views, but still mark it handled so URL-sync can clean it up.
+    if (!runtimeRelevant) {
+      setHandledRuntimeParam(urlRuntime);
+      return;
+    }
+
+    if (!urlRuntime.trim()) {
+      setContainerRuntime('');
+      setHandledRuntimeParam('');
+      return;
+    }
+
+    if (viewMode() !== 'app-container') {
+      setViewMode('app-container');
+    }
+    setContainerRuntime(urlRuntime);
+    if (!showFilters()) {
+      setShowFilters(true);
+    }
+    setHandledRuntimeParam(urlRuntime);
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const urlType = parsed.type ?? '';
+    const urlRuntime = parsed.runtime ?? '';
+    const urlContext = parsed.context ?? '';
+    const urlNamespace = parsed.namespace ?? '';
+    const urlAgent = parsed.agent ?? '';
+    const urlResource = parsed.resource ?? '';
+
+    // Avoid oscillation: only write managed params after we've processed the current URL.
+    if (handledTypeParam() !== urlType) return;
+    if (handledRuntimeParam() !== urlRuntime) return;
+    if (handledContextParam() !== urlContext) return;
+    if (handledNamespaceParam() !== urlNamespace) return;
+    if (handledAgentParam() !== urlAgent) return;
+    if (urlResource && handledResourceId() !== urlResource) return;
+
+    const currentParams = new URLSearchParams(location.search);
+    const nextParams = new URLSearchParams(location.search);
+    const nextType = viewMode() === 'all' ? '' : viewMode();
+    const nextRuntime = viewMode() === 'app-container' ? containerRuntime().trim() : '';
+    const nextContext = viewMode() === 'pod' ? (selectedKubernetesContext() ?? '') : '';
+    const nextNamespace = viewMode() === 'pod' ? (selectedKubernetesNamespace() ?? '') : '';
+    const nextAgent = viewMode() === 'pod' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
+
+    const managedPath = buildWorkloadsPath({
+      type: nextType || null,
+      runtime: nextRuntime || null,
+      context: nextContext || null,
+      namespace: nextNamespace || null,
+      agent: nextAgent || null,
+    });
+    const managedUrl = new URL(managedPath, 'http://pulse.local');
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
+    managedUrl.searchParams.forEach((value, key) => {
+      nextParams.set(key, value);
+    });
+
+    if (!areSearchParamsEquivalent(currentParams, nextParams)) {
+      const nextSearch = nextParams.toString();
+      const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
+      scheduleUrlSyncNavigate(nextPath);
+    }
+  });
+
+  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>(
+    'dashboardStatusMode',
+    'all',
+    {
+      deserialize: (raw) =>
+        raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
+          ? (raw as StatusMode)
+          : 'all',
+    },
+  );
 
   // Grouping mode - grouped by node or flat list
   const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
@@ -299,23 +809,56 @@ export function Dashboard(props: DashboardProps) {
       serialize: (value) => String(value),
     },
   );
+  const [workloadsSummaryRange, setWorkloadsSummaryRange] = usePersistentSignal(
+    STORAGE_KEYS.WORKLOADS_SUMMARY_RANGE,
+    '1h',
+    {
+      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
+    },
+  );
+  const [workloadsSummaryCollapsed, setWorkloadsSummaryCollapsed] = usePersistentSignal<boolean>(
+    STORAGE_KEYS.WORKLOADS_SUMMARY_COLLAPSED,
+    false,
+    { deserialize: (raw) => raw === 'true' },
+  );
 
-  // Sorting state - default to VMID ascending (matches Proxmox order)
-  const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
+  // Sorting state - default to type ascending so VMs/LXCs/Docker/K8s cluster together
+  const [sortKey, setSortKey] = createSignal<WorkloadSortKey | null>('type');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   // Column visibility management
   // OS and IP columns are hidden by default since they require guest agent and may show dashes
+  const relevantColumns = createMemo(() => {
+    const base = VIEW_MODE_COLUMNS[viewMode()];
+    if (!base) return null;
+    // Hide the node column when grouped by node — it's already shown in the group header
+    if (groupingMode() === 'grouped' && base.has('node')) {
+      const filtered = new Set(base);
+      filtered.delete('node');
+      return filtered;
+    }
+    return base;
+  });
   const columnVisibility = useColumnVisibility(
     STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
-    GUEST_COLUMNS as GuestColumnDef[],
-    ['os', 'ip']  // Default hidden columns for cleaner first-run experience
+    GUEST_COLUMNS,
+    ['os', 'ip'], // Default hidden columns for cleaner first-run experience
+    relevantColumns,
   );
   const visibleColumns = columnVisibility.visibleColumns;
-  const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+  const visibleColumnIds = createMemo(() => visibleColumns().map((c) => c.id));
+  // Mobile: restrict to the essential columns only so the table fits without horizontal scroll.
+  // Secondary data (uptime, IP, node, I/O, etc.) is accessible via the row detail drawer.
+  const MOBILE_ESSENTIAL_COLS = new Set(['name', 'cpu', 'memory', 'disk', 'link']);
+  const mobileVisibleColumns = createMemo(() =>
+    isMobile() ? visibleColumns().filter((c) => MOBILE_ESSENTIAL_COLS.has(c.id)) : visibleColumns(),
+  );
+  const mobileVisibleColumnIds = createMemo(() =>
+    isMobile() ? mobileVisibleColumns().map((c) => c.id) : visibleColumnIds(),
+  );
 
   // Total columns for colspan calculations
-  const totalColumns = createMemo(() => visibleColumns().length);
+  const totalColumns = createMemo(() => mobileVisibleColumns().length);
 
   // Helper function to refresh guest metadata from server
   const refreshGuestMetadata = async () => {
@@ -329,8 +872,8 @@ export function Dashboard(props: DashboardProps) {
   };
 
   // Load all guest metadata on mount (single API call for all guests)
-  onMount(async () => {
-    await refreshGuestMetadata();
+  onMount(() => {
+    void refreshGuestMetadata();
 
     // Listen for metadata changes from AI or other sources
     const handleMetadataChanged = (event: Event) => {
@@ -342,14 +885,17 @@ export function Dashboard(props: DashboardProps) {
         let { guestId, url } = customEvent.detail.payload;
         if (guestId) {
           // Normalize guestId if it's in the canonical AI format (instance:node:vmid)
-          // Frontend uses 'instance-vmid' (e.g., 'delly-101') but AI sends 'delly:delly:101'
+          // Frontend uses 'instance-vmid' (e.g., 'pve-node-101') but AI sends 'homelab:pve-node:101'
           if (guestId.includes(':')) {
             const parts = guestId.split(':');
             if (parts.length === 3) {
               const [instance, _node, vmid] = parts;
               // Construct frontend ID format
               guestId = `${instance}-${vmid}`;
-              logger.debug('[Dashboard] Normalized optimistic guestId', { original: customEvent.detail.payload.guestId, normalized: guestId });
+              logger.debug('[Dashboard] Normalized optimistic guestId', {
+                original: customEvent.detail.payload.guestId,
+                normalized: guestId,
+              });
             }
           }
 
@@ -368,9 +914,24 @@ export function Dashboard(props: DashboardProps) {
 
     logger.debug('[Dashboard] Adding pulse:metadata-changed listener');
     window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', (nextOrgID) => {
+      setOrgScope(normalizeOrgScope(nextOrgID));
+      void refreshGuestMetadata();
+    });
 
-    // Note: SolidJS onMount doesn't support cleanup return, so we rely on component unmount
-    // In practice, Dashboard is always mounted so this is fine
+    onCleanup(() => {
+      window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
+      unsubscribeOrgSwitched();
+    });
+  });
+
+  let lastConnected = connected();
+  createEffect(() => {
+    const isConnected = connected();
+    if (workloadsEnabled() && isConnected && !lastConnected) {
+      void workloads.refetch();
+    }
+    lastConnected = isConnected;
   });
 
   // Callback to update a guest's custom URL in metadata
@@ -426,50 +987,16 @@ export function Dashboard(props: DashboardProps) {
 
   // Create a mapping from node ID to node object
   // Also maps by instance-nodeName for guest grouping compatibility
-  const nodeByInstance = createMemo(() => {
-    const map: Record<string, Node> = {};
-    props.nodes.forEach((node) => {
-      // Map by node.id (may be clusterName-nodeName or instance-nodeName)
-      map[node.id] = node;
-      // Also map by instance-nodeName for guest grouping (guests use instance-node format)
-      const legacyKey = `${node.instance}-${node.name}`;
-      if (!map[legacyKey]) {
-        map[legacyKey] = node;
-      }
-    });
-    return map;
-  });
+  const nodeByInstance = createMemo(() => buildNodeByInstance(props.nodes));
 
-  // PERFORMANCE: Pre-compute guest-to-parent-node mapping for faster lookups
+  // PERFORMANCE: Pre-compute guest- mapping for faster lookups
   // This avoids repeated node lookups for each guest during render
-  const guestParentNodeMap = createMemo(() => {
-    const nodes = nodeByInstance();
-    const mapping = new Map<string, Node>();
-
-    allGuests().forEach((guest) => {
-      // Try guest.id-based lookup first
-      if (guest.id) {
-        const lastDash = guest.id.lastIndexOf('-');
-        if (lastDash > 0) {
-          const nodeId = guest.id.slice(0, lastDash);
-          if (nodes[nodeId]) {
-            mapping.set(guest.id, nodes[nodeId]);
-            return;
-          }
-        }
-      }
-      // Fallback to composite key
-      const compositeKey = `${guest.instance}-${guest.node}`;
-      if (nodes[compositeKey]) {
-        mapping.set(guest.id || `${guest.instance}-${guest.vmid}`, nodes[compositeKey]);
-      }
-    });
-
-    return mapping;
-  });
+  const guestParentNodeMap = createMemo(() =>
+    buildGuestParentNodeMap(allGuests(), nodeByInstance()),
+  );
 
   // Sort handler
-  const handleSort = (key: keyof (VM | Container)) => {
+  const handleSort = (key: WorkloadSortKey) => {
     if (sortKey() === key) {
       // Toggle direction for the same column
       setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
@@ -481,10 +1008,8 @@ export function Dashboard(props: DashboardProps) {
         key === 'cpu' ||
         key === 'memory' ||
         key === 'disk' ||
-        key === 'diskRead' ||
-        key === 'diskWrite' ||
-        key === 'networkIn' ||
-        key === 'networkOut' ||
+        key === 'diskIo' ||
+        key === 'netIo' ||
         key === 'uptime'
       ) {
         setSortDirection('desc');
@@ -494,111 +1019,26 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-  const getDiskUsagePercent = (guest: VM | Container): number | null => {
-    const disk = guest?.disk;
-    if (!disk) return null;
-
-    const clamp = (value: number) => Math.min(100, Math.max(0, value));
-
-    if (typeof disk.usage === 'number' && Number.isFinite(disk.usage)) {
-      // Some sources report usage as a ratio (0-1), others as a percentage (0-100)
-      const usageValue = disk.usage > 1 ? disk.usage : disk.usage * 100;
-      return clamp(usageValue);
-    }
-
-    if (
-      typeof disk.used === 'number' &&
-      Number.isFinite(disk.used) &&
-      typeof disk.total === 'number' &&
-      Number.isFinite(disk.total) &&
-      disk.total > 0
-    ) {
-      return clamp((disk.used / disk.total) * 100);
-    }
-
-    return null;
-  };
-
   // PERFORMANCE: Memoized sort comparator to avoid duplicating sorting logic
   // This comparator is reused by both flat and grouped modes in groupedGuests
-  const guestSortComparator = createMemo(() => {
-    const key = sortKey();
-    const dir = sortDirection();
-
-    if (!key) {
-      return null;
-    }
-
-    return (a: VM | Container, b: VM | Container): number => {
-      let aVal: string | number | boolean | null | undefined = a[key] as
-        | string
-        | number
-        | boolean
-        | null
-        | undefined;
-      let bVal: string | number | boolean | null | undefined = b[key] as
-        | string
-        | number
-        | boolean
-        | null
-        | undefined;
-
-      // Special handling for percentage-based columns
-      if (key === 'cpu') {
-        aVal = a.cpu * 100;
-        bVal = b.cpu * 100;
-      } else if (key === 'memory') {
-        aVal = a.memory ? a.memory.usage || 0 : 0;
-        bVal = b.memory ? b.memory.usage || 0 : 0;
-      } else if (key === 'disk') {
-        aVal = getDiskUsagePercent(a);
-        bVal = getDiskUsagePercent(b);
-      }
-
-      // Handle null/undefined/empty values - put at end for both asc and desc
-      const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
-      const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
-
-      if (aIsEmpty && bIsEmpty) return 0;
-      if (aIsEmpty) return 1;
-      if (bIsEmpty) return -1;
-
-      // Type-specific comparison
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        const comparison = aVal < bVal ? -1 : 1;
-        return dir === 'asc' ? comparison : -comparison;
-      } else {
-        const aStr = String(aVal).toLowerCase();
-        const bStr = String(bVal).toLowerCase();
-
-        if (aStr === bStr) return 0;
-        const comparison = aStr < bStr ? -1 : 1;
-        return dir === 'asc' ? comparison : -comparison;
-      }
-    };
-  });
-
-  // Handle keyboard shortcuts
-  let searchInputRef: HTMLInputElement | undefined;
+  const guestSortComparator = createMemo(() =>
+    createWorkloadSortComparator(sortKey() || '', sortDirection()),
+  );
 
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input, textarea, or contenteditable
-      const target = e.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true';
-
       // Escape key behavior
       if (e.key === 'Escape') {
         // First check if we have search/filters to clear (including tag filters and node selection)
         const hasActiveFilters =
           search().trim() ||
-          sortKey() !== 'vmid' ||
+          sortKey() !== 'type' ||
           sortDirection() !== 'asc' ||
           selectedNode() !== null ||
+          selectedHostHint() !== null ||
+          selectedKubernetesContext() !== null ||
+          selectedKubernetesNamespace() !== null ||
+          containerRuntime().trim() !== '' ||
           viewMode() !== 'all' ||
           statusMode() !== 'all';
 
@@ -606,36 +1046,20 @@ export function Dashboard(props: DashboardProps) {
           // Clear ALL filters including search text, tag filters, node selection, and view modes
           setSearch('');
           setIsSearchLocked(false);
-          setSortKey('vmid');
+          setSortKey('type');
           setSortDirection('asc');
           setSelectedNode(null);
+          setSelectedHostHint(null);
+          setSelectedKubernetesContext(null);
+          setSelectedKubernetesNamespace(null);
+          setContainerRuntime('');
           setViewMode('all');
           setStatusMode('all');
 
-          // Blur the search input if it's focused
-          if (searchInputRef && document.activeElement === searchInputRef) {
-            searchInputRef.blur();
-          }
+          blurFocusedTypeToSearch();
         } else {
           // No active filters, toggle the filters section visibility
           setShowFilters(!showFilters());
-        }
-      } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // If it's a printable character and user is not in an input field
-        // Check if AI chat is open - if so, focus that instead
-        if (aiChatStore.focusInput()) {
-          // AI chat input was focused, let the character be typed there
-          return;
-        }
-        // Otherwise, focus the search input
-        // Expand filters section if collapsed
-        if (!showFilters()) {
-          setShowFilters(true);
-        }
-        // Focus the search input and let the character be typed
-        if (searchInputRef) {
-          searchInputRef.focus();
-          // Don't prevent default - let the character be typed
         }
       }
     };
@@ -646,160 +1070,238 @@ export function Dashboard(props: DashboardProps) {
 
   // Filter guests based on current settings
   const filteredGuests = createMemo(() => {
-    let guests = allGuests();
-
-    // Filter by selected node using both instance and node name for uniqueness
-    const selectedNodeId = selectedNode();
-    if (selectedNodeId) {
-      // Find the node to get both instance and name for precise matching
-      const node = props.nodes.find((n) => n.id === selectedNodeId);
-      if (node) {
-        guests = guests.filter(
-          (g) => g.instance === node.instance && g.node === node.name,
-        );
-      }
-    }
-
-    // Filter by type
-    if (viewMode() === 'vm') {
-      guests = guests.filter((g) => g.type === 'qemu');
-    } else if (viewMode() === 'lxc') {
-      // Include both traditional LXC and OCI containers (Proxmox 9.1+)
-      guests = guests.filter((g) => g.type === 'lxc' || g.type === 'oci');
-    }
-
-    // Filter by status
-    if (statusMode() === 'running') {
-      guests = guests.filter((g) => g.status === 'running');
-    } else if (statusMode() === 'degraded') {
-      guests = guests.filter((g) => {
-        const status = (g.status || '').toLowerCase();
-        return (
-          DEGRADED_HEALTH_STATUSES.has(status) ||
-          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-        );
-      });
-    } else if (statusMode() === 'stopped') {
-      guests = guests.filter((g) => g.status !== 'running');
-    }
-
-    // Apply search/filter
-    const searchTerm = search().trim();
-    if (searchTerm) {
-      // Split by commas first
-      const searchParts = searchTerm
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t);
-
-      // Separate filters from text searches
-      const filters: string[] = [];
-      const textSearches: string[] = [];
-
-      searchParts.forEach((part) => {
-        if (part.includes('>') || part.includes('<') || part.includes(':')) {
-          filters.push(part);
-        } else {
-          textSearches.push(part.toLowerCase());
-        }
-      });
-
-      // Apply filters if any
-      if (filters.length > 0) {
-        // Join filters with AND operator
-        const filterString = filters.join(' AND ');
-        const stack = parseFilterStack(filterString);
-        if (stack.filters.length > 0) {
-          guests = guests.filter((g) => evaluateFilterStack(g, stack));
-        }
-      }
-
-      // Apply text search if any
-      if (textSearches.length > 0) {
-        guests = guests.filter((g) =>
-          textSearches.some(
-            (term) =>
-              g.name.toLowerCase().includes(term) ||
-              g.vmid.toString().includes(term) ||
-              g.node.toLowerCase().includes(term) ||
-              g.status.toLowerCase().includes(term),
-          ),
-        );
-      }
-    }
-
-    // Don't filter by thresholds anymore - dimming is handled in GuestRow component
-
-    return guests;
+    const params: FilterWorkloadsParams = {
+      guests: allGuests(),
+      viewMode: viewMode(),
+      statusMode: statusMode(),
+      searchTerm: search().trim(),
+      selectedNode: selectedNode(),
+      selectedHostHint: selectedHostHint(),
+      selectedKubernetesContext: selectedKubernetesContext(),
+      selectedKubernetesNamespace: selectedKubernetesNamespace(),
+      containerRuntime: containerRuntime().trim() || null,
+    };
+    return filterWorkloads(params);
   });
 
-  // Group by node or return flat list based on grouping mode
-  const groupedGuests = createMemo(() => {
+  const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
+    filteredGuests().map((guest) => workloadSummaryGuestId(guest)),
+  );
+
+  const workloadsSummaryFallbackCounts = createMemo(() => {
     const guests = filteredGuests();
-
-    // If flat mode, return all guests in a single group
-    if (groupingMode() === 'flat') {
-      const groups: Record<string, (VM | Container)[]> = { '': guests };
-      // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
-      const comparator = guestSortComparator();
-      if (comparator) {
-        groups[''] = groups[''].sort(comparator);
-      }
-      return groups;
-    }
-
-    // Group by node ID (instance + node name) to match Node.ID format
-    const groups: Record<string, (VM | Container)[]> = {};
-    guests.forEach((guest) => {
-      // Node.ID is formatted as "instance-nodename", so we need to match that
-      const nodeId = `${guest.instance}-${guest.node}`;
-
-      if (!groups[nodeId]) {
-        groups[nodeId] = [];
-      }
-      groups[nodeId].push(guest);
-    });
-
-    // PERFORMANCE: Use memoized sort comparator (eliminates ~50 lines of duplicate code)
-    const comparator = guestSortComparator();
-    if (comparator) {
-      Object.keys(groups).forEach((node) => {
-        groups[node] = groups[node].sort(comparator);
-      });
-    }
-
-    return groups;
-  });
-
-  const totalStats = createMemo(() => {
-    const guests = filteredGuests();
-    const running = guests.filter((g) => g.status === 'running').length;
-    const degraded = guests.filter((g) => {
-      const status = (g.status || '').toLowerCase();
-      // Count as degraded if explicitly in degraded list, or if not running and not offline/stopped
-      return (
-        DEGRADED_HEALTH_STATUSES.has(status) ||
-        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-      );
-    }).length;
-    const stopped = guests.length - running - degraded;
-    const vms = guests.filter((g) => g.type === 'qemu').length;
-    const containers = guests.filter((g) => g.type === 'lxc' || g.type === 'oci').length;
+    const running = guests.filter(
+      (guest) => guest.status === 'running' || guest.status === 'online',
+    ).length;
     return {
       total: guests.length,
       running,
-      degraded,
-      stopped,
-      vms,
-      containers,
+      stopped: Math.max(0, guests.length - running),
     };
   });
+
+  const workloadsSummaryFallbackSnapshots = createMemo<WorkloadSummarySnapshot[]>(() =>
+    filteredGuests().map((guest) => {
+      const guestId = workloadSummaryGuestId(guest);
+      const memoryUsage = workloadMetricPercent(guest.memory?.usage);
+      let diskUsage = workloadMetricPercent(guest.disk?.usage);
+      if (
+        (!diskUsage || diskUsage <= 0) &&
+        typeof guest.disk?.used === 'number' &&
+        typeof guest.disk?.total === 'number' &&
+        Number.isFinite(guest.disk.used) &&
+        Number.isFinite(guest.disk.total) &&
+        guest.disk.total > 0
+      ) {
+        const selectorDiskUsage = getDiskUsagePercent(guest);
+        const rawDiskUsage = (guest.disk.used / guest.disk.total) * 100;
+        // Preserve fallback behavior for anomalous >100% values.
+        diskUsage = rawDiskUsage > 100 ? rawDiskUsage : (selectorDiskUsage ?? rawDiskUsage);
+      }
+
+      return {
+        id: guestId,
+        name: guest.name || guestId,
+        cpu: workloadMetricPercent(guest.cpu),
+        memory: memoryUsage,
+        disk: Math.max(0, diskUsage),
+        network: Math.max(0, guest.networkIn || 0) + Math.max(0, guest.networkOut || 0),
+      };
+    }),
+  );
+
+  createEffect(() => {
+    const hoveredId = hoveredWorkloadId();
+    if (!hoveredId) return;
+    const exists = filteredGuests().some((guest) => workloadSummaryGuestId(guest) === hoveredId);
+    if (!exists) {
+      setHoveredWorkloadId(null);
+    }
+  });
+
+  const getGroupLabel = (
+    groupKey: string,
+    guests: WorkloadGuest[],
+  ): { type: string; name: string } => {
+    const node = nodeByInstance()[groupKey];
+    if (node) return { type: '', name: getNodeDisplayName(node) };
+    const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
+    const [prefix, ...rest] = normalizedGroupKey.split(':');
+    const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
+    if (prefix === 'app-container') return { type: 'App Containers', name: context };
+    if (prefix === 'pod') return { type: 'Pods', name: context };
+    if (prefix === 'vm') return { type: 'VM', name: context };
+    if (prefix === 'system-container') return { type: 'Container', name: context };
+    // For PVE workload groups (instance-node key), show node name + cluster badge
+    const first = guests[0];
+    if (first) {
+      const cluster = (first.clusterName || '').trim();
+      const nodeName = (first.node || '').trim();
+      if (nodeName && cluster) return { type: cluster, name: nodeName };
+      if (nodeName) return { type: '', name: nodeName };
+    }
+    return { type: '', name: context };
+  };
+
+  // Group by node or return flat list based on grouping mode
+  const groupedGuests = createMemo(() =>
+    groupWorkloads(filteredGuests(), groupingMode(), guestSortComparator()),
+  );
+
+  // Stable sorted group keys for <For> — strings compare by value so DOM stays stable across data updates
+  const sortedGroupKeys = createMemo(() => {
+    const groups = groupedGuests();
+    const nodes = nodeByInstance();
+    return Object.keys(groups).sort((a, b) => {
+      const nodeA = nodes[a];
+      const nodeB = nodes[b];
+      const labelA = nodeA ? getNodeDisplayName(nodeA) : getGroupLabel(a, groups[a]).name;
+      const labelB = nodeB ? getNodeDisplayName(nodeB) : getGroupLabel(b, groups[b]).name;
+      return labelA.localeCompare(labelB) || a.localeCompare(b);
+    });
+  });
+
+  const guestGlobalIndexById = createMemo(() => {
+    const indexById = new Map<string, number>();
+    const groups = groupedGuests();
+    let globalIndex = 0;
+
+    for (const groupKey of sortedGroupKeys()) {
+      const guests = groups[groupKey] || [];
+      for (const guest of guests) {
+        indexById.set(getCanonicalWorkloadId(guest), globalIndex);
+        globalIndex += 1;
+      }
+    }
+
+    return indexById;
+  });
+
+  const revealGuestIndex = createMemo<number | null>(() => {
+    const selectedId = selectedGuestId();
+    if (!selectedId) return null;
+    return guestGlobalIndexById().get(selectedId) ?? null;
+  });
+
+  const groupedWindowing = useGroupedTableWindowing({
+    totalRowCount: () => filteredGuests().length,
+    revealIndex: revealGuestIndex,
+  });
+
+  const groupStartIndexByKey = createMemo(() => {
+    const starts = new Map<string, number>();
+    const groups = groupedGuests();
+    let globalIndex = 0;
+
+    for (const groupKey of sortedGroupKeys()) {
+      starts.set(groupKey, globalIndex);
+      globalIndex += (groups[groupKey] || []).length;
+    }
+
+    return starts;
+  });
+
+  const windowedGroupedGuests = createMemo<Record<string, WorkloadGuest[]>>(() => {
+    const groups = groupedGuests();
+    if (!groupedWindowing.isWindowed()) {
+      return groups;
+    }
+
+    const starts = groupStartIndexByKey();
+    const result: Record<string, WorkloadGuest[]> = {};
+    for (const groupKey of sortedGroupKeys()) {
+      const guests = groups[groupKey] || [];
+      const groupStart = starts.get(groupKey) ?? 0;
+      const visible = groupedWindowing.getVisibleSlice(groupKey, guests, groupStart);
+      if (visible.length > 0) {
+        result[groupKey] = visible;
+      }
+    }
+
+    return result;
+  });
+
+  const visibleGroupKeys = createMemo(() => {
+    const keys = sortedGroupKeys();
+    if (!groupedWindowing.isWindowed()) return keys;
+    const groups = windowedGroupedGuests();
+    return keys.filter((groupKey) => (groups[groupKey] || []).length > 0);
+  });
+
+  const topSpacerHeight = createMemo(() =>
+    groupedWindowing.isWindowed()
+      ? groupedWindowing.startIndex() * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT
+      : 0,
+  );
+
+  const bottomSpacerHeight = createMemo(() =>
+    groupedWindowing.isWindowed()
+      ? Math.max(
+          0,
+          (filteredGuests().length - groupedWindowing.endIndex()) *
+            DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+        )
+      : 0,
+  );
+
+  const syncGuestWindowToViewport = () => {
+    if (!groupedWindowing.isWindowed() || typeof window === 'undefined') return;
+    const body = tableBodyRef();
+    if (!body) return;
+    const rect = body.getBoundingClientRect();
+    const scrollTop = Math.max(0, -rect.top);
+    groupedWindowing.onScroll(scrollTop, window.innerHeight, DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT);
+  };
+
+  createEffect(() => {
+    if (typeof window === 'undefined') return;
+    filteredGuests().length;
+    if (!groupedWindowing.isWindowed()) return;
+    if (!tableBodyRef()) return;
+
+    const handleViewportChange = () => {
+      syncGuestWindowToViewport();
+    };
+
+    handleViewportChange();
+    window.addEventListener('scroll', handleViewportChange, { passive: true });
+    window.addEventListener('resize', handleViewportChange);
+    onCleanup(() => {
+      window.removeEventListener('scroll', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
+    });
+  });
+
+  const totalStats = createMemo<WorkloadStats>(() => computeWorkloadStats(filteredGuests()));
+
+  const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     logger.debug('handleNodeSelect called', { nodeId, nodeType });
 
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
+      setSelectedHostHint(null);
       setSelectedNode(nodeId);
       logger.debug('Set selected node', { nodeId });
       // Show filters if a node is selected
@@ -857,47 +1359,32 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
-
-
   return (
     <div class="space-y-3">
-      {/* Section nav - hidden in kiosk mode */}
-      <Show when={!kioskMode()}>
-        <ProxmoxSectionNav current="overview" />
+      <Show when={isWorkloadsRoute() && !workloadsSummaryCollapsed()}>
+        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
+          <WorkloadsSummary
+            timeRange={workloadsSummaryRange()}
+            onTimeRangeChange={setWorkloadsSummaryRange}
+            selectedNodeId={selectedNode()}
+            fallbackGuestCounts={workloadsSummaryFallbackCounts()}
+            fallbackSnapshots={workloadsSummaryFallbackSnapshots()}
+            visibleWorkloadIds={workloadsSummaryVisibleIds()}
+            hoveredWorkloadId={hoveredWorkloadId()}
+            focusedWorkloadId={selectedGuestId()}
+          />
+        </div>
       </Show>
 
-      {/* Unified Node Selector - always visible (this is the main dashboard content) */}
-      <UnifiedNodeSelector
+      {/* Infrastructure selector - infrastructure summary (hidden on workloads) */}
+      <InfrastructureSelector
         currentTab="dashboard"
         globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
-        filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}
-        filteredContainers={filteredGuests().filter((g) => g.type === 'lxc' || g.type === 'oci')}
         searchTerm={search()}
+        showNodeSummary={!isWorkloadsRoute()}
       />
-
-      {/* Dashboard Filter - hidden in kiosk mode */}
-      <Show when={!kioskMode()}>
-        <DashboardFilter
-          search={search}
-          setSearch={setSearch}
-          isSearchLocked={isSearchLocked}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          statusMode={statusMode}
-          setStatusMode={setStatusMode}
-          groupingMode={groupingMode}
-          setGroupingMode={setGroupingMode}
-          setSortKey={setSortKey}
-          setSortDirection={setSortDirection}
-          searchInputRef={(el) => (searchInputRef = el)}
-          availableColumns={columnVisibility.availableToggles()}
-          isColumnHidden={columnVisibility.isHiddenByUser}
-          onColumnToggle={columnVisibility.toggle}
-          onColumnReset={columnVisibility.resetToDefaults}
-        />
-      </Show>
 
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
@@ -905,7 +1392,7 @@ export function Dashboard(props: DashboardProps) {
           <EmptyState
             icon={
               <svg
-                class="mx-auto h-12 w-12 animate-spin text-gray-400"
+                class="mx-auto h-12 w-12 animate-spin text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -924,31 +1411,27 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="Loading dashboard data..."
-            description={
-              reconnecting()
-                ? 'Reconnecting to monitoring service…'
-                : 'Connecting to monitoring service'
-            }
+            title={dashboardLoadingState().title}
+            description={dashboardLoadingState().description}
           />
         </Card>
       </Show>
 
-      {/* Empty State - No PVE Nodes Configured */}
+      {/* Empty state when no infrastructure has connected yet */}
       <Show
         when={
           connected() &&
           initialDataReceived() &&
-          props.nodes.filter((n) => n.type === 'pve').length === 0 &&
-          props.vms.length === 0 &&
-          props.containers.length === 0
+          !workloads.loading() &&
+          props.nodes.length === 0 &&
+          allGuests().length === 0
         }
       >
         <Card padding="lg">
           <EmptyState
             icon={
               <svg
-                class="h-12 w-12 text-gray-400"
+                class="h-12 w-12 text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -961,16 +1444,18 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="No Proxmox VE nodes configured"
-            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Proxmox."
+            title={dashboardInfrastructureEmptyState().title}
+            description={dashboardInfrastructureEmptyState().description}
             actions={
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Go to Settings
-              </button>
+              !kioskMode() ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings')}
+                  class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  {dashboardInfrastructureEmptyState().actionLabel}
+                </button>
+              ) : undefined
             }
           />
         </Card>
@@ -995,20 +1480,16 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="Connection lost"
-            description={
-              reconnecting()
-                ? 'Attempting to reconnect…'
-                : 'Unable to connect to the backend server'
-            }
+            title={dashboardDisconnectedState().title}
+            description={dashboardDisconnectedState().description}
             tone="danger"
             actions={
-              !reconnecting() ? (
+              dashboardDisconnectedState().actionLabel ? (
                 <button
                   onClick={() => reconnect()}
                   class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                 >
-                  Reconnect now
+                  {dashboardDisconnectedState().actionLabel}
                 </button>
               ) : undefined
             }
@@ -1016,36 +1497,145 @@ export function Dashboard(props: DashboardProps) {
         </Card>
       </Show>
 
+      {/* Dashboard Filter - hidden in kiosk mode */}
+      <Show when={!kioskMode() && connected() && initialDataReceived() && allGuests().length > 0}>
+        <DashboardFilter
+          search={search}
+          setSearch={setSearch}
+          isSearchLocked={isSearchLocked}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          statusMode={statusMode}
+          setStatusMode={setStatusMode}
+          groupingMode={groupingMode}
+          setGroupingMode={setGroupingMode}
+          setSortKey={setSortKey}
+          setSortDirection={setSortDirection}
+          onBeforeAutoFocus={() => {
+            if (aiChatStore.focusInput()) return true;
+            if (!showFilters()) setShowFilters(true);
+            return false;
+          }}
+          availableColumns={columnVisibility.availableToggles()}
+          isColumnHidden={columnVisibility.isHiddenByUser}
+          onColumnToggle={columnVisibility.toggle}
+          onColumnReset={columnVisibility.resetToDefaults}
+          chartsCollapsed={isWorkloadsRoute() ? workloadsSummaryCollapsed : undefined}
+          onChartsToggle={
+            isWorkloadsRoute() ? () => setWorkloadsSummaryCollapsed((c) => !c) : undefined
+          }
+          containerRuntimeFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() !== 'app-container') return undefined;
+            const options = containerRuntimeOptions();
+            if (options.length === 0) return undefined;
+            return {
+              id: 'workloads-container-runtime-filter',
+              label: 'Runtime',
+              value: containerRuntime(),
+              options: [
+                { value: '', label: 'All runtimes' },
+                ...options.map((value) => ({ value, label: value })),
+              ],
+              onChange: (value: string) => setContainerRuntime(value),
+            };
+          })()}
+          hostFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() === 'pod') {
+              return {
+                id: 'workloads-k8s-context-filter',
+                label: 'Cluster',
+                value: selectedKubernetesContext() ?? '',
+                options: [
+                  { value: '', label: 'All clusters' },
+                  ...kubernetesContextOptions().map((context) => ({
+                    value: context,
+                    label: context,
+                  })),
+                ],
+                onChange: (value: string) => setSelectedKubernetesContext(value || null),
+              };
+            }
+            return {
+              id: 'workloads-node-filter',
+              label: 'Node',
+              value: selectedNode() ?? '',
+              options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions()],
+              onChange: (value: string) => {
+                setSelectedHostHint(null);
+                handleNodeSelect(value || null, value ? 'pve' : null);
+              },
+            };
+          })()}
+          namespaceFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() !== 'pod') return undefined;
+            const options = kubernetesNamespaceOptions();
+            if (options.length === 0) return undefined;
+            return {
+              id: 'workloads-k8s-namespace-filter',
+              label: 'Namespace',
+              value: selectedKubernetesNamespace() ?? '',
+              options: [
+                { value: '', label: 'All namespaces' },
+                ...options.map((value) => ({ value, label: value })),
+              ],
+              onChange: (value: string) => setSelectedKubernetesNamespace(value || null),
+            };
+          })()}
+        />
+      </Show>
+
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-            <div ref={tableRef} class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
-                <thead>
-                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    <For each={visibleColumns()}>
+          <Card padding="none" tone="card" class="mb-4 rounded-md">
+            <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+              Workloads
+            </div>
+            <div class="overflow-x-auto">
+              <Table
+                wrapperRef={(el) => (tableRef = el)}
+                class="whitespace-nowrap min-w-[max-content]"
+                style={{
+                  'table-layout': 'fixed',
+                  'min-width': isMobile() ? '100%' : 'max-content',
+                }}
+              >
+                <TableHeader>
+                  <TableRow class="bg-surface-alt text-muted border-b border-border">
+                    <For each={mobileVisibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
-                        const sortKeyForCol = col.sortKey as keyof (VM | Container) | undefined;
+                        const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
                         const isSortable = !!sortKeyForCol;
                         const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
                         return (
-                          <th
-                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
-                                  ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
-                                  ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                          <TableHead
+                            class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+ ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
+ ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                             style={{
-                              ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "60px" : "140px" }
-                                : (col.width ? { "width": col.width } : {})),
-                              "vertical-align": 'middle'
+                              ...(['cpu', 'memory', 'disk'].includes(col.id)
+                                ? { width: isMobile() ? '70px' : '140px' }
+                                : ['netIo', 'diskIo'].includes(col.id)
+                                  ? { width: isMobile() ? '170px' : '170px' }
+                                  : isMobile() && col.id === 'name'
+                                    ? { width: '100%', 'min-width': '120px' }
+                                    : col.width
+                                      ? { width: col.width }
+                                      : {}),
+                              'vertical-align': 'middle',
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
                             title={col.icon ? col.label : undefined}
                           >
-                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                            <div
+                              class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
+                              style={{ 'min-height': '14px' }}
+                            >
                               {col.icon ? (
                                 <span class="flex items-center">{col.icon}</span>
                               ) : (
@@ -1053,83 +1643,143 @@ export function Dashboard(props: DashboardProps) {
                               )}
                               {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                             </div>
-                          </th>
+                          </TableHead>
                         );
                       }}
                     </For>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <For
-                    each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                      const nodeA = nodeByInstance()[instanceIdA];
-                      const nodeB = nodeByInstance()[instanceIdB];
-                      const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
-                      const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
-                      return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
-                    })}
-                    fallback={<></>}
-                  >
-                    {([instanceId, guests]) => {
-                      const node = nodeByInstance()[instanceId];
+                  </TableRow>
+                </TableHeader>
+                <TableBody ref={setTableBodyRef} class="divide-y divide-border">
+                  <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
+                    <TableRow aria-hidden="true">
+                      <TableCell
+                        colspan={totalColumns()}
+                        style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }}
+                      />
+                    </TableRow>
+                  </Show>
+                  {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
+                  <For each={visibleGroupKeys()} fallback={<></>}>
+                    {(groupKey) => {
+                      const groupGuests = () => windowedGroupedGuests()[groupKey] || [];
+                      const fullGroupGuests = () => groupedGuests()[groupKey] || [];
+                      const node = () => nodeByInstance()[groupKey];
                       return (
                         <>
-                          <Show when={node && groupingMode() === 'grouped'}>
-                            <NodeGroupHeader node={node!} renderAs="tr" colspan={totalColumns()} />
+                          <Show when={groupingMode() === 'grouped'}>
+                            <Show
+                              when={node()}
+                              fallback={
+                                <TableRow class="bg-surface-alt">
+                                  <TableCell
+                                    colspan={totalColumns()}
+                                    class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
+                                  >
+                                    {(() => {
+                                      const label = getGroupLabel(groupKey, fullGroupGuests());
+                                      return (
+                                        <div class="flex items-center gap-3">
+                                          <span>{label.name}</span>
+                                          <Show when={label.type}>
+                                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                              {label.type}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      );
+                                    })()}
+                                  </TableCell>
+                                </TableRow>
+                              }
+                            >
+                              <NodeGroupHeader
+                                node={node()!}
+                                renderAs="tr"
+                                colspan={totalColumns()}
+                              />
+                            </Show>
                           </Show>
-                          <For each={guests} fallback={<></>}>
+                          {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
+                          <Index each={groupGuests()} fallback={<></>}>
                             {(guest) => {
-                              // Use canonical format: instance:node:vmid
-                              const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
-                              // Create a getter function for metadata to ensure reactivity
-                              // Accessing guestMetadata() in a plain variable breaks SolidJS reactivity
+                              const guestId = () => {
+                                const g = guest();
+                                return getCanonicalWorkloadId(g);
+                              };
                               const getMetadata = () =>
-                                guestMetadata()[guestId] ||
-                                guestMetadata()[`${guest.instance}:${guest.node}:${guest.vmid}`];
-                              // PERFORMANCE: Use pre-computed parent node map instead of resolveParentNode
-                              const parentNode = node ?? guestParentNodeMap().get(guestId);
-                              const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                                guestMetadata()[guestId()] ||
+                                guestMetadata()[
+                                  `${guest().instance}:${guest().node}:${guest().vmid}`
+                                ];
+                              const parentNode = () => node() ?? guestParentNodeMap()[guestId()];
+                              const parentNodeOnline = () => {
+                                const pn = parentNode();
+                                return pn ? isNodeOnline(pn) : true;
+                              };
 
                               return (
                                 <ComponentErrorBoundary name="GuestRow">
                                   <GuestRow
-                                    guest={guest}
-                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                    guest={guest()}
+                                    alertStyles={getAlertStyles(
+                                      guestId(),
+                                      activeAlerts,
+                                      alertsEnabled(),
+                                    )}
                                     customUrl={getMetadata()?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
-                                    parentNodeOnline={parentNodeOnline}
+                                    parentNodeOnline={parentNodeOnline()}
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
-                                    visibleColumnIds={visibleColumnIds()}
-                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId ? null : guestId)}
-                                    isExpanded={selectedGuestId() === guestId}
+                                    visibleColumnIds={mobileVisibleColumnIds()}
+                                    onClick={() =>
+                                      setSelectedGuestId(
+                                        selectedGuestId() === guestId() ? null : guestId(),
+                                      )
+                                    }
+                                    isExpanded={selectedGuestId() === guestId()}
+                                    ioEmphasis={workloadIOEmphasis()}
+                                    onHoverChange={setHoveredWorkloadId}
                                   />
-                                  <Show when={selectedGuestId() === guestId}>
-                                    <tr>
-                                      <td colspan={totalColumns()} class="p-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                                        <div class="p-4" onClick={(e) => e.stopPropagation()}>
+                                  <Show when={selectedGuestId() === guestId()}>
+                                    <TableRow>
+                                      <TableCell
+                                        colspan={totalColumns()}
+                                        class="p-0 border-b border-border bg-surface-alt"
+                                      >
+                                        <div
+                                          class="px-2 sm:px-4 py-3 sm:py-4"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                           <GuestDrawer
-                                            guest={guest}
-                                            metricsKey={buildMetricKey(guest.type === 'qemu' ? 'vm' : 'container', guestId)}
+                                            guest={guest()}
                                             onClose={() => setSelectedGuestId(null)}
                                             customUrl={getMetadata()?.customUrl}
                                             onCustomUrlChange={handleCustomUrlUpdate}
                                           />
                                         </div>
-                                      </td>
-                                    </tr>
+                                      </TableCell>
+                                    </TableRow>
                                   </Show>
                                 </ComponentErrorBoundary>
                               );
                             }}
-                          </For>
+                          </Index>
                         </>
                       );
                     }}
                   </For>
-                </tbody>
-              </table>
+                  <Show when={groupedWindowing.isWindowed() && bottomSpacerHeight() > 0}>
+                    <TableRow aria-hidden="true">
+                      <TableCell
+                        colspan={totalColumns()}
+                        style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }}
+                      />
+                    </TableRow>
+                  </Show>
+                </TableBody>
+              </Table>
             </div>
           </Card>
         </ComponentErrorBoundary>
@@ -1140,14 +1790,14 @@ export function Dashboard(props: DashboardProps) {
           connected() &&
           initialDataReceived() &&
           filteredGuests().length === 0 &&
-          (props.vms.length > 0 || props.containers.length > 0)
+          allGuests().length > 0
         }
       >
         <Card padding="lg" class="mb-4">
           <EmptyState
             icon={
               <svg
-                class="h-12 w-12 text-gray-400"
+                class="h-12 w-12 text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1160,12 +1810,8 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="No guests found"
-            description={
-              search() && search().trim() !== ''
-                ? `No guests match your search "${search()}"`
-                : 'No guests match your current filters'
-            }
+            title={dashboardGuestsEmptyState().title}
+            description={dashboardGuestsEmptyState().description}
           />
         </Card>
       </Show>
@@ -1173,20 +1819,20 @@ export function Dashboard(props: DashboardProps) {
       {/* Stats */}
       <Show when={connected() && initialDataReceived()}>
         <div class="mb-4">
-          <div class="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
-            <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+          <div class="flex items-center gap-2 p-2 bg-surface-alt border border-border rounded">
+            <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-green-500 rounded-full"></span>
               {totalStats().running} running
             </span>
             <Show when={totalStats().degraded > 0}>
-              <span class="text-gray-400">|</span>
-              <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+              <span class="text-slate-400">|</span>
+              <span class="flex items-center gap-1 text-xs text-muted">
                 <span class="h-2 w-2 bg-orange-500 rounded-full"></span>
                 {totalStats().degraded} degraded
               </span>
             </Show>
-            <span class="text-gray-400">|</span>
-            <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+            <span class="text-slate-400">|</span>
+            <span class="flex items-center gap-1 text-xs text-muted">
               <span class="h-2 w-2 bg-red-500 rounded-full"></span>
               {totalStats().stopped} stopped
             </span>
@@ -1194,6 +1840,7 @@ export function Dashboard(props: DashboardProps) {
         </div>
       </Show>
 
+      <ScrollToTopButton />
     </div>
   );
 }

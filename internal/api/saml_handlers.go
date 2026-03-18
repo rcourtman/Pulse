@@ -40,7 +40,7 @@ func (m *SAMLServiceManager) GetService(providerID string) *SAMLService {
 func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig) error {
 	service, err := NewSAMLService(ctx, providerID, cfg, m.baseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("initialize SAML provider %q: %w", providerID, err)
 	}
 
 	m.mu.Lock()
@@ -205,18 +205,16 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// RBAC Integration: Map SAML groups to Pulse roles and ensure user is registered
-	if authManager := internalauth.GetManager(); authManager != nil {
+	// RBAC Integration: Map SAML groups to Pulse roles
+	if authManager := internalauth.GetManager(); authManager != nil && len(provider.GroupRoleMappings) > 0 {
 		var rolesToAssign []string
 		seenRoles := make(map[string]bool)
 
-		if len(provider.GroupRoleMappings) > 0 {
-			for _, group := range result.Groups {
-				if roleID, ok := provider.GroupRoleMappings[group]; ok {
-					if !seenRoles[roleID] {
-						rolesToAssign = append(rolesToAssign, roleID)
-						seenRoles[roleID] = true
-					}
+		for _, group := range result.Groups {
+			if roleID, ok := provider.GroupRoleMappings[group]; ok {
+				if !seenRoles[roleID] {
+					rolesToAssign = append(rolesToAssign, roleID)
+					seenRoles[roleID] = true
 				}
 			}
 		}
@@ -232,9 +230,6 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 			} else {
 				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
-		} else if _, exists := authManager.GetUserAssignment(result.Username); !exists {
-			// Ensure SSO user appears in the Users list even without role mappings
-			_ = authManager.UpdateUserRoles(result.Username, []string{})
 		}
 	}
 
@@ -391,6 +386,9 @@ type SAMLSessionInfo struct {
 
 // establishSAMLSession creates a session for a SAML-authenticated user
 func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, username string, samlInfo *SAMLSessionInfo) error {
+	// Invalidate any pre-existing session to prevent session fixation attacks.
+	InvalidateOldSessionFromRequest(req)
+
 	token := generateSessionToken()
 	if token == "" {
 		return fmt.Errorf("failed to generate session token")
@@ -420,7 +418,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
+		Name:     sessionCookieName(isSecure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -430,7 +428,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    csrfToken,
 		Path:     "/",
 		Secure:   isSecure,
@@ -443,7 +441,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 
 // getSAMLSessionInfo retrieves SAML session info from the current session
 func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
-	cookie, err := req.Cookie("pulse_session")
+	cookie, err := readSessionCookie(req)
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
@@ -466,7 +464,7 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 	isSecure, sameSitePolicy := getCookieSettings(req)
 
 	// Invalidate server-side session first
-	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 		// Get username before deleting session for untracking
 		if username := GetSessionUsername(cookie.Value); username != "" {
 			UntrackUserSession(username, cookie.Value)
@@ -474,20 +472,22 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 		GetSessionStore().InvalidateSession(cookie.Value)
 	}
 
-	// Clear pulse_session cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-	})
+	// Clear both session cookie variants (prefixed and unprefixed)
+	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+		})
+	}
 
 	// Clear pulse_csrf cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,

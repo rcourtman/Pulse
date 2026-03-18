@@ -74,7 +74,7 @@ type alertWrapper struct {
 	alert *alerts.Alert
 }
 
-func (w *alertWrapper) GetAlertID() string {
+func (w *alertWrapper) GetAlertIdentifier() string {
 	if w.alert == nil {
 		return ""
 	}

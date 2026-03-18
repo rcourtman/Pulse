@@ -11,10 +11,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
+
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
 // Tier represents the granularity of stored metrics
@@ -81,7 +84,7 @@ type WriteMetric struct {
 
 // Store provides persistent metrics storage
 type Store struct {
-	db     *sql.DB
+	db     *pdb.InstrumentedDB
 	config StoreConfig
 
 	// Write buffer
@@ -93,6 +96,7 @@ type Store struct {
 	stopCh   chan struct{}
 	doneCh   chan struct{}
 	stopOnce sync.Once
+	stopping atomic.Bool
 }
 
 // NewStore creates a new metrics store with the given configuration
@@ -113,15 +117,17 @@ func NewStore(config StoreConfig) (*Store, error) {
 			"wal_autocheckpoint(500)",
 		},
 	}.Encode()
-	db, err := sql.Open("sqlite", dsn)
+	rawDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metrics database: %w", err)
 	}
 
 	// Configure connection pool (SQLite works best with single writer)
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0)
+	rawDB.SetMaxOpenConns(1)
+	rawDB.SetMaxIdleConns(1)
+	rawDB.SetConnMaxLifetime(0)
+
+	db := pdb.Wrap(rawDB, "metrics")
 
 	store := &Store{
 		db:      db,
@@ -137,6 +143,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
+	store.migrateLegacyHostResourceType()
 
 	// Clean up stale data from previous runs before starting the background worker.
 	// This prevents accumulation if Pulse was restarted before hourly retention ran.
@@ -199,8 +206,6 @@ func (s *Store) initSchema() error {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
-	// Ensure rollups (and any reprocessing after failed checkpoints) don't create duplicate rows.
-	// We enforce uniqueness on the natural key so we can use INSERT OR IGNORE for rollups.
 	if err := s.ensureMetricsUniqueIndex(); err != nil {
 		return err
 	}
@@ -235,7 +240,6 @@ func (s *Store) ensureMetricsUniqueIndex() error {
 	}
 	defer tx.Rollback()
 
-	// Keep the earliest row (lowest id) for each natural key.
 	_, txErr = tx.Exec(`
 		DELETE FROM metrics
 		WHERE id NOT IN (
@@ -289,6 +293,104 @@ func (s *Store) migrateAutoVacuum() {
 	log.Info().Dur("duration", time.Since(start)).Msg("Metrics database auto-vacuum migration complete")
 }
 
+// migrateLegacyHostResourceType rewrites legacy v5 `resource_type=host` rows to
+// canonical v6 `resource_type=agent`. This keeps reads/writes agent-only while
+// preserving historical data.
+func (s *Store) migrateLegacyHostResourceType() {
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to start legacy host->agent metrics migration")
+		return
+	}
+	defer tx.Rollback()
+
+	// Reinsert legacy rows with canonical type, keeping any existing canonical
+	// records when duplicates collide with the unique index.
+	if _, err := tx.Exec(`
+		INSERT OR IGNORE INTO metrics (
+			resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier
+		)
+		SELECT
+			'agent', resource_id, metric_type, value, min_value, max_value, timestamp, tier
+		FROM metrics
+		WHERE resource_type = 'host'
+	`); err != nil {
+		log.Warn().Err(err).Msg("Failed to copy legacy host metrics rows")
+		return
+	}
+
+	deleteResult, err := tx.Exec(`DELETE FROM metrics WHERE resource_type = 'host'`)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to delete legacy host metrics rows")
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Warn().Err(err).Msg("Failed to commit legacy host->agent metrics migration")
+		return
+	}
+
+	rowsDeleted, err := deleteResult.RowsAffected()
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to read affected rows for legacy host->agent migration")
+		return
+	}
+	if rowsDeleted > 0 {
+		log.Info().Int64("rows", rowsDeleted).Msg("Migrated legacy host metrics rows to agent")
+	}
+}
+
+func normalizeMetricResourceType(resourceType string) string {
+	return strings.ToLower(strings.TrimSpace(resourceType))
+}
+
+func normalizeMetricType(metricType string) string {
+	return strings.ToLower(strings.TrimSpace(metricType))
+}
+
+func normalizeMetricIdentifier(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func isLegacyMetricResourceType(resourceType string) bool {
+	return strings.EqualFold(strings.TrimSpace(resourceType), "host")
+}
+
+func isSupportedMetricTier(tier Tier) bool {
+	switch tier {
+	case TierRaw, TierMinute, TierHourly, TierDaily:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateMetricWrite(resourceType, resourceID, metricType string, tier Tier) (string, string, string, bool, string) {
+	normalizedType := normalizeMetricResourceType(resourceType)
+	if normalizedType == "" {
+		return "", "", "", false, "empty resource type"
+	}
+	if isLegacyMetricResourceType(normalizedType) {
+		return "", "", "", false, `unsupported legacy resource type "host"`
+	}
+
+	normalizedID := normalizeMetricIdentifier(resourceID)
+	if normalizedID == "" {
+		return "", "", "", false, "empty resource id"
+	}
+
+	normalizedMetric := normalizeMetricType(metricType)
+	if normalizedMetric == "" {
+		return "", "", "", false, "empty metric type"
+	}
+
+	if !isSupportedMetricTier(tier) {
+		return "", "", "", false, fmt.Sprintf("unsupported metric tier %q", tier)
+	}
+
+	return normalizedType, normalizedID, normalizedMetric, true, ""
+}
+
 // Write adds a metric to the write buffer with the 'raw' tier by default
 func (s *Store) Write(resourceType, resourceID, metricType string, value float64, timestamp time.Time) {
 	s.WriteWithTier(resourceType, resourceID, metricType, value, timestamp, TierRaw)
@@ -296,13 +398,33 @@ func (s *Store) Write(resourceType, resourceID, metricType string, value float64
 
 // WriteWithTier adds a metric to the write buffer with a specific tier
 func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value float64, timestamp time.Time, tier Tier) {
+	if s.stopping.Load() {
+		return
+	}
+
+	normalizedType, normalizedID, normalizedMetric, ok, reason := validateMetricWrite(resourceType, resourceID, metricType, tier)
+	if !ok {
+		log.Warn().
+			Str("resource_type", resourceType).
+			Str("resource_id", resourceID).
+			Str("metric_type", metricType).
+			Str("tier", string(tier)).
+			Str("reason", reason).
+			Msg("Dropping invalid metrics write")
+		return
+	}
+
 	s.bufferMu.Lock()
 	defer s.bufferMu.Unlock()
 
+	if s.stopping.Load() {
+		return
+	}
+
 	s.buffer = append(s.buffer, bufferedMetric{
-		resourceType: resourceType,
-		resourceID:   resourceID,
-		metricType:   metricType,
+		resourceType: normalizedType,
+		resourceID:   normalizedID,
+		metricType:   normalizedMetric,
 		value:        value,
 		timestamp:    timestamp,
 		tier:         tier,
@@ -320,16 +442,42 @@ func (s *Store) WriteBatchSync(metrics []WriteMetric) {
 		return
 	}
 
-	batch := make([]bufferedMetric, len(metrics))
-	for i, metric := range metrics {
-		batch[i] = bufferedMetric{
-			resourceType: metric.ResourceType,
-			resourceID:   metric.ResourceID,
-			metricType:   metric.MetricType,
+	batch := make([]bufferedMetric, 0, len(metrics))
+	droppedInvalid := 0
+	for _, metric := range metrics {
+		normalizedType, normalizedID, normalizedMetric, ok, reason := validateMetricWrite(
+			metric.ResourceType,
+			metric.ResourceID,
+			metric.MetricType,
+			metric.Tier,
+		)
+		if !ok {
+			droppedInvalid++
+			log.Warn().
+				Str("resource_type", metric.ResourceType).
+				Str("resource_id", metric.ResourceID).
+				Str("metric_type", metric.MetricType).
+				Str("tier", string(metric.Tier)).
+				Str("reason", reason).
+				Msg("Dropping invalid metrics write from batch")
+			continue
+		}
+		batch = append(batch, bufferedMetric{
+			resourceType: normalizedType,
+			resourceID:   normalizedID,
+			metricType:   normalizedMetric,
 			value:        metric.Value,
 			timestamp:    metric.Timestamp,
 			tier:         metric.Tier,
-		}
+		})
+	}
+	if droppedInvalid > 0 {
+		log.Warn().
+			Int("dropped", droppedInvalid).
+			Msg("Dropped invalid metrics writes from batch")
+	}
+	if len(batch) == 0 {
+		return
 	}
 
 	s.writeBatch(batch)
@@ -350,7 +498,13 @@ func (s *Store) flushLocked() {
 	select {
 	case s.writeCh <- toWrite:
 	default:
-		log.Warn().Msg("Metrics write channel full, dropping batch")
+		log.Warn().
+			Str("component", "metrics_store").
+			Str("action", "drop_write_batch").
+			Int("batch_size", len(toWrite)).
+			Int("write_queue_depth", len(s.writeCh)).
+			Int("write_queue_capacity", cap(s.writeCh)).
+			Msg("Metrics write channel full, dropping batch")
 	}
 }
 
@@ -360,7 +514,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		return
 	}
 
-	var tx *sql.Tx
+	var tx *pdb.InstrumentedTx
 	var err error
 
 	// Retry on SQLITE_BUSY with exponential backoff
@@ -373,7 +527,11 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
-		log.Error().Err(err).Msg("Failed to begin metrics transaction")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "begin_write_tx").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to begin metrics transaction")
 		return
 	}
 
@@ -383,7 +541,11 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	`)
 	if err != nil {
 		tx.Rollback()
-		log.Error().Err(err).Msg("Failed to prepare metrics insert")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "prepare_write_stmt").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to prepare metrics insert")
 		return
 	}
 	defer stmt.Close()
@@ -392,14 +554,22 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		_, err := stmt.Exec(m.resourceType, m.resourceID, m.metricType, m.value, m.timestamp.Unix(), string(m.tier))
 		if err != nil {
 			log.Warn().Err(err).
-				Str("resource", m.resourceID).
-				Str("metric", m.metricType).
+				Str("component", "metrics_store").
+				Str("action", "insert_metric").
+				Str("resource_type", m.resourceType).
+				Str("resource_id", m.resourceID).
+				Str("metric_type", m.metricType).
+				Str("tier", string(m.tier)).
 				Msg("Failed to insert metric")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("Failed to commit metrics batch")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "commit_write_tx").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to commit metrics batch")
 		return
 	}
 
@@ -408,6 +578,9 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 
 // Query retrieves metrics for a resource within a time range, with optional downsampling
 func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
+	resourceType = normalizeMetricResourceType(resourceType)
+	resourceID = normalizeMetricIdentifier(resourceID)
+	metricType = normalizeMetricType(metricType)
 	tiers := s.tierFallbacks(end.Sub(start))
 	if len(tiers) == 0 {
 		return []MetricPoint{}, nil
@@ -498,6 +671,8 @@ func (s *Store) queryWithTier(resourceType, resourceID, metricType string, start
 
 // QueryAll retrieves all metric types for a resource within a time range, with optional downsampling
 func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
+	resourceType = normalizeMetricResourceType(resourceType)
+	resourceID = normalizeMetricIdentifier(resourceID)
 	tiers := s.tierFallbacks(end.Sub(start))
 	if len(tiers) == 0 {
 		return map[string][]MetricPoint{}, nil
@@ -612,6 +787,164 @@ func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end tim
 	return result, rows.Err()
 }
 
+// queryAllBatchChunkSize limits the number of resource IDs per SQL IN clause
+// to stay well within SQLite's host-parameter ceiling and keep individual
+// queries fast.
+const queryAllBatchChunkSize = 500
+
+// QueryAllBatch retrieves all metric types for multiple resources of the same
+// type in a single query. Returns map[resourceID]map[metricType][]MetricPoint.
+// This avoids N+1 query patterns when loading charts for many resources.
+// Resource IDs are deduplicated and chunked to stay within SQLite limits.
+func (s *Store) QueryAllBatch(resourceType string, resourceIDs []string, start, end time.Time, stepSecs int64) (map[string]map[string][]MetricPoint, error) {
+	resourceType = normalizeMetricResourceType(resourceType)
+	// Deduplicate resource IDs.
+	seen := make(map[string]struct{}, len(resourceIDs))
+	unique := make([]string, 0, len(resourceIDs))
+	for _, id := range resourceIDs {
+		normalizedID := normalizeMetricIdentifier(id)
+		if normalizedID == "" {
+			continue
+		}
+		if _, dup := seen[normalizedID]; !dup {
+			seen[normalizedID] = struct{}{}
+			unique = append(unique, normalizedID)
+		}
+	}
+	if len(unique) == 0 {
+		return map[string]map[string][]MetricPoint{}, nil
+	}
+
+	tiers := s.tierFallbacks(end.Sub(start))
+	if len(tiers) == 0 {
+		return map[string]map[string][]MetricPoint{}, nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(unique))
+	unresolved := unique
+
+	for _, tier := range tiers {
+		if len(unresolved) == 0 {
+			break
+		}
+
+		nextUnresolved := make([]string, 0, len(unresolved))
+
+		// Process in chunks to stay within SQLite parameter limits.
+		for lo := 0; lo < len(unresolved); lo += queryAllBatchChunkSize {
+			hi := lo + queryAllBatchChunkSize
+			if hi > len(unresolved) {
+				hi = len(unresolved)
+			}
+			chunk := unresolved[lo:hi]
+			tierResult, err := s.queryAllBatchWithTier(resourceType, chunk, start, end, stepSecs, tier)
+			if err != nil {
+				return nil, err
+			}
+
+			// Match QueryAll semantics per resource: once any tier returns data
+			// for a resource, stop falling back for that resource.
+			for _, resID := range chunk {
+				metricMap, found := tierResult[resID]
+				if !found || len(metricMap) == 0 {
+					nextUnresolved = append(nextUnresolved, resID)
+					continue
+				}
+				result[resID] = metricMap
+			}
+		}
+
+		unresolved = nextUnresolved
+	}
+
+	return result, nil
+}
+
+func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string, start, end time.Time, stepSecs int64, tier Tier) (map[string]map[string][]MetricPoint, error) {
+	placeholders := make([]string, len(resourceIDs))
+	for i := range resourceIDs {
+		placeholders[i] = "?"
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	var params []interface{}
+	var sqlQuery string
+
+	if stepSecs > 1 {
+		params = make([]interface{}, 0, len(resourceIDs)+7)
+		params = append(params, stepSecs, stepSecs, stepSecs, resourceType)
+		for _, id := range resourceIDs {
+			params = append(params, id)
+		}
+		params = append(params, string(tier), start.Unix(), end.Unix())
+
+		sqlQuery = fmt.Sprintf(`
+			SELECT
+				resource_id,
+				metric_type,
+				(timestamp / ?) * ? + (? / 2) as bucket_ts,
+				AVG(value),
+				MIN(COALESCE(min_value, value)),
+				MAX(COALESCE(max_value, value))
+			FROM metrics
+			WHERE resource_type = ? AND resource_id IN (%s) AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			GROUP BY resource_id, metric_type, bucket_ts
+			ORDER BY resource_id, metric_type, bucket_ts ASC
+		`, inClause)
+	} else {
+		params = make([]interface{}, 0, len(resourceIDs)+4)
+		params = append(params, resourceType)
+		for _, id := range resourceIDs {
+			params = append(params, id)
+		}
+		params = append(params, string(tier), start.Unix(), end.Unix())
+
+		sqlQuery = fmt.Sprintf(`
+			SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
+			FROM metrics
+			WHERE resource_type = ? AND resource_id IN (%s) AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			ORDER BY resource_id, metric_type, timestamp ASC
+		`, inClause)
+	}
+
+	// Retry on SQLITE_BUSY
+	var rows *sql.Rows
+	var err error
+	for i := 0; i < 5; i++ {
+		rows, err = s.db.Query(sqlQuery, params...)
+		if err == nil {
+			break
+		}
+		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
+		return nil, fmt.Errorf("failed to batch query metrics: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string][]MetricPoint)
+	for rows.Next() {
+		var resourceID, metricType string
+		var ts int64
+		var p MetricPoint
+		if err := rows.Scan(&resourceID, &metricType, &ts, &p.Value, &p.Min, &p.Max); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan batch metric row")
+			continue
+		}
+		p.Timestamp = time.Unix(ts, 0)
+
+		if _, exists := result[resourceID]; !exists {
+			result[resourceID] = make(map[string][]MetricPoint)
+		}
+		result[resourceID][metricType] = append(result[resourceID][metricType], p)
+	}
+
+	return result, rows.Err()
+}
+
 // selectTier chooses the appropriate data tier based on time range
 // Note: Tier selection uses fixed thresholds to ensure queries use tiers with complete data:
 // - Raw: up to 2 hours (high-resolution real-time data)
@@ -716,7 +1049,10 @@ func (s *Store) runRollup() {
 	log.Debug().Dur("duration", time.Since(start)).Msg("Metrics rollup completed")
 }
 
-// rollupTier aggregates data from one tier to another
+// rollupTier aggregates data from one tier to another.
+// Uses a single INSERT...SELECT...GROUP BY to batch-rollup all resource/metric
+// combinations at once, replacing the previous N+1 pattern (candidate discovery
+// query + per-candidate INSERT transaction).
 func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Duration) {
 	cutoff := time.Now().Add(-minAge).Unix()
 	bucketSecs := int64(bucketSize.Seconds())
@@ -741,42 +1077,61 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 		return
 	}
 
-	// Find distinct resource/metric combinations that need rollup
-	rows, err := s.db.Query(`
-		SELECT DISTINCT resource_type, resource_id, metric_type
+	// Fast check: skip rollup and preserve the checkpoint if the source tier
+	// has no data in this window. This matches the old per-candidate path's
+	// len(candidates)==0 early return, preventing the checkpoint from advancing
+	// past windows where late or backfilled data may arrive later.
+	var hasSource bool
+	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM metrics WHERE tier = ? AND timestamp >= ? AND timestamp < ?)`,
+		string(fromTier), lastBucket, cutoffBucket).Scan(&hasSource); err != nil {
+		log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to check rollup source data")
+		return
+	}
+	if !hasSource {
+		return
+	}
+
+	// Batch rollup: aggregate ALL resource/metric combinations in a single
+	// SQL statement. The GROUP BY naturally partitions results by
+	// (resource_type, resource_id, metric_type, bucket_ts), producing the
+	// same output as the previous per-candidate loop but in one query and
+	// one transaction instead of N+1.
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to begin rollup transaction")
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
+		SELECT
+			resource_type,
+			resource_id,
+			metric_type,
+			AVG(value) as value,
+			MIN(value) as min_value,
+			MAX(value) as max_value,
+			(timestamp / ?) * ? as bucket_ts,
+			?
 		FROM metrics
 		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
-	`, string(fromTier), lastBucket, cutoffBucket)
+		GROUP BY resource_type, resource_id, metric_type, bucket_ts
+	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), lastBucket, cutoffBucket)
 	if err != nil {
-		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to find rollup candidates")
+		log.Warn().Err(err).
+			Str("from", string(fromTier)).
+			Str("to", string(toTier)).
+			Msg("Failed to batch rollup metrics")
 		return
 	}
 
-	var candidates []struct {
-		resourceType string
-		resourceID   string
-		metricType   string
-	}
-
-	for rows.Next() {
-		var c struct {
-			resourceType string
-			resourceID   string
-			metricType   string
-		}
-		if err := rows.Scan(&c.resourceType, &c.resourceID, &c.metricType); err == nil {
-			candidates = append(candidates, c)
-		}
-	}
-	rows.Close()
-
-	if len(candidates) == 0 {
+	if err := tx.Commit(); err != nil {
+		log.Warn().Err(err).
+			Str("from", string(fromTier)).
+			Str("to", string(toTier)).
+			Msg("Failed to commit rollup transaction")
 		return
-	}
-
-	// Process each candidate
-	for _, c := range candidates {
-		s.rollupCandidate(c.resourceType, c.resourceID, c.metricType, fromTier, toTier, bucketSecs, lastBucket, cutoffBucket)
 	}
 
 	if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
@@ -789,14 +1144,14 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 	if startTs >= endTs {
 		return
 	}
-	tx, err := s.db.Begin()
+	itx, err := s.db.Begin()
 	if err != nil {
 		return
 	}
-	defer tx.Rollback()
+	defer itx.Rollback()
 
 	// Aggregate data into buckets
-	_, err = tx.Exec(`
+	_, err = itx.Exec(`
 		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 		SELECT 
 			resource_type, 
@@ -822,7 +1177,7 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 		return
 	}
 
-	tx.Commit()
+	itx.Commit()
 }
 
 func (s *Store) getMetaInt(key string) (int64, bool) {
@@ -920,6 +1275,7 @@ func (s *Store) SetMaxOpenConns(n int) {
 // Close shuts down the store gracefully
 func (s *Store) Close() error {
 	s.stopOnce.Do(func() {
+		s.stopping.Store(true)
 		close(s.stopCh)
 	})
 

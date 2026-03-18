@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // OrganizationRole represents a user's role within an organization.
 type OrganizationRole string
@@ -10,9 +13,86 @@ const (
 	OrgRoleOwner OrganizationRole = "owner"
 	// OrgRoleAdmin can manage resources but cannot delete the organization.
 	OrgRoleAdmin OrganizationRole = "admin"
-	// OrgRoleMember has read-only access to organization resources.
-	OrgRoleMember OrganizationRole = "member"
+	// OrgRoleEditor can update organization resources but cannot manage members.
+	OrgRoleEditor OrganizationRole = "editor"
+	// OrgRoleViewer has read-only access to organization resources.
+	OrgRoleViewer OrganizationRole = "viewer"
 )
+
+// OrgStatus represents lifecycle status for an organization.
+type OrgStatus string
+
+const (
+	OrgStatusActive          OrgStatus = "active"
+	OrgStatusSuspended       OrgStatus = "suspended"
+	OrgStatusPendingDeletion OrgStatus = "pending_deletion"
+)
+
+// NormalizeOrgStatus canonicalizes lifecycle status values.
+// Empty status is treated as active for backward compatibility.
+func NormalizeOrgStatus(status OrgStatus) OrgStatus {
+	switch strings.ToLower(strings.TrimSpace(string(status))) {
+	case "", string(OrgStatusActive):
+		return OrgStatusActive
+	case string(OrgStatusSuspended):
+		return OrgStatusSuspended
+	case string(OrgStatusPendingDeletion):
+		return OrgStatusPendingDeletion
+	default:
+		return OrgStatus(strings.ToLower(strings.TrimSpace(string(status))))
+	}
+}
+
+// NormalizeOrganizationRole canonicalizes role values.
+func NormalizeOrganizationRole(role OrganizationRole) OrganizationRole {
+	switch strings.ToLower(strings.TrimSpace(string(role))) {
+	case string(OrgRoleOwner):
+		return OrgRoleOwner
+	case string(OrgRoleAdmin):
+		return OrgRoleAdmin
+	case string(OrgRoleEditor):
+		return OrgRoleEditor
+	case string(OrgRoleViewer):
+		return OrgRoleViewer
+	default:
+		return OrganizationRole(strings.ToLower(strings.TrimSpace(string(role))))
+	}
+}
+
+// IsValidOrganizationRole reports whether the role is a known organization role.
+func IsValidOrganizationRole(role OrganizationRole) bool {
+	switch NormalizeOrganizationRole(role) {
+	case OrgRoleOwner, OrgRoleAdmin, OrgRoleEditor, OrgRoleViewer:
+		return true
+	default:
+		return false
+	}
+}
+
+func organizationRoleRank(role OrganizationRole) int {
+	switch NormalizeOrganizationRole(role) {
+	case OrgRoleViewer:
+		return 1
+	case OrgRoleEditor:
+		return 2
+	case OrgRoleAdmin:
+		return 3
+	case OrgRoleOwner:
+		return 4
+	default:
+		return 0
+	}
+}
+
+// OrganizationRoleAtLeast reports whether actualRole satisfies requiredRole.
+func OrganizationRoleAtLeast(actualRole, requiredRole OrganizationRole) bool {
+	actualRole = NormalizeOrganizationRole(actualRole)
+	requiredRole = NormalizeOrganizationRole(requiredRole)
+	if !IsValidOrganizationRole(actualRole) || !IsValidOrganizationRole(requiredRole) {
+		return false
+	}
+	return organizationRoleRank(actualRole) >= organizationRoleRank(requiredRole)
+}
 
 // OrganizationMember represents a user's membership in an organization.
 type OrganizationMember struct {
@@ -29,6 +109,33 @@ type OrganizationMember struct {
 	AddedBy string `json:"addedBy,omitempty"`
 }
 
+// OrganizationShare represents a cross-organization resource/view share.
+type OrganizationShare struct {
+	// ID is a unique identifier for the share record.
+	ID string `json:"id"`
+
+	// TargetOrgID is the organization receiving access.
+	TargetOrgID string `json:"targetOrgId"`
+
+	// ResourceType identifies what is being shared (e.g. "resource", "view").
+	ResourceType string `json:"resourceType"`
+
+	// ResourceID is the stable identifier of the shared resource/view.
+	ResourceID string `json:"resourceId"`
+
+	// ResourceName is an optional display label used by the UI.
+	ResourceName string `json:"resourceName,omitempty"`
+
+	// AccessRole defines the access level granted to the target organization.
+	AccessRole OrganizationRole `json:"accessRole"`
+
+	// CreatedAt is when the share was created.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy is the user ID that created the share.
+	CreatedBy string `json:"createdBy"`
+}
+
 // Organization represents a distinct tenant in the system.
 type Organization struct {
 	// ID is the unique identifier for the organization (e.g., "customer-a").
@@ -37,6 +144,10 @@ type Organization struct {
 
 	// DisplayName is the human-readable name of the organization.
 	DisplayName string `json:"displayName"`
+
+	// Status is the current lifecycle status for the organization.
+	// Empty status is treated as active for backward compatibility.
+	Status OrgStatus `json:"status,omitempty"`
 
 	// CreatedAt is when the organization was registered.
 	CreatedAt time.Time `json:"createdAt"`
@@ -48,6 +159,21 @@ type Organization struct {
 	// Members is the list of users who have access to this organization.
 	// This includes the owner (with OrgRoleOwner) and any additional members.
 	Members []OrganizationMember `json:"members,omitempty"`
+
+	// SharedResources contains outgoing cross-organization shares.
+	SharedResources []OrganizationShare `json:"sharedResources,omitempty"`
+
+	// SuspendedAt records when the organization was suspended.
+	SuspendedAt *time.Time `json:"suspendedAt,omitempty"`
+
+	// SuspendReason stores the reason for suspension, if provided.
+	SuspendReason string `json:"suspendReason,omitempty"`
+
+	// DeletionRequestedAt records when soft-deletion was requested.
+	DeletionRequestedAt *time.Time `json:"deletionRequestedAt,omitempty"`
+
+	// RetentionDays stores the soft-delete retention period in days.
+	RetentionDays int `json:"retentionDays,omitempty"`
 
 	// EncryptionKeyID refers to the specific encryption key used for this org's data
 	// (Future proofing for per-tenant encryption keys)
@@ -69,7 +195,7 @@ func (o *Organization) HasMember(userID string) bool {
 func (o *Organization) GetMemberRole(userID string) OrganizationRole {
 	for _, member := range o.Members {
 		if member.UserID == userID {
-			return member.Role
+			return NormalizeOrganizationRole(member.Role)
 		}
 	}
 	return ""
@@ -93,6 +219,5 @@ func (o *Organization) CanUserManage(userID string) bool {
 	if o.OwnerUserID == userID {
 		return true
 	}
-	role := o.GetMemberRole(userID)
-	return role == OrgRoleOwner || role == OrgRoleAdmin
+	return OrganizationRoleAtLeast(o.GetMemberRole(userID), OrgRoleAdmin)
 }

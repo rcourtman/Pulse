@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,9 +17,9 @@ func (m *WSMockLicenseService) HasFeature(feature string) bool {
 	return m.Features[feature]
 }
 
-func (m *WSMockLicenseService) Service(ctx context.Context) *license.Service {
+func (m *WSMockLicenseService) Service(ctx context.Context) *pkglicensing.Service {
 	// Return empty service (no license) by default
-	return license.NewService()
+	return pkglicensing.NewService()
 }
 
 // WebSocketMockLicenseProvider to return our mock service
@@ -27,15 +27,15 @@ type WebSocketMockLicenseProvider struct {
 	service *WSMockLicenseService
 }
 
-func (p *WebSocketMockLicenseProvider) Service(ctx context.Context) *license.Service {
-	return license.NewService()
+func (p *WebSocketMockLicenseProvider) Service(ctx context.Context) *pkglicensing.Service {
+	return pkglicensing.NewService()
 }
 
 func TestWebSocketIsolation_Permanent(t *testing.T) {
 	// Reset global state
 	defer SetMultiTenantEnabled(false)
 
-	checker := NewMultiTenantChecker()
+	checker := NewMultiTenantChecker(false) // self-hosted mode for existing tests
 
 	// Case 1: Default Org always allowed
 	result := checker.CheckMultiTenant(context.Background(), "default")

@@ -1,0 +1,800 @@
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
+import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { State } from '@/types/api';
+
+type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
+
+type TestWsState = State & Record<string, unknown>;
+
+const v2Resource = {
+  id: 'node-1',
+  type: 'agent',
+  name: 'node-1',
+  status: 'online',
+  lastSeen: '2026-02-06T12:00:00Z',
+  sources: ['agent'],
+  metrics: {
+    cpu: { percent: 15 },
+    memory: { used: 4 * 1024 * 1024, total: 8 * 1024 * 1024, percent: 50 },
+    disk: { used: 30 * 1024 * 1024, total: 100 * 1024 * 1024, percent: 30 },
+  },
+  discoveryTarget: {
+    resourceType: 'agent',
+    agentId: 'host-1',
+    resourceId: 'host-1',
+    hostname: 'pve1',
+  },
+};
+
+const asWsResource = <T extends object>(resource: T): State['resources'][number] =>
+  resource as unknown as State['resources'][number];
+
+const flushAsync = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
+const waitForResourceCount = async (getCount: () => number, expectedMin = 1) => {
+  for (let i = 0; i < 20; i++) {
+    if (getCount() >= expectedMin) {
+      return;
+    }
+    await flushAsync();
+  }
+  throw new Error(`Timed out waiting for at least ${expectedMin} resources`);
+};
+
+const waitForValue = async <T>(readValue: () => T, expected: T) => {
+  for (let i = 0; i < 20; i++) {
+    if (readValue() === expected) {
+      return;
+    }
+    await flushAsync();
+  }
+  throw new Error(`Timed out waiting for expected value: ${String(expected)}`);
+};
+
+describe('useUnifiedResources', () => {
+  let apiFetchMock: ReturnType<typeof vi.fn>;
+  let setWsState: SetStoreFunction<TestWsState>;
+  let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
+  let useStorageRecoveryResources: UseUnifiedResourcesModule['useStorageRecoveryResources'];
+  let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
+  let eventBus: (typeof import('@/stores/events'))['eventBus'];
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+
+    apiFetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [v2Resource] }),
+    });
+
+    const [connected] = createSignal(true);
+    const [initialDataReceived] = createSignal(true);
+    const [state, _setWsState] = createStore<TestWsState>({
+      connectedInfrastructure: [],
+      metrics: [],
+      performance: {
+        apiCallDuration: {},
+        lastPollDuration: 0,
+        pollingStartTime: '',
+        totalApiCalls: 0,
+        failedApiCalls: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+      },
+      connectionHealth: {},
+      stats: {
+        startTime: '',
+        uptime: 0,
+        pollingCycles: 0,
+        webSocketClients: 0,
+        version: '2.0.0',
+      },
+      activeAlerts: [],
+      recentlyResolved: [],
+      resources: [asWsResource(v2Resource)],
+      lastUpdate: 0,
+    });
+    setWsState = _setWsState;
+
+    const wsStore = { connected, initialDataReceived, state };
+
+    vi.doMock('@/utils/apiClient', () => ({
+      apiFetch: apiFetchMock,
+      getOrgID: () => 'default',
+    }));
+    vi.doMock('@/stores/websocket-global', () => ({
+      getGlobalWebSocketStore: () => wsStore,
+    }));
+
+    ({
+      useUnifiedResources,
+      useStorageRecoveryResources,
+      __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests,
+    } = await import('@/hooks/useUnifiedResources'));
+    ({ eventBus } = await import('@/stores/events'));
+    resetUnifiedResourcesCacheForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('refetches when lastUpdate changes even if resources are reconciled in place', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    let firstResourceEffectRuns = 0;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+      createEffect(() => {
+        const first = result!.resources()[0];
+        if (first) {
+          firstResourceEffectRuns += 1;
+        }
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/resources?type=agent%2Cdocker-host%2Cpbs%2Cpmg%2Ck8s-cluster%2Ck8s-node&page=1&limit=100',
+      { cache: 'no-store' },
+    );
+    const originalResourceRef = result!.resources()[0];
+    const effectsAfterInitialFetch = firstResourceEffectRuns;
+
+    vi.advanceTimersByTime(800);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    // Simulate a metric update where reconcile keeps array identity stable.
+    batch(() => {
+      setWsState(
+        'resources',
+        reconcile(
+          [
+            asWsResource({
+              ...v2Resource,
+              metrics: {
+                ...v2Resource.metrics,
+                cpu: { percent: 42 },
+              },
+            }),
+          ],
+          { key: 'id' },
+        ),
+      );
+      setWsState('lastUpdate', 1738843201000);
+    });
+
+    vi.advanceTimersByTime(799);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(2000);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result!.resources()[0]).toBe(originalResourceRef);
+    expect(firstResourceEffectRuns).toBe(effectsAfterInitialFetch);
+    expect(result!.resources()[0].discoveryTarget).toEqual({
+      resourceType: 'agent',
+      agentId: 'host-1',
+      resourceId: 'host-1',
+      hostname: 'pve1',
+    });
+
+    dispose();
+  });
+
+  it('falls back to proxmox temperature when agent temperature is unavailable', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            sources: ['proxmox'],
+            agent: undefined,
+            proxmox: {
+              nodeName: 'pve1',
+              clusterName: 'mock-cluster',
+              uptime: 1234,
+              temperature: 58.4,
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].temperature).toBe(58.4);
+
+    dispose();
+  });
+
+  it('maps discoveryTarget.agentId into canonical discovery agentId', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            discoveryTarget: {
+              resourceType: 'agent',
+              agentId: 'agent-discovery-1',
+              resourceId: 'agent-discovery-1',
+              hostname: 'pve1',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].discoveryTarget).toEqual({
+      resourceType: 'agent',
+      agentId: 'agent-discovery-1',
+      resourceId: 'agent-discovery-1',
+      hostname: 'pve1',
+    });
+
+    dispose();
+  });
+
+  it('maps canonical policy metadata and aiSafeSummary into unified resources', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            policy: {
+              sensitivity: 'restricted',
+              routing: {
+                scope: 'local-only',
+                allowCloudSummary: false,
+                allowCloudRawSignals: false,
+                redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
+              },
+            },
+            aiSafeSummary: 'resource summary safe for remote AI use',
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].policy).toEqual({
+      sensitivity: 'restricted',
+      routing: {
+        scope: 'local-only',
+        allowCloudSummary: false,
+        allowCloudRawSignals: false,
+        redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
+      },
+    });
+    expect(result!.resources()[0].aiSafeSummary).toBe('resource summary safe for remote AI use');
+
+    dispose();
+  });
+
+  it('normalizes legacy k8s discovery targets to pod for frontend consumers', async () => {
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            type: 'pod',
+            discoveryTarget: {
+              resourceType: 'k8s',
+              agentId: 'cluster-agent-1',
+              resourceId: 'pod/default/nginx',
+              hostname: 'cluster-a',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()[0].discoveryTarget).toEqual({
+      resourceType: 'pod',
+      agentId: 'cluster-agent-1',
+      resourceId: 'pod/default/nginx',
+      hostname: 'cluster-a',
+    });
+
+    dispose();
+  });
+
+  it('normalizes legacy node metrics targets at the API load boundary', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            metricsTarget: {
+              resourceType: 'node',
+              resourceId: 'pve-node-1',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].metricsTarget).toEqual({
+      resourceType: 'agent',
+      resourceId: 'pve-node-1',
+    });
+
+    dispose();
+  });
+
+  it('derives normalized platformId through the shared identity helper precedence', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'docker-runtime-1',
+            type: 'agent',
+            name: 'fallback-name',
+            proxmox: undefined,
+            agent: { hostname: 'agent-host.local' },
+            docker: { hostname: 'docker-host.local' },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].platformId).toBe('agent-host.local');
+
+    dispose();
+  });
+
+  it('prefers backend canonical identity fields over frontend fallback inference', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'hybrid-host-1',
+            name: 'fallback-name',
+            identity: {
+              hostnames: ['legacy-host.local'],
+            },
+            proxmox: { nodeName: 'legacy-node' },
+            canonicalIdentity: {
+              displayName: 'Tower',
+              hostname: 'tower.local',
+              platformId: 'pve1',
+              primaryId: 'node:instance-pve1',
+              aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].name).toBe('Tower');
+    expect(result!.resources()[0].displayName).toBe('Tower');
+    expect(result!.resources()[0].platformId).toBe('pve1');
+    expect(result!.resources()[0].identity?.hostname).toBe('tower.local');
+    expect(result!.resources()[0].canonicalIdentity).toMatchObject({
+      primaryId: 'node:instance-pve1',
+      hostname: 'tower.local',
+    });
+
+    dispose();
+  });
+
+  it('preserves parentName from backend resources', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'storage-1',
+            type: 'storage',
+            name: 'local-zfs',
+            parentId: 'agent-123',
+            parentName: 'pve1',
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=storage' });
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].parentId).toBe('agent-123');
+    expect(result!.resources()[0].parentName).toBe('pve1');
+
+    dispose();
+  });
+
+  it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: 'k8s-cluster-native',
+            type: 'k8s-cluster',
+            name: 'cluster-a',
+            status: 'online',
+            lastSeen: '2026-02-06T12:00:00Z',
+            sources: ['kubernetes'],
+          },
+          {
+            id: 'k8s-node-native',
+            type: 'k8s-node',
+            name: 'worker-1',
+            status: 'online',
+            lastSeen: '2026-02-06T12:00:00Z',
+            parentId: 'k8s-cluster-native',
+            sources: ['kubernetes'],
+          },
+        ],
+      }),
+    });
+
+    batch(() => {
+      setWsState('legacy_clusters', [
+        {
+          id: 'legacy-cluster',
+          name: 'legacy-cluster',
+          hidden: false,
+          status: 'online',
+          lastSeen: 1738929600000,
+          nodes: [{ uid: 'legacy-node', name: 'legacy-node', ready: true }],
+        },
+      ]);
+      setWsState('lastUpdate', 1738843202000);
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+
+    const resources = result!.resources();
+    expect(resources).toHaveLength(2);
+    expect(resources.map((resource) => resource.id)).toEqual([
+      'k8s-cluster-native',
+      'k8s-node-native',
+    ]);
+
+    dispose();
+  });
+
+  it('ignores non-canonical websocket payload fields for infrastructure resources', async () => {
+    batch(() => {
+      setWsState('legacy_hosts', [
+        { id: 'legacy-host-1', hostname: 'legacy-host', status: 'online', lastSeen: 1738929600000 },
+      ]);
+      setWsState('legacy_docker_hosts', [
+        {
+          id: 'legacy-docker-1',
+          hostname: 'legacy-docker',
+          status: 'online',
+          lastSeen: 1738929600000,
+        },
+      ]);
+      setWsState('legacy_pbs', [{ id: 'legacy-pbs-1', name: 'legacy-pbs' }]);
+      setWsState('legacy_pmg', [{ id: 'legacy-pmg-1', name: 'legacy-pmg' }]);
+      setWsState('lastUpdate', 1738843204000);
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+
+    const resources = result!.resources();
+    expect(resources).toHaveLength(1);
+    expect(resources[0].id).toBe('node-1');
+    expect(resources[0].type).toBe('agent');
+
+    dispose();
+  });
+
+  it('reuses fresh cache on remount without an extra network fetch', async () => {
+    let disposeFirst = () => {};
+    let first: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeFirst = d;
+      first = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => first!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    disposeFirst();
+
+    let disposeSecond = () => {};
+    let second: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeSecond = d;
+      second = useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(second!.resources().length).toBeGreaterThan(0);
+
+    disposeSecond();
+  });
+
+  it('coalesces burst websocket updates into a single delayed refetch', async () => {
+    let dispose = () => {};
+    createRoot((d) => {
+      dispose = d;
+      useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    setWsState('lastUpdate', 1738843201000);
+    await flushAsync();
+    vi.advanceTimersByTime(100);
+
+    setWsState('lastUpdate', 1738843202000);
+    await flushAsync();
+    vi.advanceTimersByTime(100);
+
+    setWsState('lastUpdate', 1738843203000);
+    await flushAsync();
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    dispose();
+  });
+
+  it('replaces stale canonical resources when websocket lastUpdate triggers a refetch', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              ...v2Resource,
+              id: 'agent-old',
+              name: 'seeded-agent-old',
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              ...v2Resource,
+              id: 'agent-new',
+              name: 'seeded-agent-new',
+              lastSeen: '2026-02-06T12:01:00Z',
+            },
+          ],
+        }),
+      });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.resources()[0]?.id).toBe('agent-old');
+    expect(result!.resources()[0]?.name).toBe('seeded-agent-old');
+
+    setWsState('lastUpdate', 1738843209000);
+    await flushAsync();
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    await waitForValue(() => result!.resources()[0]?.id, 'agent-new');
+    expect(result!.resources()[0]?.id).toBe('agent-new');
+    expect(result!.resources()[0]?.name).toBe('seeded-agent-new');
+
+    dispose();
+  });
+
+  it('uses the storage/recovery query variant for storage pages', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useStorageRecoveryResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useStorageRecoveryResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Csystem-container%2Cpod%2Cagent%2Ck8s-cluster%2Ck8s-node%2Cphysical_disk%2Cceph&page=1&limit=100',
+      { cache: 'no-store' },
+    );
+    expect(result!.resources().length).toBeGreaterThanOrEqual(0);
+
+    dispose();
+  });
+
+  it('filters malformed source entries from backend payloads', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            sources: ['agent', 42, null, { bad: true }, 'proxmox'],
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.resources()[0]?.id).toBe('node-1');
+    expect(result!.resources()[0]?.platformType).toBe('proxmox-pve');
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'node-2',
+            name: 'node-2',
+          },
+        ],
+      }),
+    });
+
+    eventBus.emit('org_switched', 'tenant-b');
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result!.resources()[0]?.id).toBe('node-2');
+
+    eventBus.emit('org_switched', 'default');
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result!.resources()[0]?.id).toBe('node-1');
+
+    dispose();
+  });
+
+  it('normalizes proxmox service aliases into canonical platform types', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { ...v2Resource, id: 'pve-1', name: 'pve-1', sources: ['proxmox'] },
+          { ...v2Resource, id: 'pbs-1', name: 'pbs-1', sources: ['pbs'] },
+          { ...v2Resource, id: 'pmg-1', name: 'pmg-1', sources: ['pmg'] },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length, 3);
+
+    const byId = new Map(result!.resources().map((resource) => [resource.id, resource]));
+    expect(byId.get('pve-1')?.platformType).toBe('proxmox-pve');
+    expect(byId.get('pbs-1')?.platformType).toBe('proxmox-pbs');
+    expect(byId.get('pmg-1')?.platformType).toBe('proxmox-pmg');
+
+    dispose();
+  });
+});

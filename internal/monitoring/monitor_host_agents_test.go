@@ -8,7 +8,87 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func TestFindLinkedProxmoxEntity_MatchesCanonicalReadStateViews(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve-a", Instance: "pve1"},
+	})
+	monitor.state.UpdateVMs([]models.VM{
+		{ID: "vm-100", Name: "vm-a", Instance: "pve1", VMID: 100},
+	})
+	monitor.state.UpdateContainers([]models.Container{
+		{ID: "ct-200", Name: "ct-a", Instance: "pve1", VMID: 200},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntity("pve-a")
+	if nodeID != "node-1" || vmID != "" || ctID != "" {
+		t.Fatalf("expected node match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+
+	nodeID, vmID, ctID = monitor.findLinkedProxmoxEntity("vm-a")
+	if nodeID != "" || vmID != "vm-100" || ctID != "" {
+		t.Fatalf("expected vm match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+
+	nodeID, vmID, ctID = monitor.findLinkedProxmoxEntity("ct-a")
+	if nodeID != "" || vmID != "" || ctID != "ct-200" {
+		t.Fatalf("expected container match only, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntity_AmbiguousNodeNameReturnsNoLink(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntity("pve")
+	if nodeID != "" || vmID != "" || ctID != "" {
+		t.Fatalf("expected ambiguous node name to produce no link, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntityWithHints_UsesEndpointIPToDisambiguateNodes(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a", Host: "https://10.0.0.1:8006"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b", Host: "https://10.0.0.2:8006"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints("pve", "10.0.0.2", nil)
+	if nodeID != "node-2" || vmID != "" || ctID != "" {
+		t.Fatalf("expected endpoint IP to disambiguate node-2, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFallback(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a", Host: "https://pve-a.lab:8006"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b", Host: "https://pve-b.lab:8006"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints("pve-b.lab", "", nil)
+	if nodeID != "node-2" || vmID != "" || ctID != "" {
+		t.Fatalf("expected endpoint hostname to disambiguate node-2, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
 
 func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	t.Helper()
@@ -58,218 +138,13 @@ func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	alerts := monitor.alertManager.GetActiveAlerts()
 	found := false
 	for _, alert := range alerts {
-		if alert.ID == "host-offline-"+hostID {
+		if alert.Type == "host-offline" && alert.ResourceID == "agent:"+hostID {
 			found = true
 			break
 		}
 	}
 	if !found {
 		t.Fatalf("expected host offline alert to remain active")
-	}
-}
-
-func TestRestorePersistedHostAgents(t *testing.T) {
-	dataDir := t.TempDir()
-	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
-	metadataStore := config.NewHostMetadataStore(dataDir, nil)
-
-	now := time.Now().UTC()
-	if err := runtimeStore.Upsert(models.Host{
-		ID:              "host-restored",
-		Hostname:        "restored.local",
-		DisplayName:     "Restored Host",
-		Status:          "online",
-		IntervalSeconds: 30,
-		LastSeen:        now.Add(-5 * time.Minute),
-		TokenID:         "token-restored",
-	}); err != nil {
-		t.Fatalf("seed runtime store: %v", err)
-	}
-
-	enabled := true
-	if err := metadataStore.Set("host-restored", &config.HostMetadata{CommandsEnabled: &enabled}); err != nil {
-		t.Fatalf("set host metadata: %v", err)
-	}
-
-	monitor := &Monitor{
-		state:                  models.NewState(),
-		config:                 &config.Config{APITokens: []config.APITokenRecord{{ID: "token-restored"}}},
-		hostMetadataStore:      metadataStore,
-		hostRuntimeStore:       runtimeStore,
-		hostTokenBindings:      make(map[string]string),
-		lastHostRuntimePersist: make(map[string]time.Time),
-	}
-
-	monitor.restorePersistedHostAgents()
-	monitor.RebuildTokenBindings()
-
-	snapshot := monitor.state.GetSnapshot()
-	if len(snapshot.Hosts) != 1 {
-		t.Fatalf("expected 1 restored host, got %d", len(snapshot.Hosts))
-	}
-	restored := snapshot.Hosts[0]
-	if restored.ID != "host-restored" {
-		t.Fatalf("restored host id = %q, want host-restored", restored.ID)
-	}
-	if restored.Status != "offline" {
-		t.Fatalf("restored host status = %q, want offline", restored.Status)
-	}
-	if !restored.CommandsEnabled {
-		t.Fatalf("expected commandsEnabled override to apply on restore")
-	}
-
-	connKey := hostConnectionPrefix + restored.ID
-	if healthy, ok := snapshot.ConnectionHealth[connKey]; !ok || healthy {
-		t.Fatalf("expected restored host connection health false, got %v (exists=%v)", healthy, ok)
-	}
-
-	if boundID := monitor.hostTokenBindings["token-restored:restored.local"]; boundID != "host-restored" {
-		t.Fatalf("expected token binding to be rebuilt, got %q", boundID)
-	}
-}
-
-func TestApplyHostReportPersistsAndRemoveHostAgentClearsRuntime(t *testing.T) {
-	dataDir := t.TempDir()
-	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
-
-	monitor := &Monitor{
-		state:                  models.NewState(),
-		alertManager:           alerts.NewManager(),
-		hostTokenBindings:      make(map[string]string),
-		removedHosts:           make(map[string]time.Time),
-		config:                 &config.Config{},
-		rateTracker:            NewRateTracker(),
-		hostRuntimeStore:       runtimeStore,
-		lastHostRuntimePersist: make(map[string]time.Time),
-	}
-	t.Cleanup(func() { monitor.alertManager.Stop() })
-
-	report := agentshost.Report{
-		Agent: agentshost.AgentInfo{
-			ID:              "agent-runtime",
-			Version:         "1.0.0",
-			IntervalSeconds: 30,
-		},
-		Host: agentshost.HostInfo{
-			ID:       "machine-runtime",
-			Hostname: "runtime.local",
-			Platform: "linux",
-		},
-		Timestamp: time.Now().UTC(),
-		Metrics: agentshost.Metrics{
-			CPUUsagePercent: 5.5,
-		},
-	}
-
-	host, err := monitor.ApplyHostReport(report, nil)
-	if err != nil {
-		t.Fatalf("ApplyHostReport: %v", err)
-	}
-
-	if persisted := runtimeStore.GetAll(); len(persisted) != 1 {
-		t.Fatalf("expected 1 persisted host after report, got %d", len(persisted))
-	}
-
-	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
-		t.Fatalf("RemoveHostAgent: %v", err)
-	}
-
-	if persisted := runtimeStore.GetAll(); len(persisted) != 0 {
-		t.Fatalf("expected persisted host to be removed, got %d entries", len(persisted))
-	}
-}
-
-func TestApplyHostReportPreservesFreeBSDSMARTWhenNextReportOmitsIt(t *testing.T) {
-	t.Helper()
-
-	monitor := &Monitor{
-		state:             models.NewState(),
-		alertManager:      alerts.NewManager(),
-		hostTokenBindings: make(map[string]string),
-		config:            &config.Config{},
-		rateTracker:       NewRateTracker(),
-	}
-	t.Cleanup(func() { monitor.alertManager.Stop() })
-
-	now := time.Now().UTC()
-	first := agentshost.Report{
-		Agent: agentshost.AgentInfo{
-			ID:              "agent-freebsd",
-			Version:         "1.0.0",
-			IntervalSeconds: 30,
-		},
-		Host: agentshost.HostInfo{
-			ID:       "machine-freebsd",
-			Hostname: "pfsense.local",
-			Platform: "freebsd",
-		},
-		Timestamp: now,
-		Metrics: agentshost.Metrics{
-			CPUUsagePercent: 5.5,
-		},
-		Sensors: agentshost.Sensors{
-			SMART: []agentshost.DiskSMART{
-				{
-					Device:      "ada0",
-					Model:       "Disk 0",
-					Temperature: 33,
-					Health:      "PASSED",
-				},
-			},
-		},
-	}
-
-	host, err := monitor.ApplyHostReport(first, nil)
-	if err != nil {
-		t.Fatalf("ApplyHostReport first: %v", err)
-	}
-	if len(host.Sensors.SMART) != 1 {
-		t.Fatalf("expected initial SMART data, got %d entries", len(host.Sensors.SMART))
-	}
-
-	second := first
-	second.Timestamp = now.Add(30 * time.Second)
-	second.Sensors = agentshost.Sensors{}
-
-	host, err = monitor.ApplyHostReport(second, nil)
-	if err != nil {
-		t.Fatalf("ApplyHostReport second: %v", err)
-	}
-	if len(host.Sensors.SMART) != 1 {
-		t.Fatalf("expected SMART data to be preserved, got %d entries", len(host.Sensors.SMART))
-	}
-	if host.Sensors.SMART[0].Device != "ada0" {
-		t.Fatalf("expected preserved SMART device ada0, got %q", host.Sensors.SMART[0].Device)
-	}
-	if host.Sensors.SMART[0].Temperature != 33 {
-		t.Fatalf("expected preserved SMART temperature 33, got %d", host.Sensors.SMART[0].Temperature)
-	}
-}
-
-func TestClearUnauthenticatedAgentsClearsPersistedHostRuntime(t *testing.T) {
-	dataDir := t.TempDir()
-	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)
-	if err := runtimeStore.Upsert(models.Host{ID: "host-clear", Hostname: "clear.local", LastSeen: time.Now().UTC()}); err != nil {
-		t.Fatalf("seed runtime store: %v", err)
-	}
-
-	monitor := &Monitor{
-		state:                  models.NewState(),
-		config:                 &config.Config{},
-		hostRuntimeStore:       runtimeStore,
-		hostTokenBindings:      make(map[string]string),
-		dockerTokenBindings:    make(map[string]string),
-		lastHostRuntimePersist: make(map[string]time.Time),
-	}
-	monitor.state.UpsertHost(models.Host{ID: "host-clear", Hostname: "clear.local"})
-
-	hostCount, dockerCount := monitor.ClearUnauthenticatedAgents()
-	if hostCount != 1 || dockerCount != 0 {
-		t.Fatalf("ClearUnauthenticatedAgents = (%d,%d), want (1,0)", hostCount, dockerCount)
-	}
-
-	if persisted := runtimeStore.GetAll(); len(persisted) != 0 {
-		t.Fatalf("expected persisted runtime store to be cleared, got %d entries", len(persisted))
 	}
 }
 
@@ -394,7 +269,6 @@ func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
-		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 		rateTracker:       NewRateTracker(),
 	}
@@ -478,7 +352,6 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
-		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -502,6 +375,317 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	}
 	if _, exists := monitor.hostTokenBindings[tokenID]; exists {
 		t.Fatalf("expected legacy token binding to be cleared after host removal")
+	}
+}
+
+func TestRemoveHostAgent_KeepsSharedTokenUsedByDockerRuntime(t *testing.T) {
+	t.Helper()
+
+	tokenID := "shared-token"
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config: &config.Config{
+			APITokens: []config.APITokenRecord{
+				{ID: tokenID, Name: "Shared Token"},
+			},
+		},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-shared"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "shared-host.local",
+		TokenID:  tokenID,
+	})
+	monitor.state.UpsertDockerHost(models.DockerHost{
+		ID:       "docker-shared",
+		Hostname: "docker-shared.local",
+		TokenID:  tokenID,
+		Status:   "online",
+	})
+	monitor.hostTokenBindings[tokenID+":shared-host.local"] = hostID
+
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	if got := len(monitor.config.APITokens); got != 1 {
+		t.Fatalf("expected shared API token to remain, got %d tokens", got)
+	}
+	if monitor.config.APITokens[0].ID != tokenID {
+		t.Fatalf("expected shared token %q to remain, got %q", tokenID, monitor.config.APITokens[0].ID)
+	}
+}
+
+func TestApplyHostReport_PreservesPreviousTokenMetadata(t *testing.T) {
+	t.Helper()
+
+	lastUsed := time.Now().UTC().Add(-5 * time.Minute)
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	monitor.state.UpsertHost(models.Host{
+		ID:              "host-prev",
+		Hostname:        "preserve.local",
+		TokenID:         "token-prev",
+		TokenName:       "Previous Token",
+		TokenHint:       "prev_1234",
+		TokenLastUsedAt: &lastUsed,
+	})
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-prev",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "host-prev",
+			Hostname: "preserve.local",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if host.TokenID != "token-prev" || host.TokenName != "Previous Token" || host.TokenHint != "prev_1234" {
+		t.Fatalf("expected previous token metadata to be preserved, got id=%q name=%q hint=%q", host.TokenID, host.TokenName, host.TokenHint)
+	}
+	if host.TokenLastUsedAt == nil || !host.TokenLastUsedAt.Equal(lastUsed) {
+		t.Fatalf("expected TokenLastUsedAt %v, got %v", lastUsed, host.TokenLastUsedAt)
+	}
+}
+
+func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Unraid: &agentshost.UnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			SyncAction:   "check",
+			SyncProgress: 55,
+			Disks: []agentshost.UnraidDisk{
+				{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-PARITY"},
+				{Name: "disk1", Device: "/dev/sdc", Role: "data", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-DATA"},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if host.Unraid == nil {
+		t.Fatal("expected unraid topology on host")
+	}
+	if !host.Unraid.ArrayStarted || host.Unraid.SyncAction != "check" {
+		t.Fatalf("unexpected unraid summary %+v", host.Unraid)
+	}
+	if len(host.Unraid.Disks) != 2 || host.Unraid.Disks[0].Role != "parity" {
+		t.Fatalf("unexpected unraid disks %+v", host.Unraid.Disks)
+	}
+}
+
+func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	powerOnHours := int64(1234)
+	reallocated := int64(2)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/sda",
+					Model:       "IronWolf",
+					Serial:      "SERIAL-TOWER-1",
+					Temperature: 41,
+					Attributes: &agentshost.SMARTAttributes{
+						PowerOnHours:       &powerOnHours,
+						ReallocatedSectors: &reallocated,
+					},
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	points := waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_temp")
+	if len(points) == 0 {
+		t.Fatal("expected SMART temperature metric for agent disk")
+	}
+
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_power_on_hours")
+	if len(points) == 0 || points[len(points)-1].Value != float64(powerOnHours) {
+		t.Fatalf("expected power-on-hours metric %.0f, got %+v", float64(powerOnHours), points)
+	}
+
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_reallocated_sectors")
+	if len(points) == 0 || points[len(points)-1].Value != float64(reallocated) {
+		t.Fatalf("expected reallocated-sectors metric %.0f, got %+v", float64(reallocated), points)
+	}
+}
+
+func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	mediaErrors := int64(7)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower-fallback",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/nvme0n1",
+					Model:       "CacheDisk",
+					Temperature: 39,
+					Attributes: &agentshost.SMARTAttributes{
+						MediaErrors: &mediaErrors,
+					},
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	resourceID := "machine-tower:nvme0n1"
+	points := waitForStoredDiskMetric(t, store, resourceID, "smart_temp")
+	if len(points) == 0 {
+		t.Fatal("expected SMART temperature metric for fallback-id agent disk")
+	}
+
+	points = waitForStoredDiskMetric(t, store, resourceID, "smart_media_errors")
+	if len(points) == 0 || points[len(points)-1].Value != float64(mediaErrors) {
+		t.Fatalf("expected media-errors metric %.0f, got %+v", float64(mediaErrors), points)
+	}
+}
+
+func waitForStoredDiskMetric(t *testing.T, store *metrics.Store, resourceID, metric string) []metrics.MetricPoint {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		now := time.Now().UTC()
+		points, err := store.Query("disk", resourceID, metric, now.Add(-time.Hour), now.Add(time.Hour), 60)
+		if err != nil {
+			t.Fatalf("Query %s: %v", metric, err)
+		}
+		if len(points) > 0 {
+			return points
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for disk metric %s for %s", metric, resourceID)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -823,11 +1007,49 @@ func TestEvaluateHostAgentsNilAlertManagerOffline(t *testing.T) {
 	}
 }
 
+func TestRemoveHostAgent_ClearsConnectionHealth(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-connhealth"
+	monitor.state.UpsertHost(models.Host{
+		ID:              hostID,
+		Hostname:        "connhealth.local",
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	})
+
+	// Seed connection health for this host (as evaluateHostAgents would)
+	monitor.state.SetConnectionHealth(hostConnectionPrefix+hostID, true)
+
+	// Verify it's present before removal
+	snapshot := monitor.state.GetSnapshot()
+	if _, ok := snapshot.ConnectionHealth[hostConnectionPrefix+hostID]; !ok {
+		t.Fatalf("expected connection health entry to exist before removal")
+	}
+
+	// Remove the host
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	// Verify connection health entry is gone
+	snapshot = monitor.state.GetSnapshot()
+	if _, ok := snapshot.ConnectionHealth[hostConnectionPrefix+hostID]; ok {
+		t.Fatalf("expected connection health entry to be removed after RemoveHostAgent")
+	}
+}
+
 func TestRemoveHostAgent_EmptyHostID(t *testing.T) {
 	monitor := &Monitor{
 		state:        models.NewState(),
 		alertManager: alerts.NewManager(),
-		removedHosts: make(map[string]time.Time),
 		config:       &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -853,7 +1075,6 @@ func TestRemoveHostAgent_NotFound(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
-		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -878,7 +1099,6 @@ func TestRemoveHostAgent_NoTokenBinding(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
-		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -907,7 +1127,6 @@ func TestRemoveHostAgent_NilAlertManager(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      nil, // No alert manager
 		hostTokenBindings: make(map[string]string),
-		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 
@@ -925,6 +1144,49 @@ func TestRemoveHostAgent_NilAlertManager(t *testing.T) {
 
 	if host.ID != hostID {
 		t.Errorf("expected host.ID = %q, got %q", hostID, host.ID)
+	}
+}
+
+func TestRemoveHostAgent_BlocksFutureReportsUntilAllowed(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		removedHostAgents: make(map[string]time.Time),
+		rateTracker:       NewRateTracker(),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-blocked"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "blocked.local",
+	})
+
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("remove host agent: %v", err)
+	}
+
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			ID:       hostID,
+			Hostname: "blocked.local",
+		},
+		Agent:     agentshost.AgentInfo{ID: hostID},
+		Timestamp: time.Now(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err == nil {
+		t.Fatal("expected removed host agent report to be rejected")
+	}
+
+	if err := monitor.AllowHostAgentReenroll(hostID); err != nil {
+		t.Fatalf("allow host reenroll: %v", err)
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("expected host report after allow reenroll, got %v", err)
 	}
 }
 

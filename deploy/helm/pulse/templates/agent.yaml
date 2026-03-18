@@ -41,7 +41,7 @@ spec:
         {{- toYaml $podSecurityContext | nindent 8 }}
       {{- end }}
       containers:
-        - name: pulse-docker-agent
+        - name: pulse-agent
           image: "{{ .Values.agent.image.repository }}:{{ default .Chart.AppVersion .Values.agent.image.tag }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
           {{- if .Values.agent.args }}

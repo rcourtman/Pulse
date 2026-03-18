@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +29,39 @@ type MockAlertManager struct {
 func (m *MockAlertManager) GetConfig() alerts.AlertConfig {
 	args := m.Called()
 	return args.Get(0).(alerts.AlertConfig)
+}
+
+func TestExportIncident_UsesCanonicalEmptyCollections(t *testing.T) {
+	openedAt := time.Unix(1700000000, 0).UTC()
+	view := exportIncident(&memory.Incident{
+		ID:              "inc-1",
+		AlertIdentifier: "canonical:inc-1",
+		AlertType:       "cpu",
+		Level:           "warning",
+		ResourceID:      "node/pve-1",
+		ResourceName:    "pve-1",
+		Status:          memory.IncidentStatusOpen,
+		OpenedAt:        openedAt,
+		Events: []memory.IncidentEvent{
+			{
+				ID:        "evt-1",
+				Type:      memory.IncidentEventAlertFired,
+				Timestamp: openedAt,
+				Summary:   "Alert fired",
+			},
+		},
+	})
+
+	payload, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("marshal exported incident: %v", err)
+	}
+	if !strings.Contains(string(payload), `"events":[`) {
+		t.Fatalf("expected exported incident to retain events array, got %s", payload)
+	}
+	if !strings.Contains(string(payload), `"details":{}`) {
+		t.Fatalf("expected exported incident event to retain empty details map, got %s", payload)
+	}
 }
 
 func (m *MockAlertManager) UpdateConfig(cfg alerts.AlertConfig) {
@@ -103,9 +138,9 @@ func (m *MockAlertMonitor) SyncAlertState() {
 	m.Called()
 }
 
-func (m *MockAlertMonitor) GetState() models.StateSnapshot {
+func (m *MockAlertMonitor) BuildFrontendState() models.StateFrontend {
 	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
+	return args.Get(0).(models.StateFrontend)
 }
 
 type MockConfigPersistence struct {
@@ -135,7 +170,7 @@ func TestGetAlertConfig(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp alerts.AlertConfig
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.True(t, resp.Enabled)
 }
 
@@ -143,7 +178,7 @@ func TestUpdateAlertConfig(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockPersist := new(MockConfigPersistence)
-	notificationMgr := notifications.NewNotificationManager("")
+	notificationMgr := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
 	defer notificationMgr.Stop()
 
 	mockMonitor.On("GetAlertManager").Return(mockManager)
@@ -171,7 +206,7 @@ func TestActivateAlerts_EnablesNotificationManager(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockPersist := new(MockConfigPersistence)
-	notificationMgr := notifications.NewNotificationManager("")
+	notificationMgr := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
 	defer notificationMgr.Stop()
 
 	mockMonitor.On("GetAlertManager").Return(mockManager)
@@ -218,50 +253,12 @@ func TestGetActiveAlerts(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp []alerts.Alert
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp, 1)
 	assert.Equal(t, "a1", resp[0].ID)
 }
 
-func TestAcknowledgeAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/acknowledge", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-
-	h.AcknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestClearAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("ClearAlert", "a1").Return(true)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/clear", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-
-	h.ClearAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestValidateAlertID(t *testing.T) {
+func TestValidateAlertIdentifier(t *testing.T) {
 	testCases := []struct {
 		name  string
 		id    string
@@ -278,8 +275,8 @@ func TestValidateAlertID(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		if got := validateAlertID(tc.id); got != tc.valid {
-			t.Errorf("validateAlertID(%s) = %v, want %v", tc.name, got, tc.valid)
+		if got := validateAlertIdentifier(tc.id); got != tc.valid {
+			t.Errorf("validateAlertIdentifier(%s) = %v, want %v", tc.name, got, tc.valid)
 		}
 	}
 }
@@ -287,9 +284,34 @@ func TestAlertHandlers_SetMonitor(t *testing.T) {
 	mockMonitor1 := new(MockAlertMonitor)
 	mockMonitor2 := new(MockAlertMonitor)
 	h := NewAlertHandlers(nil, mockMonitor1, nil)
-	assert.Equal(t, mockMonitor1, h.legacyMonitor)
+	assert.Equal(t, mockMonitor1, h.defaultMonitor)
 	h.SetMonitor(mockMonitor2)
-	assert.Equal(t, mockMonitor2, h.legacyMonitor)
+	assert.Equal(t, mockMonitor2, h.defaultMonitor)
+}
+
+func TestAlertHandlers_SetMonitorConcurrentAccess(t *testing.T) {
+	mockMonitor1 := new(MockAlertMonitor)
+	mockMonitor2 := new(MockAlertMonitor)
+	h := NewAlertHandlers(nil, mockMonitor1, nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 500; j++ {
+				if (worker+j)%2 == 0 {
+					h.SetMonitor(mockMonitor1)
+				} else {
+					h.SetMonitor(mockMonitor2)
+				}
+				_ = h.getMonitor(context.Background())
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	assert.NotNil(t, h.getMonitor(context.Background()))
 }
 
 func TestGetAlertHistory(t *testing.T) {
@@ -306,25 +328,8 @@ func TestGetAlertHistory(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp []alerts.Alert
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp, 1)
-}
-
-func TestUnacknowledgeAlert(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
-
-	req := httptest.NewRequest("POST", "/api/alerts/a1/unacknowledge", nil)
-	req.SetPathValue("id", "a1")
-	w := httptest.NewRecorder()
-	h.UnacknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
 }
 
 func TestClearAlertHistory(t *testing.T) {
@@ -342,54 +347,6 @@ func TestClearAlertHistory(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
-func TestAcknowledgeAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("AcknowledgeAlert", "a/b", testifymock.Anything).Return(nil).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/acknowledge", nil)
-	w := httptest.NewRecorder()
-	h.AcknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestUnacknowledgeAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("UnacknowledgeAlert", "a/b").Return(nil).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/unacknowledge", nil)
-	w := httptest.NewRecorder()
-	h.UnacknowledgeAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestClearAlertURL_Success(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("ClearAlert", "a/b").Return(true).Once()
-
-	req := httptest.NewRequest("POST", "/api/alerts/a%2Fb/clear", nil)
-	w := httptest.NewRecorder()
-	h.ClearAlert(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
 func TestSaveAlertIncidentNote(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
@@ -400,12 +357,94 @@ func TestSaveAlertIncidentNote(t *testing.T) {
 	alert := &alerts.Alert{ID: "a1", Type: "test"}
 	mockStore.RecordAlertFired(alert)
 
-	body := `{"alert_id": "a1", "note": "test note", "user": "admin"}`
+	body := `{"alertIdentifier": "a1", "note": "test note", "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.SaveAlertIncidentNote(w, req)
 
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=canonical:a1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incident map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incident)
+	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
+}
+
+func TestGetAlertIncidentTimeline_AcceptsCamelCaseAlertIdentifierQuery(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=canonical:a1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incident map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incident)
+	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
+}
+
+func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?resource_id=resource-1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incidents []map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incidents)
+	assert.Len(t, incidents, 1)
+	assert.Equal(t, "canonical:a1", incidents[0]["alertIdentifier"])
 }
 
 func TestBulkAcknowledgeAlerts(t *testing.T) {
@@ -418,7 +457,7 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 	mockManager.On("AcknowledgeAlert", "a2", testifymock.Anything).Return(fmt.Errorf("error"))
 
-	body := `{"alertIds": ["a1", "a2"], "user": "admin"}`
+	body := `{"alertIdentifiers": ["a1", "a2"], "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.BulkAcknowledgeAlerts(w, req)
@@ -427,7 +466,7 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	var resp struct {
 		Results []map[string]interface{} `json:"results"`
 	}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp.Results, 2)
 }
 
@@ -451,7 +490,7 @@ func TestHandleAlerts(t *testing.T) {
 		{"GET", "/api/alerts/history", func() {
 			mockManager.On("GetAlertHistory", mock.MatchedBy(func(int) bool { return true })).Return([]alerts.Alert{}).Once()
 		}},
-		{"GET", "/api/alerts/incidents?alert_id=a1", func() {
+		{"GET", "/api/alerts/incidents?alertIdentifier=a1", func() {
 			mockMonitor.On("GetIncidentStore").Return(memory.NewIncidentStore(memory.IncidentStoreConfig{})).Once()
 		}},
 		{"POST", "/api/alerts/incidents/note", func() {
@@ -480,18 +519,6 @@ func TestHandleAlerts(t *testing.T) {
 			mockManager.On("ClearAlert", "a1").Return(true).Once()
 			mockMonitor.On("SyncAlertState").Return()
 		}},
-		{"POST", "/api/alerts/a1/acknowledge", func() {
-			mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
-		{"POST", "/api/alerts/a1/unacknowledge", func() {
-			mockManager.On("UnacknowledgeAlert", "a1").Return(nil).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
-		{"POST", "/api/alerts/a1/clear", func() {
-			mockManager.On("ClearAlert", "a1").Return(true).Once()
-			mockMonitor.On("SyncAlertState").Return()
-		}},
 	}
 
 	for _, rt := range routes {
@@ -500,11 +527,11 @@ func TestHandleAlerts(t *testing.T) {
 			var body []byte
 			if rt.method == "POST" || rt.method == "PUT" || rt.method == "DELETE" {
 				if strings.Contains(rt.path, "bulk") {
-					body = []byte(`{"alertIds": ["a1"]}`)
+					body = []byte(`{"alertIdentifiers": ["a1"]}`)
 				} else if strings.Contains(rt.path, "note") {
-					body = []byte(`{"alert_id": "a1", "note": "test"}`)
+					body = []byte(`{"alertIdentifier": "a1", "note": "test"}`)
 				} else {
-					body = []byte(`{"id": "a1", "user": "admin"}`)
+					body = []byte(`{"alertIdentifier": "a1", "user": "admin"}`)
 				}
 			}
 			req := httptest.NewRequest(rt.method, rt.path, bytes.NewReader(body))
@@ -531,7 +558,7 @@ func TestBulkClearAlerts(t *testing.T) {
 	mockManager.On("ClearAlert", "a1").Return(true)
 	mockManager.On("ClearAlert", "a2").Return(false)
 
-	body := `{"alertIds": ["a1", "a2"]}`
+	body := `{"alertIdentifiers": ["a1", "a2"]}`
 	req := httptest.NewRequest("POST", "/api/alerts/bulk/clear", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.BulkClearAlerts(w, req)
@@ -548,7 +575,24 @@ func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 
-	body := `{"id": "a1", "user": "admin"}`
+	body := `{"alertIdentifier": "a1", "user": "admin"}`
+	req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.AcknowledgeAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestAcknowledgeAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.AcknowledgeAlertByBody(w, req)
@@ -565,7 +609,24 @@ func TestUnacknowledgeAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
 
-	body := `{"id": "a1"}`
+	body := `{"alertIdentifier": "a1"}`
+	req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.UnacknowledgeAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestUnacknowledgeAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("UnacknowledgeAlert", "canonical:a1").Return(nil)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.UnacknowledgeAlertByBody(w, req)
@@ -582,7 +643,24 @@ func TestClearAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("ClearAlert", "a1").Return(true)
 
-	body := `{"id": "a1"}`
+	body := `{"alertIdentifier": "a1"}`
+	req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.ClearAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestClearAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("ClearAlert", "canonical:a1").Return(true)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.ClearAlertByBody(w, req)
@@ -604,14 +682,14 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("AcknowledgeAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("AcknowledgeAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -619,35 +697,35 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 
 	t.Run("AcknowledgeAlertByBody_ManagerError", func(t *testing.T) {
 		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(fmt.Errorf("error")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": "a1", "user": "admin"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": "a1", "user": "admin"}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 404, w.Code)
 	})
 
 	t.Run("UnacknowledgeAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.UnacknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("UnacknowledgeAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.UnacknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("ClearAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("ClearAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -655,7 +733,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 
 	t.Run("ClearAlertByBody_NotFound", func(t *testing.T) {
 		mockManager.On("ClearAlert", "unknown").Return(false).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": "unknown"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": "unknown"}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 404, w.Code)
@@ -669,10 +747,19 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("BulkAcknowledgeAlerts_NoIDs", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIds": []}`))
+		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": []}`))
 		w := httptest.NewRecorder()
 		h.BulkAcknowledgeAlerts(w, req)
 		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("BulkAcknowledgeAlerts_CanonicalIdentifiers", func(t *testing.T) {
+		mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil).Once()
+		mockMonitor.On("SyncAlertState").Return().Once()
+		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": ["canonical:a1"]}`))
+		w := httptest.NewRecorder()
+		h.BulkAcknowledgeAlerts(w, req)
+		assert.Equal(t, 200, w.Code)
 	})
 
 	t.Run("UnacknowledgeAlertByBody_InvalidJSON", func(t *testing.T) {
@@ -717,10 +804,31 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
-	t.Run("SaveAlertIncidentNote_InvalidAlertID", func(t *testing.T) {
+	t.Run("SaveAlertIncidentNote_CanonicalIdentifier", func(t *testing.T) {
+		mockMonitor3 := new(MockAlertMonitor)
+		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+		mockMonitor3.On("GetIncidentStore").Return(mockStore)
+		h3 := NewAlertHandlers(nil, mockMonitor3, nil)
+		incidentAlert := &alerts.Alert{
+			ID:           "canonical:a1",
+			Type:         "cpu",
+			Level:        alerts.AlertLevelWarning,
+			ResourceID:   "resource-1",
+			ResourceName: "resource-1",
+			Message:      "test",
+			StartTime:    time.Now(),
+		}
+		mockStore.RecordAlertFired(incidentAlert)
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "canonical:a1", "note": "test"}`))
+		w := httptest.NewRecorder()
+		h3.SaveAlertIncidentNote(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("SaveAlertIncidentNote_InvalidAlertIdentifier", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "bad\x01", "note": "test"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "bad\x01", "note": "test"}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -729,7 +837,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_MissingNote", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "a1", "note": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "a1", "note": ""}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -738,8 +846,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_NotFound", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		// alert_id non-existent in store
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "none", "note": "test"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "none", "note": "test"}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -751,71 +858,5 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.ClearAlertHistory(w, req)
 		assert.Equal(t, 500, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notack", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/acknowledge", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("AcknowledgeAlert_Error", func(t *testing.T) {
-		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(errors.New("not found")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/a1/acknowledge", nil)
-		w := httptest.NewRecorder()
-		h.AcknowledgeAlert(w, req)
-		assert.Equal(t, 404, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notunack", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/unacknowledge", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("UnacknowledgeAlert_Error", func(t *testing.T) {
-		mockManager.On("UnacknowledgeAlert", "a1").Return(errors.New("not found")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/a1/unacknowledge", nil)
-		w := httptest.NewRecorder()
-		h.UnacknowledgeAlert(w, req)
-		assert.Equal(t, 404, w.Code)
-	})
-
-	t.Run("ClearAlert_InvalidURL", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/a/notclear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("ClearAlert_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bad%01/clear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 400, w.Code)
-	})
-
-	t.Run("ClearAlert_NotFound", func(t *testing.T) {
-		mockManager.On("ClearAlert", "none").Return(false).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/none/clear", nil)
-		w := httptest.NewRecorder()
-		h.ClearAlert(w, req)
-		assert.Equal(t, 404, w.Code)
 	})
 }

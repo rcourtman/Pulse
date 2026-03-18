@@ -19,7 +19,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -101,18 +100,18 @@ func TestSaveAlertConfig_DoesNotOverwriteExistingClear(t *testing.T) {
 	}
 }
 
-func TestSaveAlertConfig_NormalizesHostDefaults(t *testing.T) {
+func TestSaveAlertConfig_NormalizesAgentDefaults(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
 		t.Fatalf("EnsureConfigDir: %v", err)
 	}
 
-	// Config with nil/zero HostDefaults - should get defaults
+	// Config with nil/zero AgentDefaults - should get defaults
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults:   alerts.ThresholdConfig{}, // Empty - needs defaults
+		AgentDefaults:  alerts.ThresholdConfig{}, // Empty - needs defaults
 	}
 
 	if err := cp.SaveAlertConfig(cfg); err != nil {
@@ -124,28 +123,28 @@ func TestSaveAlertConfig_NormalizesHostDefaults(t *testing.T) {
 		t.Fatalf("LoadAlertConfig: %v", err)
 	}
 
-	// Verify host defaults were applied
-	if loaded.HostDefaults.CPU == nil {
+	// Verify agent defaults were applied
+	if loaded.AgentDefaults.CPU == nil {
 		t.Fatal("CPU defaults should be set")
 	}
-	if loaded.HostDefaults.CPU.Trigger != 80 {
-		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	if loaded.AgentDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.AgentDefaults.CPU.Trigger)
 	}
-	if loaded.HostDefaults.Memory == nil {
+	if loaded.AgentDefaults.Memory == nil {
 		t.Fatal("Memory defaults should be set")
 	}
-	if loaded.HostDefaults.Memory.Trigger != 85 {
-		t.Errorf("Memory trigger = %v, want 85", loaded.HostDefaults.Memory.Trigger)
+	if loaded.AgentDefaults.Memory.Trigger != 85 {
+		t.Errorf("Memory trigger = %v, want 85", loaded.AgentDefaults.Memory.Trigger)
 	}
-	if loaded.HostDefaults.Disk == nil {
+	if loaded.AgentDefaults.Disk == nil {
 		t.Fatal("Disk defaults should be set")
 	}
-	if loaded.HostDefaults.Disk.Trigger != 90 {
-		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	if loaded.AgentDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.AgentDefaults.Disk.Trigger)
 	}
 }
 
-func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
+func TestSaveAlertConfig_NormalizesAgentDefaultsClear(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
@@ -156,7 +155,7 @@ func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 90, Clear: 0},
 			Memory: &alerts.HysteresisThreshold{Trigger: 95, Clear: 0},
 			Disk:   &alerts.HysteresisThreshold{Trigger: 92, Clear: 0},
@@ -173,21 +172,21 @@ func TestSaveAlertConfig_NormalizesHostDefaultsClear(t *testing.T) {
 	}
 
 	// Clear should be trigger - 5
-	if loaded.HostDefaults.CPU.Clear != 85 {
-		t.Errorf("CPU clear = %v, want 85", loaded.HostDefaults.CPU.Clear)
+	if loaded.AgentDefaults.CPU.Clear != 85 {
+		t.Errorf("CPU clear = %v, want 85", loaded.AgentDefaults.CPU.Clear)
 	}
-	if loaded.HostDefaults.Memory.Clear != 90 {
-		t.Errorf("Memory clear = %v, want 90", loaded.HostDefaults.Memory.Clear)
+	if loaded.AgentDefaults.Memory.Clear != 90 {
+		t.Errorf("Memory clear = %v, want 90", loaded.AgentDefaults.Memory.Clear)
 	}
-	if loaded.HostDefaults.Disk.Clear != 87 {
-		t.Errorf("Disk clear = %v, want 87", loaded.HostDefaults.Disk.Clear)
+	if loaded.AgentDefaults.Disk.Clear != 87 {
+		t.Errorf("Disk clear = %v, want 87", loaded.AgentDefaults.Disk.Clear)
 	}
 }
 
-// TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting verifies that setting
+// TestSaveAlertConfig_AgentDefaultsZeroDisablesAlerting verifies that setting
 // Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
 // Setting a threshold to 0 should disable alerting for that metric.
-func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
+func TestSaveAlertConfig_AgentDefaultsZeroDisablesAlerting(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
 	if err := cp.EnsureConfigDir(); err != nil {
@@ -198,7 +197,7 @@ func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
 	cfg := alerts.AlertConfig{
 		Enabled:        true,
 		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}, // Disabled
 			Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -215,22 +214,22 @@ func TestSaveAlertConfig_HostDefaultsZeroDisablesAlerting(t *testing.T) {
 	}
 
 	// Memory threshold should remain at 0 (disabled), not reset to default
-	if loaded.HostDefaults.Memory == nil {
+	if loaded.AgentDefaults.Memory == nil {
 		t.Fatal("Memory defaults should be preserved (not nil)")
 	}
-	if loaded.HostDefaults.Memory.Trigger != 0 {
-		t.Errorf("Memory trigger = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Trigger)
+	if loaded.AgentDefaults.Memory.Trigger != 0 {
+		t.Errorf("Memory trigger = %v, want 0 (disabled)", loaded.AgentDefaults.Memory.Trigger)
 	}
-	if loaded.HostDefaults.Memory.Clear != 0 {
-		t.Errorf("Memory clear = %v, want 0 (disabled)", loaded.HostDefaults.Memory.Clear)
+	if loaded.AgentDefaults.Memory.Clear != 0 {
+		t.Errorf("Memory clear = %v, want 0 (disabled)", loaded.AgentDefaults.Memory.Clear)
 	}
 
 	// CPU and Disk should still have their values
-	if loaded.HostDefaults.CPU.Trigger != 80 {
-		t.Errorf("CPU trigger = %v, want 80", loaded.HostDefaults.CPU.Trigger)
+	if loaded.AgentDefaults.CPU.Trigger != 80 {
+		t.Errorf("CPU trigger = %v, want 80", loaded.AgentDefaults.CPU.Trigger)
 	}
-	if loaded.HostDefaults.Disk.Trigger != 90 {
-		t.Errorf("Disk trigger = %v, want 90", loaded.HostDefaults.Disk.Trigger)
+	if loaded.AgentDefaults.Disk.Trigger != 90 {
+		t.Errorf("Disk trigger = %v, want 90", loaded.AgentDefaults.Disk.Trigger)
 	}
 }
 
@@ -322,7 +321,7 @@ func TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting(t *testing.T) {
 		NodeDefaults: alerts.ThresholdConfig{
 			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
-		HostDefaults: alerts.ThresholdConfig{
+		AgentDefaults: alerts.ThresholdConfig{
 			CPU:    &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 			Memory: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 			Disk:   &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
@@ -345,14 +344,14 @@ func TestSaveAlertConfig_AllThresholdsZeroDisablesAlerting(t *testing.T) {
 	if loaded.NodeDefaults.Temperature == nil || loaded.NodeDefaults.Temperature.Trigger != 0 {
 		t.Errorf("Temperature trigger = %v, want 0", loaded.NodeDefaults.Temperature)
 	}
-	if loaded.HostDefaults.CPU == nil || loaded.HostDefaults.CPU.Trigger != 0 {
-		t.Errorf("HostDefaults.CPU trigger = %v, want 0", loaded.HostDefaults.CPU)
+	if loaded.AgentDefaults.CPU == nil || loaded.AgentDefaults.CPU.Trigger != 0 {
+		t.Errorf("AgentDefaults.CPU trigger = %v, want 0", loaded.AgentDefaults.CPU)
 	}
-	if loaded.HostDefaults.Memory == nil || loaded.HostDefaults.Memory.Trigger != 0 {
-		t.Errorf("HostDefaults.Memory trigger = %v, want 0", loaded.HostDefaults.Memory)
+	if loaded.AgentDefaults.Memory == nil || loaded.AgentDefaults.Memory.Trigger != 0 {
+		t.Errorf("AgentDefaults.Memory trigger = %v, want 0", loaded.AgentDefaults.Memory)
 	}
-	if loaded.HostDefaults.Disk == nil || loaded.HostDefaults.Disk.Trigger != 0 {
-		t.Errorf("HostDefaults.Disk trigger = %v, want 0", loaded.HostDefaults.Disk)
+	if loaded.AgentDefaults.Disk == nil || loaded.AgentDefaults.Disk.Trigger != 0 {
+		t.Errorf("AgentDefaults.Disk trigger = %v, want 0", loaded.AgentDefaults.Disk)
 	}
 }
 
@@ -398,7 +397,6 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 
 	raw := alerts.AlertConfig{
 		Enabled:                        false,
-		TimeThreshold:                  0,
 		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
 		DockerIgnoredContainerPrefixes: []string{" Runner "},
 		SnapshotDefaults: alerts.SnapshotAlertConfig{
@@ -433,9 +431,6 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 		t.Fatalf("LoadAlertConfig: %v", err)
 	}
 
-	if loaded.TimeThreshold != 5 {
-		t.Fatalf("expected time threshold default 5, got %d", loaded.TimeThreshold)
-	}
 	if got := loaded.TimeThresholds["guest"]; got != 5 {
 		t.Fatalf("expected guest threshold default 5, got %d", got)
 	}
@@ -567,6 +562,24 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 	if err := cp.SaveAPITokens(tokens); err != nil {
 		t.Fatalf("SaveAPITokens: %v", err)
 	}
+	sso := &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "primary",
+				Name:    "Primary SSO",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://idp.example.com",
+					ClientID:  "pulse-client",
+				},
+			},
+		},
+		DefaultProviderID: "primary",
+	}
+	if err := cp.SaveSSOConfig(sso); err != nil {
+		t.Fatalf("SaveSSOConfig: %v", err)
+	}
 
 	passphrase := "strong-passphrase"
 	exported, err := cp.ExportConfig(passphrase)
@@ -576,11 +589,15 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 
 	decoded := mustDecodeExport(t, exported, passphrase)
 
-	if decoded.Version != "4.1" {
-		t.Fatalf("expected export version 4.1, got %q", decoded.Version)
+	if decoded.Version != "4.2" {
+		t.Fatalf("expected export version 4.2, got %q", decoded.Version)
 	}
 
 	assertJSONEqual(t, decoded.APITokens, tokens, "api tokens")
+	if decoded.SSO == nil {
+		t.Fatalf("expected sso config in export")
+	}
+	assertJSONEqual(t, decoded.SSO, sso, "sso config")
 }
 
 func TestImportConfigTransactionalSuccess(t *testing.T) {
@@ -623,7 +640,6 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 			Trigger: 70,
 			Clear:   65,
 		},
-		TimeThreshold: 10,
 		TimeThresholds: map[string]int{
 			"guest":   10,
 			"node":    10,
@@ -1124,6 +1140,54 @@ func TestLoadNodesConfigNormalizesPVEHostsAndClusterEndpoints(t *testing.T) {
 	}
 }
 
+func TestLoadNodesConfigConsolidatesStandalonePVEIntoClusterEndpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	pveNodes := []config.PVEInstance{
+		{
+			Name:        "homelab",
+			Host:        "https://cluster-entry.local",
+			ClusterName: "homelab",
+			IsCluster:   true,
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "minipc", Host: "10.0.0.5"},
+			},
+		},
+		{
+			Name:        "minipc-standalone",
+			Host:        "https://10.0.0.5",
+			GuestURL:    "https://minipc.example",
+			Fingerprint: "fp-standalone",
+		},
+	}
+
+	if err := cp.SaveNodesConfig(pveNodes, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PVEInstances) != 1 {
+		t.Fatalf("expected 1 consolidated PVE instance, got %d", len(loaded.PVEInstances))
+	}
+	if len(loaded.PVEInstances[0].ClusterEndpoints) != 1 {
+		t.Fatalf("expected 1 cluster endpoint, got %d", len(loaded.PVEInstances[0].ClusterEndpoints))
+	}
+	if got := loaded.PVEInstances[0].ClusterEndpoints[0].GuestURL; got != "https://minipc.example" {
+		t.Fatalf("GuestURL = %q, want https://minipc.example", got)
+	}
+	if got := loaded.PVEInstances[0].ClusterEndpoints[0].Fingerprint; got != "fp-standalone" {
+		t.Fatalf("Fingerprint = %q, want fp-standalone", got)
+	}
+}
+
 func mustDecodeExport(t *testing.T, payload, passphrase string) config.ExportData {
 	t.Helper()
 
@@ -1303,6 +1367,95 @@ func TestLoadAPITokensFileNotExist(t *testing.T) {
 	}
 }
 
+func TestLoadAPITokens_MigratesPlaintextHashedFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	plaintextTokens := []config.APITokenRecord{
+		{
+			Name:      "Legacy Plaintext Metadata",
+			Hash:      "legacy-hash",
+			Prefix:    "leg",
+			Suffix:    "acy",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{config.ScopeWildcard},
+		},
+	}
+	plaintextData, err := json.Marshal(plaintextTokens)
+	if err != nil {
+		t.Fatalf("Marshal plaintext tokens: %v", err)
+	}
+
+	tokensFile := filepath.Join(tempDir, "api_tokens.json")
+	if err := os.WriteFile(tokensFile, plaintextData, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("loaded len = %d, want 1", len(loaded))
+	}
+	if loaded[0].ID == "" {
+		t.Fatalf("loaded token missing canonical ID after load")
+	}
+
+	rewritten, err := os.ReadFile(tokensFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten api_tokens.json: %v", err)
+	}
+	if bytes.Equal(rewritten, plaintextData) {
+		t.Fatalf("expected plaintext api token metadata file to be rewritten encrypted")
+	}
+	if bytes.Contains(rewritten, []byte(`"legacy-hash"`)) {
+		t.Fatalf("rewritten api_tokens.json still exposes plaintext token metadata: %s", string(rewritten))
+	}
+
+	reloaded, err := cp.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens second read: %v", err)
+	}
+	if len(reloaded) != 1 {
+		t.Fatalf("reloaded len = %d, want 1", len(reloaded))
+	}
+	if reloaded[0].ID == "" {
+		t.Fatalf("reloaded token missing canonical ID")
+	}
+}
+
+func TestLoadAPITokens_CanonicalizesLegacyHostAgentScopeAliases(t *testing.T) {
+	cp := config.NewConfigPersistence(t.TempDir())
+
+	legacy := []config.APITokenRecord{{
+		ID:        "tok-1",
+		Name:      "legacy",
+		Hash:      "hashed-token",
+		CreatedAt: time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC),
+		Scopes:    []string{"host-agent:report", "host-agent:config:read"},
+		OrgID:     "default",
+	}}
+
+	if err := cp.SaveAPITokens(legacy); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+
+	loaded, err := cp.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("LoadAPITokens: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(loaded))
+	}
+	if got := loaded[0].Scopes; len(got) != 2 || got[0] != config.ScopeAgentReport || got[1] != config.ScopeAgentConfigRead {
+		t.Fatalf("expected canonical agent scopes, got %#v", got)
+	}
+}
+
 func TestLoadEmailConfigErrorInvalidJSON(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
@@ -1410,6 +1563,49 @@ func TestLoadEmailConfig_EncryptedRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadEmailConfig_MigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	emailFile := filepath.Join(tempDir, "email.enc")
+
+	plaintext := notifications.EmailConfig{
+		Enabled:  true,
+		Provider: "smtp",
+		SMTPHost: "mail.example.com",
+		SMTPPort: 465,
+		Username: "user@example.com",
+		Password: "secret-password",
+		From:     "alerts@example.com",
+		To:       []string{"ops@example.com"},
+	}
+	raw, err := json.Marshal(plaintext)
+	if err != nil {
+		t.Fatalf("Marshal plaintext email config: %v", err)
+	}
+	if err := os.WriteFile(emailFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadEmailConfig()
+	if err != nil {
+		t.Fatalf("LoadEmailConfig: %v", err)
+	}
+	if loaded.SMTPHost != plaintext.SMTPHost {
+		t.Fatalf("expected SMTPHost %q, got %q", plaintext.SMTPHost, loaded.SMTPHost)
+	}
+
+	rewritten, err := os.ReadFile(emailFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten email config: %v", err)
+	}
+	if bytes.Equal(rewritten, raw) {
+		t.Fatalf("expected plaintext email config file to be rewritten encrypted")
+	}
+	if bytes.Contains(rewritten, []byte("secret-password")) {
+		t.Fatalf("rewritten email.enc still exposes plaintext credentials: %s", string(rewritten))
+	}
+}
+
 func TestLoadWebhooksErrorInvalidJSON(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
@@ -1462,6 +1658,11 @@ func TestLoadWebhooksMigrationFromLegacyFile(t *testing.T) {
 			URL:     "https://example.com/hook",
 			Method:  "POST",
 			Enabled: true,
+			Service: "pushover",
+			CustomFields: map[string]string{
+				"app_token":  "legacy-app",
+				"user_token": "legacy-user",
+			},
 		},
 	}
 	legacyData, err := json.Marshal(legacyWebhooks)
@@ -1487,6 +1688,30 @@ func TestLoadWebhooksMigrationFromLegacyFile(t *testing.T) {
 	if webhooks[0].ID != "webhook-1" {
 		t.Fatalf("expected webhook ID 'webhook-1', got %q", webhooks[0].ID)
 	}
+	if got := webhooks[0].CustomFields["token"]; got != "legacy-app" {
+		t.Fatalf("expected canonical token custom field after migration, got %q", got)
+	}
+	if got := webhooks[0].CustomFields["user"]; got != "legacy-user" {
+		t.Fatalf("expected canonical user custom field after migration, got %q", got)
+	}
+	if _, ok := webhooks[0].CustomFields["app_token"]; ok {
+		t.Fatalf("expected legacy app_token field to be removed after migration")
+	}
+	if _, ok := webhooks[0].CustomFields["user_token"]; ok {
+		t.Fatalf("expected legacy user_token field to be removed after migration")
+	}
+
+	encryptedFile := filepath.Join(tempDir, "webhooks.enc")
+	rewritten, err := os.ReadFile(encryptedFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten webhooks: %v", err)
+	}
+	if bytes.Equal(rewritten, legacyData) {
+		t.Fatalf("expected legacy webhooks file to be migrated into encrypted storage")
+	}
+	if _, err := os.Stat(legacyFile + ".backup"); err != nil {
+		t.Fatalf("expected legacy webhooks backup after migration: %v", err)
+	}
 }
 
 func TestLoadWebhooksMigrationFromUnencryptedEncFile(t *testing.T) {
@@ -1505,6 +1730,11 @@ func TestLoadWebhooksMigrationFromUnencryptedEncFile(t *testing.T) {
 			URL:     "https://example.com/plain",
 			Method:  "POST",
 			Enabled: true,
+			Service: "pushover",
+			CustomFields: map[string]string{
+				"app_token":  "legacy-app",
+				"user_token": "legacy-user",
+			},
 		},
 	}
 	plainData, err := json.Marshal(plainWebhooks)
@@ -1529,6 +1759,26 @@ func TestLoadWebhooksMigrationFromUnencryptedEncFile(t *testing.T) {
 
 	if webhooks[0].ID != "unencrypted-webhook" {
 		t.Fatalf("expected ID 'unencrypted-webhook', got %q", webhooks[0].ID)
+	}
+	if got := webhooks[0].CustomFields["token"]; got != "legacy-app" {
+		t.Fatalf("expected canonical token custom field after migration, got %q", got)
+	}
+	if got := webhooks[0].CustomFields["user"]; got != "legacy-user" {
+		t.Fatalf("expected canonical user custom field after migration, got %q", got)
+	}
+	if _, ok := webhooks[0].CustomFields["app_token"]; ok {
+		t.Fatalf("expected legacy app_token field to be removed after migration")
+	}
+	if _, ok := webhooks[0].CustomFields["user_token"]; ok {
+		t.Fatalf("expected legacy user_token field to be removed after migration")
+	}
+
+	rewritten, err := os.ReadFile(encFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten webhooks.enc: %v", err)
+	}
+	if bytes.Equal(rewritten, plainData) {
+		t.Fatalf("expected plaintext webhooks.enc to be rewritten encrypted")
 	}
 }
 
@@ -2028,6 +2278,47 @@ func TestLoadAppriseConfigFileNotExist(t *testing.T) {
 	}
 }
 
+func TestLoadAppriseConfig_MigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	appriseFile := filepath.Join(tempDir, "apprise.enc")
+
+	plaintext := notifications.AppriseConfig{
+		Enabled:        true,
+		Mode:           notifications.AppriseModeHTTP,
+		Targets:        []string{"mailto://ops@example.com"},
+		ServerURL:      "https://notify.example.com",
+		APIKey:         "secret-api-key",
+		TimeoutSeconds: 30,
+	}
+	raw, err := json.Marshal(plaintext)
+	if err != nil {
+		t.Fatalf("Marshal plaintext apprise config: %v", err)
+	}
+	if err := os.WriteFile(appriseFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadAppriseConfig()
+	if err != nil {
+		t.Fatalf("LoadAppriseConfig: %v", err)
+	}
+	if loaded.ServerURL != plaintext.ServerURL {
+		t.Fatalf("expected ServerURL %q, got %q", plaintext.ServerURL, loaded.ServerURL)
+	}
+
+	rewritten, err := os.ReadFile(appriseFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten apprise config: %v", err)
+	}
+	if bytes.Equal(rewritten, raw) {
+		t.Fatalf("expected plaintext apprise config file to be rewritten encrypted")
+	}
+	if bytes.Contains(rewritten, []byte("secret-api-key")) {
+		t.Fatalf("rewritten apprise.enc still exposes plaintext secret: %s", string(rewritten))
+	}
+}
+
 func TestLoadAlertConfigErrorInvalidJSON(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
@@ -2084,278 +2375,6 @@ func TestLoadSystemSettingsFileNotExist(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// LoadOIDCConfig error paths and success cases
-// ============================================================================
-
-func TestLoadOIDCConfigFileNotExist(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Don't create the file - test that nil, nil is returned
-	cfg, err := cp.LoadOIDCConfig()
-	if err != nil {
-		t.Fatalf("LoadOIDCConfig returned error for non-existent file: %v", err)
-	}
-
-	if cfg != nil {
-		t.Fatal("expected nil config for non-existent file, got non-nil")
-	}
-}
-
-func TestLoadOIDCConfigFileReadError(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Create oidc.enc as a directory to trigger a read error (not IsNotExist)
-	oidcFile := filepath.Join(tempDir, "oidc.enc")
-	if err := os.Mkdir(oidcFile, 0700); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-
-	_, err := cp.LoadOIDCConfig()
-	if err == nil {
-		t.Fatal("expected error when reading directory as file, got nil")
-	}
-}
-
-func TestLoadOIDCConfigValidJSONWithoutEncryption(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Use SaveOIDCConfig to properly save (and encrypt) the config,
-	// then LoadOIDCConfig should be able to load it back
-	expected := config.OIDCConfig{
-		Enabled:       true,
-		IssuerURL:     "https://auth.example.com",
-		ClientID:      "test-client-id",
-		ClientSecret:  "test-client-secret",
-		RedirectURL:   "https://app.example.com/callback",
-		Scopes:        []string{"openid", "email", "profile"},
-		UsernameClaim: "preferred_username",
-	}
-
-	if err := cp.SaveOIDCConfig(expected); err != nil {
-		t.Fatalf("SaveOIDCConfig: %v", err)
-	}
-
-	loaded, err := cp.LoadOIDCConfig()
-	if err != nil {
-		t.Fatalf("LoadOIDCConfig: %v", err)
-	}
-
-	if loaded == nil {
-		t.Fatal("expected non-nil config, got nil")
-	}
-	if loaded.Enabled != expected.Enabled {
-		t.Fatalf("Enabled mismatch: got %v want %v", loaded.Enabled, expected.Enabled)
-	}
-	if loaded.IssuerURL != expected.IssuerURL {
-		t.Fatalf("IssuerURL mismatch: got %q want %q", loaded.IssuerURL, expected.IssuerURL)
-	}
-	if loaded.ClientID != expected.ClientID {
-		t.Fatalf("ClientID mismatch: got %q want %q", loaded.ClientID, expected.ClientID)
-	}
-	if loaded.ClientSecret != expected.ClientSecret {
-		t.Fatalf("ClientSecret mismatch: got %q want %q", loaded.ClientSecret, expected.ClientSecret)
-	}
-	if loaded.RedirectURL != expected.RedirectURL {
-		t.Fatalf("RedirectURL mismatch: got %q want %q", loaded.RedirectURL, expected.RedirectURL)
-	}
-	if loaded.UsernameClaim != expected.UsernameClaim {
-		t.Fatalf("UsernameClaim mismatch: got %q want %q", loaded.UsernameClaim, expected.UsernameClaim)
-	}
-	if !reflect.DeepEqual(loaded.Scopes, expected.Scopes) {
-		t.Fatalf("Scopes mismatch: got %v want %v", loaded.Scopes, expected.Scopes)
-	}
-}
-
-func TestLoadOIDCConfigInvalidJSON(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Write invalid data to oidc.enc file
-	// Since crypto is enabled, writing raw JSON will cause a decryption error first
-	// To test JSON unmarshal error, we need to bypass encryption or test the path
-	// where crypto is nil. Writing garbage data will trigger decrypt error which
-	// covers the decrypt error path.
-	oidcFile := filepath.Join(tempDir, "oidc.enc")
-	if err := os.WriteFile(oidcFile, []byte(`{invalid json content`), 0600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	_, err := cp.LoadOIDCConfig()
-	if err == nil {
-		t.Fatal("expected error for invalid data, got nil")
-	}
-}
-
-func TestLoadOIDCConfigDecryptionError(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Write data that will fail decryption (not valid encrypted format)
-	oidcFile := filepath.Join(tempDir, "oidc.enc")
-	if err := os.WriteFile(oidcFile, []byte(`corrupted encrypted data`), 0600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	_, err := cp.LoadOIDCConfig()
-	if err == nil {
-		t.Fatal("expected decryption error, got nil")
-	}
-}
-
-func TestLoadOIDCConfigRoundTrip(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := config.NewConfigPersistence(tempDir)
-	if err := cp.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Test full round-trip with encryption
-	original := config.OIDCConfig{
-		Enabled:        true,
-		IssuerURL:      "https://idp.example.org/realms/myrealm",
-		ClientID:       "my-app",
-		ClientSecret:   "super-secret-value",
-		RedirectURL:    "https://myapp.example.org/auth/callback",
-		LogoutURL:      "https://idp.example.org/realms/myrealm/protocol/openid-connect/logout",
-		Scopes:         []string{"openid", "email", "profile", "groups"},
-		UsernameClaim:  "preferred_username",
-		EmailClaim:     "email",
-		GroupsClaim:    "groups",
-		AllowedGroups:  []string{"admin", "users"},
-		AllowedDomains: []string{"example.org"},
-		AllowedEmails:  []string{"admin@example.org"},
-		CABundle:       "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----",
-	}
-
-	if err := cp.SaveOIDCConfig(original); err != nil {
-		t.Fatalf("SaveOIDCConfig: %v", err)
-	}
-
-	loaded, err := cp.LoadOIDCConfig()
-	if err != nil {
-		t.Fatalf("LoadOIDCConfig: %v", err)
-	}
-
-	if loaded == nil {
-		t.Fatal("expected config, got nil")
-	}
-
-	// Verify all fields are preserved through the round-trip
-	if loaded.Enabled != original.Enabled {
-		t.Errorf("Enabled: got %v want %v", loaded.Enabled, original.Enabled)
-	}
-	if loaded.IssuerURL != original.IssuerURL {
-		t.Errorf("IssuerURL: got %q want %q", loaded.IssuerURL, original.IssuerURL)
-	}
-	if loaded.ClientID != original.ClientID {
-		t.Errorf("ClientID: got %q want %q", loaded.ClientID, original.ClientID)
-	}
-	if loaded.ClientSecret != original.ClientSecret {
-		t.Errorf("ClientSecret: got %q want %q", loaded.ClientSecret, original.ClientSecret)
-	}
-	if loaded.RedirectURL != original.RedirectURL {
-		t.Errorf("RedirectURL: got %q want %q", loaded.RedirectURL, original.RedirectURL)
-	}
-	if loaded.LogoutURL != original.LogoutURL {
-		t.Errorf("LogoutURL: got %q want %q", loaded.LogoutURL, original.LogoutURL)
-	}
-	if !reflect.DeepEqual(loaded.Scopes, original.Scopes) {
-		t.Errorf("Scopes: got %v want %v", loaded.Scopes, original.Scopes)
-	}
-	if loaded.UsernameClaim != original.UsernameClaim {
-		t.Errorf("UsernameClaim: got %q want %q", loaded.UsernameClaim, original.UsernameClaim)
-	}
-	if loaded.EmailClaim != original.EmailClaim {
-		t.Errorf("EmailClaim: got %q want %q", loaded.EmailClaim, original.EmailClaim)
-	}
-	if loaded.GroupsClaim != original.GroupsClaim {
-		t.Errorf("GroupsClaim: got %q want %q", loaded.GroupsClaim, original.GroupsClaim)
-	}
-	if !reflect.DeepEqual(loaded.AllowedGroups, original.AllowedGroups) {
-		t.Errorf("AllowedGroups: got %v want %v", loaded.AllowedGroups, original.AllowedGroups)
-	}
-	if !reflect.DeepEqual(loaded.AllowedDomains, original.AllowedDomains) {
-		t.Errorf("AllowedDomains: got %v want %v", loaded.AllowedDomains, original.AllowedDomains)
-	}
-	if !reflect.DeepEqual(loaded.AllowedEmails, original.AllowedEmails) {
-		t.Errorf("AllowedEmails: got %v want %v", loaded.AllowedEmails, original.AllowedEmails)
-	}
-	if loaded.CABundle != original.CABundle {
-		t.Errorf("CABundle: got %q want %q", loaded.CABundle, original.CABundle)
-	}
-}
-
-func TestPersistence_EnvConfigSuppressions(t *testing.T) {
-	tempDir := t.TempDir()
-	p := config.NewConfigPersistence(tempDir)
-	if err := p.EnsureConfigDir(); err != nil {
-		t.Fatalf("EnsureConfigDir: %v", err)
-	}
-
-	// Should start empty
-	hashes, err := p.LoadEnvTokenSuppressions()
-	if err != nil {
-		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
-	}
-	if len(hashes) != 0 {
-		t.Errorf("Expected empty hashes, got %v", hashes)
-	}
-
-	// Save some hashes
-	expected := []string{"hash1", "hash2"}
-	if err := p.SaveEnvTokenSuppressions(expected); err != nil {
-		t.Fatalf("SaveEnvTokenSuppressions: %v", err)
-	}
-
-	// Load back
-	loaded, err := p.LoadEnvTokenSuppressions()
-	if err != nil {
-		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
-	}
-	if !reflect.DeepEqual(loaded, expected) {
-		t.Errorf("Expected %v, got %v", expected, loaded)
-	}
-
-	// Save empty
-	if err := p.SaveEnvTokenSuppressions([]string{}); err != nil {
-		t.Fatalf("SaveEnvTokenSuppressions empty: %v", err)
-	}
-	loaded, err = p.LoadEnvTokenSuppressions()
-	if err != nil {
-		t.Fatalf("LoadEnvTokenSuppressions: %v", err)
-	}
-	if len(loaded) != 0 {
-		t.Errorf("Expected empty hashes after clearing, got %v", loaded)
-	}
-
-	// Test invalid JSON
-	invalidFile := filepath.Join(tempDir, "env_token_suppressions.json")
-	require.NoError(t, os.WriteFile(invalidFile, []byte("{xxx"), 0644))
-	_, err = p.LoadEnvTokenSuppressions()
-	if err == nil {
-		t.Fatal("Expected error on invalid JSON")
-	}
-}
-
 func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := config.NewConfigPersistence(tempDir)
@@ -2391,5 +2410,43 @@ func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
 	// MonitorBackups should be migrated to true
 	if !pve.MonitorBackups {
 		t.Errorf("expected MonitorBackups to be migrated to true, got false")
+	}
+}
+
+func TestLoadNodesConfig_PBSMonitorDatastoresMigration(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PBS instance with MonitorDatastores=false (simulating old config)
+	pbsInstances := []config.PBSInstance{
+		{
+			Name:              "pbs-no-datastores",
+			Host:              "https://pbs.local:8007",
+			User:              "admin@pbs",
+			Password:          "secret",
+			MonitorBackups:    true,
+			MonitorDatastores: false, // This should be migrated to true
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, pbsInstances, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(loaded.PBSInstances))
+	}
+
+	pbs := loaded.PBSInstances[0]
+	if !pbs.MonitorDatastores {
+		t.Errorf("expected MonitorDatastores to be migrated to true, got false")
 	}
 }

@@ -3,11 +3,20 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+)
+
+const (
+	legacyPatrolAlertIdentifierField = "legacy_alert_id"
+	legacyPatrolAlertIDField         = "alert_id"
 )
 
 func TestHandleGetPatrolStatus_MethodNotAllowed(t *testing.T) {
@@ -51,6 +60,40 @@ func TestHandleGetPatrolStatus_NoPatrolService(t *testing.T) {
 	}
 	if !resp.Healthy {
 		t.Error("expected Healthy to be true when patrol not initialized (no issues)")
+	}
+}
+
+func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
+	t.Parallel()
+
+	// Handler with no legacy AI service should not panic.
+	handler := &AISettingsHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Running {
+		t.Error("expected Running to be false when AI service missing")
+	}
+	if resp.Enabled {
+		t.Error("expected Enabled to be false when AI service missing")
+	}
+	if !resp.Healthy {
+		t.Error("expected Healthy to be true when AI service missing")
+	}
+	if resp.LicenseStatus == "" {
+		t.Error("expected LicenseStatus to be set when AI service missing")
 	}
 }
 
@@ -281,6 +324,328 @@ func TestHandleGetPatrolRunHistory_NoPatrolService(t *testing.T) {
 	if len(history) != 0 {
 		t.Errorf("expected empty history, got %d", len(history))
 	}
+}
+
+func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(10)
+	store.Add(ai.PatrolRunRecord{
+		ID:               "run-1",
+		StartedAt:        time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+		DurationMs:       60000,
+		Type:             "patrol",
+		AlertIdentifier:  "instance:node:100::metric/cpu",
+		ResourcesChecked: 1,
+		FindingsSummary:  "ok",
+		FindingIDs:       []string{},
+		Status:           "healthy",
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolRunHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var history []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected one history item, got %d", len(history))
+	}
+	if history[0]["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", history[0]["alert_identifier"])
+	}
+	if _, ok := history[0][legacyPatrolAlertIdentifierField]; ok {
+		t.Fatalf(
+			"did not expect %s in patrol history response, got %#v",
+			legacyPatrolAlertIdentifierField,
+			history[0][legacyPatrolAlertIdentifierField],
+		)
+	}
+	if _, ok := history[0][legacyPatrolAlertIDField]; ok {
+		t.Fatalf(
+			"did not expect %s in patrol history response, got %#v",
+			legacyPatrolAlertIDField,
+			history[0][legacyPatrolAlertIDField],
+		)
+	}
+}
+
+func TestHandleGetPatrolRunHistory_PreservesExplicitEmptySnapshotCollections(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(10)
+	store.Add(ai.PatrolRunRecord{
+		ID:                        "run-1",
+		StartedAt:                 time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		CompletedAt:               time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+		DurationMs:                60000,
+		Type:                      "scoped",
+		TriggerReason:             "alert_fired",
+		ScopeResourceIDs:          []string{"seed-resource"},
+		EffectiveScopeResourceIDs: []string{},
+		ScopeResourceTypes:        []string{"vm"},
+		ResourcesChecked:          2,
+		PMGChecked:                1,
+		ExistingFindings:          1,
+		RejectedFindings:          1,
+		FindingsSummary:           "ok",
+		FindingIDs:                []string{},
+		Status:                    "healthy",
+		TriageFlags:               2,
+		TriageSkippedLLM:          true,
+		ToolCallCount:             0,
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolRunHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var history []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected one history item, got %d", len(history))
+	}
+
+	run := history[0]
+	if values, ok := run["effective_scope_resource_ids"].([]interface{}); !ok || len(values) != 0 {
+		t.Fatalf("expected explicit empty effective_scope_resource_ids, got %#v", run["effective_scope_resource_ids"])
+	}
+	if values, ok := run["finding_ids"].([]interface{}); !ok || len(values) != 0 {
+		t.Fatalf("expected explicit empty finding_ids, got %#v", run["finding_ids"])
+	}
+	if got := run["pmg_checked"]; got != float64(1) {
+		t.Fatalf("expected pmg_checked=1, got %#v", got)
+	}
+	if got := run["rejected_findings"]; got != float64(1) {
+		t.Fatalf("expected rejected_findings=1, got %#v", got)
+	}
+	if got := run["triage_flags"]; got != float64(2) {
+		t.Fatalf("expected triage_flags=2, got %#v", got)
+	}
+	if got := run["triage_skipped_llm"]; got != true {
+		t.Fatalf("expected triage_skipped_llm=true, got %#v", got)
+	}
+}
+
+func TestHandleGetPatrolRunHistory_InvalidOrOversizedLimitIsNormalized(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(200)
+	for i := 0; i < 120; i++ {
+		store.Add(ai.PatrolRunRecord{
+			ID:               fmt.Sprintf("run-%03d", i),
+			StartedAt:        time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Minute),
+			CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC).Add(time.Duration(i) * time.Minute),
+			DurationMs:       60000,
+			Type:             "patrol",
+			ResourcesChecked: 1,
+			FindingsSummary:  "ok",
+			FindingIDs:       []string{},
+			Status:           "healthy",
+		})
+	}
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	tests := []struct {
+		name       string
+		query      string
+		wantLength int
+	}{
+		{name: "zero_uses_default", query: "?limit=0", wantLength: 30},
+		{name: "negative_uses_default", query: "?limit=-5", wantLength: 30},
+		{name: "cap_at_100", query: "?limit=250", wantLength: 100},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs"+tc.query, nil)
+			rec := httptest.NewRecorder()
+
+			handler.HandleGetPatrolRunHistory(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+			}
+
+			var history []map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+			if len(history) != tc.wantLength {
+				t.Fatalf("history length = %d, want %d", len(history), tc.wantLength)
+			}
+		})
+	}
+}
+
+func TestHandleGetPatrolRun_Errors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("method_not_allowed", func(t *testing.T) {
+		handler := createTestAIHandler(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/runs/run-1", nil)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+		}
+	})
+
+	t.Run("missing_run_id", func(t *testing.T) {
+		handler := createTestAIHandler(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs/", nil)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+	})
+
+	t.Run("no_patrol_service", func(t *testing.T) {
+		handler := createTestAIHandler(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs/run-1", nil)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if payload["error"] != "Pulse Patrol service not available" {
+			t.Fatalf("error = %#v, want Pulse Patrol service not available", payload["error"])
+		}
+	})
+}
+
+func TestHandleGetPatrolRun_ByID(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(10)
+	store.Add(ai.PatrolRunRecord{
+		ID:               "run/special",
+		StartedAt:        time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+		DurationMs:       60000,
+		Type:             "patrol",
+		ResourcesChecked: 1,
+		FindingsSummary:  "ok",
+		FindingIDs:       []string{},
+		Status:           "healthy",
+		ToolCalls: []ai.ToolCallRecord{
+			{
+				ID:       "call-1",
+				ToolName: "ssh",
+				Input:    "{\"command\":\"uptime\"}",
+				Output:   "ok",
+				Success:  true,
+				Duration: 42,
+			},
+		},
+		ToolCallCount: 1,
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	t.Run("omits_tool_calls_by_default", func(t *testing.T) {
+		req := httptest.NewRequest(
+			http.MethodGet,
+			"/api/ai/patrol/runs/"+url.PathEscape("run/special"),
+			nil,
+		)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+		}
+
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if payload["id"] != "run/special" {
+			t.Fatalf("id = %#v, want run/special", payload["id"])
+		}
+		if _, ok := payload["tool_calls"]; ok {
+			t.Fatalf("did not expect tool_calls in default response, got %#v", payload["tool_calls"])
+		}
+		if payload["tool_call_count"] != float64(1) {
+			t.Fatalf("tool_call_count = %#v, want 1", payload["tool_call_count"])
+		}
+	})
+
+	t.Run("includes_tool_calls_when_requested", func(t *testing.T) {
+		req := httptest.NewRequest(
+			http.MethodGet,
+			"/api/ai/patrol/runs/"+url.PathEscape("run/special")+"?include=tool_calls",
+			nil,
+		)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+		}
+
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		toolCalls, ok := payload["tool_calls"].([]interface{})
+		if !ok || len(toolCalls) != 1 {
+			t.Fatalf("expected one tool call, got %#v", payload["tool_calls"])
+		}
+	})
+
+	t.Run("missing_run_returns_not_found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs/missing", nil)
+		rec := httptest.NewRecorder()
+
+		handler.HandleGetPatrolRun(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+		}
+	})
 }
 
 func TestHandleSuppressFinding_MethodNotAllowed(t *testing.T) {

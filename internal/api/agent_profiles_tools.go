@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -19,11 +18,11 @@ const aiProfileDescription = "Managed by Pulse Patrol"
 // MCPAgentProfileManager manages agent profiles for MCP tools.
 type MCPAgentProfileManager struct {
 	persistence    *config.ConfigPersistence
-	licenseService *license.Service
+	licenseService licenseFeatureChecker
 	validator      *models.ProfileValidator
 }
 
-func NewMCPAgentProfileManager(persistence *config.ConfigPersistence, licenseService *license.Service) *MCPAgentProfileManager {
+func NewMCPAgentProfileManager(persistence *config.ConfigPersistence, licenseService licenseFeatureChecker) *MCPAgentProfileManager {
 	return &MCPAgentProfileManager{
 		persistence:    persistence,
 		licenseService: licenseService,
@@ -269,7 +268,7 @@ func formatValidationIssues(result models.ValidationResult) string {
 func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note string) error {
 	versions, err := m.persistence.LoadAgentProfileVersions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile versions: %w", err)
 	}
 
 	versions = append(versions, models.AgentProfileVersion{
@@ -284,7 +283,10 @@ func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note s
 		ChangeNote:  note,
 	})
 
-	return m.persistence.SaveAgentProfileVersions(versions)
+	if err := m.persistence.SaveAgentProfileVersions(versions); err != nil {
+		return fmt.Errorf("save profile versions: %w", err)
+	}
+	return nil
 }
 
 func (m *MCPAgentProfileManager) logChange(entry models.ProfileChangeLog) {
@@ -297,7 +299,7 @@ func (m *MCPAgentProfileManager) requireLicense() error {
 	if m.licenseService == nil {
 		return nil
 	}
-	return m.licenseService.RequireFeature(license.FeatureAgentProfiles)
+	return m.licenseService.RequireFeature(featureAgentProfilesValue)
 }
 
 func buildScopeProfileName(agentLabel, agentID string) string {

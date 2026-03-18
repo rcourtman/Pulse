@@ -3,7 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,37 +12,51 @@ import (
 )
 
 func TestNewConfigWatcher_DirectoryPriority(t *testing.T) {
-	// Create temporary directories to simulate different environments
 	tempDir := t.TempDir()
-
-	dir1 := filepath.Join(tempDir, "dir1") // Explicit auth dir
-	dir2 := filepath.Join(tempDir, "dir2") // DATA_DIR
+	dir1 := filepath.Join(tempDir, "dir1")
+	dir2 := filepath.Join(tempDir, "dir2")
 
 	require.NoError(t, os.MkdirAll(dir1, 0755))
 	require.NoError(t, os.MkdirAll(dir2, 0755))
-
-	// Create .env files
 	require.NoError(t, os.WriteFile(filepath.Join(dir1, ".env"), []byte(""), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir2, ".env"), []byte(""), 0644))
 
 	tests := []struct {
-		name           string
-		authConfigDir  string
-		dataDir        string
-		expectedPrefix string
+		name          string
+		cfg           *Config
+		authConfigDir string
+		dataDir       string
+		expectedPath  string
 	}{
-		// Test case "Fallback to PULSE_DATA_DIR" removed as it depends on /etc/pulse/.env non-existence
 		{
-			name:           "Prefer PULSE_AUTH_CONFIG_DIR",
-			authConfigDir:  dir1,
-			dataDir:        dir2,
-			expectedPrefix: dir1,
+			name:          "Prefer PULSE_AUTH_CONFIG_DIR",
+			cfg:           &Config{ConfigPath: dir2},
+			authConfigDir: dir1,
+			dataDir:       dir2,
+			expectedPath:  filepath.Join(dir1, ".env"),
 		},
 		{
-			name:           "Default fallback (when dir2 is not treated as production)",
-			authConfigDir:  "",
-			dataDir:        "",
-			expectedPrefix: "/etc/pulse", // Default fallback
+			name:         "Prefer ConfigPath over PULSE_DATA_DIR",
+			cfg:          &Config{ConfigPath: dir1},
+			dataDir:      dir2,
+			expectedPath: filepath.Join(dir1, ".env"),
+		},
+		{
+			name:         "Prefer DataPath when ConfigPath empty",
+			cfg:          &Config{DataPath: dir1},
+			dataDir:      dir2,
+			expectedPath: filepath.Join(dir1, ".env"),
+		},
+		{
+			name:         "Fallback to PULSE_DATA_DIR",
+			cfg:          &Config{},
+			dataDir:      dir2,
+			expectedPath: filepath.Join(dir2, ".env"),
+		},
+		{
+			name:         "Default fallback uses defaultDataDir",
+			cfg:          &Config{},
+			expectedPath: filepath.Join(defaultDataDir, ".env"),
 		},
 	}
 
@@ -60,20 +74,11 @@ func TestNewConfigWatcher_DirectoryPriority(t *testing.T) {
 				os.Unsetenv("PULSE_DATA_DIR")
 			}
 
-			cfg := &Config{}
-			cw, err := NewConfigWatcher(cfg)
+			cw, err := NewConfigWatcher(tt.cfg)
 			require.NoError(t, err)
+			defer cw.Stop()
 
-			// Check if envPath starts with the expected directory
-			// Note: NewConfigWatcher logic has specific checks for /etc/pulse and /data
-			// For arbitrary temp dirs, it might fall back to option 5 or 6 depending on checks.
-			// Let's verify what it actually picked.
-			if tt.expectedPrefix != "/etc/pulse" && !strings.HasPrefix(cw.envPath, tt.expectedPrefix) {
-				// If we expected a specific temp dir but got something else, verify why.
-				// In "Prefer PULSE_AUTH_CONFIG_DIR", it should pick dir1.
-				// In "Fallback to PULSE_DATA_DIR", it should pick dir2 (Option 5).
-				t.Errorf("Expected envPath to start with %s, got %s", tt.expectedPrefix, cw.envPath)
-			}
+			assert.Equal(t, tt.expectedPath, cw.envPath)
 		})
 	}
 }
@@ -113,44 +118,25 @@ PULSE_AUTH_PASS="newsecret"`
 	assert.Equal(t, "newsecret", cfg.AuthPass)
 }
 
-func TestConfigWatcher_ReloadMockConfig(t *testing.T) {
-	// Setup
+func TestConfigWatcher_ReloadConfig_MockSettings(t *testing.T) {
 	tempDir := t.TempDir()
-
-	// We need to manipulate where NewConfigWatcher looks for mock.env.
-	// It looks in /opt/pulse by default if not docker.
-	// Since we can't easily change the hardcoded path in NewConfigWatcher without refactoring,
-	// we will manually set cw.mockEnvPath and create the file there.
-
-	mockEnvPath := filepath.Join(tempDir, "mock.env")
+	envPath := filepath.Join(tempDir, ".env")
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
 
 	cfg := &Config{}
-	cw := &ConfigWatcher{
-		config:      cfg,
-		mockEnvPath: mockEnvPath,
-	}
+	cw, err := NewConfigWatcher(cfg)
+	require.NoError(t, err)
 
-	// Hook
-	callbackCalled := false
+	var callbackCalled atomic.Bool
 	cw.SetMockReloadCallback(func() {
-		callbackCalled = true
+		callbackCalled.Store(true)
 	})
 
-	// Create mock.env
-	envContent := `PULSE_MOCK_TEST="true"`
-	require.NoError(t, os.WriteFile(mockEnvPath, []byte(envContent), 0644))
+	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_MOCK_TEST="true"`), 0644))
+	cw.reloadConfig()
+	assert.Equal(t, "true", os.Getenv("PULSE_MOCK_TEST"))
 
-	// Reload
-	cw.reloadMockConfig()
-
-	// Validation
-	val := os.Getenv("PULSE_MOCK_TEST")
-	assert.Equal(t, "true", val)
-
-	// Wait for callback (it's called in a goroutine)
-	require.Eventually(t, func() bool { return callbackCalled }, 1*time.Second, 10*time.Millisecond)
-
-	// Cleanup
+	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 	os.Unsetenv("PULSE_MOCK_TEST")
 }
 
@@ -172,9 +158,9 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 		apiTokensPath: apiTokensPath,
 	}
 
-	callbackCalled := false
+	var callbackCalled atomic.Bool
 	cw.SetAPITokenReloadCallback(func() {
-		callbackCalled = true
+		callbackCalled.Store(true)
 	})
 
 	// Create API tokens file via persistence to ensure format matches
@@ -199,11 +185,17 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 	assert.Len(t, cfg.APITokens, 1)
 	if len(cfg.APITokens) > 0 {
 		assert.Equal(t, "Test Token", cfg.APITokens[0].Name)
+		assert.Equal(t, "default", cfg.APITokens[0].OrgID)
 	}
 	Mu.Unlock()
 
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.Equal(t, "default", persisted[0].OrgID)
+
 	// Wait for callback
-	require.Eventually(t, func() bool { return callbackCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 }
 
 func TestConfigWatcher_CalculateFileHash_Error(t *testing.T) {
@@ -243,18 +235,10 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
-	mockEnvPath := filepath.Join(tempDir, "mock.env")
 	apiTokensPath := filepath.Join(tempDir, "api_tokens.json")
 
 	// Create initial files
-	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_AUTH_USER="initial"`), 0644))
-	// We need mock.env to exist locally to have NewConfigWatcher pick it up,
-	// BUT NewConfigWatcher uses hardcoded /opt/pulse for mock logic unless we trick it or it's changed.
-	// Actually NewConfigWatcher checks /opt/pulse/mock.env if NOT docker.
-	// We can't easily change the path it looks for.
-	// However, `pollForChanges` uses `cw.mockEnvPath`.
-	// We can manually set `cw.mockEnvPath` in the test structure as we did in TestConfigWatcher_ReloadMockConfig.
-
+	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=\"initial\"\nPULSE_MOCK_TEST=\"1\""), 0644))
 	require.NoError(t, os.WriteFile(apiTokensPath, []byte("[]"), 0644))
 
 	// Ensure temp dir is used
@@ -263,15 +247,6 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cfg := &Config{}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
-
-	// Manually set mockEnvPath for test visibility since default is /opt/pulse
-	cw.mockEnvPath = mockEnvPath
-	require.NoError(t, os.WriteFile(mockEnvPath, []byte(`PULSE_MOCK_TEST="1"`), 0644))
-
-	// Set initial mod times (simulate what Start() or NewConfigWatcher would do)
-	if stat, err := os.Stat(mockEnvPath); err == nil {
-		cw.mockLastModTime = stat.ModTime()
-	}
 	if stat, err := os.Stat(apiTokensPath); err == nil {
 		cw.apiTokensLastModTime = stat.ModTime()
 	}
@@ -280,11 +255,11 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cw.pollInterval = 10 * time.Millisecond
 
 	// Hook up callbacks
-	mockCalled := false
-	tokenCalled := false
+	var mockCalled atomic.Bool
+	var tokenCalled atomic.Bool
 
-	cw.SetMockReloadCallback(func() { mockCalled = true })
-	cw.SetAPITokenReloadCallback(func() { tokenCalled = true })
+	cw.SetMockReloadCallback(func() { mockCalled.Store(true) })
+	cw.SetAPITokenReloadCallback(func() { tokenCalled.Store(true) })
 
 	// Mock global persistence for API token reloads
 	p := NewConfigPersistence(tempDir)
@@ -296,12 +271,11 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	go cw.pollForChanges()
 	defer cw.Stop()
 
-	// Wait a bit
-	time.Sleep(20 * time.Millisecond)
-
 	// 1. Update .env
-	time.Sleep(100 * time.Millisecond) // Ensure FS modtime change
 	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_AUTH_USER="updated"`), 0644))
+	// Avoid relying on filesystem timestamp granularity.
+	future := time.Now().Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(envPath, future, future))
 
 	require.Eventually(t, func() bool {
 		Mu.RLock()
@@ -309,62 +283,52 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 		return cfg.AuthUser == "updated"
 	}, 1*time.Second, 10*time.Millisecond)
 
-	// 2. Update mock.env
-	time.Sleep(100 * time.Millisecond)
-	require.NoError(t, os.WriteFile(mockEnvPath, []byte(`PULSE_MOCK_TEST="2"`), 0644))
+	// 2. Update .env mock settings
+	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=\"updated\"\nPULSE_MOCK_TEST=\"2\""), 0644))
+	future = future.Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(envPath, future, future))
 
-	require.Eventually(t, func() bool { return mockCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return mockCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "2", os.Getenv("PULSE_MOCK_TEST"))
 
 	// 3. Update api_tokens.json
 	// Write valid JSON
-	time.Sleep(100 * time.Millisecond)
 	// We need to write to file that Persistence reads.
 	// ReloadAPITokens uses globalPersistence to load.
 	tokens := []APITokenRecord{{ID: "new", Hash: "hash", Name: "New"}}
 	require.NoError(t, p.SaveAPITokens(tokens))
+	future = future.Add(2 * time.Second)
+	require.NoError(t, os.Chtimes(apiTokensPath, future, future))
 
 	// Waiting for polling to pick up change in file modification
 	// persistence.SaveAPITokens writes to the file.
 
-	require.Eventually(t, func() bool { return tokenCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return tokenCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 
 	Mu.RLock()
 	defer Mu.RUnlock()
 	assert.Len(t, cfg.APITokens, 1)
 }
 
-func TestConfigWatcher_ReloadConfig_APITokens(t *testing.T) {
+func TestConfigWatcher_ReloadConfig_APITokensIgnored(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
 	// Ensure temp dir is used
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
 
 	cfg := &Config{
-		APITokens: []APITokenRecord{},
+		APITokens: []APITokenRecord{{ID: "id", Hash: "hash"}},
 	}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
 
-	// Scenario 1: Add tokens via .env (when APITokens empty)
+	// API_TOKEN/API_TOKENS are ignored by watcher reloads in strict v6 mode.
 	envContent := `API_TOKEN="token1"
 API_TOKENS="token2,token3"`
 	require.NoError(t, os.WriteFile(envPath, []byte(envContent), 0644))
 
 	cw.reloadConfig()
 
-	assert.Len(t, cfg.APITokens, 3)
-	assert.True(t, cfg.HasAPITokens())
-
-	// Scenario 2: Legacy tokens ignored if APITokens not empty (manually added via UI/Persistence)
-	// Let's simulate that by adding a token directly to config
-	cfg.APITokens = []APITokenRecord{{ID: "id", Hash: "hash"}}
-
-	envContentUpdated := `API_TOKEN="tokenRefused"`
-	require.NoError(t, os.WriteFile(envPath, []byte(envContentUpdated), 0644))
-
-	cw.reloadConfig()
-	// Should still match manual config, ignoring .env
 	assert.Len(t, cfg.APITokens, 1)
 	assert.Equal(t, "hash", cfg.APITokens[0].Hash)
 }
@@ -418,37 +382,36 @@ func TestConfigWatcher_ReloadConfig_Manual(t *testing.T) {
 	assert.Equal(t, "manual", cfg.AuthUser)
 }
 
-func TestConfigWatcher_ReloadMockConfig_LocalOverride(t *testing.T) {
+func TestConfigWatcher_ReloadConfig_RemovesMockSetting(t *testing.T) {
 	tempDir := t.TempDir()
-	mockEnvPath := filepath.Join(tempDir, "mock.env")
-	mockEnvLocalPath := filepath.Join(tempDir, "mock.env.local")
+	envPath := filepath.Join(tempDir, ".env")
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
 
 	cfg := &Config{}
-	cw := &ConfigWatcher{
-		config:      cfg,
-		mockEnvPath: mockEnvPath,
-	}
+	cw, err := NewConfigWatcher(cfg)
+	require.NoError(t, err)
 
-	require.NoError(t, os.WriteFile(mockEnvPath, []byte(`PULSE_MOCK_TEST="base"`), 0644))
-	require.NoError(t, os.WriteFile(mockEnvLocalPath, []byte(`PULSE_MOCK_TEST="override"`), 0644))
+	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_MOCK_TEST="base"`), 0644))
+	cw.reloadConfig()
+	require.Equal(t, "base", os.Getenv("PULSE_MOCK_TEST"))
 
-	cw.reloadMockConfig()
-
-	assert.Equal(t, "override", os.Getenv("PULSE_MOCK_TEST"))
+	require.NoError(t, os.WriteFile(envPath, []byte(""), 0644))
+	cw.reloadConfig()
+	assert.Equal(t, "", os.Getenv("PULSE_MOCK_TEST"))
 	os.Unsetenv("PULSE_MOCK_TEST")
 }
 
-func TestConfigWatcher_ReloadMockConfig_MissingFile(t *testing.T) {
+func TestConfigWatcher_ReloadConfig_MissingEnvRemovesMockSetting(t *testing.T) {
 	tempDir := t.TempDir()
-	mockEnvPath := filepath.Join(tempDir, "mock.env")
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+	os.Setenv("PULSE_MOCK_TEST", "stale")
+	t.Cleanup(func() { os.Unsetenv("PULSE_MOCK_TEST") })
 
-	cw := &ConfigWatcher{
-		config:      &Config{},
-		mockEnvPath: mockEnvPath,
-	}
+	cw, err := NewConfigWatcher(&Config{})
+	require.NoError(t, err)
 
-	// Should not panic or error
-	cw.reloadMockConfig()
+	cw.reloadConfig()
+	assert.Equal(t, "", os.Getenv("PULSE_MOCK_TEST"))
 }
 
 func TestConfigWatcher_ReloadAPITokens_Retries(t *testing.T) {

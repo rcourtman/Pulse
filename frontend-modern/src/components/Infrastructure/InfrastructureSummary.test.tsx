@@ -1,0 +1,890 @@
+import { createSignal } from 'solid-js';
+import { render, waitFor, cleanup } from '@solidjs/testing-library';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { InfrastructureSummary, __resetInMemoryChartCacheForTests } from './InfrastructureSummary';
+import type { Resource } from '@/types/resource';
+import type { TimeRange } from '@/api/charts';
+import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
+
+const mockGetCharts = vi.fn();
+let mockHostAgentResources: Resource[] = [];
+
+vi.mock('@/api/charts', async () => {
+  const actual = await vi.importActual<typeof import('@/api/charts')>('@/api/charts');
+  return {
+    ...actual,
+    ChartsAPI: {
+      ...actual.ChartsAPI,
+      getInfrastructureSummaryCharts: (...args: unknown[]) => mockGetCharts(...args),
+    },
+  };
+});
+
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({
+    workloads: () => [],
+    resources: () => mockHostAgentResources,
+  }),
+}));
+
+vi.mock('@/components/shared/DensityMap', () => ({
+  DensityMap: (_props: {
+    series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
+  }) => {
+    return (
+      <svg class="cursor-crosshair" data-testid="density-map">
+        <path vector-effect="non-scaling-stroke" />
+      </svg>
+    );
+  },
+}));
+
+const makeHost = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'node-1',
+  type: 'agent',
+  name: 'node-1',
+  displayName: 'node-1',
+  platformId: 'node-1',
+  platformType: 'proxmox-pve',
+  sourceType: 'api',
+  status: 'online',
+  lastSeen: Date.now(),
+  ...overrides,
+});
+
+const makeChartsResponse = (ids: string[] = ['node-1']) => ({
+  nodeData: Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
+        cpu: [
+          { timestamp: Date.now() - 60_000, value: 10 + index },
+          { timestamp: Date.now(), value: 15 + index },
+        ],
+        memory: [
+          { timestamp: Date.now() - 60_000, value: 45 + index },
+          { timestamp: Date.now(), value: 50 + index },
+        ],
+        disk: [
+          { timestamp: Date.now() - 60_000, value: 30 + index },
+          { timestamp: Date.now(), value: 35 + index },
+        ],
+      },
+    ]),
+  ),
+  dockerHostData: {},
+  agentData: {},
+  timestamp: Date.now(),
+  stats: {
+    oldestDataTimestamp: Date.now() - 60_000,
+  },
+});
+
+const countSparklinePaths = (container: HTMLElement): number =>
+  container.querySelectorAll('path[vector-effect="non-scaling-stroke"]').length;
+
+describe('InfrastructureSummary range behavior', () => {
+  beforeEach(() => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValue(makeChartsResponse());
+    __resetInfrastructureSummaryFetchesForTests();
+    __resetInMemoryChartCacheForTests();
+    localStorage.clear();
+    mockHostAgentResources = [];
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('requests charts for initial and updated time ranges', async () => {
+    const [range, setRange] = createSignal<TimeRange>('1h');
+    render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    setRange('24h');
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+  });
+
+  it('deduplicates concurrent summary fetches across component instances', async () => {
+    let resolveFetch: ((value: ReturnType<typeof makeChartsResponse>) => void) | undefined;
+    const pending = new Promise<ReturnType<typeof makeChartsResponse>>((resolve) => {
+      resolveFetch = resolve;
+    });
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementation(() => pending);
+
+    render(() => (
+      <>
+        <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+        <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+      </>
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    resolveFetch?.(makeChartsResponse());
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('hydrates sparklines from cache immediately while live fetch is pending', async () => {
+    // First render: fetch succeeds, populating the in-memory cache.
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce(makeChartsResponse());
+    const { container: firstContainer, unmount } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+    ));
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(firstContainer.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+    unmount();
+
+    // Second render: fetch hangs, but in-memory cache provides instant data.
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      const path = container
+        .querySelector('svg.cursor-crosshair')
+        ?.querySelector('path[vector-effect="non-scaling-stroke"]');
+      expect(path).toBeTruthy();
+    });
+  });
+
+  it('renders charts once live fetch resolves', async () => {
+    let resolveFetch: ((value: ReturnType<typeof makeChartsResponse>) => void) | undefined;
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve as (value: ReturnType<typeof makeChartsResponse>) => void;
+        }),
+    );
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    // While fetch is pending, skeleton should be shown (no in-memory cache yet).
+    expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]').length).toBeGreaterThan(
+      0,
+    );
+
+    resolveFetch?.(makeChartsResponse());
+
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
+    });
+  });
+
+  it('does not render stale-range sparkline paths while new range data is loading', async () => {
+    const firstResponse = makeChartsResponse();
+    mockGetCharts.mockImplementationOnce(() => Promise.resolve(firstResponse));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+
+    const [range, setRange] = createSignal<TimeRange>('1h');
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      const sparklineSvg = container.querySelector('svg.cursor-crosshair');
+      const sparklinePath = sparklineSvg?.querySelector('path[vector-effect="non-scaling-stroke"]');
+      expect(sparklinePath).toBeTruthy();
+    });
+
+    setRange('24h');
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+
+    expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('requests the new range while the previous range request is still pending', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
+
+    const [range, setRange] = createSignal<TimeRange>('1h');
+    render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    setRange('24h');
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+  });
+
+  it('clears stale range data when a new range response is empty', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
+    mockGetCharts.mockImplementationOnce(() =>
+      Promise.resolve({
+        nodeData: {},
+        dockerHostData: {},
+        agentData: {},
+        timestamp: Date.now(),
+        stats: {
+          oldestDataTimestamp: Date.now() - 60_000,
+        },
+      }),
+    );
+
+    const [range, setRange] = createSignal<TimeRange>('1h');
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+
+    setRange('24h');
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
+      expect(container.textContent).toContain('Waiting for first sample');
+    });
+  });
+
+  it('shows waiting state for a newly connected online host before the first sample lands', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {},
+      agentData: {},
+      timestamp: Date.now(),
+      stats: {
+        oldestDataTimestamp: null,
+      },
+    });
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Waiting for first sample');
+    });
+  });
+
+  it('shows error state when the newly selected range request fails', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
+    mockGetCharts.mockImplementationOnce(() => Promise.reject(new Error('network error')));
+
+    const [range, setRange] = createSignal<TimeRange>('1h');
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+
+    setRange('24h');
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
+      expect(container.textContent).toContain('Trend data unavailable');
+    });
+  });
+
+  it('hydrates from cache after hosts are removed and re-added', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+
+    const [hosts, setHosts] = createSignal<Resource[]>([makeHost()]);
+    const { container } = render(() => (
+      <InfrastructureSummary resources={hosts()} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+
+    setHosts([]);
+    setHosts([makeHost()]);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
+    });
+  });
+
+  it('keeps per-chart rendered series bounded to the focused resource', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce(makeChartsResponse(['node-1', 'node-2']));
+    const hosts = [
+      makeHost(),
+      makeHost({
+        id: 'node-2',
+        name: 'node-2',
+        displayName: 'node-2',
+        platformId: 'node-2',
+      }),
+    ];
+    const [focusedResourceId, setFocusedResourceId] = createSignal<string | null>(null);
+
+    const { container } = render(() => (
+      <InfrastructureSummary
+        resources={hosts}
+        timeRange="1h"
+        focusedResourceId={focusedResourceId()}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
+      expect(countSparklinePaths(container)).toBeGreaterThan(0);
+    });
+
+    const allSeriesPathCount = countSparklinePaths(container);
+    setFocusedResourceId('node-2');
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
+      expect(countSparklinePaths(container)).toBeGreaterThan(0);
+      expect(countSparklinePaths(container)).toBeLessThan(allSeriesPathCount);
+    });
+  });
+
+  it('does not refetch charts on large resource list growth for the same range', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValue(makeChartsResponse(['node-1']));
+
+    const [hosts, setHosts] = createSignal<Resource[]>(
+      Array.from({ length: 300 }, (_, i) =>
+        makeHost({
+          id: `node-${i}`,
+          name: `node-${i}`,
+          displayName: `node-${i}`,
+          platformId: `node-${i}`,
+        }),
+      ),
+    );
+
+    render(() => <InfrastructureSummary resources={hosts()} timeRange="1h" />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+    });
+
+    setHosts(
+      Array.from({ length: 1200 }, (_, i) =>
+        makeHost({
+          id: `node-updated-${i}`,
+          name: `node-updated-${i}`,
+          displayName: `node-updated-${i}`,
+          platformId: `node-updated-${i}`,
+        }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('keeps the network card visible from canonical agent facets without source hints', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {},
+      agentData: {
+        'agent-host-1': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [],
+          netout: [],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const agentOnlyHost: Resource = {
+      id: 'unified-host-1',
+      type: 'agent',
+      name: 'unraid-node',
+      displayName: 'unraid-node',
+      platformId: 'unraid-node',
+      platformType: 'agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: now,
+      platformData: {
+        agent: {
+          agentId: 'agent-host-1',
+          hostname: 'unraid-node',
+        },
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[agentOnlyHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Network');
+      expect(container.textContent).not.toContain('Workloads');
+    });
+  });
+
+  it('maps agentData by top-level resource.agent.agentId when platformData is absent', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {},
+      agentData: {
+        'agent-host-2': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 4096 },
+            { timestamp: now, value: 8192 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 2048 },
+            { timestamp: now, value: 4096 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const agentOnlyHost: Resource = {
+      id: 'unified-host-2',
+      type: 'agent',
+      name: 'agent-host-two',
+      displayName: 'agent-host-two',
+      platformId: 'agent-host-two',
+      platformType: 'agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: now,
+      agent: {
+        agentId: 'agent-host-2',
+      },
+      platformData: {
+        sources: ['agent'],
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[agentOnlyHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
+
+  it('maps docker-host metrics using metricsTarget and hostSourceId identifiers', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {
+        'docker-host-1': {
+          cpu: [
+            { timestamp: now - 60_000, value: 18 },
+            { timestamp: now, value: 21 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 52 },
+            { timestamp: now, value: 55 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 37 },
+            { timestamp: now, value: 39 },
+          ],
+        },
+      },
+      agentData: {},
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const dockerHost: Resource = {
+      id: 'hash-docker-host-resource-id',
+      type: 'docker-host',
+      name: 'Tower',
+      displayName: 'Tower',
+      platformId: 'tower',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: now,
+      metricsTarget: {
+        resourceType: 'docker-host',
+        resourceId: 'docker-host-1',
+      },
+      platformData: {
+        docker: {
+          hostSourceId: 'docker-host-1',
+        },
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary
+        resources={[dockerHost]}
+        timeRange="1h"
+        focusedResourceId="hash-docker-host-resource-id"
+      />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).not.toContain('No history yet');
+    });
+  });
+
+  it('uses linked agent discovery IDs for network chart fallback when resource IDs are hashed', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {
+        'node-1': {
+          cpu: [
+            { timestamp: now - 60_000, value: 20 },
+            { timestamp: now, value: 25 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 40 },
+            { timestamp: now, value: 45 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 35 },
+            { timestamp: now, value: 40 },
+          ],
+          netin: [],
+          netout: [],
+        },
+      },
+      dockerHostData: {},
+      agentData: {
+        'agent-host-3': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    mockHostAgentResources = [
+      {
+        id: 'hash-host-resource-id',
+        type: 'agent',
+        name: 'agent-host-3-name',
+        displayName: 'Agent Host 3',
+        platformId: 'agent-host-3-platform',
+        platformType: 'proxmox-pve',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: now,
+        discoveryTarget: {
+          resourceType: 'agent',
+          agentId: 'agent-host-3',
+          resourceId: 'agent-host-3',
+        },
+        platformData: {
+          agent: {
+            agentId: 'agent-host-3',
+            linkedNodeId: 'node-1',
+          },
+        },
+      },
+    ];
+
+    const proxmoxNodeHost: Resource = {
+      id: 'node-1',
+      type: 'agent',
+      name: 'node-1',
+      displayName: 'node-1',
+      platformId: 'node-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: now,
+      platformData: {
+        sources: ['agent'],
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
+
+  it('uses linkedAgentId for direct agent chart fallback when no agent resource is loaded', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockHostAgentResources = [];
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {
+        'node-1': {
+          cpu: [
+            { timestamp: now - 60_000, value: 20 },
+            { timestamp: now, value: 25 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 40 },
+            { timestamp: now, value: 45 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 35 },
+            { timestamp: now, value: 40 },
+          ],
+          netin: [],
+          netout: [],
+        },
+      },
+      dockerHostData: {},
+      agentData: {
+        'agent-host-4': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const proxmoxNodeHost: Resource = {
+      id: 'node-1',
+      type: 'agent',
+      name: 'node-1',
+      displayName: 'node-1',
+      platformId: 'node-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: now,
+      platformData: {
+        linkedAgentId: 'agent-host-4',
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
+
+  it('matches loaded agent resources by shared identity aliases when names diverge', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {
+        'node-2': {
+          cpu: [
+            { timestamp: now - 60_000, value: 20 },
+            { timestamp: now, value: 25 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 40 },
+            { timestamp: now, value: 45 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 35 },
+            { timestamp: now, value: 40 },
+          ],
+          netin: [],
+          netout: [],
+        },
+      },
+      dockerHostData: {},
+      agentData: {
+        'agent-host-5': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    mockHostAgentResources = [
+      {
+        id: 'hash-agent-resource',
+        type: 'agent',
+        name: 'unhelpful-internal-name',
+        displayName: 'Merged Host',
+        platformId: 'internal-platform-id',
+        platformType: 'agent',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: now,
+        platformData: {
+          agent: {
+            agentId: 'agent-host-5',
+            hostname: 'tower.local',
+          },
+        },
+      },
+    ];
+
+    const proxmoxNodeHost: Resource = {
+      id: 'node-2',
+      type: 'agent',
+      name: 'pve-node-2',
+      displayName: 'PVE Node 2',
+      platformId: 'pve-node-2',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: now,
+      identity: {
+        hostname: 'tower.local',
+      },
+      platformData: {
+        sources: ['proxmox'],
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
+});

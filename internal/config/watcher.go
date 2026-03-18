@@ -5,15 +5,13 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,91 +20,60 @@ var (
 	watcherOsGetenv = os.Getenv
 )
 
+// Debounce durations for fsnotify events. Package vars so tests can override to avoid real sleeps.
+var (
+	debounceEnvWrite       = 500 * time.Millisecond
+	debounceAPITokensWrite = 250 * time.Millisecond
+)
+
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
 	config               *Config
 	envPath              string
-	mockEnvPath          string
 	apiTokensPath        string
 	watcher              *fsnotify.Watcher
 	stopChan             chan struct{}
 	stopOnce             sync.Once // Ensures Stop() can only close channel once
 	lastModTime          time.Time
 	lastEnvHash          string
-	mockLastModTime      time.Time
 	apiTokensLastModTime time.Time
 	mu                   sync.RWMutex
-	onMockReload         func() // Callback to trigger backend restart
+	onMockReload         func() // Callback to trigger backend restart when PULSE_MOCK_* changes
 	onAPITokenReload     func() // Callback when API tokens are reloaded from disk
 	pollInterval         time.Duration
 }
 
 // NewConfigWatcher creates a new config watcher
 func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
-	// CRITICAL FIX: Config watcher must ALWAYS watch the persistent production config,
-	// NOT the mock data directory. Mock mode should only affect Proxmox data, not auth.
-	//
-	// Strategy:
-	// 1. Check PULSE_AUTH_CONFIG_DIR (dedicated env var for auth config)
-	// 2. If PULSE_DATA_DIR looks like production (/etc/pulse or /data), use it
-	// 3. Otherwise, always prefer /etc/pulse if it exists (production auth)
-	// 4. Fall back to /data for Docker environments
-	// 5. Last resort: use PULSE_DATA_DIR (may be mock/dev)
-
-	persistentDataDir := ""
-	dataDir := watcherOsGetenv("PULSE_DATA_DIR")
-
-	// Option 1: Explicit auth config directory override
-	if authDir := watcherOsGetenv("PULSE_AUTH_CONFIG_DIR"); authDir != "" {
-		persistentDataDir = authDir
-		log.Info().Str("authConfigDir", authDir).Msg("Using PULSE_AUTH_CONFIG_DIR for auth config")
-	} else if dataDir == "/etc/pulse" || dataDir == "/data" {
-		// Option 2: PULSE_DATA_DIR is already production, use it
-		persistentDataDir = dataDir
-	} else if _, err := watcherOsStat("/etc/pulse/.env"); err == nil {
-		// Option 3: /etc/pulse exists, use it (production)
-		persistentDataDir = "/etc/pulse"
-		if dataDir != "" && dataDir != persistentDataDir {
-			log.Warn().
-				Str("dataDir", dataDir).
-				Str("authConfigDir", persistentDataDir).
-				Msg("PULSE_DATA_DIR points to non-production directory - using /etc/pulse for auth config instead")
-		}
-	} else if _, err := watcherOsStat("/data/.env"); err == nil {
-		// Option 4: Docker environment
-		persistentDataDir = "/data"
-	} else if dataDir != "" {
-		// Option 5: Use PULSE_DATA_DIR as fallback
-		persistentDataDir = dataDir
-		if strings.Contains(persistentDataDir, "/mock-data") || strings.Contains(persistentDataDir, "/tmp/") {
-			log.Warn().
-				Str("authConfigDir", persistentDataDir).
-				Msg("WARNING: Auth config watcher is using temporary/mock directory - auth may be unstable")
-		}
-	} else {
-		// Option 6: Last resort default
-		persistentDataDir = "/etc/pulse"
+	persistentDataDir := resolveWatcherDataDir(config)
+	dataDir := strings.TrimSpace(watcherOsGetenv("PULSE_DATA_DIR"))
+	configPath := ""
+	dataPath := ""
+	if config != nil {
+		configPath = config.ConfigPath
+		dataPath = config.DataPath
 	}
 
 	envPath := filepath.Join(persistentDataDir, ".env")
 
-	// Log what we're watching for debugging
-	log.Info().
+	logEvent := log.Info().
 		Str("watchingPath", envPath).
 		Str("authConfigDir", persistentDataDir).
 		Str("pulseDataDir", dataDir).
-		Str("configPathFromConfig", config.ConfigPath).
-		Msg("Config watcher initialized - watching production auth config")
-
-	// Determine mock.env path - skip in Docker or if directory doesn't exist
-	mockEnvPath := ""
-	isDocker := watcherOsGetenv("PULSE_DOCKER") == "true"
-	mockDir := "/opt/pulse"
-	if !isDocker {
-		if stat, err := watcherOsStat(mockDir); err == nil && stat.IsDir() {
-			mockEnvPath = filepath.Join(mockDir, "mock.env")
-		}
+		Str("configPathFromConfig", configPath).
+		Str("dataPathFromConfig", dataPath)
+	if authDir := strings.TrimSpace(watcherOsGetenv("PULSE_AUTH_CONFIG_DIR")); authDir != "" {
+		logEvent = logEvent.Str("pathAuthority", "PULSE_AUTH_CONFIG_DIR")
+	} else if strings.TrimSpace(configPath) != "" {
+		logEvent = logEvent.Str("pathAuthority", "config.ConfigPath")
+	} else if strings.TrimSpace(dataPath) != "" {
+		logEvent = logEvent.Str("pathAuthority", "config.DataPath")
+	} else if dataDir != "" {
+		logEvent = logEvent.Str("pathAuthority", "PULSE_DATA_DIR")
+	} else {
+		logEvent = logEvent.Str("pathAuthority", "defaultDataDir")
 	}
+	logEvent.Msg("Config watcher initialized")
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -118,7 +85,6 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	cw := &ConfigWatcher{
 		config:        config,
 		envPath:       envPath,
-		mockEnvPath:   mockEnvPath,
 		apiTokensPath: apiTokensPath,
 		watcher:       watcher,
 		stopChan:      make(chan struct{}),
@@ -133,11 +99,6 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 			cw.lastEnvHash = hex.EncodeToString(hash[:])
 		}
 	}
-	if mockEnvPath != "" {
-		if stat, err := watcherOsStat(mockEnvPath); err == nil {
-			cw.mockLastModTime = stat.ModTime()
-		}
-	}
 	if stat, err := watcherOsStat(apiTokensPath); err == nil {
 		cw.apiTokensLastModTime = stat.ModTime()
 	}
@@ -145,7 +106,23 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	return cw, nil
 }
 
-// SetMockReloadCallback sets the callback function to trigger when mock.env changes
+func resolveWatcherDataDir(config *Config) string {
+	if authDir := strings.TrimSpace(watcherOsGetenv("PULSE_AUTH_CONFIG_DIR")); authDir != "" {
+		log.Info().Str("authConfigDir", authDir).Msg("Using PULSE_AUTH_CONFIG_DIR for auth config")
+		return authDir
+	}
+	if config != nil {
+		if configPath := strings.TrimSpace(config.ConfigPath); configPath != "" {
+			return configPath
+		}
+		if dataPath := strings.TrimSpace(config.DataPath); dataPath != "" {
+			return dataPath
+		}
+	}
+	return ResolveRuntimeDataDir(watcherOsGetenv("PULSE_DATA_DIR"))
+}
+
+// SetMockReloadCallback sets the callback function to trigger when PULSE_MOCK_* settings change.
 func (cw *ConfigWatcher) SetMockReloadCallback(callback func()) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
@@ -169,26 +146,18 @@ func (cw *ConfigWatcher) Start() error {
 		log.Warn().Err(err).Str("path", dir).Msg("Failed to watch config directory")
 	}
 
-	// Also watch the mock.env directory if it's configured (not in Docker)
-	if cw.mockEnvPath != "" {
-		mockDir := filepath.Dir(cw.mockEnvPath)
-		if err := cw.watcher.Add(mockDir); err != nil {
-			log.Warn().Err(err).Str("path", mockDir).Msg("Failed to watch mock.env directory")
-		}
-	}
-
 	if err != nil {
-		log.Warn().Msg("Falling back to polling for config changes")
+		log.Warn().
+			Err(err).
+			Str("env_path", cw.envPath).
+			Dur("poll_interval", cw.pollInterval).
+			Msg("Falling back to polling for config changes")
 		go cw.pollForChanges()
 		return nil
 	}
 
 	go cw.watchForChanges()
-	logEvent := log.Info().Str("env_path", cw.envPath).Str("api_tokens_path", cw.apiTokensPath)
-	if cw.mockEnvPath != "" {
-		logEvent = logEvent.Str("mock_env_path", cw.mockEnvPath)
-	}
-	logEvent.Msg("Started watching config files for changes")
+	log.Info().Str("env_path", cw.envPath).Str("api_tokens_path", cw.apiTokensPath).Msg("Started watching config files for changes")
 	return nil
 }
 
@@ -223,7 +192,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			// Check if the event is for our .env file
 			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(500 * time.Millisecond)
+				if !cw.waitForDuration(debounceEnvWrite) {
+					return
+				}
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					// Check if content actually changed to prevent restart loops on touch
@@ -244,7 +215,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
 				// Debounce - wait longer for atomic file operations to complete
 				// (write to .tmp, rename to final file)
-				time.Sleep(250 * time.Millisecond)
+				if !cw.waitForDuration(debounceAPITokensWrite) {
+					return
+				}
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
@@ -252,26 +225,41 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 				}
 			}
 
-			// Check if the event is for mock.env (only if mock.env watching is enabled)
-			if cw.mockEnvPath != "" && (filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath) {
-				// Debounce - wait a bit for write to complete
-				time.Sleep(100 * time.Millisecond)
-
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-					log.Info().Str("event", event.Op.String()).Msg("Detected mock.env file change")
-					cw.reloadMockConfig()
-				}
-			}
-
 		case err, ok := <-errors:
 			if !ok {
 				return
 			}
-			log.Error().Err(err).Msg("Config watcher error")
+			log.Error().
+				Err(err).
+				Str("env_path", cw.envPath).
+				Str("api_tokens_path", cw.apiTokensPath).
+				Msg("Config watcher error")
 
 		case <-cw.stopChan:
 			return
 		}
+	}
+}
+
+// waitForDuration blocks for d unless shutdown is requested first.
+func (cw *ConfigWatcher) waitForDuration(d time.Duration) bool {
+	if d <= 0 {
+		select {
+		case <-cw.stopChan:
+			return false
+		default:
+			return true
+		}
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-cw.stopChan:
+		return false
 	}
 }
 
@@ -298,17 +286,6 @@ func (cw *ConfigWatcher) pollForChanges() {
 					}
 					log.Info().Msg("Detected .env file change via polling")
 					cw.reloadConfig()
-				}
-			}
-
-			// Check mock.env (only if mock.env watching is enabled)
-			if cw.mockEnvPath != "" {
-				if stat, err := os.Stat(cw.mockEnvPath); err == nil {
-					if stat.ModTime().After(cw.mockLastModTime) {
-						log.Info().Msg("Detected mock.env file change via polling")
-						cw.mockLastModTime = stat.ModTime()
-						cw.reloadMockConfig()
-					}
 				}
 			}
 
@@ -340,15 +317,12 @@ func (cw *ConfigWatcher) calculateFileHash(path string) (string, error) {
 
 // reloadConfig reloads the config from the .env file
 func (cw *ConfigWatcher) reloadConfig() {
-	cw.mu.Lock()
-	defer cw.mu.Unlock()
-
 	// Load the .env file
 	envMap, err := godotenv.Read(cw.envPath)
 	if err != nil {
 		// File might not exist, which is fine (no auth)
 		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read .env file")
+			log.Error().Err(err).Str("env_path", cw.envPath).Msg("Failed to read .env file")
 			return
 		}
 		envMap = make(map[string]string)
@@ -357,19 +331,18 @@ func (cw *ConfigWatcher) reloadConfig() {
 	// Track what changed
 	var changes []string
 
+	cw.mu.Lock()
+	callback := cw.onMockReload
+	defer cw.mu.Unlock()
+
 	// Update auth settings
 	oldAuthUser := cw.config.AuthUser
 	oldAuthPass := cw.config.AuthPass
-	oldTokenHashes := cw.config.ActiveAPITokenHashes()
-	existingByHash := make(map[string]APITokenRecord, len(cw.config.APITokens))
-	for _, record := range cw.config.APITokens {
-		existingByHash[record.Hash] = record.Clone()
-	}
+	oldMockEnv := currentMockEnv()
+	newMockEnv := extractMockEnv(envMap)
 
 	// Apply auth user
 	Mu.Lock()
-	defer Mu.Unlock()
-
 	newUser := strings.Trim(envMap["PULSE_AUTH_USER"], "'\"")
 	if newUser != oldAuthUser {
 		cw.config.AuthUser = newUser
@@ -394,81 +367,11 @@ func (cw *ConfigWatcher) reloadConfig() {
 			changes = append(changes, "auth password updated")
 		}
 	}
+	Mu.Unlock()
 
-	// Legacy env token support: only process if api_tokens.json is empty
-	// This prevents .env changes from overwriting UI-managed tokens (fixes #685)
-	rawTokens := make([]string, 0, 4)
-	if raw, ok := envMap["API_TOKENS"]; ok {
-		raw = strings.Trim(raw, "'\"")
-		if raw != "" {
-			parts := strings.Split(raw, ",")
-			for _, part := range parts {
-				token := strings.TrimSpace(part)
-				if token != "" {
-					rawTokens = append(rawTokens, token)
-				}
-			}
-		}
-	}
-	if raw, ok := envMap["API_TOKEN"]; ok {
-		raw = strings.Trim(raw, "'\"")
-		if raw != "" {
-			rawTokens = append(rawTokens, raw)
-		}
-	}
-
-	// Only reload tokens from .env if NO tokens exist in api_tokens.json
-	// This makes api_tokens.json the authoritative source once it has records
-	if len(rawTokens) > 0 && len(cw.config.APITokens) == 0 {
-		log.Debug().Msg("No existing API tokens found - loading from .env (legacy)")
-		seen := make(map[string]struct{}, len(rawTokens))
-		newRecords := make([]APITokenRecord, 0, len(rawTokens))
-		for _, tokenValue := range rawTokens {
-			tokenValue = strings.TrimSpace(tokenValue)
-			if tokenValue == "" {
-				continue
-			}
-
-			hashed := tokenValue
-			prefix := tokenPrefix(tokenValue)
-			suffix := tokenSuffix(tokenValue)
-			if !auth.IsAPITokenHashed(tokenValue) {
-				hashed = auth.HashAPIToken(tokenValue)
-				prefix = tokenPrefix(tokenValue)
-				suffix = tokenSuffix(tokenValue)
-			}
-
-			if _, exists := seen[hashed]; exists {
-				continue
-			}
-			seen[hashed] = struct{}{}
-
-			newRecords = append(newRecords, APITokenRecord{
-				ID:        uuid.NewString(),
-				Name:      "Environment token",
-				Hash:      hashed,
-				Prefix:    prefix,
-				Suffix:    suffix,
-				CreatedAt: time.Now().UTC(),
-				Scopes:    []string{ScopeWildcard},
-			})
-		}
-
-		cw.config.APITokens = newRecords
-		cw.config.SortAPITokens()
-
-		newHashes := cw.config.ActiveAPITokenHashes()
-		if !reflect.DeepEqual(oldTokenHashes, newHashes) {
-			changes = append(changes, "API tokens added")
-
-			if globalPersistence != nil {
-				if err := globalPersistence.SaveAPITokens(cw.config.APITokens); err != nil {
-					log.Error().Err(err).Msg("Failed to persist API tokens from .env reload")
-				}
-			}
-		}
-	} else if len(rawTokens) > 0 && len(cw.config.APITokens) > 0 {
-		log.Debug().Msg("Ignoring API_TOKEN/API_TOKENS from .env - api_tokens.json is authoritative")
+	mockChanged := applyMockEnv(newMockEnv, oldMockEnv)
+	if mockChanged {
+		changes = append(changes, "mock runtime updated")
 	}
 
 	// REMOVED: POLLING_INTERVAL from .env - now ONLY in system.json
@@ -484,6 +387,21 @@ func (cw *ConfigWatcher) reloadConfig() {
 	} else {
 		log.Debug().Msg("No relevant changes detected in .env file")
 	}
+
+	if mockChanged && callback != nil {
+		log.Info().Str("env_path", cw.envPath).Msg("Triggering backend reload due to .env mock setting change")
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Stack().
+						Msg("Recovered from panic in .env mock reload callback")
+				}
+			}()
+			callback()
+		}()
+	}
 }
 
 func (cw *ConfigWatcher) reloadAPITokens() {
@@ -495,7 +413,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	defer cw.mu.Unlock()
 
 	if globalPersistence == nil {
-		log.Warn().Msg("Config persistence unavailable; cannot reload API tokens")
+		log.Warn().Str("api_tokens_path", cw.apiTokensPath).Msg("Config persistence unavailable; cannot reload API tokens")
 		return
 	}
 
@@ -521,8 +439,11 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
 				Dur("retryDelay", retryDelay).
+				Str("api_tokens_path", cw.apiTokensPath).
 				Msg("Failed to reload API tokens, retrying...")
-			time.Sleep(retryDelay)
+			if !cw.waitForDuration(retryDelay) {
+				return
+			}
 			retryDelay *= 2 // Exponential backoff
 		}
 	}
@@ -531,9 +452,36 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		log.Error().
 			Err(err).
 			Int("existingTokens", existingCount).
+			Str("api_tokens_path", cw.apiTokensPath).
 			Msg("Failed to reload API tokens after retries - preserving existing tokens")
 		// CRITICAL: Keep existing tokens rather than clearing them
 		return
+	}
+
+	persistMutations := false
+	if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
+		persistMutations = true
+		log.Warn().
+			Int("count", migrated).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Msg("Migrated API tokens missing IDs during reload")
+	}
+
+	if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
+		persistMutations = true
+		log.Warn().
+			Int("count", migrated).
+			Str("api_tokens_path", cw.apiTokensPath).
+			Msg("Migrated legacy API tokens to default organization binding during reload")
+	}
+
+	if persistMutations {
+		if err := globalPersistence.SaveAPITokens(tokens); err != nil {
+			log.Error().
+				Err(err).
+				Str("api_tokens_path", cw.apiTokensPath).
+				Msg("Failed to persist API token migrations during reload")
+		}
 	}
 
 	// Only update if we successfully loaded tokens
@@ -570,63 +518,53 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	}
 }
 
-// reloadMockConfig handles mock.env file changes
-func (cw *ConfigWatcher) reloadMockConfig() {
-	// Skip if mock.env watching is disabled (Docker environment)
-	if cw.mockEnvPath == "" {
-		return
-	}
-
-	cw.mu.Lock()
-	callback := cw.onMockReload
-	cw.mu.Unlock()
-
-	// Load the mock.env file to update environment variables
-	envMap, err := godotenv.Read(cw.mockEnvPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read mock.env file")
-			return
+func currentMockEnv() map[string]string {
+	mockEnv := make(map[string]string)
+	for _, entry := range os.Environ() {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || !strings.HasPrefix(key, "PULSE_MOCK_") {
+			continue
 		}
-		log.Warn().Msg("mock.env file not found")
-		return
+		mockEnv[key] = value
 	}
+	return mockEnv
+}
 
-	// Load local overrides if they exist
-	mockEnvLocalPath := cw.mockEnvPath + ".local"
-	if localEnv, err := godotenv.Read(mockEnvLocalPath); err == nil {
-		// Merge local overrides into envMap
-		for key, value := range localEnv {
-			envMap[key] = value
-		}
-		log.Debug().Str("path", mockEnvLocalPath).Msg("Loaded mock.env.local overrides")
-	}
-
-	// Update environment variables for the mock package to read
+func extractMockEnv(envMap map[string]string) map[string]string {
+	mockEnv := make(map[string]string)
 	for key, value := range envMap {
 		if strings.HasPrefix(key, "PULSE_MOCK_") {
-			os.Setenv(key, value)
+			mockEnv[key] = value
 		}
 	}
+	return mockEnv
+}
 
-	log.Info().
-		Str("path", cw.mockEnvPath).
-		Interface("config", envMap).
-		Msg("Reloaded mock.env configuration")
-
-	// Trigger callback to restart backend if set
-	if callback != nil {
-		log.Info().Msg("Triggering backend restart due to mock.env change")
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().
-						Interface("panic", r).
-						Stack().
-						Msg("Recovered from panic in mock.env callback")
-				}
-			}()
-			callback()
-		}()
+func applyMockEnv(next map[string]string, current map[string]string) bool {
+	changed := false
+	seen := make(map[string]struct{}, len(next))
+	for key, value := range next {
+		seen[key] = struct{}{}
+		if currentValue, ok := current[key]; !ok || currentValue != value {
+			_ = os.Setenv(key, value)
+			changed = true
+		}
 	}
+	for key := range current {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		if err := os.Unsetenv(key); err == nil {
+			changed = true
+		}
+	}
+	if changed {
+		keys := make([]string, 0, len(next))
+		for key := range next {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		log.Debug().Strs("variables", keys).Msg("Applied .env mock variables")
+	}
+	return changed
 }

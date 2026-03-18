@@ -4,6 +4,31 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 
 ---
 
+## v6 Execution Canonical Source
+
+For Pulse v6 build/release execution work, do not start from this broad docs index.
+Use:
+
+1. `docs/release-control/v6/SOURCE_OF_TRUTH.md` for stable human governance and locked decisions
+2. `docs/release-control/v6/status.json` for live lane state, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists
+3. `docs/release-control/v6/status.schema.json` for the machine-readable status contract
+4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership, explicit shared-ownership exceptions, and proof-routing rules
+5. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
+6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
+7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks and exact registry-derived shared-boundary wording
+   Local pre-commit runs the v6 machine audits against staged control-file content so partial staging cannot hide governance drift.
+   Local pre-commit also blocks partial staging for hook-sensitive governance files under `docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because those checks still execute or structurally read the working-tree versions locally.
+8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations for a change
+
+For governed runtime changes, a staged subsystem contract only counts if its
+diff updates a substantive contract section such as `Purpose`, `Canonical Files`,
+`Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
+`Completion Obligations`, or `Current State`, rather than metadata alone.
+
+All other documents are supporting references unless explicitly required for evidence.
+
+---
+
 ## 🚀 Getting Started
 
 - **[Installation Guide](INSTALL.md)**
@@ -14,9 +39,9 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
   Where config lives, how updates work, and what differs per deployment.
 - **[Migration Guide](MIGRATION.md)**  
   Moving to a new server? Here's how to export and import your data safely.
-- **[Upgrade to v5](UPGRADE_v5.md)**  
-  Practical upgrade guidance and post-upgrade checks.
-- **[FAQ](FAQ.md)**  
+- **[Upgrade to v6](UPGRADE_v6.md)**  
+  Practical upgrade guidance and post-upgrade checks for Pulse v6.
+- **[FAQ](FAQ.md)**
   Common questions and quick answers.
 
 ## 🛠️ Deployment & Operations
@@ -29,33 +54,55 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 ## 🔐 Security
 
 - **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
+- **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
+- **[OIDC / SSO](OIDC.md)** – OIDC Single Sign-On configuration (Authentik, Keycloak, Azure AD, etc.).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
+- **[Agent Security](AGENT_SECURITY.md)** – Agent self-update verification and API security.
 
-## ✨ New in 5.0
+## 📖 Advanced Topics (Relay / Pro / Pro+ / Cloud)
 
-- **[Pulse AI](AI.md)** – Optional assistant for chat, patrol findings, alert analysis, and execution workflows.
+- **[AI Autonomy & Safety](AI_AUTONOMY.md)** – Configure patrol autonomy levels, assistant control levels, investigation tuning, and safety guardrails.
+- **[Role-Based Access Control (RBAC)](RBAC.md)** – Define custom roles, assign permissions, and integrate with OIDC group mapping.
+- **[Audit Logging](AUDIT_LOGGING.md)** – Tamper-evident event logging for compliance, with query, export, and signature verification.
+
+## ✨ New in 6.0
+
+- **[Unified Resource Model](UNIFIED_RESOURCES.md)** – How all platforms merge into one model with task-based navigation.
+- **[Unified Navigation Migration](MIGRATION_UNIFIED_NAV.md)** – Upgrading from platform-specific tabs to v6 navigation.
+- **[TrueNAS Integration](TRUENAS.md)** – First-class TrueNAS SCALE/CORE monitoring (pools, datasets, disks, snapshots, replication).
+- **[Relay / Mobile Remote Access](RELAY.md)** – End-to-end encrypted relay (mobile app public rollout is coming soon; Relay and above).
+- **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
+- **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
+- **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.
 - **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
-- **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
+- **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
+- **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Relay/Pro/Pro+/Cloud.
 
-## 🚀 Pulse Pro
+## 💳 Plans (Community / Relay / Pro / Pro+ / Cloud)
 
-Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is available to all with BYOK**.
+Pulse is available in four self-hosted tiers plus hosted Cloud:
+
+- **Community**: Free self-hosted monitoring for up to 5 monitored systems with 7-day history.
+- **Relay**: Adds remote access, mobile, push notifications, 14-day history, and raises the monitored-system limit to 8.
+- **Pro**: Adds AI investigation, auto-fix, operations tooling, and raises the monitored-system limit to 15 with 90-day history.
+- **Pro+**: Everything in Pro with room for up to 50 monitored systems.
+- **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
-- **[AI Patrol deep dive](AI.md)**
-- **[Pulse Pro technical overview](PULSE_PRO.md)**
-- **What you actually get**: Auto-fix + autonomous mode, alert-triggered deep dives, Kubernetes AI analysis, reporting, and agent profiles.
-- **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
-- **Scheduling**: 10 minutes to 7 days (default 6 hours).
-- **Agent Profiles (Pro)**: centralized agent configuration profiles. See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md).
+- **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Relay/Pro/Pro+/Cloud matrix)
+- **[AI deep dive](AI.md)**
+- **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
 
 ## 📡 Monitoring & Agents
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
-- **[Centralized Agent Management (Pro)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
+- **[Centralized Agent Management (Pro/Pro+/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
+- **[TrueNAS](TRUENAS.md)** – TrueNAS SCALE/CORE integration.
+- **[ZFS Monitoring](ZFS_MONITORING.md)** – Proxmox-native ZFS pool monitoring.
+- **[Storage Architecture](STORAGE_ARCHITECTURE.md)** – Proposed canonical storage, disk, S.M.A.R.T., and topology model for making storage genuinely operator-useful.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
@@ -65,6 +112,12 @@ Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is av
 - **[API Reference](API.md)** – Complete REST API documentation.
 - **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
+
+## 📁 Previous Versions
+
+- **[Upgrade to v5](UPGRADE_v5.md)** – Upgrade guidance for v4 → v5 migrations.
+- **[v6 Release Promotion Policy](release-control/v6/RELEASE_PROMOTION_POLICY.md)** – Canonical stable-vs-RC release rules and rollback expectations.
+- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)** – Internal release operations used during the v6 RC period.
 
 ---
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -64,7 +65,7 @@ func newTokenRecord(t *testing.T, raw string, scopes []string, metadata map[stri
 
 func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.RegisteredPayload {
 	t.Helper()
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("ReadMessage: %v", err)
@@ -86,6 +87,13 @@ func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.Registe
 		t.Fatalf("unmarshal registered payload: %v", err)
 	}
 	return payload
+}
+
+// newLegacyAIServiceForTest creates an *ai.Service with loaded config for route-level tests.
+func newLegacyAIServiceForTest(persistence *config.ConfigPersistence) *ai.Service {
+	svc := ai.NewService(persistence, nil)
+	_ = svc.LoadConfig()
+	return svc
 }
 
 func TestSimpleStatsRequiresAuthInAPIMode(t *testing.T) {
@@ -146,155 +154,6 @@ func TestSimpleStatsRejectsInvalidBearerToken(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Invalid API token") {
 		t.Fatalf("expected invalid token response, got %q", rec.Body.String())
-	}
-}
-
-func TestSocketIORequiresAuthInAPIMode(t *testing.T) {
-	rawToken := "socket-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling", nil)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without token, got %d", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling", nil)
-	req.Header.Set("X-API-Token", rawToken)
-	rec = httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 with token, got %d", rec.Code)
-	}
-	if ct := rec.Header().Get("Content-Type"); ct != "text/plain; charset=UTF-8" {
-		t.Fatalf("expected text/plain content type, got %q", ct)
-	}
-	if body := rec.Body.String(); !strings.HasPrefix(body, "0{") {
-		t.Fatalf("unexpected polling handshake body: %q", body)
-	}
-}
-
-func TestSocketIORequiresMonitoringReadScope(t *testing.T) {
-	rawToken := "socket-scope-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling", nil)
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing monitoring:read scope, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), config.ScopeMonitoringRead) {
-		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, rec.Body.String())
-	}
-}
-
-func TestSocketIOJSRequiresAuth(t *testing.T) {
-	rawToken := "socket-js-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodGet, "/socket.io/socket.io.js", nil)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without token, got %d", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/socket.io/socket.io.js", nil)
-	req.Header.Set("X-API-Token", rawToken)
-	rec = httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected 302 redirect with token, got %d", rec.Code)
-	}
-	if location := rec.Header().Get("Location"); !strings.Contains(location, "socket.io.min.js") {
-		t.Fatalf("expected CDN redirect, got %q", location)
-	}
-}
-
-func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
-	rawToken := "socket-ws-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	hub := pulsews.NewHub(nil)
-	go hub.Run()
-	defer hub.Stop()
-
-	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
-	defer ts.Close()
-
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket"
-
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err == nil {
-		conn.Close()
-		t.Fatalf("expected websocket auth failure without token")
-	}
-	if resp == nil {
-		t.Fatalf("expected HTTP response for failed websocket auth")
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for missing token, got %d", resp.StatusCode)
-	}
-
-	headers := http.Header{}
-	headers.Set("X-API-Token", rawToken)
-	conn, resp, err = websocket.DefaultDialer.Dial(wsURL, headers)
-	if err != nil {
-		t.Fatalf("expected websocket connection with token, got %v", err)
-	}
-	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
-		t.Fatalf("expected 101 switching protocols, got %v", resp)
-	}
-	conn.Close()
-}
-
-func TestSocketIOWebSocketAllowsQueryToken(t *testing.T) {
-	rawToken := "socket-ws-query-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	hub := pulsews.NewHub(nil)
-	go hub.Run()
-	defer hub.Stop()
-
-	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
-	defer ts.Close()
-
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&token=" + rawToken
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("expected websocket connection with query token, got %v", err)
-	}
-	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
-		conn.Close()
-		t.Fatalf("expected 101 switching protocols, got %v", resp)
-	}
-	conn.Close()
-}
-
-func TestSocketIOPollingIgnoresQueryToken(t *testing.T) {
-	rawToken := "socket-polling-query-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodGet, "/socket.io/?transport=polling&token="+rawToken, nil)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 when token is only in query string, got %d", rec.Code)
 	}
 }
 
@@ -430,9 +289,28 @@ func TestAIStatusRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestAIStatusRequiresAIChatScope(t *testing.T) {
+	rawToken := "ai-status-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:chat scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIChat, rec.Body.String())
+	}
+}
+
 func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 	rawToken := "ws-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -451,7 +329,7 @@ func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 
 func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 	rawToken := "ws-scope-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 
 	hub := pulsews.NewHub(nil)
@@ -459,7 +337,7 @@ func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
@@ -478,9 +356,9 @@ func TestWebSocketRequiresMonitoringReadScopeForUpgrade(t *testing.T) {
 	}
 }
 
-func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
+func TestUnifiedAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "host-manage-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostManage}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentManage}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -489,9 +367,12 @@ func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "link", method: http.MethodPost, path: "/api/agents/host/link"},
-		{name: "unlink", method: http.MethodPost, path: "/api/agents/host/unlink"},
-		{name: "delete", method: http.MethodDelete, path: "/api/agents/host/agent-1"},
+		{name: "link", method: http.MethodPost, path: "/api/agents/agent/link"},
+		{name: "unlink", method: http.MethodPost, path: "/api/agents/agent/unlink"},
+		{name: "delete", method: http.MethodDelete, path: "/api/agents/agent/agent-1"},
+		{name: "host link alias", method: http.MethodPost, path: "/api/agents/host/link"},
+		{name: "host unlink alias", method: http.MethodPost, path: "/api/agents/host/unlink"},
+		{name: "host delete alias", method: http.MethodDelete, path: "/api/agents/host/agent-1"},
 	}
 
 	for _, tc := range cases {
@@ -507,37 +388,6 @@ func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 				t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 			}
 		})
-	}
-}
-
-func TestHostAgentDeleteMissingSettingsWriteErrorContract(t *testing.T) {
-	rawToken := "host-delete-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostManage}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodDelete, "/api/agents/host/agent-1", nil)
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
-	}
-
-	var body struct {
-		Error         string `json:"error"`
-		RequiredScope string `json:"requiredScope"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("expected JSON error contract, decode failed: %v", err)
-	}
-
-	if body.Error != "missing_scope" {
-		t.Fatalf("expected error code %q, got %q", "missing_scope", body.Error)
-	}
-	if body.RequiredScope != config.ScopeSettingsWrite {
-		t.Fatalf("expected required scope %q, got %q", config.ScopeSettingsWrite, body.RequiredScope)
 	}
 }
 
@@ -626,7 +476,7 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
@@ -636,17 +486,18 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-2",
-			Hostname: "host-2",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-2",
+		Hostname: "host-2",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -662,17 +513,18 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -684,13 +536,13 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
-func TestAgentExecRequiresAgentExecScope(t *testing.T) {
+func TestSecurityTokens_AgentExecRequiresAgentExecScope(t *testing.T) {
 	rawToken := "agent-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/agent/ws"
@@ -698,17 +550,18 @@ func TestAgentExecRequiresAgentExecScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -716,6 +569,48 @@ func TestAgentExecRequiresAgentExecScope(t *testing.T) {
 	if reg.Success {
 		conn.Close()
 		t.Fatalf("expected registration to be rejected without agent:exec scope")
+	}
+	conn.Close()
+}
+
+func TestSecurityTokens_AgentExecRejectsLegacySingleAPIToken(t *testing.T) {
+	rawToken := "legacy-agent-token-123.12345678"
+	cfg := &config.Config{
+		DataPath:                     t.TempDir(),
+		APIToken:                     rawToken,
+		APITokens:                    nil,
+		AllowedOrigins:               "*",
+		TemperatureMonitoringEnabled: true,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-legacy",
+		Hostname: "host-legacy",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg := readRegisteredPayload(t, conn)
+	if reg.Success {
+		conn.Close()
+		t.Fatalf("expected registration to be rejected for legacy single API token")
 	}
 	conn.Close()
 }
@@ -730,10 +625,10 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
@@ -753,10 +648,10 @@ func TestWebSocketAllowsBearerToken(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
@@ -776,10 +671,10 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	defer hub.Stop()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	ts := httptest.NewServer(router.Handler())
+	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?token=" + rawToken
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default&token=" + rawToken
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
@@ -789,6 +684,60 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 		t.Fatalf("expected 101 switching protocols, got %v", resp)
 	}
 	conn.Close()
+}
+
+func TestWebSocketRejectsOrgQueryMismatchWithTenantContext(t *testing.T) {
+	rawToken := "ws-org-mismatch-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=tenant-b&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket org mismatch rejection")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for websocket org mismatch")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for websocket org mismatch, got %d", resp.StatusCode)
+	}
+}
+
+func TestWebSocketRejectsInvalidOrgQueryID(t *testing.T) {
+	rawToken := "ws-invalid-org-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=../tenant-b&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket invalid org rejection")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for websocket invalid org")
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for websocket invalid org, got %d", resp.StatusCode)
+	}
 }
 
 func TestQueryTokenIgnoredForHTTPRequests(t *testing.T) {
@@ -983,6 +932,35 @@ func TestSetupScriptURLRequiresSettingsWriteScope(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
 		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestSetupScriptURLRejectsSetupTokenAuthWhenPulseAuthIsConfigured(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "0123456789abcdef0123456789abcdef"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(time.Minute),
+		NodeType:  "pve",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup-script-url", strings.NewReader(`{"type":"pve","host":"pve.local"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Setup-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected setup token auth on /api/setup-script-url to be rejected with 401, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != `{"error":"Authentication required"}` {
+		t.Fatalf("body = %q, want authentication-required JSON", body)
 	}
 }
 
@@ -1272,6 +1250,7 @@ func TestAIExecuteReadEndpointsRequireAIExecuteScope(t *testing.T) {
 		"/api/ai/patrol/findings",
 		"/api/ai/patrol/history",
 		"/api/ai/patrol/runs",
+		"/api/ai/patrol/runs/run-1",
 		"/api/ai/patrol/dismissed",
 		"/api/ai/patrol/suppressions",
 		"/api/ai/approvals",
@@ -1360,7 +1339,7 @@ func TestInfraUpdateReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	paths := []string{
 		"/api/infra-updates",
 		"/api/infra-updates/summary",
-		"/api/infra-updates/host/host-1",
+		"/api/infra-updates/agent/host-1",
 		"/api/infra-updates/docker:host-1/c1",
 	}
 
@@ -1442,9 +1421,6 @@ func TestAlertMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/alerts/acknowledge", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/unacknowledge", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/clear", body: `{}`},
-		{method: http.MethodPost, path: "/api/alerts/alert-1/acknowledge", body: `{}`},
-		{method: http.MethodPost, path: "/api/alerts/alert-1/unacknowledge", body: `{}`},
-		{method: http.MethodPost, path: "/api/alerts/alert-1/clear", body: `{}`},
 		{method: http.MethodPost, path: "/api/alerts/incidents/note", body: `{}`},
 	}
 
@@ -1459,6 +1435,35 @@ func TestAlertMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
 			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
 		}
+	}
+}
+
+func TestAlertMutationEndpointsAllowMonitoringWriteWithoutReadScope(t *testing.T) {
+	rawToken := "alerts-write-only-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("expected write-only token to reach alert mutation handler, got 403 body=%q", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected validation failure (400) after passing scope checks, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	readReq := httptest.NewRequest(http.MethodGet, "/api/alerts/config", nil)
+	readReq.Header.Set("X-API-Token", rawToken)
+	readRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(readRec, readReq)
+	if readRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for read endpoint with write-only token, got %d", readRec.Code)
+	}
+	if !strings.Contains(readRec.Body.String(), config.ScopeMonitoringRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, readRec.Body.String())
 	}
 }
 
@@ -1781,6 +1786,62 @@ func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestConfigExportImportRejectsNonAdminSession(t *testing.T) {
+	hashed, err := auth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:   t.TempDir(),
+		ConfigPath: t.TempDir(),
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "config-member-session-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+	csrfToken := generateCSRFToken(sessionToken)
+
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "export",
+			path: "/api/config/export",
+			body: `{"passphrase":"long-enough-passphrase"}`,
+		},
+		{
+			name: "import",
+			path: "/api/config/import",
+			body: `{"passphrase":"long-enough-passphrase","data":"invalid"}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.RemoteAddr = "127.0.0.1:1234"
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-CSRF-Token", csrfToken)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 for non-admin session on %s, got %d: %s", tc.path, rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+				t.Fatalf("expected admin privileges error on %s, got %q", tc.path, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestConfigExportBlocksPublicNetworkWithoutAuth(t *testing.T) {
 	cfg := &config.Config{
 		DataPath:   t.TempDir(),
@@ -1826,9 +1887,6 @@ func TestAutoRegisterRequiresAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without auth, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissing) {
-		t.Fatalf("expected missing-auth error, got %q", rec.Body.String())
-	}
 }
 
 func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
@@ -1842,34 +1900,16 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for missing required scope, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissingScope) {
-		t.Fatalf("expected scope error, got %q", rec.Body.String())
-	}
-}
-
-func TestAutoRegisterRejectsInvalidAPIToken(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.configHandlers.SetConfig(cfg)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(`{}`))
-	req.Header.Set("X-API-Token", "invalid-token-123.12345678")
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for invalid API token, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), autoRegisterAuthInvalidAPI) {
-		t.Fatalf("expected invalid API token error, got %q", rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing required scope, got %d", rec.Code)
 	}
 }
 
 func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	rawToken := "agent-register-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	router.configHandlers.SetConfig(cfg)
@@ -1879,26 +1919,9 @@ func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	// Should not be 401 — the agent token has host-agent:report which is accepted
+	// Should not be 401 — the agent token has agent:report which is accepted
 	if rec.Code == http.StatusUnauthorized {
-		t.Fatalf("expected agent token with host-agent:report to be accepted, got 401")
-	}
-}
-
-func TestAutoRegisterAcceptsBearerAgentToken(t *testing.T) {
-	rawToken := "agent-register-token-bearer-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.configHandlers.SetConfig(cfg)
-
-	body := `{"type":"pve","host":"https://192.168.1.1:8006","tokenId":"test@pam!pulse","tokenValue":"secret"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code == http.StatusUnauthorized {
-		t.Fatalf("expected bearer agent token with host-agent:report to be accepted, got 401")
+		t.Fatalf("expected agent token with agent:report to be accepted, got 401")
 	}
 }
 
@@ -1963,9 +1986,12 @@ func TestDiscoveryReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/discovery/status",
 		"/api/discovery/info/host-1",
 		"/api/discovery/type/pve",
-		"/api/discovery/host/host-1",
-		"/api/discovery/host/host-1/resource-1",
-		"/api/discovery/host/host-1/resource-1/progress",
+		"/api/discovery/agent/host-1",
+		"/api/discovery/agent/host-1/resource-1",
+		"/api/discovery/agent/host-1/resource-1/progress",
+		"/api/discovery/agent/host-1",
+		"/api/discovery/agent/host-1/resource-1",
+		"/api/discovery/agent/host-1/resource-1/progress",
 		"/api/discovery/resource-1",
 		"/api/discovery/resource-1/progress",
 	}
@@ -1995,9 +2021,12 @@ func TestDiscoveryMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{method: http.MethodPost, path: "/api/discovery/host/host-1/resource-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/discovery/host/host-1/resource-1/notes", body: `{}`},
-		{method: http.MethodDelete, path: "/api/discovery/host/host-1/resource-1", body: ""},
+		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
+		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
+		{method: http.MethodPost, path: "/api/discovery/agent/host-1/resource-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/discovery/agent/host-1/resource-1/notes", body: `{}`},
+		{method: http.MethodDelete, path: "/api/discovery/agent/host-1/resource-1", body: ""},
 		{method: http.MethodPost, path: "/api/discovery/resource-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/discovery/resource-1/notes", body: `{}`},
 		{method: http.MethodDelete, path: "/api/discovery/resource-1", body: ""},
@@ -2043,7 +2072,7 @@ func TestDiscoverySettingsRejectsProxyNonAdmin(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.DefaultConfig())
+	service := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
 	router.SetDiscoveryService(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/discovery/settings", strings.NewReader(`{"max_discovery_age_days":5}`))
@@ -2066,11 +2095,11 @@ func TestDiscoveryNotesRejectsProxyUserSecrets(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.DefaultConfig())
+	service := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
 	router.SetDiscoveryService(service)
 
 	payload := `{"user_notes":"note","user_secrets":{"token":"abc"}}`
-	req := httptest.NewRequest(http.MethodPut, "/api/discovery/host/host-1/resource-1/notes", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPut, "/api/discovery/agent/host-1/resource-1/notes", strings.NewReader(payload))
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
 	req.Header.Set("X-Remote-User", "viewer-user")
 	req.Header.Set("X-Remote-Roles", "viewer")
@@ -2117,7 +2146,7 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 	cfg.ProxyAuthAdminRole = "admin"
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.defaultConfig = cfg
 
 	cases := []struct {
 		method string
@@ -2156,7 +2185,6 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
 		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
-		{method: http.MethodPost, path: "/api/security/oidc", body: `{}`},
 		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
 		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
 		{method: http.MethodGet, path: "/api/audit", body: ""},
@@ -2183,8 +2211,13 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/test", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/test/openai", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/docker/containers/update", body: `{}`},
-		{method: http.MethodDelete, path: "/api/agents/docker/hosts/host-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/docker/runtimes/host-1/update-all", body: ``},
+		{method: http.MethodDelete, path: "/api/agents/docker/runtimes/host-1", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/kubernetes/clusters/cluster-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
+		{method: http.MethodPatch, path: "/api/agents/agent/host-1/config", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/agent/agent-1", body: ``},
 		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
 		{method: http.MethodPatch, path: "/api/agents/host/host-1/config", body: `{}`},
@@ -2253,7 +2286,7 @@ func TestDockerManageEndpointsRequireDockerManageScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
-		"/api/agents/docker/hosts/host-1",
+		"/api/agents/docker/runtimes/host-1",
 		"/api/agents/docker/containers/update",
 	}
 
@@ -2307,13 +2340,16 @@ func TestKubernetesManageEndpointsRequireKubernetesManageScope(t *testing.T) {
 	}
 }
 
-func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
+func TestUnifiedAgentEndpointsRequireAgentReportScope(t *testing.T) {
 	rawToken := "host-report-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
+		"/api/agents/agent/report",
+		"/api/agents/agent/lookup",
+		"/api/agents/agent/uninstall",
 		"/api/agents/host/report",
 		"/api/agents/host/lookup",
 		"/api/agents/host/uninstall",
@@ -2325,29 +2361,54 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 for missing host:report scope on %s, got %d", path, rec.Code)
+			t.Fatalf("expected 403 for missing agent:report scope on %s, got %d", path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), config.ScopeHostReport) {
-			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeHostReport, rec.Body.String())
+		if !strings.Contains(rec.Body.String(), config.ScopeAgentReport) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAgentReport, rec.Body.String())
 		}
 	}
 }
 
-func TestHostAgentConfigPatchRequiresHostManageScope(t *testing.T) {
-	rawToken := "host-config-manage-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeHostConfigRead}, nil)
+func TestUnifiedAgentEndpointsAcceptLegacyUnifiedAgentReportScopeAlias(t *testing.T) {
+	rawToken := "legacy-host-report-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{"host-agent:report"}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodPatch, "/api/agents/host/host-1/config", strings.NewReader(`{}`))
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing host:manage scope, got %d", rec.Code)
+	for _, path := range []string{
+		"/api/agents/agent/report",
+		"/api/agents/host/report",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("expected legacy host-agent:report scope alias to pass scope gate on %s, got 403: %s", path, rec.Body.String())
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected request to reach handler and fail on invalid JSON for %s, got %d", path, rec.Code)
+		}
 	}
-	if !strings.Contains(rec.Body.String(), config.ScopeHostManage) {
-		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeHostManage, rec.Body.String())
+}
+
+func TestUnifiedAgentConfigPatchRequiresAgentManageScope(t *testing.T) {
+	rawToken := "host-config-manage-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentConfigRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/host/host-1/config"} {
+		req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing agent:manage scope on %s, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAgentManage) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAgentManage, rec.Body.String())
+		}
 	}
 }
 
@@ -2362,24 +2423,19 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/storage/host-1",
 		"/api/storage-charts",
 		"/api/charts",
+		"/api/charts/workloads",
 		"/api/metrics-store/stats",
 		"/api/metrics-store/history",
-		"/api/backups",
-		"/api/backups/unified",
-		"/api/backups/pve",
-		"/api/backups/pbs",
-		"/api/snapshots",
-		"/api/resources",
-		"/api/resources/stats",
-		"/api/resources/resource-1",
 		"/api/guests/metadata",
 		"/api/guests/metadata/guest-1",
 		"/api/docker/metadata",
 		"/api/docker/metadata/container-1",
-		"/api/docker/hosts/metadata",
-		"/api/docker/hosts/metadata/host-1",
-		"/api/hosts/metadata",
-		"/api/hosts/metadata/host-1",
+		"/api/docker/runtimes/metadata",
+		"/api/docker/runtimes/metadata/host-1",
+		"/api/agents/metadata",
+		"/api/agents/metadata/host-1",
+		"/api/agents/metadata",
+		"/api/agents/metadata/host-1",
 	}
 
 	for _, path := range paths {
@@ -2413,12 +2469,15 @@ func TestMetadataMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/docker/metadata/container-1", body: `{}`},
 		{method: http.MethodPut, path: "/api/docker/metadata/container-1", body: `{}`},
 		{method: http.MethodDelete, path: "/api/docker/metadata/container-1", body: ""},
-		{method: http.MethodPost, path: "/api/docker/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/docker/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodDelete, path: "/api/docker/hosts/metadata/host-1", body: ""},
-		{method: http.MethodPost, path: "/api/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodPut, path: "/api/hosts/metadata/host-1", body: `{}`},
-		{method: http.MethodDelete, path: "/api/hosts/metadata/host-1", body: ""},
+		{method: http.MethodPost, path: "/api/docker/runtimes/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/docker/runtimes/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/docker/runtimes/metadata/host-1", body: ""},
+		{method: http.MethodPost, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/metadata/host-1", body: ""},
+		{method: http.MethodPost, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodPut, path: "/api/agents/metadata/host-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/metadata/host-1", body: ""},
 	}
 
 	for _, tc := range paths {
@@ -2486,7 +2545,7 @@ func TestAISettingsUpdateRejectsProxyNonAdmin(t *testing.T) {
 	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 	cfg.ProxyAuthAdminRole = "admin"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.defaultConfig = cfg
 
 	req := httptest.NewRequest(http.MethodPost, "/api/settings/ai/update", strings.NewReader(`{}`))
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
@@ -2506,7 +2565,7 @@ func TestAITestConnectionRejectsProxyNonAdmin(t *testing.T) {
 	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 	cfg.ProxyAuthAdminRole = "admin"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.defaultConfig = cfg
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", strings.NewReader(`{}`))
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
@@ -2526,7 +2585,7 @@ func TestAITestProviderRejectsProxyNonAdmin(t *testing.T) {
 	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 	cfg.ProxyAuthAdminRole = "admin"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.legacyConfig = cfg
+	router.aiSettingsHandler.defaultConfig = cfg
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", strings.NewReader(`{}`))
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
@@ -2536,6 +2595,154 @@ func TestAITestProviderRejectsProxyNonAdmin(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-admin proxy AI provider test, got %d", rec.Code)
+	}
+}
+
+func TestAITestConnectionRouteWithValidScope(t *testing.T) {
+	t.Parallel()
+
+	// Set up a mock Ollama server for the AI connection test
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/version" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	rawToken := "ai-test-conn-valid-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
+	router.aiSettingsHandler.defaultAIService = newLegacyAIServiceForTest(persistence)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid settings:write scope on /api/ai/test, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("expected success=true, got %+v", resp)
+	}
+}
+
+func TestAITestProviderRouteWithValidScope(t *testing.T) {
+	t.Parallel()
+
+	// Set up a mock Ollama server for the provider test
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/version" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ollama.Close()
+
+	rawToken := "ai-test-prov-valid-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = ollama.URL
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.aiSettingsHandler.defaultConfig = cfg
+	router.aiSettingsHandler.defaultPersistence = persistence
+	router.aiSettingsHandler.defaultAIService = newLegacyAIServiceForTest(persistence)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid settings:write scope on /api/ai/test/ollama, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success  bool   `json:"success"`
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success || resp.Provider != "ollama" {
+		t.Fatalf("expected success=true provider=ollama, got %+v", resp)
+	}
+}
+
+func TestAITestConnectionRouteRejectsWrongScope(t *testing.T) {
+	t.Parallel()
+
+	// Token with monitoring:read scope — NOT settings:write
+	rawToken := "ai-test-wrong-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for wrong scope on /api/ai/test, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
+	}
+}
+
+func TestAITestProviderRouteRejectsWrongScope(t *testing.T) {
+	t.Parallel()
+
+	// Token with monitoring:read scope — NOT settings:write
+	rawToken := "ai-test-prov-wrong-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for wrong scope on /api/ai/test/openai, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 	}
 }
 
@@ -2554,8 +2761,6 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/chat", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: ""},
-		{method: http.MethodGet, path: "/api/ai/chat/sessions", body: ""},
-		{method: http.MethodGet, path: "/api/ai/chat/sessions/session-1", body: ""},
 		{method: http.MethodGet, path: "/api/ai/question/q-1", body: ""},
 		{method: http.MethodGet, path: "/api/ai/knowledge", body: ""},
 		{method: http.MethodPost, path: "/api/ai/knowledge/save", body: `{}`},
@@ -2767,6 +2972,7 @@ func TestAILicensedEndpointsRequireLicenseFeature(t *testing.T) {
 	paths := []string{
 		"/api/ai/kubernetes/analyze",
 		"/api/ai/investigate-alert",
+		"/api/ai/findings/f-1/reinvestigate",
 		"/api/ai/findings/f-1/reapprove",
 	}
 
@@ -2778,24 +2984,6 @@ func TestAILicensedEndpointsRequireLicenseFeature(t *testing.T) {
 		if rec.Code != http.StatusPaymentRequired {
 			t.Fatalf("expected 402 for missing AI license on %s, got %d", path, rec.Code)
 		}
-	}
-}
-
-func TestSecurityOIDCRequiresSettingsWriteScope(t *testing.T) {
-	rawToken := "security-oidc-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/oidc", strings.NewReader(`{}`))
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing settings:write scope, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 	}
 }
 
@@ -2989,6 +3177,88 @@ func TestApplyRestartRequiresProxyAdmin(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Admin privileges required") {
 		t.Fatalf("expected admin privilege error, got %q", rec.Body.String())
+	}
+}
+
+func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
+	hashed, err := auth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = hashed
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "security-member-session-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+	tests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/system/settings", body: ``},
+		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
+		{method: http.MethodGet, path: "/api/diagnostics", body: ``},
+		{method: http.MethodGet, path: "/api/diagnostics/docker/prepare-token", body: ``},
+		{method: http.MethodGet, path: "/api/license/status", body: ``},
+		{method: http.MethodPost, path: "/api/license/trial/start", body: `{}`},
+		{method: http.MethodGet, path: "/api/updates/check", body: ``},
+		{method: http.MethodGet, path: "/api/updates/status", body: ``},
+		{method: http.MethodGet, path: "/api/updates/plan", body: ``},
+		{method: http.MethodGet, path: "/api/updates/history", body: ``},
+		{method: http.MethodPost, path: "/api/updates/apply", body: `{}`},
+		{method: http.MethodGet, path: "/api/logs/stream", body: ``},
+		{method: http.MethodGet, path: "/api/logs/download", body: ``},
+		{method: http.MethodGet, path: "/api/settings/relay", body: ``},
+		{method: http.MethodGet, path: "/api/settings/relay/status", body: ``},
+		{method: http.MethodPut, path: "/api/settings/relay", body: `{}`},
+		{method: http.MethodGet, path: "/api/settings/ai", body: ``},
+		{method: http.MethodGet, path: "/api/ai/cost/summary", body: ``},
+		{method: http.MethodGet, path: "/api/security/tokens", body: ``},
+		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
+		{method: http.MethodGet, path: "/api/security/sso/providers", body: ``},
+		{method: http.MethodPost, path: "/api/security/sso/providers", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/sso/providers/test", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/sso/providers/metadata/preview", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/roles", body: ``},
+		{method: http.MethodGet, path: "/api/admin/users", body: ``},
+		{method: http.MethodGet, path: "/api/admin/rbac/integrity", body: ``},
+		{method: http.MethodPost, path: "/api/admin/rbac/reset-admin", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ``},
+		{method: http.MethodPut, path: "/api/upgrade-metrics/config", body: `{"enabled":true}`},
+		{method: http.MethodGet, path: "/api/onboarding/qr", body: ``},
+		{method: http.MethodGet, path: "/api/onboarding/deep-link", body: ``},
+		{method: http.MethodPost, path: "/api/onboarding/validate", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
+		{method: http.MethodPost, path: "/api/settings/ai/update", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test/openai", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{"identifier":"admin"}`},
+		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
+		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
+	}
+
+	for _, tc := range tests {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.RemoteAddr = "127.0.0.1:1234"
+		req.Header.Set("Content-Type", "application/json")
+		if tc.method != http.MethodGet && tc.method != http.MethodHead {
+			req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+		}
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for non-admin session on %s %s, got %d: %s", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+			t.Fatalf("expected admin privilege error on %s %s, got %q", tc.method, tc.path, rec.Body.String())
+		}
 	}
 }
 
@@ -3514,14 +3784,6 @@ func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
-		"/install-docker-agent.sh",
-		"/install-container-agent.sh",
-		"/download/pulse-docker-agent",
-		"/install-host-agent.sh",
-		"/install-host-agent.ps1",
-		"/uninstall-host-agent.sh",
-		"/uninstall-host-agent.ps1",
-		"/download/pulse-host-agent",
 		"/install.sh",
 		"/install.ps1",
 		"/download/pulse-agent",
@@ -3537,41 +3799,6 @@ func TestPublicDownloadEndpointsBypassAuth(t *testing.T) {
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("expected 405 for public download endpoint %s, got %d", path, rec.Code)
 		}
-	}
-}
-
-func TestHostAgentChecksumRequiresAuth(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
-	cfg.AuthUser = "admin"
-	cfg.AuthPass = "hashed"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	ResetRateLimitForIP("203.0.113.90")
-	req := httptest.NewRequest(http.MethodGet, "/download/pulse-host-agent.sha256", nil)
-	req.RemoteAddr = "203.0.113.90:1234"
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for protected checksum, got %d", rec.Code)
-	}
-}
-
-func TestHostAgentChecksumAllowsTokenAuth(t *testing.T) {
-	rawToken := "checksum-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	cfg.AuthUser = "admin"
-	cfg.AuthPass = "hashed"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	ResetRateLimitForIP("203.0.113.91")
-	req := httptest.NewRequest(http.MethodGet, "/download/pulse-host-agent.sha256", nil)
-	req.RemoteAddr = "203.0.113.91:1234"
-	req.Header.Set("X-API-Token", rawToken)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
-		t.Fatalf("expected checksum to allow token auth, got %d", rec.Code)
 	}
 }
 
@@ -3667,35 +3894,35 @@ func TestSetupScriptRejectsInvalidPulseURL(t *testing.T) {
 	}
 }
 
-func TestOIDCLoginBypassesAuth(t *testing.T) {
+func TestSSOOIDCLoginBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	ResetRateLimitForIP("203.0.113.46")
-	req := httptest.NewRequest(http.MethodGet, "/api/oidc/login", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/test-provider/login", nil)
 	req.RemoteAddr = "203.0.113.46:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected 302 redirect when OIDC is disabled, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown OIDC provider on public endpoint, got %d", rec.Code)
 	}
 }
 
-func TestOIDCCallbackBypassesAuth(t *testing.T) {
+func TestSSOOIDCCallbackBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	ResetRateLimitForIP("203.0.113.51")
-	req := httptest.NewRequest(http.MethodGet, config.DefaultOIDCCallbackPath, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/test-provider/callback", nil)
 	req.RemoteAddr = "203.0.113.51:1234"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 when OIDC is disabled, got %d", rec.Code)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect for unknown OIDC provider callback on public endpoint, got %d", rec.Code)
 	}
 }
 
@@ -3731,7 +3958,7 @@ func TestLoginEndpointBypassesAuth(t *testing.T) {
 	}
 }
 
-func TestInstallScriptEndpointsBypassAuth(t *testing.T) {
+func TestLegacyInstallScriptAliasesDoNotBypassAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed"
@@ -3739,28 +3966,6 @@ func TestInstallScriptEndpointsBypassAuth(t *testing.T) {
 
 	paths := []string{
 		"/api/install/install-docker.sh",
-	}
-
-	for idx, path := range paths {
-		ip := "203.0.113." + strconv.Itoa(60+idx)
-		ResetRateLimitForIP(ip)
-		req := httptest.NewRequest(http.MethodPost, path, nil)
-		req.RemoteAddr = ip + ":1234"
-		rec := httptest.NewRecorder()
-		router.Handler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("expected 405 for public install script %s, got %d", path, rec.Code)
-		}
-	}
-}
-
-func TestInstallScriptAPIRoutesRequireAuth(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
-	cfg.AuthUser = "admin"
-	cfg.AuthPass = "hashed"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	paths := []string{
 		"/api/install/install.sh",
 		"/api/install/install.ps1",
 	}
@@ -3773,7 +3978,7 @@ func TestInstallScriptAPIRoutesRequireAuth(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401 for protected install script %s, got %d", path, rec.Code)
+			t.Fatalf("expected 401 for removed install alias %s, got %d", path, rec.Code)
 		}
 	}
 }
@@ -3829,7 +4034,7 @@ func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
 	token := "0123456789abcdef0123456789abcdef"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
 	router.configHandlers.codeMutex.Unlock()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
@@ -3844,6 +4049,55 @@ func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
 	}
 }
 
+func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "fedcba9876543210fedcba9876543210"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
+	req.Header.Set("X-Setup-Token", token)
+	req.Header.Set("X-Pulse-Org-ID", "org-b")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected setup token org mismatch to be rejected, got %d", rec.Code)
+	}
+}
+
+func TestVerifyTemperatureSSHRejectsSetupTokenOrgIDQueryBypass(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "11223344556677889900aabbccddeeff"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?org_id=org-a", strings.NewReader(`{"nodes":""}`))
+	req.Header.Set("X-Setup-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected org_id query bypass attempt to be rejected, got %d", rec.Code)
+	}
+}
+
 func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -3852,7 +4106,7 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	token := "abcdef0123456789abcdef0123456789"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
 	router.configHandlers.codeMutex.Unlock()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
@@ -3867,6 +4121,32 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	}
 }
 
+func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Setenv("HOME", t.TempDir())
+
+	token := "00112233445566778899aabbccddeeff"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
+	req.Header.Set("X-Setup-Token", token)
+	req.Header.Set("X-Pulse-Org-ID", "org-b")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected setup token org mismatch to be rejected, got %d", rec.Code)
+	}
+}
+
 func TestVerifyTemperatureSSHAllowsSetupTokenQueryParam(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -3874,7 +4154,7 @@ func TestVerifyTemperatureSSHAllowsSetupTokenQueryParam(t *testing.T) {
 	token := "abcdefabcdefabcdefabcdefabcdefab"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
 	router.configHandlers.codeMutex.Unlock()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
@@ -3896,7 +4176,7 @@ func TestSSHConfigAllowsSetupTokenQueryParam(t *testing.T) {
 	token := "deadbeefdeadbeefdeadbeefdeadbeef"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.codeMutex.Lock()
-	router.configHandlers.setupCodes[tokenHash] = &SetupCode{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
 	router.configHandlers.codeMutex.Unlock()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))

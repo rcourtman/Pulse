@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,10 +50,17 @@ func TestOIDCServiceMatches(t *testing.T) {
 	}
 }
 
+func TestEmptyOIDCSnapshotNormalizesScopes(t *testing.T) {
+	snapshot := emptyOIDCSnapshot()
+	if snapshot.scopes == nil {
+		t.Fatal("expected scopes slice to be normalized")
+	}
+}
+
 func TestOIDCServiceStateEntryAndConsume(t *testing.T) {
 	svc := &OIDCService{stateStore: newOIDCStateStore()}
 
-	state, entry, err := svc.newStateEntry("/return")
+	state, entry, err := svc.newStateEntry("", "/return")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
@@ -88,7 +95,7 @@ func TestOIDCServiceAuthCodeURLIncludesPKCE(t *testing.T) {
 }
 
 func TestOIDCServiceExchangeCode(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -166,6 +173,26 @@ func TestOIDCStateStoreCleanupAndConsume(t *testing.T) {
 func TestOIDCStateStoreStop(t *testing.T) {
 	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
 	store.Stop()
+	select {
+	case <-store.stopCleanup:
+	default:
+		t.Fatalf("expected stop channel to be closed")
+	}
+}
+
+func TestOIDCStateStoreStopIdempotentConcurrent(t *testing.T) {
+	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			store.Stop()
+		}()
+	}
+	wg.Wait()
+
 	select {
 	case <-store.stopCleanup:
 	default:
@@ -300,7 +327,7 @@ func TestOIDCStateStoreConsumeUnknown(t *testing.T) {
 
 func TestOIDCServiceNewStateEntryFields(t *testing.T) {
 	svc := &OIDCService{stateStore: newOIDCStateStore()}
-	_, entry, err := svc.newStateEntry("/return")
+	_, entry, err := svc.newStateEntry("", "/return")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
@@ -337,7 +364,7 @@ func TestOIDCServiceContextWithHTTPClientNil(t *testing.T) {
 }
 
 func TestOIDCServiceRefreshTokenKeepsOldRefresh(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"access","token_type":"Bearer","expires_in":3600}`)
 	}))
@@ -361,7 +388,7 @@ func TestOIDCServiceRefreshTokenKeepsOldRefresh(t *testing.T) {
 }
 
 func TestOIDCServiceRefreshTokenReplacesRefresh(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"access","refresh_token":"new-refresh","token_type":"Bearer","expires_in":3600}`)
 	}))
@@ -385,7 +412,7 @@ func TestOIDCServiceRefreshTokenReplacesRefresh(t *testing.T) {
 }
 
 func TestOIDCServiceExchangeCodeMissingVerifier(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if strings.Contains(string(body), "code_verifier") {
 			w.WriteHeader(http.StatusBadRequest)

@@ -2,14 +2,18 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func newTestMonitor(t *testing.T) (*monitoring.Monitor, *models.State, *monitoring.MetricsHistory) {
@@ -23,6 +27,126 @@ func newTestMonitor(t *testing.T) (*monitoring.Monitor, *models.State, *monitori
 	setUnexportedField(t, monitor, "metricsHistory", metricsHistory)
 
 	return monitor, state, metricsHistory
+}
+
+// syncTestResourceStore populates a MonitorAdapter (ResourceRegistry) from the
+// legacy state so that GetUnifiedReadState() returns a valid ReadState.
+// Call this after setting state.VMs, state.Nodes, etc.
+func syncTestResourceStore(t *testing.T, monitor *monitoring.Monitor, state *models.State) {
+	t.Helper()
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+}
+
+func TestNormalizeMetricsHistoryResourceType_ContainerCanonicalTypes(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantResponse string
+		wantRuntime  string
+		wantStore    []string
+	}{
+		{
+			name:         "system container",
+			input:        "system-container",
+			wantResponse: "system-container",
+			wantRuntime:  "system-container",
+			wantStore:    []string{"container"},
+		},
+		{
+			name:         "oci container",
+			input:        "oci-container",
+			wantResponse: "oci-container",
+			wantRuntime:  "oci-container",
+			wantStore:    []string{"container"},
+		},
+		{
+			name:         "app container",
+			input:        "app-container",
+			wantResponse: "app-container",
+			wantRuntime:  "app-container",
+			wantStore:    []string{"dockerContainer", "docker"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType(tt.input)
+			if err != nil {
+				t.Fatalf("normalizeMetricsHistoryResourceType(%q) error = %v", tt.input, err)
+			}
+			if responseType != tt.wantResponse {
+				t.Fatalf("responseType = %q, want %q", responseType, tt.wantResponse)
+			}
+			if runtimeType != tt.wantRuntime {
+				t.Fatalf("runtimeType = %q, want %q", runtimeType, tt.wantRuntime)
+			}
+			if len(storeTypes) != len(tt.wantStore) {
+				t.Fatalf("storeTypes len = %d, want %d (%v)", len(storeTypes), len(tt.wantStore), storeTypes)
+			}
+			for i := range storeTypes {
+				if storeTypes[i] != tt.wantStore[i] {
+					t.Fatalf("storeTypes[%d] = %q, want %q (all=%v)", i, storeTypes[i], tt.wantStore[i], storeTypes)
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_RejectsLegacyContainerAlias(t *testing.T) {
+	_, _, _, err := normalizeMetricsHistoryResourceType("container")
+	if err == nil {
+		t.Fatal("expected error for legacy container alias")
+	}
+	if !strings.Contains(err.Error(), `unsupported resourceType "container"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.T) {
+	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("docker-host")
+	if err != nil {
+		t.Fatalf("normalizeMetricsHistoryResourceType(docker-host) error = %v", err)
+	}
+	if responseType != "docker-host" {
+		t.Fatalf("responseType = %q, want %q", responseType, "docker-host")
+	}
+	if runtimeType != "docker-host" {
+		t.Fatalf("runtimeType = %q, want %q", runtimeType, "docker-host")
+	}
+	if len(storeTypes) != 1 || storeTypes[0] != "dockerHost" {
+		t.Fatalf("storeTypes = %v, want [dockerHost]", storeTypes)
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_AgentQueriesNodeHistoryAsFallback(t *testing.T) {
+	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("agent")
+	if err != nil {
+		t.Fatalf("normalizeMetricsHistoryResourceType(agent) error = %v", err)
+	}
+	if responseType != "agent" {
+		t.Fatalf("responseType = %q, want %q", responseType, "agent")
+	}
+	if runtimeType != "agent" {
+		t.Fatalf("runtimeType = %q, want %q", runtimeType, "agent")
+	}
+	if len(storeTypes) != 2 || storeTypes[0] != "agent" || storeTypes[1] != "node" {
+		t.Fatalf("storeTypes = %v, want [agent node]", storeTypes)
+	}
+}
+
+func TestNormalizeMetricsHistoryResourceType_RejectsLegacyAliases(t *testing.T) {
+	legacyTypes := []string{"host", "guest", "docker", "dockerhost", "dockercontainer", "system_container"}
+	for _, legacyType := range legacyTypes {
+		_, _, _, err := normalizeMetricsHistoryResourceType(legacyType)
+		if err == nil {
+			t.Fatalf("expected error for legacy alias %q", legacyType)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprintf(`unsupported resourceType %q`, legacyType)) {
+			t.Fatalf("unexpected error for %q: %v", legacyType, err)
+		}
+	}
 }
 
 func TestHandleSchedulerHealth_MethodNotAllowed(t *testing.T) {
@@ -46,6 +170,90 @@ func TestHandleSchedulerHealth_NoMonitor(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestHandleSchedulerHealth_UsesCanonicalEmptyCollections(t *testing.T) {
+	router := &Router{monitor: &monitoring.Monitor{}}
+	req := httptest.NewRequest(http.MethodGet, "/api/scheduler/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleSchedulerHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"breakers":[]`) {
+		t.Fatalf("expected breakers array to be retained, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"staleness":[]`) {
+		t.Fatalf("expected staleness array to be retained, got %s", rec.Body.String())
+	}
+}
+
+func TestHandleHealth_NoMonitor(t *testing.T) {
+	router := &Router{}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleHealth(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+
+	var response HealthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if response.Status != "unhealthy" {
+		t.Fatalf("expected unhealthy status, got %q", response.Status)
+	}
+
+	if response.Dependencies["monitor"] {
+		t.Fatalf("expected monitor dependency to be unhealthy")
+	}
+}
+
+func TestHandleHealth_WithMonitor(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response HealthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if response.Status != "healthy" {
+		t.Fatalf("expected healthy status, got %q", response.Status)
+	}
+	if !response.Dependencies["monitor"] {
+		t.Fatalf("expected monitor dependency to be healthy")
+	}
+	if !response.Dependencies["scheduler"] {
+		t.Fatalf("expected scheduler dependency to be healthy")
+	}
+	if response.Dependencies["websocket"] {
+		t.Fatalf("expected websocket dependency to be false when ws hub is not configured")
+	}
+}
+
+func TestHealthResponse_UsesCanonicalEmptyDependencies(t *testing.T) {
+	payload, err := json.Marshal(EmptyHealthResponse())
+	if err != nil {
+		t.Fatalf("marshal empty health response: %v", err)
+	}
+	if !strings.Contains(string(payload), `"dependencies":{}`) {
+		t.Fatalf("expected empty health response to retain dependencies map, got %s", payload)
 	}
 }
 
@@ -181,6 +389,7 @@ func TestHandleStorage_Success(t *testing.T) {
 func TestHandleCharts_Success(t *testing.T) {
 	monitor, state, _ := newTestMonitor(t)
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one", CPU: 0.2}}
+	syncTestResourceStore(t, monitor, state)
 	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
@@ -196,10 +405,654 @@ func TestHandleCharts_Success(t *testing.T) {
 	}
 }
 
+func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one", CPU: 0.2}}
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-one", CPU: 0.1}}
+	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One", Used: 50, Total: 100}}
+	syncTestResourceStore(t, monitor, state)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	body := rec.Body.Bytes()
+
+	var decoded ChartResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal ChartResponse: %v", err)
+	}
+
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+	if decoded.Stats.MetricsStoreEnabled {
+		t.Fatalf("expected stats.metricsStoreEnabled=false in test monitor, got true")
+	}
+	if decoded.Stats.PrimarySourceHint != "memory" {
+		t.Fatalf("expected stats.primarySourceHint=memory, got %q", decoded.Stats.PrimarySourceHint)
+	}
+	if decoded.Stats.InMemoryThresholdSecs != 7200 {
+		t.Fatalf("expected stats.inMemoryThresholdSecs=7200, got %d", decoded.Stats.InMemoryThresholdSecs)
+	}
+	if decoded.Stats.OldestDataTimestamp <= 0 {
+		t.Fatalf("expected stats.oldestDataTimestamp to be set, got %d", decoded.Stats.OldestDataTimestamp)
+	}
+	if decoded.Stats.OldestDataTimestamp > decoded.Timestamp {
+		t.Fatalf(
+			"expected stats.oldestDataTimestamp <= timestamp, got oldest=%d timestamp=%d",
+			decoded.Stats.OldestDataTimestamp,
+			decoded.Timestamp,
+		)
+	}
+
+	// With no history in the test monitor, handleCharts falls back to synthetic points:
+	// guests: cpu/memory/disk/netin/netout (5 — diskread/diskwrite excluded from sparkline payloads)
+	// nodes: cpu/memory/disk (3)
+	// storage: disk (1)
+	if decoded.Stats.PointCounts.Guests != 5 {
+		t.Fatalf("expected stats.pointCounts.guests=5, got %d", decoded.Stats.PointCounts.Guests)
+	}
+	if decoded.Stats.PointCounts.Nodes != 3 {
+		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.Storage != 1 {
+		t.Fatalf("expected stats.pointCounts.storage=1, got %d", decoded.Stats.PointCounts.Storage)
+	}
+	if decoded.Stats.PointCounts.DockerContainers != 0 || decoded.Stats.PointCounts.DockerHosts != 0 || decoded.Stats.PointCounts.Agents != 0 {
+		t.Fatalf(
+			"expected dockerContainers/dockerHosts/agents all 0, got dc=%d dh=%d agents=%d",
+			decoded.Stats.PointCounts.DockerContainers,
+			decoded.Stats.PointCounts.DockerHosts,
+			decoded.Stats.PointCounts.Agents,
+		)
+	}
+
+	sum := decoded.Stats.PointCounts.Guests +
+		decoded.Stats.PointCounts.Nodes +
+		decoded.Stats.PointCounts.Storage +
+		decoded.Stats.PointCounts.DockerContainers +
+		decoded.Stats.PointCounts.DockerHosts +
+		decoded.Stats.PointCounts.Agents
+	if decoded.Stats.PointCounts.Total != sum {
+		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("unmarshal raw JSON: %v", err)
+	}
+	stats, ok := raw["stats"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stats object in JSON response")
+	}
+	if _, ok := stats["pointCounts"]; !ok {
+		t.Fatalf("expected stats.pointCounts to be present in JSON response")
+	}
+}
+
+func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:     "node-1",
+		Name:   "node-one",
+		Status: "online",
+		CPU:    0.1,
+		Memory: models.Memory{Usage: 12.0},
+		Disk:   models.Disk{Usage: 34.0},
+	}}
+	state.DockerHosts = []models.DockerHost{{
+		ID:       "docker-host-1",
+		Runtime:  "docker",
+		CPUUsage: 23.0,
+		Memory:   models.Memory{Usage: 45.0},
+		Disks:    []models.Disk{{Usage: 67.0}},
+		Status:   "online",
+	}}
+	state.Hosts = []models.Host{{
+		ID:       "host-1",
+		Hostname: "host-one",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleInfrastructureCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected application/json, got %q", ct)
+	}
+
+	body := rec.Body.Bytes()
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
+	}
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+
+	// With no history in the test monitor, handler falls back to synthetic points:
+	// nodes: cpu/memory/disk (3)
+	// dockerHosts: cpu/memory/disk (3)
+	// agents: cpu/memory/disk (3)
+	if decoded.Stats.PointCounts.Nodes != 3 {
+		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.DockerHosts != 3 {
+		t.Fatalf("expected stats.pointCounts.dockerHosts=3, got %d", decoded.Stats.PointCounts.DockerHosts)
+	}
+	if decoded.Stats.PointCounts.Agents != 3 {
+		t.Fatalf("expected stats.pointCounts.agents=3, got %d", decoded.Stats.PointCounts.Agents)
+	}
+	sum := decoded.Stats.PointCounts.Nodes + decoded.Stats.PointCounts.DockerHosts + decoded.Stats.PointCounts.Agents
+	if decoded.Stats.PointCounts.Total != sum {
+		t.Fatalf("expected stats.pointCounts.total=%d, got %d", sum, decoded.Stats.PointCounts.Total)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("unmarshal raw JSON: %v", err)
+	}
+	for _, forbidden := range []string{"data", "storageData", "dockerData", "guestTypes"} {
+		if _, ok := raw[forbidden]; ok {
+			t.Fatalf("expected %q to be absent from infra summary response", forbidden)
+		}
+	}
+}
+
+func TestHandleWorkloadsSummaryCharts_AggregatesAndCounts(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:       "node-pve-1",
+		Name:     "pve-1",
+		Instance: "pve",
+	}}
+	state.VMs = []models.VM{{
+		ID:         "vm-101",
+		Name:       "vm-101",
+		Node:       "pve-1",
+		Instance:   "pve",
+		Status:     "running",
+		CPU:        0.25,
+		Memory:     models.Memory{Usage: 40.0},
+		Disk:       models.Disk{Usage: 55.0},
+		NetworkIn:  1200,
+		NetworkOut: 800,
+	}}
+	state.Containers = []models.Container{{
+		ID:         "ct-201",
+		Name:       "ct-201",
+		Node:       "pve-1",
+		Instance:   "pve",
+		Status:     "stopped",
+		CPU:        0.10,
+		Memory:     models.Memory{Usage: 30.0},
+		Disk:       models.Disk{Usage: 45.0},
+		NetworkIn:  400,
+		NetworkOut: 600,
+	}}
+	state.DockerHosts = []models.DockerHost{{
+		ID:      "docker-host-1",
+		Runtime: "docker",
+		Containers: []models.DockerContainer{{
+			ID:                  "docker-1",
+			Name:                "docker-1",
+			State:               "running",
+			CPUPercent:          35.0,
+			MemoryPercent:       60.0,
+			WritableLayerBytes:  10,
+			RootFilesystemBytes: 100,
+		}},
+	}}
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleWorkloadsSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected application/json, got %q", ct)
+	}
+
+	body := rec.Body.Bytes()
+
+	var decoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadsSummaryChartsResponse: %v", err)
+	}
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+
+	if decoded.GuestCounts.Total != 3 {
+		t.Fatalf("expected guestCounts.total=3, got %d", decoded.GuestCounts.Total)
+	}
+	if decoded.GuestCounts.Running != 2 {
+		t.Fatalf("expected guestCounts.running=2, got %d", decoded.GuestCounts.Running)
+	}
+	if decoded.GuestCounts.Stopped != 1 {
+		t.Fatalf("expected guestCounts.stopped=1, got %d", decoded.GuestCounts.Stopped)
+	}
+
+	for metricName, metric := range map[string]WorkloadsSummaryMetricData{
+		"cpu":     decoded.CPU,
+		"memory":  decoded.Memory,
+		"disk":    decoded.Disk,
+		"network": decoded.Network,
+	} {
+		if len(metric.P50) == 0 {
+			t.Fatalf("expected %s p50 points to be present", metricName)
+		}
+		if len(metric.P95) == 0 {
+			t.Fatalf("expected %s p95 points to be present", metricName)
+		}
+	}
+
+	if decoded.Stats.PointCounts.Total <= 0 {
+		t.Fatalf("expected stats.pointCounts.total to be > 0, got %d", decoded.Stats.PointCounts.Total)
+	}
+	if decoded.Stats.PointCounts.Guests <= 0 {
+		t.Fatalf("expected stats.pointCounts.guests to be > 0, got %d", decoded.Stats.PointCounts.Guests)
+	}
+
+	if decoded.BlastRadius.CPU.Scope != "concentrated" {
+		t.Fatalf("expected cpu blast radius concentrated, got %q", decoded.BlastRadius.CPU.Scope)
+	}
+	if decoded.BlastRadius.Network.Scope != "concentrated" {
+		t.Fatalf("expected network blast radius concentrated, got %q", decoded.BlastRadius.Network.Scope)
+	}
+
+	// Node-scoped request should only include workloads that match the selected node.
+	nodeReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/charts/workloads-summary?range=5m&node=node-pve-1",
+		nil,
+	)
+	nodeRec := httptest.NewRecorder()
+
+	router.handleWorkloadsSummaryCharts(nodeRec, nodeReq)
+
+	if nodeRec.Code != http.StatusOK {
+		t.Fatalf("node-scoped expected status %d, got %d", http.StatusOK, nodeRec.Code)
+	}
+
+	var nodeScoped WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(nodeRec.Body.Bytes(), &nodeScoped); err != nil {
+		t.Fatalf("unmarshal node-scoped WorkloadsSummaryChartsResponse: %v", err)
+	}
+	if nodeScoped.GuestCounts.Total != 2 {
+		t.Fatalf("expected node-scoped guestCounts.total=2, got %d", nodeScoped.GuestCounts.Total)
+	}
+	if nodeScoped.GuestCounts.Running != 1 {
+		t.Fatalf("expected node-scoped guestCounts.running=1, got %d", nodeScoped.GuestCounts.Running)
+	}
+	if nodeScoped.GuestCounts.Stopped != 1 {
+		t.Fatalf("expected node-scoped guestCounts.stopped=1, got %d", nodeScoped.GuestCounts.Stopped)
+	}
+	if nodeScoped.BlastRadius.CPU.Scope != "concentrated" {
+		t.Fatalf("expected node-scoped cpu blast radius concentrated, got %q", nodeScoped.BlastRadius.CPU.Scope)
+	}
+}
+
+func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:       "node-pve-1",
+		Name:     "pve-1",
+		Instance: "pve",
+	}}
+	state.VMs = []models.VM{
+		{
+			ID:       "vm-101",
+			Name:     "vm-101",
+			Node:     "pve-1",
+			Instance: "pve",
+			CPU:      0.2,
+			Memory:   models.Memory{Usage: 55},
+			Disk:     models.Disk{Usage: 40},
+		},
+		{
+			ID:       "vm-202",
+			Name:     "vm-202",
+			Node:     "other",
+			Instance: "other",
+			CPU:      0.4,
+			Memory:   models.Memory{Usage: 65},
+			Disk:     models.Disk{Usage: 70},
+		},
+	}
+	state.Containers = []models.Container{
+		{
+			ID:       "ct-301",
+			Name:     "ct-301",
+			Node:     "pve-1",
+			Instance: "pve",
+			CPU:      0.3,
+			Memory:   models.Memory{Usage: 40},
+			Disk:     models.Disk{Usage: 25},
+		},
+	}
+	state.DockerHosts = []models.DockerHost{{
+		ID:          "docker-host-1",
+		Hostname:    "pve-1",
+		DisplayName: "pve-1",
+		Containers: []models.DockerContainer{{
+			ID:            "docker-401",
+			Name:          "docker-401",
+			CPUPercent:    22,
+			MemoryPercent: 30,
+		}},
+	}}
+
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected application/json, got %q", ct)
+	}
+
+	var decoded WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
+	}
+
+	if decoded.Stats.Range != "5m" {
+		t.Fatalf("expected stats.range=5m, got %q", decoded.Stats.Range)
+	}
+	if decoded.Stats.RangeSeconds != 300 {
+		t.Fatalf("expected stats.rangeSeconds=300, got %d", decoded.Stats.RangeSeconds)
+	}
+	if len(decoded.ChartData) != 3 {
+		t.Fatalf("expected 3 workload chart entries, got %d", len(decoded.ChartData))
+	}
+	if len(decoded.DockerData) != 1 {
+		t.Fatalf("expected 1 docker chart entry, got %d", len(decoded.DockerData))
+	}
+	if decoded.GuestTypes["vm-101"] != "vm" {
+		t.Fatalf("expected vm guest type for vm-101, got %q", decoded.GuestTypes["vm-101"])
+	}
+	if decoded.GuestTypes["ct-301"] != "system-container" {
+		t.Fatalf(
+			"expected system-container guest type for ct-301, got %q",
+			decoded.GuestTypes["ct-301"],
+		)
+	}
+	if decoded.Stats.PointCounts.Total <= 0 {
+		t.Fatalf("expected stats.pointCounts.total > 0, got %d", decoded.Stats.PointCounts.Total)
+	}
+
+	// Node-scoped request should only include workloads linked to node-pve-1
+	// plus docker containers running on matching docker hosts.
+	nodeReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/charts/workloads?range=5m&node=node-pve-1",
+		nil,
+	)
+	nodeRec := httptest.NewRecorder()
+	router.handleWorkloadCharts(nodeRec, nodeReq)
+
+	if nodeRec.Code != http.StatusOK {
+		t.Fatalf("node-scoped expected status %d, got %d", http.StatusOK, nodeRec.Code)
+	}
+
+	var scoped WorkloadChartsResponse
+	if err := json.Unmarshal(nodeRec.Body.Bytes(), &scoped); err != nil {
+		t.Fatalf("unmarshal node-scoped WorkloadChartsResponse: %v", err)
+	}
+	if len(scoped.ChartData) != 2 {
+		t.Fatalf("expected 2 scoped workload chart entries, got %d", len(scoped.ChartData))
+	}
+	if _, ok := scoped.ChartData["vm-202"]; ok {
+		t.Fatalf("expected vm-202 to be excluded by node scope")
+	}
+	if len(scoped.DockerData) != 1 {
+		t.Fatalf("expected 1 scoped docker chart entry, got %d", len(scoped.DockerData))
+	}
+}
+
+func TestHandleWorkloadCharts_IncludesKubernetesPods(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(false)
+	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:       "node-pve-1",
+		Name:     "pve-1",
+		Instance: "pve",
+	}}
+	state.KubernetesClusters = []models.KubernetesCluster{{
+		ID:     "cluster-k8s-summary-test",
+		Name:   "cluster-k8s-summary-test",
+		Status: "online",
+		Pods: []models.KubernetesPod{
+			{
+				UID:       "pod-001",
+				Name:      "api-0",
+				Namespace: "default",
+				NodeName:  "pve-1",
+				Phase:     "Running",
+				Containers: []models.KubernetesPodContainer{
+					{Name: "api", Ready: true},
+				},
+			},
+		},
+	}}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
+	}
+
+	var metricID string
+	for id, typ := range decoded.GuestTypes {
+		if typ == "k8s" {
+			metricID = id
+			break
+		}
+	}
+	if metricID == "" {
+		t.Fatal("expected at least one kubernetes pod series")
+	}
+
+	series, ok := decoded.ChartData[metricID]
+	if !ok {
+		t.Fatalf("expected kubernetes pod series for %s", metricID)
+	}
+	if len(series["cpu"]) == 0 {
+		t.Fatalf("expected kubernetes cpu points for %s", metricID)
+	}
+	if got := len(series["disk"]); got != 1 || series["disk"][0].Value != 0 {
+		t.Fatalf("expected unsupported kubernetes pod disk metric fallback to single zero point; got len=%d value=%v", got, series["disk"])
+	}
+	if got := len(series["netin"]); got != 1 || series["netin"][0].Value != 0 {
+		t.Fatalf("expected unsupported kubernetes pod network metric fallback to single zero point; got len=%d value=%v", got, series["netin"])
+	}
+}
+
+func TestHandleWorkloadsSummaryCharts_IncludesKubernetesPods(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(false)
+	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+
+	monitor, state, _ := newTestMonitor(t)
+	state.KubernetesClusters = []models.KubernetesCluster{{
+		ID:     "cluster-alpha",
+		Name:   "cluster-alpha",
+		Status: "online",
+		Pods: []models.KubernetesPod{
+			{
+				UID:       "pod-001",
+				Name:      "api-0",
+				Namespace: "default",
+				Phase:     "Running",
+				Containers: []models.KubernetesPodContainer{
+					{Name: "api", Ready: true},
+				},
+			},
+			{
+				UID:       "pod-002",
+				Name:      "batch-0",
+				Namespace: "ops",
+				Phase:     "Failed",
+				Containers: []models.KubernetesPodContainer{
+					{Name: "worker", Ready: false},
+				},
+			},
+		},
+	}}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=5m", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadsSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadsSummaryChartsResponse: %v", err)
+	}
+
+	if decoded.GuestCounts.Total != 2 {
+		t.Fatalf("expected guestCounts.total=2, got %d", decoded.GuestCounts.Total)
+	}
+	if decoded.GuestCounts.Running != 1 {
+		t.Fatalf("expected guestCounts.running=1, got %d", decoded.GuestCounts.Running)
+	}
+	if decoded.GuestCounts.Stopped != 1 {
+		t.Fatalf("expected guestCounts.stopped=1, got %d", decoded.GuestCounts.Stopped)
+	}
+	if len(decoded.CPU.P50) == 0 {
+		t.Fatal("expected cpu summary points for kubernetes workloads")
+	}
+}
+
+func TestHandleWorkloadCharts_UnknownNodeFilterFallsBackToGlobalScope(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:       "node-pve-1",
+		Name:     "pve-1",
+		Instance: "pve",
+	}}
+	state.VMs = []models.VM{{
+		ID:       "vm-101",
+		Name:     "vm-101",
+		Node:     "pve-1",
+		Instance: "pve",
+		CPU:      0.3,
+		Memory:   models.Memory{Usage: 42},
+		Disk:     models.Disk{Usage: 55},
+	}}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m&node=missing-node-id", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleWorkloadCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
+	}
+	if len(decoded.ChartData) == 0 {
+		t.Fatalf("expected fallback to global scope when node filter is stale")
+	}
+}
+
+func TestHandleWorkloadsSummaryCharts_UnknownNodeFilterFallsBackToGlobalScope(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:       "node-pve-1",
+		Name:     "pve-1",
+		Instance: "pve",
+	}}
+	state.VMs = []models.VM{{
+		ID:       "vm-101",
+		Name:     "vm-101",
+		Node:     "pve-1",
+		Instance: "pve",
+		CPU:      0.3,
+		Memory:   models.Memory{Usage: 42},
+		Disk:     models.Disk{Usage: 55},
+		Status:   "running",
+	}}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=5m&node=missing-node-id", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleWorkloadsSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadsSummaryChartsResponse: %v", err)
+	}
+	if decoded.GuestCounts.Total == 0 {
+		t.Fatalf("expected fallback to global scope when summary node filter is stale")
+	}
+}
+
 func TestHandleStorageCharts_Success(t *testing.T) {
 	monitor, state, metricsHistory := newTestMonitor(t)
 	state.Storage = []models.Storage{{ID: "store-1", Name: "Store One"}}
 	metricsHistory.AddStorageMetric("store-1", "usage", 0.4, time.Now())
+	syncTestResourceStore(t, monitor, state)
 
 	router := &Router{monitor: monitor}
 	req := httptest.NewRequest(http.MethodGet, "/api/storage/charts?range=30", nil)
@@ -252,19 +1105,14 @@ func TestEstablishOIDCSession(t *testing.T) {
 	}
 }
 
-func TestLearnBaselines_NoMonitor(t *testing.T) {
-	router := &Router{}
-	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
-	history := monitoring.NewMetricsHistory(10, time.Hour)
-
-	router.learnBaselines(store, history)
-}
-
 func TestLearnBaselines_WithData(t *testing.T) {
 	monitor, state, history := newTestMonitor(t)
 	state.Nodes = []models.Node{{ID: "node-1", Name: "node"}}
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm", Status: "running"}}
 	state.Containers = []models.Container{{ID: "ct-1", Name: "ct", Status: "running"}}
+
+	// Sync ReadState from legacy state — learnBaselines uses ReadState exclusively.
+	syncTestResourceStore(t, monitor, state)
 
 	now := time.Now()
 	history.AddNodeMetric("node-1", "cpu", 0.5, now)
@@ -279,12 +1127,4 @@ func TestLearnBaselines_WithData(t *testing.T) {
 	if store.ResourceCount() == 0 {
 		t.Fatalf("expected baselines to be learned")
 	}
-}
-
-func TestWireAlertTriggeredAI_EarlyReturns(t *testing.T) {
-	router := &Router{}
-	router.WireAlertTriggeredAI()
-
-	router.aiSettingsHandler = &AISettingsHandler{legacyAIService: ai.NewService(nil, nil)}
-	router.WireAlertTriggeredAI()
 }

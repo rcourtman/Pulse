@@ -3,27 +3,33 @@ package hostagent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
 
-// Config controls the behaviour of the host agent.
+// Config controls the behaviour of the runtime-side Unified Agent.
 type Config struct {
 	PulseURL           string
 	APIToken           string
@@ -31,9 +37,10 @@ type Config struct {
 	HostnameOverride   string
 	AgentID            string
 	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
-	AgentVersion       string // Version to report; if empty, uses hostagent.Version
+	AgentVersion       string // Version to report; if empty, uses the Unified Agent binary version
 	Tags               []string
 	InsecureSkipVerify bool
+	CACertPath         string
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
@@ -45,8 +52,14 @@ type Config struct {
 	// Security options
 	EnableCommands bool // If true, enables the command execution feature (AI auto-fix)
 
+	// Enrollment
+	Enroll bool // If true, exchange bootstrap token for runtime token on startup
+
 	// Disk filtering
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
+
+	// State directory for persistent files (agent-id, proxmox registration, etc.)
+	StateDir string // Default: /var/lib/pulse-agent
 
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
@@ -61,32 +74,58 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	hostInfo        *gohost.InfoStat
-	hostname        string
-	displayName     string
-	platform        string
-	osName          string
-	osVersion       string
-	kernelVersion   string
-	architecture    string
-	machineID       string
-	agentID         string
-	agentVersion    string
-	updatedFrom     string // Previous version if recently auto-updated (reported once)
-	reportIP        string // User-specified IP to report (for multi-NIC systems)
-	interval        time.Duration
-	trimmedPulseURL string
-	reportBuffer    *buffer.Queue[agentshost.Report]
-	commandClient   *CommandClient
-	collector       SystemCollector
+	hostInfo               *gohost.InfoStat
+	hostname               string
+	displayName            string
+	platform               string
+	osName                 string
+	osVersion              string
+	kernelVersion          string
+	architecture           string
+	machineID              string
+	agentID                string
+	agentVersion           string
+	updatedFrom            string // Previous version if recently auto-updated (reported once)
+	reportIP               string // User-specified IP to report (for multi-NIC systems)
+	interval               time.Duration
+	stateDir               string
+	trimmedPulseURL        string
+	reportBuffer           *utils.Queue[agentshost.Report]
+	commandClient          *CommandClient
+	commandClientMu        sync.Mutex
+	commandClientRunCancel context.CancelFunc
+	commandClientParentCtx context.Context
+	collector              SystemCollector
 }
 
 const defaultInterval = 30 * time.Second
+const defaultStateDir = "/var/lib/pulse-agent"
+const agentReportEndpoint = "/api/agents/agent/report"
 
-// New constructs a fully initialised host Agent.
+type reportHTTPStatusError struct {
+	Endpoint   string
+	Status     string
+	StatusCode int
+}
+
+func (e *reportHTTPStatusError) Error() string {
+	return fmt.Sprintf("pulse responded with status %s", e.Status)
+}
+
+var newCommandClient = NewCommandClient
+var runCommandClient = func(client *CommandClient, ctx context.Context) error {
+	return client.Run(ctx)
+}
+var getUpdatedFromVersion = agentupdate.GetUpdatedFromVersion
+
+// New constructs a fully initialised runtime-side Unified Agent.
 func New(cfg Config) (*Agent, error) {
 	if cfg.Interval <= 0 {
 		cfg.Interval = defaultInterval
+	}
+
+	if strings.TrimSpace(cfg.StateDir) == "" {
+		cfg.StateDir = defaultStateDir
 	}
 
 	if zerolog.GlobalLevel() == zerolog.DebugLevel && cfg.LogLevel != zerolog.DebugLevel {
@@ -102,18 +141,32 @@ func New(cfg Config) (*Agent, error) {
 		cfg.Logger = &defaultLogger
 	}
 
-	logger := cfg.Logger.Level(cfg.LogLevel).With().Str("component", "host-agent").Logger()
+	logger := cfg.Logger.Level(cfg.LogLevel).With().Str("component", "agent").Logger()
 
-	if strings.TrimSpace(cfg.APIToken) == "" {
-		return nil, fmt.Errorf("api token is required")
+	if cfg.Enroll && strings.TrimSpace(cfg.APIToken) == "" {
+		return nil, fmt.Errorf("api token is required when enrollment is enabled")
 	}
 
-	pulseURL := cfg.PulseURL
-	if strings.TrimSpace(pulseURL) == "" {
+	pulseURL := strings.TrimSpace(cfg.PulseURL)
+	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
-	pulseURL = strings.TrimRight(pulseURL, "/")
+	var err error
+	pulseURL, err = normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
 	cfg.PulseURL = pulseURL
+
+	cfg.ProxmoxType, err = normalizeProxmoxType(cfg.ProxmoxType)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.ReportIP, err = normalizeReportIP(cfg.ReportIP)
+	if err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -161,10 +214,9 @@ func New(cfg Config) (*Agent, error) {
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if cfg.InsecureSkipVerify {
-		//nolint:gosec // Insecure mode is explicitly user-controlled.
-		tlsConfig.InsecureSkipVerify = true
+	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CA bundle: %w", err)
 	}
 
 	client := &http.Client{
@@ -205,7 +257,7 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
-	updatedFrom := agentupdate.GetUpdatedFromVersion()
+	updatedFrom := getUpdatedFromVersion()
 	if updatedFrom != "" {
 		logger.Info().
 			Str("previousVersion", updatedFrom).
@@ -229,16 +281,17 @@ func New(cfg Config) (*Agent, error) {
 		agentID:         agentID,
 		agentVersion:    agentVersion,
 		updatedFrom:     updatedFrom,
-		reportIP:        strings.TrimSpace(cfg.ReportIP),
+		reportIP:        cfg.ReportIP,
+		stateDir:        cfg.StateDir,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
-		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
+		reportBuffer:    utils.New[agentshost.Report](bufferCapacity),
 		collector:       collector,
 	}
 
 	// Create command client for AI command execution (only if enabled)
 	if cfg.EnableCommands {
-		agent.commandClient = NewCommandClient(cfg, agentID, hostname, platform, agentVersion)
+		agent.commandClient = newCommandClient(cfg, agentID, hostname, platform, agentVersion)
 		cfg.Logger.Info().Msg("Command execution enabled via --enable-commands flag")
 	} else {
 		cfg.Logger.Info().Msg("Command execution disabled (use --enable-commands to enable)")
@@ -247,10 +300,66 @@ func New(cfg Config) (*Agent, error) {
 	return agent, nil
 }
 
+func normalizeProxmoxType(raw string) (string, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	switch value {
+	case "", "auto":
+		return "", nil
+	case "pve", "pbs":
+		return value, nil
+	default:
+		return "", fmt.Errorf("invalid proxmox type %q: must be pve, pbs, or auto", raw)
+	}
+}
+
+func normalizeReportIP(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+
+	addr, err := netip.ParseAddr(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid report IP %q: must be a valid IPv4 or IPv6 address", raw)
+	}
+	if addr.IsUnspecified() {
+		return "", fmt.Errorf("invalid report IP %q: unspecified addresses are not allowed", raw)
+	}
+
+	return addr.String(), nil
+}
+
 // Run executes the agent until the context is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
 	if a.cfg.RunOnce {
 		return a.runOnce(ctx)
+	}
+
+	a.commandClientMu.Lock()
+	a.commandClientParentCtx = ctx
+	commandClient := a.commandClient
+	a.commandClientMu.Unlock()
+	defer func() {
+		a.commandClientMu.Lock()
+		a.commandClientParentCtx = nil
+		a.commandClientMu.Unlock()
+		a.stopCommandClient(true)
+	}()
+
+	// Enrollment: exchange bootstrap token for runtime token (must run before
+	// Proxmox setup and reporting, which require the runtime token's scopes).
+	if a.cfg.Enroll {
+		if err := a.runEnrollmentLoop(ctx); err != nil {
+			return fmt.Errorf("enrollment failed: %w", err)
+		}
+		// Re-create command client with the new runtime token, since the
+		// original was built with the bootstrap token during New().
+		if a.cfg.EnableCommands {
+			a.commandClientMu.Lock()
+			a.commandClient = newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+			commandClient = a.commandClient
+			a.commandClientMu.Unlock()
+		}
 	}
 
 	// Proxmox setup (if enabled)
@@ -259,19 +368,22 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	// Start command client in background for AI command execution
-	if a.commandClient != nil {
-		go func() {
-			if err := a.commandClient.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
+	if commandClient != nil {
+		a.startCommandClient(commandClient)
 	}
+
+	// Load any reports buffered from a previous shutdown
+	a.loadPersistedBuffer()
 
 	ticker := time.NewTicker(a.interval)
 	defer ticker.Stop()
+	defer a.persistBuffer()
 
 	if err := a.process(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		a.logger.Error().Err(err).Msg("initial report failed")
+		a.logger.Error().
+			Err(err).
+			Str("hostname", a.hostname).
+			Msg("Initial host report failed")
 	}
 
 	for {
@@ -283,8 +395,57 @@ func (a *Agent) Run(ctx context.Context) error {
 				if errors.Is(err, context.Canceled) {
 					return err
 				}
-				a.logger.Error().Err(err).Msg("failed to send report")
+				a.logger.Error().
+					Err(err).
+					Str("hostname", a.hostname).
+					Msg("Failed to process host report")
 			}
+		}
+	}
+}
+
+func (a *Agent) startCommandClient(client *CommandClient) {
+	if client == nil {
+		return
+	}
+
+	a.commandClientMu.Lock()
+	if a.commandClientRunCancel != nil {
+		a.commandClientMu.Unlock()
+		return
+	}
+
+	parentCtx := a.commandClientParentCtx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(parentCtx)
+	a.commandClientRunCancel = cancel
+	a.commandClientMu.Unlock()
+
+	go func() {
+		if err := runCommandClient(client, runCtx); err != nil && !errors.Is(err, context.Canceled) {
+			a.logger.Error().Err(err).Msg("Command client stopped with error")
+		}
+	}()
+}
+
+func (a *Agent) stopCommandClient(clearClient bool) {
+	a.commandClientMu.Lock()
+	client := a.commandClient
+	cancel := a.commandClientRunCancel
+	a.commandClientRunCancel = nil
+	if clearClient {
+		a.commandClient = nil
+	}
+	a.commandClientMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if client != nil {
+		if err := client.Close(); err != nil {
+			a.logger.Debug().Err(err).Msg("Error closing command client connection")
 		}
 	}
 }
@@ -299,12 +460,26 @@ func (a *Agent) process(ctx context.Context) error {
 		return fmt.Errorf("build report: %w", err)
 	}
 	if err := a.sendReport(ctx, report); err != nil {
-		if strings.Contains(err.Error(), "403 Forbidden") {
-			a.logger.Error().Msg("Failed to send host report (403 Forbidden). API token may lack 'Host agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
+		var statusErr *reportHTTPStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusForbidden {
+			a.logger.Error().
+				Err(err).
+				Str("endpoint", statusErr.Endpoint).
+				Int("status_code", statusErr.StatusCode).
+				Msg("Failed to send Unified Agent report (403 Forbidden). API token may lack 'Unified Agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
 			return nil
 		}
-		a.logger.Warn().Err(err).Msg("Failed to send report, buffering")
+
 		a.reportBuffer.Push(report)
+		event := a.logger.Warn().
+			Err(err).
+			Str("endpoint", agentReportEndpoint).
+			Int("buffered_reports", a.reportBuffer.Len())
+		if errors.As(err, &statusErr) {
+			event.Str("endpoint", statusErr.Endpoint)
+			event.Int("status_code", statusErr.StatusCode)
+		}
+		event.Msg("Failed to send report, buffering")
 		return nil
 	}
 
@@ -314,7 +489,7 @@ func (a *Agent) process(ctx context.Context) error {
 	a.logger.Debug().
 		Str("hostname", report.Host.Hostname).
 		Str("platform", report.Host.Platform).
-		Msg("host report sent")
+		Msg("Unified Agent report sent")
 	return nil
 }
 
@@ -333,7 +508,16 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 		}
 
 		if err := a.sendReport(ctx, report); err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to flush buffered report, stopping flush")
+			var statusErr *reportHTTPStatusError
+			event := a.logger.Warn().
+				Err(err).
+				Str("endpoint", agentReportEndpoint).
+				Int("remaining_buffered_reports", a.reportBuffer.Len())
+			if errors.As(err, &statusErr) {
+				event.Str("endpoint", statusErr.Endpoint)
+				event.Int("status_code", statusErr.StatusCode)
+			}
+			event.Msg("Failed to flush buffered report, stopping flush")
 			return
 		}
 
@@ -342,11 +526,93 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 	}
 }
 
+const bufferFileName = "report-buffer.json"
+
+// persistBuffer writes buffered reports to disk on shutdown so they can be
+// retransmitted on the next startup. Uses atomic write (tmp + rename) to
+// prevent corruption if the process is killed mid-write.
+func (a *Agent) persistBuffer() {
+	items := a.reportBuffer.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	if a.stateDir == "" {
+		a.logger.Debug().Msg("No state dir configured, skipping buffer persistence")
+		return
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to marshal report buffer for persistence")
+		return
+	}
+
+	if err := os.MkdirAll(a.stateDir, 0700); err != nil {
+		a.logger.Warn().Err(err).Str("dir", a.stateDir).Msg("Failed to create state dir for buffer persistence")
+		return
+	}
+
+	path := filepath.Join(a.stateDir, bufferFileName)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		a.logger.Warn().Err(err).Str("path", tmpPath).Msg("Failed to write report buffer temp file")
+		return
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		a.logger.Warn().Err(err).Str("path", path).Msg("Failed to rename report buffer file")
+		_ = os.Remove(tmpPath)
+		return
+	}
+
+	a.logger.Info().Int("count", len(items)).Str("path", path).Msg("Persisted report buffer to disk")
+}
+
+// loadPersistedBuffer loads buffered reports from a previous shutdown and
+// attempts to flush them. The file is deleted after loading regardless of
+// whether the flush succeeds (items are pushed back into the in-memory buffer).
+func (a *Agent) loadPersistedBuffer() {
+	if a.stateDir == "" {
+		return
+	}
+
+	path := filepath.Join(a.stateDir, bufferFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			a.logger.Warn().Err(err).Str("path", path).Msg("Failed to read persisted report buffer")
+		}
+		return
+	}
+
+	// Always delete the file after reading
+	_ = os.Remove(path)
+
+	var items []agentshost.Report
+	if err := json.Unmarshal(data, &items); err != nil {
+		a.logger.Warn().Err(err).Str("path", path).Msg("Corrupt report buffer file, discarding")
+		return
+	}
+
+	if len(items) == 0 {
+		return
+	}
+
+	for _, item := range items {
+		a.reportBuffer.Push(item)
+	}
+
+	a.logger.Info().Int("count", len(items)).Msg("Loaded persisted report buffer from disk")
+}
+
 func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	uptime, _ := a.collector.HostUptime(collectCtx)
+	uptime, err := a.collector.HostUptime(collectCtx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect host uptime; defaulting to 0")
+	}
 	snapshot, err := a.collector.Metrics(collectCtx, a.cfg.DiskExclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
@@ -364,8 +630,23 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)
 
+	// Collect Unraid array topology (best effort - only on Unraid hosts).
+	unraidData := a.collectUnraidStorage(collectCtx)
+
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
 	cephData := a.collectCephStatus(collectCtx)
+
+	// Collect temperature data from Proxmox cluster peers via SSH (best effort).
+	// Uses parent ctx, not collectCtx — cluster SSH has its own 15s budget that
+	// would be capped by collectCtx's 10s timeout.
+	clusterSensors := a.collectClusterSensors(ctx)
+
+	// Carry updated_from on the first freshly built v6 report only. If that
+	// report is buffered, the buffered copy still retains the field for retry.
+	updatedFrom := a.updatedFrom
+	if updatedFrom != "" {
+		a.updatedFrom = ""
+	}
 
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
@@ -374,9 +655,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
-			UpdatedFrom:     a.updatedFrom,
+			UpdatedFrom:     updatedFrom,
 			CommandsEnabled: a.cfg.EnableCommands,
-			DiskExclude:     a.cfg.DiskExclude,
+			DiskExclude:     append([]string(nil), a.cfg.DiskExclude...),
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,
@@ -398,14 +679,16 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			CPUUsagePercent: snapshot.CPUUsagePercent,
 			Memory:          snapshot.Memory,
 		},
-		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
-		DiskIO:    append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
-		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
-		Sensors:   sensorData,
-		RAID:      raidData,
-		Ceph:      cephData,
-		Tags:      append([]string(nil), a.cfg.Tags...),
-		Timestamp: a.collector.Now(),
+		Disks:          append([]agentshost.Disk(nil), snapshot.Disks...),
+		DiskIO:         append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
+		Network:        append([]agentshost.NetworkInterface(nil), snapshot.Network...),
+		Sensors:        sensorData,
+		RAID:           raidData,
+		Unraid:         unraidData,
+		Ceph:           cephData,
+		ClusterSensors: clusterSensors,
+		Tags:           append([]string(nil), a.cfg.Tags...),
+		Timestamp:      a.collector.Now(),
 	}
 
 	return report, nil
@@ -417,31 +700,48 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/agents/host/report", a.trimmedPulseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+
+	endpoint := agentReportEndpoint
+	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, endpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-	req.Header.Set("X-API-Token", a.cfg.APIToken)
-	req.Header.Set("User-Agent", "pulse-host-agent/"+Version)
+	req.Header.Set("Content-Encoding", "gzip")
+	if token := strings.TrimSpace(a.cfg.APIToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Token", token)
+	}
+	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close report response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("pulse responded with status %s", resp.Status)
+		return &reportHTTPStatusError{
+			Endpoint:   endpoint,
+			Status:     resp.Status,
+			StatusCode: resp.StatusCode,
+		}
 	}
 
 	// Parse response to check for server-side config overrides
 	var reportResp struct {
 		Success bool   `json:"success"`
-		HostID  string `json:"hostId"`
+		AgentID string `json:"agentId"`
 		Config  *struct {
 			CommandsEnabled *bool `json:"commandsEnabled"`
 		} `json:"config,omitempty"`
@@ -452,6 +752,12 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return nil
 	}
 
+	// Persist the server-acknowledged agent ID so uninstall can deregister.
+	canonicalAgentID := strings.TrimSpace(reportResp.AgentID)
+	if canonicalAgentID != "" {
+		a.persistAgentID(canonicalAgentID)
+	}
+
 	// Apply server config overrides
 	if reportResp.Config != nil && reportResp.Config.CommandsEnabled != nil {
 		a.applyRemoteConfig(*reportResp.Config.CommandsEnabled)
@@ -460,31 +766,52 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	return nil
 }
 
+// persistAgentID writes the server-assigned agent ID to the state directory.
+// This file is read by the uninstall script to deregister the agent from the server.
+// Errors are debug-logged, never fatal — same resilience pattern as proxmox_setup.go.
+func (a *Agent) persistAgentID(agentID string) {
+	if a.stateDir == "" {
+		return
+	}
+	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to create state directory for agent-id")
+		return
+	}
+	agentIDPath := filepath.Join(a.stateDir, "agent-id")
+	if err := a.collector.WriteFile(agentIDPath, []byte(agentID), 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to persist agent-id")
+		return
+	}
+	if err := a.collector.Chmod(agentIDPath, 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to enforce agent-id file permissions")
+	}
+}
+
 // applyRemoteConfig applies server-side configuration overrides.
 // Currently handles enabling/disabling the command execution feature dynamically.
 func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
-	// Check if state would change
-	currentlyEnabled := a.commandClient != nil
+	var (
+		clientToStart *CommandClient
+		shouldStop    bool
+	)
 
-	if commandsEnabled && !currentlyEnabled {
-		// Server enabled commands, but we don't have a command client
-		// Start the command client
+	a.commandClientMu.Lock()
+	currentlyEnabled := a.commandClient != nil
+	switch {
+	case commandsEnabled && !currentlyEnabled:
+		clientToStart = NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		a.commandClient = clientToStart
+	case !commandsEnabled && currentlyEnabled:
+		shouldStop = true
+	}
+	a.commandClientMu.Unlock()
+
+	if clientToStart != nil {
 		a.logger.Info().Msg("Server enabled command execution - starting command client")
-		client := NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
-		a.commandClient = client
-		go func() {
-			if err := client.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
-	} else if !commandsEnabled && currentlyEnabled {
-		// Server disabled commands, but we have a command client running
+		a.startCommandClient(clientToStart)
+	} else if shouldStop {
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		// Properly close the WebSocket connection to stop the client
-		if err := a.commandClient.Close(); err != nil {
-			a.logger.Debug().Err(err).Msg("Error closing command client connection")
-		}
-		a.commandClient = nil
+		a.stopCommandClient(true)
 	}
 }
 
@@ -496,6 +823,59 @@ func normalisePlatform(platform string) string {
 	default:
 		return platform
 	}
+}
+
+func normalizePulseURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+	}
+
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		// Always allowed.
+	case "http":
+		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback or private network", rawURL)
+		}
+	default:
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
+	}
+
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+
+	return parsed.String(), nil
+}
+
+// isLoopbackOrPrivateHost returns true for loopback and RFC1918 private
+// network addresses.  HTTP (non-TLS) is safe over a local/private network;
+// the scheme guard only needs to prevent plaintext over the public internet.
+func isLoopbackOrPrivateHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 // collectTemperatures attempts to collect temperature data from the local system.
@@ -529,7 +909,39 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		return agentshost.Sensors{}
 	}
 
-	// Convert to host agent sensor format
+	result := convertTemperatureDataToSensors(tempData)
+
+	// Collect power consumption data (Intel RAPL, etc.)
+	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
+		result.PowerWatts = make(map[string]float64)
+		if powerData.PackageWatts > 0 {
+			result.PowerWatts["cpu_package"] = powerData.PackageWatts
+		}
+		if powerData.CoreWatts > 0 {
+			result.PowerWatts["cpu_core"] = powerData.CoreWatts
+		}
+		if powerData.DRAMWatts > 0 {
+			result.PowerWatts["dram"] = powerData.DRAMWatts
+		}
+		a.logger.Debug().
+			Float64("packageWatts", powerData.PackageWatts).
+			Str("source", powerData.Source).
+			Msg("Collected power data")
+	}
+
+	a.logger.Debug().
+		Int("temperatureCount", len(result.TemperatureCelsius)).
+		Int("fanCount", len(result.FanRPM)).
+		Int("powerCount", len(result.PowerWatts)).
+		Int("additionalCount", len(result.Additional)).
+		Msg("Collected sensor data")
+
+	return result
+}
+
+// convertTemperatureDataToSensors converts parsed sensor data into the agent report
+// sensor format. This is shared between local collection and cluster peer collection.
+func convertTemperatureDataToSensors(tempData *sensors.TemperatureData) agentshost.Sensors {
 	result := agentshost.Sensors{
 		TemperatureCelsius: make(map[string]float64),
 	}
@@ -541,7 +953,6 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 
 	// Add individual core temperatures
 	for coreName, temp := range tempData.Cores {
-		// Normalize core name (e.g., "Core 0" -> "cpu_core_0")
 		normalizedName := strings.ToLower(strings.ReplaceAll(coreName, " ", "_"))
 		result.TemperatureCelsius["cpu_"+normalizedName] = temp
 	}
@@ -572,43 +983,15 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		}
 	}
 
-	// Collect power consumption data (Intel RAPL, etc.)
-	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
-		result.PowerWatts = make(map[string]float64)
-		if powerData.PackageWatts > 0 {
-			result.PowerWatts["cpu_package"] = powerData.PackageWatts
-		}
-		if powerData.CoreWatts > 0 {
-			result.PowerWatts["cpu_core"] = powerData.CoreWatts
-		}
-		if powerData.DRAMWatts > 0 {
-			result.PowerWatts["dram"] = powerData.DRAMWatts
-		}
-		a.logger.Debug().
-			Float64("packageWatts", powerData.PackageWatts).
-			Str("source", powerData.Source).
-			Msg("Collected power data")
-	}
-
-	a.logger.Debug().
-		Int("temperatureCount", len(result.TemperatureCelsius)).
-		Int("fanCount", len(result.FanRPM)).
-		Int("powerCount", len(result.PowerWatts)).
-		Int("additionalCount", len(result.Additional)).
-		Msg("Collected sensor data")
-
 	return result
 }
 
-// collectFreeBSDTemperatures collects temperature data on FreeBSD via sysctl.
-// FreeBSD exposes CPU temperatures as dev.cpu.N.temperature and ACPI thermal
-// zones as hw.acpi.thermal.tzN.temperature.
+// collectFreeBSDTemperatures reads CPU and ACPI thermal zone temperatures
+// from sysctl on FreeBSD. Returns an empty Sensors struct on any error.
 func (a *Agent) collectFreeBSDTemperatures(ctx context.Context) agentshost.Sensors {
 	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// Query all sysctl values and filter for temperature in Go
-	// (avoids sh -c and handles grep exit-code-1 on no matches)
 	cmd := exec.CommandContext(cmdCtx, "sysctl", "-a")
 	output, err := cmd.Output()
 	if err != nil {
@@ -627,11 +1010,9 @@ func (a *Agent) collectFreeBSDTemperatures(ctx context.Context) agentshost.Senso
 	return result
 }
 
-// parseFreeBSDSysctlTemperatures parses FreeBSD sysctl output and extracts
-// temperature readings. Expects lines like:
-//
-//	dev.cpu.0.temperature: 45.0C
-//	hw.acpi.thermal.tz0.temperature: 38.0C
+// parseFreeBSDSysctlTemperatures parses sysctl output for temperature readings.
+// FreeBSD exposes CPU temps via dev.cpu.N.temperature and ACPI thermal zones via
+// hw.acpi.thermal.tzN.temperature. Values are formatted as "45.0C".
 func parseFreeBSDSysctlTemperatures(sysctlOutput string) agentshost.Sensors {
 	result := agentshost.Sensors{
 		TemperatureCelsius: make(map[string]float64),
@@ -654,14 +1035,11 @@ func parseFreeBSDSysctlTemperatures(sysctlOutput string) agentshost.Sensors {
 			continue
 		}
 
-		// Convert sysctl keys to sensor names matching lm-sensors conventions
 		keyParts := strings.Split(key, ".")
 		switch {
 		case strings.HasPrefix(key, "dev.cpu.") && len(keyParts) >= 3:
-			// dev.cpu.0.temperature → cpu_core_0
 			result.TemperatureCelsius["cpu_core_"+keyParts[2]] = temp
 		case strings.HasPrefix(key, "hw.acpi.thermal.") && len(keyParts) >= 4:
-			// hw.acpi.thermal.tz0.temperature → acpi_tz0
 			result.TemperatureCelsius["acpi_"+keyParts[3]] = temp
 		default:
 			normalized := strings.ReplaceAll(key, ".", "_")
@@ -696,6 +1074,30 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	return arrays
 }
 
+// collectUnraidStorage attempts to collect Unraid array topology.
+// Returns nil when not running on Unraid or if collection fails.
+func (a *Agent) collectUnraidStorage(ctx context.Context) *agentshost.UnraidStorage {
+	if a.collector.GOOS() != "linux" {
+		return nil
+	}
+
+	storage, err := a.collector.UnraidStorage(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect Unraid storage data")
+		return nil
+	}
+	if storage == nil {
+		return nil
+	}
+
+	a.logger.Debug().
+		Bool("arrayStarted", storage.ArrayStarted).
+		Int("diskCount", len(storage.Disks)).
+		Msg("Collected Unraid storage data")
+
+	return storage
+}
+
 // collectCephStatus attempts to collect Ceph cluster status.
 // Returns nil if Ceph is not available or not configured on this host.
 func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
@@ -720,7 +1122,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	result := &agentshost.CephCluster{
 		FSID: status.FSID,
 		Health: agentshost.CephHealth{
-			Status: status.Health.Status,
+			Status: string(status.Health.Status),
 			Checks: make(map[string]agentshost.CephCheck),
 		},
 		MonMap: agentshost.CephMonitorMap{
@@ -771,7 +1173,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert health checks
 	for name, check := range status.Health.Checks {
 		result.Health.Checks[name] = agentshost.CephCheck{
-			Severity: check.Severity,
+			Severity: string(check.Severity),
 			Message:  check.Message,
 			Detail:   check.Detail,
 		}
@@ -780,7 +1182,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert health summary
 	for _, s := range status.Health.Summary {
 		result.Health.Summary = append(result.Health.Summary, agentshost.CephHealthSummary{
-			Severity: s.Severity,
+			Severity: string(s.Severity),
 			Message:  s.Message,
 		})
 	}
@@ -800,7 +1202,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert services
 	for _, svc := range status.Services {
 		result.Services = append(result.Services, agentshost.CephService{
-			Type:    svc.Type,
+			Type:    string(svc.Type),
 			Running: svc.Running,
 			Total:   svc.Total,
 			Daemons: svc.Daemons,
@@ -886,6 +1288,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 		a.cfg.ProxmoxType,
 		a.hostname,
 		a.reportIP,
+		a.stateDir,
 		a.cfg.InsecureSkipVerify,
 	)
 
@@ -969,7 +1372,7 @@ func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerol
 			machineID := strings.TrimSpace(string(data))
 			if machineID != "" && len(machineID) >= 8 {
 				// Format as UUID if it's a 32-char hex string (like machine-id typically is).
-				if len(machineID) == 32 && isHexString(machineID) {
+				if len(machineID) == 32 && utils.IsHexString(machineID) {
 					machineID = fmt.Sprintf("%s-%s-%s-%s-%s",
 						machineID[0:8], machineID[8:12], machineID[12:16],
 						machineID[16:20], machineID[20:32])
@@ -996,20 +1399,6 @@ func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerol
 	}
 
 	return gopsutilID
-}
-
-func isHexString(input string) bool {
-	for i := 0; i < len(input); i++ {
-		ch := input[i]
-		switch {
-		case ch >= '0' && ch <= '9':
-		case ch >= 'a' && ch <= 'f':
-		case ch >= 'A' && ch <= 'F':
-		default:
-			return false
-		}
-	}
-	return input != ""
 }
 
 func getPrimaryMACIdentifier(c SystemCollector) string {

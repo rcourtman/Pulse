@@ -1,6 +1,7 @@
 package servicediscovery
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -208,5 +209,139 @@ func TestIsCommonWebPort(t *testing.T) {
 		if isCommonWebPort(port) {
 			t.Errorf("isCommonWebPort(%d) = true, want false", port)
 		}
+	}
+}
+
+func TestSuggestWebURLWithReason(t *testing.T) {
+	tests := []struct {
+		name      string
+		discovery *ResourceDiscovery
+		hostIP    string
+		wantCode  string
+	}{
+		{
+			name:      "nil discovery",
+			discovery: nil,
+			hostIP:    "192.168.1.10",
+			wantCode:  urlReasonNoDiscovery,
+		},
+		{
+			name: "missing host",
+			discovery: &ResourceDiscovery{
+				ServiceType: "proxmox",
+				Category:    CategoryVirtualizer,
+			},
+			hostIP:   "",
+			wantCode: urlReasonNoHost,
+		},
+		{
+			name: "non-web category",
+			discovery: &ResourceDiscovery{
+				ServiceType: "postgres",
+				Category:    CategoryDatabase,
+			},
+			hostIP:   "192.168.1.20",
+			wantCode: urlReasonCategoryNotWeb,
+		},
+		{
+			name: "unknown service with no ports",
+			discovery: &ResourceDiscovery{
+				ServiceType: "unknown",
+				Category:    CategoryUnknown,
+			},
+			hostIP:   "192.168.1.30",
+			wantCode: urlReasonNoPortsDetected,
+		},
+		{
+			name: "ports present but no common web ports",
+			discovery: &ResourceDiscovery{
+				ServiceType: "custom",
+				Category:    CategoryUnknown,
+				Ports: []PortInfo{
+					{Port: 22, Protocol: "tcp"},
+					{Port: 3306, Protocol: "tcp"},
+				},
+			},
+			hostIP:   "192.168.1.40",
+			wantCode: urlReasonNoCommonWebPort,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url, code, detail := suggestWebURLWithReason(tt.discovery, tt.hostIP)
+			if url != "" {
+				t.Fatalf("expected empty URL, got %q", url)
+			}
+			if code != tt.wantCode {
+				t.Fatalf("unexpected reason code: got %q want %q", code, tt.wantCode)
+			}
+			if detail == "" {
+				t.Fatalf("expected non-empty reason detail")
+			}
+		})
+	}
+}
+
+func TestSuggestWebURLWithReason_SuccessCases(t *testing.T) {
+	tests := []struct {
+		name         string
+		discovery    *ResourceDiscovery
+		hostIP       string
+		wantURL      string
+		wantCode     string
+		detailSubstr string
+	}{
+		{
+			name: "service default match",
+			discovery: &ResourceDiscovery{
+				ServiceType: "proxmox",
+				Category:    CategoryVirtualizer,
+			},
+			hostIP:       "192.168.1.10",
+			wantURL:      "https://192.168.1.10:8006",
+			wantCode:     urlReasonServiceDefaultMatch,
+			detailSubstr: "service default",
+		},
+		{
+			name: "service variation match",
+			discovery: &ResourceDiscovery{
+				ServiceType: "homeassistant-server",
+				Category:    CategoryHomeAuto,
+			},
+			hostIP:       "192.168.1.20",
+			wantURL:      "http://192.168.1.20:8123",
+			wantCode:     urlReasonServiceVariation,
+			detailSubstr: "normalized match",
+		},
+		{
+			name: "web port inference",
+			discovery: &ResourceDiscovery{
+				ServiceType: "custom",
+				Category:    CategoryUnknown,
+				Ports: []PortInfo{
+					{Port: 8443, Protocol: "tcp"},
+				},
+			},
+			hostIP:       "192.168.1.30",
+			wantURL:      "https://192.168.1.30:8443",
+			wantCode:     urlReasonWebPortInference,
+			detailSubstr: "web port 8443",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotURL, gotCode, gotDetail := suggestWebURLWithReason(tt.discovery, tt.hostIP)
+			if gotURL != tt.wantURL {
+				t.Fatalf("unexpected URL. got %q want %q", gotURL, tt.wantURL)
+			}
+			if gotCode != tt.wantCode {
+				t.Fatalf("unexpected reason code. got %q want %q", gotCode, tt.wantCode)
+			}
+			if !strings.Contains(gotDetail, tt.detailSubstr) {
+				t.Fatalf("unexpected detail. got %q want substring %q", gotDetail, tt.detailSubstr)
+			}
+		})
 	}
 }

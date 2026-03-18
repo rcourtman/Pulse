@@ -1,13 +1,13 @@
 package websocket
 
 import (
+	"compress/flate"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,8 +16,17 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	// maxWebSocketInboundMessageSize bounds client->server websocket message size.
+	maxWebSocketInboundMessageSize = 64 * 1024
+	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
+	maxWebSocketOrgIDLength = 64
+	websocketHubComponent   = "websocket_hub"
 )
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
@@ -86,11 +95,32 @@ func normalizeForwardedProto(proto string, fallback string) string {
 	}
 }
 
+func isValidWebSocketOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if len(orgID) > maxWebSocketOrgIDLength {
+		return false
+	}
+	if strings.TrimSpace(orgID) != orgID {
+		return false
+	}
+	if strings.ContainsAny(orgID, `/\`) {
+		return false
+	}
+	for _, r := range orgID {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
 // SetAllowedOrigins sets the allowed origins for CORS
 func (h *Hub) SetAllowedOrigins(origins []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.allowedOrigins = origins
+	h.allowedOrigins = append([]string(nil), origins...)
 }
 
 // checkOrigin validates the origin against allowed origins
@@ -102,26 +132,37 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	}
 
 	h.mu.RLock()
-	allowedOrigins := h.allowedOrigins
+	allowedOrigins := append([]string(nil), h.allowedOrigins...)
 	h.mu.RUnlock()
 
-	// Determine the actual origin (accounting for proxy headers)
+	// Determine the actual origin (accounting for proxy headers).
+	// Only trust X-Forwarded-* headers when the peer is a known trusted proxy,
+	// consistent with how auth.go gates proxy header trust via isTrustedProxyIP.
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
 
-	// Check X-Forwarded-Proto or X-Forwarded-Scheme for proxied requests
-	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-		scheme = normalizeForwardedProto(forwardedProto, scheme)
-	} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
-		scheme = normalizeForwardedProto(forwardedScheme, scheme)
+	h.mu.RLock()
+	trustedProxyFn := h.isTrustedProxy
+	h.mu.RUnlock()
+
+	peerIP := extractPeerIP(r.RemoteAddr)
+	peerIsTrusted := trustedProxyFn != nil && trustedProxyFn(peerIP)
+
+	if peerIsTrusted {
+		if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+			scheme = normalizeForwardedProto(forwardedProto, scheme)
+		} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
+			scheme = normalizeForwardedProto(forwardedScheme, scheme)
+		}
 	}
 
-	// Use X-Forwarded-Host if present (for proxied requests)
 	host := r.Host
-	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
-		host = forwardedHost
+	if peerIsTrusted {
+		if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+			host = forwardedHost
+		}
 	}
 
 	requestOrigin := scheme + "://" + host
@@ -352,7 +393,7 @@ type MultiTenantChecker interface {
 
 // Hub maintains active WebSocket clients and broadcasts messages
 type Hub struct {
-	clients            map[*Client]bool            // All clients (legacy support)
+	clients            map[*Client]bool            // Flat client registry for lifecycle management
 	clientsByTenant    map[string]map[*Client]bool // Per-tenant client tracking
 	broadcast          chan []byte
 	broadcastSeq       chan Message         // Sequenced broadcast channel for ordering
@@ -360,13 +401,13 @@ type Hub struct {
 	register           chan *Client
 	unregister         chan *Client
 	stopChan           chan struct{} // Signals shutdown
+	stopOnce           sync.Once
 	mu                 sync.RWMutex
-	getState           func() interface{}             // Function to get current state (legacy)
-	getStateByTenant   func(orgID string) interface{} // Function to get state for specific tenant
+	getState           func(orgID string) interface{} // Function to get state for specific tenant
 	allowedOrigins     []string                       // Allowed origins for CORS
 	orgAuthChecker     OrgAuthChecker                 // Org authorization checker
 	multiTenantChecker MultiTenantChecker             // Multi-tenant feature flag and license checker
-	singleTenantMode   bool                           // Ignore tenant selection and force default org
+	isTrustedProxy     func(ip string) bool           // Optional: checks if peer IP is a trusted reverse proxy
 	// Broadcast coalescing fields
 	coalesceWindow  time.Duration
 	coalescePending *Message
@@ -384,18 +425,11 @@ type Message struct {
 	Timestamp string      `json:"timestamp,omitempty"`
 }
 
-// SetStateGetter sets the state getter function (legacy, for default tenant)
-func (h *Hub) SetStateGetter(getState func() interface{}) {
+// SetStateGetter sets the tenant-aware state getter function.
+func (h *Hub) SetStateGetter(getState func(orgID string) interface{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.getState = getState
-}
-
-// SetStateGetterForTenant sets the tenant-aware state getter function
-func (h *Hub) SetStateGetterForTenant(getState func(orgID string) interface{}) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.getStateByTenant = getState
 }
 
 // SetOrgAuthChecker sets the organization authorization checker.
@@ -412,35 +446,36 @@ func (h *Hub) SetMultiTenantChecker(checker MultiTenantChecker) {
 	h.multiTenantChecker = checker
 }
 
-// SetSingleTenantMode forces all connections to use the default org.
-func (h *Hub) SetSingleTenantMode(enabled bool) {
+// SetTrustedProxyChecker sets the function used to verify whether a peer IP is a
+// trusted reverse proxy. When set, X-Forwarded-Host/X-Forwarded-Proto are only
+// trusted in checkOrigin when the peer passes this check.
+func (h *Hub) SetTrustedProxyChecker(fn func(ip string) bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.singleTenantMode = enabled
+	h.isTrustedProxy = fn
+}
+
+func (h *Hub) hasStateGetter() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.getState != nil
 }
 
 // getStateForClient returns the state for a specific client based on their tenant
 func (h *Hub) getStateForClient(client *Client) interface{} {
 	h.mu.RLock()
-	getStateByTenant := h.getStateByTenant
 	getState := h.getState
 	h.mu.RUnlock()
 
-	// Try tenant-specific getter first
-	if getStateByTenant != nil && client.orgID != "" {
-		return getStateByTenant(client.orgID)
-	}
-
-	// Fall back to default getter
 	if getState != nil {
-		return getState()
+		return getState(normalizeOrgID(client.orgID))
 	}
 
 	return nil
 }
 
 // NewHub creates a new WebSocket hub
-func NewHub(getState func() interface{}) *Hub {
+func NewHub(getState func(orgID string) interface{}) *Hub {
 	return &Hub{
 		clients:               make(map[*Client]bool),
 		clientsByTenant:       make(map[string]map[*Client]bool),
@@ -462,6 +497,7 @@ func NewHub(getState func() interface{}) *Hub {
 func (h *Hub) Run() {
 	// Start broadcast sequencer goroutine
 	go h.runBroadcastSequencer()
+	log.Info().Msg("WebSocket state payload configured for unified resources")
 
 	pingTicker := time.NewTicker(30 * time.Second)
 	defer pingTicker.Stop()
@@ -479,16 +515,16 @@ func (h *Hub) Run() {
 				h.clientsByTenant[client.orgID][client] = true
 			}
 			h.mu.Unlock()
-			log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("WebSocket client connected")
+			log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client connected")
 
 			// Send initial state to the new client immediately
 			// Use tenant-aware state getter if available
-			hasGetState := h.getState != nil || h.getStateByTenant != nil
+			hasGetState := h.hasStateGetter()
 			log.Debug().Bool("hasGetState", hasGetState).Msg("Checking getState function for new client")
 			if hasGetState {
 				// Add a small delay to ensure client is ready
 				go func() {
-					log.Debug().Str("client", client.id).Msg("Starting initial state goroutine")
+					log.Debug().Str("client", client.id).Msg("starting initial state goroutine")
 					time.Sleep(500 * time.Millisecond)
 
 					// First send a small welcome message
@@ -503,28 +539,30 @@ func (h *Hub) Run() {
 						h.mu.RUnlock()
 
 						if stillRegistered {
-							log.Info().Str("client", client.id).Msg("Sending welcome message")
+							log.Info().Str("client", client.id).Msg("sending welcome message")
 							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("Welcome message sent")
+								log.Info().Str("client", client.id).Msg("welcome message sent")
 							} else {
-								log.Warn().Str("client", client.id).Msg("Failed to send welcome message - client closed or buffer full")
+								log.Warn().Str("client", client.id).Msg("failed to send welcome message - client closed or buffer full")
 							}
 						} else {
-							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
+							log.Debug().Str("client", client.id).Msg("client disconnected before welcome message")
 						}
+					} else {
+						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal welcome message")
 					}
 
 					// Then send the initial state after another delay
 					time.Sleep(100 * time.Millisecond)
-					log.Debug().Str("client", client.id).Msg("About to get state")
+					log.Debug().Str("client", client.id).Msg("about to get state")
 
 					// Get the state using tenant-aware getter
 					stateData := h.getStateForClient(client)
-					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("Got state for initial message")
+					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
 
 					initialMsg := Message{
 						Type: "initialState",
-						Data: sanitizeData(stateData),
+						Data: sanitizeData(h.prepareStateForBroadcast(stateData)),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
 						// Check if client is still registered before sending (must hold lock)
@@ -533,21 +571,26 @@ func (h *Hub) Run() {
 						h.mu.RUnlock()
 
 						if stillRegistered {
-							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
+							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("sending initial state to client")
 							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
+								log.Info().Str("client", client.id).Msg("initial state sent successfully")
 							} else {
-								log.Warn().Str("client", client.id).Msg("Client closed or buffer full, skipping initial state")
+								log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
 							}
 						} else {
-							log.Debug().Str("client", client.id).Msg("Client disconnected before initial state")
+							log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
 						}
 					} else {
-						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal initial state")
+						log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
 					}
 				}()
 			} else {
-				log.Warn().Msg("No getState function defined")
+				log.Warn().
+					Str("component", websocketHubComponent).
+					Str("action", "initial_state_skipped_missing_getter").
+					Str("client", client.id).
+					Str("org_id", client.orgID).
+					Msg("No getState function defined")
 			}
 
 		case client := <-h.unregister:
@@ -565,7 +608,7 @@ func (h *Hub) Run() {
 				client.closed.Store(true) // Mark closed before closing channel to prevent sends
 				close(client.send)
 				h.mu.Unlock()
-				log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("WebSocket client disconnected")
+				log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client disconnected")
 			} else {
 				h.mu.Unlock()
 			}
@@ -595,7 +638,7 @@ func (h *Hub) Run() {
 			h.sendPing()
 
 		case <-h.stopChan:
-			log.Info().Msg("WebSocket hub shutting down")
+			log.Info().Msg("webSocket hub shutting down")
 			// Close all client connections
 			h.mu.Lock()
 			for client := range h.clients {
@@ -611,7 +654,31 @@ func (h *Hub) Run() {
 
 // Stop gracefully shuts down the hub
 func (h *Hub) Stop() {
-	close(h.stopChan)
+	h.stopOnce.Do(func() {
+		close(h.stopChan)
+	})
+}
+
+func (h *Hub) isStopping() bool {
+	select {
+	case <-h.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Hub) tryRegisterClient(client *Client) bool {
+	if h.isStopping() {
+		return false
+	}
+
+	select {
+	case h.register <- client:
+		return true
+	case <-h.stopChan:
+		return false
+	}
 }
 
 // HandleWebSocket handles WebSocket upgrade requests
@@ -624,38 +691,44 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Extract org ID from request for tenant isolation
 	// Priority: Header > Cookie > Query param > Default
-	orgID := r.Header.Get("X-Pulse-Org-ID")
+	orgID := strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
 	if orgID == "" {
 		if cookie, err := r.Cookie("pulse_org_id"); err == nil {
-			orgID = cookie.Value
+			orgID = strings.TrimSpace(cookie.Value)
 		}
 	}
 	if orgID == "" {
-		orgID = r.URL.Query().Get("org_id")
+		orgID = strings.TrimSpace(r.URL.Query().Get("org_id"))
 	}
-	if orgID == "" {
-		orgID = "default"
+	if !isValidWebSocketOrgID(orgID) {
+		log.Warn().
+			Int("org_id_len", len(orgID)).
+			Msg("WebSocket connection denied - invalid organization ID")
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
 	}
 
 	// Multi-tenant feature flag and license check for non-default orgs
 	h.mu.RLock()
 	mtChecker := h.multiTenantChecker
 	authChecker := h.orgAuthChecker
-	singleTenantMode := h.singleTenantMode
 	h.mu.RUnlock()
-
-	if singleTenantMode && orgID != "" && orgID != "default" {
-		log.Debug().
-			Str("requested_org", orgID).
-			Msg("Ignoring non-default org for single-tenant WebSocket runtime")
-		orgID = "default"
-	}
 
 	if orgID != "default" {
 		// Check if multi-tenant is enabled and licensed
 		if mtChecker != nil {
 			result := mtChecker.CheckMultiTenant(r.Context(), orgID)
 			if !result.Allowed {
+				userID := getUserFromContext(r.Context())
+				audit.Log(
+					"websocket_multitenant_access_denied",
+					userID,
+					extractPeerIP(r.RemoteAddr),
+					r.URL.Path,
+					false,
+					fmt.Sprintf("org_id=%s reason=%s feature_enabled=%t licensed=%t", orgID, result.Reason, result.FeatureEnabled, result.Licensed),
+				)
+
 				log.Warn().
 					Str("org_id", orgID).
 					Bool("feature_enabled", result.FeatureEnabled).
@@ -681,6 +754,15 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			token := getAPITokenFromContext(r.Context())
 
 			if !authChecker.CanAccessOrg(userID, token, orgID) {
+				audit.Log(
+					"websocket_org_access_denied",
+					userID,
+					extractPeerIP(r.RemoteAddr),
+					r.URL.Path,
+					false,
+					fmt.Sprintf("org_id=%s", orgID),
+				)
+
 				log.Warn().
 					Str("org_id", orgID).
 					Str("user_id", userID).
@@ -693,15 +775,20 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Create upgrader with our origin check
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 1024 * 4, // 4MB to handle large state messages
-		WriteBufferSize: 1024 * 1024 * 4, // 4MB to handle large state messages
-		CheckOrigin:     h.checkOrigin,
+		ReadBufferSize:    1024 * 1024 * 4, // 4MB to handle large state messages
+		WriteBufferSize:   1024 * 1024 * 4, // 4MB to handle large state messages
+		CheckOrigin:       h.checkOrigin,
+		EnableCompression: true,
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
+		log.Error().Err(err).Msg("failed to upgrade WebSocket connection")
 		return
+	}
+	conn.EnableWriteCompression(true)
+	if err := conn.SetCompressionLevel(flate.BestSpeed); err != nil {
+		log.Warn().Err(err).Msg("Failed to set WebSocket compression level")
 	}
 
 	clientID := utils.GenerateID("client")
@@ -715,9 +802,13 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		lastPing: time.Now(),
 	}
 
-	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("WebSocket client created")
+	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("webSocket client created")
 
-	client.hub.register <- client
+	if !client.hub.tryRegisterClient(client) {
+		log.Info().Str("client", clientID).Str("org_id", orgID).Msg("WebSocket hub stopping; rejecting new client")
+		conn.Close()
+		return
+	}
 
 	// Start goroutines for reading and writing
 	go client.writePump()
@@ -732,6 +823,14 @@ func getUserFromContext(ctx context.Context) string {
 // getAPITokenFromContext extracts the API token from request context.
 func getAPITokenFromContext(ctx context.Context) interface{} {
 	return auth.GetAPIToken(ctx)
+}
+
+func normalizeOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
 }
 
 // dispatchToClients fan-outs a marshaled payload to all clients, dropping any that
@@ -797,6 +896,8 @@ func (h *Hub) runBroadcastSequencer() {
 					if pending != nil {
 						if data, err := json.Marshal(*pending); err == nil {
 							h.dispatchToClients(data, "Client send channel full, dropping coalesced message and closing connection")
+						} else {
+							log.Error().Err(err).Str("type", pending.Type).Msg("Failed to marshal coalesced broadcast message")
 						}
 					}
 				})
@@ -806,6 +907,8 @@ func (h *Hub) runBroadcastSequencer() {
 				// Non-state messages (alerts, etc.) - send immediately
 				if data, err := json.Marshal(msg); err == nil {
 					h.dispatchToClients(data, "Client send channel full, dropping message and closing connection")
+				} else {
+					log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal broadcast message")
 				}
 			}
 
@@ -835,6 +938,8 @@ func (h *Hub) runBroadcastSequencer() {
 					if pending != nil {
 						if data, err := json.Marshal(*pending); err == nil {
 							h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
+						} else {
+							log.Error().Err(err).Str("org_id", orgID).Str("type", pending.Type).Msg("Failed to marshal tenant coalesced broadcast message")
 						}
 					}
 				})
@@ -844,11 +949,13 @@ func (h *Hub) runBroadcastSequencer() {
 				// Non-state messages - send immediately to tenant
 				if data, err := json.Marshal(tb.Message); err == nil {
 					h.dispatchToTenantClients(tb.OrgID, data, "Client send channel full, dropping tenant message and closing connection")
+				} else {
+					log.Error().Err(err).Str("org_id", tb.OrgID).Str("type", tb.Message.Type).Msg("Failed to marshal tenant broadcast message")
 				}
 			}
 
 		case <-h.stopChan:
-			log.Debug().Msg("Broadcast sequencer shutting down")
+			log.Debug().Msg("broadcast sequencer shutting down")
 			// Cancel pending timer if exists
 			h.coalesceMutex.Lock()
 			if h.coalesceTimer != nil {
@@ -868,45 +975,60 @@ func (h *Hub) runBroadcastSequencer() {
 
 // BroadcastState broadcasts state update to all clients via sequencer
 func (h *Hub) BroadcastState(state interface{}) {
-	// Debug log to track docker hosts
-	dockerHostsCount := -1
-	// Use reflection to get dockerHosts field from any struct type
-	v := reflect.ValueOf(state)
-	if v.Kind() == reflect.Struct {
-		field := v.FieldByName("DockerHosts")
-		if field.IsValid() && field.Kind() == reflect.Slice {
-			dockerHostsCount = field.Len()
-		}
+	if h.isStopping() {
+		log.Debug().Msg("Skipping state broadcast while hub is stopping")
+		return
 	}
-	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("Broadcasting state")
+
+	log.Debug().Msg("broadcasting state")
+	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
 		Type: "rawData",
-		Data: state,
+		Data: stateData,
 	}
 
 	// Send through sequencer for ordering and coalescing
 	select {
 	case h.broadcastSeq <- msg:
 	default:
-		log.Warn().Msg("Broadcast sequencer channel full, dropping state update")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_state_dropped").
+			Str("channel", "broadcast_seq").
+			Int("channel_depth", len(h.broadcastSeq)).
+			Int("channel_capacity", cap(h.broadcastSeq)).
+			Msg("Broadcast sequencer channel full, dropping state update")
 	}
 }
 
 // BroadcastStateToTenant broadcasts state update only to clients of a specific tenant.
 func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant state broadcast while hub is stopping")
+		return
+	}
+
 	log.Debug().Str("org_id", orgID).Msg("Broadcasting state to tenant")
+	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
 		Type: "rawData",
-		Data: state,
+		Data: stateData,
 	}
 
 	// Send through tenant broadcast channel
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping state update")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_state_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping state update")
 	}
 }
 
@@ -942,8 +1064,14 @@ func (h *Hub) dispatchToTenantClients(orgID string, data []byte, dropLog string)
 	}
 }
 
+// prepareStateForBroadcast applies websocket payload compatibility rules to state payloads.
+func (h *Hub) prepareStateForBroadcast(state interface{}) interface{} {
+	return state
+}
+
 // GetTenantClientCount returns the number of connected clients for a specific tenant.
 func (h *Hub) GetTenantClientCount(orgID string) int {
+	orgID = normalizeOrgID(orgID)
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if tenantClients := h.clientsByTenant[orgID]; tenantClients != nil {
@@ -954,7 +1082,7 @@ func (h *Hub) GetTenantClientCount(orgID string) int {
 
 // BroadcastAlert broadcasts alert to all clients
 func (h *Hub) BroadcastAlert(alert interface{}) {
-	log.Info().Interface("alert", alert).Msg("Broadcasting alert to WebSocket clients")
+	log.Info().Interface("alert", alert).Msg("broadcasting alert to WebSocket clients")
 	msg := Message{
 		Type: "alert",
 		Data: cloneAlertData(alert),
@@ -964,12 +1092,74 @@ func (h *Hub) BroadcastAlert(alert interface{}) {
 
 // BroadcastAlertResolved broadcasts alert resolution to all clients
 func (h *Hub) BroadcastAlertResolved(alertID string) {
-	log.Info().Str("alertID", alertID).Msg("Broadcasting alert resolved to WebSocket clients")
+	log.Info().Str("alertID", alertID).Msg("broadcasting alert resolved to WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
-		Data: map[string]string{"alertId": alertID},
+		Data: map[string]string{
+			"alertIdentifier": alertID,
+		},
 	}
 	h.BroadcastMessage(msg)
+}
+
+// BroadcastAlertToTenant broadcasts alert to clients of a specific tenant only.
+// Empty org IDs are normalized to the default tenant.
+func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
+	orgID = normalizeOrgID(orgID)
+
+	log.Info().Str("org_id", orgID).Msg("broadcasting alert to tenant WebSocket clients")
+	msg := Message{
+		Type: "alert",
+		Data: cloneAlertData(alert),
+	}
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant alert broadcast while hub is stopping")
+		return
+	}
+
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_alert_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping alert")
+	}
+}
+
+// BroadcastAlertResolvedToTenant broadcasts alert resolution to clients of a specific tenant only.
+// Empty org IDs are normalized to the default tenant.
+func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
+	orgID = normalizeOrgID(orgID)
+
+	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("broadcasting alert resolved to tenant WebSocket clients")
+	msg := Message{
+		Type: "alertResolved",
+		Data: map[string]string{
+			"alertIdentifier": alertID,
+		},
+	}
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant alert resolved broadcast while hub is stopping")
+		return
+	}
+
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_alert_resolved_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping alert resolved")
+	}
 }
 
 // GetClientCount returns the number of connected clients
@@ -990,16 +1180,21 @@ func (h *Hub) Broadcast(data interface{}) {
 
 // BroadcastMessage sends a message to all clients
 func (h *Hub) BroadcastMessage(msg Message) {
+	if h.isStopping() {
+		log.Debug().Str("type", msg.Type).Msg("Skipping websocket broadcast while hub is stopping")
+		return
+	}
+
 	// Sanitize the message data to handle NaN values
 	msg.Data = sanitizeData(msg.Data)
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal WebSocket message")
+		log.Error().Err(err).Str("type", msg.Type).Msg("failed to marshal WebSocket message")
 		// Try to marshal without data to see what's failing
 		debugMsg := Message{Type: msg.Type, Data: "[error marshaling data]"}
 		if debugData, debugErr := json.Marshal(debugMsg); debugErr == nil {
-			log.Debug().Str("debugMsg", string(debugData)).Msg("Debug message")
+			log.Debug().Str("debugMsg", string(debugData)).Msg("debug message")
 		}
 		return
 	}
@@ -1007,7 +1202,14 @@ func (h *Hub) BroadcastMessage(msg Message) {
 	select {
 	case h.broadcast <- data:
 	default:
-		log.Warn().Msg("WebSocket broadcast channel full")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_broadcast_dropped").
+			Str("message_type", msg.Type).
+			Str("channel", "broadcast").
+			Int("channel_depth", len(h.broadcast)).
+			Int("channel_capacity", cap(h.broadcast)).
+			Msg("WebSocket broadcast channel full")
 	}
 }
 
@@ -1023,31 +1225,34 @@ func (h *Hub) sendPing() {
 // readPump handles incoming messages from the client
 func (c *Client) readPump() {
 	defer func() {
-		log.Info().Str("client", c.id).Msg("ReadPump exiting")
+		log.Info().Str("client", c.id).Msg("readPump exiting")
 		c.hub.unregister <- c
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in readPump")
+		}
 	}()
 
 	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
-		log.Warn().Err(err).Str("client", c.id).Msg("Failed to set initial read deadline")
+		log.Warn().Err(err).Str("client", c.id).Msg("failed to set initial read deadline")
 	}
+	c.conn.SetReadLimit(maxWebSocketInboundMessageSize)
 	c.conn.SetPongHandler(func(string) error {
 		if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
-			log.Warn().Err(err).Str("client", c.id).Msg("Failed to refresh read deadline on pong")
+			log.Warn().Err(err).Str("client", c.id).Msg("failed to refresh read deadline on pong")
 		}
 		c.lastPing = time.Now()
 		return nil
 	})
 
-	log.Info().Str("client", c.id).Msg("ReadPump started")
+	log.Info().Str("client", c.id).Msg("readPump started")
 
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Error().Err(err).Str("client", c.id).Msg("WebSocket read error")
+				log.Error().Err(err).Str("client", c.id).Msg("webSocket read error")
 			} else {
-				log.Info().Err(err).Str("client", c.id).Msg("WebSocket closed")
+				log.Info().Err(err).Str("client", c.id).Msg("webSocket closed")
 			}
 			break
 		}
@@ -1055,7 +1260,7 @@ func (c *Client) readPump() {
 		// Handle incoming messages
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Error().Err(err).Str("client", c.id).Msg("Failed to unmarshal WebSocket message")
+			log.Error().Err(err).Str("client", c.id).Msg("failed to unmarshal WebSocket message")
 			continue
 		}
 
@@ -1068,23 +1273,29 @@ func (c *Client) readPump() {
 				Data: map[string]int64{"timestamp": time.Now().Unix()},
 			}
 			if data, err := json.Marshal(pong); err == nil {
-				c.safeSend(data)
+				if !c.safeSend(data) {
+					log.Warn().Str("client", c.id).Msg("Failed to queue pong response; client channel closed or full")
+				}
+			} else {
+				log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal pong response")
 			}
 		case "requestData":
-			// Send current state
-			if c.hub.getState != nil {
+			// Send current state with lock-safe getter lookup.
+			if c.hub.hasStateGetter() {
 				stateMsg := Message{
 					Type: "rawData",
-					Data: sanitizeData(c.hub.getState()),
+					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getStateForClient(c))),
 				}
 				if data, err := json.Marshal(stateMsg); err == nil {
-					c.safeSend(data)
+					if !c.safeSend(data) {
+						log.Warn().Str("client", c.id).Msg("Failed to queue requestData state response; client channel closed or full")
+					}
 				} else {
-					log.Error().Err(err).Msg("Failed to marshal state for requestData")
+					log.Error().Err(err).Str("client", c.id).Msg("failed to marshal state for requestData")
 				}
 			}
 		default:
-			log.Debug().Str("client", c.id).Str("type", msg.Type).Msg("Received WebSocket message")
+			log.Debug().Str("client", c.id).Str("type", msg.Type).Msg("received WebSocket message")
 		}
 	}
 }
@@ -1102,23 +1313,25 @@ func (c *Client) writePump() {
 
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
-		log.Info().Str("client", c.id).Msg("WritePump exiting")
+		log.Info().Str("client", c.id).Msg("writePump exiting")
 		ticker.Stop()
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in writePump")
+		}
 	}()
 
-	log.Info().Str("client", c.id).Msg("WritePump started")
+	log.Info().Str("client", c.id).Msg("writePump started")
 
 	for {
 		select {
 		case message, ok := <-c.send:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(writeDeadline)); err != nil {
-				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline before message send")
+				log.Warn().Err(err).Str("client", c.id).Msg("failed to set write deadline before message send")
 			}
 			if !ok {
-				log.Debug().Str("client", c.id).Msg("Send channel closed")
+				log.Debug().Str("client", c.id).Msg("send channel closed")
 				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
-					log.Warn().Err(err).Str("client", c.id).Msg("Failed to send close message")
+					log.Warn().Err(err).Str("client", c.id).Msg("failed to send close message")
 				}
 				return
 			}
@@ -1155,7 +1368,7 @@ func (c *Client) writePump() {
 				select {
 				case msg := <-c.send:
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("Failed to flush queued message")
+						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("failed to flush queued message")
 						// Don't disconnect on queued message failure, just break the flush loop
 						break flushLoop
 					}
@@ -1166,10 +1379,10 @@ func (c *Client) writePump() {
 
 		case <-ticker.C:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(pingDeadline)); err != nil {
-				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline for ping")
+				log.Warn().Err(err).Str("client", c.id).Msg("failed to set write deadline for ping")
 			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Debug().Err(err).Str("client", c.id).Msg("Failed to send ping; closing connection")
+				log.Debug().Err(err).Str("client", c.id).Msg("failed to send ping; closing connection")
 				return
 			}
 		}

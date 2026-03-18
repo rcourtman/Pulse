@@ -3,9 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -14,10 +12,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -38,22 +35,6 @@ func TestMonitor_GetConnectionStatuses_MockMode_Extra(t *testing.T) {
 	if statuses == nil {
 		t.Error("Statuses should not be nil")
 	}
-}
-
-func TestMonitor_Stop_Extra(t *testing.T) {
-	m := &Monitor{}
-	m.Stop()
-
-	tmpFile := filepath.Join(t.TempDir(), "test_metrics_extra.db")
-	store, _ := metrics.NewStore(metrics.StoreConfig{
-		DBPath:          tmpFile,
-		FlushInterval:   time.Millisecond,
-		WriteBufferSize: 1,
-	})
-
-	m.metricsStore = store
-	m.alertManager = alerts.NewManager()
-	m.Stop()
 }
 
 func TestMonitor_Cleanup_Extra(t *testing.T) {
@@ -130,21 +111,6 @@ func TestMonitor_SetMockMode_Advanced_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_RetryFailedConnections_Short_Extra(t *testing.T) {
-	m := &Monitor{
-		config: &config.Config{
-			PVEInstances: []config.PVEInstance{{Name: "pve1", Host: "localhost"}},
-		},
-		pveClients: make(map[string]PVEClientInterface),
-		state:      models.NewState(),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	m.retryFailedConnections(ctx)
-}
-
 func TestMonitor_GetConfiguredHostIPs_Extra(t *testing.T) {
 	m := &Monitor{
 		config: &config.Config{
@@ -207,15 +173,225 @@ func TestMonitor_ConsolidateDuplicateClusters_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_ConsolidateDuplicateClusters_RemovesStandaloneCoveredByClusterEndpoint(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name:        "minipc-standalone",
+					Host:        "10.0.0.5",
+					GuestURL:    "https://minipc.example",
+					Fingerprint: "fp-standalone",
+				},
+			},
+		},
+	}
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected 1 instance after consolidation, got %d", len(m.config.PVEInstances))
+	}
+	cluster := m.config.PVEInstances[0]
+	if !cluster.IsCluster {
+		t.Fatalf("expected remaining instance to be cluster")
+	}
+	if len(cluster.ClusterEndpoints) != 1 {
+		t.Fatalf("expected 1 cluster endpoint, got %d", len(cluster.ClusterEndpoints))
+	}
+	if cluster.ClusterEndpoints[0].GuestURL != "https://minipc.example" {
+		t.Fatalf("GuestURL = %q, want https://minipc.example", cluster.ClusterEndpoints[0].GuestURL)
+	}
+	if cluster.ClusterEndpoints[0].Fingerprint != "fp-standalone" {
+		t.Fatalf("Fingerprint = %q, want fp-standalone", cluster.ClusterEndpoints[0].Fingerprint)
+	}
+}
+
+func TestMonitor_ConsolidateDuplicateClusters_RetiresRemovedStandaloneRuntimeState(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "10.0.0.5",
+				},
+			},
+		},
+		state:           models.NewState(),
+		pveClients:      map[string]PVEClientInterface{"homelab": nil, "minipc-standalone": nil},
+		taskQueue:       NewTaskQueue(),
+		deadLetterQueue: NewTaskQueue(),
+		circuitBreakers: map[string]*circuitBreaker{schedulerKey(InstanceTypePVE, "minipc-standalone"): newCircuitBreaker(3, time.Second, time.Minute, 30*time.Second)},
+		failureCounts:   map[string]int{schedulerKey(InstanceTypePVE, "minipc-standalone"): 2},
+		lastOutcome:     map[string]taskOutcome{schedulerKey(InstanceTypePVE, "minipc-standalone"): {recordedAt: time.Now()}},
+		instanceInfoCache: map[string]*instanceInfo{
+			schedulerKey(InstanceTypePVE, "minipc-standalone"): {
+				Key:         schedulerKey(InstanceTypePVE, "minipc-standalone"),
+				Type:        InstanceTypePVE,
+				DisplayName: "minipc-standalone",
+			},
+		},
+		pollStatusMap:            map[string]*pollStatus{schedulerKey(InstanceTypePVE, "minipc-standalone"): {}},
+		dlqInsightMap:            map[string]*dlqInsight{schedulerKey(InstanceTypePVE, "minipc-standalone"): {}},
+		lastClusterCheck:         map[string]time.Time{"minipc-standalone": time.Now()},
+		lastPhysicalDiskPoll:     map[string]time.Time{"minipc-standalone": time.Now()},
+		lastPVEBackupPoll:        map[string]time.Time{"minipc-standalone": time.Now()},
+		backupPermissionWarnings: map[string]string{"minipc-standalone": "warn"},
+		nodeLastOnline:           map[string]time.Time{"minipc-standalone-minipc": time.Now()},
+		nodePendingUpdatesCache:  map[string]pendingUpdatesCache{"minipc-standalone-minipc": {count: 1, checkedAt: time.Now()}},
+		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {RetrievedAt: time.Now()}},
+		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {RetrievedAt: time.Now()}},
+		guestMetadataCache:       map[string]guestMetadataCacheEntry{"minipc-standalone|minipc|100": {fetchedAt: time.Now()}},
+		guestMetadataLimiter:     map[string]time.Time{"minipc-standalone|minipc|100": time.Now().Add(time.Minute)},
+	}
+	connectionHealthKey := m.connectionHealthStateKey(InstanceTypePVE, "minipc-standalone")
+	m.state.SetConnectionHealth(connectionHealthKey, true)
+	m.state.UpdateNodesForInstance("minipc-standalone", []models.Node{{ID: "minipc-standalone-minipc", Name: "minipc", Instance: "minipc-standalone"}})
+	m.state.UpdateVMsForInstance("minipc-standalone", []models.VM{{ID: "vm-1", VMID: 100, Instance: "minipc-standalone"}})
+	m.state.UpdateContainersForInstance("minipc-standalone", []models.Container{{ID: "ct-1", VMID: 101, Instance: "minipc-standalone"}})
+	m.state.UpdateStorageForInstance("minipc-standalone", []models.Storage{{ID: "st-1", Instance: "minipc-standalone"}})
+	m.state.UpdatePhysicalDisks("minipc-standalone", []models.PhysicalDisk{{ID: "pd-1", Instance: "minipc-standalone"}})
+	m.state.UpdateReplicationJobsForInstance("minipc-standalone", []models.ReplicationJob{{ID: "rep-1", Instance: "minipc-standalone"}})
+	m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "minipc-standalone", NextRun: time.Now()})
+	m.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "minipc-standalone", NextRun: time.Now()})
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected 1 config instance after consolidation, got %d", len(m.config.PVEInstances))
+	}
+	if _, ok := m.pveClients["minipc-standalone"]; ok {
+		t.Fatalf("expected retired standalone client to be removed")
+	}
+	if _, ok := m.state.ConnectionHealth[connectionHealthKey]; ok {
+		t.Fatalf("expected retired standalone connection health to be removed")
+	}
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.Nodes) != 0 || len(snapshot.VMs) != 0 || len(snapshot.Containers) != 0 || len(snapshot.Storage) != 0 || len(snapshot.PhysicalDisks) != 0 || len(snapshot.ReplicationJobs) != 0 {
+		t.Fatalf("expected retired standalone runtime state to be cleared, got %+v", snapshot)
+	}
+	if m.taskQueue.Size() != 0 {
+		t.Fatalf("expected standalone task to be removed from scheduler queue")
+	}
+	if m.deadLetterQueue.Size() != 0 {
+		t.Fatalf("expected standalone task to be removed from dead letter queue")
+	}
+	if _, ok := m.pollStatusMap[schedulerKey(InstanceTypePVE, "minipc-standalone")]; ok {
+		t.Fatalf("expected poll status to be removed for retired instance")
+	}
+	if _, ok := m.nodeSnapshots["minipc-standalone|minipc"]; ok {
+		t.Fatalf("expected node diagnostic snapshots to be cleared")
+	}
+}
+
+func TestDetectClusterMembership_CanonicalizesAndRetiresStandaloneOverlap(t *testing.T) {
+	originalDetect := detectMonitorPVECluster
+	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
+
+	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return true, "cluster-A", []config.ClusterEndpoint{
+			{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+		}
+	}
+
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "https://10.0.0.5:8006",
+				},
+			},
+		},
+		state:            models.NewState(),
+		pveClients:       map[string]PVEClientInterface{"homelab": nil, "minipc-standalone": nil},
+		taskQueue:        NewTaskQueue(),
+		deadLetterQueue:  NewTaskQueue(),
+		lastClusterCheck: make(map[string]time.Time),
+	}
+	m.state.UpdateNodesForInstance("minipc-standalone", []models.Node{{ID: "minipc-standalone-minipc", Name: "minipc", Instance: "minipc-standalone"}})
+	instanceCfg := &m.config.PVEInstances[1]
+
+	m.detectClusterMembership(context.Background(), "minipc-standalone", instanceCfg, &stubPVEClient{})
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected runtime cluster canonicalization to leave 1 instance, got %d", len(m.config.PVEInstances))
+	}
+	if m.config.PVEInstances[0].Name != "homelab" {
+		t.Fatalf("expected surviving instance homelab, got %q", m.config.PVEInstances[0].Name)
+	}
+	if _, ok := m.pveClients["minipc-standalone"]; ok {
+		t.Fatalf("expected retired standalone client to be removed")
+	}
+	if len(m.state.GetSnapshot().Nodes) != 0 {
+		t.Fatalf("expected retired standalone node state to be removed")
+	}
+}
+
+func TestMonitor_ConsolidateDuplicateClusters_KeepsStandaloneWithoutExplicitEndpointOverlap(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://minipc.local:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "https://10.0.0.5:8006",
+				},
+			},
+		},
+	}
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 2 {
+		t.Fatalf("expected standalone to remain without exact endpoint overlap, got %d instances", len(m.config.PVEInstances))
+	}
+}
+
 func TestMonitor_CleanupGuestMetadataCache_Extra(t *testing.T) {
 	m := &Monitor{
-		guestMetadataCache: make(map[string]guestMetadataCacheEntry),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
 	}
 
 	now := time.Now()
 	stale := now.Add(-2 * time.Hour)
 	m.guestMetadataCache["stale"] = guestMetadataCacheEntry{fetchedAt: stale}
 	m.guestMetadataCache["fresh"] = guestMetadataCacheEntry{fetchedAt: now}
+	m.guestMetadataLimiter["stale"] = stale
+	m.guestMetadataLimiter["fresh"] = now.Add(-2 * time.Minute)
+	m.guestMetadataLimiter["future"] = now.Add(1 * time.Minute)
 
 	m.cleanupGuestMetadataCache(now)
 
@@ -224,6 +400,15 @@ func TestMonitor_CleanupGuestMetadataCache_Extra(t *testing.T) {
 	}
 	if _, ok := m.guestMetadataCache["fresh"]; !ok {
 		t.Error("Fresh metadata cache entry removed")
+	}
+	if _, ok := m.guestMetadataLimiter["stale"]; ok {
+		t.Error("Stale metadata limiter entry not removed")
+	}
+	if _, ok := m.guestMetadataLimiter["fresh"]; !ok {
+		t.Error("Fresh metadata limiter entry removed")
+	}
+	if _, ok := m.guestMetadataLimiter["future"]; !ok {
+		t.Error("Future metadata limiter entry removed")
 	}
 }
 
@@ -235,20 +420,17 @@ func TestMonitor_LinkNodeToHostAgent_Extra(t *testing.T) {
 
 	m.linkNodeToHostAgent("node1:node1", "host1")
 
-	if m.state.Nodes[0].LinkedHostAgentID != "host1" {
-		t.Errorf("Expected link to host1, got %s", m.state.Nodes[0].LinkedHostAgentID)
+	if m.state.Nodes[0].LinkedAgentID != "host1" {
+		t.Errorf("Expected link to host1, got %s", m.state.Nodes[0].LinkedAgentID)
 	}
 }
 
 type mockPVEClientExtra struct {
 	mockPVEClient
-	resources   []proxmox.ClusterResource
-	vms         []proxmox.VM
-	vmStatus    *proxmox.VMStatus
-	vmStatusErr error
-	fsInfo      []proxmox.VMFileSystem
-	netIfaces   []proxmox.VMNetworkInterface
-	vmRRDPoints []proxmox.GuestRRDPoint
+	resources []proxmox.ClusterResource
+	vmStatus  *proxmox.VMStatus
+	fsInfo    []proxmox.VMFileSystem
+	netIfaces []proxmox.VMNetworkInterface
 }
 
 func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
@@ -256,9 +438,6 @@ func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceTy
 }
 
 func (m *mockPVEClientExtra) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
-	if m.vmStatusErr != nil {
-		return nil, m.vmStatusErr
-	}
 	return m.vmStatus, nil
 }
 
@@ -302,20 +481,12 @@ func (m *mockPVEClientExtra) GetVMAgentVersion(ctx context.Context, node string,
 	return "1.0", nil
 }
 
-func (m *mockPVEClientExtra) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
 func (m *mockPVEClientExtra) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
 	return nil, nil
 }
 
 func (m *mockPVEClientExtra) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
-	return m.vmRRDPoints, nil
-}
-
-func (m *mockPVEClientExtra) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
-	return m.vms, nil
+	return nil, nil
 }
 
 func (m *mockPVEClientExtra) GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error) {
@@ -360,9 +531,6 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 		metricsHistory:           NewMetricsHistory(100, time.Hour),
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
-		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
-		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -381,7 +549,7 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 			{Mountpoint: "/", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 50 * 1024 * 1024 * 1024, Type: "ext4"},
 		},
 		netIfaces: []proxmox.VMNetworkInterface{
-			{Name: "eth0", IPAddresses: []proxmox.VMIpAddress{{Address: "192.168.1.100", Prefix: 24}}},
+			{Name: "eth0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.168.1.100", Prefix: 24}}},
 		},
 	}
 
@@ -399,204 +567,6 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	if len(state.Containers) != 1 {
 		t.Errorf("Expected 1 Container, got %d", len(state.Containers))
 	}
-}
-
-func TestMonitor_PollVMsAndContainersEfficient_UsesVMRRDMemUsedWhenStatusUnavailable(t *testing.T) {
-	const total = uint64(8 << 30)
-	const inflatedUsed = uint64(6 << 30)
-	const rrdUsed = uint64(3 << 30)
-
-	m := &Monitor{
-		state:                    models.NewState(),
-		guestAgentFSInfoTimeout:  time.Second,
-		guestAgentRetries:        1,
-		guestAgentNetworkTimeout: time.Second,
-		guestAgentOSInfoTimeout:  time.Second,
-		guestAgentVersionTimeout: time.Second,
-		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
-		guestMetadataLimiter:     make(map[string]time.Time),
-		rateTracker:              NewRateTracker(),
-		metricsHistory:           NewMetricsHistory(100, time.Hour),
-		alertManager:             alerts.NewManager(),
-		stalenessTracker:         NewStalenessTracker(nil),
-		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
-		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
-	}
-	defer m.alertManager.Stop()
-
-	client := &mockPVEClientExtra{
-		resources: []proxmox.ClusterResource{
-			{Type: "qemu", VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: total, Mem: inflatedUsed},
-		},
-		vmStatusErr: fmt.Errorf("API error 403: status unavailable"),
-		vmRRDPoints: []proxmox.GuestRRDPoint{
-			{MaxMem: floatPtr(float64(total)), MemUsed: floatPtr(float64(rrdUsed))},
-		},
-	}
-
-	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, map[string]string{"node1": "online"})
-	if !success {
-		t.Fatal("pollVMsAndContainersEfficient failed")
-	}
-
-	state := m.GetState()
-	if len(state.VMs) != 1 {
-		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
-	}
-	if state.VMs[0].Memory.Used != int64(rrdUsed) {
-		t.Fatalf("memory used mismatch: got %d want %d", state.VMs[0].Memory.Used, rrdUsed)
-	}
-	if state.VMs[0].MemorySource != "rrd-memused" {
-		t.Fatalf("memory source mismatch: got %q want rrd-memused", state.VMs[0].MemorySource)
-	}
-}
-
-func TestMonitor_PollVMsAndContainersEfficient_PreservesMissingGuestsFromPartialResources(t *testing.T) {
-	now := time.Now()
-
-	m := &Monitor{
-		state:                    models.NewState(),
-		guestAgentFSInfoTimeout:  time.Second,
-		guestAgentRetries:        1,
-		guestAgentNetworkTimeout: time.Second,
-		guestAgentOSInfoTimeout:  time.Second,
-		guestAgentVersionTimeout: time.Second,
-		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
-		guestMetadataLimiter:     make(map[string]time.Time),
-		rateTracker:              NewRateTracker(),
-		metricsHistory:           NewMetricsHistory(100, time.Hour),
-		alertManager:             alerts.NewManager(),
-		stalenessTracker:         NewStalenessTracker(nil),
-		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
-		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
-	}
-	defer m.alertManager.Stop()
-
-	m.state.UpdateVMsForInstance("pve1", []models.VM{
-		{ID: "pve1:node1:100", Instance: "pve1", Node: "node1", VMID: 100, Name: "vm100", Type: "qemu", Status: "stopped", LastSeen: now},
-		{ID: "pve1:node1:101", Instance: "pve1", Node: "node1", VMID: 101, Name: "vm101", Type: "qemu", Status: "stopped", LastSeen: now},
-	})
-
-	client := &mockPVEClientExtra{
-		resources: []proxmox.ClusterResource{
-			{Type: "qemu", VMID: 100, Name: "vm100", Node: "node1", Status: "stopped", MaxMem: 2048, Mem: 1024},
-		},
-	}
-
-	success := m.pollVMsAndContainersEfficient(
-		context.Background(),
-		"pve1",
-		"",
-		false,
-		client,
-		map[string]string{"node1": "online"},
-	)
-	if !success {
-		t.Fatal("pollVMsAndContainersEfficient failed")
-	}
-
-	state := m.GetState()
-	if len(state.VMs) != 2 {
-		t.Fatalf("expected 2 VMs after partial preservation, got %d", len(state.VMs))
-	}
-
-	found := false
-	for _, vm := range state.VMs {
-		if vm.VMID == 101 {
-			found = true
-			if vm.LastSeen.IsZero() {
-				t.Fatal("preserved VM should keep last seen timestamp")
-			}
-		}
-	}
-	if !found {
-		t.Fatal("missing VM from partial cluster/resources response was not preserved")
-	}
-}
-
-func TestMonitor_PollVMsWithNodes_UsesVMRRDMemUsedWhenStatusUnavailable(t *testing.T) {
-	const total = uint64(8 << 30)
-	const inflatedUsed = uint64(6 << 30)
-	const rrdUsed = uint64(3 << 30)
-
-	m := &Monitor{
-		state:                    models.NewState(),
-		guestAgentFSInfoTimeout:  time.Second,
-		guestAgentRetries:        1,
-		guestAgentNetworkTimeout: time.Second,
-		guestAgentOSInfoTimeout:  time.Second,
-		guestAgentVersionTimeout: time.Second,
-		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
-		guestMetadataLimiter:     make(map[string]time.Time),
-		rateTracker:              NewRateTracker(),
-		metricsHistory:           NewMetricsHistory(100, time.Hour),
-		alertManager:             alerts.NewManager(),
-		stalenessTracker:         NewStalenessTracker(nil),
-		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
-		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
-	}
-	defer m.alertManager.Stop()
-
-	client := &mockPVEClientExtra{
-		vms: []proxmox.VM{
-			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: total, Mem: inflatedUsed},
-		},
-		vmStatusErr: fmt.Errorf("API error 403: status unavailable"),
-		vmRRDPoints: []proxmox.GuestRRDPoint{
-			{MaxMem: floatPtr(float64(total)), MemUsed: floatPtr(float64(rrdUsed))},
-		},
-	}
-
-	m.pollVMsWithNodes(context.Background(), "pve1", "", false, client, []proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"})
-
-	state := m.GetState()
-	if len(state.VMs) != 1 {
-		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
-	}
-	if state.VMs[0].Memory.Used != int64(rrdUsed) {
-		t.Fatalf("memory used mismatch: got %d want %d", state.VMs[0].Memory.Used, rrdUsed)
-	}
-	if state.VMs[0].MemorySource != "rrd-memused" {
-		t.Fatalf("memory source mismatch: got %q want rrd-memused", state.VMs[0].MemorySource)
-	}
-}
-
-func TestMonitor_MiscSetters_Extra(t *testing.T) {
-	m := &Monitor{
-		state:        models.NewState(),
-		alertManager: alerts.NewManager(),
-	}
-	defer m.alertManager.Stop()
-
-	m.ClearUnauthenticatedAgents()
-
-	m.SetExecutor(nil)
-	m.SyncAlertState()
-}
-
-func TestMonitor_PollGuestSnapshots_Extra(t *testing.T) {
-	m := &Monitor{
-		state:          models.NewState(),
-		guestSnapshots: make(map[string]GuestMemorySnapshot),
-	}
-	m.state.UpdateVMsForInstance("pve1", []models.VM{
-		{ID: "pve1:node1:100", Instance: "pve1", Node: "node1", VMID: 100, Name: "vm100"},
-	})
-	m.state.UpdateContainersForInstance("pve1", []models.Container{
-		{ID: "pve1:node1:101", Instance: "pve1", Node: "node1", VMID: 101, Name: "ct101"},
-	})
-
-	client := &mockPVEClientExtra{}
-	m.pollGuestSnapshots(context.Background(), "pve1", client)
-}
-
-func TestMonitor_CephConversion_Extra(t *testing.T) {
-	// Just call the functions to get coverage
-	convertAgentCephToModels(nil)
-	convertAgentCephToGlobalCluster(&agentshost.CephCluster{}, "host1", "host1", time.Now())
 }
 
 func TestMonitor_EnrichContainerMetadata_Extra(t *testing.T) {
@@ -635,6 +605,56 @@ func TestMonitor_TokenBindings_Extra(t *testing.T) {
 	}
 	if _, ok := m.hostTokenBindings["orphaned:host2"]; ok {
 		t.Error("Orphaned host token binding not removed")
+	}
+}
+
+func TestMonitor_TokenBindings_UseUnifiedReadState(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:        "docker-source-1",
+				AgentID:   "docker-agent-1",
+				Hostname:  "docker-host-1",
+				Status:    "online",
+				TokenID:   "docker-token",
+				TokenName: "Docker Token",
+				TokenHint: "dock_1234",
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:        "host-agent-1",
+				Hostname:  "host-1",
+				Status:    "online",
+				TokenID:   "host-token",
+				TokenName: "Host Token",
+				TokenHint: "host_1234",
+			},
+		},
+	})
+
+	m := &Monitor{
+		state:               models.NewState(),
+		resourceStore:       unifiedresources.NewMonitorAdapter(registry),
+		config:              &config.Config{APITokens: []config.APITokenRecord{{ID: "docker-token"}, {ID: "host-token"}}},
+		dockerTokenBindings: map[string]string{"stale": "old-agent"},
+		hostTokenBindings:   map[string]string{"stale:host": "old-host"},
+	}
+
+	m.RebuildTokenBindings()
+
+	if got := m.dockerTokenBindings["docker-token"]; got != "docker-agent-1" {
+		t.Fatalf("expected docker binding from unified read-state, got %q", got)
+	}
+	if got := m.hostTokenBindings["host-token:host-1"]; got != "host-agent-1" {
+		t.Fatalf("expected host binding from unified read-state, got %q", got)
+	}
+	if _, ok := m.dockerTokenBindings["stale"]; ok {
+		t.Fatal("expected stale docker binding to be removed")
+	}
+	if _, ok := m.hostTokenBindings["stale:host"]; ok {
+		t.Fatal("expected stale host binding to be removed")
 	}
 }
 
@@ -686,10 +706,6 @@ func (m *mockPVEClientStorage) GetStorageContent(ctx context.Context, node, stor
 	return m.content, nil
 }
 
-func (m *mockPVEClientStorage) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
 func TestMonitor_RetryPVEPortFallback_Extra(t *testing.T) {
 	m := &Monitor{
 		config: &config.Config{},
@@ -709,8 +725,8 @@ func TestMonitor_GuestMetadata_Extra(t *testing.T) {
 	store := config.NewGuestMetadataStore(tempDir, nil)
 
 	// Use store.Set directly to avoid race of async persistGuestIdentity
-	store.Set("pve1:node1:100", &config.GuestMetadata{LastKnownName: "vm100", LastKnownType: "qemu"})
-	store.Set("pve1:node1:101", &config.GuestMetadata{LastKnownName: "ct101", LastKnownType: "oci"})
+	_ = store.Set("pve1:node1:100", &config.GuestMetadata{LastKnownName: "vm100", LastKnownType: "qemu"})
+	_ = store.Set("pve1:node1:101", &config.GuestMetadata{LastKnownName: "ct101", LastKnownType: "oci"})
 
 	// Test persistGuestIdentity separately for coverage
 	persistGuestIdentity(store, "pve1:node1:101", "ct101", "lxc") // Should not downgrade oci
@@ -731,6 +747,68 @@ func TestMonitor_GuestMetadata_Extra(t *testing.T) {
 	}
 }
 
+func TestMaybePollPhysicalDisksAsync_UsesCanonicalReadStateForRefresh(t *testing.T) {
+	m := &Monitor{
+		state:                models.NewState(),
+		lastPhysicalDiskPoll: map[string]time.Time{"pve1": time.Now()},
+	}
+
+	m.state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{{ID: "legacy-disk", Instance: "pve1", Node: "node1", DevPath: "/dev/nvme0n1"}})
+	m.state.UpdateNodesForInstance("pve1", []models.Node{{ID: "legacy-node", Name: "node1", Instance: "pve1"}})
+	m.state.UpsertHost(models.Host{ID: "legacy-host", Hostname: "legacy"})
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "node-1",
+			Name:          "node1",
+			Instance:      "pve1",
+			LinkedAgentID: "host-1",
+			Temperature: &models.Temperature{
+				Available: true,
+				SMART: []models.DiskTemp{{
+					Device:      "/dev/nvme0n1",
+					Temperature: 41,
+				}},
+			},
+		}},
+		Hosts: []models.Host{{
+			ID:       "host-1",
+			Hostname: "host1",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{
+					Device:      "/dev/nvme0n1",
+					Temperature: 44,
+					Attributes:  &models.SMARTAttributes{PowerOnHours: int64PtrExtra(123)},
+				}},
+			},
+		}},
+		PhysicalDisks: []models.PhysicalDisk{{
+			ID:       "disk-1",
+			Instance: "pve1",
+			Node:     "node1",
+			DevPath:  "/dev/nvme0n1",
+		}},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	client := &mockPVEClientExtra{}
+	m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client, []proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, []models.Node{{Name: "node1"}})
+
+	disks := m.state.GetSnapshot().PhysicalDisks
+	if len(disks) != 1 || disks[0].DevPath != "/dev/nvme0n1" || disks[0].Instance != "pve1" {
+		t.Fatalf("expected refreshed physical disks from canonical read-state, got %+v", disks)
+	}
+	if disks[0].Temperature != 41 {
+		t.Fatalf("expected canonical node temperature merge, got %+v", disks[0])
+	}
+	if disks[0].SmartAttributes == nil || disks[0].SmartAttributes.PowerOnHours == nil || *disks[0].SmartAttributes.PowerOnHours != 123 {
+		t.Fatalf("expected SMART attributes merged from canonical linked host, got %+v", disks[0].SmartAttributes)
+	}
+}
+
+func int64PtrExtra(v int64) *int64 { return &v }
+
 func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
@@ -745,11 +823,21 @@ func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 
 type mockResourceStoreExtra struct {
 	ResourceStoreInterface
-	resources []resources.Resource
+	resources []unifiedresources.Resource
+	snapshots []models.StateSnapshot
+	freshness time.Time
 }
 
-func (m *mockResourceStoreExtra) GetAll() []resources.Resource {
+func (m *mockResourceStoreExtra) GetAll() []unifiedresources.Resource {
 	return m.resources
+}
+
+func (m *mockResourceStoreExtra) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	m.snapshots = append(m.snapshots, snapshot)
+}
+
+func (m *mockResourceStoreExtra) UnifiedResourceFreshness() time.Time {
+	return m.freshness
 }
 
 func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
@@ -758,9 +846,38 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 		t.Error("Expected nil when store is nil")
 	}
 
+	now := time.Now().UTC()
+	total := int64(100)
+	used := int64(40)
+	uptime := int64(3600)
+
 	m.resourceStore = &mockResourceStoreExtra{
-		resources: []resources.Resource{
-			{ID: "r1", Type: "node", Name: "node1", PlatformID: "p1"},
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName:    "node1",
+					Instance:    "p1",
+					Uptime:      uptime,
+					ClusterName: "cluster-a",
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU:    &unifiedresources.MetricValue{Percent: 12.5},
+					Memory: &unifiedresources.MetricValue{Percent: 40, Total: &total, Used: &used},
+					NetIn:  &unifiedresources.MetricValue{Value: 111},
+					NetOut: &unifiedresources.MetricValue{Value: 222},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames:   []string{"node1"},
+					MachineID:   "mid-1",
+					IPAddresses: []string{"10.0.0.10"},
+				},
+			},
 		},
 	}
 
@@ -768,19 +885,177 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	if len(res) != 1 {
 		t.Errorf("Expected 1 resource, got %d", len(res))
 	}
+	if res[0].ID != "node-1" || res[0].Type != "node" || res[0].DisplayName != "Node One" {
+		t.Fatalf("unexpected resource identity payload: %#v", res[0])
+	}
+	if res[0].PlatformType != "proxmox-pve" || res[0].SourceType != "api" || res[0].Status != "online" {
+		t.Fatalf("unexpected platform/status payload: %#v", res[0])
+	}
+	if res[0].CPU == nil || res[0].Memory == nil || res[0].Network == nil {
+		t.Fatalf("expected cpu/memory/network payloads, got %#v", res[0])
+	}
+	if len(res[0].Alerts) != 0 {
+		t.Fatalf("expected no direct alert payload, got %#v", res[0].Alerts)
+	}
+	if res[0].Identity == nil || res[0].Identity.Hostname != "node1" {
+		t.Fatalf("expected identity payload to be preserved, got %#v", res[0].Identity)
+	}
 }
 
-func TestMonitor_CheckMockAlerts_Extra(t *testing.T) {
+func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 	m := &Monitor{
-		alertManager:   alerts.NewManager(),
-		metricsHistory: NewMetricsHistory(10, time.Hour),
+		state: models.NewState(),
 	}
-	defer m.alertManager.Stop()
+	stateUpdate := time.Now().Add(-time.Minute).UTC()
+	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online", LastSeen: stateUpdate}})
 
-	m.SetMockMode(true)
-	defer m.SetMockMode(false)
+	storeFreshness := time.Now().UTC()
+	store := &mockResourceStoreExtra{
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: time.Now().UTC(),
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "p1",
+				},
+			},
+		},
+		freshness: storeFreshness,
+	}
+	m.resourceStore = store
 
-	m.checkMockAlerts()
+	frontendState := m.BuildBroadcastFrontendState()
+
+	if len(store.snapshots) != 1 {
+		t.Fatalf("expected resource store population once, got %d", len(store.snapshots))
+	}
+	if len(store.snapshots[0].Nodes) != 1 {
+		t.Fatalf("expected snapshot nodes to be populated, got %#v", store.snapshots[0].Nodes)
+	}
+	if len(frontendState.Resources) != 1 {
+		t.Fatalf("expected frontend resources to be populated, got %#v", frontendState.Resources)
+	}
+	if frontendState.Resources[0].ID != "node-1" {
+		t.Fatalf("expected broadcast resource node-1, got %#v", frontendState.Resources[0])
+	}
+	if frontendState.LastUpdate != storeFreshness.UnixMilli() {
+		t.Fatalf("expected broadcast lastUpdate %d from unified store freshness, got %d", storeFreshness.UnixMilli(), frontendState.LastUpdate)
+	}
+}
+
+func TestMonitor_BuildFrontendState_UsesCanonicalResources(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+	stateUpdate := time.Now().Add(-time.Minute).UTC()
+	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online", LastSeen: stateUpdate}})
+
+	storeFreshness := time.Now().UTC()
+	store := &mockResourceStoreExtra{
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: time.Now().UTC(),
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "p1",
+				},
+			},
+		},
+		freshness: storeFreshness,
+	}
+	m.resourceStore = store
+
+	frontendState := m.BuildFrontendState()
+
+	if len(store.snapshots) != 1 {
+		t.Fatalf("expected resource store population once, got %d", len(store.snapshots))
+	}
+	if len(frontendState.Resources) != 1 {
+		t.Fatalf("expected frontend resources to be populated, got %#v", frontendState.Resources)
+	}
+	if frontendState.LastUpdate != storeFreshness.UnixMilli() {
+		t.Fatalf("expected frontend lastUpdate %d from unified store freshness, got %d", storeFreshness.UnixMilli(), frontendState.LastUpdate)
+	}
+}
+
+func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "vm-1", Instance: "pve1", VMID: 101, Name: "vm1"},
+			{ID: "vm-2", Instance: "pve2", VMID: 202, Name: "vm2"},
+		},
+		Containers: []models.Container{
+			{ID: "ct-1", Instance: "pve1", VMID: 111, Name: "ct1", Type: "oci", IsOCI: true},
+			{ID: "ct-2", Instance: "pve1", VMID: 112, Name: "ct2", Type: "lxc"},
+			{ID: "ct-3", Instance: "pve2", VMID: 211, Name: "ct3", Type: "oci", IsOCI: true},
+		},
+		Hosts: []models.Host{
+			{ID: "host-1", LinkedVMID: "vm-1", Status: "online", Memory: models.Memory{Total: 1024}},
+			{ID: "host-2", LinkedVMID: "vm-2", Status: "offline", Memory: models.Memory{Total: 1024}},
+			{ID: "host-3", LinkedVMID: "vm-3", Status: "online", Memory: models.Memory{Total: 0}},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	prev := m.previousGuestContextForInstance("pve1")
+
+	if len(prev.vms) != 1 || prev.vms[0].VMID != 101 || prev.vms[0].Instance != "pve1" || prev.vms[0].Name != "vm1" {
+		t.Fatalf("expected only pve1 VMs, got %#v", prev.vms)
+	}
+	if len(prev.containers) != 2 {
+		t.Fatalf("expected only pve1 containers, got %#v", prev.containers)
+	}
+	if !prev.containerOCIByVMID[111] {
+		t.Fatalf("expected OCI container VMID 111 to be tracked, got %#v", prev.containerOCIByVMID)
+	}
+	if prev.containerOCIByVMID[112] || prev.containerOCIByVMID[211] {
+		t.Fatalf("unexpected OCI classification leakage: %#v", prev.containerOCIByVMID)
+	}
+	if len(prev.hostAgentsByVMID) != 1 || prev.hostAgentsByVMID["vm-1"].LinkedVMID != "vm-1" {
+		t.Fatalf("expected only online linked host with memory to be tracked, got %#v", prev.hostAgentsByVMID)
+	}
+}
+
+func TestMonitor_PreviousNodesForInstance_Extra(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", Instance: "pve1", Name: "a", DisplayName: "a", Memory: models.Memory{Total: 100}},
+			{ID: "node-2", Instance: "pve2", Name: "b", DisplayName: "b", Memory: models.Memory{Total: 200}},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	prevNodeMemory, prevNodes := m.previousNodesForInstance("pve1")
+
+	if len(prevNodes) != 1 || prevNodes[0].Instance != "pve1" || prevNodes[0].DisplayName != "a" {
+		t.Fatalf("expected only pve1 nodes, got %#v", prevNodes)
+	}
+	if mem, ok := prevNodeMemory[prevNodes[0].ID]; !ok || mem.Total != 100 {
+		t.Fatalf("expected node memory for node-1, got %#v", prevNodeMemory)
+	}
+	if len(prevNodeMemory) != 1 {
+		t.Fatalf("expected node-2 to be filtered out, got %#v", prevNodeMemory)
+	}
 }
 
 func TestMonitor_MoreUtilities_Extra(t *testing.T) {
@@ -858,7 +1133,7 @@ func TestMonitor_AI_Extra(t *testing.T) {
 func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	m := &Monitor{
 		state:        models.NewState(),
-		alertManager: alerts.NewManager(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
 	}
 	defer m.alertManager.Stop()
 
@@ -870,6 +1145,60 @@ func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 
 	if !m.pruneStaleDockerAlerts() {
 		t.Error("Expected stale alert to be pruned")
+	}
+}
+
+func TestMonitor_SyncAlertsToState_UsesCanonicalAlertID(t *testing.T) {
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
+	}
+	defer m.alertManager.Stop()
+
+	host := models.DockerHost{ID: "sync-host", DisplayName: "Sync Host", Hostname: "sync-host"}
+	m.state.UpsertDockerHost(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+
+	m.syncAlertsToState()
+
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.ActiveAlerts) == 0 {
+		t.Fatal("expected active alert snapshot")
+	}
+	alert := snapshot.ActiveAlerts[0]
+	if !strings.HasPrefix(alert.ID, "docker:sync-host::") {
+		t.Fatalf("snapshot alert ID = %q, want canonical docker host alert ID", alert.ID)
+	}
+}
+
+func TestMonitor_PruneDockerAlerts_UsesUnifiedReadState(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{ID: "live-host", DisplayName: "Live Host", Hostname: "live-host", Status: "online"},
+		},
+	})
+
+	m := &Monitor{
+		state:         models.NewState(),
+		alertManager:  alerts.NewManagerWithDataDir(t.TempDir()),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+	defer m.alertManager.Stop()
+
+	host := models.DockerHost{ID: "live-host", DisplayName: "Live Host"}
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+
+	if m.pruneStaleDockerAlerts() {
+		t.Fatal("expected alert pruning to keep hosts present in unified read-state")
+	}
+
+	if len(m.alertManager.GetActiveAlerts()) == 0 {
+		t.Fatal("expected docker offline alert to remain active")
 	}
 }
 
@@ -946,33 +1275,6 @@ func TestMonitor_CephConversion_Detailed_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_HandleAlertResolved_Extra(t *testing.T) {
-	m := &Monitor{
-		alertManager:  alerts.NewManager(),
-		incidentStore: nil, // nil store
-		wsHub:         websocket.NewHub(nil),
-	}
-	defer m.alertManager.Stop()
-
-	// 1. With nil NotificationMgr
-	m.handleAlertResolved("alert1")
-
-	// 2. With NotificationMgr
-	m.notificationMgr = notifications.NewNotificationManager("")
-	m.handleAlertResolved("alert1")
-}
-
-func TestMonitor_BroadcastStateUpdate_Extra(t *testing.T) {
-	m := &Monitor{
-		state: models.NewState(),
-	}
-	// nil hub
-	m.broadcastStateUpdate()
-
-	m.wsHub = websocket.NewHub(nil)
-	m.broadcastStateUpdate()
-}
-
 func TestMonitor_PollPBSBackups_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
@@ -997,11 +1299,16 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	defer func() { newProxmoxClientFunc = orig }()
 
 	m := &Monitor{
-		config:     &config.Config{ConnectionTimeout: time.Second},
+		config: &config.Config{
+			ConnectionTimeout: time.Second,
+			PVEInstances: []config.PVEInstance{
+				{Name: "pve1", Host: "https://localhost:8006"},
+			},
+		},
 		pveClients: make(map[string]PVEClientInterface),
 	}
 
-	instanceCfg := &config.PVEInstance{Host: "https://localhost:8006"}
+	instanceCfg := &config.PVEInstance{Name: "pve1", Host: "https://localhost:8006"}
 	currentClient := &mockPVEClientExtra{}
 	cause := fmt.Errorf("dial tcp 127.0.0.1:8006: connect: connection refused")
 
@@ -1019,6 +1326,12 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	}
 	if client == nil {
 		t.Error("Expected fallback client")
+	}
+	if _, ok := m.pveClients["pve1"]; !ok {
+		t.Error("Expected fallback client to be stored on monitor")
+	}
+	if got := m.config.PVEInstances[0].Host; got != "https://localhost:443" {
+		t.Errorf("Expected config host updated to fallback endpoint, got %q", got)
 	}
 	_ = nodes // ignore
 
@@ -1050,34 +1363,12 @@ func (m *mockPVEClientFailNodes) GetNodes(ctx context.Context) ([]proxmox.Node, 
 	return nil, fmt.Errorf("nodes failed")
 }
 
-func (m *mockPVEClientFailNodes) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
 type mockExecutor struct {
-	mu       sync.Mutex
 	executed []PollTask
-	started  chan struct{}
-	release  chan struct{}
 }
 
 func (m *mockExecutor) Execute(ctx context.Context, task PollTask) {
-	m.mu.Lock()
 	m.executed = append(m.executed, task)
-	started := m.started
-	release := m.release
-	m.mu.Unlock()
-
-	if started != nil {
-		select {
-		case <-started:
-		default:
-			close(started)
-		}
-	}
-	if release != nil {
-		<-release
-	}
 }
 
 func TestMonitor_ExecuteScheduledTask_Extra(t *testing.T) {
@@ -1103,45 +1394,6 @@ func TestMonitor_ExecuteScheduledTask_Extra(t *testing.T) {
 	if len(exec.executed) != 1 {
 		t.Error("PBS task should not be executed (missing client)")
 	}
-}
-
-func TestMonitor_ExecuteScheduledTask_SkipsOverlappingInstanceRuns(t *testing.T) {
-	m := &Monitor{
-		pveClients: map[string]PVEClientInterface{"pve1": &mockPVEClientExtra{}},
-	}
-
-	exec := &mockExecutor{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	m.SetExecutor(exec)
-
-	task := ScheduledTask{InstanceName: "pve1", InstanceType: InstanceTypePVE}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		m.executeScheduledTask(context.Background(), task)
-	}()
-
-	select {
-	case <-exec.started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("first task did not start execution")
-	}
-
-	m.executeScheduledTask(context.Background(), task)
-
-	exec.mu.Lock()
-	executed := len(exec.executed)
-	exec.mu.Unlock()
-	if executed != 1 {
-		t.Fatalf("expected overlapping execution to be skipped, got %d executions", executed)
-	}
-
-	close(exec.release)
-	wg.Wait()
 }
 
 func TestMonitor_Start_Extra(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -23,29 +24,31 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	"github.com/rs/zerolog/log"
 )
 
 // AISettingsHandler handles AI settings endpoints
 type AISettingsHandler struct {
+	stateMu                 sync.RWMutex
 	mtPersistence           *config.MultiTenantPersistence
 	mtMonitor               *monitoring.MultiTenantMonitor
-	legacyConfig            *config.Config
-	legacyPersistence       *config.ConfigPersistence
-	legacyAIService         *ai.Service
+	defaultConfig           *config.Config
+	defaultPersistence      *config.ConfigPersistence
+	defaultAIService        *ai.Service
 	aiServices              map[string]*ai.Service
 	aiServicesMu            sync.RWMutex
 	agentServer             *agentexec.Server
@@ -54,7 +57,8 @@ type AISettingsHandler struct {
 
 	// Providers to be applied to new services
 	stateProvider           ai.StateProvider
-	resourceProvider        ai.ResourceProvider
+	readState               unifiedresources.ReadState
+	unifiedResourceProvider ai.UnifiedResourceProvider
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -67,26 +71,114 @@ type AISettingsHandler struct {
 	licenseHandlers         *LicenseHandlers
 
 	// New AI intelligence services (Phase 6)
-	circuitBreaker    *circuit.Breaker         // Circuit breaker for resilient patrol
-	learningStore     *learning.LearningStore  // Feedback learning
-	forecastService   *forecast.Service        // Trend forecasting
-	proxmoxCorrelator *proxmox.EventCorrelator // Proxmox event correlation
-	remediationEngine *remediation.Engine      // AI-guided remediation
-	unifiedStore      *unified.UnifiedStore    // Unified alert/finding store
-	alertBridge       *unified.AlertBridge     // Bridge between alerts and unified store
+	circuitBreaker    *circuit.Breaker              // Circuit breaker for resilient patrol
+	learningStore     *learning.LearningStore       // Feedback learning
+	forecastService   *forecast.Service             // Trend forecasting
+	proxmoxCorrelator *proxmox.EventCorrelator      // Proxmox event correlation
+	remediationEngine aicontracts.RemediationEngine // AI-guided remediation
+	unifiedStore      *unified.UnifiedStore         // Unified alert/finding store
+	alertBridge       *unified.AlertBridge          // Bridge between alerts and unified store
 
 	// Event-driven patrol (Phase 7)
-	triggerManager      *ai.TriggerManager        // Event-driven patrol trigger manager
-	incidentCoordinator *ai.IncidentCoordinator   // Incident recording coordinator
-	incidentRecorder    *metrics.IncidentRecorder // High-frequency incident recorder
+	triggerManager       *ai.TriggerManager        // Event-driven patrol trigger manager
+	incidentCoordinator  *ai.IncidentCoordinator   // Incident recording coordinator
+	incidentRecorder     *metrics.IncidentRecorder // High-frequency incident recorder
+	intelligenceMu       sync.RWMutex
+	proxmoxCorrelators   map[string]*proxmox.EventCorrelator
+	learningStores       map[string]*learning.LearningStore
+	forecastServices     map[string]*forecast.Service
+	remediationEngines   map[string]aicontracts.RemediationEngine
+	incidentStores       map[string]*memory.IncidentStore
+	circuitBreakers      map[string]*circuit.Breaker
+	discoveryStores      map[string]*servicediscovery.Store
+	unifiedStores        map[string]*unified.UnifiedStore
+	alertBridges         map[string]*unified.AlertBridge
+	triggerManagers      map[string]*ai.TriggerManager
+	incidentCoordinators map[string]*ai.IncidentCoordinator
+	incidentRecorders    map[string]*metrics.IncidentRecorder
 
 	// Investigation orchestration (Patrol Autonomy)
-	chatHandler         *AIHandler                      // Chat service handler for investigations
-	investigationStores map[string]*investigation.Store // Investigation stores per org
+	chatHandler         *AIHandler                                // Chat service handler for investigations
+	investigationStores map[string]aicontracts.InvestigationStore // Investigation stores per org
 	investigationMu     sync.RWMutex
+
+	// Extension endpoints for enterprise feature gating
+	aiAutoFixEndpoints extensions.AIAutoFixEndpoints
 
 	// Discovery store for deep infrastructure discovery
 	discoveryStore *servicediscovery.Store
+}
+
+// SetAIAutoFixEndpoints sets the resolved AI auto-fix extension endpoints.
+// Called during route registration so the approval handler can delegate investigation fix approvals.
+func (h *AISettingsHandler) SetAIAutoFixEndpoints(ep extensions.AIAutoFixEndpoints) {
+	h.aiAutoFixEndpoints = ep
+}
+
+func (h *AISettingsHandler) stateRefs() (
+	*config.MultiTenantPersistence,
+	*monitoring.MultiTenantMonitor,
+	*config.Config,
+	*config.ConfigPersistence,
+	unifiedresources.ReadState,
+	ai.UnifiedResourceProvider,
+) {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return h.mtPersistence, h.mtMonitor, h.defaultConfig, h.defaultPersistence, h.readState, h.unifiedResourceProvider
+}
+
+type aiSettingsProviderSnapshot struct {
+	defaultAIService        *ai.Service
+	stateProvider           ai.StateProvider
+	metadataProvider        ai.MetadataProvider
+	patrolThresholdProvider ai.ThresholdProvider
+	metricsHistoryProvider  ai.MetricsHistoryProvider
+	baselineStore           *ai.BaselineStore
+	changeDetector          *ai.ChangeDetector
+	remediationLog          *ai.RemediationLog
+	incidentStore           *memory.IncidentStore
+	patternDetector         *ai.PatternDetector
+	correlationDetector     *ai.CorrelationDetector
+	discoveryStore          *servicediscovery.Store
+	licenseHandlers         *LicenseHandlers
+	chatHandler             *AIHandler
+}
+
+type failClosedLicenseChecker struct{}
+
+func (failClosedLicenseChecker) HasFeature(string) bool { return false }
+func (failClosedLicenseChecker) GetLicenseStateString() (string, bool) {
+	return string(ai.LicenseStateNone), false
+}
+
+func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return aiSettingsProviderSnapshot{
+		defaultAIService:        h.defaultAIService,
+		stateProvider:           h.stateProvider,
+		metadataProvider:        h.metadataProvider,
+		patrolThresholdProvider: h.patrolThresholdProvider,
+		metricsHistoryProvider:  h.metricsHistoryProvider,
+		baselineStore:           h.baselineStore,
+		changeDetector:          h.changeDetector,
+		remediationLog:          h.remediationLog,
+		incidentStore:           h.incidentStore,
+		patternDetector:         h.patternDetector,
+		correlationDetector:     h.correlationDetector,
+		discoveryStore:          h.discoveryStore,
+		licenseHandlers:         h.licenseHandlers,
+		chatHandler:             h.chatHandler,
+	}
+}
+
+func (h *AISettingsHandler) newFailClosedTenantService(orgID string) *ai.Service {
+	svc := ai.NewService(nil, h.agentServer)
+	svc.SetOrgID(orgID)
+	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
+	svc.SetLicenseChecker(failClosedLicenseChecker{})
+	return svc
 }
 
 // NewAISettingsHandler creates a new AI settings handler
@@ -106,41 +198,69 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		}
 	}
 
+	defaultAIService = ai.NewService(defaultPersistence, agentServer)
+	defaultAIService.SetOrgID("default")
+	defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
+	// Wire quickstart credit manager before LoadConfig so the quickstart
+	// provider path is available during initial configuration.
 	if defaultPersistence != nil {
-		defaultAIService = ai.NewService(defaultPersistence, agentServer)
+		billingStore := config.NewFileBillingStore(defaultPersistence.DataDir())
+		qsMgr := ai.NewFileQuickstartCreditManager(
+			billingStore,
+			"default",
+			func() *config.AIConfig {
+				cfg, _ := defaultPersistence.LoadAIConfig()
+				return cfg
+			},
+			"default",
+		)
+		defaultAIService.SetQuickstartCredits(qsMgr)
+	}
+	if defaultPersistence != nil {
 		if err := defaultAIService.LoadConfig(); err != nil {
 			log.Warn().Err(err).Msg("Failed to load AI config on startup")
 		}
 	}
 
 	return &AISettingsHandler{
-		mtPersistence:     mtp,
-		mtMonitor:         mtm,
-		legacyConfig:      defaultConfig,
-		legacyPersistence: defaultPersistence,
-		legacyAIService:   defaultAIService,
-		aiServices:        make(map[string]*ai.Service),
-		agentServer:       agentServer,
+		mtPersistence:        mtp,
+		mtMonitor:            mtm,
+		defaultConfig:        defaultConfig,
+		defaultPersistence:   defaultPersistence,
+		defaultAIService:     defaultAIService,
+		aiServices:           make(map[string]*ai.Service),
+		agentServer:          agentServer,
+		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
+		learningStores:       make(map[string]*learning.LearningStore),
+		forecastServices:     make(map[string]*forecast.Service),
+		remediationEngines:   make(map[string]aicontracts.RemediationEngine),
+		incidentStores:       make(map[string]*memory.IncidentStore),
+		circuitBreakers:      make(map[string]*circuit.Breaker),
+		discoveryStores:      make(map[string]*servicediscovery.Store),
+		unifiedStores:        make(map[string]*unified.UnifiedStore),
+		alertBridges:         make(map[string]*unified.AlertBridge),
+		triggerManagers:      make(map[string]*ai.TriggerManager),
+		incidentCoordinators: make(map[string]*ai.IncidentCoordinator),
+		incidentRecorders:    make(map[string]*metrics.IncidentRecorder),
 	}
-}
-
-func (h *AISettingsHandler) ensureLegacyAIService() *ai.Service {
-	if h.legacyAIService != nil || h.legacyPersistence == nil {
-		return h.legacyAIService
-	}
-
-	h.legacyAIService = ai.NewService(h.legacyPersistence, h.agentServer)
-	if err := h.legacyAIService.LoadConfig(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load AI config on startup")
-	}
-	return h.legacyAIService
 }
 
 // GetAIService returns the underlying AI service
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
+	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
+	providers := h.providerSnapshot()
+	defaultAIService := providers.defaultAIService
+
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
-		return h.ensureLegacyAIService()
+		return defaultAIService
+	}
+	if mtPersistence == nil {
+		if mtMonitor != nil {
+			log.Warn().Str("orgID", orgID).Msg("Failed to get persistence manager for tenant AI service")
+			return h.newFailClosedTenantService(orgID)
+		}
+		return defaultAIService
 	}
 
 	h.aiServicesMu.RLock()
@@ -160,68 +280,96 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	// Create new service for this tenant
-	if h.mtPersistence == nil {
-		return h.ensureLegacyAIService()
-	}
-	persistence, err := h.mtPersistence.GetPersistence(orgID)
+	persistence, err := mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
-		return h.legacyAIService
+		return h.newFailClosedTenantService(orgID)
+	}
+	if persistence == nil {
+		log.Warn().Str("orgID", orgID).Msg("Tenant persistence unavailable for AI service")
+		return h.newFailClosedTenantService(orgID)
 	}
 
 	svc = ai.NewService(persistence, h.agentServer)
+	svc.SetOrgID(orgID)
+	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
+	// Wire quickstart credit manager before LoadConfig so the quickstart
+	// provider path is available during initial configuration.
+	// Use the base data dir (not tenant-scoped dir) because FileBillingStore
+	// internally resolves org paths: base/orgs/<org>/billing.json.
+	billingBaseDir := mtPersistence.BaseDataDir()
+	billingStore := config.NewFileBillingStore(billingBaseDir)
+	qsMgr := ai.NewFileQuickstartCreditManager(
+		billingStore,
+		orgID,
+		func() *config.AIConfig {
+			cfg, _ := persistence.LoadAIConfig()
+			return cfg
+		},
+		orgID,
+	)
+	svc.SetQuickstartCredits(qsMgr)
 	if err := svc.LoadConfig(); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant")
 	}
 
 	// Set providers on new service
-	if h.stateProvider != nil {
-		svc.SetStateProvider(h.stateProvider)
+	svc.SetStateProvider(h.stateProviderForOrg(orgID, providers.stateProvider))
+	if readState := h.readStateForOrg(orgID); readState != nil {
+		svc.SetReadState(readState)
 	}
-	if h.resourceProvider != nil {
-		svc.SetResourceProvider(h.resourceProvider)
+	if provider := h.unifiedResourceProviderForOrg(orgID); provider != nil {
+		svc.SetUnifiedResourceProvider(provider)
 	}
-	if h.metadataProvider != nil {
-		svc.SetMetadataProvider(h.metadataProvider)
+	if providers.metadataProvider != nil {
+		svc.SetMetadataProvider(providers.metadataProvider)
 	}
-	if h.patrolThresholdProvider != nil {
-		svc.SetPatrolThresholdProvider(h.patrolThresholdProvider)
+	if orgID == "default" {
+		if providers.patrolThresholdProvider != nil {
+			svc.SetPatrolThresholdProvider(providers.patrolThresholdProvider)
+		}
+		if providers.metricsHistoryProvider != nil {
+			svc.SetMetricsHistoryProvider(providers.metricsHistoryProvider)
+		}
+		if providers.baselineStore != nil {
+			svc.SetBaselineStore(providers.baselineStore)
+		}
+		if providers.changeDetector != nil {
+			svc.SetChangeDetector(providers.changeDetector)
+		}
+		if providers.remediationLog != nil {
+			svc.SetRemediationLog(providers.remediationLog)
+		}
 	}
-	if h.metricsHistoryProvider != nil {
-		svc.SetMetricsHistoryProvider(h.metricsHistoryProvider)
+	if incidentStore := h.GetIncidentStoreForOrg(orgID); incidentStore != nil {
+		svc.SetIncidentStore(incidentStore)
+	} else if orgID == "default" && providers.incidentStore != nil {
+		svc.SetIncidentStore(providers.incidentStore)
 	}
-	if h.baselineStore != nil {
-		svc.SetBaselineStore(h.baselineStore)
+	if orgID == "default" {
+		if providers.patternDetector != nil {
+			svc.SetPatternDetector(providers.patternDetector)
+		}
+		if providers.correlationDetector != nil {
+			svc.SetCorrelationDetector(providers.correlationDetector)
+		}
 	}
-	if h.changeDetector != nil {
-		svc.SetChangeDetector(h.changeDetector)
-	}
-	if h.remediationLog != nil {
-		svc.SetRemediationLog(h.remediationLog)
-	}
-	if h.incidentStore != nil {
-		svc.SetIncidentStore(h.incidentStore)
-	}
-	if h.patternDetector != nil {
-		svc.SetPatternDetector(h.patternDetector)
-	}
-	if h.correlationDetector != nil {
-		svc.SetCorrelationDetector(h.correlationDetector)
-	}
-	if h.discoveryStore != nil {
-		svc.SetDiscoveryStore(h.discoveryStore)
+	if discoveryStore := h.GetDiscoveryStoreForOrg(orgID); discoveryStore != nil {
+		svc.SetDiscoveryStore(discoveryStore)
+	} else if orgID == "default" && providers.discoveryStore != nil {
+		svc.SetDiscoveryStore(providers.discoveryStore)
 	}
 
 	// Set license checker if handler available
-	if h.licenseHandlers != nil {
+	if providers.licenseHandlers != nil {
 		// Used context to resolve tenant license service
-		if licSvc, _, err := h.licenseHandlers.getTenantComponents(ctx); err == nil {
+		if licSvc, _, err := providers.licenseHandlers.getTenantComponents(ctx); err == nil {
 			svc.SetLicenseChecker(licSvc)
 		}
 	}
 
 	// Set up investigation orchestrator if chat handler is available
-	if h.chatHandler != nil {
+	if providers.chatHandler != nil && isAIInvestigationEnabled() {
 		h.setupInvestigationOrchestrator(orgID, svc)
 	}
 
@@ -231,45 +379,73 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 
 // RemoveTenantService removes the AI settings service for a specific tenant.
 func (h *AISettingsHandler) RemoveTenantService(orgID string) {
+	orgID = strings.TrimSpace(orgID)
 	if orgID == "default" || orgID == "" {
 		return
 	}
 
 	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
+	svc := h.aiServices[orgID]
 	delete(h.aiServices, orgID)
+	h.aiServicesMu.Unlock()
+	if svc != nil {
+		svc.StopPatrol()
+	}
+
+	h.RemoveTenantIntelligence(orgID)
+
+	h.investigationMu.Lock()
+	delete(h.investigationStores, orgID)
+	h.investigationMu.Unlock()
+
 	log.Debug().Str("orgID", orgID).Msg("Removed AI settings service for tenant")
 }
 
 // getConfig returns the config for the current context
 func (h *AISettingsHandler) getConfig(ctx context.Context) *config.Config {
-	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	_, mtMonitor, defaultConfig, _, _, _ := h.stateRefs()
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return defaultConfig
+	}
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return m.GetConfig()
 		}
+		// Security: never fall back to default config for non-default orgs.
+		return nil
 	}
-	return h.legacyConfig
+	return defaultConfig
 }
 
 // GetPersistence returns the persistence for the current context
 func (h *AISettingsHandler) getPersistence(ctx context.Context) *config.ConfigPersistence {
-	orgID := GetOrgID(ctx)
-	if h.mtPersistence != nil {
-		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil {
+	mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" || orgID == "default" {
+		return defaultPersistence
+	}
+	if mtPersistence != nil {
+		if p, err := mtPersistence.GetPersistence(orgID); err == nil && p != nil {
 			return p
 		}
+		// Security: never fall back to default persistence for non-default orgs.
+		return nil
 	}
-	return h.legacyPersistence
+	return defaultPersistence
 }
 
 // SetMultiTenantPersistence updates the persistence manager
 func (h *AISettingsHandler) SetMultiTenantPersistence(mtp *config.MultiTenantPersistence) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtPersistence = mtp
 }
 
 // SetMultiTenantMonitor updates the monitor manager
 func (h *AISettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.mtMonitor = mtm
 }
 
@@ -278,18 +454,9 @@ func (h *AISettingsHandler) SetConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
-	h.legacyConfig = cfg
-}
-
-// SetLegacyRuntime wires the single-tenant runtime config and persistence explicitly.
-func (h *AISettingsHandler) SetLegacyRuntime(cfg *config.Config, persistence *config.ConfigPersistence) {
-	if cfg != nil {
-		h.legacyConfig = cfg
-	}
-	if persistence != nil {
-		h.legacyPersistence = persistence
-	}
-	h.ensureLegacyAIService()
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.defaultConfig = cfg
 }
 
 // setSSECORSHeaders validates the request origin against the configured AllowedOrigins
@@ -310,34 +477,22 @@ func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if allowed == "*" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-	} else {
-		for _, o := range strings.Split(allowed, ",") {
-			if strings.TrimSpace(o) == origin {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				break
-			}
-		}
-	}
-
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
-	w.Header().Set("Vary", "Origin")
+	applyConfiguredCORSHeaders(w, origin, allowed, "GET, POST, OPTIONS", "Content-Type, Accept, Cookie")
 }
 
 // SetStateProvider sets the state provider for infrastructure context
 func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
+	h.stateMu.Lock()
 	h.stateProvider = sp
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetStateProvider(sp)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetStateProvider(sp)
 	}
 
 	h.aiServicesMu.Lock()
-	for _, svc := range h.aiServices {
-		svc.SetStateProvider(sp)
+	for orgID, svc := range h.aiServices {
+		svc.SetStateProvider(h.stateProviderForOrg(orgID, sp))
 	}
 	h.aiServicesMu.Unlock()
 
@@ -345,8 +500,8 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 	// Try to set up the investigation orchestrator if chat handler is ready.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if h.chatHandler != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	if defaultAIService != nil && isAIInvestigationEnabled() {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 		h.aiServicesMu.RLock()
 		for orgID, svc := range h.aiServices {
 			h.setupInvestigationOrchestrator(orgID, svc)
@@ -357,28 +512,126 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 
 // GetStateProvider returns the state provider for infrastructure context
 func (h *AISettingsHandler) GetStateProvider() ai.StateProvider {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
 	return h.stateProvider
 }
 
-// SetResourceProvider sets the resource provider for unified infrastructure context (Phase 2)
-func (h *AISettingsHandler) SetResourceProvider(rp ai.ResourceProvider) {
-	h.resourceProvider = rp
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetResourceProvider(rp)
+func (h *AISettingsHandler) stateProviderForOrg(orgID string, fallback ai.StateProvider) ai.StateProvider {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" || orgID == "default" {
+		return fallback
+	}
+	// Security: never fall back to default-org provider for non-default orgs.
+	return nil
+}
+
+func (h *AISettingsHandler) readStateForOrg(orgID string) unifiedresources.ReadState {
+	if h == nil {
+		return nil
+	}
+	_, mtMonitor, _, _, fallbackReadState, _ := h.stateRefs()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if mtMonitor != nil {
+		if monitor, err := mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			if readState := monitor.GetUnifiedReadState(); readState != nil {
+				return readState
+			}
+		}
+		if orgID != "default" {
+			// Security: never fall back to default-org read state for non-default orgs.
+			return nil
+		}
+	}
+
+	return fallbackReadState
+}
+
+func (h *AISettingsHandler) unifiedResourceProviderForOrg(orgID string) ai.UnifiedResourceProvider {
+	if h == nil {
+		return nil
+	}
+	_, mtMonitor, _, _, _, fallbackProvider := h.stateRefs()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if mtMonitor != nil {
+		if monitor, err := mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			if readState := monitor.GetUnifiedReadState(); readState != nil {
+				if provider, ok := readState.(ai.UnifiedResourceProvider); ok && provider != nil {
+					return provider
+				}
+			}
+		}
+		if orgID != "default" {
+			// Security: never fall back to default-org unified provider for non-default orgs.
+			return nil
+		}
+	}
+
+	return fallbackProvider
+}
+
+// SetReadState injects unified read-state context into AI services (patrol path).
+func (h *AISettingsHandler) SetReadState(rs unifiedresources.ReadState) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	h.readState = rs
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+
+	if defaultAIService != nil {
+		defaultAIService.SetReadState(h.readStateForOrg("default"))
+	}
+
+	h.aiServicesMu.Lock()
+	for orgID, svc := range h.aiServices {
+		if svc != nil {
+			svc.SetReadState(h.readStateForOrg(orgID))
+		}
+	}
+	h.aiServicesMu.Unlock()
+}
+
+// SetUnifiedResourceProvider forwards unified-resource-native context to AI services.
+func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourceProvider) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	h.unifiedResourceProvider = urp
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+
+	if defaultAIService != nil {
+		defaultAIService.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg("default"))
 	}
 
 	h.aiServicesMu.Lock()
 	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetResourceProvider(rp)
+	for orgID, svc := range h.aiServices {
+		if svc != nil {
+			svc.SetUnifiedResourceProvider(h.unifiedResourceProviderForOrg(orgID))
+		}
 	}
 }
 
 // SetMetadataProvider sets the metadata provider for AI URL discovery
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
+	h.stateMu.Lock()
 	h.metadataProvider = mp
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetMetadataProvider(mp)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetMetadataProvider(mp)
 	}
 
 	h.aiServicesMu.Lock()
@@ -400,26 +653,21 @@ func (h *AISettingsHandler) IsAIEnabled(ctx context.Context) bool {
 
 // SetPatrolThresholdProvider sets the threshold provider for the patrol service
 func (h *AISettingsHandler) SetPatrolThresholdProvider(provider ai.ThresholdProvider) {
+	h.stateMu.Lock()
 	h.patrolThresholdProvider = provider
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetPatrolThresholdProvider(provider)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetPatrolThresholdProvider(provider)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetPatrolThresholdProvider(provider)
 	}
 }
 
 // SetPatrolFindingsPersistence enables findings persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.FindingsPersistence) error {
 	var firstErr error
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		if patrol := svc.GetPatrolService(); patrol != nil {
-			if err := patrol.SetFindingsPersistence(persistence); err != nil {
-				firstErr = err
-			}
+	if patrol := h.defaultAIService.GetPatrolService(); patrol != nil {
+		if err := patrol.SetFindingsPersistence(persistence); err != nil {
+			firstErr = err
 		}
 	}
 	// Also apply to active services
@@ -441,11 +689,9 @@ func (h *AISettingsHandler) SetPatrolFindingsPersistence(persistence ai.Findings
 // SetPatrolRunHistoryPersistence enables patrol run history persistence for the patrol service
 func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.PatrolHistoryPersistence) error {
 	var firstErr error
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		if patrol := svc.GetPatrolService(); patrol != nil {
-			if err := patrol.SetRunHistoryPersistence(persistence); err != nil {
-				firstErr = err
-			}
+	if patrol := h.defaultAIService.GetPatrolService(); patrol != nil {
+		if err := patrol.SetRunHistoryPersistence(persistence); err != nil {
+			firstErr = err
 		}
 	}
 	// Also apply to active services
@@ -466,254 +712,906 @@ func (h *AISettingsHandler) SetPatrolRunHistoryPersistence(persistence ai.Patrol
 
 // SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
 func (h *AISettingsHandler) SetMetricsHistoryProvider(provider ai.MetricsHistoryProvider) {
+	h.stateMu.Lock()
 	h.metricsHistoryProvider = provider
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetMetricsHistoryProvider(provider)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetMetricsHistoryProvider(provider)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetMetricsHistoryProvider(provider)
 	}
 }
 
 // SetBaselineStore sets the baseline store for anomaly detection
 func (h *AISettingsHandler) SetBaselineStore(store *ai.BaselineStore) {
+	h.stateMu.Lock()
 	h.baselineStore = store
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetBaselineStore(store)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetBaselineStore(store)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetBaselineStore(store)
 	}
 }
 
 // SetChangeDetector sets the change detector for operational memory
 func (h *AISettingsHandler) SetChangeDetector(detector *ai.ChangeDetector) {
+	h.stateMu.Lock()
 	h.changeDetector = detector
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetChangeDetector(detector)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetChangeDetector(detector)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetChangeDetector(detector)
 	}
 }
 
 // SetRemediationLog sets the remediation log for tracking fix attempts
 func (h *AISettingsHandler) SetRemediationLog(remLog *ai.RemediationLog) {
+	h.stateMu.Lock()
 	h.remediationLog = remLog
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetRemediationLog(remLog)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetRemediationLog(remLog)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetRemediationLog(remLog)
 	}
 }
 
-// SetIncidentStore sets the incident store for alert timelines.
+// SetIncidentStore sets the incident store for the default org.
 func (h *AISettingsHandler) SetIncidentStore(store *memory.IncidentStore) {
-	h.incidentStore = store
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetIncidentStore(store)
+	h.SetIncidentStoreForOrg("default", store)
+}
+
+// SetIncidentStoreForOrg sets the incident store for alert timelines for an org.
+func (h *AISettingsHandler) SetIncidentStoreForOrg(orgID string, store *memory.IncidentStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.incidentStores, orgID)
+	} else {
+		h.incidentStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.stateMu.Lock()
+		h.incidentStore = store
+		defaultAIService := h.defaultAIService
+		h.stateMu.Unlock()
+		if defaultAIService != nil {
+			defaultAIService.SetIncidentStore(store)
+		}
 	}
 
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
+	h.aiServicesMu.RLock()
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
 		svc.SetIncidentStore(store)
 	}
+}
+
+// GetIncidentStoreForOrg returns the incident store for an org.
+func (h *AISettingsHandler) GetIncidentStoreForOrg(orgID string) *memory.IncidentStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.incidentStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		h.stateMu.RLock()
+		store := h.incidentStore
+		h.stateMu.RUnlock()
+		return store
+	}
+	return nil
 }
 
 // SetPatternDetector sets the pattern detector for failure prediction
 func (h *AISettingsHandler) SetPatternDetector(detector *ai.PatternDetector) {
+	h.stateMu.Lock()
 	h.patternDetector = detector
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetPatternDetector(detector)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetPatternDetector(detector)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetPatternDetector(detector)
 	}
 }
 
 // SetCorrelationDetector sets the correlation detector for multi-resource correlation
 func (h *AISettingsHandler) SetCorrelationDetector(detector *ai.CorrelationDetector) {
+	h.stateMu.Lock()
 	h.correlationDetector = detector
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetCorrelationDetector(detector)
-	}
-
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.SetCorrelationDetector(detector)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultAIService != nil {
+		defaultAIService.SetCorrelationDetector(detector)
 	}
 }
 
-// SetCircuitBreaker sets the circuit breaker for resilient patrol
+// SetCircuitBreaker sets the circuit breaker for the default org.
 func (h *AISettingsHandler) SetCircuitBreaker(breaker *circuit.Breaker) {
-	h.circuitBreaker = breaker
+	h.SetCircuitBreakerForOrg("default", breaker)
 }
 
-// GetCircuitBreaker returns the circuit breaker
+// SetCircuitBreakerForOrg sets the circuit breaker for an org.
+func (h *AISettingsHandler) SetCircuitBreakerForOrg(orgID string, breaker *circuit.Breaker) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if breaker == nil {
+		delete(h.circuitBreakers, orgID)
+	} else {
+		h.circuitBreakers[orgID] = breaker
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.circuitBreaker = breaker
+	}
+}
+
+// GetCircuitBreaker returns the circuit breaker for the default org.
 func (h *AISettingsHandler) GetCircuitBreaker() *circuit.Breaker {
-	return h.circuitBreaker
+	return h.GetCircuitBreakerForOrg("default")
 }
 
-// SetLearningStore sets the learning store for feedback learning
-func (h *AISettingsHandler) SetLearningStore(store *learning.LearningStore) {
-	h.learningStore = store
-}
-
-// GetLearningStore returns the learning store
-func (h *AISettingsHandler) GetLearningStore() *learning.LearningStore {
-	return h.learningStore
-}
-
-// SetForecastService sets the forecast service for trend forecasting
-func (h *AISettingsHandler) SetForecastService(svc *forecast.Service) {
-	h.forecastService = svc
-}
-
-// GetForecastService returns the forecast service
-func (h *AISettingsHandler) GetForecastService() *forecast.Service {
-	return h.forecastService
-}
-
-// SetProxmoxCorrelator sets the Proxmox event correlator
-func (h *AISettingsHandler) SetProxmoxCorrelator(correlator *proxmox.EventCorrelator) {
-	h.proxmoxCorrelator = correlator
-}
-
-// GetProxmoxCorrelator returns the Proxmox event correlator
-func (h *AISettingsHandler) GetProxmoxCorrelator() *proxmox.EventCorrelator {
-	return h.proxmoxCorrelator
-}
-
-// SetRemediationEngine sets the remediation engine for AI-guided fixes
-func (h *AISettingsHandler) SetRemediationEngine(engine *remediation.Engine) {
-	h.remediationEngine = engine
-}
-
-// GetRemediationEngine returns the remediation engine
-func (h *AISettingsHandler) GetRemediationEngine() *remediation.Engine {
-	return h.remediationEngine
-}
-
-// SetUnifiedStore sets the unified store
-func (h *AISettingsHandler) SetUnifiedStore(store *unified.UnifiedStore) {
-	h.unifiedStore = store
-}
-
-// GetUnifiedStore returns the unified store
-func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
-	return h.unifiedStore
-}
-
-// SetDiscoveryStore sets the discovery store for deep infrastructure discovery
-func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
-	h.discoveryStore = store
-	// Also set on legacy service if it exists
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.SetDiscoveryStore(store)
+// GetCircuitBreakerForOrg returns the circuit breaker for an org.
+func (h *AISettingsHandler) GetCircuitBreakerForOrg(orgID string) *circuit.Breaker {
+	if h == nil {
+		return nil
 	}
-	// Set on all existing tenant services
-	h.aiServicesMu.RLock()
-	defer h.aiServicesMu.RUnlock()
-	for _, svc := range h.aiServices {
-		svc.SetDiscoveryStore(store)
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if breaker := h.circuitBreakers[orgID]; breaker != nil {
+		h.intelligenceMu.RUnlock()
+		return breaker
 	}
-}
-
-// GetDiscoveryStore returns the discovery store
-func (h *AISettingsHandler) GetDiscoveryStore() *servicediscovery.Store {
-	return h.discoveryStore
-}
-
-// SetAlertBridge sets the alert bridge
-func (h *AISettingsHandler) SetAlertBridge(bridge *unified.AlertBridge) {
-	h.alertBridge = bridge
-}
-
-// GetAlertBridge returns the alert bridge
-func (h *AISettingsHandler) GetAlertBridge() *unified.AlertBridge {
-	return h.alertBridge
-}
-
-// SetTriggerManager sets the event-driven patrol trigger manager
-func (h *AISettingsHandler) SetTriggerManager(tm *ai.TriggerManager) {
-	h.triggerManager = tm
-}
-
-// GetTriggerManager returns the event-driven patrol trigger manager
-func (h *AISettingsHandler) GetTriggerManager() *ai.TriggerManager {
-	return h.triggerManager
-}
-
-// SetIncidentCoordinator sets the incident recording coordinator
-func (h *AISettingsHandler) SetIncidentCoordinator(coordinator *ai.IncidentCoordinator) {
-	h.incidentCoordinator = coordinator
-}
-
-// GetIncidentCoordinator returns the incident recording coordinator
-func (h *AISettingsHandler) GetIncidentCoordinator() *ai.IncidentCoordinator {
-	return h.incidentCoordinator
-}
-
-// SetIncidentRecorder sets the high-frequency incident recorder
-func (h *AISettingsHandler) SetIncidentRecorder(recorder *metrics.IncidentRecorder) {
-	h.incidentRecorder = recorder
-}
-
-// GetIncidentRecorder returns the high-frequency incident recorder
-func (h *AISettingsHandler) GetIncidentRecorder() *metrics.IncidentRecorder {
-	return h.incidentRecorder
-}
-
-// StopPatrol stops the background AI patrol service
-func (h *AISettingsHandler) StopPatrol() {
-	if svc := h.ensureLegacyAIService(); svc != nil {
-		svc.StopPatrol()
-	}
-	h.aiServicesMu.Lock()
-	defer h.aiServicesMu.Unlock()
-	for _, svc := range h.aiServices {
-		svc.StopPatrol()
-	}
-}
-
-// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
-func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) *ai.AlertTriggeredAnalyzer {
-	if svc := h.GetAIService(ctx); svc != nil {
-		return svc.GetAlertTriggeredAnalyzer()
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.circuitBreaker
 	}
 	return nil
 }
 
+// SetLearningStore sets the learning store for the default org.
+func (h *AISettingsHandler) SetLearningStore(store *learning.LearningStore) {
+	h.SetLearningStoreForOrg("default", store)
+}
+
+// SetLearningStoreForOrg sets the learning store for an org.
+func (h *AISettingsHandler) SetLearningStoreForOrg(orgID string, store *learning.LearningStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.learningStores, orgID)
+	} else {
+		h.learningStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.learningStore = store
+	}
+}
+
+// GetLearningStore returns the learning store for the default org.
+func (h *AISettingsHandler) GetLearningStore() *learning.LearningStore {
+	return h.GetLearningStoreForOrg("default")
+}
+
+// GetLearningStoreForOrg returns the learning store for an org.
+func (h *AISettingsHandler) GetLearningStoreForOrg(orgID string) *learning.LearningStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.learningStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.learningStore
+	}
+	return nil
+}
+
+// SetForecastService sets the forecast service for the default org.
+func (h *AISettingsHandler) SetForecastService(svc *forecast.Service) {
+	h.SetForecastServiceForOrg("default", svc)
+}
+
+// SetForecastServiceForOrg sets the forecast service for an org.
+func (h *AISettingsHandler) SetForecastServiceForOrg(orgID string, svc *forecast.Service) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if svc == nil {
+		delete(h.forecastServices, orgID)
+	} else {
+		h.forecastServices[orgID] = svc
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.forecastService = svc
+	}
+}
+
+// GetForecastService returns the forecast service for the default org.
+func (h *AISettingsHandler) GetForecastService() *forecast.Service {
+	return h.GetForecastServiceForOrg("default")
+}
+
+// GetForecastServiceForOrg returns the forecast service for an org.
+func (h *AISettingsHandler) GetForecastServiceForOrg(orgID string) *forecast.Service {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if svc := h.forecastServices[orgID]; svc != nil {
+		h.intelligenceMu.RUnlock()
+		return svc
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.forecastService
+	}
+	return nil
+}
+
+func normalizeAIIntelligenceOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+func (h *AISettingsHandler) ensureIntelligenceMapsLocked() {
+	if h.proxmoxCorrelators == nil {
+		h.proxmoxCorrelators = make(map[string]*proxmox.EventCorrelator)
+	}
+	if h.learningStores == nil {
+		h.learningStores = make(map[string]*learning.LearningStore)
+	}
+	if h.forecastServices == nil {
+		h.forecastServices = make(map[string]*forecast.Service)
+	}
+	if h.remediationEngines == nil {
+		h.remediationEngines = make(map[string]aicontracts.RemediationEngine)
+	}
+	if h.incidentStores == nil {
+		h.incidentStores = make(map[string]*memory.IncidentStore)
+	}
+	if h.circuitBreakers == nil {
+		h.circuitBreakers = make(map[string]*circuit.Breaker)
+	}
+	if h.discoveryStores == nil {
+		h.discoveryStores = make(map[string]*servicediscovery.Store)
+	}
+	if h.alertBridges == nil {
+		h.alertBridges = make(map[string]*unified.AlertBridge)
+	}
+	if h.unifiedStores == nil {
+		h.unifiedStores = make(map[string]*unified.UnifiedStore)
+	}
+	if h.triggerManagers == nil {
+		h.triggerManagers = make(map[string]*ai.TriggerManager)
+	}
+	if h.incidentCoordinators == nil {
+		h.incidentCoordinators = make(map[string]*ai.IncidentCoordinator)
+	}
+	if h.incidentRecorders == nil {
+		h.incidentRecorders = make(map[string]*metrics.IncidentRecorder)
+	}
+}
+
+// SetProxmoxCorrelatorForOrg sets the Proxmox event correlator for an org.
+func (h *AISettingsHandler) SetProxmoxCorrelatorForOrg(orgID string, correlator *proxmox.EventCorrelator) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if correlator == nil {
+		delete(h.proxmoxCorrelators, orgID)
+	} else {
+		h.proxmoxCorrelators[orgID] = correlator
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.proxmoxCorrelator = correlator
+	}
+}
+
+// SetProxmoxCorrelator sets the Proxmox event correlator
+func (h *AISettingsHandler) SetProxmoxCorrelator(correlator *proxmox.EventCorrelator) {
+	h.SetProxmoxCorrelatorForOrg("default", correlator)
+}
+
+// GetProxmoxCorrelatorForOrg returns the Proxmox event correlator for an org.
+func (h *AISettingsHandler) GetProxmoxCorrelatorForOrg(orgID string) *proxmox.EventCorrelator {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if correlator := h.proxmoxCorrelators[orgID]; correlator != nil {
+		h.intelligenceMu.RUnlock()
+		return correlator
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.proxmoxCorrelator
+	}
+	return nil
+}
+
+// GetProxmoxCorrelator returns the Proxmox event correlator
+func (h *AISettingsHandler) GetProxmoxCorrelator() *proxmox.EventCorrelator {
+	return h.GetProxmoxCorrelatorForOrg("default")
+}
+
+// SetRemediationEngine sets the remediation engine for the default org.
+func (h *AISettingsHandler) SetRemediationEngine(engine aicontracts.RemediationEngine) {
+	h.SetRemediationEngineForOrg("default", engine)
+}
+
+// SetRemediationEngineForOrg sets the remediation engine for an org.
+func (h *AISettingsHandler) SetRemediationEngineForOrg(orgID string, engine aicontracts.RemediationEngine) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if engine == nil {
+		delete(h.remediationEngines, orgID)
+	} else {
+		h.remediationEngines[orgID] = engine
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.remediationEngine = engine
+	}
+}
+
+// GetRemediationEngine returns the remediation engine for the default org.
+func (h *AISettingsHandler) GetRemediationEngine() aicontracts.RemediationEngine {
+	return h.GetRemediationEngineForOrg("default")
+}
+
+// GetRemediationEngineForOrg returns the remediation engine for an org.
+func (h *AISettingsHandler) GetRemediationEngineForOrg(orgID string) aicontracts.RemediationEngine {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if engine := h.remediationEngines[orgID]; engine != nil {
+		h.intelligenceMu.RUnlock()
+		return engine
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.remediationEngine
+	}
+	return nil
+}
+
+// SetUnifiedStore sets the unified store for the default org.
+func (h *AISettingsHandler) SetUnifiedStore(store *unified.UnifiedStore) {
+	h.SetUnifiedStoreForOrg("default", store)
+}
+
+// SetUnifiedStoreForOrg sets the unified store for an org.
+func (h *AISettingsHandler) SetUnifiedStoreForOrg(orgID string, store *unified.UnifiedStore) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.unifiedStores, orgID)
+	} else {
+		h.unifiedStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.unifiedStore = store
+	}
+}
+
+// GetUnifiedStore returns the unified store for the default org.
+func (h *AISettingsHandler) GetUnifiedStore() *unified.UnifiedStore {
+	return h.GetUnifiedStoreForOrg("default")
+}
+
+// GetUnifiedStoreForOrg returns the unified store for an org.
+func (h *AISettingsHandler) GetUnifiedStoreForOrg(orgID string) *unified.UnifiedStore {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.unifiedStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.unifiedStore
+	}
+	return nil
+}
+
+// SetDiscoveryStore sets the discovery store for the default org.
+func (h *AISettingsHandler) SetDiscoveryStore(store *servicediscovery.Store) {
+	h.SetDiscoveryStoreForOrg("default", store)
+}
+
+// SetDiscoveryStoreForOrg sets the discovery store for deep infrastructure discovery for an org.
+func (h *AISettingsHandler) SetDiscoveryStoreForOrg(orgID string, store *servicediscovery.Store) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if store == nil {
+		delete(h.discoveryStores, orgID)
+	} else {
+		h.discoveryStores[orgID] = store
+	}
+	h.intelligenceMu.Unlock()
+
+	if orgID == "default" {
+		h.stateMu.Lock()
+		h.discoveryStore = store
+		defaultAIService := h.defaultAIService
+		h.stateMu.Unlock()
+		if defaultAIService != nil {
+			defaultAIService.SetDiscoveryStore(store)
+		}
+	}
+
+	h.aiServicesMu.RLock()
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
+		svc.SetDiscoveryStore(store)
+	}
+}
+
+// GetDiscoveryStore returns the discovery store for the default org.
+func (h *AISettingsHandler) GetDiscoveryStore() *servicediscovery.Store {
+	return h.GetDiscoveryStoreForOrg("default")
+}
+
+// GetDiscoveryStoreForOrg returns the discovery store for an org.
+func (h *AISettingsHandler) GetDiscoveryStoreForOrg(orgID string) *servicediscovery.Store {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if store := h.discoveryStores[orgID]; store != nil {
+		h.intelligenceMu.RUnlock()
+		return store
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		h.stateMu.RLock()
+		store := h.discoveryStore
+		h.stateMu.RUnlock()
+		return store
+	}
+	return nil
+}
+
+// SetAlertBridge sets the alert bridge
+func (h *AISettingsHandler) SetAlertBridge(bridge *unified.AlertBridge) {
+	h.SetAlertBridgeForOrg("default", bridge)
+}
+
+// SetAlertBridgeForOrg sets the alert bridge for an org.
+func (h *AISettingsHandler) SetAlertBridgeForOrg(orgID string, bridge *unified.AlertBridge) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if bridge == nil {
+		delete(h.alertBridges, orgID)
+	} else {
+		h.alertBridges[orgID] = bridge
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.alertBridge = bridge
+	}
+}
+
+// GetAlertBridge returns the alert bridge
+func (h *AISettingsHandler) GetAlertBridge() *unified.AlertBridge {
+	return h.GetAlertBridgeForOrg("default")
+}
+
+// GetAlertBridgeForOrg returns the alert bridge for an org.
+func (h *AISettingsHandler) GetAlertBridgeForOrg(orgID string) *unified.AlertBridge {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if bridge := h.alertBridges[orgID]; bridge != nil {
+		h.intelligenceMu.RUnlock()
+		return bridge
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.alertBridge
+	}
+	return nil
+}
+
+// SetTriggerManager sets the event-driven patrol trigger manager
+func (h *AISettingsHandler) SetTriggerManager(tm *ai.TriggerManager) {
+	h.SetTriggerManagerForOrg("default", tm)
+}
+
+// SetTriggerManagerForOrg sets the event-driven patrol trigger manager for an org.
+func (h *AISettingsHandler) SetTriggerManagerForOrg(orgID string, tm *ai.TriggerManager) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if tm == nil {
+		delete(h.triggerManagers, orgID)
+	} else {
+		h.triggerManagers[orgID] = tm
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.triggerManager = tm
+	}
+}
+
+// GetTriggerManager returns the event-driven patrol trigger manager
+func (h *AISettingsHandler) GetTriggerManager() *ai.TriggerManager {
+	return h.GetTriggerManagerForOrg("default")
+}
+
+// GetTriggerManagerForOrg returns the event-driven patrol trigger manager for an org.
+func (h *AISettingsHandler) GetTriggerManagerForOrg(orgID string) *ai.TriggerManager {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if tm := h.triggerManagers[orgID]; tm != nil {
+		h.intelligenceMu.RUnlock()
+		return tm
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.triggerManager
+	}
+	return nil
+}
+
+// SetIncidentCoordinator sets the incident recording coordinator
+func (h *AISettingsHandler) SetIncidentCoordinator(coordinator *ai.IncidentCoordinator) {
+	h.SetIncidentCoordinatorForOrg("default", coordinator)
+}
+
+// SetIncidentCoordinatorForOrg sets the incident recording coordinator for an org.
+func (h *AISettingsHandler) SetIncidentCoordinatorForOrg(orgID string, coordinator *ai.IncidentCoordinator) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if coordinator == nil {
+		delete(h.incidentCoordinators, orgID)
+	} else {
+		h.incidentCoordinators[orgID] = coordinator
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.incidentCoordinator = coordinator
+	}
+}
+
+// GetIncidentCoordinator returns the incident recording coordinator
+func (h *AISettingsHandler) GetIncidentCoordinator() *ai.IncidentCoordinator {
+	return h.GetIncidentCoordinatorForOrg("default")
+}
+
+// GetIncidentCoordinatorForOrg returns the incident recording coordinator for an org.
+func (h *AISettingsHandler) GetIncidentCoordinatorForOrg(orgID string) *ai.IncidentCoordinator {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if coordinator := h.incidentCoordinators[orgID]; coordinator != nil {
+		h.intelligenceMu.RUnlock()
+		return coordinator
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.incidentCoordinator
+	}
+	return nil
+}
+
+// SetIncidentRecorder sets the high-frequency incident recorder
+func (h *AISettingsHandler) SetIncidentRecorder(recorder *metrics.IncidentRecorder) {
+	h.SetIncidentRecorderForOrg("default", recorder)
+}
+
+// SetIncidentRecorderForOrg sets the high-frequency incident recorder for an org.
+func (h *AISettingsHandler) SetIncidentRecorderForOrg(orgID string, recorder *metrics.IncidentRecorder) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.Lock()
+	h.ensureIntelligenceMapsLocked()
+	if recorder == nil {
+		delete(h.incidentRecorders, orgID)
+	} else {
+		h.incidentRecorders[orgID] = recorder
+	}
+	h.intelligenceMu.Unlock()
+	if orgID == "default" {
+		h.incidentRecorder = recorder
+	}
+}
+
+// GetIncidentRecorder returns the high-frequency incident recorder
+func (h *AISettingsHandler) GetIncidentRecorder() *metrics.IncidentRecorder {
+	return h.GetIncidentRecorderForOrg("default")
+}
+
+// GetIncidentRecorderForOrg returns the high-frequency incident recorder for an org.
+func (h *AISettingsHandler) GetIncidentRecorderForOrg(orgID string) *metrics.IncidentRecorder {
+	if h == nil {
+		return nil
+	}
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	h.intelligenceMu.RLock()
+	if recorder := h.incidentRecorders[orgID]; recorder != nil {
+		h.intelligenceMu.RUnlock()
+		return recorder
+	}
+	h.intelligenceMu.RUnlock()
+	if orgID == "default" {
+		return h.incidentRecorder
+	}
+	return nil
+}
+
+// ListLearningStores returns learning stores keyed by org.
+func (h *AISettingsHandler) ListLearningStores() map[string]*learning.LearningStore {
+	out := make(map[string]*learning.LearningStore)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, store := range h.learningStores {
+		if store != nil {
+			out[orgID] = store
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.learningStore != nil {
+		out["default"] = h.learningStore
+	}
+	return out
+}
+
+// ListAlertBridges returns alert bridges keyed by org for shutdown/cleanup flows.
+func (h *AISettingsHandler) ListAlertBridges() map[string]*unified.AlertBridge {
+	out := make(map[string]*unified.AlertBridge)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, bridge := range h.alertBridges {
+		if bridge != nil {
+			out[orgID] = bridge
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.alertBridge != nil {
+		out["default"] = h.alertBridge
+	}
+	return out
+}
+
+// ListTriggerManagers returns trigger managers keyed by org for shutdown/cleanup flows.
+func (h *AISettingsHandler) ListTriggerManagers() map[string]*ai.TriggerManager {
+	out := make(map[string]*ai.TriggerManager)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, tm := range h.triggerManagers {
+		if tm != nil {
+			out[orgID] = tm
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.triggerManager != nil {
+		out["default"] = h.triggerManager
+	}
+	return out
+}
+
+// ListIncidentCoordinators returns incident coordinators keyed by org.
+func (h *AISettingsHandler) ListIncidentCoordinators() map[string]*ai.IncidentCoordinator {
+	out := make(map[string]*ai.IncidentCoordinator)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, coordinator := range h.incidentCoordinators {
+		if coordinator != nil {
+			out[orgID] = coordinator
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.incidentCoordinator != nil {
+		out["default"] = h.incidentCoordinator
+	}
+	return out
+}
+
+// ListIncidentRecorders returns incident recorders keyed by org.
+func (h *AISettingsHandler) ListIncidentRecorders() map[string]*metrics.IncidentRecorder {
+	out := make(map[string]*metrics.IncidentRecorder)
+	if h == nil {
+		return out
+	}
+	h.intelligenceMu.RLock()
+	for orgID, recorder := range h.incidentRecorders {
+		if recorder != nil {
+			out[orgID] = recorder
+		}
+	}
+	h.intelligenceMu.RUnlock()
+	if _, ok := out["default"]; !ok && h.incidentRecorder != nil {
+		out["default"] = h.incidentRecorder
+	}
+	return out
+}
+
+// StopPatrol stops the background AI patrol service
+func (h *AISettingsHandler) StopPatrol() {
+	if h.defaultAIService != nil {
+		h.defaultAIService.StopPatrol()
+	}
+	h.aiServicesMu.RLock()
+	services := make([]*ai.Service, 0, len(h.aiServices))
+	for _, svc := range h.aiServices {
+		if svc != nil {
+			services = append(services, svc)
+		}
+	}
+	h.aiServicesMu.RUnlock()
+	for _, svc := range services {
+		svc.StopPatrol()
+	}
+}
+
+// StopPatrolForOrg stops patrol for a single org without affecting others.
+func (h *AISettingsHandler) StopPatrolForOrg(orgID string) {
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	if orgID == "default" {
+		if h.defaultAIService != nil {
+			h.defaultAIService.StopPatrol()
+		}
+		return
+	}
+
+	h.aiServicesMu.RLock()
+	svc := h.aiServices[orgID]
+	h.aiServicesMu.RUnlock()
+	if svc != nil {
+		svc.StopPatrol()
+	}
+}
+
+// RemoveTenantIntelligence stops and removes org-scoped intelligence components.
+func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
+	orgID = normalizeAIIntelligenceOrgID(orgID)
+	if orgID == "default" {
+		return
+	}
+
+	var (
+		bridge      *unified.AlertBridge
+		trigger     *ai.TriggerManager
+		coordinator *ai.IncidentCoordinator
+		recorder    *metrics.IncidentRecorder
+	)
+
+	h.intelligenceMu.Lock()
+	delete(h.learningStores, orgID)
+	delete(h.forecastServices, orgID)
+	delete(h.remediationEngines, orgID)
+	delete(h.incidentStores, orgID)
+	delete(h.circuitBreakers, orgID)
+	delete(h.discoveryStores, orgID)
+	bridge = h.alertBridges[orgID]
+	trigger = h.triggerManagers[orgID]
+	coordinator = h.incidentCoordinators[orgID]
+	recorder = h.incidentRecorders[orgID]
+	delete(h.unifiedStores, orgID)
+	delete(h.alertBridges, orgID)
+	delete(h.triggerManagers, orgID)
+	delete(h.incidentCoordinators, orgID)
+	delete(h.incidentRecorders, orgID)
+	delete(h.proxmoxCorrelators, orgID)
+	h.intelligenceMu.Unlock()
+
+	if bridge != nil {
+		bridge.Stop()
+	}
+	if trigger != nil {
+		trigger.Stop()
+	}
+	if coordinator != nil {
+		coordinator.Stop()
+	}
+	if recorder != nil {
+		recorder.Stop()
+	}
+}
+
+// GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for wiring into alert callbacks
+func (h *AISettingsHandler) GetAlertTriggeredAnalyzer(ctx context.Context) aicontracts.AlertAnalyzer {
+	return h.GetAIService(ctx).GetAlertTriggeredAnalyzer()
+}
+
 // SetLicenseHandlers sets the license handlers for Pro feature gating
 func (h *AISettingsHandler) SetLicenseHandlers(handlers *LicenseHandlers) {
+	h.stateMu.Lock()
 	h.licenseHandlers = handlers
-	// Update legacy service?
-	// legacy service needs a legacy/default license checker?
-	// We can try to get it using background context (default tenant)
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
 	if handlers == nil {
 		return
 	}
+	// Update default-org service with the current license checker.
+	// We can try to get it using background context (default tenant).
 	if svc, _, err := handlers.getTenantComponents(context.Background()); err == nil {
-		if legacy := h.ensureLegacyAIService(); legacy != nil {
-			legacy.SetLicenseChecker(svc)
+		if defaultAIService != nil {
+			defaultAIService.SetLicenseChecker(svc)
 		}
 	}
 }
@@ -733,40 +1631,54 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 // SetChatHandler sets the chat handler for investigation orchestration
 // This enables the patrol service to spawn chat sessions to investigate findings
 func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
+	h.stateMu.Lock()
 	h.chatHandler = chatHandler
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
 	h.investigationMu.Lock()
 	if h.investigationStores == nil {
-		h.investigationStores = make(map[string]*investigation.Store)
+		h.investigationStores = make(map[string]aicontracts.InvestigationStore)
 	}
 	h.investigationMu.Unlock()
 
-	// Wire up orchestrator for the legacy service
+	// Wire up orchestrator for the default-org service.
 	// Note: This usually fails because chat service isn't started yet.
 	// The orchestrator will be wired via WireOrchestratorAfterChatStart() instead.
-	if h.legacyAIService != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	if defaultAIService != nil && isAIInvestigationEnabled() {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 	}
 
 	// Wire up orchestrator for any existing services
-	h.aiServicesMu.RLock()
-	for orgID, svc := range h.aiServices {
-		h.setupInvestigationOrchestrator(orgID, svc)
+	if isAIInvestigationEnabled() {
+		h.aiServicesMu.RLock()
+		for orgID, svc := range h.aiServices {
+			h.setupInvestigationOrchestrator(orgID, svc)
+		}
+		h.aiServicesMu.RUnlock()
 	}
-	h.aiServicesMu.RUnlock()
 }
 
 // WireOrchestratorAfterChatStart is called after the chat service is started
 // to wire up the investigation orchestrator. This must be called after aiHandler.Start()
 // because the orchestrator needs an active chat service.
 func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
-	if h.chatHandler == nil {
+	if !isAIInvestigationEnabled() {
+		log.Info().Msg("WireOrchestratorAfterChatStart skipped (requires Pulse Pro)")
+		return
+	}
+
+	h.stateMu.RLock()
+	hasChatHandler := h.chatHandler != nil
+	defaultAIService := h.defaultAIService
+	h.stateMu.RUnlock()
+	if !hasChatHandler {
 		log.Warn().Msg("WireOrchestratorAfterChatStart called but chatHandler is nil")
 		return
 	}
 
-	// Wire up orchestrator for the legacy service
-	if h.legacyAIService != nil {
-		h.setupInvestigationOrchestrator("default", h.legacyAIService)
+	// Wire up orchestrator for the default-org service.
+	if defaultAIService != nil {
+		h.setupInvestigationOrchestrator("default", defaultAIService)
 	}
 
 	// Wire up orchestrator for any existing services
@@ -779,7 +1691,22 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 // setupInvestigationOrchestrator creates and wires the investigation orchestrator for an AI service
 func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai.Service) {
-	if h.chatHandler == nil {
+	// Check factory exists first — if nil, this is OSS (no orchestrator available).
+	// Clear any stale orchestrator from a prior setup so the patrol service
+	// doesn't keep using a removed enterprise component.
+	factory := getCreateInvestigationOrchestrator()
+	if factory == nil {
+		if patrol := svc.GetPatrolService(); patrol != nil {
+			patrol.SetInvestigationOrchestrator(nil)
+		}
+		log.Debug().Str("orgID", orgID).Msg("Investigation orchestrator factory not registered (requires Pulse Pro)")
+		return
+	}
+
+	h.stateMu.RLock()
+	chatHandler := h.chatHandler
+	h.stateMu.RUnlock()
+	if chatHandler == nil {
 		log.Debug().Str("orgID", orgID).Msg("Chat handler not set, skipping orchestrator setup")
 		return
 	}
@@ -796,14 +1723,22 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	if !exists {
 		// Get data directory from persistence
 		var dataDir string
-		if h.legacyPersistence != nil && orgID == "default" {
-			dataDir = h.legacyPersistence.DataDir()
-		} else if h.mtPersistence != nil {
-			if p, err := h.mtPersistence.GetPersistence(orgID); err == nil {
+		mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
+		if defaultPersistence != nil && orgID == "default" {
+			dataDir = defaultPersistence.DataDir()
+		} else if mtPersistence != nil {
+			if p, err := mtPersistence.GetPersistence(orgID); err == nil {
 				dataDir = p.DataDir()
 			}
 		}
-		store = investigation.NewStore(dataDir)
+		if storeFactory := getCreateInvestigationStore(); storeFactory != nil {
+			store = storeFactory(dataDir)
+		}
+		if store == nil {
+			log.Warn().Str("orgID", orgID).Msg("Investigation store not available (requires Pulse Pro)")
+			h.investigationMu.Unlock()
+			return
+		}
 		if err := store.LoadFromDisk(); err != nil {
 			log.Warn().Err(err).Str("orgID", orgID).Msg("Failed to load investigation store")
 		}
@@ -813,7 +1748,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 
 	// Get chat service for this org using org-scoped context
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
-	chatSvc := h.chatHandler.GetService(ctx)
+	chatSvc := chatHandler.GetService(ctx)
 	if chatSvc == nil {
 		log.Warn().Str("orgID", orgID).Msg("Chat service not available for orchestrator")
 		return
@@ -825,7 +1760,16 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Chat service is not *chat.Service, cannot create adapter")
 		return
 	}
-	chatAdapter := investigation.NewChatServiceAdapter(chatService)
+
+	// Mirror default-org router wiring for per-org services so patrol/investigation
+	// executions always use the chat backend path with mid-run budget enforcement.
+	svc.SetChatService(&chatServiceAdapter{svc: chatService})
+	chatService.SetBudgetChecker(func() error {
+		return svc.CheckBudget("patrol")
+	})
+
+	// Build local adapters that implement aicontracts.Orchestrator* interfaces
+	chatAdapter := &orchestratorChatAdapter{svc: chatService}
 
 	// Create findings store adapter
 	findingsStore := patrol.GetFindings()
@@ -833,46 +1777,25 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
-	findingsStoreWrapper := &findingsStoreWrapper{store: findingsStore}
-	findingsAdapter := investigation.NewFindingsStoreAdapter(findingsStoreWrapper)
+	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}}
 
 	// Create approval adapter from the global approval store
-	var approvalAdapter *investigation.ApprovalAdapter
-	if approvalStore := approval.GetStore(); approvalStore != nil {
-		approvalAdapter = investigation.NewApprovalAdapter(approvalStore)
+	var approvalAdapter aicontracts.OrchestratorApprovalStore
+	if approvalStoreInst := approval.GetStore(); approvalStoreInst != nil {
+		approvalAdapter = &orchestratorApprovalAdapter{store: approvalStoreInst, orgID: approval.NormalizeOrgID(orgID)}
 	}
 
 	// Get config for investigation settings
 	cfg := svc.GetConfig()
-	invConfig := investigation.DefaultConfig()
+	invConfig := aicontracts.DefaultInvestigationConfig()
 	if cfg != nil {
 		invConfig.MaxTurns = cfg.GetPatrolInvestigationBudget()
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
 	}
 
-	// Create orchestrator
-	orchestrator := investigation.NewOrchestrator(
-		chatAdapter,
-		store,
-		findingsAdapter,
-		approvalAdapter,
-		invConfig,
-	)
-
-	// Set command executor for auto-executing fixes in full autonomy mode
-	// The chatAdapter implements both ChatService and CommandExecutor interfaces
-	orchestrator.SetCommandExecutor(chatAdapter)
-
-	// Set autonomy level provider for re-checking before fix execution
-	// This handles cases where user changes autonomy level during an investigation
-	orchestrator.SetAutonomyLevelProvider(&autonomyLevelProviderAdapter{svc: svc})
-
-	// Set infrastructure context provider for CLI access information
-	// This enables investigations to know where services run (Docker, systemd, native)
-	// and propose correct commands (e.g., 'docker exec pbs proxmox-backup-manager ...')
+	// Wire up discovery context to the knowledge store for infrastructure context
+	var infraContext aicontracts.OrchestratorInfraContextProvider
 	if knowledgeStore := svc.GetKnowledgeStore(); knowledgeStore != nil {
-		// Wire up discovery context to the knowledge store
-		// This unifies deep-scanned discovery data with legacy knowledge notes
 		if discoveryService := svc.GetDiscoveryService(); discoveryService != nil {
 			knowledgeStore.SetDiscoveryContextProvider(func() string {
 				discoveries, err := discoveryService.ListDiscoveries()
@@ -893,29 +1816,240 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 				return servicediscovery.FormatForAIContext(filtered)
 			})
 		}
-		orchestrator.SetInfrastructureContextProvider(knowledgeStore)
+		infraContext = knowledgeStore
 	}
 
-	// Create adapter to bridge investigation.Orchestrator to ai.InvestigationOrchestrator interface
-	adapter := ai.NewInvestigationOrchestratorAdapter(orchestrator)
+	// Build deps struct and call factory
+	deps := aicontracts.OrchestratorDeps{
+		ChatService:   chatAdapter,
+		CmdExecutor:   chatAdapter, // ChatServiceAdapter implements both interfaces
+		Store:         store,
+		FindingsStore: findingsAdapter,
+		ApprovalStore: approvalAdapter,
+		Config:        invConfig,
+		InfraContext:  infraContext,
+		Autonomy:      &autonomyLevelProviderAdapter{svc: svc},
+		FixVerifier:   &patrolFixVerifierAdapter{patrol: patrol},
+		License:       &licenseCheckerForOrchestrator{svc: svc},
+		Metrics:       &patrolMetricsCallbackAdapter{},
+	}
 
-	// Set on patrol service
-	patrol.SetInvestigationOrchestrator(adapter)
+	orchestrator := factory(deps)
+	if orchestrator == nil {
+		log.Warn().Str("orgID", orgID).Msg("Investigation orchestrator factory returned nil")
+		patrol.SetInvestigationOrchestrator(nil)
+		return
+	}
 
-	// Wire up fix verification: patrol re-checks resources after fixes are executed
-	adapter.SetFixVerifier(patrol)
-
-	// Wire up Prometheus metrics for investigation outcomes and fix verification
-	adapter.SetMetricsCallback()
-
-	// Wire up license checker for defense-in-depth autonomy clamping
-	// This prevents auto-fix execution even if autonomy level was somehow set to assisted/full without Pro
-	adapter.SetLicenseChecker(&licenseCheckerForOrchestrator{svc: svc})
+	// Set directly on patrol service — factory returns the interface
+	patrol.SetInvestigationOrchestrator(orchestrator)
 
 	log.Info().Str("orgID", orgID).Msg("Investigation orchestrator configured for patrol service")
 }
 
-// licenseCheckerForOrchestrator adapts *ai.Service to investigation.LicenseChecker
+// ---------------------------------------------------------------------------
+// Local adapters — bridge between OSS singletons and aicontracts interfaces
+// ---------------------------------------------------------------------------
+
+// orchestratorChatAdapter wraps *chat.Service to implement
+// aicontracts.OrchestratorChatService and OrchestratorCommandExecutor.
+type orchestratorChatAdapter struct {
+	svc *chat.Service
+}
+
+func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontracts.OrchestratorChatSession, error) {
+	session, err := a.svc.CreateSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &aicontracts.OrchestratorChatSession{ID: session.ID}, nil
+}
+
+func (a *orchestratorChatAdapter) ExecuteStream(ctx context.Context, req aicontracts.OrchestratorExecuteRequest, callback aicontracts.OrchestratorStreamCallback) error {
+	if a.svc == nil {
+		return fmt.Errorf("chat service is nil")
+	}
+	if !a.svc.IsRunning() {
+		return fmt.Errorf("chat service is not running")
+	}
+	chatReq := chat.ExecuteRequest{
+		Prompt:         req.Prompt,
+		SessionID:      req.SessionID,
+		MaxTurns:       req.MaxTurns,
+		AutonomousMode: req.AutonomousMode,
+	}
+	return a.svc.ExecuteStream(ctx, chatReq, func(event chat.StreamEvent) {
+		callback(aicontracts.OrchestratorStreamEvent{
+			Type: event.Type,
+			Data: event.Data,
+		})
+	})
+}
+
+func (a *orchestratorChatAdapter) GetMessages(ctx context.Context, sessionID string) ([]aicontracts.OrchestratorMessage, error) {
+	chatMessages, err := a.svc.GetMessages(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]aicontracts.OrchestratorMessage, len(chatMessages))
+	for i, msg := range chatMessages {
+		m := aicontracts.OrchestratorMessage{
+			ID:               msg.ID,
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			Timestamp:        msg.Timestamp,
+		}
+		for _, tc := range msg.ToolCalls {
+			m.ToolCalls = append(m.ToolCalls, aicontracts.OrchestratorToolCallInfo{
+				ID:    tc.ID,
+				Name:  tc.Name,
+				Input: tc.Input,
+			})
+		}
+		if msg.ToolResult != nil {
+			m.ToolResult = &aicontracts.OrchestratorToolResultInfo{
+				ToolUseID: msg.ToolResult.ToolUseID,
+				Content:   msg.ToolResult.Content,
+				IsError:   msg.ToolResult.IsError,
+			}
+		}
+		messages[i] = m.NormalizeCollections()
+	}
+	return messages, nil
+}
+
+func (a *orchestratorChatAdapter) DeleteSession(ctx context.Context, sessionID string) error {
+	return a.svc.DeleteSession(ctx, sessionID)
+}
+
+func (a *orchestratorChatAdapter) ListAvailableTools(ctx context.Context, prompt string) []string {
+	if a.svc == nil {
+		return nil
+	}
+	return a.svc.ListAvailableTools(ctx, prompt)
+}
+
+func (a *orchestratorChatAdapter) SetAutonomousMode(enabled bool) {
+	if a.svc != nil {
+		a.svc.SetAutonomousMode(enabled)
+	}
+}
+
+func (a *orchestratorChatAdapter) ExecuteCommand(ctx context.Context, command, targetHost string) (string, int, error) {
+	if a.svc == nil {
+		return "", -1, fmt.Errorf("chat service not available")
+	}
+	return a.svc.ExecuteCommand(ctx, command, targetHost)
+}
+
+// orchestratorFindingsAdapter wraps findingsStoreWrapper to implement
+// aicontracts.OrchestratorFindingsStore.
+type orchestratorFindingsAdapter struct {
+	store *findingsStoreWrapper
+}
+
+func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
+	if a.store == nil {
+		return nil
+	}
+	f := a.store.Get(id)
+	if f == nil {
+		return nil
+	}
+	return &aicontracts.Finding{
+		ID:                     f.GetID(),
+		Severity:               f.GetSeverity(),
+		Category:               f.GetCategory(),
+		ResourceID:             f.GetResourceID(),
+		ResourceName:           f.GetResourceName(),
+		ResourceType:           f.GetResourceType(),
+		Title:                  f.GetTitle(),
+		Description:            f.GetDescription(),
+		Recommendation:         f.GetRecommendation(),
+		Evidence:               f.GetEvidence(),
+		InvestigationSessionID: f.GetInvestigationSessionID(),
+		InvestigationStatus:    f.GetInvestigationStatus(),
+		InvestigationOutcome:   f.GetInvestigationOutcome(),
+		LastInvestigatedAt:     f.GetLastInvestigatedAt(),
+		InvestigationAttempts:  f.GetInvestigationAttempts(),
+	}
+}
+
+func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
+	if a.store == nil || f == nil {
+		return false
+	}
+	return a.store.UpdateInvestigation(
+		f.ID,
+		f.InvestigationSessionID,
+		f.InvestigationStatus,
+		f.InvestigationOutcome,
+		f.LastInvestigatedAt,
+		f.InvestigationAttempts,
+	)
+}
+
+// orchestratorApprovalAdapter wraps *approval.Store to implement
+// aicontracts.OrchestratorApprovalStore.
+type orchestratorApprovalAdapter struct {
+	store *approval.Store
+	orgID string
+}
+
+func (a *orchestratorApprovalAdapter) Create(appr *aicontracts.OrchestratorApproval) error {
+	if a.store == nil {
+		return nil
+	}
+	riskLevel := approval.RiskLow
+	switch appr.RiskLevel {
+	case "low":
+		riskLevel = approval.RiskLow
+	case "medium":
+		riskLevel = approval.RiskMedium
+	case "high", "critical":
+		riskLevel = approval.RiskHigh
+	}
+	req := &approval.ApprovalRequest{
+		OrgID:      a.orgID,
+		ID:         appr.ID,
+		ToolID:     "investigation_fix",
+		Command:    appr.Command,
+		TargetType: "investigation",
+		TargetID:   appr.FindingID,
+		TargetName: strings.TrimSpace(appr.TargetHost),
+		Context:    "Automated fix from patrol investigation: " + appr.Description,
+		RiskLevel:  riskLevel,
+	}
+	if req.TargetName == "" {
+		req.TargetName = appr.Description
+	}
+	return a.store.CreateApproval(req)
+}
+
+// patrolFixVerifierAdapter wraps *ai.PatrolService to implement
+// aicontracts.OrchestratorFixVerifier.
+type patrolFixVerifierAdapter struct {
+	patrol *ai.PatrolService
+}
+
+func (v *patrolFixVerifierAdapter) VerifyFixResolved(ctx context.Context, finding *aicontracts.Finding) (bool, error) {
+	return v.patrol.VerifyFixResolved(ctx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+}
+
+// patrolMetricsCallbackAdapter implements aicontracts.OrchestratorMetricsCallback
+// by delegating to the global PatrolMetrics singleton.
+type patrolMetricsCallbackAdapter struct{}
+
+func (c *patrolMetricsCallbackAdapter) RecordInvestigationOutcome(outcome string) {
+	ai.GetPatrolMetrics().RecordInvestigationOutcome(outcome)
+}
+
+func (c *patrolMetricsCallbackAdapter) RecordFixVerification(result string) {
+	ai.GetPatrolMetrics().RecordFixVerification(result)
+}
+
+// licenseCheckerForOrchestrator adapts *ai.Service to aicontracts.OrchestratorLicenseChecker
 type licenseCheckerForOrchestrator struct {
 	svc *ai.Service
 }
@@ -924,12 +2058,12 @@ func (l *licenseCheckerForOrchestrator) HasFeature(feature string) bool {
 	return l.svc.HasLicenseFeature(feature)
 }
 
-// findingsStoreWrapper wraps *ai.FindingsStore to implement investigation.AIFindingsStore
+// findingsStoreWrapper wraps *ai.FindingsStore to implement aicontracts.OrchestratorAIFindingsStore
 type findingsStoreWrapper struct {
 	store *ai.FindingsStore
 }
 
-func (w *findingsStoreWrapper) Get(id string) investigation.AIFinding {
+func (w *findingsStoreWrapper) Get(id string) aicontracts.OrchestratorAIFinding {
 	if w.store == nil {
 		return nil
 	}
@@ -956,11 +2090,7 @@ func (a *autonomyLevelProviderAdapter) GetCurrentAutonomyLevel() string {
 	if a.svc == nil {
 		return config.PatrolAutonomyMonitor
 	}
-	cfg := a.svc.GetConfig()
-	if cfg == nil {
-		return config.PatrolAutonomyMonitor
-	}
-	return cfg.GetPatrolAutonomyLevel()
+	return a.svc.GetEffectivePatrolAutonomyLevel()
 }
 
 func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
@@ -977,82 +2107,100 @@ func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
 // AISettingsResponse is returned by GET /api/settings/ai
 // API keys are masked for security
 type AISettingsResponse struct {
-	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`    // DEPRECATED: legacy single provider
-	APIKeySet      bool   `json:"api_key_set"` // DEPRECATED: true if legacy API key is configured
-	Model          string `json:"model"`
-	ChatModel      string `json:"chat_model,omitempty"`     // Model for interactive chat (empty = use default)
-	PatrolModel    string `json:"patrol_model,omitempty"`   // Model for patrol (empty = use default)
-	AutoFixModel   string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
-	BaseURL        string `json:"base_url,omitempty"`       // DEPRECATED: legacy base URL
-	Configured     bool   `json:"configured"`               // true if AI is ready to use
-	AutonomousMode bool   `json:"autonomous_mode"`          // true if AI can execute without approval
-	CustomContext  string `json:"custom_context"`           // user-provided infrastructure context
+	Enabled       bool   `json:"enabled"`
+	Model         string `json:"model"`
+	ChatModel     string `json:"chat_model,omitempty"`     // Model for interactive chat (empty = use default)
+	PatrolModel   string `json:"patrol_model,omitempty"`   // Model for patrol (empty = use default)
+	AutoFixModel  string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
+	Configured    bool   `json:"configured"`               // true if AI is ready to use
+	CustomContext string `json:"custom_context"`           // user-provided infrastructure context
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   string                `json:"patrol_schedule_preset"`   // DEPRECATED: legacy preset
-	PatrolIntervalMinutes  int                   `json:"patrol_interval_minutes"`  // Patrol interval in minutes (0 = disabled)
-	PatrolEnabled          bool                  `json:"patrol_enabled"`           // true if patrol is enabled
-	PatrolAutoFix          bool                  `json:"patrol_auto_fix"`          // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis bool                  `json:"alert_triggered_analysis"` // true if AI analyzes when alerts fire
-	UseProactiveThresholds bool                  `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
-	AvailableModels        []providers.ModelInfo `json:"available_models"`         // List of models for current provider
+	PatrolIntervalMinutes      int                   `json:"patrol_interval_minutes"`       // Patrol interval in minutes (0 = disabled)
+	PatrolEnabled              bool                  `json:"patrol_enabled"`                // true if patrol is enabled
+	PatrolAutoFix              bool                  `json:"patrol_auto_fix"`               // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis     bool                  `json:"alert_triggered_analysis"`      // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled bool                  `json:"patrol_event_triggers_enabled"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
+	UseProactiveThresholds     bool                  `json:"use_proactive_thresholds"`      // true if patrol warns before thresholds (false = use exact thresholds)
+	AvailableModels            []providers.ModelInfo `json:"available_models"`              // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
-	OpenAIConfigured    bool     `json:"openai_configured"`         // true if OpenAI API key is set
-	DeepSeekConfigured  bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
-	GeminiConfigured    bool     `json:"gemini_configured"`         // true if Gemini API key is set
-	OllamaConfigured    bool     `json:"ollama_configured"`         // true (always available for attempt)
-	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
-	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
+	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
+	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
+	OpenRouterConfigured bool     `json:"openrouter_configured"`     // true if OpenRouter API key is set
+	DeepSeekConfigured   bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
+	GeminiConfigured     bool     `json:"gemini_configured"`         // true if Gemini API key is set
+	OllamaConfigured     bool     `json:"ollama_configured"`         // true (always available for attempt)
+	OllamaBaseURL        string   `json:"ollama_base_url"`           // Ollama server URL
+	OpenAIBaseURL        string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ConfiguredProviders  []string `json:"configured_providers"`      // List of provider names with credentials
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`              // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control
+	ControlLevel    string   `json:"control_level"`    // "read_only", "controlled", "autonomous"
+	ProtectedGuests []string `json:"protected_guests"` // VMIDs/names that AI cannot control
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	// Quickstart credits
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`     // Total credits granted (25)
+	QuickstartCreditsUsed      int  `json:"quickstart_credits_used"`      // Credits consumed
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"` // Credits remaining
+	QuickstartCreditsAvailable bool `json:"quickstart_credits_available"` // true if quickstart credits are usable
+	UsingQuickstart            bool `json:"using_quickstart"`             // true if currently using quickstart provider
+}
+
+func EmptyAISettingsResponse() AISettingsResponse {
+	return AISettingsResponse{}.NormalizeCollections()
+}
+
+func (r AISettingsResponse) NormalizeCollections() AISettingsResponse {
+	if r.AvailableModels == nil {
+		r.AvailableModels = []providers.ModelInfo{}
+	}
+	if r.ConfiguredProviders == nil {
+		r.ConfiguredProviders = []string{}
+	}
+	if r.ProtectedGuests == nil {
+		r.ProtectedGuests = []string{}
+	}
+	return r
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
 type AISettingsUpdateRequest struct {
-	Enabled        *bool   `json:"enabled,omitempty"`
-	Provider       *string `json:"provider,omitempty"` // DEPRECATED: use model selection instead
-	APIKey         *string `json:"api_key,omitempty"`  // DEPRECATED: use per-provider keys
-	Model          *string `json:"model,omitempty"`
-	ChatModel      *string `json:"chat_model,omitempty"`     // Model for interactive chat
-	PatrolModel    *string `json:"patrol_model,omitempty"`   // Model for background patrol
-	AutoFixModel   *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
-	BaseURL        *string `json:"base_url,omitempty"`       // DEPRECATED: use per-provider URLs
-	AutonomousMode *bool   `json:"autonomous_mode,omitempty"`
-	CustomContext  *string `json:"custom_context,omitempty"` // user-provided infrastructure context
-	AuthMethod     *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
+	Enabled       *bool   `json:"enabled,omitempty"`
+	Model         *string `json:"model,omitempty"`
+	ChatModel     *string `json:"chat_model,omitempty"`     // Model for interactive chat
+	PatrolModel   *string `json:"patrol_model,omitempty"`   // Model for background patrol
+	AutoFixModel  *string `json:"auto_fix_model,omitempty"` // Model for auto-fix remediation
+	CustomContext *string `json:"custom_context,omitempty"` // user-provided infrastructure context
+	AuthMethod    *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolSchedulePreset   *string `json:"patrol_schedule_preset,omitempty"`   // DEPRECATED: use patrol_interval_minutes
-	PatrolIntervalMinutes  *int    `json:"patrol_interval_minutes,omitempty"`  // Custom interval in minutes (0 = disabled, minimum 10)
-	PatrolEnabled          *bool   `json:"patrol_enabled,omitempty"`           // true if patrol is enabled
-	PatrolAutoFix          *bool   `json:"patrol_auto_fix,omitempty"`          // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
-	UseProactiveThresholds *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
+	PatrolIntervalMinutes      *int  `json:"patrol_interval_minutes,omitempty"`       // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolEnabled              *bool `json:"patrol_enabled,omitempty"`                // true if patrol is enabled
+	PatrolAutoFix              *bool `json:"patrol_auto_fix,omitempty"`               // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis     *bool `json:"alert_triggered_analysis,omitempty"`      // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled *bool `json:"patrol_event_triggers_enabled,omitempty"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
+	UseProactiveThresholds     *bool `json:"use_proactive_thresholds,omitempty"`      // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
-	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
-	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
-	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
-	GeminiAPIKey    *string `json:"gemini_api_key,omitempty"`    // Set Gemini API key
-	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
-	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
+	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
+	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
+	OpenRouterAPIKey *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
+	DeepSeekAPIKey   *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
+	GeminiAPIKey     *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
+	OllamaBaseURL    *string `json:"ollama_base_url,omitempty"`    // Set Ollama server URL
+	OpenAIBaseURL    *string `json:"openai_base_url,omitempty"`    // Set custom OpenAI base URL
 	// Clear flags for removing credentials
-	ClearAnthropicKey *bool `json:"clear_anthropic_key,omitempty"` // Clear Anthropic API key
-	ClearOpenAIKey    *bool `json:"clear_openai_key,omitempty"`    // Clear OpenAI API key
-	ClearDeepSeekKey  *bool `json:"clear_deepseek_key,omitempty"`  // Clear DeepSeek API key
-	ClearGeminiKey    *bool `json:"clear_gemini_key,omitempty"`    // Clear Gemini API key
-	ClearOllamaURL    *bool `json:"clear_ollama_url,omitempty"`    // Clear Ollama URL
+	ClearAnthropicKey  *bool `json:"clear_anthropic_key,omitempty"`  // Clear Anthropic API key
+	ClearOpenAIKey     *bool `json:"clear_openai_key,omitempty"`     // Clear OpenAI API key
+	ClearOpenRouterKey *bool `json:"clear_openrouter_key,omitempty"` // Clear OpenRouter API key
+	ClearDeepSeekKey   *bool `json:"clear_deepseek_key,omitempty"`   // Clear DeepSeek API key
+	ClearGeminiKey     *bool `json:"clear_gemini_key,omitempty"`     // Clear Gemini API key
+	ClearOllamaURL     *bool `json:"clear_ollama_url,omitempty"`     // Clear Ollama URL
 	// Cost controls
 	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -1065,10 +2213,31 @@ type AISettingsUpdateRequest struct {
 	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 }
 
+// populateQuickstartFields fills quickstart credit info on an AISettingsResponse.
+func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *AISettingsResponse) {
+	aiSvc := h.GetAIService(ctx)
+	if aiSvc == nil {
+		return
+	}
+	qsMgr := aiSvc.GetQuickstartCredits()
+	if qsMgr == nil {
+		return
+	}
+	resp.QuickstartCreditsTotal = quickstartCreditsTotalFromLicensing
+	remaining := qsMgr.CreditsRemaining()
+	resp.QuickstartCreditsRemaining = remaining
+	resp.QuickstartCreditsUsed = quickstartCreditsTotalFromLicensing - remaining
+	resp.QuickstartCreditsAvailable = qsMgr.HasCredits()
+	resp.UsingQuickstart = aiSvc.IsUsingQuickstart()
+}
+
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
 func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !ensureSettingsReadScope(h.getConfig(r.Context()), w, r) {
 		return
 	}
 
@@ -1092,33 +2261,30 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	}
 
 	// Determine if running in demo mode
-	isDemo := strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
+	isDemo := mockmode.IsEnabled()
 
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,
-		Provider:       settings.Provider,
-		APIKeySet:      settings.APIKey != "",
 		Model:          settings.GetModel(),
 		ChatModel:      settings.ChatModel,
 		PatrolModel:    settings.PatrolModel,
 		AutoFixModel:   settings.AutoFixModel,
-		BaseURL:        settings.BaseURL,
 		Configured:     settings.IsConfigured() || isDemo,
-		AutonomousMode: settings.IsAutonomous(), // Derived from control_level
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
-		PatrolEnabled:          settings.PatrolEnabled,
-		PatrolAutoFix:          settings.PatrolAutoFix,
-		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds: settings.UseProactiveThresholds,
-		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
+		PatrolEnabled:              settings.PatrolEnabled,
+		PatrolAutoFix:              settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
+		UseProactiveThresholds:     settings.UseProactiveThresholds,
+		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
@@ -1131,6 +2297,14 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+	}.NormalizeCollections()
+
+	// Populate quickstart credit info
+	h.populateQuickstartFields(ctx, &response)
+
+	// If quickstart credits are available, mark as configured even without BYOK
+	if response.QuickstartCreditsAvailable && !response.Configured {
+		response.Configured = true
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -1165,6 +2339,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			return
 		}
 	}
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
+	}
 
 	// Load existing settings
 	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
@@ -1185,22 +2362,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	// Validate and apply updates
-	if req.Provider != nil {
-		provider := strings.ToLower(strings.TrimSpace(*req.Provider))
-		switch provider {
-		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini:
-			settings.Provider = provider
-		default:
-			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'ollama', 'deepseek', or 'gemini'", http.StatusBadRequest)
-			return
-		}
-	}
-
-	if req.APIKey != nil {
-		// Empty string clears the API key
-		settings.APIKey = strings.TrimSpace(*req.APIKey)
-	}
-
 	if req.Model != nil {
 		settings.Model = strings.TrimSpace(*req.Model)
 	}
@@ -1220,14 +2381,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if req.PatrolAutoFix != nil {
 		// Auto-fix requires Pro license with ai_autofix feature
 		if *req.PatrolAutoFix && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Patrol Auto-Fix requires Pulse Pro",
-				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
 			return
 		}
 		settings.PatrolAutoFix = *req.PatrolAutoFix
@@ -1235,35 +2389,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	if req.UseProactiveThresholds != nil {
 		settings.UseProactiveThresholds = *req.UseProactiveThresholds
-	}
-
-	if req.BaseURL != nil {
-		settings.BaseURL = strings.TrimSpace(*req.BaseURL)
-	}
-
-	if req.AutonomousMode != nil {
-		// Legacy: autonomous_mode now maps to control_level for backwards compatibility
-		if *req.AutonomousMode {
-			// Autonomous mode requires Pro license with ai_autofix feature
-			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusPaymentRequired)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "license_required",
-					"message":     "Autonomous Mode requires Pulse Pro",
-					"feature":     ai.FeatureAIAutoFix,
-					"upgrade_url": "https://pulserelay.pro/",
-				})
-				return
-			}
-			settings.ControlLevel = config.ControlLevelAutonomous
-			settings.AutonomousMode = true
-		} else if settings.GetControlLevel() == config.ControlLevelAutonomous {
-			// Only downgrade from autonomous to controlled; preserve other levels
-			// (e.g., don't change read_only to controlled)
-			settings.ControlLevel = config.ControlLevelControlled
-			settings.AutonomousMode = false
-		}
 	}
 
 	if req.CustomContext != nil {
@@ -1282,6 +2407,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenAIAPIKey = ""
 	} else if req.OpenAIAPIKey != nil {
 		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
+	}
+	if req.ClearOpenRouterKey != nil && *req.ClearOpenRouterKey {
+		settings.OpenRouterAPIKey = ""
+	} else if req.OpenRouterAPIKey != nil {
+		settings.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey)
 	}
 	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
 		settings.DeepSeekAPIKey = ""
@@ -1302,16 +2432,46 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
 	}
 
+	// Track whether we need to grant quickstart credits (deferred until after all validation).
+	grantQuickstartCredits := false
 	if req.Enabled != nil {
-		// Only allow enabling if at least one provider is configured
+		// Only allow enabling if at least one provider is configured OR quickstart credits are available
 		if *req.Enabled {
 			configuredProviders := settings.GetConfiguredProviders()
 			if len(configuredProviders) == 0 {
-				// No providers configured - give a helpful error
-				http.Error(w, "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant", http.StatusBadRequest)
-				return
+				// Check if quickstart credits can bridge the gap
+				aiSvc := h.GetAIService(r.Context())
+				hasQuickstart := false
+				if aiSvc != nil {
+					if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
+						hasQuickstart = qsMgr.HasCredits()
+						// First-time enable: grant credits to check availability.
+						// This is safe even if later validation fails — grants are
+						// idempotent and every workspace is entitled to 25 credits.
+						if !hasQuickstart {
+							if err := qsMgr.GrantCredits(); err == nil {
+								hasQuickstart = qsMgr.HasCredits()
+							}
+						}
+					}
+				}
+				if !hasQuickstart {
+					http.Error(w, "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant", http.StatusBadRequest)
+					return
+				}
+				// Quickstart credits available — allow enabling without BYOK.
+				// Persist all model strings so chat.Service restart picks them
+				// up from disk. All three must point to quickstart — any stale
+				// BYOK model reference would cause the chat service to fail.
+				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				settings.Model = quickstartModelStr
+				settings.PatrolModel = quickstartModelStr
+				settings.ChatModel = quickstartModelStr
+			} else {
+				// BYOK is configured — still grant quickstart credits (idempotent)
+				// so every workspace gets the 25 free runs.
+				grantQuickstartCredits = true
 			}
-			// If we have configured providers, we're good to enable
 		}
 		settings.Enabled = *req.Enabled
 	}
@@ -1333,37 +2493,16 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		}
 
 		settings.PatrolIntervalMinutes = minutes
-		settings.PatrolSchedulePreset = "" // Clear preset when using custom minutes
 		if minutes > 0 {
 			settings.PatrolEnabled = true // Enable patrol when setting custom interval
 		} else {
 			settings.PatrolEnabled = false // Disable patrol when setting interval to 0
 		}
-	} else if req.PatrolSchedulePreset != nil {
-		// Legacy preset support
-		preset := strings.ToLower(strings.TrimSpace(*req.PatrolSchedulePreset))
-		switch preset {
-		case "15min", "1hr", "6hr", "12hr", "daily":
-			settings.PatrolSchedulePreset = preset
-			settings.PatrolIntervalMinutes = config.PresetToMinutes(preset)
-			settings.PatrolEnabled = true // Enable patrol when setting schedule preset
-		case "disabled":
-			settings.PatrolSchedulePreset = preset
-			settings.PatrolIntervalMinutes = 0
-			settings.PatrolEnabled = false // Disable patrol when using disabled preset
-		default:
-			http.Error(w, "Invalid patrol_schedule_preset. Must be '15min', '1hr', '6hr', '12hr', 'daily', or 'disabled'", http.StatusBadRequest)
-			return
-		}
 	}
 
-	if req.PatrolEnabled != nil && req.PatrolIntervalMinutes == nil && req.PatrolSchedulePreset == nil {
+	if req.PatrolEnabled != nil && req.PatrolIntervalMinutes == nil {
 		settings.PatrolEnabled = *req.PatrolEnabled
 		if *req.PatrolEnabled {
-			// Re-enable if legacy preset was disabled
-			if strings.EqualFold(settings.PatrolSchedulePreset, "disabled") {
-				settings.PatrolSchedulePreset = ""
-			}
 			// Ensure we have a sane default interval when turning on
 			if settings.PatrolIntervalMinutes <= 0 {
 				settings.PatrolIntervalMinutes = 360
@@ -1383,17 +2522,15 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if req.AlertTriggeredAnalysis != nil {
 		// Alert analysis requires Pro license with ai_alerts feature
 		if *req.AlertTriggeredAnalysis && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAlerts) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Alert Analysis requires Pulse Pro",
-				"feature":     ai.FeatureAIAlerts,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
+			WriteLicenseRequired(w, ai.FeatureAIAlerts, "Pulse Alert Analysis requires Pulse Pro")
 			return
 		}
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
+	}
+
+	// Handle event-triggered patrols toggle
+	if req.PatrolEventTriggersEnabled != nil {
+		settings.PatrolEventTriggersEnabled = *req.PatrolEventTriggersEnabled
 	}
 
 	// Handle request timeout (for slow hardware)
@@ -1412,30 +2549,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Handle infrastructure control settings
 	if req.ControlLevel != nil {
 		level := strings.TrimSpace(*req.ControlLevel)
-		if level == "suggest" {
-			level = config.ControlLevelControlled
-		}
 		if !config.IsValidControlLevel(level) {
 			http.Error(w, "invalid control_level: must be read_only, controlled, or autonomous", http.StatusBadRequest)
 			return
 		}
-		// "autonomous" requires Pro license (same as autonomous_mode)
+		// "autonomous" requires Pro license
 		if level == config.ControlLevelAutonomous {
 			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusPaymentRequired)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "license_required",
-					"message":     "Autonomous control requires Pulse Pro",
-					"feature":     ai.FeatureAIAutoFix,
-					"upgrade_url": "https://pulserelay.pro/",
-				})
+				WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Autonomous control requires Pulse Pro")
 				return
 			}
 		}
 		settings.ControlLevel = level
-		// Keep legacy AutonomousMode in sync to prevent fallback issues
-		settings.AutonomousMode = (level == config.ControlLevelAutonomous)
 	}
 
 	// Handle protected guests (nil = don't update)
@@ -1459,6 +2584,17 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Without this, enabling discovery with interval=0 silently stays in manual-only mode.
 	if settings.DiscoveryEnabled && settings.DiscoveryIntervalHours == 0 {
 		settings.DiscoveryIntervalHours = 24
+	}
+
+	// Grant quickstart credits now that all validation has passed (idempotent).
+	if grantQuickstartCredits {
+		if aiSvc := h.GetAIService(r.Context()); aiSvc != nil {
+			if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
+				if err := qsMgr.GrantCredits(); err != nil {
+					log.Warn().Err(err).Msg("Failed to grant quickstart credits")
+				}
+			}
+		}
 	}
 
 	// Save settings
@@ -1491,18 +2627,20 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Update MCP control settings if control level or protected guests changed
 	// This updates tool visibility without restarting AI chat
-	// Note: req.AutonomousMode also maps to control_level for backwards compatibility
-	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil || req.AutonomousMode != nil) {
+	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
 		h.onControlSettingsChange()
 	}
 
+	providerName, _ := config.ParseModelString(settings.GetModel())
+	LogAuditEventForTenant(GetOrgID(r.Context()), "ai_settings_updated", getAuthUsername(h.getConfig(r.Context()), r), GetClientIP(r), r.URL.Path, true,
+		fmt.Sprintf("AI settings updated: enabled=%t provider=%s model=%s", settings.Enabled, providerName, settings.GetModel()))
+
 	log.Info().
 		Bool("enabled", settings.Enabled).
-		Str("provider", settings.Provider).
+		Str("provider", providerName).
 		Str("model", settings.GetModel()).
 		Str("chatModel", settings.ChatModel).
 		Str("patrolModel", settings.PatrolModel).
-		Str("patrolPreset", settings.PatrolSchedulePreset).
 		Bool("alertTriggeredAnalysis", settings.AlertTriggeredAnalysis).
 		Msg("AI settings updated")
 
@@ -1514,28 +2652,26 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Return updated settings
 	response := AISettingsResponse{
-		Enabled:                settings.Enabled,
-		Provider:               settings.Provider,
-		APIKeySet:              settings.APIKey != "",
-		Model:                  settings.GetModel(),
-		ChatModel:              settings.ChatModel,
-		PatrolModel:            settings.PatrolModel,
-		AutoFixModel:           settings.AutoFixModel,
-		BaseURL:                settings.BaseURL,
-		Configured:             settings.IsConfigured(),
-		AutonomousMode:         settings.IsAutonomous(), // Derived from control_level
-		CustomContext:          settings.CustomContext,
-		AuthMethod:             authMethod,
-		OAuthConnected:         settings.OAuthAccessToken != "",
-		PatrolSchedulePreset:   settings.PatrolSchedulePreset,
-		PatrolIntervalMinutes:  settings.PatrolIntervalMinutes,
-		PatrolAutoFix:          settings.PatrolAutoFix,
-		AlertTriggeredAnalysis: settings.AlertTriggeredAnalysis,
-		UseProactiveThresholds: settings.UseProactiveThresholds,
-		AvailableModels:        nil, // Now populated via /api/ai/models endpoint
+		Enabled:                    settings.Enabled,
+		Model:                      settings.GetModel(),
+		ChatModel:                  settings.ChatModel,
+		PatrolModel:                settings.PatrolModel,
+		AutoFixModel:               settings.AutoFixModel,
+		Configured:                 settings.IsConfigured(),
+		CustomContext:              settings.CustomContext,
+		AuthMethod:                 authMethod,
+		OAuthConnected:             settings.OAuthAccessToken != "",
+		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
+		PatrolEnabled:              settings.PatrolEnabled,
+		PatrolAutoFix:              settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
+		UseProactiveThresholds:     settings.UseProactiveThresholds,
+		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
@@ -1547,6 +2683,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ProtectedGuests:        settings.GetProtectedGuests(),
 		DiscoveryEnabled:       settings.DiscoveryEnabled,
 		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
+	}.NormalizeCollections()
+
+	// Populate quickstart credit info
+	h.populateQuickstartFields(r.Context(), &response)
+
+	// If quickstart credits are available, mark as configured even without BYOK
+	if response.QuickstartCreditsAvailable && !response.Configured {
+		response.Configured = true
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -1555,31 +2699,19 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 }
 
 // HandleTestAIConnection tests the AI provider connection (POST /api/ai/test)
+// Auth is enforced by RequirePermission middleware at route registration; with
+// default authorizer, non-admin proxy users are hard-denied (with RBAC, deferred
+// to authorizer). Token scope is enforced by RequireScope middleware.
+// ensureSettingsWriteScope provides the additional admin-session identity guard
+// for session-based (non-token) users.
 func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Require admin authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
 		return
-	}
-
-	// Check proxy auth admin status if applicable
-	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
-			log.Warn().
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted AI connection test")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
-			return
-		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -1594,7 +2726,8 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 	err := h.GetAIService(r.Context()).TestConnection(ctx)
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = err.Error()
+		testResult.Message = "Connection test failed"
+		log.Error().Err(err).Msg("AI connection test failed")
 	} else {
 		cfg := h.GetAIService(r.Context()).GetConfig()
 		testResult.Success = true
@@ -1610,37 +2743,32 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 }
 
 // HandleTestProvider tests a specific AI provider connection (POST /api/ai/test/:provider)
+// Auth is enforced by RequirePermission middleware at route registration; with
+// default authorizer, non-admin proxy users are hard-denied (with RBAC, deferred
+// to authorizer). Token scope is enforced by RequireScope middleware.
+// ensureSettingsWriteScope provides the additional admin-session identity guard
+// for session-based (non-token) users.
 func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Require admin authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
 		return
-	}
-
-	// Check proxy auth admin status if applicable
-	if h.getConfig(r.Context()).ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(h.getConfig(r.Context()), r); valid && !isAdmin {
-			log.Warn().
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted AI provider test")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
-			return
-		}
 	}
 
 	// Get provider from URL path (e.g., /api/ai/test/anthropic -> anthropic)
 	provider := strings.TrimPrefix(r.URL.Path, "/api/ai/test/")
 	if provider == "" || provider == r.URL.Path {
 		http.Error(w, `{"error":"Provider is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate provider name: only allow lowercase alphanumeric and hyphens,
+	// max 64 chars. This rejects path traversal, slashes, and injection attempts.
+	if len(provider) > 64 || !isValidProviderName(provider) {
+		http.Error(w, `{"error":"Invalid provider name"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -1659,7 +2787,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if cfg == nil {
 		testResult.Success = false
 		testResult.Message = "Pulse Assistant not configured"
-		utils.WriteJSONResponse(w, testResult)
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
@@ -1667,7 +2797,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if !cfg.HasProvider(provider) {
 		testResult.Success = false
 		testResult.Message = "Provider not configured"
-		utils.WriteJSONResponse(w, testResult)
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
@@ -1675,15 +2807,19 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	testProvider, err := providers.NewForProvider(cfg, provider, cfg.GetModel())
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = fmt.Sprintf("Failed to create provider: %v", err)
-		utils.WriteJSONResponse(w, testResult)
+		testResult.Message = "Failed to create provider"
+		log.Error().Err(err).Str("provider", provider).Msg("AI provider creation failed")
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
 	err = testProvider.TestConnection(ctx)
 	if err != nil {
 		testResult.Success = false
-		testResult.Message = err.Error()
+		testResult.Message = "Connection test failed"
+		log.Error().Err(err).Str("provider", provider).Msg("AI provider connection test failed")
 	} else {
 		testResult.Success = true
 		testResult.Message = "Connection successful"
@@ -1694,6 +2830,17 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// isValidProviderName returns true if s contains only lowercase letters, digits,
+// and hyphens. This prevents path traversal, URL injection, and log injection.
+func isValidProviderName(s string) bool {
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
 // HandleListModels fetches available models from the configured AI provider (GET /api/ai/models)
 func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1701,10 +2848,7 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// Auth is enforced by RequireAuth + RequireScope middleware at the route level.
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
@@ -1726,9 +2870,10 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 	models, cached, err := h.GetAIService(r.Context()).ListModelsWithCache(ctx)
 	if err != nil {
 		// Return error but don't fail the request - frontend can show a fallback
+		log.Error().Err(err).Msg("Failed to list AI models")
 		resp := Response{
 			Models: []ModelInfo{},
-			Error:  err.Error(),
+			Error:  "Failed to fetch model list",
 		}
 		if jsonErr := utils.WriteJSONResponse(w, resp); jsonErr != nil {
 			log.Error().Err(jsonErr).Msg("Failed to write AI models response")
@@ -1773,7 +2918,7 @@ type AIConversationMessage struct {
 
 type AIExecuteRequest struct {
 	Prompt     string                  `json:"prompt"`
-	TargetType string                  `json:"target_type,omitempty"` // "host", "container", "vm", "node"
+	TargetType string                  `json:"target_type,omitempty"` // "agent", "system-container", "vm"
 	TargetID   string                  `json:"target_id,omitempty"`
 	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
 	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
@@ -1782,14 +2927,65 @@ type AIExecuteRequest struct {
 	UseCase    string                  `json:"use_case,omitempty"` // "chat" or "patrol"
 }
 
+func normalizeAIExecuteTargetType(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func normalizeAndValidateAIExecuteTargetType(raw string) (string, error) {
+	targetType := normalizeAIExecuteTargetType(raw)
+	if targetType == "" {
+		return "", nil
+	}
+
+	switch targetType {
+	case "agent", "system-container", "vm":
+		return targetType, nil
+	default:
+		return "", fmt.Errorf("invalid target_type")
+	}
+}
+
 // AIExecuteResponse is the response from POST /api/ai/execute
 type AIExecuteResponse struct {
 	Content          string                  `json:"content"`
 	Model            string                  `json:"model"`
 	InputTokens      int                     `json:"input_tokens"`
 	OutputTokens     int                     `json:"output_tokens"`
-	ToolCalls        []ai.ToolExecution      `json:"tool_calls,omitempty"`        // Commands that were executed
-	PendingApprovals []ai.ApprovalNeededData `json:"pending_approvals,omitempty"` // Commands that require approval (non-streaming)
+	ToolCalls        []ai.ToolExecution      `json:"tool_calls"`        // Commands that were executed
+	PendingApprovals []ai.ApprovalNeededData `json:"pending_approvals"` // Commands that require approval (non-streaming)
+}
+
+func EmptyAIExecuteResponse() AIExecuteResponse {
+	return AIExecuteResponse{}.NormalizeCollections()
+}
+
+func (r AIExecuteResponse) NormalizeCollections() AIExecuteResponse {
+	if r.ToolCalls == nil {
+		r.ToolCalls = []ai.ToolExecution{}
+	}
+	if r.PendingApprovals == nil {
+		r.PendingApprovals = []ai.ApprovalNeededData{}
+	}
+	return r
+}
+
+type aiExecuteStreamCompleteEvent struct {
+	Type         string             `json:"type"`
+	Model        string             `json:"model"`
+	InputTokens  int                `json:"input_tokens"`
+	OutputTokens int                `json:"output_tokens"`
+	ToolCalls    []ai.ToolExecution `json:"tool_calls"`
+}
+
+func emptyAIExecuteStreamCompleteEvent() aiExecuteStreamCompleteEvent {
+	return aiExecuteStreamCompleteEvent{}.NormalizeCollections()
+}
+
+func (e aiExecuteStreamCompleteEvent) NormalizeCollections() aiExecuteStreamCompleteEvent {
+	if e.ToolCalls == nil {
+		e.ToolCalls = []ai.ToolExecution{}
+	}
+	return e
 }
 
 type AIKubernetesAnalyzeRequest struct {
@@ -1803,10 +2999,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// Authentication is enforced by RequireAdmin middleware at route registration.
 
 	// Check if AI is enabled
 	if !h.GetAIService(r.Context()).IsEnabled() {
@@ -1833,14 +3026,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Patrol Auto-Fix requires Pulse Pro",
-				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
 			return
 		}
 	}
@@ -1848,6 +3034,30 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	if strings.TrimSpace(req.Prompt) == "" {
 		http.Error(w, "Prompt is required", http.StatusBadRequest)
 		return
+	}
+
+	// Validate and normalize target_type if provided
+	targetType, err := normalizeAndValidateAIExecuteTargetType(req.TargetType)
+	if err != nil {
+		http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
+		return
+	}
+
+	// Validate target_id length if provided
+	if len(req.TargetID) > 256 {
+		http.Error(w, "target_id exceeds maximum length", http.StatusBadRequest)
+		return
+	}
+
+	// Validate conversation history roles
+	for _, msg := range req.History {
+		switch msg.Role {
+		case "user", "assistant":
+			// valid
+		default:
+			http.Error(w, "Invalid role in history (allowed: user, assistant)", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Execute the prompt with a timeout
@@ -1869,7 +3079,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 
 	resp, err := h.GetAIService(r.Context()).Execute(ctx, ai.ExecuteRequest{
 		Prompt:     req.Prompt,
-		TargetType: req.TargetType,
+		TargetType: targetType,
 		TargetID:   req.TargetID,
 		Context:    req.Context,
 		History:    history,
@@ -1890,7 +3100,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 		OutputTokens:     resp.OutputTokens,
 		ToolCalls:        resp.ToolCalls,
 		PendingApprovals: resp.PendingApprovals,
-	}
+	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write AI execute response")
@@ -1975,10 +3185,8 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
+	// NOTE: Authentication is enforced by RequireAdmin middleware at route
+	// registration (router_routes_ai_relay.go). No redundant CheckAuth needed.
 
 	// Check if AI is enabled
 	if !h.GetAIService(r.Context()).IsEnabled() {
@@ -1999,14 +3207,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "license_required",
-				"message":     "Pulse Patrol Auto-Fix requires Pulse Pro",
-				"feature":     ai.FeatureAIAutoFix,
-				"upgrade_url": "https://pulserelay.pro/",
-			})
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
 			return
 		}
 	}
@@ -2016,9 +3217,33 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Validate and normalize target_type if provided
+	targetType, err := normalizeAndValidateAIExecuteTargetType(req.TargetType)
+	if err != nil {
+		http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
+		return
+	}
+
+	// Validate target_id length if provided
+	if len(req.TargetID) > 256 {
+		http.Error(w, "target_id exceeds maximum length", http.StatusBadRequest)
+		return
+	}
+
+	// Validate conversation history roles
+	for _, msg := range req.History {
+		switch msg.Role {
+		case "user", "assistant":
+			// valid
+		default:
+			http.Error(w, "Invalid role in history (allowed: user, assistant)", http.StatusBadRequest)
+			return
+		}
+	}
+
 	log.Info().
 		Int("prompt_len", len(req.Prompt)).
-		Str("target_type", req.TargetType).
+		Str("target_type", targetType).
 		Str("target_id", req.TargetID).
 		Msg("AI streaming request started")
 
@@ -2153,7 +3378,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// Execute with streaming
 	resp, err := h.GetAIService(r.Context()).ExecuteStream(ctx, ai.ExecuteRequest{
 		Prompt:     req.Prompt,
-		TargetType: req.TargetType,
+		TargetType: targetType,
 		TargetID:   req.TargetID,
 		Context:    req.Context,
 		History:    history,
@@ -2165,7 +3390,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	if err != nil {
 		log.Error().Err(err).Msg("AI streaming execution failed")
 		// Send error event — use generic message to avoid leaking internal details
-		errEvent := ai.StreamEvent{Type: "error", Data: "AI request failed. Please try again."}
+		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "AI request failed. Please try again."}}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return
@@ -2179,19 +3404,13 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		Msg("AI streaming request completed")
 
 	// Send final response with metadata (before 'done')
-	finalEvent := struct {
-		Type         string             `json:"type"`
-		Model        string             `json:"model"`
-		InputTokens  int                `json:"input_tokens"`
-		OutputTokens int                `json:"output_tokens"`
-		ToolCalls    []ai.ToolExecution `json:"tool_calls,omitempty"`
-	}{
+	finalEvent := aiExecuteStreamCompleteEvent{
 		Type:         "complete",
 		Model:        resp.Model,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 		ToolCalls:    resp.ToolCalls,
-	}
+	}.NormalizeCollections()
 	data, _ := json.Marshal(finalEvent)
 	safeWrite([]byte("data: " + string(data) + "\n\n"))
 	// 'done' event is sent by the defer above
@@ -2200,6 +3419,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 // AIRunCommandRequest is the request body for POST /api/ai/run-command
 type AIRunCommandRequest struct {
 	Command    string `json:"command"`
+	ApprovalID string `json:"approval_id"`
 	TargetType string `json:"target_type"`
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"`
@@ -2221,14 +3441,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	// Gated for AI Auto-Fix (Pro feature)
 	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusPaymentRequired)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":       "license_required",
-			"message":     "Pulse Patrol Auto-Fix requires Pulse Pro",
-			"feature":     ai.FeatureAIAutoFix,
-			"upgrade_url": "https://pulserelay.pro/",
-		})
+		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
 		return
 	}
 
@@ -2253,11 +3466,40 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Command is required", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(req.ApprovalID) == "" {
+		http.Error(w, "approval_id is required", http.StatusBadRequest)
+		return
+	}
+
+	approvalTargetType, approvalTargetID, targetErr := normalizeRunCommandApprovalTarget(req)
+	if targetErr != nil {
+		http.Error(w, targetErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		http.Error(w, "Approval store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	approvalReq, ok := store.GetApproval(req.ApprovalID)
+	if !ok || !approval.BelongsToOrg(approvalReq, orgID) {
+		http.Error(w, "Approval request not found", http.StatusNotFound)
+		return
+	}
+	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {
+		log.Error().Err(err).Str("approval_id", req.ApprovalID).Msg("Failed to consume approval")
+		http.Error(w, "Failed to consume approval", http.StatusConflict)
+		return
+	}
 
 	log.Info().
 		Str("command", req.Command).
-		Str("target_type", req.TargetType).
-		Str("target_id", req.TargetID).
+		Str("approval_id", req.ApprovalID).
+		Str("target_type", approvalTargetType).
+		Str("target_id", approvalTargetID).
 		Bool("run_on_host", req.RunOnHost).
 		Str("target_host", req.TargetHost).
 		Msg("Executing approved command")
@@ -2268,16 +3510,17 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	resp, err := h.GetAIService(r.Context()).RunCommand(ctx, ai.RunCommandRequest{
 		Command:    req.Command,
-		TargetType: req.TargetType,
-		TargetID:   req.TargetID,
+		ApprovalID: req.ApprovalID,
+		TargetType: approvalTargetType,
+		TargetID:   approvalTargetID,
 		RunOnHost:  req.RunOnHost,
 		VMID:       req.VMID,
-		TargetHost: req.TargetHost,
+		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
 	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to execute command")
-		http.Error(w, "Failed to execute command: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to execute command", http.StatusInternalServerError)
 		return
 	}
 
@@ -2286,17 +3529,98 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string, error) {
+	targetType := normalizeAIExecuteTargetType(req.TargetType)
+	targetID := strings.TrimSpace(req.TargetID)
+	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
+
+	allowedTargetTypes := map[string]struct{}{
+		"agent":            {},
+		"system-container": {},
+		"vm":               {},
+	}
+
+	if req.RunOnHost {
+		targetType = "agent"
+		if targetHost == "" {
+			return "", "", errors.New("target_host is required when run_on_host is true")
+		}
+		targetID = targetHost
+	}
+
+	if targetType == "" {
+		targetType = "agent"
+	}
+	if _, ok := allowedTargetTypes[targetType]; !ok {
+		return "", "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", targetType)
+	}
+
+	if (targetType == "system-container" || targetType == "vm") && strings.TrimSpace(req.VMID) != "" {
+		targetID = strings.TrimSpace(req.VMID)
+	}
+
+	if targetType == "agent" {
+		if targetID == "" {
+			targetID = targetHost
+		}
+		if targetID == "" {
+			return "", "", errors.New("target_id or target_host is required for agent commands")
+		}
+		targetID = strings.ToLower(targetID)
+	}
+
+	if targetID == "" {
+		return "", "", fmt.Errorf("target_id is required for target_type '%s'", targetType)
+	}
+
+	return targetType, targetID, nil
+}
+
+// maxGuestIDLength is the maximum allowed length for guest_id across all
+// knowledge endpoints, preventing abuse via oversized identifiers.
+const maxGuestIDLength = 256
+
+// maxImportNotes is the maximum number of notes allowed in a single import
+// request. This prevents abuse even within the 1MB body size limit.
+const maxImportNotes = 500
+
+// sanitizeFilenameComponent strips characters unsafe for Content-Disposition
+// filenames. Only alphanumeric, hyphens, underscores, and dots are kept.
+func sanitizeFilenameComponent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			b.WriteRune(c)
+		}
+	}
+	result := b.String()
+	if result == "" {
+		return "export"
+	}
+	return result
+}
+
 // HandleGetGuestKnowledge returns all notes for a guest
 func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	guestID := r.URL.Query().Get("guest_id")
 	if guestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
 		return
 	}
+	if len(guestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
 	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
 		return
 	}
 
@@ -2307,6 +3631,13 @@ func (h *AISettingsHandler) HandleGetGuestKnowledge(w http.ResponseWriter, r *ht
 
 // HandleSaveGuestNote saves a note for a guest
 func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
+
 	var req struct {
 		GuestID   string `json:"guest_id"`
 		GuestName string `json:"guest_name"`
@@ -2325,9 +3656,25 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 		http.Error(w, "guest_id, category, title, and content are required", http.StatusBadRequest)
 		return
 	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Category) > 128 {
+		http.Error(w, "category too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Title) > 1024 {
+		http.Error(w, "title too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.Content) > 32*1024 {
+		http.Error(w, "content too long", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.GetAIService(r.Context()).SaveGuestNote(req.GuestID, req.GuestName, req.GuestType, req.Category, req.Title, req.Content); err != nil {
-		http.Error(w, "Failed to save note: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to save note"), http.StatusInternalServerError)
 		return
 	}
 
@@ -2337,6 +3684,13 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 
 // HandleDeleteGuestNote deletes a note from a guest
 func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024) // 4KB max — only needs guest_id + note_id
+
 	var req struct {
 		GuestID string `json:"guest_id"`
 		NoteID  string `json:"note_id"`
@@ -2351,9 +3705,21 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 		http.Error(w, "guest_id and note_id are required", http.StatusBadRequest)
 		return
 	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
+	if len(req.NoteID) > maxGuestIDLength {
+		http.Error(w, "note_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.GetAIService(r.Context()).DeleteGuestNote(req.GuestID, req.NoteID); err != nil {
-		http.Error(w, "Failed to delete note: "+err.Error(), http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, "Note not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, sanitizeErrorForClient(err, "Failed to delete note"), http.StatusInternalServerError)
 		return
 	}
 
@@ -2363,21 +3729,34 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 
 // HandleExportGuestKnowledge exports all knowledge for a guest as JSON
 func (h *AISettingsHandler) HandleExportGuestKnowledge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	guestID := r.URL.Query().Get("guest_id")
 	if guestID == "" {
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
 		return
 	}
-
-	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
-	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+	if len(guestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
 		return
 	}
 
+	knowledge, err := h.GetAIService(r.Context()).GetGuestKnowledge(guestID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
+		return
+	}
+
+	// Sanitize guestID for Content-Disposition header to prevent header injection.
+	// Only allow alphanumeric, hyphens, underscores, and dots.
+	safeID := sanitizeFilenameComponent(guestID)
+
 	// Set headers for file download
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=\"pulse-notes-"+guestID+".json\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"pulse-notes-"+safeID+".json\"")
 
 	if err := json.NewEncoder(w).Encode(knowledge); err != nil {
 		log.Error().Err(err).Msg("Failed to encode knowledge export")
@@ -2407,7 +3786,7 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&importData); err != nil {
-		http.Error(w, "Invalid import data: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid import data", http.StatusBadRequest)
 		return
 	}
 
@@ -2415,9 +3794,44 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 		http.Error(w, "guest_id is required in import data", http.StatusBadRequest)
 		return
 	}
+	if len(importData.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if len(importData.Notes) == 0 {
 		http.Error(w, "No notes to import", http.StatusBadRequest)
+		return
+	}
+	if len(importData.Notes) > maxImportNotes {
+		http.Error(w, fmt.Sprintf("Too many notes: %d exceeds maximum of %d", len(importData.Notes), maxImportNotes), http.StatusBadRequest)
+		return
+	}
+
+	// Pre-filter valid notes before deleting in replace mode to avoid data loss
+	// when all incoming notes fail validation.
+	isValidNote := func(n struct {
+		Category string `json:"category"`
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+	}) bool {
+		if n.Category == "" || n.Title == "" || n.Content == "" {
+			return false
+		}
+		if len(n.Category) > 128 || len(n.Title) > 1024 || len(n.Content) > 32*1024 {
+			return false
+		}
+		return true
+	}
+
+	validCount := 0
+	for _, note := range importData.Notes {
+		if isValidNote(note) {
+			validCount++
+		}
+	}
+	if validCount == 0 {
+		http.Error(w, "No valid notes to import", http.StatusBadRequest)
 		return
 	}
 
@@ -2434,7 +3848,7 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 	// Import each note
 	imported := 0
 	for _, note := range importData.Notes {
-		if note.Category == "" || note.Title == "" || note.Content == "" {
+		if !isValidNote(note) {
 			continue
 		}
 		if err := h.GetAIService(r.Context()).SaveGuestNote(
@@ -2466,6 +3880,8 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024) // 4KB max — only needs guest_id + confirm
+
 	var req struct {
 		GuestID string `json:"guest_id"`
 		Confirm bool   `json:"confirm"`
@@ -2480,6 +3896,10 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 		http.Error(w, "guest_id is required", http.StatusBadRequest)
 		return
 	}
+	if len(req.GuestID) > maxGuestIDLength {
+		http.Error(w, "guest_id too long", http.StatusBadRequest)
+		return
+	}
 
 	if !req.Confirm {
 		http.Error(w, "confirm must be true to clear all notes", http.StatusBadRequest)
@@ -2489,7 +3909,7 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 	// Get existing knowledge and delete all notes
 	existing, err := h.GetAIService(r.Context()).GetGuestKnowledge(req.GuestID)
 	if err != nil {
-		http.Error(w, "Failed to get knowledge: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, sanitizeErrorForClient(err, "Failed to get knowledge"), http.StatusInternalServerError)
 		return
 	}
 
@@ -2532,7 +3952,7 @@ func (h *AISettingsHandler) HandleDebugContext(w http.ResponseWriter, r *http.Re
 }
 
 // HandleGetConnectedAgents returns the list of agents currently connected via WebSocket
-// This is useful for debugging when AI can't reach certain hosts
+// This is useful for debugging when AI can't reach certain agents
 func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -2563,7 +3983,7 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 	response := map[string]interface{}{
 		"count":  len(agents),
 		"agents": agents,
-		"note":   "Agents connect via WebSocket to /api/agent/ws. If a host is missing, check that pulse-agent is installed and can reach the Pulse server.",
+		"note":   "Agents connect via WebSocket to /api/agent/ws. If an agent is missing, check that pulse-agent is installed and can reach the Pulse server.",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -2572,18 +3992,38 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 
 // AIInvestigateAlertRequest is the request body for POST /api/ai/investigate-alert
 type AIInvestigateAlertRequest struct {
-	AlertID      string  `json:"alert_id"`
-	ResourceID   string  `json:"resource_id"`
-	ResourceName string  `json:"resource_name"`
-	ResourceType string  `json:"resource_type"` // guest, node, storage, docker
-	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
-	Level        string  `json:"level"`         // warning, critical
-	Value        float64 `json:"value"`
-	Threshold    float64 `json:"threshold"`
-	Message      string  `json:"message"`
-	Duration     string  `json:"duration"` // How long the alert has been active
-	Node         string  `json:"node,omitempty"`
-	VMID         int     `json:"vmid,omitempty"`
+	AlertIdentifier string  `json:"alertIdentifier"`
+	ResourceID      string  `json:"resource_id"`
+	ResourceName    string  `json:"resource_name"`
+	ResourceType    string  `json:"resource_type"` // canonical v6 resource type
+	AlertType       string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
+	Level           string  `json:"level"`         // warning, critical
+	Value           float64 `json:"value"`
+	Threshold       float64 `json:"threshold"`
+	Message         string  `json:"message"`
+	Duration        string  `json:"duration"` // How long the alert has been active
+	Node            string  `json:"node,omitempty"`
+	VMID            int     `json:"vmid,omitempty"`
+}
+
+func (r AIInvestigateAlertRequest) alertIdentifier() string {
+	return strings.TrimSpace(r.AlertIdentifier)
+}
+
+func normalizeInvestigateAlertTargetType(raw string) (string, error) {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "vm":
+		return "vm", nil
+	case "system-container", "oci-container":
+		return "system-container", nil
+	case "agent", "node", "docker-host", "app-container", "pod", "k8s-node", "k8s-cluster", "k8s-deployment", "k8s-service", "storage", "disk", "pbs", "pmg", "proxmox", "truenas", "ceph":
+		return "agent", nil
+	case "":
+		return "", errors.New("resource_type is required")
+	default:
+		return "", fmt.Errorf("unsupported resource_type %q (allowed: vm, system-container, oci-container, app-container, pod, agent, node, docker-host, k8s-cluster, k8s-node, k8s-deployment, k8s-service, storage, disk, pbs, pmg, proxmox, truenas, ceph)", raw)
+	}
 }
 
 // HandleInvestigateAlert investigates an alert using AI (POST /api/ai/investigate-alert)
@@ -2622,26 +4062,51 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	}
 
 	// Build investigation prompt
+	alertIdentifier := req.alertIdentifier()
 	investigationPrompt := ai.GenerateAlertInvestigationPrompt(ai.AlertInvestigationRequest{
-		AlertID:      req.AlertID,
-		ResourceID:   req.ResourceID,
-		ResourceName: req.ResourceName,
-		ResourceType: req.ResourceType,
-		AlertType:    req.AlertType,
-		Level:        req.Level,
-		Value:        req.Value,
-		Threshold:    req.Threshold,
-		Message:      req.Message,
-		Duration:     req.Duration,
-		Node:         req.Node,
-		VMID:         req.VMID,
+		AlertIdentifier: alertIdentifier,
+		ResourceID:      req.ResourceID,
+		ResourceName:    req.ResourceName,
+		ResourceType:    req.ResourceType,
+		AlertType:       req.AlertType,
+		Level:           req.Level,
+		Value:           req.Value,
+		Threshold:       req.Threshold,
+		Message:         req.Message,
+		Duration:        req.Duration,
+		Node:            req.Node,
+		VMID:            req.VMID,
 	})
 
 	log.Info().
-		Str("alert_id", req.AlertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("resource", req.ResourceName).
 		Str("type", req.AlertType).
 		Msg("AI alert investigation started")
+
+	targetType, err := normalizeInvestigateAlertTargetType(req.ResourceType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resourceType := strings.ToLower(strings.TrimSpace(req.ResourceType))
+	targetID := strings.TrimSpace(req.ResourceID)
+	if targetType == "vm" || targetType == "system-container" {
+		if req.VMID > 0 {
+			targetID = strconv.Itoa(req.VMID)
+		}
+	} else if targetType == "agent" {
+		if node := strings.ToLower(strings.TrimSpace(req.Node)); node != "" {
+			targetID = node
+		} else if resourceType != "app-container" {
+			// Keep explicit host-like IDs for node/agent resources.
+			targetID = strings.ToLower(strings.TrimSpace(req.ResourceID))
+		} else {
+			// app-container IDs are container-scoped, not host routing IDs.
+			targetID = ""
+		}
+	}
 
 	// Set up SSE streaming
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -2704,21 +4169,6 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		return true
 	}
 
-	// Determine target type and ID from alert info
-	targetType := req.ResourceType
-	targetID := req.ResourceID
-
-	// Map resource type to expected target type format
-	switch req.ResourceType {
-	case "guest":
-		// Could be VM or container - try to determine from VMID
-		if req.VMID > 0 {
-			targetType = "container" // Default to container, AI will figure it out
-		}
-	case "docker":
-		targetType = "docker_container"
-	}
-
 	// Stream callback
 	callback := func(event ai.StreamEvent) {
 		if event.Type == "done" {
@@ -2745,42 +4195,36 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		TargetType: targetType,
 		TargetID:   targetID,
 		Context: map[string]interface{}{
-			"alertId":      req.AlertID,
-			"alertType":    req.AlertType,
-			"alertLevel":   req.Level,
-			"alertMessage": req.Message,
-			"guestName":    req.ResourceName,
-			"node":         req.Node,
+			"alertIdentifier": alertIdentifier,
+			"alertType":       req.AlertType,
+			"alertLevel":      req.Level,
+			"alertMessage":    req.Message,
+			"guestName":       req.ResourceName,
+			"node":            req.Node,
 		},
 	}, callback)
 
 	if err != nil {
 		log.Error().Err(err).Msg("AI alert investigation failed")
-		errEvent := ai.StreamEvent{Type: "error", Data: "Alert investigation failed. Please try again."}
+		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "Alert investigation failed. Please try again."}}
 		data, _ := json.Marshal(errEvent)
 		safeWrite([]byte("data: " + string(data) + "\n\n"))
 		return
 	}
 
 	// Send completion event
-	finalEvent := struct {
-		Type         string             `json:"type"`
-		Model        string             `json:"model"`
-		InputTokens  int                `json:"input_tokens"`
-		OutputTokens int                `json:"output_tokens"`
-		ToolCalls    []ai.ToolExecution `json:"tool_calls,omitempty"`
-	}{
+	finalEvent := aiExecuteStreamCompleteEvent{
 		Type:         "complete",
 		Model:        resp.Model,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 		ToolCalls:    resp.ToolCalls,
-	}
+	}.NormalizeCollections()
 	data, _ := json.Marshal(finalEvent)
 	safeWrite([]byte("data: " + string(data) + "\n\n"))
 
-	if req.AlertID != "" {
-		h.GetAIService(r.Context()).RecordIncidentAnalysis(req.AlertID, "Pulse Assistant alert investigation completed", map[string]interface{}{
+	if alertIdentifier != "" {
+		h.GetAIService(r.Context()).RecordIncidentAnalysis(alertIdentifier, "Pulse Assistant alert investigation completed", map[string]interface{}{
 			"model":         resp.Model,
 			"tool_calls":    len(resp.ToolCalls),
 			"input_tokens":  resp.InputTokens,
@@ -2789,13 +4233,13 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	}
 
 	log.Info().
-		Str("alert_id", req.AlertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("model", resp.Model).
 		Int("tool_calls", len(resp.ToolCalls)).
 		Msg("AI alert investigation completed")
 
-	if req.AlertID != "" {
-		h.GetAIService(r.Context()).RecordIncidentAnalysis(req.AlertID, "Pulse Assistant investigation completed", map[string]interface{}{
+	if alertIdentifier != "" {
+		h.GetAIService(r.Context()).RecordIncidentAnalysis(alertIdentifier, "Pulse Assistant investigation completed", map[string]interface{}{
 			"model":         resp.Model,
 			"input_tokens":  resp.InputTokens,
 			"output_tokens": resp.OutputTokens,
@@ -2805,9 +4249,9 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 }
 
 // SetAlertProvider sets the alert provider for AI context
-// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
+// Sets on both the default-org service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
-	h.legacyAIService.SetAlertProvider(ap)
+	h.defaultAIService.SetAlertProvider(ap)
 
 	h.aiServicesMu.RLock()
 	defer h.aiServicesMu.RUnlock()
@@ -2817,9 +4261,9 @@ func (h *AISettingsHandler) SetAlertProvider(ap ai.AlertProvider) {
 }
 
 // SetAlertResolver sets the alert resolver for AI Patrol autonomous alert management
-// Sets on both the legacy service and all tenant services to ensure multi-tenant support.
+// Sets on both the default-org service and all tenant services to ensure multi-tenant support.
 func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
-	h.legacyAIService.SetAlertResolver(resolver)
+	h.defaultAIService.SetAlertResolver(resolver)
 
 	h.aiServicesMu.RLock()
 	defer h.aiServicesMu.RUnlock()
@@ -2830,8 +4274,55 @@ func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
 
 // oauthSessions stores active OAuth sessions (state -> session)
 // In production, consider using a more robust session store with expiry
-var oauthSessions = make(map[string]*providers.OAuthSession)
+type oauthSessionBinding struct {
+	session *providers.OAuthSession
+	orgID   string
+}
+
+const oauthSessionTTL = 15 * time.Minute
+
+var oauthSessions = make(map[string]*oauthSessionBinding)
 var oauthSessionsMu sync.Mutex
+var exchangeOAuthCodeForTokens = providers.ExchangeCodeForTokens
+var createAPIKeyFromOAuth = providers.CreateAPIKeyFromOAuth
+
+func storeOAuthSession(session *providers.OAuthSession, orgID string) {
+	oauthSessionsMu.Lock()
+	defer oauthSessionsMu.Unlock()
+
+	cutoff := time.Now().Add(-oauthSessionTTL)
+	for state, binding := range oauthSessions {
+		if binding == nil || binding.session == nil || binding.session.CreatedAt.Before(cutoff) {
+			delete(oauthSessions, state)
+		}
+	}
+
+	oauthSessions[session.State] = &oauthSessionBinding{
+		session: session,
+		orgID:   orgID,
+	}
+}
+
+func consumeOAuthSession(state string) (*oauthSessionBinding, bool) {
+	oauthSessionsMu.Lock()
+	binding, ok := oauthSessions[state]
+	if ok {
+		delete(oauthSessions, state) // One-time use
+	}
+	oauthSessionsMu.Unlock()
+
+	if !ok || binding == nil || binding.session == nil {
+		return nil, false
+	}
+	if time.Since(binding.session.CreatedAt) > oauthSessionTTL {
+		return nil, false
+	}
+	if !isValidOrganizationID(binding.orgID) {
+		return nil, false
+	}
+
+	return binding, true
+}
 
 // HandleOAuthStart initiates the OAuth flow for Claude Pro/Max subscription (POST /api/ai/oauth/start)
 // Returns an authorization URL for the user to visit manually
@@ -2849,22 +4340,20 @@ func (h *AISettingsHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store session (with cleanup of old sessions)
-	oauthSessionsMu.Lock()
-	// Clean up sessions older than 15 minutes
-	for state, s := range oauthSessions {
-		if time.Since(s.CreatedAt) > 15*time.Minute {
-			delete(oauthSessions, state)
-		}
+	orgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if !isValidOrganizationID(orgID) {
+		orgID = "default"
 	}
-	oauthSessions[session.State] = session
-	oauthSessionsMu.Unlock()
+
+	// Store session, bound to the tenant context that initiated OAuth.
+	storeOAuthSession(session, orgID)
 
 	// Get authorization URL
 	authURL := providers.GetAuthorizationURL(session)
 
 	log.Info().
 		Str("state", safePrefixForLog(session.State, 8)+"...").
+		Str("org_id", orgID).
 		Str("verifier_len", fmt.Sprintf("%d", len(session.CodeVerifier))).
 		Str("auth_url", authURL).
 		Msg("Starting Claude OAuth flow - user must visit URL and paste code back")
@@ -2886,6 +4375,9 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Limit body size — OAuth codes are short strings, 4 KB is plenty.
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
 
 	// Parse request body
 	var req struct {
@@ -2917,35 +4409,32 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 		Str("state_prefix", req.State[:min(8, len(req.State))]).
 		Msg("Processing OAuth code exchange")
 
-	// Look up session
-	oauthSessionsMu.Lock()
-	session, ok := oauthSessions[req.State]
-	if ok {
-		delete(oauthSessions, req.State) // One-time use
-	}
-	oauthSessionsMu.Unlock()
+	// Consume one-time OAuth session and enforce TTL.
+	binding, ok := consumeOAuthSession(req.State)
 
 	if !ok {
 		log.Error().Str("state", req.State[:min(8, len(req.State))]+"...").Msg("OAuth exchange with unknown state")
 		http.Error(w, "Invalid or expired session. Please start the OAuth flow again.", http.StatusBadRequest)
 		return
 	}
+	orgID := binding.orgID
+	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
 	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
 	defer cancel()
 
-	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
-		http.Error(w, "Failed to exchange authorization code: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to exchange authorization code", http.StatusBadRequest)
 		return
 	}
 
 	// Try to create an API key from the OAuth access token
 	// Team/Enterprise users get org:create_api_key scope and can create API keys
 	// Pro/Max users don't have this scope and will use OAuth tokens directly
-	apiKey, err := providers.CreateAPIKeyFromOAuth(ctx, tokens.AccessToken)
+	apiKey, err := createAPIKeyFromOAuth(ctx, tokens.AccessToken)
 	if err != nil {
 		// Check if it's a permission error (Pro/Max users)
 		if strings.Contains(err.Error(), "org:create_api_key") || strings.Contains(err.Error(), "403") {
@@ -2953,7 +4442,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 			// This is fine for Pro/Max users - they'll use OAuth tokens
 		} else {
 			log.Error().Err(err).Msg("Failed to create API key from OAuth token")
-			http.Error(w, "Failed to create API key: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Failed to create API key", http.StatusBadRequest)
 			return
 		}
 	}
@@ -2963,7 +4452,12 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(oauthCtx)
+	if persistence == nil {
+		http.Error(w, "Tenant persistence unavailable", http.StatusInternalServerError)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -2973,7 +4467,6 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Update settings
-	settings.Provider = config.AIProviderAnthropic
 	settings.AuthMethod = config.AuthMethodOAuth
 	settings.OAuthAccessToken = tokens.AccessToken
 	settings.OAuthRefreshToken = tokens.RefreshToken
@@ -2982,22 +4475,24 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 
 	// If we got an API key, use it; otherwise use OAuth tokens directly
 	if apiKey != "" {
-		settings.APIKey = apiKey
+		settings.AnthropicAPIKey = apiKey
 	} else {
 		// Pro/Max users: clear any old API key, will use OAuth client
 		settings.ClearAPIKey()
 	}
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save OAuth tokens")
 		http.Error(w, "Failed to save OAuth credentials", http.StatusInternalServerError)
 		return
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	if svc := h.GetAIService(oauthCtx); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth authentication successful")
@@ -3032,8 +4527,8 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 			Str("error", errParam).
 			Str("description", errDesc).
 			Msg("OAuth authorization failed")
-		// Redirect to settings page with error
-		http.Redirect(w, r, "/settings?ai_oauth_error="+errParam, http.StatusTemporaryRedirect)
+		// Redirect to settings page with error (URL-encode to prevent injection)
+		http.Redirect(w, r, "/settings?ai_oauth_error="+url.QueryEscape(errParam), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -3043,25 +4538,22 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Look up session
-	oauthSessionsMu.Lock()
-	session, ok := oauthSessions[state]
-	if ok {
-		delete(oauthSessions, state) // One-time use
-	}
-	oauthSessionsMu.Unlock()
+	// Consume one-time OAuth session and enforce TTL.
+	binding, ok := consumeOAuthSession(state)
 
 	if !ok {
 		log.Error().Str("state", state).Msg("OAuth callback with unknown state")
 		http.Redirect(w, r, "/settings?ai_oauth_error=invalid_state", http.StatusTemporaryRedirect)
 		return
 	}
+	orgID := binding.orgID
+	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
 	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
 	defer cancel()
 
-	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
 		http.Redirect(w, r, "/settings?ai_oauth_error=token_exchange_failed", http.StatusTemporaryRedirect)
@@ -3069,7 +4561,12 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(oauthCtx)
+	if persistence == nil {
+		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -3079,7 +4576,6 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	// Update settings with OAuth tokens
-	settings.Provider = config.AIProviderAnthropic
 	settings.AuthMethod = config.AuthMethodOAuth
 	settings.OAuthAccessToken = tokens.AccessToken
 	settings.OAuthRefreshToken = tokens.RefreshToken
@@ -3089,15 +4585,17 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	settings.ClearAPIKey()
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save OAuth tokens")
 		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
 		return
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+	if svc := h.GetAIService(oauthCtx); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth authentication successful")
@@ -3119,7 +4617,13 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(r.Context())
+	if persistence == nil {
+		log.Error().Msg("No persistence available for OAuth disconnect")
+		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth disconnect")
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
@@ -3134,15 +4638,17 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	settings.AuthMethod = config.AuthMethodAPIKey
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save settings after OAuth disconnect")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
 	// Reload the AI service
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
-		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth disconnect")
+	if svc := h.GetAIService(r.Context()); svc != nil {
+		if err := svc.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth disconnect")
+		}
 	}
 
 	log.Info().Msg("Claude OAuth disconnected")
@@ -3172,6 +4678,10 @@ type PatrolStatusResponse struct {
 	FixedCount       int        `json:"fixed_count"` // Number of issues auto-fixed by Patrol
 	BlockedReason    string     `json:"blocked_reason,omitempty"`
 	BlockedAt        *time.Time `json:"blocked_at,omitempty"`
+	// Quickstart credit info for Patrol quickstart mode
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`
+	UsingQuickstart            bool `json:"using_quickstart"`
 	// License status for Pro feature gating
 	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
 	LicenseStatus   string `json:"license_status"`   // "active", "expired", "grace_period", "none"
@@ -3184,6 +4694,18 @@ type PatrolStatusResponse struct {
 	} `json:"summary"`
 }
 
+func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolService {
+	aiService := h.GetAIService(ctx)
+	if aiService == nil {
+		return nil
+	}
+	return aiService.GetPatrolService()
+}
+
+func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
+	writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+}
+
 // HandleGetPatrolStatus returns the current patrol status (GET /api/ai/patrol/status)
 func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -3191,13 +4713,37 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		// Service not initialized (e.g. no persistence/config yet). Return safe defaults.
+		response := PatrolStatusResponse{
+			Running:         false,
+			Enabled:         false,
+			Healthy:         true,
+			LicenseRequired: true,
+			LicenseStatus:   "none",
+			UpgradeURL:      upgradeURLForFeatureFromLicensing(featureAIAutoFixValue),
+		}
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol status response (no AI service)")
+		}
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		// Patrol not initialized
+		licenseStatus, _ := aiService.GetLicenseState()
+		hasAutoFixFeature := aiService.HasLicenseFeature(featureAIAutoFixValue)
 		response := PatrolStatusResponse{
-			Running: false,
-			Enabled: false,
-			Healthy: true,
+			Running:         false,
+			Enabled:         false,
+			Healthy:         true,
+			LicenseRequired: !hasAutoFixFeature,
+			LicenseStatus:   licenseStatus,
+		}
+		if !hasAutoFixFeature {
+			response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response")
@@ -3210,9 +4756,9 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 
 	// Determine license status for Pro feature gating
 	// GetLicenseState returns accurate state: none, active, expired, grace_period
-	licenseStatus, _ := h.GetAIService(r.Context()).GetLicenseState()
+	licenseStatus, _ := aiService.GetLicenseState()
 	// Check for auto-fix feature - patrol itself is free, auto-fix requires Pro
-	hasAutoFixFeature := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix)
+	hasAutoFixFeature := aiService.HasLicenseFeature(featureAIAutoFixValue)
 
 	// Get fixed count from investigation orchestrator
 	fixedCount := 0
@@ -3221,24 +4767,27 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 
 	response := PatrolStatusResponse{
-		Running:          status.Running,
-		Enabled:          status.Enabled,
-		LastPatrolAt:     status.LastPatrolAt,
-		NextPatrolAt:     status.NextPatrolAt,
-		LastDurationMs:   status.LastDuration.Milliseconds(),
-		ResourcesChecked: status.ResourcesChecked,
-		FindingsCount:    status.FindingsCount,
-		ErrorCount:       status.ErrorCount,
-		Healthy:          status.Healthy,
-		IntervalMs:       status.IntervalMs,
-		FixedCount:       fixedCount,
-		BlockedReason:    status.BlockedReason,
-		BlockedAt:        status.BlockedAt,
-		LicenseRequired:  !hasAutoFixFeature,
-		LicenseStatus:    licenseStatus,
+		Running:                    status.Running,
+		Enabled:                    status.Enabled,
+		LastPatrolAt:               status.LastPatrolAt,
+		NextPatrolAt:               status.NextPatrolAt,
+		LastDurationMs:             status.LastDuration.Milliseconds(),
+		ResourcesChecked:           status.ResourcesChecked,
+		FindingsCount:              status.FindingsCount,
+		ErrorCount:                 status.ErrorCount,
+		Healthy:                    status.Healthy,
+		IntervalMs:                 status.IntervalMs,
+		FixedCount:                 fixedCount,
+		BlockedReason:              status.BlockedReason,
+		BlockedAt:                  status.BlockedAt,
+		QuickstartCreditsRemaining: status.QuickstartCreditsRemaining,
+		QuickstartCreditsTotal:     status.QuickstartCreditsTotal,
+		UsingQuickstart:            status.UsingQuickstart,
+		LicenseRequired:            !hasAutoFixFeature,
+		LicenseStatus:              licenseStatus,
 	}
 	if !hasAutoFixFeature {
-		response.UpgradeURL = "https://pulserelay.pro/"
+		response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning
@@ -3264,9 +4813,20 @@ func (h *AISettingsHandler) HandleGetIntelligence(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		response := map[string]interface{}{
+			"error": "Pulse Patrol service not available",
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write intelligence response")
+		}
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
-		// Return empty intelligence when not initialized
 		response := map[string]interface{}{
 			"error": "Pulse Patrol service not available",
 		}
@@ -3293,6 +4853,10 @@ func (h *AISettingsHandler) HandleGetIntelligence(w http.ResponseWriter, r *http
 	// Check for resource_id query parameter for resource-specific intelligence
 	resourceID := r.URL.Query().Get("resource_id")
 	if resourceID != "" {
+		if len(resourceID) > 500 {
+			http.Error(w, "resource_id too long", http.StatusBadRequest)
+			return
+		}
 		// Return resource-specific intelligence
 		resourceIntel := intel.GetResourceIntelligence(resourceID)
 		if err := utils.WriteJSONResponse(w, resourceIntel); err != nil {
@@ -3315,9 +4879,15 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writePatrolServiceUnavailableResponse(w)
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3326,6 +4896,8 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	// Disable proxy buffering (e.g. nginx) so events reach clients promptly.
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -3335,20 +4907,47 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 
 	// Send an SSE comment to flush headers immediately so clients get the
 	// HTTP 200 response right away instead of blocking until the first event.
-	fmt.Fprintf(w, ": connected\n\n")
+	if _, err := fmt.Fprintf(w, ": connected\n\n"); err != nil {
+		log.Debug().Err(err).Msg("Patrol stream: failed to write initial SSE comment")
+		return
+	}
 	flusher.Flush()
 
 	// Subscribe to patrol stream
 	// Note: SubscribeToStream already sends the current buffered output to the channel
-	ch := patrol.SubscribeToStream()
+	lastID := int64(0)
+	if raw := strings.TrimSpace(r.Header.Get("Last-Event-ID")); raw != "" {
+		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v > 0 {
+			lastID = v
+		}
+	}
+	// EventSource doesn't allow setting headers manually. Accept a query param fallback
+	// so clients can resume even when they create a new EventSource instance.
+	if lastID == 0 {
+		if raw := strings.TrimSpace(r.URL.Query().Get("last_event_id")); raw != "" {
+			if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v > 0 {
+				lastID = v
+			}
+		}
+	}
+	ch := patrol.SubscribeToStreamFrom(lastID)
 	defer patrol.UnsubscribeFromStream(ch)
 
 	// Stream events until client disconnects
 	ctx := r.Context()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-heartbeat.C:
+			// SSE comment heartbeat keeps intermediaries from timing out the stream.
+			if _, err := fmt.Fprintf(w, ": ping %d\n\n", time.Now().Unix()); err != nil {
+				log.Debug().Err(err).Msg("Patrol stream: failed to write heartbeat")
+				return
+			}
+			flusher.Flush()
 		case event, ok := <-ch:
 			if !ok {
 				return
@@ -3357,7 +4956,17 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 			if err != nil {
 				continue
 			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			// Best-effort event id for Last-Event-ID support.
+			if event.Seq != 0 {
+				if _, err := fmt.Fprintf(w, "id: %d\n", event.Seq); err != nil {
+					log.Debug().Err(err).Msg("Patrol stream: failed to write event id")
+					return
+				}
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				log.Debug().Err(err).Msg("Patrol stream: failed to write event data")
+				return
+			}
 			flusher.Flush()
 		}
 	}
@@ -3370,7 +4979,16 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		// Return empty findings
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol findings response (no AI service)")
+		}
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		// Return empty findings
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
@@ -3386,6 +5004,13 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 		findings = patrol.GetFindingsForResource(resourceID)
 	} else {
 		findings = patrol.GetAllFindings()
+	}
+
+	// Optional limit parameter (for relay proxy clients with body size constraints)
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(findings) {
+			findings = findings[:limit]
+		}
 	}
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
@@ -3405,10 +5030,29 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
-	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writePatrolServiceUnavailableResponse(w)
 		return
+	}
+
+	patrol := aiService.GetPatrolService()
+	if patrol == nil {
+		writePatrolServiceUnavailableResponse(w)
+		return
+	}
+
+	// Cadence cap: Community tier is limited to 1 patrol run per hour.
+	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
+	if !aiService.HasLicenseFeature(featureAIAutoFixValue) {
+		if last := patrol.GetStatus().LastPatrolAt; last != nil {
+			if since := time.Since(*last); since < 1*time.Hour {
+				remaining := (1*time.Hour - since).Round(time.Minute)
+				writeErrorResponse(w, http.StatusTooManyRequests, "patrol_rate_limited",
+					fmt.Sprintf("Community tier is limited to 1 patrol run per hour. Try again in %s.", remaining), nil)
+				return
+			}
+		}
 	}
 
 	// Trigger patrol asynchronously
@@ -3438,9 +5082,9 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3475,7 +5119,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -3507,8 +5151,8 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -3546,9 +5190,9 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3595,7 +5239,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -3627,8 +5271,8 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -3667,9 +5311,9 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3708,13 +5352,13 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	}
 
 	// Mirror into unified store for consistent UI state
-	if store := h.GetUnifiedStore(); store != nil {
+	if store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); store != nil {
 		store.Resolve(req.FindingID)
 	}
 
 	// Record to learning store - manual resolve = user fixed the issue
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   finding.Key,
 			ResourceID:   resourceID,
@@ -3751,9 +5395,9 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3780,7 +5424,7 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 
 	// Mirror the note to the unified store immediately so it's visible
 	// without waiting for the next patrol sync cycle
-	if unifiedStore := h.GetUnifiedStore(); unifiedStore != nil {
+	if unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); unifiedStore != nil {
 		unifiedStore.SetUserNote(req.FindingID, req.Note)
 	}
 
@@ -3807,9 +5451,9 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -3862,7 +5506,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 
 	// If not in patrol findings, check the unified store (for threshold alerts)
-	unifiedStore := h.GetUnifiedStore()
+	unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if !foundInPatrol && unifiedStore != nil {
 		unifiedFinding := unifiedStore.Get(req.FindingID)
 		if unifiedFinding != nil {
@@ -3907,8 +5551,8 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 
 	// Record to learning store
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   findingKey,
 			ResourceID:   resourceID,
@@ -3936,64 +5580,6 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 }
 
-// HandleUndismissFinding reverts a dismissed/suppressed finding back to active state (POST /api/ai/patrol/undismiss)
-func (h *AISettingsHandler) HandleUndismissFinding(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
-	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var req struct {
-		FindingID string `json:"finding_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.FindingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
-		return
-	}
-
-	findings := patrol.GetFindings()
-	ok := findings.Undismiss(req.FindingID)
-
-	if store := h.GetUnifiedStore(); store != nil {
-		if store.Undismiss(req.FindingID) {
-			ok = true
-		}
-	}
-
-	if !ok {
-		http.Error(w, "Finding not found or not dismissed", http.StatusNotFound)
-		return
-	}
-
-	log.Info().
-		Str("finding_id", req.FindingID).
-		Msg("AI Patrol: Finding undismissed by user")
-
-	response := map[string]interface{}{
-		"success": true,
-		"message": "Finding undismissed",
-	}
-
-	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to write undismiss response")
-	}
-}
-
 // HandleSuppressFinding permanently suppresses similar findings for a resource (POST /api/ai/patrol/suppress)
 // The LLM will be told never to re-raise findings of this type for this resource
 func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http.Request) {
@@ -4007,9 +5593,9 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -4047,13 +5633,13 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	}
 
 	// Mirror into unified store for consistent UI state
-	if store := h.GetUnifiedStore(); store != nil {
+	if store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); store != nil {
 		store.Dismiss(req.FindingID, "not_an_issue", "Permanently suppressed by user")
 	}
 
 	// Record to learning store - suppress is a strong "not an issue" signal
-	if h.learningStore != nil {
-		h.learningStore.RecordFeedback(learning.FeedbackRecord{
+	if learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context())); learningStore != nil {
+		learningStore.RecordFeedback(learning.FeedbackRecord{
 			FindingID:    req.FindingID,
 			FindingKey:   finding.Key,
 			ResourceID:   resourceID,
@@ -4099,9 +5685,9 @@ func (h *AISettingsHandler) HandleClearAllFindings(w http.ResponseWriter, r *htt
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -4133,7 +5719,7 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		// Return empty history
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
@@ -4164,7 +5750,16 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		// Return empty history
+		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
+			log.Error().Err(err).Msg("Failed to write patrol run history response (no AI service)")
+		}
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		// Return empty history
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
@@ -4173,10 +5768,11 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		return
 	}
 
-	// Parse optional limit query parameter (default: 50)
-	limit := 50
+	// Parse optional limit query parameter (default: 30)
+	limit := 30
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := fmt.Sscanf(limitStr, "%d", &limit); err == nil && l > 0 {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
 			if limit > 100 {
 				limit = 100 // Cap at MaxPatrolRunHistory
 			}
@@ -4199,6 +5795,73 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	}
 }
 
+// HandleGetPatrolRun returns a single patrol run by ID (GET /api/ai/patrol/runs/{id})
+func (h *AISettingsHandler) HandleGetPatrolRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	const prefix = "/api/ai/patrol/runs/"
+	if !strings.HasPrefix(r.URL.Path, prefix) {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	runID := strings.TrimPrefix(r.URL.Path, prefix)
+	if runID == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+	if decoded, err := url.PathUnescape(runID); err == nil {
+		runID = decoded
+	}
+	if strings.TrimSpace(runID) == "" {
+		http.Error(w, "run_id is required", http.StatusBadRequest)
+		return
+	}
+
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(
+			w,
+			http.StatusServiceUnavailable,
+			"service_unavailable",
+			"Pulse Patrol service not available",
+			nil,
+		)
+		return
+	}
+
+	patrol := aiService.GetPatrolService()
+	if patrol == nil {
+		writeErrorResponse(
+			w,
+			http.StatusServiceUnavailable,
+			"service_unavailable",
+			"Pulse Patrol service not available",
+			nil,
+		)
+		return
+	}
+
+	run, ok := patrol.GetRunByID(runID)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Patrol run not found", nil)
+		return
+	}
+
+	// By default, omit full tool call arrays to keep payloads lean.
+	// Use ?include=tool_calls to get the full array.
+	if r.URL.Query().Get("include") != "tool_calls" {
+		run.ToolCalls = nil
+	}
+
+	if err := utils.WriteJSONResponse(w, run); err != nil {
+		log.Error().Err(err).Msg("Failed to write patrol run response")
+	}
+}
+
 // HandleGetAICostSummary returns AI usage rollups (GET /api/ai/cost/summary?days=N).
 func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -4209,7 +5872,9 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 	// Parse optional days query parameter (default: 30, max: 365)
 	days := 30
 	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
-		if _, err := fmt.Sscanf(daysStr, "%d", &days); err == nil && days > 0 {
+		var parsed int
+		if _, err := fmt.Sscanf(daysStr, "%d", &parsed); err == nil && parsed > 0 {
+			days = parsed
 			if days > 365 {
 				days = 365
 			}
@@ -4220,13 +5885,7 @@ func (h *AISettingsHandler) HandleGetAICostSummary(w http.ResponseWriter, r *htt
 	if h.GetAIService(r.Context()) != nil {
 		summary = h.GetAIService(r.Context()).GetCostSummary(days)
 	} else {
-		summary = cost.Summary{
-			Days:           days,
-			PricingAsOf:    cost.PricingAsOf(),
-			ProviderModels: []cost.ProviderModelSummary{},
-			DailyTotals:    []cost.DailySummary{},
-			Totals:         cost.ProviderModelSummary{Provider: "all"},
-		}
+		summary = cost.EmptySummary(days, cost.DefaultMaxDays, days, false)
 	}
 
 	if err := utils.WriteJSONResponse(w, summary); err != nil {
@@ -4240,6 +5899,9 @@ func (h *AISettingsHandler) HandleResetAICostHistory(w http.ResponseWriter, r *h
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Limit body size — this endpoint takes no body but cap it to prevent abuse.
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
 
 	if h.GetAIService(r.Context()) == nil {
 		http.Error(w, "Pulse Assistant service unavailable", http.StatusServiceUnavailable)
@@ -4396,7 +6058,7 @@ func (h *AISettingsHandler) HandleGetSuppressionRules(w http.ResponseWriter, r *
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
 			log.Error().Err(err).Msg("Failed to write suppression rules response")
@@ -4424,9 +6086,9 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -4501,9 +6163,9 @@ func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writePatrolServiceUnavailableResponse(w)
 		return
 	}
 
@@ -4547,7 +6209,7 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 		return
 	}
 
-	patrol := h.GetAIService(r.Context()).GetPatrolService()
+	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, []interface{}{}); err != nil {
 			log.Error().Err(err).Msg("Failed to write dismissed findings response")
@@ -4563,240 +6225,16 @@ func (h *AISettingsHandler) HandleGetDismissedFindings(w http.ResponseWriter, r 
 	}
 }
 
-// ============================================
-// AI Chat Sessions API
-// ============================================
-
-// HandleListAIChatSessions lists all chat sessions for the current user (GET /api/ai/chat/sessions)
-func (h *AISettingsHandler) HandleListAIChatSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Get username from auth context
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	sessions, err := h.getPersistence(r.Context()).GetAIChatSessionsForUser(username)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	// Return summary (without full messages) for list view
-	type sessionSummary struct {
-		ID           string    `json:"id"`
-		Title        string    `json:"title"`
-		MessageCount int       `json:"message_count"`
-		CreatedAt    time.Time `json:"created_at"`
-		UpdatedAt    time.Time `json:"updated_at"`
-	}
-
-	summaries := make([]sessionSummary, 0, len(sessions))
-	for _, s := range sessions {
-		summaries = append(summaries, sessionSummary{
-			ID:           s.ID,
-			Title:        s.Title,
-			MessageCount: len(s.Messages),
-			CreatedAt:    s.CreatedAt,
-			UpdatedAt:    s.UpdatedAt,
-		})
-	}
-
-	if err := utils.WriteJSONResponse(w, summaries); err != nil {
-		log.Error().Err(err).Msg("Failed to write chat sessions response")
-	}
-}
-
-// HandleGetAIChatSession returns a specific chat session (GET /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleGetAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	sessionsData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	session, exists := sessionsData.Sessions[sessionID]
-	if !exists {
-		http.Error(w, "Session not found", http.StatusNotFound)
-		return
-	}
-
-	// Check ownership (allow access if single-user or username matches)
-	if session.Username != "" && session.Username != username {
-		http.Error(w, "Access denied", http.StatusForbidden)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, session); err != nil {
-		log.Error().Err(err).Msg("Failed to write chat session response")
-	}
-}
-
-// HandleSaveAIChatSession creates or updates a chat session (PUT /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleSaveAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	// Parse request body
-	var session config.AIChatSession
-	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Ensure session ID matches URL
-	session.ID = sessionID
-
-	// Check ownership if session exists
-	existingData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	if existing, exists := existingData.Sessions[sessionID]; exists {
-		// Check ownership
-		if existing.Username != "" && existing.Username != username {
-			http.Error(w, "Access denied", http.StatusForbidden)
-			return
-		}
-		// Preserve original creation time and username
-		session.CreatedAt = existing.CreatedAt
-		session.Username = existing.Username
-	} else {
-		// New session - set creation time and username
-		session.CreatedAt = time.Now()
-		session.Username = username
-	}
-
-	// Auto-generate title from first user message if not set
-	if session.Title == "" && len(session.Messages) > 0 {
-		for _, msg := range session.Messages {
-			if msg.Role == "user" {
-				title := msg.Content
-				if len(title) > 50 {
-					title = title[:47] + "..."
-				}
-				session.Title = title
-				break
-			}
-		}
-	}
-	if session.Title == "" {
-		session.Title = "New conversation"
-	}
-
-	if err := h.getPersistence(r.Context()).SaveAIChatSession(&session); err != nil {
-		log.Error().Err(err).Msg("Failed to save chat session")
-		http.Error(w, "Failed to save chat session", http.StatusInternalServerError)
-		return
-	}
-
-	log.Debug().
-		Str("session_id", sessionID).
-		Str("username", username).
-		Int("messages", len(session.Messages)).
-		Msg("Chat session saved")
-
-	if err := utils.WriteJSONResponse(w, session); err != nil {
-		log.Error().Err(err).Msg("Failed to write save chat session response")
-	}
-}
-
-// HandleDeleteAIChatSession deletes a chat session (DELETE /api/ai/chat/sessions/{id})
-func (h *AISettingsHandler) HandleDeleteAIChatSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Extract session ID from URL
-	sessionID := strings.TrimPrefix(r.URL.Path, "/api/ai/chat/sessions/")
-	if sessionID == "" {
-		http.Error(w, "Session ID required", http.StatusBadRequest)
-		return
-	}
-
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-
-	// Check ownership
-	existingData, err := h.getPersistence(r.Context()).LoadAIChatSessions()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load chat sessions")
-		http.Error(w, "Failed to load chat sessions", http.StatusInternalServerError)
-		return
-	}
-
-	if existing, exists := existingData.Sessions[sessionID]; exists {
-		if existing.Username != "" && existing.Username != username {
-			http.Error(w, "Access denied", http.StatusForbidden)
-			return
-		}
-	}
-
-	if err := h.getPersistence(r.Context()).DeleteAIChatSession(sessionID); err != nil {
-		log.Error().Err(err).Msg("Failed to delete chat session")
-		http.Error(w, "Failed to delete chat session", http.StatusInternalServerError)
-		return
-	}
-
-	log.Info().
-		Str("session_id", sessionID).
-		Str("username", username).
-		Msg("Chat session deleted")
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // getAuthUsername extracts the username from the current auth context
 func getAuthUsername(cfg *config.Config, r *http.Request) string {
+	if token := getAPITokenRecordFromRequest(r); token != nil {
+		if username := apiTokenAuthenticatedUser(token); username != "" {
+			return username
+		}
+	}
+
 	// Check OIDC session first
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if username := GetSessionUsername(cookie.Value); username != "" {
 			return username
 		}
@@ -4822,47 +6260,8 @@ func getAuthUsername(cfg *config.Config, r *http.Request) string {
 // Approval Workflow Handlers (Pro Feature)
 // ============================================================================
 
-// HandleListApprovals returns all pending approval requests.
-func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check license
-	licenseState, hasFeatures := h.GetAIService(r.Context()).GetLicenseState()
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		log.Warn().
-			Str("license_state", licenseState).
-			Bool("license_features_available", hasFeatures).
-			Str("feature", license.FeatureAIAutoFix).
-			Str("data_path", h.getConfig(r.Context()).DataPath).
-			Msg("AI Auto-Fix feature not available for approvals")
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "Pulse Patrol Auto-Fix feature requires Pro license", map[string]string{
-			"license_state":              licenseState,
-			"license_features_available": strconv.FormatBool(hasFeatures),
-			"feature":                    license.FeatureAIAutoFix,
-		})
-		return
-	}
-
-	store := approval.GetStore()
-	if store == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
-		return
-	}
-
-	approvals := store.GetPendingApprovals()
-	if approvals == nil {
-		approvals = []*approval.ApprovalRequest{}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"approvals": approvals,
-		"stats":     store.GetStats(),
-	})
-}
+// HandleListApprovals has been moved to enterprise.
+// The route now delegates to aiAutoFixEndpoints.HandleListApprovals.
 
 // HandleGetApproval returns a specific approval request.
 func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Request) {
@@ -4872,11 +6271,11 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 	}
 
 	// Extract ID from path: /api/ai/approvals/{id}
-	id := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
-	id = strings.TrimSuffix(id, "/")
-	id = strings.Split(id, "/")[0] // Handle /approve or /deny suffixes
+	approvalID := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	approvalID = strings.TrimSuffix(approvalID, "/")
+	approvalID = strings.Split(approvalID, "/")[0] // Handle /approve or /deny suffixes
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -4887,8 +6286,9 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	req, ok := store.GetApproval(id)
-	if !ok {
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	req, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(req, orgID) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
 	}
@@ -4904,23 +6304,6 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Check license
-	licenseState, hasFeatures := h.GetAIService(r.Context()).GetLicenseState()
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		log.Warn().
-			Str("license_state", licenseState).
-			Bool("license_features_available", hasFeatures).
-			Str("feature", license.FeatureAIAutoFix).
-			Str("data_path", h.getConfig(r.Context()).DataPath).
-			Msg("AI Auto-Fix feature not available for approvals")
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "Pulse Patrol Auto-Fix feature requires Pro license", map[string]string{
-			"license_state":              licenseState,
-			"license_features_available": strconv.FormatBool(hasFeatures),
-			"feature":                    license.FeatureAIAutoFix,
-		})
-		return
-	}
-
 	// SECURITY: Validating command execution scope
 	if !ensureScope(w, r, config.ScopeAIExecute) {
 		return
@@ -4929,9 +6312,9 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	// Extract ID from path: /api/ai/approvals/{id}/approve
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/approve")
-	id := strings.TrimSuffix(path, "/")
+	approvalID := strings.TrimSuffix(path, "/")
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -4941,13 +6324,30 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
 		return
 	}
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	existingReq, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
+		return
+	}
+
+	// Investigation fix approvals are gated by the AI auto-fix extension point.
+	// The free adapter returns 402; the enterprise adapter executes the fix.
+	if existingReq.ToolID == "investigation_fix" {
+		if h.aiAutoFixEndpoints != nil {
+			h.aiAutoFixEndpoints.HandleApproveInvestigationFix(w, r)
+		} else {
+			WriteLicenseRequired(w, featureAIAutoFixValue, "Pulse Patrol Auto-Fix feature requires Pulse Pro")
+		}
+		return
+	}
 
 	username := getAuthUsername(h.getConfig(r.Context()), r)
 	if username == "" {
 		username = "anonymous"
 	}
 
-	req, err := store.Approve(id, username)
+	req, err := store.Approve(approvalID, username)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "approval_failed", err.Error(), nil)
 		return
@@ -4956,12 +6356,6 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	// Log audit event
 	LogAuditEvent("ai_command_approved", username, GetClientIP(r), r.URL.Path, true,
 		fmt.Sprintf("Approved command: %s", truncateForLog(req.Command, 100)))
-
-	// For investigation fixes, execute the command directly since there's no active agentic loop
-	if req.ToolID == "investigation_fix" {
-		h.executeInvestigationFix(w, r, req)
-		return
-	}
 
 	// For chat sidebar approvals, the agentic loop will detect approval and execute
 	response := map[string]interface{}{
@@ -4975,361 +6369,15 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(response)
 }
 
-// executeInvestigationFix executes an approved investigation fix directly.
-// This is needed because Patrol investigations complete before approval, so there's no
-// active agentic loop to execute the command when approved.
-func (h *AISettingsHandler) executeInvestigationFix(w http.ResponseWriter, r *http.Request, req *approval.ApprovalRequest) {
-	ctx := r.Context()
-	findingID := req.TargetID
+// HandleApproveAndExecuteInvestigationFix has been moved to enterprise.
+// The route now delegates to aiAutoFixEndpoints.HandleApproveInvestigationFix.
 
-	// Get the investigation store for this org
-	orgID := GetOrgID(ctx)
-	h.investigationMu.RLock()
-	invStore := h.investigationStores[orgID]
-	h.investigationMu.RUnlock()
+// executeInvestigationFix has been moved to enterprise.
 
-	if invStore == nil {
-		log.Warn().Str("orgID", orgID).Msg("Investigation store not found for org")
-		writeErrorResponse(w, http.StatusServiceUnavailable, "no_investigation_store", "Investigation store not available", nil)
-		return
-	}
-
-	// Get the latest investigation for this finding to get the target host
-	session := invStore.GetLatestByFinding(findingID)
-	if session == nil {
-		log.Warn().Str("findingID", findingID).Msg("No investigation found for finding")
-		writeErrorResponse(w, http.StatusNotFound, "no_investigation", "No investigation found for this finding", nil)
-		return
-	}
-
-	// Get target host from the proposed fix and clean it up
-	var targetHost string
-	if session.ProposedFix != nil {
-		targetHost = h.cleanTargetHost(session.ProposedFix.TargetHost)
-	}
-
-	var output string
-	var exitCode int
-	var execErr string
-	var err error
-
-	// Check if this is an MCP tool call or a shell command
-	if h.isMCPToolCall(req.Command) {
-		// Execute via chat service tool executor
-		// Pass the approval ID so the executor knows this is pre-approved
-		output, exitCode, err = h.executeMCPToolFix(ctx, req.Command, req.ID)
-		if err != nil {
-			execErr = err.Error()
-			log.Error().Err(err).Str("findingID", findingID).Str("command", req.Command).Msg("Failed to execute MCP tool fix")
-		}
-	} else {
-		// Execute via agent server (shell command)
-		if h.agentServer == nil {
-			log.Warn().Msg("No agent server available for fix execution")
-			writeErrorResponse(w, http.StatusServiceUnavailable, "no_agent_server", "No agent server available", nil)
-			return
-		}
-
-		// Find the appropriate agent
-		agentID := h.findAgentForTarget(targetHost)
-		if agentID == "" {
-			log.Warn().Str("targetHost", targetHost).Msg("No agent found for target host")
-			writeErrorResponse(w, http.StatusServiceUnavailable, "no_agent", "No agent available for target host", nil)
-			return
-		}
-
-		log.Info().
-			Str("findingID", findingID).
-			Str("command", req.Command).
-			Str("targetHost", targetHost).
-			Str("agentID", agentID).
-			Msg("Executing approved investigation fix via agent")
-
-		// Execute the command
-		var result *agentexec.CommandResultPayload
-		result, err = h.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-			Command:    req.Command,
-			TargetType: "host",
-			TargetID:   "",
-		})
-
-		if err != nil {
-			execErr = err.Error()
-			log.Error().Err(err).Str("findingID", findingID).Msg("Failed to execute investigation fix")
-		} else {
-			output = result.Stdout
-			if result.Stderr != "" {
-				output += "\n" + result.Stderr
-			}
-			exitCode = result.ExitCode
-		}
-	}
-
-	// Update the investigation outcome
-	newOutcome := investigation.OutcomeFixExecuted
-	if err != nil || exitCode != 0 {
-		newOutcome = investigation.OutcomeFixFailed
-	}
-
-	invStore.Complete(session.ID, newOutcome, fmt.Sprintf("Fix executed with exit code %d", exitCode), session.ProposedFix)
-
-	// Update the finding outcome
-	h.updateFindingOutcome(ctx, orgID, findingID, string(newOutcome))
-
-	// Log audit event for execution
-	success := err == nil && exitCode == 0
-	LogAuditEvent("ai_fix_executed", getAuthUsername(h.getConfig(ctx), r), GetClientIP(r), r.URL.Path, success,
-		fmt.Sprintf("Executed fix for finding %s: %s (exit code: %d)", findingID, truncateForLog(req.Command, 100), exitCode))
-
-	// Launch background verification if fix executed successfully
-	if success {
-		aiSvc := h.GetAIService(ctx)
-		go func() {
-			time.Sleep(30 * time.Second)
-
-			patrol := aiSvc.GetPatrolService()
-			if patrol == nil {
-				log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: no patrol service")
-				return
-			}
-
-			finding := patrol.GetFindings().Get(findingID)
-			if finding == nil {
-				log.Warn().Str("findingID", findingID).Msg("Post-fix verification skipped: finding not found")
-				return
-			}
-
-			bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-
-			verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
-			if verifyErr != nil {
-				log.Error().Err(verifyErr).Str("findingID", findingID).Msg("Post-fix verification failed with error")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, fmt.Sprintf("Fix executed but verification error: %v", verifyErr), session.ProposedFix)
-			} else if !verified {
-				log.Warn().Str("findingID", findingID).Msg("Post-fix verification: issue persists")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerificationFailed, "Fix executed but issue persists after verification.", session.ProposedFix)
-			} else {
-				log.Info().Str("findingID", findingID).Msg("Post-fix verification: issue resolved")
-				invStore.Complete(session.ID, investigation.OutcomeFixVerified, "Fix executed and verified - issue resolved.", session.ProposedFix)
-			}
-			h.updateFindingOutcome(bgCtx, orgID, findingID, string(invStore.GetLatestByFinding(findingID).Outcome))
-		}()
-	}
-
-	// Return response
-	response := map[string]interface{}{
-		"approved":   true,
-		"executed":   true,
-		"success":    success,
-		"output":     output,
-		"exit_code":  exitCode,
-		"error":      execErr,
-		"finding_id": findingID,
-		"message":    "Fix executed.",
-	}
-
-	if !success {
-		response["message"] = fmt.Sprintf("Fix execution failed (exit code %d)", exitCode)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// isMCPToolCall checks if a command is an MCP tool call (vs a shell command)
-func (h *AISettingsHandler) isMCPToolCall(command string) bool {
-	// MCP tool calls look like: pulse_control_guest(...) or default_api:pulse_control_guest(...)
-	return strings.HasPrefix(command, "pulse_") ||
-		strings.HasPrefix(command, "default_api:") ||
-		strings.Contains(command, "pulse_control_guest") ||
-		strings.Contains(command, "pulse_run_command") ||
-		strings.Contains(command, "pulse_get_resource")
-}
-
-// cleanTargetHost extracts just the hostname from a target host string
-// Handles cases like "delly (The container's host is 'delly')" -> "delly"
-func (h *AISettingsHandler) cleanTargetHost(targetHost string) string {
-	if targetHost == "" {
-		return ""
-	}
-	// If it contains a space and parenthesis, extract the first word
-	if idx := strings.Index(targetHost, " ("); idx > 0 {
-		return strings.TrimSpace(targetHost[:idx])
-	}
-	// If it contains a space, take the first word
-	if idx := strings.Index(targetHost, " "); idx > 0 {
-		return strings.TrimSpace(targetHost[:idx])
-	}
-	return strings.TrimSpace(targetHost)
-}
-
-// executeMCPToolFix executes an MCP tool call via the chat service
-// The approvalID is passed to mark this execution as pre-approved
-func (h *AISettingsHandler) executeMCPToolFix(ctx context.Context, command string, approvalID string) (output string, exitCode int, err error) {
-	// Get the chat service
-	if h.chatHandler == nil {
-		return "", -1, fmt.Errorf("chat handler not available")
-	}
-
-	chatSvc := h.chatHandler.GetService(ctx)
-	if chatSvc == nil {
-		return "", -1, fmt.Errorf("chat service not available")
-	}
-
-	// Cast to *chat.Service to access ExecuteMCPTool
-	chatService, ok := chatSvc.(*chat.Service)
-	if !ok {
-		return "", -1, fmt.Errorf("chat service type mismatch")
-	}
-
-	// Parse the tool call
-	toolName, args, parseErr := h.parseMCPToolCall(command)
-	if parseErr != nil {
-		return "", -1, fmt.Errorf("failed to parse tool call: %w", parseErr)
-	}
-
-	// Add the approval ID to mark this as pre-approved
-	// The tool executor will check this and skip the approval flow
-	if approvalID != "" {
-		args["_approval_id"] = approvalID
-	}
-
-	log.Info().
-		Str("tool", toolName).
-		Str("approvalID", approvalID).
-		Interface("args", args).
-		Msg("Executing MCP tool fix with pre-approval")
-
-	// Execute the tool
-	result, toolErr := chatService.ExecuteMCPTool(ctx, toolName, args)
-	if toolErr != nil {
-		return result, 1, toolErr // Return partial result if any
-	}
-
-	return result, 0, nil
-}
-
-// parseMCPToolCall parses an MCP tool call string into tool name and arguments
-// Handles formats like:
-// - pulse_control_guest(action='start', guest_id='102')
-// - default_api:pulse_control_guest(guest_id="102", action="start")
-func (h *AISettingsHandler) parseMCPToolCall(command string) (string, map[string]interface{}, error) {
-	// Remove default_api: prefix if present
-	command = strings.TrimPrefix(command, "default_api:")
-
-	// Find the opening parenthesis
-	openParen := strings.Index(command, "(")
-	if openParen == -1 {
-		return "", nil, fmt.Errorf("no opening parenthesis in tool call")
-	}
-
-	toolName := strings.TrimSpace(command[:openParen])
-
-	// Find the closing parenthesis
-	closeParen := strings.LastIndex(command, ")")
-	if closeParen == -1 || closeParen <= openParen {
-		return "", nil, fmt.Errorf("no closing parenthesis in tool call")
-	}
-
-	argsStr := command[openParen+1 : closeParen]
-	args := make(map[string]interface{})
-
-	if strings.TrimSpace(argsStr) == "" {
-		return toolName, args, nil
-	}
-
-	// Parse key=value pairs (handles both 'value' and "value" formats)
-	// This is a simple parser - for complex cases we might need something more robust
-	pairs := h.splitToolArgs(argsStr)
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		// Remove quotes from value
-		value = strings.Trim(value, "'\"")
-		args[key] = value
-	}
-
-	return toolName, args, nil
-}
-
-// splitToolArgs splits tool arguments respecting quoted strings
-func (h *AISettingsHandler) splitToolArgs(argsStr string) []string {
-	var result []string
-	var current strings.Builder
-	var inQuote rune
-	var escaped bool
-
-	for _, r := range argsStr {
-		if escaped {
-			current.WriteRune(r)
-			escaped = false
-			continue
-		}
-		if r == '\\' {
-			escaped = true
-			current.WriteRune(r)
-			continue
-		}
-		if inQuote != 0 {
-			current.WriteRune(r)
-			if r == inQuote {
-				inQuote = 0
-			}
-			continue
-		}
-		if r == '\'' || r == '"' {
-			inQuote = r
-			current.WriteRune(r)
-			continue
-		}
-		if r == ',' {
-			if s := strings.TrimSpace(current.String()); s != "" {
-				result = append(result, s)
-			}
-			current.Reset()
-			continue
-		}
-		current.WriteRune(r)
-	}
-	if s := strings.TrimSpace(current.String()); s != "" {
-		result = append(result, s)
-	}
-	return result
-}
-
-// findAgentForTarget finds an agent that can execute commands on the target host
-func (h *AISettingsHandler) findAgentForTarget(targetHost string) string {
-	if h.agentServer == nil {
-		return ""
-	}
-
-	agents := h.agentServer.GetConnectedAgents()
-	if len(agents) == 0 {
-		return ""
-	}
-
-	// If a specific target host is requested, find that agent
-	if targetHost != "" {
-		for _, agent := range agents {
-			if agent.Hostname == targetHost || agent.AgentID == targetHost {
-				return agent.AgentID
-			}
-		}
-	}
-
-	// If only one agent is connected, use it
-	if len(agents) == 1 {
-		return agents[0].AgentID
-	}
-
-	// Multiple agents and no specific target - return empty (caller should handle)
-	return ""
-}
+// isMCPToolCall, cleanTargetHost, executeMCPToolFix, parseMCPToolCall,
+// splitToolArgs, and findAgentForTarget have been moved to
+// router_routes_ai_relay.go as package-level functions used by the
+// AIAutoFixHandlerDeps adapters.
 
 // updateFindingOutcome updates the investigation outcome on a finding
 func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, findingID, outcome string) {
@@ -5370,9 +6418,9 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 	// Extract ID from path: /api/ai/approvals/{id}/deny
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/deny")
-	id := strings.TrimSuffix(path, "/")
+	approvalID := strings.TrimSuffix(path, "/")
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -5382,12 +6430,20 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		Reason string `json:"reason"`
 	}
 	if r.Body != nil {
-		json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			log.Warn().Err(err).Msg("Failed to decode deny request body")
+		}
 	}
 
 	store := approval.GetStore()
 	if store == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	existingReq, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
 	}
 
@@ -5396,7 +6452,7 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		username = "anonymous"
 	}
 
-	req, err := store.Deny(id, username, body.Reason)
+	req, err := store.Deny(approvalID, username, body.Reason)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "denial_failed", err.Error(), nil)
 		return
@@ -5448,6 +6504,10 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+		return
+	}
 	cfg := aiService.GetConfig()
 	if cfg == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
@@ -5455,10 +6515,12 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	autonomyLevel := cfg.GetPatrolAutonomyLevel()
-	// Clamp for free tier: assisted/full require Pro (ai_autofix)
-	hasAutoFix := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
-	if !hasAutoFix && (autonomyLevel == config.PatrolAutonomyAssisted || autonomyLevel == config.PatrolAutonomyFull) {
-		autonomyLevel = config.PatrolAutonomyApproval
+	// Community tier lock: without ai_autofix, patrol autonomy is findings-only ("monitor").
+	// If config contains a higher level from a previous Pro/trial period, clamp the effective
+	// value at read time so the UI reflects runtime enforcement.
+	hasAutoFix := aiService.HasLicenseFeature(featureAIAutoFixValue)
+	if !hasAutoFix && autonomyLevel != config.PatrolAutonomyMonitor {
+		autonomyLevel = config.PatrolAutonomyMonitor
 	}
 
 	settings := PatrolAutonomyResponse{
@@ -5472,121 +6534,13 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(settings)
 }
 
-// HandleUpdatePatrolAutonomy updates the patrol autonomy settings (PUT /api/ai/patrol/autonomy)
-func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+// HandleUpdatePatrolAutonomy has been moved to enterprise.
+// The route now delegates to aiAutoFixEndpoints.HandleUpdatePatrolAutonomy.
 
-	var req PatrolAutonomySettings
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
-		return
-	}
-
-	// Validate autonomy level
-	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
-			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'assisted', or 'full'", req.AutonomyLevel), nil)
-		return
-	}
-
-	// License-based autonomy clamping: assisted/full require Pro (ai_autofix)
-	hasAutoFix := h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix)
-	if !hasAutoFix && (req.AutonomyLevel == config.PatrolAutonomyAssisted || req.AutonomyLevel == config.PatrolAutonomyFull) {
-		writeErrorResponse(w, http.StatusPaymentRequired, "license_required",
-			"Auto-fix requires Pulse Pro. Free tier supports Monitor and Investigate modes.",
-			map[string]string{
-				"feature":       license.FeatureAIAutoFix,
-				"upgrade_url":   "https://pulserelay.pro/",
-				"allowed_modes": "monitor,approval",
-			})
-		return
-	}
-
-	// Validate budget (5-30)
-	if req.InvestigationBudget < 5 {
-		req.InvestigationBudget = 5
-	}
-	if req.InvestigationBudget > 30 {
-		req.InvestigationBudget = 30
-	}
-
-	// Validate timeout (60-1800 seconds / 30 minutes)
-	if req.InvestigationTimeoutSec < 60 {
-		req.InvestigationTimeoutSec = 60
-	}
-	if req.InvestigationTimeoutSec > 1800 {
-		req.InvestigationTimeoutSec = 1800
-	}
-
-	aiService := h.GetAIService(r.Context())
-	cfg := aiService.GetConfig()
-	if cfg == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
-		return
-	}
-
-	// Determine effective unlock value: use request value if provided, else preserve existing
-	effectiveUnlocked := cfg.PatrolFullModeUnlocked
-	if req.FullModeUnlocked != nil {
-		effectiveUnlocked = *req.FullModeUnlocked
-	}
-
-	// Handle auto-downgrade FIRST: if turning off unlock while currently in full mode AND
-	// request still asks for "full", downgrade to assisted. If user explicitly requested a
-	// lower level (monitor, approval, assisted), honor that instead.
-	finalAutonomyLevel := req.AutonomyLevel
-	currentLevel := cfg.GetPatrolAutonomyLevel() // Use getter to handle legacy "autonomous" migration
-	if !effectiveUnlocked && currentLevel == config.PatrolAutonomyFull && req.AutonomyLevel == config.PatrolAutonomyFull {
-		finalAutonomyLevel = config.PatrolAutonomyAssisted
-	}
-
-	// Validate the FINAL level: can't use "full" mode unless unlocked
-	if finalAutonomyLevel == config.PatrolAutonomyFull && !effectiveUnlocked {
-		writeErrorResponse(w, http.StatusForbidden, "full_mode_locked",
-			"Auto-fixing critical issues requires acknowledgment. Enable 'Auto-fix critical issues' in settings first.", nil)
-		return
-	}
-
-	// Now safe to update config (all validation passed)
-	cfg.PatrolFullModeUnlocked = effectiveUnlocked
-	cfg.PatrolAutonomyLevel = finalAutonomyLevel
-	cfg.PatrolInvestigationBudget = req.InvestigationBudget
-	cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
-
-	// Save config via persistence layer
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*cfg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Assistant config", nil)
-		return
-	}
-
-	// Reload config to update in-memory state
-	if err := aiService.LoadConfig(); err != nil {
-		// Log but don't fail - config was saved successfully
-		LogAuditEvent("patrol_autonomy_reload_warning", "", "", r.URL.Path, false,
-			fmt.Sprintf("Config saved but failed to reload: %v", err))
-	}
-
-	// Log audit event with actual saved values
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-	LogAuditEvent("patrol_autonomy_updated", username, GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("Updated patrol autonomy: level=%s, unlocked=%v, budget=%d, timeout=%ds",
-			finalAutonomyLevel, effectiveUnlocked, req.InvestigationBudget, req.InvestigationTimeoutSec))
-
-	// Return actual saved values (may differ from request due to auto-downgrade)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"settings": map[string]interface{}{
-			"autonomy_level":            finalAutonomyLevel,
-			"full_mode_unlocked":        effectiveUnlocked,
-			"investigation_budget":      req.InvestigationBudget,
-			"investigation_timeout_sec": req.InvestigationTimeoutSec,
-		},
-	})
-}
+// maxFindingIDLength is the maximum allowed length for finding IDs in URL paths.
+// Real finding IDs are 16 hex chars (SHA256[:8]), but we accept up to 256 for
+// forward compatibility with any future ID scheme.
+const maxFindingIDLength = 256
 
 // HandleGetInvestigation returns investigation details for a finding (GET /api/ai/findings/{id}/investigation)
 func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *http.Request) {
@@ -5602,8 +6556,16 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
 		return
 	}
+	if len(findingID) > maxFindingIDLength {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Finding ID is too long", nil)
+		return
+	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
+		return
+	}
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
@@ -5622,94 +6584,14 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}
+	normalizedInvestigation := investigation.NormalizeCollections()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(investigation)
+	json.NewEncoder(w).Encode(normalizedInvestigation)
 }
 
-// HandleReapproveInvestigationFix creates a new approval from an investigation's proposed fix (POST /api/ai/findings/{id}/reapprove)
-// This is useful when the original approval has expired but the user still wants to execute the fix.
-func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check license
-	if !h.GetAIService(r.Context()).HasLicenseFeature(license.FeatureAIAutoFix) {
-		writeErrorResponse(w, http.StatusForbidden, "license_required", "Pulse Patrol Auto-Fix feature requires Pro license", nil)
-		return
-	}
-
-	// Extract finding ID from path
-	findingID := strings.TrimPrefix(r.URL.Path, "/api/ai/findings/")
-	findingID = strings.TrimSuffix(findingID, "/reapprove")
-	if findingID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
-		return
-	}
-
-	aiService := h.GetAIService(r.Context())
-	patrol := aiService.GetPatrolService()
-	if patrol == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
-		return
-	}
-
-	// Get investigation from orchestrator
-	orchestrator := patrol.GetInvestigationOrchestrator()
-	if orchestrator == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
-		return
-	}
-
-	inv := orchestrator.GetInvestigationByFinding(findingID)
-	if inv == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
-		return
-	}
-
-	// Check if investigation has a proposed fix
-	if inv.ProposedFix == nil || len(inv.ProposedFix.Commands) == 0 {
-		writeErrorResponse(w, http.StatusBadRequest, "no_fix", "Investigation has no proposed fix", nil)
-		return
-	}
-
-	// Check approval store
-	store := approval.GetStore()
-	if store == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
-		return
-	}
-
-	// Create new approval request
-	req := &approval.ApprovalRequest{
-		ToolID:     "investigation_fix",
-		Command:    inv.ProposedFix.Commands[0],
-		TargetType: "investigation",
-		TargetID:   findingID,
-		TargetName: inv.ProposedFix.Description,
-		Context:    fmt.Sprintf("Re-approval of fix from investigation: %s", inv.ProposedFix.Description),
-		RiskLevel:  approval.AssessRiskLevel(inv.ProposedFix.Commands[0], "investigation"),
-	}
-
-	if err := store.CreateApproval(req); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create approval: "+err.Error(), nil)
-		return
-	}
-
-	log.Info().
-		Str("finding_id", findingID).
-		Str("approval_id", req.ID).
-		Str("command", truncateForLog(req.Command, 100)).
-		Msg("Re-created approval for investigation fix")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"approval_id": req.ID,
-		"message":     "Approval created. You can now approve and execute the fix.",
-	})
-}
+// HandleReapproveInvestigationFix has been moved to enterprise.
+// The route now delegates to aiAutoFixEndpoints.HandleReapproveInvestigationFix.
 
 // HandleGetInvestigationMessages returns chat messages for an investigation (GET /api/ai/findings/{id}/investigation/messages)
 func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter, r *http.Request) {
@@ -5725,8 +6607,16 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
 		return
 	}
+	if len(findingID) > maxFindingIDLength {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Finding ID is too long", nil)
+		return
+	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
+		return
+	}
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
@@ -5758,94 +6648,18 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 		writeErrorResponse(w, http.StatusInternalServerError, "fetch_failed", "Failed to get investigation messages", nil)
 		return
 	}
+	for i := range messages {
+		messages[i] = messages[i].NormalizeCollections()
+	}
+	normalizedInvestigation := investigation.NormalizeCollections()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"investigation_id": investigation.ID,
-		"session_id":       investigation.SessionID,
+		"investigation_id": normalizedInvestigation.ID,
+		"session_id":       normalizedInvestigation.SessionID,
 		"messages":         messages,
 	})
 }
 
-// HandleReinvestigateFinding triggers a re-investigation of a finding (POST /api/ai/findings/{id}/reinvestigate)
-func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract finding ID from path
-	findingID := strings.TrimPrefix(r.URL.Path, "/api/ai/findings/")
-	findingID = strings.TrimSuffix(findingID, "/reinvestigate")
-	if findingID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Finding ID is required", nil)
-		return
-	}
-
-	aiService := h.GetAIService(r.Context())
-	cfg := aiService.GetConfig()
-	if cfg == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
-		return
-	}
-
-	autonomyLevel := cfg.GetPatrolAutonomyLevel()
-	if autonomyLevel == config.PatrolAutonomyMonitor {
-		writeErrorResponse(w, http.StatusBadRequest, "autonomy_disabled",
-			"Patrol autonomy is set to 'monitor' mode. Enable 'approval', 'assisted', or 'full' mode to investigate findings.", nil)
-		return
-	}
-
-	patrol := aiService.GetPatrolService()
-	if patrol == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
-		return
-	}
-
-	orchestrator := patrol.GetInvestigationOrchestrator()
-	if orchestrator == nil {
-		// Try lazy initialization if chat handler is available
-		if h.chatHandler != nil {
-			log.Debug().Msg("Attempting lazy orchestrator initialization for reinvestigation")
-			h.setupInvestigationOrchestrator("default", aiService)
-			orchestrator = patrol.GetInvestigationOrchestrator()
-		}
-		if orchestrator == nil {
-			writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
-			return
-		}
-	}
-
-	// Check for already-running investigation (return 409 Conflict)
-	orgID := GetOrgID(r.Context())
-	h.investigationMu.RLock()
-	invStore := h.investigationStores[orgID]
-	h.investigationMu.RUnlock()
-	if invStore != nil {
-		if latest := invStore.GetLatestByFinding(findingID); latest != nil && latest.Status == investigation.StatusRunning {
-			writeErrorResponse(w, http.StatusConflict, "investigation_running",
-				"An investigation is already running for this finding", nil)
-			return
-		}
-	}
-
-	// Trigger re-investigation in background
-	go func() {
-		ctx := context.Background()
-		if err := orchestrator.ReinvestigateFinding(ctx, findingID, autonomyLevel); err != nil {
-			log.Error().Err(err).Str("finding_id", findingID).Msg("Re-investigation failed")
-		}
-	}()
-
-	// Log audit event
-	username := getAuthUsername(h.getConfig(r.Context()), r)
-	LogAuditEvent("finding_reinvestigation", username, GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("Triggered re-investigation for finding: %s", findingID))
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":    true,
-		"finding_id": findingID,
-		"message":    "Re-investigation started",
-	})
-}
+// HandleReinvestigateFinding has been moved to enterprise.
+// The route now delegates to aiAutoFixEndpoints.HandleReinvestigateFinding.

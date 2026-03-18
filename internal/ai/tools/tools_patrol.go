@@ -39,7 +39,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Resource ID (e.g. node/pve1, qemu/100, lxc/101)",
+						Description: "Resource ID (e.g. node/pve1, vm/100, ct/101)",
 					},
 					"resource_name": {
 						Type:        "string",
@@ -47,8 +47,8 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type",
-						Enum:        []string{"node", "vm", "container", "docker_container", "storage", "host", "kubernetes_cluster", "pbs"},
+						Description: "Canonical v6 resource type",
+						Enum:        []string{"node", "vm", "system-container", "app-container", "storage", "physical_disk", "agent", "k8s-cluster", "pbs"},
 					},
 					"title": {
 						Type:        "string",
@@ -141,6 +141,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	resourceID, _ := args["resource_id"].(string)
 	resourceName, _ := args["resource_name"].(string)
 	resourceType, _ := args["resource_type"].(string)
+	resourceType = canonicalPatrolResourceType(resourceType)
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)
 
@@ -172,6 +173,23 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 	if len(missing) > 0 {
 		return NewErrorResult(fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))), nil
+	}
+	if isUnsupportedLegacyResourceTypeToken(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
+	}
+	validResourceTypes := map[string]bool{
+		"node":             true,
+		"vm":               true,
+		"system-container": true,
+		"app-container":    true,
+		"storage":          true,
+		"physical_disk":    true,
+		"agent":            true,
+		"k8s-cluster":      true,
+		"pbs":              true,
+	}
+	if !validResourceTypes[resourceType] {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q: use node, vm, system-container, app-container, storage, physical_disk, agent, k8s-cluster, or pbs", resourceType)), nil
 	}
 
 	// Validate enums
@@ -264,4 +282,8 @@ func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[s
 	}
 	b, _ := json.Marshal(result)
 	return NewTextResult(string(b)), nil
+}
+
+func canonicalPatrolResourceType(resourceType string) string {
+	return strings.ToLower(strings.TrimSpace(resourceType))
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestHandleGetInfraUpdates(t *testing.T) {
@@ -29,17 +30,16 @@ func TestHandleGetInfraUpdates(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// Verify structure
-		if _, ok := response["updates"]; !ok {
-			t.Error("Expected 'updates' field in response")
+		if response.Total != 0 {
+			t.Errorf("Expected total to be 0, got %d", response.Total)
 		}
-		if _, ok := response["total"]; !ok {
-			t.Error("Expected 'total' field in response")
+		if len(response.Updates) != 0 {
+			t.Errorf("Expected 0 updates, got %d", len(response.Updates))
 		}
 	})
 
@@ -69,12 +69,12 @@ func TestHandleGetInfraUpdatesSummary(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesSummaryResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response["totalUpdates"].(float64) != 0 {
+		if response.TotalUpdates != 0 {
 			t.Error("Expected totalUpdates to be 0")
 		}
 	})
@@ -91,42 +91,82 @@ func TestHandleGetInfraUpdatesSummary(t *testing.T) {
 	})
 }
 
-func TestHandleGetInfraUpdatesForHost(t *testing.T) {
+func TestHandleGetInfraUpdatesForAgent(t *testing.T) {
 	handler := &UpdateDetectionHandlers{}
 
-	t.Run("returns empty for non-existent host", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/infra-updates/host/nonexistent", nil)
+	t.Run("returns empty for non-existent agent", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/infra-updates/agent/nonexistent", nil)
 		rr := httptest.NewRecorder()
 
-		handler.HandleGetInfraUpdatesForHost(rr, req, "nonexistent")
+		handler.HandleGetInfraUpdatesForAgent(rr, req, "nonexistent")
 
 		if rr.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesForAgentResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response["hostId"] != "nonexistent" {
-			t.Error("Expected hostId in response")
+		if response.AgentID != "nonexistent" {
+			t.Error("Expected agentId in response")
 		}
-		if response["total"].(float64) != 0 {
+		if response.Total != 0 {
 			t.Error("Expected total to be 0")
 		}
 	})
 
 	t.Run("method not allowed for POST", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/host/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/agent/test", nil)
 		rr := httptest.NewRecorder()
 
-		handler.HandleGetInfraUpdatesForHost(rr, req, "test")
+		handler.HandleGetInfraUpdatesForAgent(rr, req, "test")
 
 		if rr.Code != http.StatusMethodNotAllowed {
 			t.Errorf("Expected status 405, got %d", rr.Code)
 		}
 	})
+}
+
+func TestInfraUpdatesResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  any
+		key  string
+		want string
+	}{
+		{name: "updates", raw: emptyInfraUpdatesResponse(), key: "updates", want: "array"},
+		{name: "summary", raw: emptyInfraUpdatesSummaryResponse(), key: "summaries", want: "object"},
+		{name: "agent_updates", raw: emptyInfraUpdatesForAgentResponse(), key: "updates", want: "array"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(tc.raw)
+			if err != nil {
+				t.Fatalf("marshal %s: %v", tc.name, err)
+			}
+
+			var decoded map[string]any
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				t.Fatalf("decode %s: %v", tc.name, err)
+			}
+
+			switch tc.want {
+			case "array":
+				values, ok := decoded[tc.key].([]any)
+				if !ok || len(values) != 0 {
+					t.Fatalf("expected %s to be an empty array, got %T (%v)", tc.key, decoded[tc.key], decoded[tc.key])
+				}
+			case "object":
+				values, ok := decoded[tc.key].(map[string]any)
+				if !ok || len(values) != 0 {
+					t.Fatalf("expected %s to be an empty object, got %T (%v)", tc.key, decoded[tc.key], decoded[tc.key])
+				}
+			}
+		})
+	}
 }
 
 func TestHandleGetInfraUpdateForResource(t *testing.T) {
@@ -159,7 +199,7 @@ func TestHandleTriggerInfraUpdateCheck(t *testing.T) {
 	handler := &UpdateDetectionHandlers{}
 
 	t.Run("returns 503 without monitor", func(t *testing.T) {
-		body := strings.NewReader(`{"hostId":"test-host"}`)
+		body := strings.NewReader(`{"agentId":"test-host"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -185,8 +225,8 @@ func TestHandleTriggerInfraUpdateCheck(t *testing.T) {
 
 func TestContainerUpdateInfo_JSONSerialization(t *testing.T) {
 	info := ContainerUpdateInfo{
-		HostID:          "host-1",
-		HostName:        "Test Host",
+		AgentID:         "host-1",
+		AgentName:       "Test Agent",
 		ContainerID:     "container-abc",
 		ContainerName:   "nginx",
 		Image:           "nginx:latest",
@@ -207,8 +247,8 @@ func TestContainerUpdateInfo_JSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal ContainerUpdateInfo: %v", err)
 	}
 
-	if decoded.HostID != info.HostID {
-		t.Errorf("Expected HostID %q, got %q", info.HostID, decoded.HostID)
+	if decoded.AgentID != info.AgentID {
+		t.Errorf("Expected AgentID %q, got %q", info.AgentID, decoded.AgentID)
 	}
 	if decoded.UpdateAvailable != info.UpdateAvailable {
 		t.Errorf("Expected UpdateAvailable %v, got %v", info.UpdateAvailable, decoded.UpdateAvailable)
@@ -275,11 +315,17 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 		},
 	}
 
+	// Build ReadState via ResourceRegistry from the same state snapshot.
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: state.DockerHosts,
+	})
+
 	monitor := &monitoring.Monitor{}
 	setUnexportedField(t, monitor, "state", state)
-	handler := NewUpdateDetectionHandlers(monitor)
+	handler := NewUpdateDetectionHandlers(monitor, registry)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?hostId=host-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?agentId=host-1", nil)
 	rr := httptest.NewRecorder()
 	handler.HandleGetInfraUpdates(rr, req)
 	if rr.Code != http.StatusOK {
@@ -303,10 +349,7 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
 	}
-	var summaryResp struct {
-		Summaries    map[string]map[string]any `json:"summaries"`
-		TotalUpdates int                       `json:"totalUpdates"`
-	}
+	var summaryResp infraUpdatesSummaryResponse
 	if err := json.NewDecoder(rr.Body).Decode(&summaryResp); err != nil {
 		t.Fatalf("decode summary response: %v", err)
 	}
@@ -318,6 +361,12 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 	}
 	if _, ok := summaryResp.Summaries["host-2"]; !ok {
 		t.Fatalf("expected summary for host-2")
+	}
+	if summaryResp.Summaries["host-1"].TotalCount != 2 {
+		t.Fatalf("expected host-1 total count 2, got %d", summaryResp.Summaries["host-1"].TotalCount)
+	}
+	if summaryResp.Summaries["host-2"].TotalCount != 1 {
+		t.Fatalf("expected host-2 total count 1, got %d", summaryResp.Summaries["host-2"].TotalCount)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/infra-updates/docker:host-1/c1", nil)
@@ -338,7 +387,7 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 		t.Fatalf("expected container name stripped, got %q", update.ContainerName)
 	}
 
-	body := strings.NewReader(`{"hostId":"host-1"}`)
+	body := strings.NewReader(`{"agentId":"host-1"}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
 	rr = httptest.NewRecorder()
 	handler.HandleTriggerInfraUpdateCheck(rr, req)

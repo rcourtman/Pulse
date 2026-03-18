@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -32,7 +32,7 @@ func tokenHintFromRecord(record *config.APITokenRecord) string {
 // resolveDockerHostIdentifier determines a unique identifier for a Docker host
 // based on its report and existing hosts. Returns the identifier, fallback identifiers,
 // the existing host (if matched), and whether a match was found.
-func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []models.DockerHost) (string, []string, models.DockerHost, bool) {
+func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView) (string, []string, *unifiedresources.DockerHostView, bool) {
 	base := strings.TrimSpace(report.AgentKey())
 	fallbacks := uniqueNonEmptyStrings(
 		base,
@@ -42,7 +42,7 @@ func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config
 	)
 
 	if existing, ok := findMatchingDockerHost(hosts, report, tokenRecord); ok {
-		return existing.ID, fallbacks, existing, true
+		return dockerHostStableID(existing), fallbacks, existing, true
 	}
 
 	identifier := base
@@ -66,11 +66,11 @@ func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config
 		identifier = generateDockerHostIdentifier(identifier, report, tokenRecord, hosts)
 	}
 
-	return identifier, fallbacks, models.DockerHost{}, false
+	return identifier, fallbacks, nil, false
 }
 
 // findMatchingDockerHost searches for an existing host that matches the report.
-func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, bool) {
+func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report agentsdocker.Report, tokenRecord *config.APITokenRecord) (*unifiedresources.DockerHostView, bool) {
 	agentID := strings.TrimSpace(report.Agent.ID)
 	tokenID := ""
 	if tokenRecord != nil {
@@ -81,11 +81,11 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 
 	if agentID != "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.AgentID) != agentID {
+			if host == nil || strings.TrimSpace(host.AgentID()) != agentID {
 				continue
 			}
 
-			existingToken := strings.TrimSpace(host.TokenID)
+			existingToken := strings.TrimSpace(host.TokenID())
 			if tokenID == "" || existingToken == tokenID {
 				return host, true
 			}
@@ -94,8 +94,11 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 
 	if machineID != "" && hostname != "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.MachineID) == machineID && strings.TrimSpace(host.Hostname) == hostname {
-				if tokenID == "" || strings.TrimSpace(host.TokenID) == tokenID {
+			if host == nil {
+				continue
+			}
+			if strings.TrimSpace(host.MachineID()) == machineID && strings.TrimSpace(host.Hostname()) == hostname {
+				if tokenID == "" || strings.TrimSpace(host.TokenID()) == tokenID {
 					return host, true
 				}
 			}
@@ -107,7 +110,10 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 	// reconnect with the same token but are treated as new agents.
 	if hostname != "" && tokenID != "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.Hostname) == hostname && strings.TrimSpace(host.TokenID) == tokenID {
+			if host == nil {
+				continue
+			}
+			if strings.TrimSpace(host.Hostname()) == hostname && strings.TrimSpace(host.TokenID()) == tokenID {
 				return host, true
 			}
 		}
@@ -115,7 +121,10 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 
 	if machineID != "" && tokenID == "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.MachineID) == machineID && strings.TrimSpace(host.TokenID) == "" {
+			if host == nil {
+				continue
+			}
+			if strings.TrimSpace(host.MachineID()) == machineID && strings.TrimSpace(host.TokenID()) == "" {
 				return host, true
 			}
 		}
@@ -123,22 +132,35 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 
 	if hostname != "" && tokenID == "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.Hostname) == hostname && strings.TrimSpace(host.TokenID) == "" {
+			if host == nil {
+				continue
+			}
+			if strings.TrimSpace(host.Hostname()) == hostname && strings.TrimSpace(host.TokenID()) == "" {
 				return host, true
 			}
 		}
 	}
 
-	return models.DockerHost{}, false
+	return nil, false
+}
+
+func dockerHostStableID(host *unifiedresources.DockerHostView) string {
+	if host == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(host.HostSourceID()); id != "" {
+		return id
+	}
+	return strings.TrimSpace(host.ID())
 }
 
 // dockerHostIDExists checks if a host ID is already in use.
-func dockerHostIDExists(id string, hosts []models.DockerHost) bool {
+func dockerHostIDExists(id string, hosts []*unifiedresources.DockerHostView) bool {
 	if strings.TrimSpace(id) == "" {
 		return false
 	}
 	for _, host := range hosts {
-		if host.ID == id {
+		if dockerHostStableID(host) == id {
 			return true
 		}
 	}
@@ -146,7 +168,7 @@ func dockerHostIDExists(id string, hosts []models.DockerHost) bool {
 }
 
 // generateDockerHostIdentifier creates a unique identifier by appending suffixes.
-func generateDockerHostIdentifier(base string, report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []models.DockerHost) string {
+func generateDockerHostIdentifier(base string, report agentsdocker.Report, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView) string {
 	if strings.TrimSpace(base) == "" {
 		base = fallbackDockerHostID(report, tokenRecord)
 	}
@@ -156,7 +178,9 @@ func generateDockerHostIdentifier(base string, report agentsdocker.Report, token
 
 	used := make(map[string]struct{}, len(hosts))
 	for _, host := range hosts {
-		used[host.ID] = struct{}{}
+		if id := dockerHostStableID(host); id != "" {
+			used[id] = struct{}{}
+		}
 	}
 
 	suffixes := dockerHostSuffixCandidates(report, tokenRecord)

@@ -40,8 +40,8 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	broadcaster := logging.GetBroadcaster()
-	id, ch, history := broadcaster.Subscribe()
-	defer broadcaster.Unsubscribe(id)
+	subscriptionID, ch, history := broadcaster.Subscribe()
+	defer broadcaster.Unsubscribe(subscriptionID)
 
 	// Send history first
 	for _, line := range history {
@@ -85,7 +85,9 @@ func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Reques
 		if f, err := os.Open(h.config.LogFile); err == nil {
 			defer f.Close()
 			if wr, err := zipWriter.Create("pulse.log"); err == nil {
-				io.Copy(wr, f)
+				if _, err := io.Copy(wr, f); err != nil {
+					log.Warn().Err(err).Msg("failed to copy log file to zip")
+				}
 				addedLogFile = true
 			}
 		}

@@ -1,6 +1,8 @@
 import { For, Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
+import { getRunHistoryEmptyState } from '@/utils/patrolEmptyStatePresentation';
+import { getRunHistoryLoadingState } from '@/utils/patrolRunPresentation';
 import { RunHistoryEntry } from './RunHistoryEntry';
 
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -9,6 +11,12 @@ interface PatrolStreamState {
   phase: Accessor<string>;
   currentTool: Accessor<string>;
   tokens: Accessor<number>;
+  resynced: Accessor<boolean>;
+  resyncReason: Accessor<string>;
+  bufferStartSeq: Accessor<number>;
+  bufferEndSeq: Accessor<number>;
+  outputTruncated: Accessor<boolean>;
+  reconnectCount: Accessor<number>;
   isStreaming: Accessor<boolean>;
   errorMessage: Accessor<string>;
 }
@@ -23,13 +31,11 @@ interface RunHistoryPanelProps {
 
 export function RunHistoryPanel(props: RunHistoryPanelProps) {
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+    <div class="bg-surface rounded-md border border-border p-4">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Patrol Run History</h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Select a run to filter findings to that snapshot
-          </p>
+          <h2 class="text-sm font-semibold text-base-content">Patrol Run History</h2>
+          <p class="text-xs text-muted">Select a run to filter findings to that snapshot</p>
         </div>
         <Show when={props.selectedRun}>
           <button
@@ -43,15 +49,13 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
       </div>
 
       <Show when={props.loading}>
-        <div class="text-xs text-gray-500 dark:text-gray-400">Loading run history…</div>
+        <div class="text-xs text-muted">{getRunHistoryLoadingState()}</div>
       </Show>
 
       <Show when={!props.loading && props.runs.length === 0}>
         <div class="text-center py-8">
-          <RefreshCwIcon class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            No patrol runs yet. Trigger a run to populate history.
-          </p>
+          <RefreshCwIcon class="w-12 h-12 mx-auto text-slate-300 mb-3" />
+          <p class="text-sm text-muted">{getRunHistoryEmptyState().text}</p>
         </div>
       </Show>
 

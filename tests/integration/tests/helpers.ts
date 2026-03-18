@@ -2,7 +2,34 @@
  * Test helpers for Pulse update integration tests
  */
 
-import { Page, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { Browser, Page, expect } from '@playwright/test';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const runtimeStatePath = (() => {
+  const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
+  if (configuredPath === '') {
+    return path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
+  }
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(__dirname, '..', '..', '..', configuredPath);
+})();
+
+const runtimeBaseURL = (): string | null => {
+  try {
+    const raw = fs.readFileSync(runtimeStatePath, 'utf8');
+    const parsed = JSON.parse(raw) as { baseURL?: string };
+    return typeof parsed.baseURL === 'string' && parsed.baseURL.trim() !== ''
+      ? parsed.baseURL.trim()
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Default admin credentials for testing
@@ -68,20 +95,76 @@ export async function maybeCompleteSetupWizard(page: Page) {
   const wizard = page.getByRole('main', { name: 'Pulse Setup Wizard' });
   await expect(wizard).toBeVisible();
 
+  const securityConfigured = wizard.getByText(/security configured/i);
+  const secureDashboardHeading = wizard.getByText('Secure Your Dashboard');
+  const continueButton = wizard.getByRole('button', { name: /continue to setup|continue/i });
+  const finishButton = wizard.getByRole('button', { name: /go to dashboard|skip for now/i });
+
   await page.getByPlaceholder('Paste your bootstrap token').fill(E2E_CREDENTIALS.bootstrapToken);
-  await page.getByRole('button', { name: /continue/i }).click();
 
-  await expect(wizard.getByText('Secure Your Dashboard')).toBeVisible();
-  await wizard.getByRole('button', { name: /custom password/i }).click();
+  // Welcome step auto-submits pasted tokens; only click Continue if no transition happened.
+  let onSecurityStep = false;
+  let onCompleteStep = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (await securityConfigured.isVisible({ timeout: 150 }).catch(() => false)) {
+      onCompleteStep = true;
+      break;
+    }
+    if (await secureDashboardHeading.isVisible({ timeout: 150 }).catch(() => false)) {
+      onSecurityStep = true;
+      break;
+    }
+    if (attempt === 5 && await continueButton.isVisible({ timeout: 250 }).catch(() => false)) {
+      await continueButton.click();
+    }
+    await page.waitForTimeout(200);
+  }
 
-  await wizard.locator('input[type="text"]').first().fill(E2E_CREDENTIALS.username);
-  await wizard.locator('input[type="password"]').nth(0).fill(E2E_CREDENTIALS.password);
-  await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
+  if (!onSecurityStep && !onCompleteStep) {
+    throw new Error('Setup wizard did not reach security or completion step');
+  }
 
-  await wizard.getByRole('button', { name: /create account/i }).click();
-  await expect(wizard.getByText(/security configured/i)).toBeVisible();
+  if (onSecurityStep) {
+    const customPasswordButton = wizard.getByRole('button', { name: /custom password/i });
+    if (await customPasswordButton.isVisible({ timeout: 4000 }).catch(() => false)) {
+      let clickedCustomPassword = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await customPasswordButton.click({ timeout: 10_000, force: attempt > 0 });
+          clickedCustomPassword = true;
+          break;
+        } catch (error) {
+          // The step can transition to complete while waiting; handle that as success.
+          if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
+            onCompleteStep = true;
+            break;
+          }
+          if (attempt === 2) {
+            throw error;
+          }
+          await page.waitForTimeout(200);
+        }
+      }
 
-  await wizard.getByRole('button', { name: /go to dashboard|skip for now/i }).click();
+      if (!onCompleteStep && clickedCustomPassword) {
+        await wizard.locator('input[type="text"]').first().fill(E2E_CREDENTIALS.username);
+        await wizard.locator('input[type="password"]').nth(0).fill(E2E_CREDENTIALS.password);
+        await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
+
+        await wizard.getByRole('button', { name: /create account/i }).click();
+        await expect(securityConfigured).toBeVisible();
+        onCompleteStep = true;
+      }
+    } else {
+      await expect(securityConfigured).toBeVisible();
+      onCompleteStep = true;
+    }
+  }
+
+  if (onCompleteStep) {
+    await finishButton.scrollIntoViewIfNeeded();
+    await finishButton.click({ timeout: 10_000 });
+  }
 
   await page.waitForLoadState('domcontentloaded');
 }
@@ -104,16 +187,29 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
-  const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker)/;
+  // Wait for SPA JavaScript to execute. The raw HTML shell contains a
+  // "You need to enable JavaScript" noscript message. Under load (e.g.
+  // running the full journey suite sequentially), Vite can take several
+  // seconds to serve the JS bundle. Wait for #root to have meaningful
+  // child content before looking for login form or authenticated route.
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById('root');
+      return root !== null && root.children.length > 0;
+    },
+    { timeout: 20_000 },
+  );
+
+  const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');
 
   const state = await Promise.race([
     usernameInput
-      .waitFor({ state: 'visible', timeout: 10_000 })
+      .waitFor({ state: 'visible', timeout: 15_000 })
       .then(() => 'login')
       .catch(() => undefined),
     page
-      .waitForURL(authenticatedURL, { timeout: 10_000 })
+      .waitForURL(authenticatedURL, { timeout: 15_000 })
       .then(() => 'authenticated')
       .catch(() => undefined),
   ]);
@@ -128,17 +224,83 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     throw new Error(`Login did not render and did not redirect (url=${url}, body="${preview}")`);
   }
 
+  const loginErrorText = page.locator(
+    'text=/Invalid username or password|Too many requests|Account locked|Failed to connect to server|Server error/i',
+  ).first();
+
   await page.fill('input[name="username"]', credentials.username);
   await page.fill('input[name="password"]', credentials.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(authenticatedURL);
+
+  await expect.poll(
+    async () => {
+      const url = page.url();
+      if (authenticatedURL.test(url)) {
+        return 'authenticated';
+      }
+
+      const loginErrorVisible = await loginErrorText.isVisible().catch(() => false);
+      if (loginErrorVisible) {
+        const message = ((await loginErrorText.textContent()) || 'login_error').trim();
+        return `error:${message}`;
+      }
+
+      const stillShowingLogin = await usernameInput.isVisible().catch(() => false);
+      if (stillShowingLogin) {
+        return 'login';
+      }
+
+      return 'pending';
+    },
+    {
+      timeout: 30_000,
+      message: 'Timed out waiting for authenticated app state after login submission',
+    },
+  ).toBe('authenticated');
+}
+
+/**
+ * Dismiss the WhatsNew modal that appears on first visit by marking it as seen
+ * in localStorage. This prevents the "fixed inset-0 z-50" overlay from blocking
+ * clicks (logout button, row clicks, etc.) in tests.
+ */
+export async function dismissWhatsNewModal(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+  });
 }
 
 export async function ensureAuthenticated(page: Page) {
+  // Pre-set the WhatsNew modal localStorage key via an init script that runs before
+  // any page script on every navigation. This prevents the "fixed inset-0 z-50"
+  // overlay from appearing and blocking clicks (logout, row taps, etc.) in tests.
+  await page.addInitScript(() => {
+    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+  });
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
   await login(page);
-  await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker)/);
+  await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/);
+}
+
+export async function createAuthenticatedStorageState(
+  browser: Browser,
+  storageStatePath: string,
+): Promise<void> {
+  const context = await browser.newContext({
+    baseURL:
+      process.env.PULSE_BASE_URL ||
+      process.env.PLAYWRIGHT_BASE_URL ||
+      runtimeBaseURL() ||
+      'http://localhost:7655',
+  });
+  const page = await context.newPage();
+  try {
+    await ensureAuthenticated(page);
+    await context.storageState({ path: storageStatePath });
+  } finally {
+    await context.close();
+  }
 }
 
 export async function logout(page: Page) {
@@ -150,18 +312,51 @@ export async function logout(page: Page) {
 }
 
 export async function setMockMode(page: Page, enabled: boolean) {
-  const res = await page.request.post('/api/system/mock-mode', {
+  const send = () => apiRequest(page, '/api/system/mock-mode', {
+    method: 'POST',
     data: { enabled },
     headers: { 'Content-Type': 'application/json' },
   });
-  if (!res.ok()) {
-    throw new Error(`Failed to update mock mode: ${res.status()} ${await res.text()}`);
+
+  // Mock mode toggle can fail transiently when the backend is still
+  // processing a previous toggle (e.g. between consecutive suite runs).
+  // Retry up to 3 times with a short backoff, catching both HTTP errors
+  // and transport-level failures (connection reset, timeout).
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let res = await send();
+      if (res.status() === 401) {
+        await login(page);
+        res = await send();
+      }
+
+      if (res.ok()) {
+        return (await res.json()) as { enabled: boolean };
+      }
+
+      lastError = new Error(`HTTP ${res.status()}: ${await res.text()}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+
+    if (attempt < 2) {
+      await page.waitForTimeout(2000);
+    }
   }
-  return (await res.json()) as { enabled: boolean };
+
+  throw new Error(`Failed to update mock mode after 3 attempts: ${lastError?.message}`);
 }
 
 export async function getMockMode(page: Page) {
-  const res = await page.request.get('/api/system/mock-mode');
+  const send = () => apiRequest(page, '/api/system/mock-mode');
+
+  let res = await send();
+  if (res.status() === 401) {
+    await login(page);
+    res = await send();
+  }
+
   if (!res.ok()) {
     throw new Error(`Failed to read mock mode: ${res.status()} ${await res.text()}`);
   }
@@ -174,10 +369,9 @@ export async function getMockMode(page: Page) {
 export async function navigateToSettings(page: Page) {
   await page.goto('/settings');
 
-  // Wait for settings UI scaffolding (nav rail) to render
-  await expect(
-    page.locator('[aria-label="Settings navigation"], [data-testid="settings-nav"]')
-  ).toBeVisible();
+  // Wait for the settings route to load. The desktop sidebar (aria-label="Settings navigation")
+  // is hidden on mobile viewports (lg:flex), so we wait for the URL instead of sidebar visibility.
+  await page.waitForURL(/\/settings/, { timeout: 10000 });
 }
 
 /**
@@ -331,9 +525,86 @@ export async function resetTestEnvironment() {
  * Make API request to Pulse backend
  */
 export async function apiRequest(page: Page, endpoint: string, options: any = {}) {
-  const baseURL = 'http://localhost:7655';
-  const response = await page.request.fetch(`${baseURL}${endpoint}`, options);
+  const baseURL = (
+    process.env.PULSE_BASE_URL ||
+    process.env.PLAYWRIGHT_BASE_URL ||
+    runtimeBaseURL() ||
+    'http://localhost:7655'
+  ).replace(/\/+$/, '');
+
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = { ...(options.headers || {}) } as Record<string, string>;
+  const hasNonSessionAuth =
+    typeof headers.Authorization === 'string' &&
+    /^(basic|bearer)\s+/i.test(headers.Authorization) ||
+    typeof headers['X-API-Token'] === 'string';
+
+  if (!hasNonSessionAuth && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const hasCSRFHeader = Object.keys(headers).some((name) => name.toLowerCase() === 'x-csrf-token');
+    if (!hasCSRFHeader) {
+      const cookies = await page.context().cookies(baseURL);
+      const csrfCookie = cookies.find((cookie) => cookie.name === 'pulse_csrf')?.value;
+      if (csrfCookie) {
+        headers['X-CSRF-Token'] = csrfCookie;
+      }
+    }
+  }
+
+  const response = await page.request.fetch(`${baseURL}${endpoint}`, {
+    ...options,
+    headers,
+  });
   return response;
+}
+
+export async function isMultiTenantEnabled(page: Page): Promise<boolean> {
+  const orgsRes = await apiRequest(page, '/api/orgs');
+  return orgsRes.ok();
+}
+
+const toOrgID = (displayName: string) => {
+  const base = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 36) || 'org';
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  return `${base}-${suffix}`.slice(0, 64);
+};
+
+export async function createOrg(page: Page, displayName: string): Promise<{ id: string }> {
+  const res = await apiRequest(page, '/api/orgs', {
+    method: 'POST',
+    data: { id: toOrgID(displayName), displayName },
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok()) throw new Error(`Failed to create org: ${res.status()} ${await res.text()}`);
+
+  const payload = (await res.json()) as { id?: string };
+  if (!payload.id) {
+    throw new Error('Failed to create org: response missing org id');
+  }
+
+  return { id: payload.id };
+}
+
+export async function deleteOrg(page: Page, orgId: string): Promise<void> {
+  const res = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok() && res.status() !== 404) {
+    throw new Error(`Failed to delete org: ${res.status()} ${await res.text()}`);
+  }
+}
+
+export async function switchOrg(page: Page, orgId: string): Promise<void> {
+  await page.evaluate((id) => {
+    window.sessionStorage.setItem('pulse_org_id', id);
+    window.localStorage.setItem('pulse_org_id', id);
+    document.cookie = `pulse_org_id=${encodeURIComponent(id)}; Path=/; SameSite=Lax`;
+  }, orgId);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
 }
 
 /**

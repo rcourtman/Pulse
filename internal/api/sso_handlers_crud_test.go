@@ -72,6 +72,7 @@ func setupTestRouter(t *testing.T) (*Router, string) {
 		config:      cfg,
 		// samlManager is needed if we enable saml provider, initialized here if strict dependencies allow
 		samlManager: NewSAMLServiceManager("http://localhost:8080"),
+		oidcManager: NewOIDCServiceManager(),
 	}
 
 	// Save initial empty config to disk so persistence works
@@ -141,7 +142,7 @@ func TestSSOProviderCRUD(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var updated SSOProviderResponse
-	json.Unmarshal(w.Body.Bytes(), &updated)
+	_ = json.Unmarshal(w.Body.Bytes(), &updated)
 	assert.Equal(t, "Updated Name", updated.Name)
 
 	// Verify persistence
@@ -237,7 +238,7 @@ func TestHandleListSSOProviders(t *testing.T) {
 		ID: "p1", Name: "P1", Type: config.SSOProviderTypeOIDC,
 		OIDC: &config.OIDCProviderConfig{IssuerURL: "https://a.com", ClientID: "c"},
 	}
-	router.ssoConfig.AddProvider(p)
+	_ = router.ssoConfig.AddProvider(p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil)
 	w := httptest.NewRecorder()
@@ -250,4 +251,28 @@ func TestHandleListSSOProviders(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list.Providers, 1)
 	assert.Equal(t, "P1", list.Providers[0].Name)
+}
+
+func TestSSOProviderResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptySSOProvidersListResponse())
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	providers, ok := decoded["providers"].([]any)
+	if !ok || len(providers) != 0 {
+		t.Fatalf("expected providers to be an empty array, got %T (%v)", decoded["providers"], decoded["providers"])
+	}
+
+	payload, err = json.Marshal(EmptySSOProviderResponse())
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	for _, key := range []string{"allowedGroups", "allowedDomains", "allowedEmails"} {
+		values, ok := decoded[key].([]any)
+		if !ok || len(values) != 0 {
+			t.Fatalf("expected %s to be an empty array, got %T (%v)", key, decoded[key], decoded[key])
+		}
+	}
 }

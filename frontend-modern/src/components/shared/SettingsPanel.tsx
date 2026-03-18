@@ -10,6 +10,7 @@ type SettingsPanelProps = {
   bodyClass?: string;
   tone?: 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  noPadding?: boolean;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'title'>;
 
 export function SettingsPanel(props: SettingsPanelProps) {
@@ -23,35 +24,40 @@ export function SettingsPanel(props: SettingsPanelProps) {
     'class',
     'tone',
     'padding',
+    'noPadding',
   ]);
 
   return (
     <Card
       padding="none"
       tone={local.tone ?? 'default'}
-      class={`overflow-hidden border border-gray-200 dark:border-gray-700 ${local.class ?? ''}`.trim()}
+      class={`overflow-hidden border border-border ${local.class ?? ''}`.trim()}
       border={false}
       {...rest}
     >
-      <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <div class="flex items-center gap-3">
-          <Show when={local.icon}>
-            <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg text-blue-600 dark:text-blue-300">
-              {local.icon}
-            </div>
-          </Show>
-          <SectionHeader
-            title={local.title}
-            description={local.description}
-            size="sm"
-            class="flex-1"
-          />
+      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="flex min-w-0 items-center gap-3 flex-1">
+            <Show when={local.icon}>
+              <div class="text-base-content dark:text-slate-100">{local.icon}</div>
+            </Show>
+            <SectionHeader
+              title={local.title}
+              description={local.description}
+              size="sm"
+              class="min-w-0 flex-1"
+            />
+          </div>
           <Show when={local.action}>
-            <div>{local.action}</div>
+            <div class="w-full sm:w-auto">{local.action}</div>
           </Show>
         </div>
       </div>
-      <div class={`p-6 ${local.bodyClass ?? 'space-y-6'}`}>{local.children}</div>
+      <div
+        class={`${local.noPadding ? '' : 'p-4 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-6')}`}
+      >
+        {local.children}
+      </div>
     </Card>
   );
 }

@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,6 +31,22 @@ func (m *mockCryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 func (m *mockCryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 	// XOR is symmetric
 	return m.Encrypt(ciphertext)
+}
+
+type taggedMockCryptoManager struct{}
+
+func (taggedMockCryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
+	out := make([]byte, 4+len(plaintext))
+	copy(out, []byte("enc:"))
+	copy(out[4:], plaintext)
+	return out, nil
+}
+
+func (taggedMockCryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < 4 || string(ciphertext[:4]) != "enc:" {
+		return nil, os.ErrInvalid
+	}
+	return append([]byte(nil), ciphertext[4:]...), nil
 }
 
 func TestNewSigner(t *testing.T) {
@@ -75,6 +92,47 @@ func TestNewSigner(t *testing.T) {
 
 	if sig1 != sig2 {
 		t.Errorf("Signatures should match: got %s and %s", sig1, sig2)
+	}
+}
+
+func TestNewSigner_MigratesPlaintextKeyFile(t *testing.T) {
+	tempDir := t.TempDir()
+	crypto := taggedMockCryptoManager{}
+
+	plaintextKey := []byte("0123456789abcdef0123456789abcdef")
+	keyPath := filepath.Join(tempDir, ".audit-signing.key")
+	if err := os.WriteFile(keyPath, plaintextKey, 0600); err != nil {
+		t.Fatalf("write plaintext key: %v", err)
+	}
+
+	signer, err := NewSigner(tempDir, crypto)
+	if err != nil {
+		t.Fatalf("NewSigner failed: %v", err)
+	}
+	if !signer.SigningEnabled() {
+		t.Fatal("expected signing to be enabled after plaintext key migration")
+	}
+
+	rewritten, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("read rewritten key: %v", err)
+	}
+	if bytes.Equal(rewritten, plaintextKey) {
+		t.Fatal("expected plaintext signing key to be rewritten encrypted")
+	}
+
+	reloaded, err := NewSigner(tempDir, crypto)
+	if err != nil {
+		t.Fatalf("NewSigner reload failed: %v", err)
+	}
+	event := Event{
+		ID:        "migrate-1",
+		Timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		EventType: "login",
+		User:      "admin",
+	}
+	if signer.Sign(event) != reloaded.Sign(event) {
+		t.Fatal("expected migrated signer and reloaded signer to use the same key")
 	}
 }
 

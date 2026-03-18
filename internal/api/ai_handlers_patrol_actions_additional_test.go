@@ -11,22 +11,22 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func setupAIHandlerWithPatrolAtPath(t *testing.T, dataPath string) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore, *config.ConfigPersistence) {
+func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore) {
 	t.Helper()
 
-	cfg := &config.Config{DataPath: dataPath}
-	persistence := config.NewConfigPersistence(dataPath)
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.legacyAIService.SetStateProvider(&stubStateProvider{})
-	if err := handler.SetPatrolFindingsPersistence(ai.NewFindingsPersistenceAdapter(persistence)); err != nil {
-		t.Fatalf("set patrol findings persistence: %v", err)
-	}
+	handler.defaultAIService.SetStateProvider(&stubStateProvider{})
 
-	patrol := handler.legacyAIService.GetPatrolService()
+	patrol := handler.defaultAIService.GetPatrolService()
 	if patrol == nil {
 		t.Fatalf("expected patrol service to be initialized")
 	}
@@ -37,13 +37,6 @@ func setupAIHandlerWithPatrolAtPath(t *testing.T, dataPath string) (*AISettingsH
 	learningStore := learning.NewLearningStore(learning.LearningStoreConfig{})
 	handler.SetLearningStore(learningStore)
 
-	return handler, patrol, unifiedStore, learningStore, persistence
-}
-
-func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore) {
-	t.Helper()
-
-	handler, patrol, unifiedStore, learningStore, _ := setupAIHandlerWithPatrolAtPath(t, t.TempDir())
 	return handler, patrol, unifiedStore, learningStore
 }
 
@@ -82,6 +75,154 @@ func addUnifiedFinding(store *unified.UnifiedStore, id string, detectedAt time.T
 	}
 	store.AddFromAI(finding)
 	return finding
+}
+
+type stubQuickstartCreditManager struct {
+	remaining int
+}
+
+func (m *stubQuickstartCreditManager) HasCredits() bool                { return m.remaining > 0 }
+func (m *stubQuickstartCreditManager) CreditsRemaining() int           { return m.remaining }
+func (m *stubQuickstartCreditManager) ConsumeCredit() error            { return nil }
+func (m *stubQuickstartCreditManager) HasBYOK() bool                   { return false }
+func (m *stubQuickstartCreditManager) GetProvider() providers.Provider { return nil }
+func (m *stubQuickstartCreditManager) GrantCredits() error             { return nil }
+
+func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 7})
+	setUnexportedField(t, handler.defaultAIService, "usingQuickstart", true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.QuickstartCreditsRemaining != 7 {
+		t.Fatalf("quickstart credits remaining = %d, want 7", resp.QuickstartCreditsRemaining)
+	}
+	if resp.QuickstartCreditsTotal != pkglicensing.QuickstartCreditsTotal {
+		t.Fatalf("quickstart credits total = %d, want %d", resp.QuickstartCreditsTotal, pkglicensing.QuickstartCreditsTotal)
+	}
+	if !resp.UsingQuickstart {
+		t.Fatal("expected using_quickstart to be true")
+	}
+}
+
+func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	handler := newTestAISettingsHandler(cfg, nil, nil)
+
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:    "force_patrol",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/run",
+			handler: handler.HandleForcePatrol,
+		},
+		{
+			name:    "acknowledge",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/acknowledge",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleAcknowledgeFinding,
+		},
+		{
+			name:    "snooze",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/snooze",
+			body:    `{"finding_id":"finding-1","duration_hours":1}`,
+			handler: handler.HandleSnoozeFinding,
+		},
+		{
+			name:    "resolve",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/resolve",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleResolveFinding,
+		},
+		{
+			name:    "note",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/findings/note",
+			body:    `{"finding_id":"finding-1","note":"keep watching"}`,
+			handler: handler.HandleSetFindingNote,
+		},
+		{
+			name:    "dismiss",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/dismiss",
+			body:    `{"finding_id":"finding-1","reason":"expected_behavior"}`,
+			handler: handler.HandleDismissFinding,
+		},
+		{
+			name:    "suppress",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/suppress",
+			body:    `{"finding_id":"finding-1"}`,
+			handler: handler.HandleSuppressFinding,
+		},
+		{
+			name:    "clear_all",
+			method:  http.MethodDelete,
+			path:    "/api/ai/patrol/findings?confirm=true",
+			handler: handler.HandleClearAllFindings,
+		},
+		{
+			name:    "add_suppression_rule",
+			method:  http.MethodPost,
+			path:    "/api/ai/patrol/suppressions",
+			body:    `{"description":"known benign workload"}`,
+			handler: handler.HandleAddSuppressionRule,
+		},
+		{
+			name:    "delete_suppression_rule",
+			method:  http.MethodDelete,
+			path:    "/api/ai/patrol/suppressions/rule-1",
+			handler: handler.HandleDeleteSuppressionRule,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+
+			tc.handler(rec, req)
+
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+			}
+
+			var resp APIError
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Code != "service_unavailable" {
+				t.Fatalf("code = %q, want service_unavailable", resp.Code)
+			}
+			if resp.ErrorMessage != "Pulse Patrol service not available" {
+				t.Fatalf("error = %q, want Pulse Patrol service not available", resp.ErrorMessage)
+			}
+		})
+	}
 }
 
 func TestHandleAcknowledgeFinding_PatrolAndUnified(t *testing.T) {
@@ -302,110 +443,6 @@ func TestHandleSuppressFinding_SetsSuppressed(t *testing.T) {
 	stats := learningStore.GetStatistics()
 	if stats.TotalFeedbackRecords != 1 {
 		t.Fatalf("feedback records = %d, want 1", stats.TotalFeedbackRecords)
-	}
-}
-
-func TestHandleUndismissFinding_RestoresDismissedState(t *testing.T) {
-	handler, patrol, unifiedStore, _ := setupAIHandlerWithPatrol(t)
-
-	detectedAt := time.Now().Add(-2 * time.Hour)
-	addPatrolFinding(t, patrol, "finding-undismiss", detectedAt)
-	addUnifiedFinding(unifiedStore, "finding-undismiss", detectedAt)
-
-	if !patrol.GetFindings().Dismiss("finding-undismiss", "not_an_issue", "false positive") {
-		t.Fatalf("expected patrol dismiss to succeed")
-	}
-	if !unifiedStore.Dismiss("finding-undismiss", "not_an_issue", "false positive") {
-		t.Fatalf("expected unified dismiss to succeed")
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/undismiss", strings.NewReader(`{"finding_id":"finding-undismiss"}`))
-	rec := httptest.NewRecorder()
-
-	handler.HandleUndismissFinding(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	patrolFinding := patrol.GetFindings().Get("finding-undismiss")
-	if patrolFinding == nil {
-		t.Fatalf("expected patrol finding to exist")
-	}
-	if patrolFinding.DismissedReason != "" || patrolFinding.Suppressed {
-		t.Fatalf("expected patrol finding to be restored, got dismissed_reason=%q suppressed=%v", patrolFinding.DismissedReason, patrolFinding.Suppressed)
-	}
-
-	unifiedFinding := unifiedStore.Get("finding-undismiss")
-	if unifiedFinding == nil {
-		t.Fatalf("expected unified finding to exist")
-	}
-	if unifiedFinding.DismissedReason != "" || unifiedFinding.Suppressed {
-		t.Fatalf("expected unified finding to be restored, got dismissed_reason=%q suppressed=%v", unifiedFinding.DismissedReason, unifiedFinding.Suppressed)
-	}
-}
-
-func TestHandleUndismissFinding_NotFound(t *testing.T) {
-	handler, _, _, _ := setupAIHandlerWithPatrol(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/undismiss", strings.NewReader(`{"finding_id":"missing"}`))
-	rec := httptest.NewRecorder()
-
-	handler.HandleUndismissFinding(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", rec.Code)
-	}
-}
-
-func TestHandleUndismissFinding_PersistsAcrossRestart(t *testing.T) {
-	dataPath := t.TempDir()
-	handler, patrol, unifiedStore, _, persistence := setupAIHandlerWithPatrolAtPath(t, dataPath)
-
-	detectedAt := time.Now().Add(-2 * time.Hour)
-	addPatrolFinding(t, patrol, "finding-restart", detectedAt)
-	addUnifiedFinding(unifiedStore, "finding-restart", detectedAt)
-
-	dismissBody := `{"finding_id":"finding-restart","reason":"not_an_issue","note":"false positive"}`
-	dismissReq := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/dismiss", strings.NewReader(dismissBody))
-	dismissRec := httptest.NewRecorder()
-	handler.HandleDismissFinding(dismissRec, dismissReq)
-	if dismissRec.Code != http.StatusOK {
-		t.Fatalf("dismiss status = %d, want 200", dismissRec.Code)
-	}
-
-	undismissReq := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/undismiss", strings.NewReader(`{"finding_id":"finding-restart"}`))
-	undismissRec := httptest.NewRecorder()
-	handler.HandleUndismissFinding(undismissRec, undismissReq)
-	if undismissRec.Code != http.StatusOK {
-		t.Fatalf("undismiss status = %d, want 200", undismissRec.Code)
-	}
-
-	if err := patrol.GetFindings().ForceSave(); err != nil {
-		t.Fatalf("force save: %v", err)
-	}
-
-	onDisk, err := persistence.LoadAIFindings()
-	if err != nil {
-		t.Fatalf("load on-disk findings: %v", err)
-	}
-	record := onDisk.Findings["finding-restart"]
-	if record == nil {
-		t.Fatalf("expected finding-restart to be on disk")
-	}
-	if record.DismissedReason != "" || record.Suppressed {
-		t.Fatalf("expected on-disk finding restored, got dismissed_reason=%q suppressed=%v", record.DismissedReason, record.Suppressed)
-	}
-
-	handlerAfterRestart, patrolAfterRestart, _, _, _ := setupAIHandlerWithPatrolAtPath(t, dataPath)
-	_ = handlerAfterRestart
-
-	reloaded := patrolAfterRestart.GetFindings().Get("finding-restart")
-	if reloaded == nil {
-		t.Fatalf("expected finding to reload after restart")
-	}
-	if reloaded.DismissedReason != "" || reloaded.Suppressed {
-		t.Fatalf("expected reloaded finding restored, got dismissed_reason=%q suppressed=%v", reloaded.DismissedReason, reloaded.Suppressed)
 	}
 }
 

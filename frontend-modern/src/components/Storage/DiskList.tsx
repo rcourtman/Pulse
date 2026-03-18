@@ -1,179 +1,128 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
-import { formatTemperature } from '@/utils/temperature';
-import type { PhysicalDisk } from '@/types/api';
-import { useWebSocket } from '@/App';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import {
+  PHYSICAL_DISK_CELL_DISK_CLASS,
+  PHYSICAL_DISK_CELL_EXPAND_CLASS,
+  PHYSICAL_DISK_CELL_HEALTH_CLASS,
+  PHYSICAL_DISK_CELL_HOST_CLASS,
+  PHYSICAL_DISK_CELL_PARENT_CLASS,
+  PHYSICAL_DISK_CELL_ROLE_CLASS,
+  PHYSICAL_DISK_CELL_SIZE_CLASS,
+  PHYSICAL_DISK_CELL_SOURCE_CLASS,
+  PHYSICAL_DISK_CELL_TEMP_CLASS,
+  PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS,
+  PHYSICAL_DISK_EMPTY_CARD_CLASS,
+  PHYSICAL_DISK_EMPTY_FALLBACK_CLASS,
+  PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS,
+  PHYSICAL_DISK_EMPTY_MESSAGE_CLASS,
+  PHYSICAL_DISK_EMPTY_REQUIREMENTS_CLASS,
+  PHYSICAL_DISK_EMPTY_REQUIREMENTS_LIST_CLASS,
+  PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS,
+  PHYSICAL_DISK_EMPTY_REQUIREMENTS_TITLE_CLASS,
+  PHYSICAL_DISK_EMPTY_TITLE_CLASS,
+  PHYSICAL_DISK_EXPAND_BUTTON_CLASS,
+  PHYSICAL_DISK_HEADER_DISK_CLASS,
+  PHYSICAL_DISK_HEADER_EXPAND_CLASS,
+  PHYSICAL_DISK_HEADER_HEALTH_CLASS,
+  PHYSICAL_DISK_HEADER_HOST_CLASS,
+  PHYSICAL_DISK_HEADER_PARENT_CLASS,
+  PHYSICAL_DISK_HEADER_ROLE_CLASS,
+  PHYSICAL_DISK_HEADER_SIZE_CLASS,
+  PHYSICAL_DISK_HEADER_SOURCE_CLASS,
+  PHYSICAL_DISK_HEADER_TEMP_CLASS,
+  PHYSICAL_DISK_HEALTH_LABEL_CLASS,
+  PHYSICAL_DISK_HEALTH_SUMMARY_CLASS,
+  PHYSICAL_DISK_HEALTH_WRAP_CLASS,
+  PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
+  PHYSICAL_DISK_NAME_TEXT_CLASS,
+  PHYSICAL_DISK_NAME_WRAP_CLASS,
+  PHYSICAL_DISK_SIZE_VALUE_CLASS,
+  PHYSICAL_DISK_TEMPERATURE_CLASS,
+  PHYSICAL_DISK_VALUE_TEXT_CLASS,
+  PHYSICAL_DISK_TABLE_BODY_CLASS,
+  PHYSICAL_DISK_TABLE_CLASS,
+  PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS,
+  PHYSICAL_DISK_TABLE_ROW_CLASS,
+  PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
+  PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS,
+  PHYSICAL_DISK_TABLE_ROW_STYLE,
+  PHYSICAL_DISK_TABLE_SCROLL_CLASS,
+  getPhysicalDiskEmptyStatePresentation,
+  getPhysicalDiskExpandIconClass,
+  getPhysicalDiskHealthStatus,
+  getPhysicalDiskHealthSummary,
+  getPhysicalDiskHostLabel,
+  getPhysicalDiskParentLabel,
+  getPhysicalDiskRoleLabel,
+  getPhysicalDiskSourceBadgePresentation,
+} from '@/features/storageBackups/diskPresentation';
+import type { Resource } from '@/types/resource';
 import { DiskDetail } from './DiskDetail';
-
-/** Format power-on hours into human-readable form (e.g., "2.3y", "140d", "5h"). */
-function formatPowerOnHours(hours: number): string {
-  if (hours >= 8760) {
-    return `${(hours / 8760).toFixed(1)}y`;
-  }
-  if (hours >= 24) {
-    return `${Math.round(hours / 24)}d`;
-  }
-  return `${hours}h`;
-}
-
-/** Returns true if any critical SMART counters are non-zero. */
-function hasSmartWarning(disk: PhysicalDisk): boolean {
-  const attrs = disk.smartAttributes;
-  if (!attrs) return false;
-  if (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) return true;
-  if (attrs.pendingSectors && attrs.pendingSectors > 0) return true;
-  if (attrs.mediaErrors && attrs.mediaErrors > 0) return true;
-  return false;
-}
+import { useDiskListModel } from './useDiskListModel';
 
 interface DiskListProps {
-  disks: PhysicalDisk[];
+  disks: Resource[];
+  nodes: Resource[];
   selectedNode: string | null;
   searchTerm: string;
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
-  const { state } = useWebSocket();
-  const [selectedDisk, setSelectedDisk] = createSignal<PhysicalDisk | null>(null);
-
-  // Check if there are any PVE nodes configured
-  const hasPVENodes = createMemo(() => {
-    return (state.nodes || []).length > 0;
+  const model = useDiskListModel({
+    disks: () => props.disks,
+    nodes: () => props.nodes,
+    selectedNode: () => props.selectedNode,
+    searchTerm: () => props.searchTerm,
   });
-
-  // Filter disks based on selected node and search term
-  const filteredDisks = createMemo(() => {
-    let disks = props.disks || [];
-
-    // Filter by node if selected using both instance and node name
-    if (props.selectedNode) {
-      const node = state.nodes?.find((n) => n.id === props.selectedNode);
-      if (node) {
-        disks = disks.filter(
-          (d) => d.instance === node.instance && d.node === node.name,
-        );
-      }
-    }
-
-    // Filter by search term
-    if (props.searchTerm) {
-      const term = props.searchTerm.toLowerCase();
-      disks = disks.filter(
-        (d) =>
-          d.model.toLowerCase().includes(term) ||
-          d.devPath.toLowerCase().includes(term) ||
-          d.serial.toLowerCase().includes(term) ||
-          d.node.toLowerCase().includes(term),
-      );
-    }
-
-    // Sort by node and devPath - create a copy to avoid mutating store
-    return [...disks].sort((a, b) => {
-      if (a.node !== b.node) return a.node.localeCompare(b.node);
-      return a.devPath.localeCompare(b.devPath);
+  const emptyState = () =>
+    getPhysicalDiskEmptyStatePresentation({
+      selectedNodeName: model.selectedNodeName(),
+      searchTerm: props.searchTerm,
+      diskCount: (props.disks || []).length,
+      hasPVENodes: model.hasPVENodes(),
     });
-  });
-
-  // Get health status color and badge
-  const getHealthStatus = (disk: PhysicalDisk) => {
-    const healthValue = (disk.health || '').trim();
-    const normalizedHealth = healthValue.toUpperCase();
-    const isHealthy =
-      normalizedHealth === 'PASSED' ||
-      normalizedHealth === 'OK' ||
-      normalizedHealth === 'GOOD';
-
-    if (isHealthy) {
-      // Check wearout for SSDs
-      if (disk.wearout > 0 && disk.wearout < 10) {
-        return {
-          color: 'text-yellow-700 dark:text-yellow-400',
-          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
-          text: 'LOW LIFE',
-        };
-      }
-      const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth;
-      return {
-        color: 'text-green-700 dark:text-green-400',
-        bgColor: 'bg-green-100 dark:bg-green-900/30',
-        text: label,
-      };
-    } else if (normalizedHealth === 'FAILED') {
-      return {
-        color: 'text-red-700 dark:text-red-400',
-        bgColor: 'bg-red-100 dark:bg-red-900/30',
-        text: 'FAILED',
-      };
-    }
-    return {
-      color: 'text-gray-700 dark:text-gray-400',
-      bgColor: 'bg-gray-100 dark:bg-gray-700',
-      text: 'UNKNOWN',
-    };
-  };
-
-  // Get disk type badge color
-  const getDiskTypeBadge = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'nvme':
-        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300';
-      case 'sata':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300';
-      case 'sas':
-        return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300';
-      default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
-    }
-  };
-
-  // Get selected node name for display
-  const selectedNodeName = createMemo(() => {
-    if (!props.selectedNode) return null;
-    const node = state.nodes?.find(n => n.id === props.selectedNode);
-    return node?.name || null;
-  });
-
-  const handleRowClick = (disk: PhysicalDisk) => {
-    const current = selectedDisk();
-    if (current && current.id === disk.id) {
-      setSelectedDisk(null);
-    } else {
-      setSelectedDisk(disk);
-    }
-  };
 
   return (
     <div>
-      <Show when={filteredDisks().length === 0}>
-        <Card padding="lg" class="text-center">
-          <div class="text-gray-500">
-            <p class="text-sm font-medium">No physical disks found</p>
-            {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
-            {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
+      <Show when={model.filteredDisks().length === 0}>
+        <Card padding="lg" class={PHYSICAL_DISK_EMPTY_CARD_CLASS}>
+          <div class="">
+            <p class={PHYSICAL_DISK_EMPTY_TITLE_CLASS}>{emptyState().title}</p>
+            <Show when={emptyState().nodeMessage}>
+              {(message) => <p class={PHYSICAL_DISK_EMPTY_MESSAGE_CLASS}>{message()}</p>}
+            </Show>
+            <Show when={emptyState().searchMessage}>
+              {(message) => <p class={PHYSICAL_DISK_EMPTY_MESSAGE_CLASS}>{message()}</p>}
+            </Show>
           </div>
           <Show when={!props.searchTerm && (props.disks || []).length === 0}>
             <Show
-              when={hasPVENodes()}
+              when={emptyState().showRequirements}
               fallback={
-                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-left">
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
-                  </p>
+                <div class={PHYSICAL_DISK_EMPTY_FALLBACK_CLASS}>
+                  <p class={PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS}>{emptyState().fallbackMessage}</p>
                 </div>
               }
             >
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-left">
-                <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Physical disk monitoring requirements:
+              <div class={PHYSICAL_DISK_EMPTY_REQUIREMENTS_CLASS}>
+                <p class={PHYSICAL_DISK_EMPTY_REQUIREMENTS_TITLE_CLASS}>
+                  {emptyState().requirementsTitle}
                 </p>
-                <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
-                  <li>Enable "Monitor physical disk health (SMART)" in Settings → Proxmox Nodes (Advanced)</li>
-                  <li>Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"</li>
-                  <li>Wait 5 minutes for Proxmox to collect SMART data</li>
+                <ol class={PHYSICAL_DISK_EMPTY_REQUIREMENTS_LIST_CLASS}>
+                  <For each={emptyState().requirementsItems}>{(item) => <li>{item}</li>}</For>
                 </ol>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-                  Note: Both Pulse and Proxmox must have SMART monitoring enabled.
+                <p class={PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS}>
+                  {emptyState().requirementsNote}
                 </p>
               </div>
             </Show>
@@ -181,179 +130,152 @@ export const DiskList: Component<DiskListProps> = (props) => {
         </Card>
       </Show>
 
-      <Show when={filteredDisks().length > 0}>
-        <Card padding="none" tone="glass" class="overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full" style={{ "min-width": "800px" }}>
-              <thead>
-                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
-                    Node
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
-                    Device
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
-                    Model
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    Type
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    FS
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
-                    Health
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
-                    SSD Life
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
-                    Power-On
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    Temp
-                  </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
-                    Size
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <For each={filteredDisks()}>
+      <Show when={model.filteredDisks().length > 0}>
+        <Card padding="none" tone="card" class="overflow-hidden">
+          <div class={PHYSICAL_DISK_TABLE_SCROLL_CLASS} style={{ '-webkit-overflow-scrolling': 'touch' }}>
+            <Table class={PHYSICAL_DISK_TABLE_CLASS}>
+              <TableHeader>
+                <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
+                  <TableHead class={PHYSICAL_DISK_HEADER_DISK_CLASS}>Disk</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_SOURCE_CLASS}>Source</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_HOST_CLASS}>Host</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_ROLE_CLASS}>Role</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_PARENT_CLASS}>Belongs To</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>
+                  <TableHead class={PHYSICAL_DISK_HEADER_EXPAND_CLASS} />
+                </TableRow>
+              </TableHeader>
+              <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
+                <For each={model.filteredDisks()}>
                   {(disk) => {
-                    const health = getHealthStatus(disk);
-                    const isSelected = () => selectedDisk()?.id === disk.id;
-                    const warning = hasSmartWarning(disk);
+                    const data = model.getDiskData(disk);
+                    const status = getPhysicalDiskHealthStatus(data);
+                    const hostLabel = getPhysicalDiskHostLabel(data, disk);
+                    const healthSummary = getPhysicalDiskHealthSummary(status);
+                    const sourceBadge = getPhysicalDiskSourceBadgePresentation(disk);
+                    const isSelected = () => model.selectedDisk()?.id === disk.id;
 
                     return (
                       <>
-                        <tr
-                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}
-                          onClick={() => handleRowClick(disk)}
+                        <TableRow
+                          class={`${PHYSICAL_DISK_TABLE_ROW_CLASS} ${
+                            isSelected() ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
+                          }`}
+                          style={PHYSICAL_DISK_TABLE_ROW_STYLE}
+                          onClick={() => model.toggleSelectedDisk(disk)}
                         >
-                          <td class="px-1 py-1.5 text-xs">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                              <div
-                                class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
+                          <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
+                            <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
+                              <span
+                                class={PHYSICAL_DISK_NAME_TEXT_CLASS}
+                                title={data.devPath || data.model || disk.name || 'Unknown Disk'}
                               >
-                                <svg class="w-3.5 h-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </div>
-                              <span class="font-medium text-gray-900 dark:text-gray-100">
-                                {disk.node}
+                                {data.model || 'Unknown Disk'}
                               </span>
                             </div>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <span class="font-mono text-gray-600 dark:text-gray-400">
-                              {disk.devPath}
-                            </span>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <span class="text-gray-700 dark:text-gray-300">
-                              {disk.model || 'Unknown'}
-                            </span>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(disk.type)}`}
-                            >
-                              {disk.type.toUpperCase()}
-                            </span>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <Show
-                              when={disk.used && disk.used !== 'unknown'}
-                              fallback={<span class="text-gray-400">-</span>}
-                            >
-                              <span class="text-[10px] font-mono text-gray-600 dark:text-gray-400">
-                                {disk.used}
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_SOURCE_CLASS}>
+                            <span class={sourceBadge.className}>{sourceBadge.label}</span>
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_HOST_CLASS}>
+                            <Show when={hostLabel} fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}>
+                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel}>
+                                {hostLabel}
                               </span>
                             </Show>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_ROLE_CLASS}>
+                            <Show
+                              when={getPhysicalDiskRoleLabel(data)}
+                              fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                             >
-                              {health.text}
-                            </span>
-                            <Show when={warning}>
-                              <span class="ml-1 text-yellow-500 dark:text-yellow-400" title="SMART warning: critical counters non-zero">
-                                &#9888;
+                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={getPhysicalDiskRoleLabel(data)}>
+                                {getPhysicalDiskRoleLabel(data)}
                               </span>
                             </Show>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_PARENT_CLASS}>
                             <Show
-                              when={disk.wearout > 0}
-                              fallback={<span class="text-gray-400">-</span>}
+                              when={getPhysicalDiskParentLabel(data)}
+                              fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                             >
-                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                <div
-                                  class={`absolute top-0 left-0 h-full ${disk.wearout >= 50
-                                    ? 'bg-green-500/60 dark:bg-green-500/50'
-                                    : disk.wearout >= 20
-                                      ? 'bg-yellow-500/60 dark:bg-yellow-500/50'
-                                      : disk.wearout >= 10
-                                        ? 'bg-orange-500/60 dark:bg-orange-500/50'
-                                        : 'bg-red-500/60 dark:bg-red-500/50'
-                                    }`}
-                                  style={{ width: `${disk.wearout}%` }}
-                                />
-                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                  <span class="whitespace-nowrap px-0.5">{disk.wearout}%</span>
+                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={getPhysicalDiskParentLabel(data)}>
+                                {getPhysicalDiskParentLabel(data)}
+                              </span>
+                            </Show>
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_HEALTH_CLASS}>
+                            <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
+                              <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status.tone}`}>
+                                {status.label}
+                              </span>
+                              <Show when={healthSummary}>
+                                <span class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS} title={healthSummary}>
+                                  {healthSummary}
                                 </span>
-                              </div>
-                            </Show>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <Show
-                              when={disk.smartAttributes?.powerOnHours != null}
-                              fallback={<span class="text-gray-400">-</span>}
-                            >
-                              <span class="text-gray-700 dark:text-gray-300">
-                                {formatPowerOnHours(disk.smartAttributes!.powerOnHours!)}
-                              </span>
-                            </Show>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <Show
-                              when={typeof disk.temperature === 'number'}
-                              fallback={<span class="font-medium text-gray-400">-</span>}
-                            >
-                              <span
-                                class={`font-medium ${disk.temperature > 70
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : disk.temperature > 60
-                                    ? 'text-yellow-600 dark:text-yellow-400'
-                                    : 'text-green-600 dark:text-green-400'
-                                  }`}
-                              >
-                                {formatTemperature(disk.temperature)}
-                              </span>
-                            </Show>
-                          </td>
-                          <td class="px-1 py-1.5 text-xs">
-                            <span class="text-gray-700 dark:text-gray-300">
-                              {formatBytes(disk.size)}
+                              </Show>
+                            </div>
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_TEMP_CLASS}>
+                            <span class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}>
+                              {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
                             </span>
-                          </td>
-                        </tr>
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
+                            <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>{formatBytes(data.size)}</span>
+                          </TableCell>
+
+                          <TableCell class={PHYSICAL_DISK_CELL_EXPAND_CLASS}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                model.toggleSelectedDisk(disk);
+                              }}
+                              class={PHYSICAL_DISK_EXPAND_BUTTON_CLASS}
+                              aria-label={`Toggle details for ${data.model || 'disk'}`}
+                            >
+                              <svg
+                                class={getPhysicalDiskExpandIconClass(isSelected())}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  d="M9 5l7 7-7 7"
+                                />
+                              </svg>
+                            </button>
+                          </TableCell>
+                        </TableRow>
                         <Show when={isSelected()}>
-                          <tr>
-                            <td colSpan={10} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
-                              <DiskDetail disk={disk} />
-                            </td>
-                          </tr>
+                          <TableRow>
+                            <TableCell
+                              colSpan={9}
+                              class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
+                            >
+                              <DiskDetail disk={disk} nodes={props.nodes} />
+                            </TableCell>
+                          </TableRow>
                         </Show>
                       </>
                     );
                   }}
                 </For>
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
       </Show>

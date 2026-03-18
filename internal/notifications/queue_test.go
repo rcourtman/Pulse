@@ -1,12 +1,17 @@
 package notifications
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 func TestCalculateBackoff(t *testing.T) {
@@ -15,6 +20,11 @@ func TestCalculateBackoff(t *testing.T) {
 		attempt  int
 		expected time.Duration
 	}{
+		{
+			name:     "negative attempt defaults to first backoff",
+			attempt:  -1,
+			expected: 1 * time.Second,
+		},
 		{
 			name:     "attempt 0 (first retry)",
 			attempt:  0,
@@ -60,9 +70,11 @@ func TestCalculateBackoff(t *testing.T) {
 			attempt:  10,
 			expected: 60 * time.Second,
 		},
-		// Note: For very large attempt numbers (>= 60 on 64-bit), bit shift
-		// overflows causing duration to be 0. In practice this never happens
-		// as max_attempts is typically 3-10.
+		{
+			name:     "very large attempts stay capped",
+			attempt:  60,
+			expected: 60 * time.Second,
+		},
 	}
 
 	for _, tc := range tests {
@@ -73,6 +85,92 @@ func TestCalculateBackoff(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewNotificationQueue_WhitespaceDataDirUsesDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+
+	nq, err := NewNotificationQueue("   \t  ")
+	if err != nil {
+		t.Fatalf("Failed to create notification queue with whitespace data dir: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	expectedDBPath := filepath.Join(utils.GetDataDir(), "notifications", "notification_queue.db")
+	if nq.dbPath != expectedDBPath {
+		t.Fatalf("expected db path %q, got %q", expectedDBPath, nq.dbPath)
+	}
+}
+
+func TestEnqueue_ValidatesAndNormalizesInput(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	t.Run("rejects nil notification", func(t *testing.T) {
+		err := nq.Enqueue(nil)
+		if err == nil {
+			t.Fatalf("expected error for nil notification")
+		}
+	})
+
+	t.Run("rejects empty type", func(t *testing.T) {
+		err := nq.Enqueue(&QueuedNotification{
+			Config: []byte(`{}`),
+		})
+		if err == nil {
+			t.Fatalf("expected error for empty notification type")
+		}
+	})
+
+	t.Run("rejects empty config", func(t *testing.T) {
+		err := nq.Enqueue(&QueuedNotification{
+			Type: "email",
+		})
+		if err == nil {
+			t.Fatalf("expected error for empty notification config")
+		}
+	})
+
+	t.Run("normalizes attempts and type", func(t *testing.T) {
+		futureRetry := time.Now().Add(1 * time.Hour)
+		notif := &QueuedNotification{
+			ID:          "normalize-test",
+			Type:        "  email  ",
+			Status:      QueueStatusPending,
+			Attempts:    -10,
+			MaxAttempts: -2,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry, // keep background worker from picking it up
+			Alerts:      []*alerts.Alert{{ID: "a-1"}},
+		}
+
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("enqueue failed: %v", err)
+		}
+
+		var dbType string
+		var attempts int
+		var maxAttempts int
+		err := nq.db.QueryRow(`SELECT type, attempts, max_attempts FROM notification_queue WHERE id = ?`, notif.ID).Scan(&dbType, &attempts, &maxAttempts)
+		if err != nil {
+			t.Fatalf("failed to query normalized notification: %v", err)
+		}
+
+		if dbType != "email" {
+			t.Fatalf("expected trimmed type 'email', got %q", dbType)
+		}
+		if attempts != 0 {
+			t.Fatalf("expected attempts to normalize to 0, got %d", attempts)
+		}
+		if maxAttempts != defaultQueueMaxAttempts {
+			t.Fatalf("expected max attempts to normalize to %d, got %d", defaultQueueMaxAttempts, maxAttempts)
+		}
+	})
 }
 
 func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
@@ -94,6 +192,14 @@ func TestCalculateBackoff_NeverExceedsCap(t *testing.T) {
 		result := calculateBackoff(attempt)
 		if result > cap {
 			t.Errorf("calculateBackoff(%d) = %v, exceeds cap of %v", attempt, result, cap)
+		}
+	}
+}
+
+func TestCalculateBackoff_LargeAttemptStillCapped(t *testing.T) {
+	for _, attempt := range []int{60, 1000} {
+		if got := calculateBackoff(attempt); got != 60*time.Second {
+			t.Errorf("calculateBackoff(%d) = %v, want %v", attempt, got, 60*time.Second)
 		}
 	}
 }
@@ -206,7 +312,7 @@ func TestQueuedNotification_ZeroValues(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_EmptyInput(t *testing.T) {
+func TestCancelByAlertIdentifiers_EmptyInput(t *testing.T) {
 	// Create a temporary queue for testing
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
@@ -215,25 +321,25 @@ func TestCancelByAlertIDs_EmptyInput(t *testing.T) {
 	}
 
 	// Empty slice should return nil without error
-	err = nq.CancelByAlertIDs([]string{})
+	err = nq.CancelByAlertIdentifiers([]string{})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs with empty slice returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers with empty slice returned error: %v", err)
 	}
 
 	// Nil slice should also return nil without error
-	err = nq.CancelByAlertIDs(nil)
+	err = nq.CancelByAlertIdentifiers(nil)
 	if err != nil {
-		t.Errorf("CancelByAlertIDs with nil slice returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers with nil slice returned error: %v", err)
 	}
 }
 
-func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
+func TestCancelByAlertIdentifiers_NoMatchingNotifications(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -251,9 +357,9 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	}
 
 	// Cancel with non-matching alert ID
-	err = nq.CancelByAlertIDs([]string{"alert-2"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-2"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is still pending using GetQueueStats
@@ -269,13 +375,109 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
+func TestNewNotificationQueueCreatesSecureDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits are not reliably enforced on windows")
+	}
+
+	baseDir := t.TempDir()
+	queueDir := baseDir + "/notification-queue"
+
+	nq, err := NewNotificationQueue(queueDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	info, err := os.Stat(queueDir)
+	if err != nil {
+		t.Fatalf("failed to stat queue directory: %v", err)
+	}
+
+	if perms := info.Mode().Perm(); perms != 0700 {
+		t.Fatalf("expected queue directory permissions 0700, got %#o", perms)
+	}
+}
+
+func TestNewNotificationQueue_MigratesAuditAlertIdentifiersColumn(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "notification_queue.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+
+	legacySchema := `
+	CREATE TABLE notification_queue (
+		id TEXT PRIMARY KEY,
+		type TEXT NOT NULL,
+		method TEXT,
+		status TEXT NOT NULL,
+		alerts TEXT NOT NULL,
+		config TEXT NOT NULL,
+		attempts INTEGER NOT NULL DEFAULT 0,
+		max_attempts INTEGER NOT NULL DEFAULT 3,
+		last_attempt INTEGER,
+		last_error TEXT,
+		created_at INTEGER NOT NULL,
+		next_retry_at INTEGER,
+		completed_at INTEGER,
+		payload_bytes INTEGER
+	);
+
+	CREATE TABLE notification_audit (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		notification_id TEXT NOT NULL,
+		type TEXT NOT NULL,
+		method TEXT,
+		status TEXT NOT NULL,
+		alert_ids TEXT,
+		alert_count INTEGER,
+		attempts INTEGER,
+		success BOOLEAN,
+		error_message TEXT,
+		payload_size INTEGER,
+		timestamp INTEGER NOT NULL
+	);
+	`
+	if _, err := db.Exec(legacySchema); err != nil {
+		_ = db.Close()
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
+
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("NewNotificationQueue failed: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	columns, err := nq.tableColumns("notification_audit")
+	if err != nil {
+		t.Fatalf("tableColumns(notification_audit) failed: %v", err)
+	}
+	if !columns[notificationAuditAlertIdentifiersColumn] {
+		t.Fatalf("expected migrated alert_identifiers column, got %#v", columns)
+	}
+	if columns[legacyNotificationAuditAlertIdentifiersColumn] {
+		t.Fatalf(
+			"did not expect legacy %s column after migration, got %#v",
+			legacyNotificationAuditAlertIdentifiersColumn,
+			columns,
+		)
+	}
+}
+
+func TestCancelByAlertIdentifiers_MatchingNotificationCancelled(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -293,9 +495,9 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	}
 
 	// Cancel with matching alert ID
-	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is now cancelled using GetQueueStats
@@ -309,15 +511,24 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	if stats["cancelled"] != 1 {
 		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
 	}
+
+	var completedAt sql.NullInt64
+	err = nq.db.QueryRow(`SELECT completed_at FROM notification_queue WHERE id = ?`, "notif-1").Scan(&completedAt)
+	if err != nil {
+		t.Fatalf("Failed to query completed_at: %v", err)
+	}
+	if !completedAt.Valid || completedAt.Int64 <= 0 {
+		t.Errorf("Expected completed_at to be set for cancelled notification, got %+v", completedAt)
+	}
 }
 
-func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
+func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with multiple alerts (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -338,9 +549,9 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 
 	// Cancel with only one matching alert ID - should still cancel the notification
-	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is cancelled (any matching alert should cancel)
@@ -356,12 +567,119 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 }
 
+func TestCancelByAlertIdentifiers_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-cancelled-metadata",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+
+	var status string
+	var completedAt sql.NullInt64
+	var nextRetryAt sql.NullInt64
+	if err := nq.db.QueryRow(
+		`SELECT status, completed_at, next_retry_at FROM notification_queue WHERE id = ?`,
+		notif.ID,
+	).Scan(&status, &completedAt, &nextRetryAt); err != nil {
+		t.Fatalf("Failed to query cancelled notification row: %v", err)
+	}
+
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusCancelled)
+	}
+	if !completedAt.Valid || completedAt.Int64 <= 0 {
+		t.Fatalf("completed_at should be set for cancelled notifications, got %v", completedAt)
+	}
+	if nextRetryAt.Valid {
+		t.Fatalf("next_retry_at should be NULL after cancellation, got %v", nextRetryAt)
+	}
+}
+
+func TestCancelByTypes_CancelsOnlyMatchingNotificationTypes(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	for _, notif := range []*QueuedNotification{
+		{
+			ID:          "notif-email",
+			Type:        "email",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-email"}},
+		},
+		{
+			ID:          "notif-email-resolved",
+			Type:        "email_resolved",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-email-resolved"}},
+		},
+		{
+			ID:          "notif-webhook",
+			Type:        "webhook",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-webhook"}},
+		},
+	} {
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("Failed to enqueue %s: %v", notif.ID, err)
+		}
+	}
+
+	if err := nq.CancelByTypes([]string{"email", "email_resolved"}, "Email notifications disabled"); err != nil {
+		t.Fatalf("CancelByTypes returned error: %v", err)
+	}
+
+	stats, err := nq.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats["cancelled"] != 2 {
+		t.Fatalf("expected 2 cancelled notifications, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 1 {
+		t.Fatalf("expected 1 pending notification remaining, got %d (stats: %v)", stats["pending"], stats)
+	}
+}
+
 func TestProcessNotification_CancelledNotification(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Create a cancelled notification
 	notif := &QueuedNotification{
@@ -384,6 +702,7 @@ func TestProcessNotification_NoProcessor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification first so IncrementAttemptAndSetStatus works
 	notif := &QueuedNotification{
@@ -411,6 +730,7 @@ func TestProcessNotification_ProcessorSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification
 	notif := &QueuedNotification{
@@ -524,7 +844,7 @@ func TestIncrementAttempt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Set next_retry_at far in the future so background processor doesn't pick it up
 		futureRetry := time.Now().Add(1 * time.Hour)
@@ -574,7 +894,7 @@ func TestIncrementAttempt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Calling IncrementAttempt on non-existent ID should not error
 		// (the SQL UPDATE just affects 0 rows)
@@ -592,7 +912,7 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		stats, err := nq.GetQueueStats()
 		if err != nil {
@@ -611,16 +931,12 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
-
-		// Keep pending notifications out of the runnable window so the background
-		// processor can't race this test and mutate statuses before assertions.
-		futureRetry := time.Now().Add(1 * time.Hour)
+		defer func() { _ = nq.Stop() }()
 
 		// Enqueue notifications with different statuses
 		notifications := []*QueuedNotification{
-			{ID: "pending-1", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry},
-			{ID: "pending-2", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry},
+			{ID: "pending-1", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+			{ID: "pending-2", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
 			{ID: "sending-1", Type: "webhook", Status: QueueStatusSending, MaxAttempts: 3, Config: []byte(`{}`)},
 		}
 
@@ -663,7 +979,7 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		err = nq.UpdateStatus("non-existent-id", QueueStatusSent, "")
 		if err == nil {
@@ -679,7 +995,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert a notification directly with old completed_at timestamp
 		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
@@ -727,13 +1043,61 @@ func TestPerformCleanup(t *testing.T) {
 		}
 	})
 
+	t.Run("cleanup removes old completed entries with audit rows", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer func() { _ = nq.Stop() }()
+
+		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
+		recentAuditTime := time.Now().Add(-1 * time.Hour).Unix()
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"old-sent-with-audit", "email", "sent", "{}", "[]", 1, 3, oldTime, oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert old notification: %v", err)
+		}
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_audit (notification_id, type, status, timestamp)
+			VALUES (?, ?, ?, ?)`,
+			"old-sent-with-audit", "email", "sent", recentAuditTime)
+		if err != nil {
+			t.Fatalf("Failed to insert audit row: %v", err)
+		}
+
+		nq.performCleanup()
+
+		var count int
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "old-sent-with-audit").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query queue row: %v", err)
+		}
+		if count != 0 {
+			t.Error("old completed notification with audit row should have been cleaned up")
+		}
+
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_audit WHERE notification_id = ?`, "old-sent-with-audit").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query audit rows: %v", err)
+		}
+		if count != 0 {
+			t.Error("audit rows for deleted notification should have been cleaned up")
+		}
+	})
+
 	t.Run("cleanup removes old DLQ entries", func(t *testing.T) {
 		tempDir := t.TempDir()
 		nq, err := NewNotificationQueue(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert old DLQ entry (> 30 days)
 		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
@@ -786,7 +1150,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert parent notifications first (foreign key constraint)
 		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
@@ -857,7 +1221,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Should not panic or error
 		nq.performCleanup()
@@ -879,5 +1243,45 @@ func TestNewNotificationQueue_InvalidPath(t *testing.T) {
 	_, err := NewNotificationQueue(invalidPath)
 	if err == nil {
 		t.Error("expected error when creating notification queue with invalid path, got nil")
+	}
+}
+
+func TestNotificationQueueStopIsIdempotent(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	const callers = 16
+	var wg sync.WaitGroup
+	wg.Add(callers)
+
+	panicCh := make(chan interface{}, callers)
+	errCh := make(chan error, callers)
+
+	for i := 0; i < callers; i++ {
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicCh <- r
+				}
+			}()
+			errCh <- nq.Stop()
+		}()
+	}
+
+	wg.Wait()
+	close(panicCh)
+	close(errCh)
+
+	if len(panicCh) > 0 {
+		t.Fatalf("Stop panicked under concurrent calls: %v", <-panicCh)
+	}
+
+	for stopErr := range errCh {
+		if stopErr != nil {
+			t.Fatalf("Stop returned error under concurrent calls: %v", stopErr)
+		}
 	}
 }

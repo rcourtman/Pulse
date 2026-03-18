@@ -6,6 +6,35 @@ import (
 	"testing"
 )
 
+func TestGetCurrentVersion_UsesBuildVersion(t *testing.T) {
+	oldBuildVersion := BuildVersion
+	BuildVersion = "6.0.0-rc.1"
+	defer func() {
+		BuildVersion = oldBuildVersion
+	}()
+
+	t.Setenv("PATH", "")
+	t.Setenv("PULSE_MOCK_MODE", "")
+	t.Setenv("PULSE_ALLOW_DOCKER_UPDATES", "")
+
+	info, err := GetCurrentVersion()
+	if err != nil {
+		t.Fatalf("GetCurrentVersion error: %v", err)
+	}
+	if info.Version != "6.0.0-rc.1" {
+		t.Fatalf("Version = %q, want 6.0.0-rc.1", info.Version)
+	}
+	if info.Build != "release" {
+		t.Fatalf("Build = %q, want release", info.Build)
+	}
+	if info.IsDevelopment {
+		t.Fatalf("IsDevelopment = true, want false")
+	}
+	if info.Channel != "rc" {
+		t.Fatalf("Channel = %q, want rc", info.Channel)
+	}
+}
+
 func TestGetCurrentVersion_UsesVersionFile(t *testing.T) {
 	oldwd, err := os.Getwd()
 	if err != nil {

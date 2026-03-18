@@ -17,6 +17,7 @@ INSTALL_DIR="/opt/pulse"
 CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
 SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
+DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
 BUILD_FROM_SOURCE=false
 SKIP_DOWNLOAD=false
 IN_CONTAINER=false
@@ -29,7 +30,6 @@ CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
-STOPPED_PULSE_SERVICE=""
 
 # Installer version - the major version this script is bundled with
 INSTALLER_MAJOR_VERSION=5
@@ -74,6 +74,110 @@ get_latest_release_from_redirect() {
 
     printf '%s\n' "$tag"
     return 0
+}
+
+resolve_install_script_download_url() {
+    if [[ -n "${FORCE_VERSION:-}" ]]; then
+        printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$FORCE_VERSION"
+        return 0
+    fi
+
+    local channel="${FORCE_CHANNEL:-${UPDATE_CHANNEL:-stable}}"
+    if [[ "$channel" != "rc" ]]; then
+        printf 'https://github.com/%s/releases/latest/download/install.sh\n' "$GITHUB_REPO"
+        return 0
+    fi
+
+    local releases_json=""
+    if command -v timeout >/dev/null 2>&1; then
+        releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+    else
+        releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+    fi
+
+    local rc_release=""
+    if [[ -n "$releases_json" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            rc_release=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
+        else
+            rc_release=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        fi
+    fi
+
+    if [[ -z "$rc_release" || "$rc_release" == "null" ]]; then
+        return 1
+    fi
+
+    printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$rc_release"
+}
+
+resolve_release_asset_base_url() {
+    if [[ -n "${LATEST_RELEASE:-}" ]]; then
+        printf 'https://github.com/%s/releases/download/%s\n' "$GITHUB_REPO" "$LATEST_RELEASE"
+        return 0
+    fi
+
+    printf 'https://github.com/%s/releases/latest/download\n' "$GITHUB_REPO"
+}
+
+selected_update_channel() {
+    if [[ -n "${FORCE_CHANNEL:-}" ]]; then
+        printf '%s\n' "$FORCE_CHANNEL"
+        return 0
+    fi
+
+    if [[ -n "${FORCE_VERSION:-}" ]]; then
+        if [[ "$FORCE_VERSION" == *-* ]]; then
+            printf 'rc\n'
+        else
+            printf 'stable\n'
+        fi
+        return 0
+    fi
+
+    if [[ -n "${UPDATE_CHANNEL:-}" ]]; then
+        printf '%s\n' "$UPDATE_CHANNEL"
+        return 0
+    fi
+
+    if [[ -f "$CONFIG_DIR/system.json" ]]; then
+        local configured_channel=""
+        configured_channel=$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_DIR/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+        if [[ -n "$configured_channel" ]]; then
+            printf '%s\n' "$configured_channel"
+            return 0
+        fi
+    fi
+
+    printf 'stable\n'
+}
+
+build_container_install_command() {
+    local install_cmd="bash /tmp/install.sh --in-container"
+
+    if [[ -n "${FORCE_VERSION:-}" ]]; then
+        install_cmd="$install_cmd --version '$FORCE_VERSION'"
+    elif [[ "$(selected_update_channel)" == "rc" ]]; then
+        install_cmd="$install_cmd --rc"
+    fi
+
+    if [[ -n "${auto_updates_flag:-}" ]]; then
+        install_cmd="$install_cmd $auto_updates_flag"
+    fi
+    if [[ "${BUILD_FROM_SOURCE:-false}" == "true" ]]; then
+        install_cmd="$install_cmd --source '$SOURCE_BRANCH'"
+    fi
+    if [[ "${frontend_port:-7655}" != "7655" ]]; then
+        install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
+    fi
+
+    printf '%s\n' "$install_cmd"
+}
+
+print_container_recovery_command() {
+    local install_cmd
+    install_cmd=$(build_container_install_command)
+    print_info "  $install_cmd"
 }
 
 detect_lxc_ctid() {
@@ -187,35 +291,6 @@ safe_systemctl() {
         fi
     }
 }
-
-stop_pulse_service_for_update() {
-    local service_name="${1:-$(detect_service_name)}"
-
-    if ! command -v systemctl >/dev/null 2>&1; then
-        return 1
-    fi
-
-    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        STOPPED_PULSE_SERVICE="$service_name"
-        print_info "Stopping existing Pulse service ($service_name)..."
-        safe_systemctl stop "$service_name" || true
-        sleep 2
-        return 0
-    fi
-
-    return 1
-}
-
-restart_stopped_pulse_service_on_failure() {
-    local exit_code=$?
-
-    if [[ "$exit_code" -ne 0 ]] && [[ -n "$STOPPED_PULSE_SERVICE" ]] && command -v systemctl >/dev/null 2>&1; then
-        print_info "Restarting Pulse service ($STOPPED_PULSE_SERVICE) after failed update"
-        safe_systemctl start "$STOPPED_PULSE_SERVICE" || true
-    fi
-}
-
-trap restart_stopped_pulse_service_on_failure EXIT
 
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
@@ -428,106 +503,6 @@ check_proxmox_host() {
     return 1
 }
 
-cleanup_stale_sensor_proxy_mounts() {
-    # Remove stale pulse-sensor-proxy mount entries from LXC container configs.
-    # In v4, the installer added mount entries for /run/pulse-sensor-proxy to the
-    # container config. In v5, the sensor proxy was removed, and after a host reboot
-    # /run (tmpfs) is wiped so the mount source no longer exists, preventing the
-    # container from starting with: Failed to mount "/run/pulse-sensor-proxy"
-
-    if ! command -v pct >/dev/null 2>&1; then
-        return 0
-    fi
-
-    local ctids
-    ctids=$(pct list 2>/dev/null | tail -n +2 | awk '{print $1}') || return 0
-    [[ -z "$ctids" ]] && return 0
-
-    local cleaned=0
-
-    while IFS= read -r ctid; do
-        [[ -z "$ctid" ]] && continue
-        local conf="/etc/pve/lxc/${ctid}.conf"
-        [[ -f "$conf" ]] || continue
-
-        # Skip containers without sensor-proxy references
-        if ! grep -q 'pulse-sensor-proxy' "$conf" 2>/dev/null; then
-            continue
-        fi
-
-        print_info "Found stale sensor-proxy mount in container $ctid, cleaning up..."
-
-        local status
-        status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}') || true
-        local was_running=false
-        [[ "$status" == "running" ]] && was_running=true
-
-        # Stop running containers before modifying mount config
-        if [[ "$was_running" == "true" ]]; then
-            print_info "Stopping container $ctid to remove stale mount..."
-            timeout 30 pct stop "$ctid" 2>/dev/null || true
-            sleep 2
-        fi
-
-        # Determine the main-section boundary (before any [snapshot] sections)
-        local snapshot_line
-        snapshot_line=$(grep -n '^\[' "$conf" 2>/dev/null | head -1 | cut -d: -f1) || true
-
-        # Remove mp<N> entries (e.g., mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy)
-        # Only match entries in the main section, not inside snapshot blocks
-        local mp_keys
-        if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
-            mp_keys=$(head -n "$((snapshot_line - 1))" "$conf" 2>/dev/null | grep -E '^mp[0-9]+:.*pulse-sensor-proxy' | sed 's/:.*//') || true
-        else
-            mp_keys=$(grep -E '^mp[0-9]+:.*pulse-sensor-proxy' "$conf" 2>/dev/null | sed 's/:.*//') || true
-        fi
-        if [[ -n "$mp_keys" ]]; then
-            while IFS= read -r mp_key; do
-                [[ -z "$mp_key" ]] && continue
-                if timeout 15 pct set "$ctid" -delete "$mp_key" 2>/dev/null; then
-                    print_success "Removed $mp_key from container $ctid"
-                else
-                    # Fallback: direct config edit (main section only)
-                    if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
-                        timeout 10 sed -i "1,$((snapshot_line - 1)){/^${mp_key}:.*pulse-sensor-proxy/d}" "$conf" 2>/dev/null || true
-                    else
-                        timeout 10 sed -i "/^${mp_key}:.*pulse-sensor-proxy/d" "$conf" 2>/dev/null || true
-                    fi
-                    print_success "Removed $mp_key from container $ctid (direct edit)"
-                fi
-                cleaned=$((cleaned + 1))
-            done <<< "$mp_keys"
-        fi
-
-        # Remove lxc.mount.entry lines referencing pulse-sensor-proxy
-        # Only modify lines in the main section (before any [snapshot] sections)
-        if grep -q 'lxc\.mount\.entry:.*pulse-sensor-proxy' "$conf" 2>/dev/null; then
-            if [[ -n "$snapshot_line" ]] && [[ "$snapshot_line" -gt 1 ]]; then
-                # Only delete matching lines before the first snapshot section
-                timeout 10 sed -i "1,$((snapshot_line - 1)){/lxc\.mount\.entry:.*pulse-sensor-proxy/d}" "$conf" 2>/dev/null || true
-            else
-                # No snapshot sections, safe to delete all matching lines
-                timeout 10 sed -i '/lxc\.mount\.entry:.*pulse-sensor-proxy/d' "$conf" 2>/dev/null || true
-            fi
-            cleaned=$((cleaned + 1))
-            print_success "Removed lxc.mount.entry for sensor-proxy from container $ctid"
-        fi
-
-        # Restart container if it was running before cleanup
-        if [[ "$was_running" == "true" ]]; then
-            print_info "Restarting container $ctid..."
-            timeout 30 pct start "$ctid" 2>/dev/null || {
-                print_warn "Could not restart container $ctid — start it manually: pct start $ctid"
-            }
-        fi
-
-    done <<< "$ctids"
-
-    if [[ "$cleaned" -gt 0 ]]; then
-        print_success "Cleaned up stale sensor-proxy mount entries from container config(s)"
-    fi
-}
-
 check_docker_environment() {
     # Detect if we're running inside Docker (multiple detection methods)
     if [[ -f /.dockerenv ]] || \
@@ -536,10 +511,23 @@ check_docker_environment() {
        [[ -f /run/.containerenv ]] || \
        [[ "${container:-}" == "docker" ]]; then
         print_error "Docker environment detected"
-        echo "Please use the Docker image directly: docker run -d -p 7655:7655 rcourtman/pulse:latest"
-        echo "See: https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER.md"
+        echo "Please use the Docker image directly: docker run -d -p 7655:7655 $(repo_docker_image_ref latest)"
+        echo "See: $(repo_docker_docs_url)"
         exit 1
     fi
+}
+
+repo_web_url() {
+    printf 'https://github.com/%s\n' "$GITHUB_REPO"
+}
+
+repo_docker_docs_url() {
+    printf '%s/blob/main/docs/DOCKER.md\n' "$(repo_web_url)"
+}
+
+repo_docker_image_ref() {
+    local tag="${1:-latest}"
+    printf '%s:%s\n' "$DOCKER_IMAGE_REPO" "$tag"
 }
 
 # Discover host bridge interfaces, including Open vSwitch bridges.
@@ -619,19 +607,99 @@ is_bridge_interface() {
     return 1
 }
 
+cleanup_stale_sensor_proxy_mounts() {
+    # The v4 installer added mount entries for /run/pulse-sensor-proxy to LXC
+    # container configs. In v5+, the sensor proxy was removed but these entries
+    # persist. After a host reboot, /run (tmpfs) is wiped and the mount source
+    # disappears, causing Proxmox to refuse to start the container.
+    # This function detects and removes those stale entries automatically.
+    command -v pct >/dev/null 2>&1 || return 0
+
+    local ctids
+    ctids=$(pct list 2>/dev/null | tail -n +2 | awk '{print $1}')
+    [ -z "$ctids" ] && return 0
+
+    for ctid in $ctids; do
+        local conf="/etc/pve/lxc/${ctid}.conf"
+        [ -f "$conf" ] || continue
+
+        # Check if this container has any pulse-sensor-proxy references
+        grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null || continue
+
+        echo "  Cleaning stale sensor-proxy mount from container $ctid..."
+
+        # Find the first [snapshot] line to avoid modifying snapshot sections
+        local snap_line
+        snap_line=$(grep -n '^\[' "$conf" 2>/dev/null | head -1 | cut -d: -f1 || true)
+
+        # Determine which lines to examine (main config only, before snapshots)
+        local main_section
+        if [ -n "$snap_line" ]; then
+            main_section=$(head -n "$((snap_line - 1))" "$conf")
+        else
+            main_section=$(cat "$conf")
+        fi
+
+        # Check if container is running (we may need to stop it for pct set)
+        local was_running=false
+        local stopped_by_cleanup=false
+        if pct status "$ctid" 2>/dev/null | grep -q "running"; then
+            was_running=true
+        fi
+
+        # Remove mp<N> entries referencing pulse-sensor-proxy
+        local mp_keys
+        mp_keys=$(echo "$main_section" | grep -E '^mp[0-9]+:.*pulse-sensor-proxy' | cut -d: -f1 || true)
+        for mp_key in $mp_keys; do
+            if $was_running && ! $stopped_by_cleanup; then
+                if timeout 15 pct stop "$ctid" 2>/dev/null; then
+                    stopped_by_cleanup=true
+                    sleep 2
+                fi
+            fi
+            if ! timeout 10 pct set "$ctid" -delete "$mp_key" 2>/dev/null; then
+                # Fallback: direct sed deletion
+                if [ -n "$snap_line" ]; then
+                    sed -i "1,$((snap_line - 1))s/^${mp_key}:.*pulse-sensor-proxy.*$//" "$conf"
+                else
+                    sed -i "/^${mp_key}:.*pulse-sensor-proxy/d" "$conf"
+                fi
+            fi
+        done
+
+        # Remove lxc.mount.entry lines referencing pulse-sensor-proxy
+        if echo "$main_section" | grep -q "lxc.mount.entry.*pulse-sensor-proxy"; then
+            if [ -n "$snap_line" ]; then
+                sed -i "1,$((snap_line - 1)){/lxc\.mount\.entry.*pulse-sensor-proxy/d}" "$conf"
+            else
+                sed -i "/lxc\.mount\.entry.*pulse-sensor-proxy/d" "$conf"
+            fi
+        fi
+
+        # Remove any blank lines left behind
+        sed -i '/^$/d' "$conf"
+
+        # Restart container only if we stopped it during cleanup
+        if $stopped_by_cleanup; then
+            timeout 30 pct start "$ctid" 2>/dev/null || true
+        fi
+
+        echo "  Cleaned sensor-proxy mount from container $ctid"
+    done
+}
+
 create_lxc_container() {
     CURRENT_INSTALL_CTID=""
     CONTAINER_CREATED_FOR_CLEANUP=false
     trap handle_install_interrupt INT TERM
-    
+
     print_header
     echo "Proxmox VE detected. Installing Pulse in a container."
     echo
 
-    # Clean up stale sensor-proxy mount entries from v4 that prevent containers
-    # from starting after a host reboot (see GitHub Discussion #1280)
+    # Clean up stale v4 sensor-proxy mount entries that prevent LXC start after reboot
     cleanup_stale_sensor_proxy_mounts
-
+    
     # Check if we can interact with the user
     # Try to read from /dev/tty to test if we have terminal access
     if test -e /dev/tty && (echo -n "" > /dev/tty) 2>/dev/null; then
@@ -964,13 +1032,13 @@ create_lxc_container() {
             storage=${storage:-$DEFAULT_STORAGE}
         fi
         
-        safe_read_with_default "Static IP with CIDR (e.g. 192.168.1.100/24, leave empty for DHCP): " static_ip ""
+        safe_read_with_default "Static IP with CIDR (e.g. 198.51.100.100/24, leave empty for DHCP): " static_ip ""
         
         # If static IP is provided, we need gateway
         if [[ -n "$static_ip" ]]; then
             # Validate IP format
             if [[ ! "$static_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
-                print_error "Invalid IP format. Please use CIDR notation (e.g., 192.168.1.100/24)"
+                print_error "Invalid IP format. Please use CIDR notation (e.g., 198.51.100.100/24)"
                 print_info "Using DHCP instead"
                 static_ip=""
             else
@@ -1371,7 +1439,11 @@ create_lxc_container() {
     local script_source="/tmp/pulse_install_$$.sh"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
         # We're being piped, download the script with retry logic
-        local download_url="https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
+        local download_url=""
+        if ! download_url=$(resolve_install_script_download_url); then
+            print_error "Failed to determine installer download URL for the selected release channel"
+            cleanup_on_error
+        fi
         local download_success=false
         local download_error=""
         local max_retries=3
@@ -1429,16 +1501,8 @@ create_lxc_container() {
     fi
     
     # Run installation with visible progress
-    local install_cmd="bash /tmp/install.sh --in-container"
-    if [[ -n "$auto_updates_flag" ]]; then
-        install_cmd="$install_cmd $auto_updates_flag"
-    fi
-    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-        install_cmd="$install_cmd --source '$SOURCE_BRANCH'"
-    fi
-    if [[ "$frontend_port" != "7655" ]]; then
-        install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
-    fi
+    local install_cmd=""
+    install_cmd=$(build_container_install_command)
     
     # Run installation showing output in real-time so users can see progress/errors
     # Use timeout wrapper if available
@@ -1469,8 +1533,9 @@ create_lxc_container() {
                 print_info "This usually happens due to network issues or GitHub rate limiting."
             fi
             print_info "You can increase or disable the timeout by setting PULSE_CONTAINER_TIMEOUT (set to 0 to disable)."
-            print_info "Then enter the container and run 'bash /tmp/install.sh' manually:"
+            print_info "Then enter the container and run the same installer command manually:"
             print_info "  pct enter $CTID"
+            print_container_recovery_command
             cleanup_on_error
         fi
     else
@@ -1483,7 +1548,7 @@ create_lxc_container() {
         print_error "Failed to install Pulse inside container"
         print_info "You can enter the container to investigate:"
         print_info "  pct enter $CTID"
-        print_info "  bash /tmp/install.sh"
+        print_container_recovery_command
         cleanup_on_error
     fi
     
@@ -1597,18 +1662,6 @@ PY
         server_name="pulse-proxmox-host"
     fi
 
-    local bootstrap_token=""
-    if command -v pct >/dev/null 2>&1 && [[ -n "$ctid" ]]; then
-        for attempt in $(seq 1 30); do
-            bootstrap_token=$(pct exec "$ctid" -- bash -lc "if [ -f /etc/pulse/.bootstrap_token ]; then cat /etc/pulse/.bootstrap_token; fi" 2>/dev/null | tr -d '\r\n')
-            if [[ -n "$bootstrap_token" ]]; then
-                print_info "Discovered bootstrap token from container after ${attempt}s"
-                break
-            fi
-            sleep 1
-        done
-    fi
-
     local backup_flag="${PULSE_AUTO_BACKUP_PERMS:-true}"
     local backup_perms="false"
     if [[ "$backup_flag" =~ ^([Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|1|on|ON)$ ]]; then
@@ -1627,13 +1680,9 @@ PY
     echo "$setup_payload" > /tmp/pulse-auto-register-request.json 2>/dev/null || true
 
     local pulse_url="http://${pulse_ip}:${pulse_port}"
-    local setup_headers=(-H "Content-Type: application/json")
-    if [[ -n "$bootstrap_token" ]]; then
-        setup_headers+=(-H "X-Setup-Token: $bootstrap_token")
-    fi
 
     local setup_response
-    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" "${setup_headers[@]}" -d "$setup_payload"); then
+    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -1643,27 +1692,142 @@ PY
     echo "$setup_response" > /tmp/pulse-auto-register-response.json 2>/dev/null || true
 
     local setup_token
-    setup_token=$(python3 - "$setup_response" <<'PY'
+    local setup_type
+    local setup_host
+    local setup_url
+    local setup_download_url
+    local setup_script_name
+    local setup_command
+    local setup_command_with_env
+    local setup_command_without_env
+    local setup_token_hint
+    local setup_expires
+    local setup_expiry_state
+    IFS=$'\t' read -r setup_token setup_type setup_host setup_url setup_download_url setup_script_name setup_command setup_command_with_env setup_command_without_env setup_token_hint setup_expires setup_expiry_state <<<"$(python3 - "$setup_response" "$pulse_url" "$normalized_host_url" <<'PY'
 import json, sys
+import time
+from urllib.parse import quote
 try:
     data = json.loads(sys.argv[1])
 except Exception:
-    print("")
+    print("\t\t\t\t\t\t\t\t\t\t")
     sys.exit(0)
-print(data.get("setupToken", ""))
+pulse_url = sys.argv[2]
+host = sys.argv[3]
+expires_raw = data.get("expires", "")
+expiry_state = ""
+try:
+    expires_int = int(expires_raw)
+except Exception:
+    expires_int = 0
+if expires_int > int(time.time()):
+    expiry_state = "live"
+setup_token = str(data.get("setupToken", ""))
+token_hint = str(data.get("tokenHint", ""))
+setup_url = str(data.get("url", ""))
+setup_download_url = str(data.get("downloadURL", ""))
+setup_script_name = str(data.get("scriptFileName", ""))
+setup_command = str(data.get("command", ""))
+setup_command_with_env = str(data.get("commandWithEnv", ""))
+setup_command_without_env = str(data.get("commandWithoutEnv", ""))
+expected_setup_url = f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&type=pve"
+if setup_token:
+    expected_download_url = f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve"
+else:
+    expected_download_url = ""
+expected_script_name = "pulse-setup-pve.sh"
+if setup_url != expected_setup_url:
+    setup_url = ""
+if setup_download_url != expected_download_url:
+    setup_download_url = ""
+if setup_script_name != expected_script_name:
+    setup_script_name = ""
+if not setup_command:
+    setup_command = ""
+if not setup_command_with_env:
+    setup_command_with_env = ""
+if not setup_command_without_env:
+    setup_command_without_env = ""
+command_fields = (
+    ("command", setup_command, True),
+    ("commandWithEnv", setup_command_with_env, True),
+    ("commandWithoutEnv", setup_command_without_env, False),
+)
+for _field_name, _value, _requires_token in command_fields:
+    if not _value or expected_setup_url not in _value:
+        if _field_name == "command":
+            setup_command = ""
+        elif _field_name == "commandWithEnv":
+            setup_command_with_env = ""
+        else:
+            setup_command_without_env = ""
+        continue
+    if 'if [ "$(id -u)" -eq 0 ]; then' not in _value or 'elif command -v sudo >/dev/null 2>&1; then' not in _value:
+        if _field_name == "command":
+            setup_command = ""
+        elif _field_name == "commandWithEnv":
+            setup_command_with_env = ""
+        else:
+            setup_command_without_env = ""
+        continue
+    if _requires_token:
+        if "PULSE_SETUP_TOKEN=" not in _value or setup_token not in _value:
+            if _field_name == "command":
+                setup_command = ""
+            else:
+                setup_command_with_env = ""
+            continue
+    elif "PULSE_SETUP_TOKEN=" in _value or setup_token in _value:
+        setup_command_without_env = ""
+if not token_hint or token_hint == setup_token:
+    token_hint = ""
+print("\t".join([
+    setup_token,
+    str(data.get("type", "")),
+    str(data.get("host", "")),
+    setup_url,
+    setup_download_url,
+    setup_script_name,
+    setup_command,
+    setup_command_with_env,
+    setup_command_without_env,
+    token_hint,
+    str(expires_raw),
+    expiry_state,
+]))
 PY
-) || setup_token=""
+)" || setup_token=""
 
-    if [[ -z "$setup_token" ]]; then
+    local expected_setup_url="${pulse_url}/api/setup-script?host=$(python3 - <<'PY' "$normalized_host_url"
+from urllib.parse import quote
+import sys
+print(quote(sys.argv[1], safe=''))
+PY
+)&pulse_url=$(python3 - <<'PY' "$pulse_url"
+from urllib.parse import quote
+import sys
+print(quote(sys.argv[1], safe=''))
+PY
+)&type=pve"
+    local expected_download_url="$(python3 - <<'PY' "$normalized_host_url" "$pulse_url" "$setup_token"
+from urllib.parse import quote
+import sys
+host, pulse_url, setup_token = sys.argv[1:]
+print(f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve")
+PY
+)"
+    local expected_script_name="pulse-setup-pve.sh"
+
+    if [[ -z "$setup_token" ]] || [[ "$setup_type" != "pve" ]] || [[ "$setup_host" != "$normalized_host_url" ]] || [[ "$setup_url" != "$expected_setup_url" ]] || [[ "$setup_download_url" != "$expected_download_url" ]] || [[ "$setup_script_name" != "$expected_script_name" ]] || [[ -z "$setup_command" ]] || [[ -z "$setup_command_with_env" ]] || [[ -z "$setup_command_without_env" ]] || [[ -z "$setup_token_hint" ]] || [[ -z "$setup_expires" ]] || [[ "$setup_expiry_state" != "live" ]]; then
         AUTO_NODE_REGISTER_ERROR="missing setup token"
         print_warn "Pulse did not return a setup token; skipping automatic node registration"
         return
     fi
 
-    pveum user add pulse-monitor@pam --comment "Pulse monitoring service" >/dev/null 2>&1 || true
-    pveum aclmod / -user pulse-monitor@pam -role PVEAuditor >/dev/null 2>&1 || true
+    pveum user add pulse-monitor@pve --comment "Pulse monitoring service" >/dev/null 2>&1 || true
+    pveum aclmod / -user pulse-monitor@pve -role PVEAuditor >/dev/null 2>&1 || true
     if [[ "$backup_perms" == "true" ]]; then
-        pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin >/dev/null 2>&1 || true
+        pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin >/dev/null 2>&1 || true
     fi
 
     local extra_privs=()
@@ -1690,162 +1854,73 @@ PY
         pveum role delete PulseGuestAuditProbe >/dev/null 2>&1 || true
     fi
 
-    # VM.GuestAgent.FileRead (PVE 9+): needed for reading /proc/meminfo
-    # via the guest agent for accurate memory reporting
-    local has_guest_file_read=false
-    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
-        has_guest_file_read=true
-    elif pveum role add PulseGuestFileReadProbe -privs VM.GuestAgent.FileRead >/dev/null 2>&1; then
-        has_guest_file_read=true
-        pveum role delete PulseGuestFileReadProbe >/dev/null 2>&1 || true
-    fi
-
     if [[ "$has_vm_monitor" == true ]]; then
         extra_privs+=("VM.Monitor")
     elif [[ "$has_guest_audit" == true ]]; then
         extra_privs+=("VM.GuestAgent.Audit")
-        if [[ "$has_guest_file_read" == true ]]; then
-            extra_privs+=("VM.GuestAgent.FileRead")
-        fi
     fi
 
     if [[ ${#extra_privs[@]} -gt 0 ]]; then
-        local priv_string
-        priv_string="$(IFS=,; echo "${extra_privs[*]}")"
+        local priv_string="${extra_privs[*]}"
         pveum role delete PulseMonitor >/dev/null 2>&1 || true
         if pveum role add PulseMonitor -privs "$priv_string" >/dev/null 2>&1; then
-            pveum aclmod / -user pulse-monitor@pam -role PulseMonitor >/dev/null 2>&1 || true
+            pveum aclmod / -user pulse-monitor@pve -role PulseMonitor >/dev/null 2>&1 || true
         fi
     fi
 
-    local pulse_host_slug
-    pulse_host_slug=$(python3 - <<'PY' "$pulse_url"
+    local token_name
+    token_name=$(python3 - <<'PY' "$pulse_url"
 import re, sys, urllib.parse
-parsed = urllib.parse.urlparse(sys.argv[1])
-host = (parsed.hostname or "").strip().lower().strip(".")
-slug = re.sub(r"[^a-z0-9]+", "-", host).strip("-")
+
+raw = sys.argv[1].strip()
+host = ""
+if raw:
+    parsed = urllib.parse.urlparse(raw)
+    host = (parsed.hostname or "").strip().lower().strip(".")
+
+slug = re.sub(r"[^a-z0-9]+", "-", host)
+slug = slug.strip("-")
+if len(slug) > 48:
+    slug = slug[:48].strip("-")
 if not slug:
     slug = "server"
-if len(slug) > 48:
-    slug = slug[:48].rstrip("-")
-print(slug or "server")
+
+print(f"pulse-{slug}")
 PY
 )
-    local token_name="pulse-${pulse_host_slug}"
+
     local token_output=""
-    local existing_tokens=""
-    local token_exists=false
-    local legacy_tokens=()
-    local existing_token=""
-
-    existing_tokens=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk '
-{
-    line=$0
-    gsub(/\r/, "", line)
-    gsub(/│/, "|", line)
-    if (index(line, "|") == 0) {
-        next
-    }
-    n = split(line, parts, "|")
-    if (n < 3) {
-        next
-    }
-    name = parts[2]
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
-    if (name != "" && name != "tokenid" && name ~ /^pulse-/) {
-        print name
-    }
-}')
-
-    if [[ -n "$existing_tokens" ]]; then
-        while IFS= read -r existing_token; do
-            if [[ -z "$existing_token" ]]; then
-                continue
-            fi
-            if [[ "$existing_token" == "$token_name" ]]; then
-                token_exists=true
-                continue
-            fi
-            if [[ "$existing_token" == "${token_name}-"* ]]; then
-                legacy_tokens+=("$existing_token")
-            fi
-        done <<< "$existing_tokens"
-    fi
-
-    if [[ "$token_exists" == true ]]; then
-        print_info "Existing monitoring token '${token_name}' found. Rotating in place"
-        pveum user token remove pulse-monitor@pam "$token_name" >/dev/null 2>&1 || true
-    fi
-
-    if [[ ${#legacy_tokens[@]} -gt 0 ]]; then
-        print_info "Removing ${#legacy_tokens[@]} legacy monitoring token(s) for this Pulse server"
-        local legacy_token=""
-        for legacy_token in "${legacy_tokens[@]}"; do
-            pveum user token remove pulse-monitor@pam "$legacy_token" >/dev/null 2>&1 || true
-        done
-    fi
-
     set +e
-    token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 0 2>&1)
     local token_status=$?
     set -e
-    if [[ $token_status -ne 0 ]] && grep -qi "already exists" <<<"$token_output"; then
-        print_info "Monitoring token '${token_name}' already exists. Rotating in place"
-        pveum user token remove pulse-monitor@pam "$token_name" >/dev/null 2>&1 || true
-        set +e
-        token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
-        token_status=$?
-        set -e
-    fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
-        print_warn "Unable to create monitoring API token '${token_name}'; skipping automatic node registration"
+        print_warn "Unable to create monitoring API token; skipping automatic node registration"
         return
     fi
 
     local token_value
-    token_value=$(awk '
-{
-    line=$0
-    gsub(/\r/, "", line)
-    gsub(/│/, "|", line)
-    if (index(line, "|") == 0) {
-        next
-    }
-    n = split(line, parts, "|")
-    if (n < 3) {
-        next
-    }
-    key = parts[2]
-    value = parts[3]
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-    if (key == "value" && value != "") {
-        print value
-        exit
-    }
-}' <<<"$token_output")
-    if [[ -z "$token_value" ]]; then
-        token_value=$(grep -Eo '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' <<<"$token_output" | head -n1 || true)
-    fi
+    token_value=$(awk -F'│' '/[[:space:]]value[[:space:]]/{col=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", col); print col}' <<<"$token_output" | tail -n1 | tr -d '\r')
     if [[ -z "$token_value" ]]; then
         AUTO_NODE_REGISTER_ERROR="token value unavailable"
         print_warn "Failed to extract token value from pveum output; skipping automatic node registration"
         return
     fi
-    local token_id="pulse-monitor@pam!${token_name}"
+    local token_id="pulse-monitor@pve!${token_name}"
 
     local register_payload
     register_payload=$(python3 - <<'PY' "$normalized_host_url" "$token_id" "$token_value" "$server_name" "$setup_token"
 import json, sys
-host, token_id, token_value, server_name, auth_token = sys.argv[1:]
+host, token_id, token_value, server_name, setup_token = sys.argv[1:]
 print(json.dumps({
     "type": "pve",
     "host": host,
     "tokenId": token_id,
     "tokenValue": token_value,
     "serverName": server_name,
-    "authToken": auth_token
+    "authToken": setup_token,
+    "source": "script"
 }))
 PY
 )
@@ -1858,27 +1933,45 @@ PY
     fi
 
     local register_status
-    register_status=$(python3 - "$register_response" <<'PY'
+    local register_action
+    local register_type
+    local register_source
+    local register_host
+    local register_token_id
+    local register_token_value
+    local register_node_id
+    local register_node_name
+    IFS=$'\t' read -r register_status register_action register_type register_source register_host register_token_id register_token_value register_node_id register_node_name <<<"$(python3 - "$register_response" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
 except Exception:
-    print("")
+    print("\t\t\t\t\t\t\t\t")
     sys.exit(0)
-print(data.get("status", ""))
+print("\t".join([
+    str(data.get("status", "")),
+    str(data.get("action", "")),
+    str(data.get("type", "")),
+    str(data.get("source", "")),
+    str(data.get("host", "")),
+    str(data.get("tokenId", "")),
+    str(data.get("tokenValue", "")),
+    str(data.get("nodeId", "")),
+    str(data.get("nodeName", "")),
+]))
 PY
-) || register_status=""
+)" || register_status=""
 
-    if [[ "$register_status" != "success" ]]; then
+    if [[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]] || [[ "$register_host" != "$normalized_host_url" ]] || [[ "$register_token_id" != "$token_id" ]] || [[ "$register_token_value" != "$token_value" ]] || [[ -z "$register_node_id" ]] || [[ -z "$register_node_name" ]] || [[ "$register_node_id" != "$register_node_name" ]]; then
         AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
         print_warn "Pulse auto-registration reported an error: $register_response"
         return
     fi
 
     AUTO_NODE_REGISTERED=true
-    AUTO_NODE_REGISTERED_NAME="$server_name"
+    AUTO_NODE_REGISTERED_NAME="$register_node_name"
     AUTO_NODE_REGISTER_ERROR=""
-    print_success "Registered ${server_name} with Pulse automatically"
+    print_success "Registered ${register_node_name} with Pulse automatically"
 }
 
 # Compare two version strings
@@ -1994,10 +2087,10 @@ create_user() {
 }
 
 backup_existing() {
-    # No-op: removed full config-dir backup that accumulated multi-GB copies
-    # on every upgrade without cleanup, filling disks on small VMs.
-    # The upgrade only swaps the binary; config files are not modified.
-    :
+    if [[ -d "$CONFIG_DIR" ]]; then
+        print_info "Backing up existing configuration..."
+        cp -a "$CONFIG_DIR" "${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+    fi
 }
 
 download_pulse() {
@@ -2128,8 +2221,12 @@ download_pulse() {
         
         # Detect and stop existing service BEFORE downloading (to free the binary)
         EXISTING_SERVICE=$(detect_service_name)
-        stop_pulse_service_for_update "$EXISTING_SERVICE" || true
-
+        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
+            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+            safe_systemctl stop $EXISTING_SERVICE || true
+            sleep 2  # Give the process time to fully stop and release the binary
+        fi
+        
         cd /tmp
 
         if ! command -v sha256sum >/dev/null 2>&1; then
@@ -2232,28 +2329,6 @@ download_pulse() {
             exit 1
         fi
 
-        # Install Docker agent binary for distribution
-        if [[ -f "$TEMP_EXTRACT/bin/pulse-docker-agent" ]]; then
-            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
-            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-            print_success "Docker agent binary installed"
-        else
-            print_warn "Docker agent binary not found in archive; skipping installation"
-        fi
-
-        # Install host agent binary for distribution
-        if [[ -f "$TEMP_EXTRACT/bin/pulse-host-agent" ]]; then
-            cp -f "$TEMP_EXTRACT/bin/pulse-host-agent" "$INSTALL_DIR/bin/pulse-host-agent"
-            chmod +x "$INSTALL_DIR/bin/pulse-host-agent"
-            chown pulse:pulse "$INSTALL_DIR/bin/pulse-host-agent"
-            print_success "Host agent binary installed"
-        else
-            print_warn "Host agent binary not found in archive; skipping installation"
-        fi
-
         install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT"
 
         # Install all agent scripts
@@ -2296,13 +2371,6 @@ download_pulse() {
                     cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
                 fi
 
-                if [[ -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" ]]; then
-                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
-                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-                    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-                    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-                fi
-
                 install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT2"
 
                 deploy_agent_scripts "$TEMP_EXTRACT2"
@@ -2329,39 +2397,6 @@ download_pulse() {
         # Cleanup
         rm -rf "$TEMP_EXTRACT" "$ARCHIVE_PATH"
     fi  # End of SKIP_DOWNLOAD check
-}
-
-copy_host_agent_binaries_from_dir() {
-    local source_dir="$1"
-
-    if [[ -z "$source_dir" ]] || [[ ! -d "$source_dir/bin" ]]; then
-        return 1
-    fi
-
-    local copied=0
-    shopt -s nullglob
-    for agent_file in "$source_dir"/bin/pulse-host-agent-*; do
-        [[ -e "$agent_file" ]] || continue
-
-        local base
-        base=$(basename "$agent_file")
-        if [[ "$base" == "pulse-host-agent" ]]; then
-            continue
-        fi
-
-        cp -a "$agent_file" "$INSTALL_DIR/bin/$base"
-        if [[ ! -L "$INSTALL_DIR/bin/$base" ]]; then
-            chmod +x "$INSTALL_DIR/bin/$base"
-        fi
-        chown -h pulse:pulse "$INSTALL_DIR/bin/$base" || true
-        copied=1
-    done
-    shopt -u nullglob
-
-    if [[ $copied -eq 0 ]]; then
-        return 1
-    fi
-    return 0
 }
 
 copy_unified_agent_binaries_from_dir() {
@@ -2406,33 +2441,10 @@ install_additional_agent_binaries() {
         return
     fi
 
-    local docker_targets=("linux-amd64" "linux-arm64" "linux-armv7")
-    local host_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
     local unified_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
 
     # Prefer locally available agents from the extracted archive to avoid network reliance
-    copy_host_agent_binaries_from_dir "$source_dir" || true
     copy_unified_agent_binaries_from_dir "$source_dir" || true
-
-    local docker_missing_targets=()
-    for target in "${docker_targets[@]}"; do
-        if [[ ! -f "$INSTALL_DIR/bin/pulse-docker-agent-$target" ]]; then
-            docker_missing_targets+=("$target")
-        fi
-    done
-
-    local host_missing_targets=()
-    for target in "${host_targets[@]}"; do
-        if [[ "$target" == windows-* ]]; then
-            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" && ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target.exe" ]]; then
-                host_missing_targets+=("$target")
-            fi
-        else
-            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" ]]; then
-                host_missing_targets+=("$target")
-            fi
-        fi
-    done
 
     local unified_missing_targets=()
     for target in "${unified_targets[@]}"; do
@@ -2447,7 +2459,7 @@ install_additional_agent_binaries() {
         fi
     done
 
-    if [[ ${#docker_missing_targets[@]} -eq 0 ]] && [[ ${#host_missing_targets[@]} -eq 0 ]] && [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
+    if [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
         return
     fi
 
@@ -2482,43 +2494,16 @@ install_additional_agent_binaries() {
         return
     fi
 
-    local docker_installed=0
-    local host_installed=0
-
-    # Install Docker agent binaries
-    for agent_file in "$temp_dir"/bin/pulse-docker-agent-linux-*; do
-        if [[ -f "$agent_file" ]]; then
-            local base
-            base=$(basename "$agent_file")
-            cp -f "$agent_file" "$INSTALL_DIR/bin/$base"
-            cp -f "$agent_file" "$INSTALL_DIR/$base"
-            chmod +x "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
-            chown pulse:pulse "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
-            docker_installed=1
-        fi
-    done
-
-    # Install host agent binaries (preserve symlinks for Windows targets)
-    if copy_host_agent_binaries_from_dir "$temp_dir"; then
-        host_installed=1
-    fi
-
     # Install unified agent binaries (preserve symlinks for Windows targets)
     local unified_installed=0
     if copy_unified_agent_binaries_from_dir "$temp_dir"; then
         unified_installed=1
     fi
 
-    if [[ $docker_installed -eq 1 ]]; then
-        print_success "Additional Docker agent binaries installed"
-    fi
-    if [[ $host_installed -eq 1 ]]; then
-        print_success "Additional host agent binaries installed"
-    fi
     if [[ $unified_installed -eq 1 ]]; then
         print_success "Unified agent binaries installed"
     fi
-    if [[ $docker_installed -eq 0 ]] && [[ $host_installed -eq 0 ]] && [[ $unified_installed -eq 0 ]]; then
+    if [[ $unified_installed -eq 0 ]]; then
         print_warn "No agent binaries found in universal bundle"
     fi
 
@@ -2537,11 +2522,7 @@ deploy_agent_scripts() {
     mkdir -p "$INSTALL_DIR/scripts"
 
     local scripts=(
-        "install-docker-agent.sh"
         "install-container-agent.sh"
-        "install-host-agent.ps1"
-        "uninstall-host-agent.sh"
-        "uninstall-host-agent.ps1"
         "install-docker.sh"
         "install.sh"
         "install.ps1"
@@ -2564,60 +2545,16 @@ deploy_agent_scripts() {
     fi
 }
 
-build_agent_binaries_from_source() {
-    local agent_version="$1"
-
-    if ! command -v go >/dev/null 2>&1; then
-        print_warn "Go not available for cross-compiling additional agent binaries"
-        return
-    fi
-
-    local targets=(
-        "linux-amd64:amd64:"
-        "linux-arm64:arm64:"
-        "linux-armv7:arm:7"
-    )
-
-    for entry in "${targets[@]}"; do
-        IFS=':' read -r suffix goarch goarm <<< "$entry"
-
-        local output="/tmp/pulse-docker-agent-$suffix-$$"
-
-        # Skip if already exists
-        if [[ -f "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" ]]; then
-            continue
-        fi
-
-        print_info "Cross-compiling Docker agent for $suffix"
-        local env_cmd=(env GOOS=linux GOARCH="$goarch")
-        if [[ -n "$goarm" ]]; then
-            env_cmd+=(GOARM="$goarm")
-        fi
-
-        if ! "${env_cmd[@]}" go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o "$output" ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-            print_warn "Failed to build Docker agent for $suffix"
-            rm -f "$output"
-            continue
-        fi
-
-        cp -f "$output" "$INSTALL_DIR/bin/pulse-docker-agent-$suffix"
-        cp -f "$output" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        chmod +x "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        chown pulse:pulse "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
-        rm -f "$output"
-    done
-}
-
 build_from_source() {
     local branch="${1:-main}"
     local original_dir
     original_dir=$(pwd)
     local temp_build=""
-    local GO_MIN_VERSION="1.24"
+    # Keep this aligned with go.mod's toolchain directive for consistent builds and security posture.
+    local GO_MIN_VERSION="1.25.7"
     local GO_INSTALLED=false
     local arch=""
     local go_arch=""
-    local agent_version=""
     local service_name=""
 
     print_info "Building Pulse from source (branch: $branch)..."
@@ -2663,20 +2600,20 @@ build_from_source() {
             return 1
         fi
 
-        if ! wget -q "https://go.dev/dl/go1.24.7.linux-${go_arch}.tar.gz"; then
+        if ! wget -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to download Go toolchain"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
         fi
 
         rm -rf /usr/local/go
-        if ! tar -C /usr/local -xzf "go1.24.7.linux-${go_arch}.tar.gz"; then
+        if ! tar -C /usr/local -xzf "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to extract Go toolchain"
-            rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+            rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
         fi
-        rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+        rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
         cd "$original_dir" >/dev/null 2>&1 || true
     fi
 
@@ -2736,7 +2673,11 @@ build_from_source() {
     fi
 
     service_name=$(detect_service_name)
-    stop_pulse_service_for_update "$service_name" || true
+    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        print_info "Stopping existing Pulse service ($service_name)..."
+        safe_systemctl stop "$service_name" || true
+        sleep 2
+    fi
 
     mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
 
@@ -2753,24 +2694,7 @@ build_from_source() {
     fi
     chmod +x "$INSTALL_DIR/bin/pulse"
 
-    agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-    if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-        print_error "Failed to build Docker agent binary"
-        cd "$original_dir" >/dev/null 2>&1 || true
-        rm -rf "$temp_build"
-        return 1
-    fi
-
-    cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
-    cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
-    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-    rm -f pulse-docker-agent
-
-
-    build_agent_binaries_from_source "$agent_version"
-
-    for script_name in install-docker-agent.sh install-docker.sh; do
+    for script_name in install-container-agent.sh install-docker.sh install.sh install.ps1; do
         if [[ -f "scripts/$script_name" ]]; then
             cp "scripts/$script_name" "$INSTALL_DIR/scripts/$script_name"
             chmod 755 "$INSTALL_DIR/scripts/$script_name"
@@ -2852,51 +2776,65 @@ EOF
 setup_update_command() {
     # Create update command at /bin/update for ProxmoxVE LXC detection
     # This allows the backend to detect ProxmoxVE installations
-    cat > /bin/update <<'EOF'
+    local update_helper_path="${PULSE_UPDATE_HELPER_PATH:-/bin/update}"
+    local profile_path="${PULSE_PROFILE_PATH:-/etc/profile}"
+    local bashrc_path="${PULSE_BASHRC_PATH:-/etc/bash.bashrc}"
+    cat > "$update_helper_path" <<EOF
 #!/usr/bin/env bash
 # Pulse update command
-# This script re-runs the Pulse installer to update to the latest version
+# This script re-runs the Pulse installer using the configured manual channel
 
-set -e
+set -euo pipefail
 
 INSTALL_ROOT="/opt/pulse"
-MARKER_FILE="${INSTALL_ROOT}/BUILD_FROM_SOURCE"
+MARKER_FILE="\${INSTALL_ROOT}/BUILD_FROM_SOURCE"
+CONFIG_DIR="/etc/pulse"
+INSTALLER_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/install.sh"
 
 extra_args=()
-if [[ -f "$MARKER_FILE" ]]; then
-    branch=$(tr -d '\r\n' <"$MARKER_FILE" 2>/dev/null || true)
-    if [[ -n "$branch" ]]; then
-        extra_args+=(--source "$branch")
+if [[ -f "\$MARKER_FILE" ]]; then
+    branch=\$(tr -d '\r\n' <"\$MARKER_FILE" 2>/dev/null || true)
+    if [[ -n "\$branch" ]]; then
+        extra_args+=(--source "\$branch")
+    fi
+elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
+    configured_channel=\$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "\${CONFIG_DIR}/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+    if [[ "\$configured_channel" == "rc" ]]; then
+        extra_args+=(--rc)
     fi
 fi
 
 echo "Updating Pulse..."
-if [[ ${#extra_args[@]} -gt 0 ]]; then
-    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- "${extra_args[@]}"
+if [[ \${#extra_args[@]} -gt 0 ]]; then
+    curl -fsSL "\$INSTALLER_URL" | bash -s -- "\${extra_args[@]}"
 else
-    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+    curl -fsSL "\$INSTALLER_URL" | bash
 fi
 
 echo ""
 echo "Update complete! Pulse will restart automatically."
 EOF
 
-    chmod +x /bin/update
+    chmod +x "$update_helper_path"
 
     # Ensure /usr/local/bin is in PATH for all users
-    if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
-        echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/profile
+    if ! grep -q '/usr/local/bin' "$profile_path" 2>/dev/null; then
+        echo 'export PATH="/usr/local/bin:$PATH"' >> "$profile_path"
     fi
 
     # Also add to bash profile if it exists
-    if [[ -f /etc/bash.bashrc ]] && ! grep -q '/usr/local/bin' /etc/bash.bashrc 2>/dev/null; then
-        echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/bash.bashrc
+    if [[ -f "$bashrc_path" ]] && ! grep -q '/usr/local/bin' "$bashrc_path" 2>/dev/null; then
+        echo 'export PATH="/usr/local/bin:$PATH"' >> "$bashrc_path"
     fi
 }
 
 download_auto_update_script() {
-    local url="https://github.com/$GITHUB_REPO/releases/latest/download/pulse-auto-update.sh"
-    local dest="/usr/local/bin/pulse-auto-update.sh"
+    local asset_base_url=""
+    asset_base_url=$(resolve_release_asset_base_url)
+    local url="${asset_base_url}/pulse-auto-update.sh"
+    local checksums_url="${asset_base_url}/checksums.txt"
+    local legacy_checksum_url="${url}.sha256"
+    local dest="${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}"
     local attempts=0
     local max_attempts=3
     local connect_timeout=15
@@ -2908,17 +2846,67 @@ download_auto_update_script() {
 
         if command -v timeout >/dev/null 2>&1; then
             if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
-                chmod +x "$dest"
-                return 0
+                :
             else
                 curl_status=$?
             fi
         else
             if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
-                chmod +x "$dest"
-                return 0
+                :
             else
                 curl_status=$?
+            fi
+        fi
+
+        if [[ $curl_status -eq 0 ]]; then
+            if ! command -v sha256sum >/dev/null 2>&1; then
+                print_warn "sha256sum is unavailable; cannot verify auto-update script integrity"
+                rm -f "$dest"
+                return 1
+            fi
+
+            local checksum_file expected_checksum actual_checksum
+            checksum_file=$(mktemp /tmp/pulse-auto-update-checksum.XXXXXX)
+            expected_checksum=""
+
+            if command -v timeout >/dev/null 2>&1; then
+                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+            else
+                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+            fi
+
+            if [[ -s "$checksum_file" ]]; then
+                expected_checksum=$(grep -w "pulse-auto-update.sh" "$checksum_file" 2>/dev/null | awk '{print $1}' | head -1)
+            fi
+
+            if [[ -z "$expected_checksum" ]]; then
+                if command -v timeout >/dev/null 2>&1; then
+                    timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
+                else
+                    curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
+                fi
+
+                if [[ -s "$checksum_file" ]]; then
+                    expected_checksum=$(awk '{print $1}' "$checksum_file" | head -1)
+                fi
+            fi
+
+            rm -f "$checksum_file"
+
+            if [[ -z "$expected_checksum" ]]; then
+                print_warn "Failed to download checksum for pulse-auto-update.sh"
+                rm -f "$dest"
+                curl_status=1
+            else
+                actual_checksum=$(sha256sum "$dest" | awk '{print $1}')
+                if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+                    print_warn "pulse-auto-update.sh checksum verification failed"
+                    rm -f "$dest"
+                    curl_status=1
+                else
+                    chmod +x "$dest"
+                    return 0
+                fi
             fi
         fi
 
@@ -2933,13 +2921,58 @@ download_auto_update_script() {
     return 1
 }
 
+configure_auto_update_script_repo() {
+    local dest="${1:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
+    if [[ ! -f "$dest" ]]; then
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp /tmp/pulse-auto-update-script.XXXXXX)
+    if ! awk -v repo="$GITHUB_REPO" '
+        BEGIN { inserted = 0 }
+        /^#!/ {
+            print
+            if (!inserted) {
+                print "GITHUB_REPO=\"" repo "\""
+                inserted = 1
+            }
+            next
+        }
+        /^GITHUB_REPO=/ {
+            if (!inserted) {
+                print "GITHUB_REPO=\"" repo "\""
+                inserted = 1
+            }
+            next
+        }
+        { print }
+        END {
+            if (!inserted) {
+                print "GITHUB_REPO=\"" repo "\""
+            }
+        }
+    ' "$dest" > "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+
+    mv "$tmp" "$dest"
+    chmod +x "$dest"
+}
+
 setup_auto_updates() {
     print_info "Setting up automatic updates..."
+    local desired_channel
+    desired_channel=$(selected_update_channel)
+    local auto_update_dest="${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}"
+    local update_service_path="${PULSE_UPDATE_SERVICE_PATH:-/etc/systemd/system/pulse-update.service}"
+    local update_timer_path="${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/pulse-update.timer}"
 
     # Copy auto-update script if it exists in the release
     if [[ -f "$INSTALL_DIR/scripts/pulse-auto-update.sh" ]]; then
-        cp "$INSTALL_DIR/scripts/pulse-auto-update.sh" /usr/local/bin/pulse-auto-update.sh
-        chmod +x /usr/local/bin/pulse-auto-update.sh
+        cp "$INSTALL_DIR/scripts/pulse-auto-update.sh" "$auto_update_dest"
+        chmod +x "$auto_update_dest"
     else
         print_info "Downloading auto-update script..."
         if ! download_auto_update_script; then
@@ -2949,12 +2982,20 @@ setup_auto_updates() {
             return 0
         fi
     fi
+
+    if ! configure_auto_update_script_repo "$auto_update_dest"; then
+        print_warn "Could not configure the auto-update helper for the selected release repo."
+        print_warn "Continuing without automatic updates. Re-run install.sh once filesystem access is stable."
+        rm -f "$auto_update_dest"
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
     
     # Install systemd timer and service
-    cat > /etc/systemd/system/pulse-update.service << 'EOF'
+    cat > "$update_service_path" <<EOF
 [Unit]
 Description=Automatic Pulse update check and install
-Documentation=https://github.com/rcourtman/Pulse
+Documentation=$(repo_web_url)
 After=network-online.target
 Wants=network-online.target
 
@@ -2962,7 +3003,9 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
-ExecStart=/usr/local/bin/pulse-auto-update.sh
+# Skip auto-update run unless a supported Pulse service is active
+ExecCondition=/bin/sh -c 'systemctl is-active --quiet pulse || systemctl is-active --quiet pulse-backend'
+ExecStart=${auto_update_dest}
 Restart=no
 TimeoutStartSec=600
 StandardOutput=journal
@@ -2979,10 +3022,10 @@ Nice=10
 WantedBy=multi-user.target
 EOF
 
-    cat > /etc/systemd/system/pulse-update.timer << 'EOF'
+    cat > "$update_timer_path" <<EOF
 [Unit]
 Description=Daily check for Pulse updates
-Documentation=https://github.com/rcourtman/Pulse
+Documentation=$(repo_web_url)
 After=network-online.target
 Wants=network-online.target
 
@@ -3008,7 +3051,7 @@ EOF
         # Update existing file
         local temp_file="/tmp/system_$$.json"
         if command -v jq &> /dev/null; then
-            jq '.autoUpdateEnabled = true' "$CONFIG_DIR/system.json" > "$temp_file" && mv "$temp_file" "$CONFIG_DIR/system.json"
+            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$CONFIG_DIR/system.json" > "$temp_file" && mv "$temp_file" "$CONFIG_DIR/system.json"
         else
             # Fallback to sed if jq not available
             # First check if autoUpdateEnabled already exists in the file
@@ -3019,10 +3062,15 @@ EOF
                 # Field doesn't exist, add it after the opening brace
                 sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$CONFIG_DIR/system.json"
             fi
+            if grep -q '"updateChannel"' "$CONFIG_DIR/system.json"; then
+                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$CONFIG_DIR/system.json"
+            else
+                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$CONFIG_DIR/system.json"
+            fi
         fi
     else
         # Create new file with auto-updates enabled
-        echo '{"autoUpdateEnabled":true,"pollingInterval":5}' > "$CONFIG_DIR/system.json"
+        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$CONFIG_DIR/system.json"
     fi
     
     chown pulse:pulse "$CONFIG_DIR/system.json" 2>/dev/null || true
@@ -3099,11 +3147,8 @@ start_pulse() {
     if ! safe_systemctl start $SERVICE_NAME; then
         print_info "Note: systemctl start failed (common in unprivileged containers)"
         print_info "The service will start automatically when the container starts"
-        STOPPED_PULSE_SERVICE=""
         return 0
     fi
-
-    STOPPED_PULSE_SERVICE=""
     
     # Wait for service to start
     sleep 3
@@ -3147,9 +3192,9 @@ print_completion() {
     echo "  journalctl -u $SERVICE_NAME -f    - View logs"
     echo
     echo -e "${YELLOW}Management:${NC}"
-    echo "  Update:     curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash"
-    echo "  Reset:      curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --reset"
-    echo "  Uninstall:  curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --uninstall"
+    echo "  Update:     $(build_printed_management_command update)"
+    echo "  Reset:      $(build_printed_management_command reset)"
+    echo "  Uninstall:  $(build_printed_management_command uninstall)"
 
     # Show auto-update status if timer exists
     if systemctl list-unit-files --no-legend | grep -q "^pulse-update.timer"; then
@@ -3184,6 +3229,44 @@ print_completion() {
     fi
 
     echo
+}
+
+build_printed_management_command() {
+    local action=$1
+    local base="curl -sSL https://github.com/$GITHUB_REPO/releases/latest/download/install.sh | bash"
+    local -a args=()
+
+    case "$action" in
+        update)
+            ;;
+        reset)
+            args+=(--reset)
+            ;;
+        uninstall)
+            args+=(--uninstall)
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    if [[ -n "${FORCE_VERSION:-}" ]] && [[ "$action" != "uninstall" ]]; then
+        args=(--version "$FORCE_VERSION" "${args[@]}")
+    elif [[ "${FORCE_CHANNEL:-${UPDATE_CHANNEL:-stable}}" == "rc" ]] && [[ "$action" != "uninstall" ]]; then
+        args=(--rc "${args[@]}")
+    fi
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        printf '%s\n' "$base"
+        return 0
+    fi
+
+    printf '%s -s --' "$base"
+    local arg
+    for arg in "${args[@]}"; do
+        printf ' %q' "$arg"
+    done
+    printf '\n'
 }
 
 # Main installation flow
@@ -3278,7 +3361,7 @@ main() {
             SERVICE_NAME=$(detect_service_name)
             
             backup_existing
-            stop_pulse_service_for_update "$SERVICE_NAME" || true
+            systemctl stop $SERVICE_NAME || true
             create_user
             download_pulse
             setup_update_command
@@ -3488,7 +3571,7 @@ main() {
                 fi
                 
                 backup_existing
-                stop_pulse_service_for_update "$SERVICE_NAME" || true
+                systemctl stop $SERVICE_NAME || true
                 create_user
                 download_pulse
                 setup_update_command
@@ -3543,7 +3626,7 @@ main() {
                 fi
                 
                 backup_existing
-                stop_pulse_service_for_update "$SERVICE_NAME" || true
+                systemctl stop $SERVICE_NAME || true
                 create_user
                 download_pulse
                 setup_directories
@@ -3772,6 +3855,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --version)
+            if [[ $# -lt 2 ]] || [[ -z "${2:-}" ]] || [[ "$2" =~ ^-- ]]; then
+                print_error "Missing value for --version"
+                echo "Use --help for usage information"
+                exit 1
+            fi
             FORCE_VERSION="$2"
             shift 2
             ;;

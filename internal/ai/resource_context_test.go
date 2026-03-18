@@ -3,9 +3,11 @@ package ai
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestBuildUnifiedResourceContext_NilProvider(t *testing.T) {
@@ -16,161 +18,192 @@ func TestBuildUnifiedResourceContext_NilProvider(t *testing.T) {
 }
 
 func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
-	nodeWithAgent := resources.Resource{
-		ID:           "node-1",
-		Name:         "delly",
-		Type:         resources.ResourceTypeNode,
-		PlatformType: resources.PlatformProxmoxPVE,
-		ClusterID:    "cluster-a",
-		Status:       resources.StatusOnline,
-		CPU:          metricValue(12.3),
-		Memory:       metricValue(45.6),
+	nodeWithAgent := unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "pve-node",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "cluster-a",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 12.3},
+			Memory: &unifiedresources.MetricValue{Percent: 45.6},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName:    "pve-node",
+			ClusterName: "cluster-a",
+		},
 	}
-	nodeNoAgent := resources.Resource{
-		ID:           "node-2",
-		Name:         "minipc",
-		Type:         resources.ResourceTypeNode,
-		PlatformType: resources.PlatformProxmoxPVE,
-		Status:       resources.StatusDegraded,
+	nodeNoAgent := unifiedresources.Resource{
+		ID:      "node-2",
+		Name:    "minipc",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Status:  unifiedresources.StatusWarning,
+		Proxmox: &unifiedresources.ProxmoxData{NodeName: "minipc"},
 	}
-	dockerNode := resources.Resource{
-		ID:           "dock-node",
-		Name:         "dock-node",
-		Type:         resources.ResourceTypeNode,
-		PlatformType: resources.PlatformDocker,
-		Status:       resources.StatusOnline,
+	dockerNode := unifiedresources.Resource{
+		ID:     "dock-node",
+		Name:   "dock-node",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{Hostname: "dock-node"},
 	}
-	host := resources.Resource{
-		ID:           "host-1",
-		Name:         "barehost",
-		Type:         resources.ResourceTypeHost,
-		PlatformType: resources.PlatformHostAgent,
-		Status:       resources.StatusOnline,
-		Identity:     &resources.ResourceIdentity{IPs: []string{"192.168.1.10"}},
-		CPU:          metricValue(5.0),
-		Memory:       metricValue(10.0),
+	host := unifiedresources.Resource{
+		ID:     "host-1",
+		Name:   "barehost",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"192.168.1.10"},
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 5},
+			Memory: &unifiedresources.MetricValue{Percent: 10},
+		},
+		Agent: &unifiedresources.AgentData{
+			Hostname: "barehost",
+		},
 	}
-	dockerHost := resources.Resource{
-		ID:           "docker-1",
-		Name:         "dockhost",
-		Type:         resources.ResourceTypeDockerHost,
-		PlatformType: resources.PlatformDocker,
-		Status:       resources.StatusRunning,
-	}
-
-	vm := resources.Resource{
-		ID:         "vm-100",
-		Name:       "web-vm",
-		Type:       resources.ResourceTypeVM,
-		ParentID:   "node-1",
-		PlatformID: "100",
-		Status:     resources.StatusRunning,
-		Identity:   &resources.ResourceIdentity{IPs: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}},
-		CPU:        metricValue(65.4),
-		Memory:     metricValue(70.2),
-	}
-	vm.Alerts = []resources.ResourceAlert{
-		{ID: "alert-1", Message: "CPU high", Level: "critical"},
+	dockerHost := unifiedresources.Resource{
+		ID:     "docker-1",
+		Name:   "dockhost",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{Hostname: "dockhost"},
 	}
 
-	ct := resources.Resource{
-		ID:         "ct-200",
-		Name:       "db-ct",
-		Type:       resources.ResourceTypeContainer,
-		ParentID:   "node-1",
-		PlatformID: "200",
-		Status:     resources.StatusStopped,
+	nodeWithAgentID := nodeWithAgent.ID
+	dockerHostID := dockerHost.ID
+	unknownParentID := "unknown-parent"
+	vm := unifiedresources.Resource{
+		ID:       "vm-100",
+		Name:     "web-vm",
+		Type:     unifiedresources.ResourceTypeVM,
+		ParentID: &nodeWithAgentID,
+		Status:   unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"},
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 65.4},
+			Memory: &unifiedresources.MetricValue{Percent: 70.2},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 100,
+		},
 	}
-	dockerContainer := resources.Resource{
+	ct := unifiedresources.Resource{
+		ID:       "ct-200",
+		Name:     "db-ct",
+		Type:     unifiedresources.ResourceTypeSystemContainer,
+		ParentID: &nodeWithAgentID,
+		Status:   unifiedresources.StatusOffline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 200,
+		},
+	}
+	dockerContainer := unifiedresources.Resource{
 		ID:       "dock-300",
 		Name:     "redis",
-		Type:     resources.ResourceTypeDockerContainer,
-		ParentID: "docker-1",
-		Status:   resources.StatusRunning,
-		Disk:     metricValue(70.0),
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		ParentID: &dockerHostID,
+		Status:   unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 70},
+		},
 	}
-	dockerStopped := resources.Resource{
+	dockerStopped := unifiedresources.Resource{
 		ID:       "dock-301",
 		Name:     "cache",
-		Type:     resources.ResourceTypeDockerContainer,
-		ParentID: "docker-1",
-		Status:   resources.StatusStopped,
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		ParentID: &dockerHostID,
+		Status:   unifiedresources.StatusOffline,
 	}
-	unknownParent := resources.Resource{
-		ID:         "vm-999",
-		Name:       "mystery",
-		Type:       resources.ResourceTypeVM,
-		ParentID:   "unknown-parent",
-		PlatformID: "999",
-		Status:     resources.StatusRunning,
+	unknownParent := unifiedresources.Resource{
+		ID:       "vm-999",
+		Name:     "mystery",
+		Type:     unifiedresources.ResourceTypeVM,
+		ParentID: &unknownParentID,
+		Status:   unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			VMID: 999,
+		},
 	}
-	orphan := resources.Resource{
-		ID:       "orphan-1",
-		Name:     "orphan",
-		Type:     resources.ResourceTypeContainer,
-		Status:   resources.StatusRunning,
-		Identity: &resources.ResourceIdentity{IPs: []string{"172.16.0.5"}},
-	}
-
-	infrastructure := []resources.Resource{nodeWithAgent, nodeNoAgent, host, dockerHost, dockerNode}
-	workloads := []resources.Resource{vm, ct, dockerContainer, dockerStopped, unknownParent, orphan}
-	all := append(append([]resources.Resource{}, infrastructure...), workloads...)
-
-	stats := resources.StoreStats{
-		TotalResources: len(all),
-		ByType: map[resources.ResourceType]int{
-			resources.ResourceTypeNode:            3,
-			resources.ResourceTypeHost:            1,
-			resources.ResourceTypeDockerHost:      1,
-			resources.ResourceTypeVM:              2,
-			resources.ResourceTypeContainer:       2,
-			resources.ResourceTypeDockerContainer: 2,
+	orphan := unifiedresources.Resource{
+		ID:     "orphan-1",
+		Name:   "orphan",
+		Type:   unifiedresources.ResourceTypeSystemContainer,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"172.16.0.5"},
 		},
 	}
 
-	summary := resources.ResourceSummary{
-		TotalResources: len(all),
-		Healthy:        6,
-		Degraded:       1,
-		Offline:        4,
-		WithAlerts:     1,
-		ByType: map[resources.ResourceType]resources.TypeSummary{
-			resources.ResourceTypeVM:        {Count: 2, AvgCPUPercent: 40.0, AvgMemoryPercent: 55.0},
-			resources.ResourceTypeContainer: {Count: 2},
+	infrastructure := []unifiedresources.Resource{nodeWithAgent, nodeNoAgent, host, dockerHost, dockerNode}
+	workloads := []unifiedresources.Resource{vm, ct, dockerContainer, dockerStopped, unknownParent, orphan}
+	all := append(append([]unifiedresources.Resource{}, infrastructure...), workloads...)
+
+	stats := unifiedresources.ResourceStats{
+		Total: len(all),
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeAgent:           5,
+			unifiedresources.ResourceTypeVM:              2,
+			unifiedresources.ResourceTypeSystemContainer: 2,
+			unifiedresources.ResourceTypeAppContainer:    2,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline:  7,
+			unifiedresources.StatusWarning: 1,
+			unifiedresources.StatusOffline: 3,
+		},
+		BySource: map[unifiedresources.DataSource]int{
+			unifiedresources.SourceProxmox: 4,
+			unifiedresources.SourceAgent:   1,
+			unifiedresources.SourceDocker:  2,
 		},
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() resources.StoreStats {
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
 			return stats
 		},
-		getInfrastructureFunc: func() []resources.Resource {
+		getInfrastructureFunc: func() []unifiedresources.Resource {
 			return infrastructure
 		},
-		getWorkloadsFunc: func() []resources.Resource {
+		getWorkloadsFunc: func() []unifiedresources.Resource {
 			return workloads
 		},
-		getAllFunc: func() []resources.Resource {
+		getAllFunc: func() []unifiedresources.Resource {
 			return all
 		},
-		getSummaryFunc: func() resources.ResourceSummary {
-			return summary
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{vm}
 		},
-		getTopCPUFunc: func(limit int, types []resources.ResourceType) []resources.Resource {
-			return []resources.Resource{vm}
+		getTopMemoryFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{host}
 		},
-		getTopMemoryFunc: func(limit int, types []resources.ResourceType) []resources.Resource {
-			return []resources.Resource{host}
-		},
-		getTopDiskFunc: func(limit int, types []resources.ResourceType) []resources.Resource {
-			return []resources.Resource{dockerContainer}
+		getTopDiskFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{dockerContainer}
 		},
 	}
 
-	s := &Service{resourceProvider: mockRP}
+	s := &Service{
+		unifiedResourceProvider: mockURP,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   vm.ID,
+					ResourceName: vm.Name,
+					Message:      "CPU high",
+					Level:        "critical",
+				},
+			},
+		},
+	}
 	s.agentServer = &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-1", Hostname: "delly"},
+			{AgentID: "agent-1", Hostname: "pve-node"},
 		},
 	}
 
@@ -188,6 +221,8 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 
 	assertContains("## Unified Infrastructure View")
 	assertContains("Total resources: 11 (Infrastructure: 5, Workloads: 6)")
+	assertContains("Data Governance")
+	assertContains("Sensitivity: 5 internal, 6 sensitive, 0 restricted")
 	assertContains("Proxmox VE Nodes")
 	assertContains("HAS AGENT")
 	assertContains("NO AGENT")
@@ -197,58 +232,298 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("Docker/Podman Hosts")
 	assertContains("1/2 containers running")
 	assertContains("Workloads (VMs & Containers)")
-	assertContains("On delly")
-	assertContains("On unknown-parent")
+	assertContains("On pve-node")
+	assertContains("On unresolved parent resource")
 	assertContains("Other workloads")
-	assertContains("10.0.0.1, 10.0.0.2")
+	assertContains("virtual machine resource; status online; linked to parent resource; redacted for cloud summary")
+	assertContains("IPs redacted by policy")
 	assertContains("Resources with Active Alerts")
 	assertContains("CPU high")
 	assertContains("Infrastructure Summary")
 	assertContains("Resources with alerts: 1")
 	assertContains("Average utilization by type")
 	assertContains("Top CPU Consumers")
+	assertContains("virtual machine resource; status online; linked to parent resource; redacted for cloud summary** (vm): 65.4%")
 	assertContains("Top Memory Consumers")
 	assertContains("Top Disk Usage")
+	assertContains("application container resource; status online; linked to parent resource; redacted for cloud summary** (app-container): 70.0%")
+	if strings.Contains(got, "web-vm") {
+		t.Fatalf("expected sensitive VM name to be redacted, got %q", got)
+	}
+	if strings.Contains(got, "10.0.0.1") || strings.Contains(got, "10.0.0.2") {
+		t.Fatalf("expected sensitive workload IPs to be redacted, got %q", got)
+	}
+}
+
+func TestBuildUnifiedResourceContextUsesAISafeSummaryForLocalOnlyResources(t *testing.T) {
+	restricted := unifiedresources.Resource{
+		ID:     "mail-1",
+		Name:   "customer-mail-gateway",
+		Type:   unifiedresources.ResourceTypePMG,
+		Status: unifiedresources.StatusWarning,
+		PMG: &unifiedresources.PMGData{
+			Hostname: "mail-gateway.internal",
+		},
+	}
+	unifiedresources.RefreshCanonicalIdentity(&restricted)
+	unifiedresources.RefreshPolicyMetadata(&restricted)
+
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypePMG: 1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusWarning: 1,
+		},
+	}
+
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{restricted}
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{restricted}
+		},
+	}
+
+	s := &Service{unifiedResourceProvider: mockURP}
+	got := s.buildUnifiedResourceContext()
+
+	if !strings.Contains(got, "mail gateway resource; status warning; local-only context") {
+		t.Fatalf("expected AI-safe summary in context, got %q", got)
+	}
+	if strings.Contains(got, "customer-mail-gateway") {
+		t.Fatalf("expected raw restricted resource name to be hidden, got %q", got)
+	}
+}
+
+func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *testing.T) {
+	sensitiveVM := unifiedresources.Resource{
+		ID:     "vm-1",
+		Name:   "finance-db",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "prod-west",
+			IPAddresses: []string{"10.10.0.5"},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName:    "pve-prod",
+			ClusterName: "prod-west",
+			VMID:        101,
+		},
+	}
+	unifiedresources.RefreshCanonicalIdentity(&sensitiveVM)
+	unifiedresources.RefreshPolicyMetadata(&sensitiveVM)
+
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeVM: 1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline: 1,
+		},
+	}
+
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getWorkloadsFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{sensitiveVM}
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{sensitiveVM}
+		},
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{sensitiveVM}
+		},
+	}
+
+	s := &Service{unifiedResourceProvider: mockURP}
+	got := s.buildUnifiedResourceContext()
+
+	if !strings.Contains(got, "virtual machine resource; status online; redacted for cloud summary") {
+		t.Fatalf("expected AI-safe summary for sensitive resource, got %q", got)
+	}
+	if !strings.Contains(got, "IPs redacted by policy") {
+		t.Fatalf("expected sensitive IP redaction marker, got %q", got)
+	}
+	if strings.Contains(got, "finance-db") {
+		t.Fatalf("expected sensitive resource name to be hidden, got %q", got)
+	}
+	if strings.Contains(got, "10.10.0.5") {
+		t.Fatalf("expected sensitive IP to be hidden, got %q", got)
+	}
+	if strings.Contains(got, "prod-west") {
+		t.Fatalf("expected sensitive cluster name to be hidden, got %q", got)
+	}
+}
+
+func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
+	clusterID := "k8s-cluster-1"
+	k8sCluster := unifiedresources.Resource{
+		ID:     clusterID,
+		Name:   "prod-cluster",
+		Type:   unifiedresources.ResourceTypeK8sCluster,
+		Status: unifiedresources.StatusOnline,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "prod-cluster",
+		},
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:   "prod-cluster",
+			ClusterName: "prod-cluster",
+		},
+	}
+	k8sNode := unifiedresources.Resource{
+		ID:       "k8s-node-1",
+		Name:     "worker-1",
+		Type:     unifiedresources.ResourceTypeK8sNode,
+		Status:   unifiedresources.StatusWarning,
+		ParentID: &clusterID,
+		Identity: unifiedresources.ResourceIdentity{
+			ClusterName: "prod-cluster",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 91},
+			Memory: &unifiedresources.MetricValue{Percent: 77},
+		},
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:   "prod-cluster",
+			ClusterName: "prod-cluster",
+		},
+	}
+
+	all := []unifiedresources.Resource{k8sCluster, k8sNode}
+	stats := unifiedresources.ResourceStats{
+		Total: len(all),
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeK8sCluster: 1,
+			unifiedresources.ResourceTypeK8sNode:    1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline:  1,
+			unifiedresources.StatusWarning: 1,
+		},
+		BySource: map[unifiedresources.DataSource]int{
+			unifiedresources.SourceK8s: 2,
+		},
+	}
+
+	unifiedProvider := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return all
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return all
+		},
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{k8sNode}
+		},
+	}
+
+	s := &Service{
+		unifiedResourceProvider: unifiedProvider,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   k8sNode.ID,
+					ResourceName: "wrong-fallback-name",
+					Message:      "Node not ready",
+					Level:        "warning",
+				},
+			},
+		},
+	}
+
+	got := s.buildUnifiedResourceContext()
+	if got == "" {
+		t.Fatal("expected non-empty unified context")
+	}
+
+	assertContains := func(substr string) {
+		t.Helper()
+		if !strings.Contains(got, substr) {
+			t.Fatalf("expected context to contain %q", substr)
+		}
+	}
+
+	assertContains("Total resources: 2 (Infrastructure: 2, Workloads: 0)")
+	assertContains("Kubernetes")
+	assertContains("prod-cluster")
+	assertContains("worker-1")
+	assertContains("Resources with Active Alerts")
+	assertContains("Node not ready")
+}
+
+func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	records := truenas.NewDefaultProvider().Records()
+	if len(records) == 0 {
+		t.Fatal("expected truenas fixture records")
+	}
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	adapter := unifiedresources.NewUnifiedAIAdapter(registry)
+	s := &Service{}
+	s.SetUnifiedResourceProvider(adapter)
+
+	got := s.buildUnifiedResourceContext()
+	if got == "" {
+		t.Fatal("expected non-empty context")
+	}
+	if !strings.Contains(got, "TrueNAS Systems") {
+		t.Fatalf("expected context to include TrueNAS section, got %q", got)
+	}
+	if !strings.Contains(got, "agent resource; status warning; sources truenas") {
+		t.Fatalf("expected context to include governed truenas summary, got %q", got)
+	}
+	if strings.Contains(got, "truenas-main") {
+		t.Fatalf("expected raw truenas host name to be redacted, got %q", got)
+	}
 }
 
 func TestBuildUnifiedResourceContext_TruncatesLargeContext(t *testing.T) {
 	largeName := strings.Repeat("a", 60000)
 
-	node := resources.Resource{
-		ID:           "node-1",
-		Name:         "node-1",
-		DisplayName:  largeName,
-		Type:         resources.ResourceTypeNode,
-		PlatformType: resources.PlatformProxmoxPVE,
-		Status:       resources.StatusOnline,
+	node := unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   largeName,
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
 	}
 
-	stats := resources.StoreStats{
-		TotalResources: 1,
-		ByType: map[resources.ResourceType]int{
-			resources.ResourceTypeNode: 1,
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeAgent: 1,
 		},
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() resources.StoreStats {
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
 			return stats
 		},
-		getInfrastructureFunc: func() []resources.Resource {
-			return []resources.Resource{node}
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{node}
 		},
-		getWorkloadsFunc: func() []resources.Resource {
+		getWorkloadsFunc: func() []unifiedresources.Resource {
 			return nil
 		},
-		getAllFunc: func() []resources.Resource {
-			return []resources.Resource{node}
-		},
-		getSummaryFunc: func() resources.ResourceSummary {
-			return resources.ResourceSummary{TotalResources: 1}
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{node}
 		},
 	}
 
-	s := &Service{resourceProvider: mockRP}
+	s := &Service{unifiedResourceProvider: mockURP}
 	got := s.buildUnifiedResourceContext()
 	if !strings.Contains(got, "[... Context truncated ...]") {
 		t.Fatal("expected context to be truncated")
@@ -258,6 +533,249 @@ func TestBuildUnifiedResourceContext_TruncatesLargeContext(t *testing.T) {
 	}
 }
 
-func metricValue(current float64) *resources.MetricValue {
-	return &resources.MetricValue{Current: current}
+func TestResourceContextUnifiedProvider_NilRegistry(t *testing.T) {
+	adapter := unifiedresources.NewUnifiedAIAdapter(nil)
+
+	if got := adapter.GetAll(); len(got) != 0 {
+		t.Fatalf("GetAll() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetInfrastructure(); len(got) != 0 {
+		t.Fatalf("GetInfrastructure() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetWorkloads(); len(got) != 0 {
+		t.Fatalf("GetWorkloads() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetByType(unifiedresources.ResourceTypeAgent); len(got) != 0 {
+		t.Fatalf("GetByType(host) len = %d, want 0", len(got))
+	}
+	if got := adapter.GetTopByCPU(3, nil); len(got) != 0 {
+		t.Fatalf("GetTopByCPU() len = %d, want 0", len(got))
+	}
+	if got := adapter.GetRelated("missing"); len(got) != 0 {
+		t.Fatalf("GetRelated(missing) len = %d, want 0", len(got))
+	}
+	if got := adapter.FindContainerHost("missing"); got != "" {
+		t.Fatalf("FindContainerHost(missing) = %q, want empty", got)
+	}
+	if stats := adapter.GetStats(); stats.Total != 0 {
+		t.Fatalf("GetStats().Total = %d, want 0", stats.Total)
+	}
+}
+
+func TestResourceContextUnifiedProvider_ResourceCounts(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "host-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID: "ct-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeSystemContainer,
+				Name:     "ct-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	if got, want := len(unified.GetAll()), 3; got != want {
+		t.Fatalf("GetAll() count mismatch: got=%d want=%d", got, want)
+	}
+}
+
+func TestResourceContextUnifiedProvider_InfrastructureWorkloadSplit(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "host-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID: "ct-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeSystemContainer,
+				Name:     "ct-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+
+	if got, want := len(unified.GetInfrastructure()), 1; got != want {
+		t.Fatalf("GetInfrastructure() count mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := len(unified.GetWorkloads()), 2; got != want {
+		t.Fatalf("GetWorkloads() count mismatch: got=%d want=%d", got, want)
+	}
+}
+
+func TestResourceContextUnifiedProvider_TopCPU(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-low",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "host-low",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 25},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vm-high",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-high",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 92},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "ct-mid",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAppContainer,
+				Name:     "ct-mid",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					CPU: &unifiedresources.MetricValue{Percent: 61},
+				},
+			},
+		},
+	})
+
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+	top := unified.GetTopByCPU(2, []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeAgent,
+		unifiedresources.ResourceTypeVM,
+		unifiedresources.ResourceTypeAppContainer,
+	})
+	if len(top) != 2 {
+		t.Fatalf("GetTopByCPU() len = %d, want 2", len(top))
+	}
+	if top[0].Name != "vm-high" || top[1].Name != "ct-mid" {
+		t.Fatalf("unexpected top CPU ordering: got [%s, %s]", top[0].Name, top[1].Name)
+	}
+}
+
+func TestResourceContextUnifiedProvider_FindContainerHost(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+	registry.IngestRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "docker-host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "docker-node-1",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+		{
+			SourceID:       "container-1",
+			ParentSourceID: "docker-host-1",
+			Resource: unifiedresources.Resource{
+				Type:     unifiedresources.ResourceTypeAppContainer,
+				Name:     "web",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Docker:   &unifiedresources.DockerData{ContainerID: "abc123"},
+			},
+		},
+	})
+
+	unified := unifiedresources.NewUnifiedAIAdapter(registry)
+	if got := unified.FindContainerHost("web"); got != "docker-node-1" {
+		t.Fatalf("FindContainerHost(web) = %q, want docker-node-1", got)
+	}
+	if got := unified.FindContainerHost("abc123"); got != "docker-node-1" {
+		t.Fatalf("FindContainerHost(abc123) = %q, want docker-node-1", got)
+	}
+}
+
+type resourceContextAlertProvider struct {
+	active  []AlertInfo
+	history []ResolvedAlertInfo
+}
+
+func (m *resourceContextAlertProvider) GetActiveAlerts() []AlertInfo {
+	return m.active
+}
+
+func (m *resourceContextAlertProvider) GetRecentlyResolved(minutes int) []ResolvedAlertInfo {
+	return m.history
+}
+
+func (m *resourceContextAlertProvider) GetAlertsByResource(resourceID string) []AlertInfo {
+	out := make([]AlertInfo, 0)
+	for _, alert := range m.active {
+		if alert.ResourceID == resourceID {
+			out = append(out, alert)
+		}
+	}
+	return out
+}
+
+func (m *resourceContextAlertProvider) GetAlertHistory(resourceID string, limit int) []ResolvedAlertInfo {
+	out := make([]ResolvedAlertInfo, 0)
+	for _, alert := range m.history {
+		if alert.ResourceID == resourceID {
+			out = append(out, alert)
+		}
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
 }

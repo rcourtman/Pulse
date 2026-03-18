@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -170,6 +171,24 @@ func TestPatrolRunHistoryStore_GetRecent(t *testing.T) {
 	}
 }
 
+func TestPatrolRunHistoryStore_GetByID(t *testing.T) {
+	store := NewPatrolRunHistoryStore(10)
+	store.Add(PatrolRunRecord{ID: "run-1"})
+	store.Add(PatrolRunRecord{ID: "run-2"})
+
+	run, ok := store.GetByID("run-1")
+	if !ok {
+		t.Fatal("expected run-1 to be found")
+	}
+	if run.ID != "run-1" {
+		t.Fatalf("expected run-1, got %s", run.ID)
+	}
+
+	if _, ok := store.GetByID("missing"); ok {
+		t.Fatal("expected missing run lookup to fail")
+	}
+}
+
 func TestPatrolRunHistoryStore_Count(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 
@@ -213,6 +232,37 @@ func TestPatrolRunHistoryStore_SetPersistence(t *testing.T) {
 	runs := store.GetAll()
 	if runs[0].ID != "persisted-1" {
 		t.Errorf("Expected persisted-1, got %s", runs[0].ID)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+
+	runs := []PatrolRunRecord{
+		{
+			ID:              "run-1",
+			StartedAt:       time.Now().Add(-time.Minute),
+			CompletedAt:     time.Now(),
+			DurationMs:      60000,
+			AlertIdentifier: "instance:node:100::metric/cpu",
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save patrol run history: %v", err)
+	}
+
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load patrol run history: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 loaded patrol run, got %d", len(loaded))
+	}
+	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
 	}
 }
 
@@ -336,7 +386,7 @@ func TestPatrolRunHistoryStore_FlushPersistence(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
 	store.Add(PatrolRunRecord{ID: "run-2"})
@@ -369,7 +419,7 @@ func TestPatrolRunHistoryStore_ScheduleSave(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond // Short debounce for testing
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0) // Reset after SetPersistence load
 
 	// Add a run (triggers scheduleSave)
@@ -388,7 +438,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_StopsExistingTimer(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -406,7 +456,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_Cancelled(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -427,7 +477,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_Error(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{saveErr: errors.New("save failed")}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -462,29 +512,31 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 
 	runs := []PatrolRunRecord{
 		{
-			ID:               "run-1",
-			StartedAt:        time.Now().Add(-2 * time.Minute),
-			CompletedAt:      time.Now().Add(-1 * time.Minute),
-			Duration:         time.Minute,
-			Type:             "manual",
-			ResourcesChecked: 10,
-			NodesChecked:     2,
-			GuestsChecked:    5,
-			DockerChecked:    1,
-			StorageChecked:   1,
-			HostsChecked:     0,
-			PBSChecked:       0,
-			NewFindings:      1,
-			ExistingFindings: 2,
-			ResolvedFindings: 1,
-			AutoFixCount:     0,
-			FindingsSummary:  "summary",
-			FindingIDs:       []string{"f1", "f2"},
-			ErrorCount:       0,
-			Status:           "ok",
-			AIAnalysis:       "analysis",
-			InputTokens:      100,
-			OutputTokens:     200,
+			ID:                        "run-1",
+			StartedAt:                 time.Now().Add(-2 * time.Minute),
+			CompletedAt:               time.Now().Add(-1 * time.Minute),
+			Duration:                  time.Minute,
+			Type:                      "manual",
+			ScopeResourceIDs:          []string{"node-1"},
+			EffectiveScopeResourceIDs: []string{"node-1", "qemu/101"},
+			ResourcesChecked:          10,
+			NodesChecked:              2,
+			GuestsChecked:             5,
+			DockerChecked:             1,
+			StorageChecked:            1,
+			HostsChecked:              0,
+			PBSChecked:                0,
+			NewFindings:               1,
+			ExistingFindings:          2,
+			ResolvedFindings:          1,
+			AutoFixCount:              0,
+			FindingsSummary:           "summary",
+			FindingIDs:                []string{"f1", "f2"},
+			ErrorCount:                0,
+			Status:                    "ok",
+			AIAnalysis:                "analysis",
+			InputTokens:               100,
+			OutputTokens:              200,
 		},
 	}
 
@@ -501,6 +553,78 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	}
 	if loaded[0].Duration != runs[0].Duration {
 		t.Fatalf("expected duration %v, got %v", runs[0].Duration, loaded[0].Duration)
+	}
+	if strings.Join(loaded[0].EffectiveScopeResourceIDs, ",") != strings.Join(runs[0].EffectiveScopeResourceIDs, ",") {
+		t.Fatalf("expected effective scope IDs %v, got %v", runs[0].EffectiveScopeResourceIDs, loaded[0].EffectiveScopeResourceIDs)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+
+	runs := []PatrolRunRecord{
+		{
+			ID:                        "run-empty",
+			StartedAt:                 time.Now().Add(-2 * time.Minute),
+			CompletedAt:               time.Now().Add(-1 * time.Minute),
+			Duration:                  time.Minute,
+			Type:                      "scoped",
+			TriggerReason:             "alert_fired",
+			ScopeResourceIDs:          []string{"seed-resource"},
+			EffectiveScopeResourceIDs: []string{},
+			ScopeResourceTypes:        []string{"vm"},
+			ResourcesChecked:          2,
+			GuestsChecked:             2,
+			PMGChecked:                1,
+			NewFindings:               0,
+			ExistingFindings:          1,
+			RejectedFindings:          1,
+			ResolvedFindings:          0,
+			FindingsSummary:           "Nothing matched",
+			FindingIDs:                []string{},
+			ErrorCount:                0,
+			Status:                    "healthy",
+			TriageFlags:               3,
+			TriageSkippedLLM:          true,
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected one loaded run, got %d", len(loaded))
+	}
+	if loaded[0].EffectiveScopeResourceIDs == nil {
+		t.Fatal("expected explicit empty effective scope ids to survive persistence")
+	}
+	if len(loaded[0].EffectiveScopeResourceIDs) != 0 {
+		t.Fatalf("expected empty effective scope ids, got %v", loaded[0].EffectiveScopeResourceIDs)
+	}
+	if loaded[0].FindingIDs == nil {
+		t.Fatal("expected explicit empty finding ids to survive persistence")
+	}
+	if len(loaded[0].FindingIDs) != 0 {
+		t.Fatalf("expected empty finding ids, got %v", loaded[0].FindingIDs)
+	}
+	if loaded[0].PMGChecked != 1 {
+		t.Fatalf("expected PMGChecked=1, got %d", loaded[0].PMGChecked)
+	}
+	if loaded[0].RejectedFindings != 1 {
+		t.Fatalf("expected RejectedFindings=1, got %d", loaded[0].RejectedFindings)
+	}
+	if loaded[0].TriageFlags != 3 {
+		t.Fatalf("expected TriageFlags=3, got %d", loaded[0].TriageFlags)
+	}
+	if !loaded[0].TriageSkippedLLM {
+		t.Fatal("expected TriageSkippedLLM to survive persistence")
 	}
 }
 

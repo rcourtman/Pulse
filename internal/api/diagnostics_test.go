@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestIsFallbackMemorySource(t *testing.T) {
@@ -24,12 +23,20 @@ func TestIsFallbackMemorySource(t *testing.T) {
 		{"Nodes-Endpoint", true},
 		{"node-status-used", true},
 		{"previous-snapshot", true},
+		{"rrd-available", true},
+		{"rrd-data", true},
+		{"listing", true},
 
 		// Non-fallback sources
 		{"cgroup", false},
 		{"qemu-agent", false},
 		{"proxmox-api", false},
+		{"available-field", false},
+		{"avail-field", false},
+		{"meminfo-available", false},
+		{"calculated", false},
 		{"rrddata", false},
+		{"powered-off", false},
 		{"some-other-source", false},
 	}
 
@@ -270,57 +277,32 @@ func TestInterfaceToStringSlice(t *testing.T) {
 func TestPreferredDockerHostName(t *testing.T) {
 	tests := []struct {
 		name     string
-		host     models.DockerHost
+		host     *unifiedresources.DockerHostView
 		expected string
 	}{
 		{
-			name: "display name preferred",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "My Docker Host",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "display name preferred",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "My Docker Host", "docker-host.local", "agent-456"),
 			expected: "My Docker Host",
 		},
 		{
-			name: "hostname when no display name",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "hostname when no display name",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "docker-host.local", "agent-456"),
 			expected: "docker-host.local",
 		},
 		{
-			name: "agent ID when no display name or hostname",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "",
-				AgentID:     "agent-456",
-			},
+			name:     "agent ID when no display name or hostname",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "", "agent-456"),
 			expected: "agent-456",
 		},
 		{
-			name: "ID as fallback",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "",
-				AgentID:     "",
-			},
+			name:     "ID as fallback",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "", ""),
 			expected: "id-123",
 		},
 		{
-			name: "whitespace-only display name ignored",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "   ",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "whitespace-only display name ignored",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "   ", "docker-host.local", "agent-456"),
 			expected: "docker-host.local",
 		},
 	}
@@ -333,6 +315,21 @@ func TestPreferredDockerHostName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func dockerHostViewForDiagnostics(resourceID, hostSourceID, name, hostname, agentID string) *unifiedresources.DockerHostView {
+	r := &unifiedresources.Resource{
+		ID:   resourceID,
+		Type: unifiedresources.ResourceTypeAgent,
+		Name: name,
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: hostSourceID,
+			Hostname:     hostname,
+			AgentID:      agentID,
+		},
+	}
+	view := unifiedresources.NewDockerHostView(r)
+	return &view
 }
 
 func TestFormatTimeMaybe(t *testing.T) {
@@ -363,105 +360,6 @@ func TestFormatTimeMaybe(t *testing.T) {
 			result := formatTimeMaybe(tt.input)
 			if result != tt.expected {
 				t.Errorf("formatTimeMaybe() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestHasLegacyThresholds(t *testing.T) {
-	ptrFloat := func(v float64) *float64 { return &v }
-
-	tests := []struct {
-		name     string
-		config   alerts.ThresholdConfig
-		expected bool
-	}{
-		{
-			name:     "empty config",
-			config:   alerts.ThresholdConfig{},
-			expected: false,
-		},
-		{
-			name: "modern thresholds only",
-			config: alerts.ThresholdConfig{
-				CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 70},
-				Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 75},
-			},
-			expected: false,
-		},
-		{
-			name: "CPU legacy set",
-			config: alerts.ThresholdConfig{
-				CPULegacy: ptrFloat(80.0),
-			},
-			expected: true,
-		},
-		{
-			name: "Memory legacy set",
-			config: alerts.ThresholdConfig{
-				MemoryLegacy: ptrFloat(85.0),
-			},
-			expected: true,
-		},
-		{
-			name: "Disk legacy set",
-			config: alerts.ThresholdConfig{
-				DiskLegacy: ptrFloat(90.0),
-			},
-			expected: true,
-		},
-		{
-			name: "DiskRead legacy set",
-			config: alerts.ThresholdConfig{
-				DiskReadLegacy: ptrFloat(50.0),
-			},
-			expected: true,
-		},
-		{
-			name: "DiskWrite legacy set",
-			config: alerts.ThresholdConfig{
-				DiskWriteLegacy: ptrFloat(60.0),
-			},
-			expected: true,
-		},
-		{
-			name: "NetworkIn legacy set",
-			config: alerts.ThresholdConfig{
-				NetworkInLegacy: ptrFloat(70.0),
-			},
-			expected: true,
-		},
-		{
-			name: "NetworkOut legacy set",
-			config: alerts.ThresholdConfig{
-				NetworkOutLegacy: ptrFloat(75.0),
-			},
-			expected: true,
-		},
-		{
-			name: "multiple legacy fields set",
-			config: alerts.ThresholdConfig{
-				CPULegacy:    ptrFloat(80.0),
-				MemoryLegacy: ptrFloat(85.0),
-				DiskLegacy:   ptrFloat(90.0),
-			},
-			expected: true,
-		},
-		{
-			name: "mixed modern and legacy",
-			config: alerts.ThresholdConfig{
-				CPU:          &alerts.HysteresisThreshold{Trigger: 80, Clear: 70},
-				MemoryLegacy: ptrFloat(85.0),
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := hasLegacyThresholds(tt.config)
-			if result != tt.expected {
-				t.Errorf("hasLegacyThresholds() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -627,9 +525,9 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with no matching files returns 0",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
-				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
-				os.WriteFile(dir+"/config", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/config", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 0,
@@ -639,7 +537,7 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with id_rsa counts as 1",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 1,
@@ -649,8 +547,8 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with id_rsa and id_rsa.pub counts as 2",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 2,
@@ -660,11 +558,11 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with multiple key types",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519.pub", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ecdsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ecdsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 5,
@@ -674,8 +572,8 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "subdirectories named id_* are not counted",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.Mkdir(dir+"/id_subdirectory", 0755)
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.Mkdir(dir+"/id_subdirectory", 0755)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 1,
@@ -685,11 +583,11 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "mixed files and directories",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.Mkdir(dir+"/id_subdir", 0755)
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
-				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
-				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				_ = os.Mkdir(dir+"/id_subdir", 0755)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 2,

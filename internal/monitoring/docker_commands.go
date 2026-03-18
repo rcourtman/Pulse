@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -15,6 +16,8 @@ const (
 	DockerCommandTypeStop = "stop"
 	// DockerCommandTypeUpdateContainer instructs the agent to update a container to its latest image.
 	DockerCommandTypeUpdateContainer = "update_container"
+	// DockerCommandTypeUpdateAll instructs the agent to update all containers with updates available.
+	DockerCommandTypeUpdateAll = "update_all"
 	// DockerCommandTypeCheckUpdates instructs the agent to check for container updates immediately.
 	DockerCommandTypeCheckUpdates = "check_updates"
 
@@ -127,21 +130,15 @@ func (m *Monitor) queueDockerStopCommand(hostID string) (models.DockerHostComman
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	if existing, ok := m.dockerCommands[hostID]; ok {
 		switch existing.status.Status {
-		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged:
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
 			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
 		}
 	}
@@ -181,22 +178,16 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 		return models.DockerHostCommandStatus{}, fmt.Errorf("container id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
 		switch existing.status.Status {
-		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged:
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
 			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
 		}
 	}
@@ -231,6 +222,99 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 	return cmd.status, nil
 }
 
+// QueueDockerUpdateAllCommand enqueues an update_all command for a docker host.
+// The monitor selects containers with UpdateStatus.UpdateAvailable == true and includes their IDs in the payload.
+func (m *Monitor) QueueDockerUpdateAllCommand(hostID string) (models.DockerHostCommandStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
+	}
+
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+	hostID = canonicalHostID
+
+	// Check for existing commands in progress for this host
+	if existing, ok := m.dockerCommands[hostID]; ok {
+		switch existing.status.Status {
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
+			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
+		}
+	}
+
+	// Select containers that currently have updates available.
+	readState := m.dockerCommandReadStateLocked()
+	containerIDs := make([]string, 0)
+	for _, c := range readState.DockerContainers() {
+		if c == nil || normalizeDockerHostID(c.HostSourceID()) != hostID {
+			continue
+		}
+		updateStatus := c.UpdateStatus()
+		if updateStatus == nil || !updateStatus.UpdateAvailable {
+			continue
+		}
+		containerID := strings.TrimSpace(c.ContainerID())
+		if containerID == "" {
+			continue
+		}
+		containerIDs = append(containerIDs, containerID)
+	}
+
+	if len(containerIDs) == 0 {
+		// Fallback to host-level nested container data when read-state was built from
+		// a snapshot shape that has not yet materialized per-container resources.
+		if snapshotHost, found := m.stateDockerHostByIDLocked(hostID); found {
+			for _, c := range snapshotHost.Containers {
+				if c.UpdateStatus == nil || !c.UpdateStatus.UpdateAvailable {
+					continue
+				}
+				if strings.TrimSpace(c.ID) == "" {
+					continue
+				}
+				containerIDs = append(containerIDs, c.ID)
+			}
+		}
+	}
+
+	if len(containerIDs) == 0 {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("no containers have updates available")
+	}
+
+	payload := map[string]any{
+		"containerIds": containerIDs,
+	}
+
+	cmd := newDockerHostCommand(
+		DockerCommandTypeUpdateAll,
+		fmt.Sprintf("Updating %d containers", len(containerIDs)),
+		dockerCommandDefaultTTL,
+		payload,
+	)
+
+	if m.dockerCommands == nil {
+		m.dockerCommands = make(map[string]*dockerHostCommand)
+	}
+	m.dockerCommands[hostID] = &cmd
+	if m.dockerCommandIndex == nil {
+		m.dockerCommandIndex = make(map[string]string)
+	}
+	m.dockerCommandIndex[cmd.status.ID] = hostID
+
+	m.state.SetDockerHostCommand(hostID, &cmd.status)
+	log.Info().
+		Str("dockerHostID", hostID).
+		Int("containers", len(containerIDs)).
+		Str("commandID", cmd.status.ID).
+		Msg("Queued docker update all command")
+
+	return cmd.status, nil
+}
+
 // QueueDockerCheckUpdatesCommand queues a command to check for container updates on a Docker host.
 func (m *Monitor) QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHostCommandStatus, error) {
 	m.mu.Lock()
@@ -241,17 +325,11 @@ func (m *Monitor) QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHo
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -369,7 +447,6 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 		cmd.markAcknowledged(message)
 		cmd.markCompleted(message)
 		// Only remove the Docker host if this was a "stop" command.
-		// Other commands (update_container, check_updates) should not remove the host.
 		if cmd.status.Type == DockerCommandTypeStop {
 			shouldRemove = true
 		}
@@ -388,7 +465,9 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 		Str("status", cmd.status.Status).
 		Msg("Docker host acknowledged command")
 
-	if status == DockerCommandStatusFailed || shouldRemove {
+	// Completed/failed commands should not be sent to agents again. Keep the last status
+	// in state for UI visibility, but clear the active command from memory.
+	if status == DockerCommandStatusFailed || status == DockerCommandStatusCompleted || shouldRemove {
 		delete(m.dockerCommands, resolvedHostID)
 		delete(m.dockerCommandIndex, commandID)
 	}
@@ -398,4 +477,65 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 
 func normalizeDockerHostID(id string) string {
 	return strings.TrimSpace(id)
+}
+
+func (m *Monitor) dockerCommandReadStateLocked() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	if readState, ok := m.resourceStore.(unifiedresources.ReadState); ok && readState != nil {
+		return readState
+	}
+	if m.state == nil {
+		return nil
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(m.state.GetSnapshot())
+	return unifiedresources.NewMonitorAdapter(registry)
+}
+
+func (m *Monitor) resolveDockerCommandHostLocked(hostID string) (*unifiedresources.DockerHostView, string, bool) {
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return nil, "", false
+	}
+
+	readState := m.dockerCommandReadStateLocked()
+	if readState == nil {
+		return nil, "", false
+	}
+
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		candidateID := normalizeDockerHostID(host.ID())
+		sourceID := normalizeDockerHostID(host.HostSourceID())
+		if hostID != candidateID && hostID != sourceID {
+			continue
+		}
+		if sourceID == "" {
+			sourceID = candidateID
+		}
+		if sourceID == "" {
+			return nil, "", false
+		}
+		return host, sourceID, true
+	}
+
+	return nil, "", false
+}
+
+func (m *Monitor) stateDockerHostByIDLocked(hostID string) (models.DockerHost, bool) {
+	if m == nil || m.state == nil {
+		return models.DockerHost{}, false
+	}
+
+	for _, host := range m.state.GetDockerHosts() {
+		if normalizeDockerHostID(host.ID) == hostID {
+			return host, true
+		}
+	}
+	return models.DockerHost{}, false
 }

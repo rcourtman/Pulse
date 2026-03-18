@@ -3,8 +3,8 @@ import type {
   VM,
   Container,
   PBSInstance,
-  Host,
-  DockerHost,
+  Agent,
+  DockerRuntime,
   DockerContainer,
   DockerService,
   ReplicationJob,
@@ -12,14 +12,40 @@ import type {
 
 const ONLINE_STATUS = 'online';
 const RUNNING_STATUS = 'running';
+const STATUS_LABELS: Record<string, string> = {
+  online: 'Online',
+  offline: 'Offline',
+  degraded: 'Degraded',
+  paused: 'Paused',
+  unknown: 'Unknown',
+  running: 'Running',
+  stopped: 'Stopped',
+};
+
+export const STATUS_SORT_ORDER = [
+  'online',
+  'degraded',
+  'paused',
+  'offline',
+  'stopped',
+  'unknown',
+  'running',
+] as const;
 
 const normalize = (value?: string | null): string => (value || '').trim().toLowerCase();
 
-const formatStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
+export const formatStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
   if (!value) return fallback;
   const normalized = value.trim();
   if (!normalized) return fallback;
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+export const getCanonicalStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
+  const raw = (value || '').trim();
+  const normalized = normalize(raw);
+  if (!normalized) return fallback;
+  return STATUS_LABELS[normalized] || raw;
 };
 
 export type StatusIndicatorVariant = 'success' | 'warning' | 'danger' | 'muted';
@@ -30,6 +56,13 @@ export interface StatusIndicator {
 }
 
 const defaultIndicator: StatusIndicator = { variant: 'muted', label: 'Unknown' };
+
+const STATUS_INDICATOR_BADGE_TONE_CLASSES: Record<StatusIndicatorVariant, string> = {
+  success: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  danger: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  muted: 'bg-surface-alt text-base-content',
+};
 
 export const OFFLINE_HEALTH_STATUSES = new Set([
   'offline',
@@ -69,6 +102,38 @@ export const ERROR_CONTAINER_STATES = new Set([
   'unhealthy',
 ]);
 
+export function getSimpleStatusIndicator(value?: string | null): StatusIndicator {
+  const normalized = normalize(value);
+  if (!normalized) return defaultIndicator;
+
+  if (OFFLINE_HEALTH_STATUSES.has(normalized)) {
+    return { variant: 'danger', label: formatStatusLabel(value, 'Offline') };
+  }
+
+  if (DEGRADED_HEALTH_STATUSES.has(normalized)) {
+    return { variant: 'warning', label: formatStatusLabel(value, 'Warning') };
+  }
+
+  if (normalized === ONLINE_STATUS || normalized === RUNNING_STATUS || normalized === 'healthy') {
+    return {
+      variant: 'success',
+      label:
+        normalized === 'healthy' ? 'Healthy' : normalized === RUNNING_STATUS ? 'Running' : 'Online',
+    };
+  }
+
+  return { variant: 'muted', label: formatStatusLabel(value, 'Unknown') };
+}
+
+export function getStatusIndicatorBadgeToneClasses(variant: StatusIndicatorVariant): string {
+  return STATUS_INDICATOR_BADGE_TONE_CLASSES[variant] || STATUS_INDICATOR_BADGE_TONE_CLASSES.muted;
+}
+
+export function isConnectedHealthStatus(value?: string | null): boolean {
+  const normalized = normalize(value);
+  return normalized === ONLINE_STATUS || normalized === RUNNING_STATUS || normalized === 'healthy';
+}
+
 export function isNodeOnline(node: Partial<Node> | undefined | null): boolean {
   if (!node) return false;
   if (node.status !== ONLINE_STATUS) return false;
@@ -95,7 +160,11 @@ export function getNodeStatusIndicator(node: Partial<Node> | undefined | null): 
   const status = normalize(node.status);
   const uptime = node.uptime ?? 0;
 
-  if (OFFLINE_HEALTH_STATUSES.has(connection) || OFFLINE_HEALTH_STATUSES.has(status) || uptime <= 0) {
+  if (
+    OFFLINE_HEALTH_STATUSES.has(connection) ||
+    OFFLINE_HEALTH_STATUSES.has(status) ||
+    uptime <= 0
+  ) {
     return { variant: 'danger', label: formatStatusLabel(connection || status, 'Offline') };
   }
 
@@ -146,9 +215,9 @@ export function getGuestPowerIndicator(
     : { variant: 'danger', label: 'Stopped' };
 }
 
-export function getHostStatusIndicator(host: Partial<Host> | undefined | null): StatusIndicator {
-  if (!host) return defaultIndicator;
-  const status = normalize(host.status);
+export function getAgentStatusIndicator(agent: Partial<Agent> | undefined | null): StatusIndicator {
+  if (!agent) return defaultIndicator;
+  const status = normalize(agent.status);
 
   if (OFFLINE_HEALTH_STATUSES.has(status)) {
     return { variant: 'danger', label: formatStatusLabel(status, 'Offline') };
@@ -168,7 +237,7 @@ export function getHostStatusIndicator(host: Partial<Host> | undefined | null): 
 }
 
 export function getDockerHostStatusIndicator(
-  host: Partial<DockerHost> | string | undefined | null,
+  host: Partial<DockerRuntime> | string | undefined | null,
 ): StatusIndicator {
   const rawStatus = typeof host === 'string' ? host : host?.status;
   const status = normalize(rawStatus);
@@ -181,7 +250,7 @@ export function getDockerHostStatusIndicator(
     return { variant: 'warning', label: formatStatusLabel(status, 'Degraded') };
   }
 
-  if (status === ONLINE_STATUS || status === RUNNING_STATUS || status === 'healthy') {
+  if (isConnectedHealthStatus(status)) {
     return { variant: 'success', label: formatStatusLabel(status, 'Online') };
   }
 

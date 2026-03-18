@@ -96,7 +96,7 @@ func TestInstallShAdapterDownloadInstallScript(t *testing.T) {
 	t.Setenv("PULSE_TEST_SHA", checksumPath)
 
 	adapter := NewInstallShAdapter(nil)
-	got, err := adapter.downloadInstallScript(context.Background())
+	got, err := adapter.downloadInstallScript(context.Background(), "")
 	if err != nil {
 		t.Fatalf("downloadInstallScript error: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestInstallShAdapterDownloadInstallScript(t *testing.T) {
 	if err := os.WriteFile(checksumPath, []byte("deadbeef"), 0600); err != nil {
 		t.Fatalf("write checksum: %v", err)
 	}
-	if _, err := adapter.downloadInstallScript(context.Background()); err == nil {
+	if _, err := adapter.downloadInstallScript(context.Background(), ""); err == nil {
 		t.Fatalf("expected checksum error")
 	}
 }

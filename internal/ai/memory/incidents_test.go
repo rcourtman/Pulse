@@ -1,12 +1,62 @@
 package memory
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestIncidentJSONCanonicalOutput(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	incident := Incident{
+		ID:              "incident-1",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		AlertType:       "cpu",
+		Level:           "warning",
+		ResourceID:      "resource-1",
+		ResourceName:    "resource-1",
+		Status:          IncidentStatusOpen,
+		OpenedAt:        now,
+	}
+
+	data, err := json.Marshal(incident)
+	if err != nil {
+		t.Fatalf("marshal incident: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
+	}
+	if _, ok := payload["alertId"]; ok {
+		t.Fatalf("did not expect alertId in canonical payload, got %#v", payload["alertId"])
+	}
+
+	var decoded Incident
+	if err := json.Unmarshal([]byte(`{
+		"id":"incident-2",
+		"alertIdentifier":"instance:node:100::metric/cpu",
+		"alertType":"cpu",
+		"level":"warning",
+		"resourceId":"resource-2",
+		"resourceName":"resource-2",
+		"status":"open",
+		"openedAt":"2026-03-01T00:00:00Z"
+	}`), &decoded); err != nil {
+		t.Fatalf("decode canonical incident: %v", err)
+	}
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier to load, got %q", decoded.AlertIdentifier)
+	}
+}
 
 func TestIncidentStore_RecordTimeline(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{
@@ -34,7 +84,7 @@ func TestIncidentStore_RecordTimeline(t *testing.T) {
 	store.RecordCommand(alert.ID, "systemctl restart nginx", true, "ok", nil)
 	store.RecordAlertResolved(alert, time.Now())
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatalf("expected timeline, got nil")
 	}
@@ -126,7 +176,7 @@ func TestIncidentStore_RecordAlertUnacknowledged(t *testing.T) {
 	store.RecordAlertFired(alert)
 	store.RecordAlertAcknowledged(alert, "admin")
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatalf("expected timeline after ack")
 	}
@@ -140,7 +190,7 @@ func TestIncidentStore_RecordAlertUnacknowledged(t *testing.T) {
 	// Now unacknowledge
 	store.RecordAlertUnacknowledged(alert, "operator")
 
-	timeline = store.GetTimelineByAlertID(alert.ID)
+	timeline = store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatalf("expected timeline after unack")
 	}
@@ -199,7 +249,7 @@ func TestIncidentStore_RecordRunbook(t *testing.T) {
 	// Record a runbook execution
 	store.RecordRunbook(alert.ID, "runbook-cleanup", "Disk Cleanup", "success", true, "Freed 10GB")
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatal("expected timeline after runbook")
 	}
@@ -251,7 +301,7 @@ func TestIncidentStore_RecordRunbook_CreatesIncident(t *testing.T) {
 	// RecordRunbook should create incident if none exists
 	store.RecordRunbook("new-alert", "runbook-1", "Test Runbook", "completed", false, "")
 
-	timeline := store.GetTimelineByAlertID("new-alert")
+	timeline := store.GetTimelineByAlertIdentifier("new-alert")
 	if timeline == nil {
 		t.Fatal("expected timeline to be created by RecordRunbook")
 	}
@@ -592,7 +642,7 @@ func TestIncidentStore_RecordNote_ByIncidentID(t *testing.T) {
 	}
 	store.RecordAlertFired(alert)
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatal("expected timeline")
 	}
@@ -603,7 +653,7 @@ func TestIncidentStore_RecordNote_ByIncidentID(t *testing.T) {
 		t.Fatal("expected note to be saved by incident ID")
 	}
 
-	timeline = store.GetTimelineByAlertID(alert.ID)
+	timeline = store.GetTimelineByAlertIdentifier(alert.ID)
 	foundNoteEvent := false
 	for _, evt := range timeline.Events {
 		if evt.Type == IncidentEventNote {

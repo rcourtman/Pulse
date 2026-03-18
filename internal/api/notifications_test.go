@@ -2,12 +2,15 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -165,11 +168,6 @@ func (m *MockNotificationMonitor) GetConfigPersistence() NotificationConfigPersi
 	return args.Get(0).(NotificationConfigPersistence)
 }
 
-func (m *MockNotificationMonitor) GetState() models.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
-}
-
 type MockNotificationManager struct {
 	mock.Mock
 }
@@ -307,7 +305,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp notifications.EmailConfig
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.Equal(t, "smtp.example.com", resp.SMTPHost)
 		assert.Empty(t, resp.Password) // Should be redacted
 	})
@@ -318,6 +316,7 @@ func TestNotificationHandlers(t *testing.T) {
 			SMTPHost: "smtp.example.com",
 			Password: "newpassword",
 		}
+		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 		mockManager.On("SetEmailConfig", mock.Anything).Return().Once()
 		mockPersistence.On("SaveEmailConfig", mock.Anything).Return(nil).Once()
 
@@ -368,7 +367,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.Equal(t, 1, len(resp))
 		assert.Equal(t, "wh1", resp[0]["id"])
 		headers := resp[0]["headers"].(map[string]interface{})
@@ -422,7 +421,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		queue := resp["queue"].(map[string]interface{})
 		assert.Equal(t, float64(1), queue["pending"])
 		assert.Equal(t, true, queue["healthy"])
@@ -576,7 +575,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestNotification", "email").Return(nil).Once()
 		body, _ := json.Marshal(map[string]string{"method": "email"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
@@ -586,7 +584,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_Webhook", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "wh1"}}).Once()
 		mockManager.On("SendTestWebhook", mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "wh1"})
@@ -605,8 +602,88 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 	})
 
+	t.Run("CreateWebhook_CanonicalizesPushoverLegacyAliasesAtAPIIngress", func(t *testing.T) {
+		mockManager.ExpectedCalls = nil
+		mockManager.Calls = nil
+		mockPersistence.ExpectedCalls = nil
+		mockPersistence.Calls = nil
+
+		mockManager.On("ValidateWebhookURL", "https://api.pushover.net/1/messages.json").Return(nil).Once()
+		mockManager.On("AddWebhook", mock.MatchedBy(func(w notifications.WebhookConfig) bool {
+			return w.Service == "pushover" &&
+				w.CustomFields["token"] == "legacy-app" &&
+				w.CustomFields["user"] == "legacy-user" &&
+				w.CustomFields["app_token"] == "" &&
+				w.CustomFields["user_token"] == ""
+		})).Return().Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"name":    "Pushover",
+			"url":     "https://api.pushover.net/1/messages.json",
+			"service": "pushover",
+			"customFields": map[string]string{
+				"app_token":  "legacy-app",
+				"user_token": "legacy-user",
+			},
+		})
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.CreateWebhook(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.NotContains(t, w.Body.String(), "app_token")
+		assert.NotContains(t, w.Body.String(), "user_token")
+		assert.Contains(t, w.Body.String(), "\"token\":\"legacy-app\"")
+		assert.Contains(t, w.Body.String(), "\"user\":\"legacy-user\"")
+	})
+
+	t.Run("TestWebhook_UsesNotificationsOwnedTemplateSynthesis", func(t *testing.T) {
+		mockManager.On("TestEnhancedWebhook", mock.MatchedBy(func(webhook notifications.EnhancedWebhookConfig) bool {
+			return webhook.Service == "discord" &&
+				strings.Contains(webhook.PayloadTemplate, `"username": "Pulse Monitoring"`) &&
+				webhook.Headers["Content-Type"] == "application/json"
+		})).Return(200, "OK", nil).Once()
+		body, _ := json.Marshal(map[string]string{"url": "https://example.com/test", "service": "discord"})
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.TestWebhook(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("TestWebhook_CanonicalizesPushoverLegacyAliasesAtAPIIngress", func(t *testing.T) {
+		mockManager.ExpectedCalls = nil
+		mockManager.Calls = nil
+		mockPersistence.ExpectedCalls = nil
+		mockPersistence.Calls = nil
+
+		mockManager.On("TestEnhancedWebhook", mock.MatchedBy(func(webhook notifications.EnhancedWebhookConfig) bool {
+			_, hasLegacyApp := webhook.CustomFields["app_token"]
+			_, hasLegacyUser := webhook.CustomFields["user_token"]
+			return webhook.Service == "pushover" &&
+				webhook.CustomFields["token"] == "legacy-app" &&
+				webhook.CustomFields["user"] == "legacy-user" &&
+				!hasLegacyApp &&
+				!hasLegacyUser
+		})).Return(200, "OK", nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"url":     "https://api.pushover.net/1/messages.json",
+			"service": "pushover",
+			"customFields": map[string]string{
+				"app_token":  "legacy-app",
+				"user_token": "legacy-user",
+			},
+		})
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.TestWebhook(w, req)
+
+		assert.Equal(t, 200, w.Code)
+	})
+
 	t.Run("TestNotification_EmailWithConfig", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestNotificationWithConfig", "email", mock.Anything, mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "email",
@@ -619,7 +696,6 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 
 	t.Run("TestNotification_AppriseWithConfig", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("SendTestAppriseWithConfig", mock.Anything).Return(nil).Once()
 		body, _ := json.Marshal(map[string]interface{}{
 			"method": "apprise",
@@ -660,6 +736,49 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 	})
 
+	t.Run("UpdateWebhook_CanonicalizesPushoverLegacyAliasesAtAPIIngress", func(t *testing.T) {
+		mockManager.ExpectedCalls = nil
+		mockManager.Calls = nil
+		mockPersistence.ExpectedCalls = nil
+		mockPersistence.Calls = nil
+
+		existing := notifications.WebhookConfig{
+			ID:      "wh-push",
+			URL:     "https://api.pushover.net/1/messages.json",
+			Service: "pushover",
+		}
+
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
+		mockManager.On("ValidateWebhookURL", "https://api.pushover.net/1/messages.json").Return(nil).Once()
+		mockManager.On("UpdateWebhook", "wh-push", mock.MatchedBy(func(w notifications.WebhookConfig) bool {
+			return w.Service == "pushover" &&
+				w.CustomFields["token"] == "legacy-app" &&
+				w.CustomFields["user"] == "legacy-user" &&
+				w.CustomFields["app_token"] == "" &&
+				w.CustomFields["user_token"] == ""
+		})).Return(nil).Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
+		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"url":     "https://api.pushover.net/1/messages.json",
+			"service": "pushover",
+			"customFields": map[string]string{
+				"app_token":  "legacy-app",
+				"user_token": "legacy-user",
+			},
+		})
+		req := httptest.NewRequest("PUT", "/api/notifications/webhooks/wh-push", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.UpdateWebhook(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.NotContains(t, w.Body.String(), "app_token")
+		assert.NotContains(t, w.Body.String(), "user_token")
+		assert.Contains(t, w.Body.String(), "\"token\":\"legacy-app\"")
+		assert.Contains(t, w.Body.String(), "\"user\":\"legacy-user\"")
+	})
+
 	t.Run("TestNotification_InvalidJSON", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader([]byte("{invalid}")))
 		w := httptest.NewRecorder()
@@ -667,8 +786,15 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
+	t.Run("TestNotification_RequestBodyTooLarge", func(t *testing.T) {
+		oversized := `{"method":"email","config":{"smtpHost":"` + strings.Repeat("a", notificationTestRequestBodyLimit) + `"}}`
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader([]byte(oversized)))
+		w := httptest.NewRecorder()
+		h.TestNotification(w, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	})
+
 	t.Run("TestNotification_WebhookNotFound", func(t *testing.T) {
-		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
 		body, _ := json.Marshal(map[string]string{"method": "webhook", "webhookId": "nonexistent"})
 		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(body))
@@ -676,4 +802,161 @@ func TestNotificationHandlers(t *testing.T) {
 		h.TestNotification(w, req)
 		assert.Equal(t, 404, w.Code)
 	})
+
+	t.Run("TestWebhook_RequestBodyTooLarge", func(t *testing.T) {
+		oversized := `{"url":"https://example.com/` + strings.Repeat("a", webhookTestRequestBodyLimit) + `","service":"generic"}`
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader([]byte(oversized)))
+		w := httptest.NewRecorder()
+		h.TestWebhook(w, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	})
+}
+
+func TestClassifyNotificationError(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            string
+		wantSummary    string
+		wantHasDetail  bool
+		summaryMustNot []string // substrings that must NOT appear in summary
+	}{
+		{
+			name:           "connection refused",
+			err:            "dial tcp smtp.gmail.com:587: connect: connection refused",
+			wantSummary:    "Could not connect to the server — check host, port, and firewall settings",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "no such host",
+			err:            "dial tcp: lookup smtp.example.com: no such host",
+			wantSummary:    "Server hostname not found — check the server address",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "i/o timeout",
+			err:            "dial tcp 10.0.0.1:587: i/o timeout",
+			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "context deadline exceeded",
+			err:            "context deadline exceeded",
+			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"context"},
+		},
+		{
+			name:           "x509 certificate error",
+			err:            "x509: certificate signed by unknown authority",
+			wantSummary:    "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"x509:"},
+		},
+		{
+			name:           "smtp auth failure",
+			err:            "535 5.7.8 Username and Password not accepted",
+			wantSummary:    "Authentication failed — check username and password",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"535"},
+		},
+		{
+			name:           "executable not found",
+			err:            `exec: "apprise": executable file not found in $PATH`,
+			wantSummary:    "Required program not found — ensure it is installed on the server",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"exec:"},
+		},
+		{
+			name:           "permission denied",
+			err:            "open /etc/ssl/certs: permission denied",
+			wantSummary:    "Permission denied — the server process lacks access to the required resource",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"open /etc"},
+		},
+		{
+			name:           "eof",
+			err:            "read tcp 192.168.1.1:587: EOF",
+			wantSummary:    "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"read tcp"},
+		},
+		{
+			name:          "unknown error passes through",
+			err:           "some unknown error",
+			wantSummary:   "some unknown error",
+			wantHasDetail: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary, detail := classifyNotificationError(fmt.Errorf("%s", tt.err))
+			assert.Equal(t, tt.wantSummary, summary)
+			if tt.wantHasDetail {
+				assert.Equal(t, tt.err, detail, "detail should contain original error")
+			} else {
+				assert.Empty(t, detail, "detail should be empty for unclassified errors")
+			}
+			for _, banned := range tt.summaryMustNot {
+				assert.NotContains(t, summary, banned, "summary must not contain Go internal prefix %q", banned)
+			}
+		})
+	}
+}
+
+func TestWriteTestNotificationError(t *testing.T) {
+	t.Run("classified error returns JSON with detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		err := fmt.Errorf("dial tcp smtp.gmail.com:587: connect: connection refused")
+		writeTestNotificationError(w, err, http.StatusBadRequest)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+
+		var resp map[string]string
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "Could not connect to the server — check host, port, and firewall settings", resp["error"])
+		assert.Equal(t, "dial tcp smtp.gmail.com:587: connect: connection refused", resp["detail"])
+	})
+
+	t.Run("unclassified error returns JSON without detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		err := fmt.Errorf("some unknown error")
+		writeTestNotificationError(w, err, http.StatusBadRequest)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var resp map[string]string
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "some unknown error", resp["error"])
+		assert.Empty(t, resp["detail"])
+	})
+}
+
+func TestNotificationHandlers_SetMonitorConcurrentAccess(t *testing.T) {
+	mockMonitor1 := new(MockNotificationMonitor)
+	mockMonitor2 := new(MockNotificationMonitor)
+	h := NewNotificationHandlers(nil, mockMonitor1)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 500; j++ {
+				if (worker+j)%2 == 0 {
+					h.SetMonitor(mockMonitor1)
+				} else {
+					h.SetMonitor(mockMonitor2)
+				}
+				_ = h.getMonitor(context.Background())
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	assert.NotNil(t, h.getMonitor(context.Background()))
 }

@@ -1,0 +1,206 @@
+{
+  "scenarios": [
+    {
+      "id": "multi-tenant",
+      "name": "Multi-tenant Isolation",
+      "description": "Validates org lifecycle, switching, and isolation boundaries.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/03-multi-tenant.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {
+          "PULSE_MULTI_TENANT_ENABLED": "true",
+          "PULSE_E2E_ENTITLEMENT_PROFILE": "multi-tenant"
+        }
+      },
+      "agentic": {
+        "task_file": "evals/tasks/multi-tenant.md"
+      }
+    },
+    {
+      "id": "trial-signup",
+      "name": "Pro Trial Signup Return",
+      "description": "Ensures self-hosted Pulse initiates hosted trial signup, preserves local entitlements until activation, and rate-limits duplicate initiation attempts.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/07-trial-signup-return.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/trial-signup.md"
+      }
+    },
+    {
+      "id": "cloud-hosting",
+      "name": "Pulse Cloud Hosted Signup",
+      "description": "Validates public cloud signup, Stripe sandbox checkout completion, and magic-link request behavior.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/08-cloud-hosting.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/cloud-hosting.md"
+      }
+    },
+    {
+      "id": "cloud-billing-lifecycle",
+      "name": "Cloud Billing Lifecycle",
+      "description": "Validates post-checkout cloud lifecycle transitions (active to canceled) through Stripe + webhook processing.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/09-cloud-billing-lifecycle.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ]
+      },
+      "agentic": {
+        "task_file": "evals/tasks/cloud-billing-lifecycle.md"
+      }
+    },
+    {
+      "id": "truenas-node-add",
+      "name": "TrueNAS Node Addition",
+      "description": "Validates TrueNAS connection add, pool/dataset discovery, and unified resource visibility.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/02-node-add-truenas.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {
+          "PULSE_E2E_TRUENAS_INSECURE": "true"
+        }
+      },
+      "agentic": {
+        "task_file": "evals/tasks/truenas-node-add.md"
+      }
+    },
+    {
+      "id": "relay-pairing",
+      "name": "Relay Pairing & Mobile Readiness",
+      "description": "Validates relay configuration, connection to relay server, QR code generation, and mobile pairing readiness.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/03-relay-pairing.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/relay-pairing.md"
+      }
+    },
+    {
+      "id": "agent-registration",
+      "name": "Agent Install & Registration",
+      "description": "Validates host agent registration via report API, host visibility in unified state, and infrastructure page rendering.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/04-agent-install-registration.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/agent-registration.md"
+      }
+    },
+    {
+      "id": "saml-sso-login",
+      "name": "SAML SSO Provider Lifecycle",
+      "description": "Validates SAML SSO provider CRUD, SP metadata generation, test-connection, and SSO settings UI rendering.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/05-saml-sso-login.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/saml-sso.md"
+      }
+    },
+    {
+      "id": "audit-log-reporting",
+      "name": "Audit Log + Reporting Lifecycle",
+      "description": "Validates audit event list/export/summary, audit webhook CRUD, notification webhooks, report generation, and reporting UI.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/06-audit-log-reporting.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/audit-reporting.md"
+      }
+    },
+    {
+      "id": "ai-patrol-lifecycle",
+      "name": "AI Patrol Finding Lifecycle",
+      "description": "Validates AI Patrol status, findings, force run, autonomy settings, approval queue, investigation, finding acknowledge/resolve lifecycle, and AI page UI.",
+      "deterministic": {
+        "command": [
+          "npx",
+          "playwright",
+          "test",
+          "tests/journeys/07-ai-patrol-finding-lifecycle.spec.ts",
+          "--project=chromium",
+          "--reporter=list",
+          "--retries=1"
+        ],
+        "env": {}
+      },
+      "agentic": {
+        "task_file": "evals/tasks/ai-patrol-lifecycle.md"
+      }
+    }
+  ]
+}

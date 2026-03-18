@@ -23,17 +23,17 @@ func (g *CSVGenerator) Generate(data *ReportData) ([]byte, error) {
 
 	// Write header comment rows
 	if err := g.writeHeader(w, data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write CSV header section: %w", err)
 	}
 
 	// Write summary section
 	if err := g.writeSummary(w, data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write CSV summary section: %w", err)
 	}
 
 	// Write data section
 	if err := g.writeData(w, data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write CSV data section: %w", err)
 	}
 
 	w.Flush()
@@ -59,7 +59,7 @@ func (g *CSVGenerator) writeHeader(w *csv.Writer, data *ReportData) error {
 
 	for _, row := range headers {
 		if err := w.Write(row); err != nil {
-			return err
+			return fmt.Errorf("write header row %q: %w", row[0], err)
 		}
 	}
 
@@ -70,12 +70,12 @@ func (g *CSVGenerator) writeHeader(w *csv.Writer, data *ReportData) error {
 func (g *CSVGenerator) writeSummary(w *csv.Writer, data *ReportData) error {
 	// Section header
 	if err := w.Write([]string{"# SUMMARY"}); err != nil {
-		return err
+		return fmt.Errorf("write summary section heading: %w", err)
 	}
 
 	// Column headers
 	if err := w.Write([]string{"Metric", "Count", "Min", "Max", "Average", "Current", "Unit"}); err != nil {
-		return err
+		return fmt.Errorf("write summary column headers: %w", err)
 	}
 
 	// Get sorted metric names for consistent output
@@ -99,13 +99,13 @@ func (g *CSVGenerator) writeSummary(w *csv.Writer, data *ReportData) error {
 			unit,
 		}
 		if err := w.Write(row); err != nil {
-			return err
+			return fmt.Errorf("write summary row for metric %q: %w", metricType, err)
 		}
 	}
 
 	// Empty row as separator
 	if err := w.Write([]string{""}); err != nil {
-		return err
+		return fmt.Errorf("write summary separator row: %w", err)
 	}
 
 	return nil
@@ -115,7 +115,7 @@ func (g *CSVGenerator) writeSummary(w *csv.Writer, data *ReportData) error {
 func (g *CSVGenerator) writeData(w *csv.Writer, data *ReportData) error {
 	// Section header
 	if err := w.Write([]string{"# DATA"}); err != nil {
-		return err
+		return fmt.Errorf("write data section heading: %w", err)
 	}
 
 	// Get sorted metric names
@@ -136,7 +136,7 @@ func (g *CSVGenerator) writeData(w *csv.Writer, data *ReportData) error {
 		}
 	}
 	if err := w.Write(headerRow); err != nil {
-		return err
+		return fmt.Errorf("write data column headers: %w", err)
 	}
 
 	// Collect all unique timestamps and build a map for lookup
@@ -173,7 +173,7 @@ func (g *CSVGenerator) writeData(w *csv.Writer, data *ReportData) error {
 		}
 
 		if err := w.Write(row); err != nil {
-			return err
+			return fmt.Errorf("write data row for timestamp %d: %w", ts, err)
 		}
 	}
 
@@ -197,19 +197,19 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	}
 	for _, row := range headers {
 		if err := w.Write(row); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("write multi-resource header row %q: %w", row[0], err)
 		}
 	}
 
 	// Write summary section
 	if err := w.Write([]string{"# SUMMARY"}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write multi-resource summary section heading: %w", err)
 	}
 
 	// Summary column headers
 	summaryHeaders := []string{"Resource Name", "Resource Type", "Resource ID", "Metric", "Count", "Min", "Max", "Average", "Current", "Unit"}
 	if err := w.Write(summaryHeaders); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write multi-resource summary column headers: %w", err)
 	}
 
 	// Write summary rows for each resource
@@ -242,19 +242,19 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 				unit,
 			}
 			if err := w.Write(row); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("write multi-resource summary row for resource %q metric %q: %w", rd.ResourceID, metricType, err)
 			}
 		}
 	}
 
 	// Empty separator
 	if err := w.Write([]string{""}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write multi-resource summary separator row: %w", err)
 	}
 
 	// Write data section
 	if err := w.Write([]string{"# DATA"}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write multi-resource data section heading: %w", err)
 	}
 
 	// Collect all unique metric names across all resources
@@ -281,7 +281,7 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 		}
 	}
 	if err := w.Write(headerRow); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write multi-resource data column headers: %w", err)
 	}
 
 	// Collect all data points across all resources, with resource info
@@ -344,7 +344,7 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 			}
 		}
 		if err := w.Write(csvRow); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("write multi-resource data row for resource %q at timestamp %d: %w", row.resourceID, row.timestamp, err)
 		}
 	}
 

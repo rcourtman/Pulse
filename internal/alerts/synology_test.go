@@ -12,7 +12,6 @@ func TestSynologyRAIDSuppression(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -76,16 +75,15 @@ func TestSynologyRAIDClearing(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
 	// Manually inject an alert for md0
-	alertID := "host-syno-1-raid-md0"
+	alertID := buildCanonicalStateID("agent:syno-1/raid:md0", "agent:syno-1/raid:md0-health")
 	m.mu.Lock()
 	m.activeAlerts[alertID] = &Alert{
 		ID:           alertID,
-		ResourceID:   "host-syno-1-raid-md0",
+		ResourceID:   "agent:syno-1/raid:md0",
 		ResourceName: "Synology NAS - /dev/md0 (raid1)",
 		Message:      "RAID array degraded",
 	}
@@ -110,7 +108,7 @@ func TestSynologyRAIDClearing(t *testing.T) {
 	m.CheckHost(host)
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if exists {
@@ -122,7 +120,6 @@ func TestHostDisableClearsRAID(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 
@@ -145,9 +142,9 @@ func TestHostDisableClearsRAID(t *testing.T) {
 	// 1. Initial check - creates alert
 	m.CheckHost(host)
 
-	alertID := "host-host-raid-raid-md2"
+	alertID := buildCanonicalStateID("agent:host-raid/raid:md2", "agent:host-raid/raid:md2-health")
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if !exists {
@@ -163,7 +160,6 @@ func TestHostDisableClearsRAID(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 	m.mu.Lock()
-	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
 	m.mu.Unlock()
 

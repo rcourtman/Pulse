@@ -1,9 +1,15 @@
 import { spawn } from 'node:child_process';
+import { stopManagedLocalBackend } from './managed-local-backend.mjs';
 
 const truthy = (value) => {
   if (!value) return false;
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 };
+
+if (truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND)) {
+  await stopManagedLocalBackend();
+  process.exit(0);
+}
 
 if (truthy(process.env.PULSE_E2E_SKIP_DOCKER)) {
   console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose down');
@@ -41,4 +47,3 @@ try {
   // Avoid masking test failures with cleanup errors
   console.warn('[integration] docker compose down failed:', err?.message || err);
 }
-

@@ -11,8 +11,8 @@ type StateSnapshot struct {
 	RemovedDockerHosts           []RemovedDockerHost        `json:"removedDockerHosts"`
 	KubernetesClusters           []KubernetesCluster        `json:"kubernetesClusters"`
 	RemovedKubernetesClusters    []RemovedKubernetesCluster `json:"removedKubernetesClusters"`
-	RemovedHosts                 []RemovedHost              `json:"removedHosts"`
 	Hosts                        []Host                     `json:"hosts"`
+	RemovedHostAgents            []RemovedHostAgent         `json:"removedHostAgents"`
 	Storage                      []Storage                  `json:"storage"`
 	CephClusters                 []CephCluster              `json:"cephClusters"`
 	PhysicalDisks                []PhysicalDisk             `json:"physicalDisks"`
@@ -31,10 +31,122 @@ type StateSnapshot struct {
 	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
-	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
-	// TemplateVMIDs holds Proxmox template VMID→node mappings per instance.
-	// Not serialised to JSON or the frontend API; used only for backup orphan detection.
-	TemplateVMIDs map[string]map[int]string `json:"-"`
+}
+
+// EmptyStateSnapshot returns a normalized zero-value snapshot for runtime
+// paths that need to fail closed without leaking nil collection/map fields.
+func EmptyStateSnapshot() StateSnapshot {
+	snapshot := StateSnapshot{}
+	snapshot.NormalizeCollections()
+	return snapshot
+}
+
+// NormalizeCollections preserves stable empty-slice semantics for snapshot
+// collection fields so downstream callers do not have to distinguish nil from
+// "present but empty".
+func (s *StateSnapshot) NormalizeCollections() {
+	if s.Nodes == nil {
+		s.Nodes = []Node{}
+	}
+	for i := range s.Nodes {
+		s.Nodes[i] = s.Nodes[i].NormalizeCollections()
+	}
+	if s.VMs == nil {
+		s.VMs = []VM{}
+	}
+	for i := range s.VMs {
+		s.VMs[i] = s.VMs[i].NormalizeCollections()
+	}
+	if s.Containers == nil {
+		s.Containers = []Container{}
+	}
+	for i := range s.Containers {
+		s.Containers[i] = s.Containers[i].NormalizeCollections()
+	}
+	if s.DockerHosts == nil {
+		s.DockerHosts = []DockerHost{}
+	}
+	for i := range s.DockerHosts {
+		s.DockerHosts[i] = s.DockerHosts[i].NormalizeCollections()
+	}
+	if s.RemovedDockerHosts == nil {
+		s.RemovedDockerHosts = []RemovedDockerHost{}
+	}
+	if s.KubernetesClusters == nil {
+		s.KubernetesClusters = []KubernetesCluster{}
+	}
+	for i := range s.KubernetesClusters {
+		s.KubernetesClusters[i] = s.KubernetesClusters[i].NormalizeCollections()
+	}
+	if s.RemovedKubernetesClusters == nil {
+		s.RemovedKubernetesClusters = []RemovedKubernetesCluster{}
+	}
+	if s.Hosts == nil {
+		s.Hosts = []Host{}
+	}
+	for i := range s.Hosts {
+		s.Hosts[i] = s.Hosts[i].NormalizeCollections()
+	}
+	if s.RemovedHostAgents == nil {
+		s.RemovedHostAgents = []RemovedHostAgent{}
+	}
+	if s.Storage == nil {
+		s.Storage = []Storage{}
+	}
+	for i := range s.Storage {
+		s.Storage[i] = s.Storage[i].NormalizeCollections()
+	}
+	if s.CephClusters == nil {
+		s.CephClusters = []CephCluster{}
+	}
+	for i := range s.CephClusters {
+		s.CephClusters[i] = s.CephClusters[i].NormalizeCollections()
+	}
+	if s.PhysicalDisks == nil {
+		s.PhysicalDisks = []PhysicalDisk{}
+	}
+	if s.PBSInstances == nil {
+		s.PBSInstances = []PBSInstance{}
+	}
+	for i := range s.PBSInstances {
+		s.PBSInstances[i] = s.PBSInstances[i].NormalizeCollections()
+	}
+	if s.PMGInstances == nil {
+		s.PMGInstances = []PMGInstance{}
+	}
+	for i := range s.PMGInstances {
+		s.PMGInstances[i] = s.PMGInstances[i].NormalizeCollections()
+	}
+	if s.PBSBackups == nil {
+		s.PBSBackups = []PBSBackup{}
+	}
+	for i := range s.PBSBackups {
+		s.PBSBackups[i] = s.PBSBackups[i].NormalizeCollections()
+	}
+	if s.PMGBackups == nil {
+		s.PMGBackups = []PMGBackup{}
+	}
+	if s.ReplicationJobs == nil {
+		s.ReplicationJobs = []ReplicationJob{}
+	}
+	if s.Metrics == nil {
+		s.Metrics = []Metric{}
+	}
+	for i := range s.Metrics {
+		s.Metrics[i] = s.Metrics[i].NormalizeCollections()
+	}
+	if s.ActiveAlerts == nil {
+		s.ActiveAlerts = []Alert{}
+	}
+	if s.RecentlyResolved == nil {
+		s.RecentlyResolved = []ResolvedAlert{}
+	}
+	s.PVEBackups = s.PVEBackups.NormalizeCollections()
+	s.Backups = s.Backups.NormalizeCollections()
+	if s.ConnectionHealth == nil {
+		s.ConnectionHealth = map[string]bool{}
+	}
+	s.Performance = s.Performance.NormalizeCollections()
 }
 
 // GetSnapshot returns a snapshot of the current state without mutex
@@ -42,30 +154,26 @@ func (s *State) GetSnapshot() StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	pbsBackups := append([]PBSBackup{}, s.PBSBackups...)
-	pmgBackups := append([]PMGBackup{}, s.PMGBackups...)
-	pveBackups := PVEBackups{
-		BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
-		StorageBackups: append([]StorageBackup{}, s.PVEBackups.StorageBackups...),
-		GuestSnapshots: append([]GuestSnapshot{}, s.PVEBackups.GuestSnapshots...),
-	}
+	pbsBackups := clonePBSBackups(s.PBSBackups)
+	pmgBackups := clonePMGBackups(s.PMGBackups)
+	pveBackups := clonePVEBackups(s.PVEBackups)
 
 	// Create a snapshot without mutex
 	snapshot := StateSnapshot{
-		Nodes:                     append([]Node{}, s.Nodes...),
-		VMs:                       append([]VM{}, s.VMs...),
-		Containers:                append([]Container{}, s.Containers...),
-		DockerHosts:               append([]DockerHost{}, s.DockerHosts...),
-		RemovedDockerHosts:        append([]RemovedDockerHost{}, s.RemovedDockerHosts...),
-		KubernetesClusters:        append([]KubernetesCluster{}, s.KubernetesClusters...),
-		RemovedKubernetesClusters: append([]RemovedKubernetesCluster{}, s.RemovedKubernetesClusters...),
-		RemovedHosts:              append([]RemovedHost{}, s.RemovedHosts...),
-		Hosts:                     append([]Host{}, s.Hosts...),
-		Storage:                   append([]Storage{}, s.Storage...),
-		CephClusters:              append([]CephCluster{}, s.CephClusters...),
-		PhysicalDisks:             append([]PhysicalDisk{}, s.PhysicalDisks...),
-		PBSInstances:              append([]PBSInstance{}, s.PBSInstances...),
-		PMGInstances:              append([]PMGInstance{}, s.PMGInstances...),
+		Nodes:                     cloneNodes(s.Nodes),
+		VMs:                       cloneVMs(s.VMs),
+		Containers:                cloneContainers(s.Containers),
+		DockerHosts:               cloneDockerHosts(s.DockerHosts),
+		RemovedDockerHosts:        append([]RemovedDockerHost(nil), s.RemovedDockerHosts...),
+		KubernetesClusters:        cloneKubernetesClusters(s.KubernetesClusters),
+		RemovedKubernetesClusters: append([]RemovedKubernetesCluster(nil), s.RemovedKubernetesClusters...),
+		Hosts:                     cloneHosts(s.Hosts),
+		RemovedHostAgents:         append([]RemovedHostAgent(nil), s.RemovedHostAgents...),
+		Storage:                   cloneStorages(s.Storage),
+		CephClusters:              cloneCephClusters(s.CephClusters),
+		PhysicalDisks:             clonePhysicalDisks(s.PhysicalDisks),
+		PBSInstances:              clonePBSInstances(s.PBSInstances),
+		PMGInstances:              clonePMGInstances(s.PMGInstances),
 		PBSBackups:                pbsBackups,
 		PMGBackups:                pmgBackups,
 		Backups: Backups{
@@ -73,40 +181,38 @@ func (s *State) GetSnapshot() StateSnapshot {
 			PBS: pbsBackups,
 			PMG: pmgBackups,
 		},
-		ReplicationJobs:              append([]ReplicationJob{}, s.ReplicationJobs...),
-		Metrics:                      append([]Metric{}, s.Metrics...),
+		ReplicationJobs:              cloneReplicationJobs(s.ReplicationJobs),
+		Metrics:                      cloneMetrics(s.Metrics),
 		PVEBackups:                   pveBackups,
-		Performance:                  s.Performance,
+		Performance:                  clonePerformance(s.Performance),
 		ConnectionHealth:             make(map[string]bool),
 		Stats:                        s.Stats,
-		ActiveAlerts:                 append([]Alert{}, s.ActiveAlerts...),
-		RecentlyResolved:             append([]ResolvedAlert{}, s.RecentlyResolved...),
+		ActiveAlerts:                 cloneAlerts(s.ActiveAlerts),
+		RecentlyResolved:             cloneResolvedAlerts(s.RecentlyResolved),
 		LastUpdate:                   s.LastUpdate,
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}
 
-	// Copy maps
+	snapshot.NormalizeCollections()
+
+	// Copy map
 	for k, v := range s.ConnectionHealth {
 		snapshot.ConnectionHealth[k] = v
 	}
-	if len(s.PVETagColors) > 0 {
-		snapshot.PVETagColors = make(map[string]string, len(s.PVETagColors))
-		for k, v := range s.PVETagColors {
-			snapshot.PVETagColors[k] = v
-		}
-	}
-	if len(s.templateVMIDs) > 0 {
-		snapshot.TemplateVMIDs = make(map[string]map[int]string, len(s.templateVMIDs))
-		for instance, vmids := range s.templateVMIDs {
-			vmap := make(map[int]string, len(vmids))
-			for vmid, node := range vmids {
-				vmap[vmid] = node
-			}
-			snapshot.TemplateVMIDs[instance] = vmap
-		}
-	}
 
 	return snapshot
+}
+
+// GetLastUpdate returns the current state freshness marker without cloning the
+// full snapshot payload.
+func (s *State) GetLastUpdate() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.LastUpdate
 }
 
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.
@@ -115,16 +221,16 @@ type ResourceLocation struct {
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name
-	ResourceType string // "node", "vm", "lxc", "dockerhost", "docker", "host", "k8s_cluster", "k8s_pod", "k8s_deployment"
+	ResourceType string // "node", "vm", "system-container", "docker-host", "app-container", "agent", "k8s-cluster", "k8s-pod", "k8s-deployment"
 
-	// For VMs and LXCs (Proxmox)
-	VMID int    // VMID if this is a VM or LXC
-	Node string // Proxmox node name
+	// For VMs and system containers (guest resources on a hypervisor node)
+	VMID int    // Guest ID (VMID) if this is a VM or system container
+	Node string // Hypervisor node name (e.g., Proxmox node)
 
 	// For Docker/Podman containers
-	DockerHostName string // Name of the Docker host (LXC/VM/standalone)
-	DockerHostType string // "lxc", "vm", or "standalone"
-	DockerHostVMID int    // VMID if Docker host is an LXC/VM
+	DockerHostName string // Name of the Docker host (system-container/VM/standalone)
+	DockerHostType string // "system-container", "vm", or "standalone"
+	DockerHostVMID int    // Guest ID (VMID) if Docker host is a system container or VM
 
 	// For Kubernetes resources
 	K8sClusterName string // Kubernetes cluster name
@@ -132,7 +238,7 @@ type ResourceLocation struct {
 	K8sAgentID     string // Agent ID for routing kubectl commands
 
 	// For generic hosts (Windows/Linux via Pulse Unified Agent)
-	HostID   string // Host ID
+	TargetID string // Canonical target ID (agent ID for host resources)
 	Platform string // "linux", "windows", etc.
 
 	// The key output: where to route commands
@@ -170,34 +276,34 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 		}
 	}
 
-	// Check LXC containers
+	// Check system containers (LXC/Incus)
 	for _, lxc := range s.Containers {
 		if lxc.Name == name {
 			return ResourceLocation{
 				Found:        true,
 				Name:         name,
-				ResourceType: "lxc",
+				ResourceType: "system-container",
 				VMID:         lxc.VMID,
 				Node:         lxc.Node,
-				TargetHost:   lxc.Name, // Route to LXC by name
+				TargetHost:   lxc.Name,
 			}
 		}
 	}
 
-	// Check Docker hosts (LXCs/VMs/standalone hosts running Docker)
+	// Check Docker hosts (system-containers/VMs/standalone hosts running Docker)
 	for _, dh := range s.DockerHosts {
 		if dh.Hostname == name || dh.ID == name {
 			loc := ResourceLocation{
 				Found:          true,
 				Name:           dh.Hostname,
-				ResourceType:   "dockerhost",
+				ResourceType:   "docker-host",
 				DockerHostName: dh.Hostname,
 				TargetHost:     dh.Hostname,
 			}
-			// Check if this Docker host is an LXC
+			// Check if this Docker host is a system container
 			for _, lxc := range s.Containers {
 				if lxc.Name == dh.Hostname || lxc.Name == dh.ID {
-					loc.DockerHostType = "lxc"
+					loc.DockerHostType = "system-container"
 					loc.DockerHostVMID = lxc.VMID
 					loc.Node = lxc.Node
 					break
@@ -228,17 +334,17 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				loc := ResourceLocation{
 					Found:          true,
 					Name:           name,
-					ResourceType:   "docker",
+					ResourceType:   "app-container",
 					DockerHostName: dh.Hostname,
 					TargetHost:     dh.Hostname, // Route to the Docker host, not the container
 				}
-				// Resolve the Docker host's parent (LXC/VM/standalone)
+				// Resolve the Docker host's parent (system-container/VM/standalone)
 				for _, lxc := range s.Containers {
 					if lxc.Name == dh.Hostname || lxc.Name == dh.ID {
-						loc.DockerHostType = "lxc"
+						loc.DockerHostType = "system-container"
 						loc.DockerHostVMID = lxc.VMID
 						loc.Node = lxc.Node
-						loc.TargetHost = lxc.Name // Route to the LXC
+						loc.TargetHost = lxc.Name
 						break
 					}
 				}
@@ -248,7 +354,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 							loc.DockerHostType = "vm"
 							loc.DockerHostVMID = vm.VMID
 							loc.Node = vm.Node
-							loc.TargetHost = vm.Name // Route to the VM
+							loc.TargetHost = vm.Name
 							break
 						}
 					}
@@ -267,8 +373,8 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 			return ResourceLocation{
 				Found:        true,
 				Name:         host.Hostname,
-				ResourceType: "host",
-				HostID:       host.ID,
+				ResourceType: "agent",
+				TargetID:     host.ID,
 				Platform:     host.Platform,
 				TargetHost:   host.Hostname,
 			}
@@ -281,7 +387,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 			return ResourceLocation{
 				Found:          true,
 				Name:           cluster.Name,
-				ResourceType:   "k8s_cluster",
+				ResourceType:   "k8s-cluster",
 				K8sClusterName: cluster.Name,
 				K8sAgentID:     cluster.AgentID,
 				TargetHost:     cluster.Name,
@@ -295,7 +401,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				return ResourceLocation{
 					Found:          true,
 					Name:           pod.Name,
-					ResourceType:   "k8s_pod",
+					ResourceType:   "k8s-pod",
 					K8sClusterName: cluster.Name,
 					K8sNamespace:   pod.Namespace,
 					K8sAgentID:     cluster.AgentID,
@@ -311,7 +417,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				return ResourceLocation{
 					Found:          true,
 					Name:           deploy.Name,
-					ResourceType:   "k8s_deployment",
+					ResourceType:   "k8s-deployment",
 					K8sClusterName: cluster.Name,
 					K8sNamespace:   deploy.Namespace,
 					K8sAgentID:     cluster.AgentID,
@@ -327,117 +433,17 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 
 // ToFrontend converts a StateSnapshot to frontend format with proper tag handling
 func (s StateSnapshot) ToFrontend() StateFrontend {
-	// Convert nodes
-	nodes := make([]NodeFrontend, len(s.Nodes))
-	for i, n := range s.Nodes {
-		nodes[i] = n.ToFrontend()
+	frontend := EmptyStateFrontend()
+	frontend.ActiveAlerts = append([]Alert{}, s.ActiveAlerts...)
+	frontend.RecentlyResolved = append([]ResolvedAlert{}, s.RecentlyResolved...)
+	frontend.Metrics = append([]Metric{}, s.Metrics...)
+	frontend.Performance = s.Performance
+	frontend.ConnectionHealth = make(map[string]bool, len(s.ConnectionHealth))
+	for key, value := range s.ConnectionHealth {
+		frontend.ConnectionHealth[key] = value
 	}
-
-	// Convert VMs
-	vms := make([]VMFrontend, len(s.VMs))
-	for i, v := range s.VMs {
-		vms[i] = v.ToFrontend()
-	}
-
-	// Convert containers
-	containers := make([]ContainerFrontend, len(s.Containers))
-	for i, c := range s.Containers {
-		containers[i] = c.ToFrontend()
-	}
-
-	dockerHosts := make([]DockerHostFrontend, len(s.DockerHosts))
-	for i, host := range s.DockerHosts {
-		dockerHosts[i] = host.ToFrontend()
-	}
-
-	removedDockerHosts := make([]RemovedDockerHostFrontend, len(s.RemovedDockerHosts))
-	for i, entry := range s.RemovedDockerHosts {
-		removedDockerHosts[i] = entry.ToFrontend()
-	}
-
-	kubernetesClusters := make([]KubernetesClusterFrontend, len(s.KubernetesClusters))
-	for i, cluster := range s.KubernetesClusters {
-		kubernetesClusters[i] = cluster.ToFrontend()
-	}
-
-	removedKubernetesClusters := make([]RemovedKubernetesClusterFrontend, len(s.RemovedKubernetesClusters))
-	for i, entry := range s.RemovedKubernetesClusters {
-		removedKubernetesClusters[i] = entry.ToFrontend()
-	}
-
-	removedHosts := make([]RemovedHostFrontend, len(s.RemovedHosts))
-	for i, entry := range s.RemovedHosts {
-		removedHosts[i] = entry.ToFrontend()
-	}
-
-	hosts := make([]HostFrontend, len(s.Hosts))
-	for i, host := range s.Hosts {
-		hosts[i] = host.ToFrontend()
-	}
-
-	// Convert storage
-	storage := make([]StorageFrontend, len(s.Storage))
-	for i, st := range s.Storage {
-		storage[i] = st.ToFrontend()
-	}
-
-	// Convert Ceph clusters - deduplicate by FSID (same cluster may be reported from multiple sources)
-	// When PVE and host agent both report the same Ceph cluster, prefer the one with more data
-	cephByFSID := make(map[string]CephCluster)
-	for _, cluster := range s.CephClusters {
-		fsid := cluster.FSID
-		if fsid == "" {
-			fsid = cluster.ID // fallback for clusters without FSID
-		}
-		existing, exists := cephByFSID[fsid]
-		if !exists {
-			cephByFSID[fsid] = cluster
-			continue
-		}
-		// Keep the cluster with more complete data (more monitors/managers/pools reported)
-		existingScore := existing.NumMons + existing.NumMgrs + len(existing.Pools)
-		newScore := cluster.NumMons + cluster.NumMgrs + len(cluster.Pools)
-		if newScore > existingScore {
-			cephByFSID[fsid] = cluster
-		}
-	}
-	cephClusters := make([]CephClusterFrontend, 0, len(cephByFSID))
-	for _, cluster := range cephByFSID {
-		cephClusters = append(cephClusters, cluster.ToFrontend())
-	}
-
-	replicationJobs := make([]ReplicationJobFrontend, len(s.ReplicationJobs))
-	for i, job := range s.ReplicationJobs {
-		replicationJobs[i] = job.ToFrontend()
-	}
-
-	return StateFrontend{
-		Nodes:                        nodes,
-		VMs:                          vms,
-		Containers:                   containers,
-		DockerHosts:                  dockerHosts,
-		RemovedDockerHosts:           removedDockerHosts,
-		KubernetesClusters:           kubernetesClusters,
-		RemovedKubernetesClusters:    removedKubernetesClusters,
-		RemovedHosts:                 removedHosts,
-		Hosts:                        hosts,
-		Storage:                      storage,
-		CephClusters:                 cephClusters,
-		PhysicalDisks:                s.PhysicalDisks,
-		PBS:                          s.PBSInstances,
-		PMG:                          s.PMGInstances,
-		PBSBackups:                   s.PBSBackups,
-		PMGBackups:                   s.PMGBackups,
-		Backups:                      s.Backups,
-		ReplicationJobs:              replicationJobs,
-		ActiveAlerts:                 s.ActiveAlerts,
-		Metrics:                      make(map[string]any),
-		PVEBackups:                   s.PVEBackups,
-		Performance:                  make(map[string]any),
-		ConnectionHealth:             s.ConnectionHealth,
-		Stats:                        make(map[string]any),
-		LastUpdate:                   s.LastUpdate.Unix() * 1000, // JavaScript timestamp
-		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
-		PVETagColors:                 s.PVETagColors,
-	}
+	frontend.Stats = s.Stats
+	frontend.LastUpdate = s.LastUpdate.Unix() * 1000 // JavaScript timestamp
+	frontend.TemperatureMonitoringEnabled = s.TemperatureMonitoringEnabled
+	return frontend.NormalizeCollections()
 }

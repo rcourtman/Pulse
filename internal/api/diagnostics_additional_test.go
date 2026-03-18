@@ -13,7 +13,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 type stubAIPersistence struct {
@@ -41,7 +40,7 @@ type proxmoxTestResponse struct {
 func newProxmoxTestServer(t *testing.T, responses map[string]proxmoxTestResponse) *httptest.Server {
 	t.Helper()
 
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp, ok := responses[r.URL.Path]
 		if !ok {
 			http.NotFound(w, r)
@@ -131,6 +130,27 @@ func TestHandleDiagnostics_CacheHit(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsInfo_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyDiagnosticsInfo())
+	if err != nil {
+		t.Fatalf("marshal empty diagnostics info: %v", err)
+	}
+
+	for _, want := range []string{
+		`"nodes":[]`,
+		`"pbs":[]`,
+		`"errors":[]`,
+		`"nodeSnapshots":[]`,
+		`"guestSnapshots":[]`,
+		`"memorySources":[]`,
+		`"memorySourceBreakdown":[]`,
+	} {
+		if !strings.Contains(string(payload), want) {
+			t.Fatalf("expected empty diagnostics info to retain %s, got %s", want, payload)
+		}
+	}
+}
+
 func TestComputeDiagnostics_Basic(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor := newMonitorForDiagnostics(t, cfg)
@@ -155,80 +175,22 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	}
 }
 
-func TestComputeDiagnostics_PVEUsesFingerprint(t *testing.T) {
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		switch r.URL.Path {
-		case "/api2/json/nodes":
-			_, _ = w.Write([]byte(`{"data":[{"node":"pve1","status":"online"}]}`))
-		case "/api2/json/nodes/pve1/status":
-			_, _ = w.Write([]byte(`{"data":{"pveversion":"pve-manager/8.4.1"}}`))
-		case "/api2/json/cluster/status":
-			_, _ = w.Write([]byte(`{"data":[{"type":"cluster"},{"type":"node"}]}`))
-		case "/api2/json/nodes/pve1/qemu":
-			_, _ = w.Write([]byte(`{"data":[]}`))
-		case "/api2/json/nodes/pve1/disks/list":
-			_, _ = w.Write([]byte(`{"data":[]}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	fingerprint, err := tlsutil.FetchFingerprint(server.URL)
-	if err != nil {
-		t.Fatalf("FetchFingerprint: %v", err)
-	}
-
-	cfg := &config.Config{
-		DataPath: t.TempDir(),
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:        "pve1",
-				Host:        server.URL,
-				TokenName:   "user@pam!token",
-				TokenValue:  "secret",
-				VerifySSL:   true,
-				Fingerprint: fingerprint,
-			},
-		},
-	}
-	monitor := newMonitorForDiagnostics(t, cfg)
-
-	router := &Router{config: cfg, monitor: monitor}
-	diag := router.computeDiagnostics(context.Background())
-
-	if len(diag.Nodes) != 1 {
-		t.Fatalf("node count = %d, want 1", len(diag.Nodes))
-	}
-	if !diag.Nodes[0].Connected {
-		t.Fatalf("expected fingerprint-pinned PVE diagnostics probe to succeed, got error: %q", diag.Nodes[0].Error)
-	}
-	if diag.Nodes[0].Error != "" {
-		t.Fatalf("unexpected diagnostics error: %q", diag.Nodes[0].Error)
-	}
-}
-
 func TestBuildAPITokenDiagnostic_WithDockerUsage(t *testing.T) {
 	now := time.Now()
 	lastUsed := now.Add(-time.Hour)
 	cfg := &config.Config{
 		DataPath: t.TempDir(),
-		EnvOverrides: map[string]bool{
-			"API_TOKEN": true,
-		},
 		APITokens: []config.APITokenRecord{
 			{
 				ID:        "token-1",
-				Name:      "Environment token",
+				Name:      "Primary token",
 				Prefix:    "pre",
 				Suffix:    "suf",
 				CreatedAt: now,
 			},
 			{
 				ID:         "token-2",
-				Name:       "Legacy token",
+				Name:       "Secondary token",
 				CreatedAt:  now,
 				LastUsedAt: &lastUsed,
 			},
@@ -266,12 +228,6 @@ func TestBuildAPITokenDiagnostic_WithDockerUsage(t *testing.T) {
 	}
 	if diag.TokenCount != 2 {
 		t.Fatalf("token count = %d, want 2", diag.TokenCount)
-	}
-	if !diag.HasEnvTokens || !diag.HasLegacyToken {
-		t.Fatalf("expected env and legacy tokens to be detected")
-	}
-	if diag.LegacyDockerHostCount != 1 {
-		t.Fatalf("legacy docker host count = %d, want 1", diag.LegacyDockerHostCount)
 	}
 	if diag.UnusedTokenCount != 1 {
 		t.Fatalf("unused token count = %d, want 1", diag.UnusedTokenCount)
@@ -315,20 +271,20 @@ func TestBuildDockerAgentDiagnostic(t *testing.T) {
 	if diag == nil {
 		t.Fatalf("expected diagnostics")
 	}
-	if diag.HostsTotal != 2 {
-		t.Fatalf("hosts total = %d, want 2", diag.HostsTotal)
+	if diag.AgentsTotal != 2 {
+		t.Fatalf("agents total = %d, want 2", diag.AgentsTotal)
 	}
-	if diag.HostsOutdatedVersion != 1 {
-		t.Fatalf("outdated version count = %d, want 1", diag.HostsOutdatedVersion)
+	if diag.AgentsOutdatedVersion != 1 {
+		t.Fatalf("outdated version count = %d, want 1", diag.AgentsOutdatedVersion)
 	}
-	if diag.HostsWithoutVersion != 1 {
-		t.Fatalf("missing version count = %d, want 1", diag.HostsWithoutVersion)
+	if diag.AgentsWithoutVersion != 1 {
+		t.Fatalf("missing version count = %d, want 1", diag.AgentsWithoutVersion)
 	}
-	if diag.HostsWithoutTokenBinding != 1 {
-		t.Fatalf("hosts without token binding = %d, want 1", diag.HostsWithoutTokenBinding)
+	if diag.AgentsWithoutTokenBinding != 1 {
+		t.Fatalf("agents without token binding = %d, want 1", diag.AgentsWithoutTokenBinding)
 	}
-	if diag.HostsNeedingAttention == 0 {
-		t.Fatalf("expected hosts needing attention")
+	if diag.AgentsNeedingAttention == 0 {
+		t.Fatalf("expected agents needing attention")
 	}
 }
 
@@ -338,10 +294,6 @@ func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {
 
 	manager := monitor.GetAlertManager()
 	alertCfg := manager.GetConfig()
-	legacy := 90.0
-	alertCfg.GuestDefaults.CPULegacy = &legacy
-	alertCfg.TimeThreshold = 5
-	alertCfg.Schedule.GroupingWindow = 10
 	alertCfg.Schedule.Grouping.Window = 0
 	alertCfg.Schedule.Cooldown = 0
 	manager.UpdateConfig(alertCfg)
@@ -349,9 +301,6 @@ func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {
 	diag := buildAlertsDiagnostic(monitor)
 	if diag == nil {
 		t.Fatalf("expected diagnostics")
-	}
-	if !diag.LegacyThresholdsDetected {
-		t.Fatalf("expected legacy thresholds to be detected")
 	}
 	if !diag.MissingCooldown || !diag.MissingGroupingWindow {
 		t.Fatalf("expected missing schedule settings")
@@ -388,17 +337,16 @@ func TestBuildDiscoveryDiagnostic_ConfigOnly(t *testing.T) {
 func TestBuildAIChatDiagnostic_WithService(t *testing.T) {
 	aiCfg := &config.AIConfig{
 		Enabled:   true,
-		Provider:  config.AIProviderOllama,
 		ChatModel: "ollama:llama3",
 	}
 	handler := &AIHandler{
-		legacyPersistence: stubAIPersistence{cfg: aiCfg, dataDir: t.TempDir()},
+		defaultPersistence: stubAIPersistence{cfg: aiCfg, dataDir: t.TempDir()},
 	}
 
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetBaseURL").Return("http://localhost:1234")
-	handler.legacyService = mockSvc
+	handler.defaultService = mockSvc
 
 	diag := buildAIChatDiagnostic(&config.Config{}, handler)
 	if diag == nil || !diag.Enabled {

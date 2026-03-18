@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,46 +26,30 @@ func (m *Monitor) getHostAgentTemperature(nodeName string) *models.Temperature {
 // then falls back to hostname matching. This correctly handles clusters where
 // multiple nodes may have the same hostname (e.g., "px1" on different IPs).
 func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.Temperature {
-	if m.state == nil {
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
 		return nil
 	}
 
-	hosts := m.state.GetHosts()
+	hosts := readState.Hosts()
 	if len(hosts) == 0 {
-		return nil
+		// No host agents at all — check cluster sensor cache as fallback
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	var matchedHost *models.Host
+	var matchedHost *unifiedresources.HostView
 
-	// First, try to resolve through the node's canonical linked host agent ID.
-	// This is the link preserved by node refreshes and is more reliable than
-	// host-side hostname matching when node IDs change or FQDN/short names differ.
+	// First, try to find a host agent that is explicitly linked to this node
+	// via LinkedNodeID. This is the most reliable method and handles duplicate
+	// hostnames correctly.
 	if nodeID != "" {
-		if linkedHostID := m.state.GetNodeLinkedHostAgentID(nodeID); linkedHostID != "" {
-			for i := range hosts {
-				if hosts[i].ID == linkedHostID {
-					matchedHost = &hosts[i]
-					log.Debug().
-						Str("nodeID", nodeID).
-						Str("hostAgentID", hosts[i].ID).
-						Str("hostname", hosts[i].Hostname).
-						Msg("Matched host agent to node via LinkedHostAgentID")
-					break
-				}
-			}
-		}
-	}
-
-	// Fallback: try to find a host agent that is explicitly linked to this node
-	// via LinkedNodeID. This maintains compatibility with older host-side links.
-	if matchedHost == nil && nodeID != "" {
 		for i := range hosts {
-			if hosts[i].LinkedNodeID == nodeID {
-				matchedHost = &hosts[i]
+			if hosts[i].LinkedNodeID() == nodeID {
+				matchedHost = hosts[i]
 				log.Debug().
 					Str("nodeID", nodeID).
-					Str("hostAgentID", hosts[i].ID).
-					Str("hostname", hosts[i].Hostname).
+					Str("hostAgentID", hosts[i].ID()).
+					Str("hostname", hosts[i].Hostname()).
 					Msg("Matched host agent to node via LinkedNodeID")
 				break
 			}
@@ -72,39 +57,101 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	}
 
 	// Fallback: match by hostname if no linked host was found
-	// This maintains backwards compatibility for setups where linking hasn't occurred yet.
-	// Compare both FQDN and short hostname forms so the behavior matches node auto-linking.
+	// This maintains backwards compatibility for setups where linking hasn't occurred yet
 	if matchedHost == nil {
-		nodeLower := normalizeHostAgentNodeName(nodeName)
+		nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
 		for i := range hosts {
-			hostnameLower := normalizeHostAgentNodeName(hosts[i].Hostname)
+			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname()))
 			if hostnameLower == nodeLower {
-				matchedHost = &hosts[i]
+				matchedHost = hosts[i]
 				break
 			}
 		}
 	}
 
 	if matchedHost == nil {
-		return nil
+		// No directly-linked host agent found — check cluster sensor cache
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	// Allow SMART-only sensor payloads from platforms like FreeBSD where
-	// CPU sensors may be unavailable but disk temperature data is still valid.
-	if len(matchedHost.Sensors.TemperatureCelsius) == 0 && len(matchedHost.Sensors.SMART) == 0 {
-		return nil
+	// Check if the host agent has temperature data
+	sensors := matchedHost.Sensors()
+	if sensors == nil || len(sensors.TemperatureCelsius) == 0 {
+		// Host agent exists but has no temperature data — try cluster cache
+		return m.getClusterSensorTemperature(nodeName)
 	}
 
 	// Convert host agent sensor data to Temperature model
-	return convertHostSensorsToTemperature(matchedHost.Sensors, matchedHost.LastSeen)
+	return convertUnifiedHostSensorsToTemperature(sensors, matchedHost.LastSeen())
 }
 
-func normalizeHostAgentNodeName(name string) string {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	if idx := strings.Index(normalized, "."); idx > 0 {
-		return normalized[:idx]
+func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensorMeta, lastSeen time.Time) *models.Temperature {
+	if sensors == nil {
+		return nil
 	}
-	return normalized
+
+	return convertHostSensorsToTemperature(models.HostSensorSummary{
+		TemperatureCelsius: cloneStringFloatMap(sensors.TemperatureCelsius),
+		FanRPM:             cloneStringFloatMap(sensors.FanRPM),
+		Additional:         cloneStringFloatMap(sensors.Additional),
+		SMART:              convertUnifiedHostSMART(sensors.SMART),
+	}, lastSeen)
+}
+
+func convertUnifiedHostSMART(smart []unifiedresources.HostSMARTMeta) []models.HostDiskSMART {
+	if len(smart) == 0 {
+		return nil
+	}
+
+	result := make([]models.HostDiskSMART, len(smart))
+	for i, disk := range smart {
+		result[i] = models.HostDiskSMART{
+			Device:      disk.Device,
+			Model:       disk.Model,
+			Serial:      disk.Serial,
+			WWN:         disk.WWN,
+			Type:        disk.Type,
+			Temperature: disk.Temperature,
+			Health:      disk.Health,
+			Standby:     disk.Standby,
+			Attributes:  cloneSMARTAttributesModel(disk.Attributes),
+		}
+	}
+	return result
+}
+
+func cloneSMARTAttributesModel(src *models.SMARTAttributes) *models.SMARTAttributes {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	return &dest
+}
+
+// getClusterSensorTemperature looks up cached temperature data that was collected
+// by a sibling agent in the same Proxmox cluster via SSH. Returns nil if no
+// recent data is available.
+func (m *Monitor) getClusterSensorTemperature(nodeName string) *models.Temperature {
+	if nodeName == "" {
+		return nil
+	}
+
+	key := strings.ToLower(strings.TrimSpace(nodeName))
+
+	m.clusterSensorsMu.RLock()
+	entry, ok := m.clusterSensorsCache[key]
+	m.clusterSensorsMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	// Reuse the same staleness threshold as direct host agents (2 minutes)
+	if !isHostAgentTemperatureRecent(entry.updatedAt) {
+		return nil
+	}
+
+	return convertHostSensorsToTemperature(entry.sensors, entry.updatedAt)
 }
 
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
@@ -114,6 +161,10 @@ func normalizeHostAgentNodeName(name string) string {
 // - "nvme0", "nvme1", etc. -> NVMe temperatures
 // - "gpu_edge", "gpu_junction", etc. -> GPU temperatures
 func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen time.Time) *models.Temperature {
+	if len(sensors.TemperatureCelsius) == 0 {
+		return nil
+	}
+
 	temp := &models.Temperature{
 		Available:  true,
 		LastUpdate: lastSeen,
@@ -259,7 +310,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 	}
 
 	log.Debug().
-		Str("source", "host-agent").
+		Str("source", "agent").
 		Float64("cpuPackage", temp.CPUPackage).
 		Float64("cpuMax", temp.CPUMax).
 		Int("coreCount", len(temp.Cores)).

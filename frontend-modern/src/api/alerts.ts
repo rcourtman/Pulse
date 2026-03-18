@@ -1,6 +1,7 @@
 import type { Alert, Incident } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
+import { arrayOrEmpty } from './responseUtils';
 
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
@@ -29,22 +30,28 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
   }
 
-  static async getIncidentTimeline(alertId: string, startedAt?: string): Promise<Incident | null> {
-    const query = new URLSearchParams({ alert_id: alertId });
+  static async getIncidentTimeline(alertIdentifier: string, startedAt?: string): Promise<Incident | null> {
+    const query = new URLSearchParams({ alertIdentifier });
     if (startedAt) {
       query.set('started_at', startedAt);
     }
-    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident | null>;
+    const incident = (await apiFetchJSON(
+      `${this.baseUrl}/incidents?${query.toString()}`,
+    )) as Incident | null;
+    return incident;
   }
 
   static async getIncidentsForResource(resourceId: string, limit?: number): Promise<Incident[]> {
     const query = new URLSearchParams({ resource_id: resourceId });
     if (limit) query.set('limit', String(limit));
-    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident[]>;
+    const incidents = (await apiFetchJSON(
+      `${this.baseUrl}/incidents?${query.toString()}`,
+    )) as Incident[];
+    return arrayOrEmpty<Incident>(incidents);
   }
 
   static async addIncidentNote(params: {
-    alertId?: string;
+    alertIdentifier?: string;
     incidentId?: string;
     note: string;
     user?: string;
@@ -52,7 +59,7 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/incidents/note`, {
       method: 'POST',
       body: JSON.stringify({
-        alert_id: params.alertId,
+        alertIdentifier: params.alertIdentifier,
         incident_id: params.incidentId,
         note: params.note,
         user: params.user,
@@ -60,25 +67,25 @@ export class AlertsAPI {
     }) as Promise<{ success: boolean }>;
   }
 
-  static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {
+  static async acknowledge(alertIdentifier: string, user?: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ id: alertId, user }),
+      body: JSON.stringify({ alertIdentifier, user }),
     });
   }
 
-  static async unacknowledge(alertId: string): Promise<{ success: boolean }> {
+  static async unacknowledge(alertIdentifier: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/unacknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ id: alertId }),
+      body: JSON.stringify({ alertIdentifier }),
     });
   }
 
   // Alert configuration methods
   static async getConfig(): Promise<AlertConfig> {
-    return apiFetchJSON(`${this.baseUrl}/config`);
+    return apiFetchJSON(`${this.baseUrl}/config`) as Promise<AlertConfig>;
   }
 
   static async updateConfig(config: AlertConfig): Promise<{ success: boolean }> {
@@ -101,13 +108,28 @@ export class AlertsAPI {
   }
 
   static async bulkAcknowledge(
-    alertIds: string[],
+    alertIdentifiers: string[],
     user?: string,
-  ): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
-    return apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
+  ): Promise<{
+    results: Array<{ alertIdentifier: string; success: boolean; error?: string }>;
+  }> {
+    const response = (await apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ alertIds, user }),
-    });
+      body: JSON.stringify({ alertIdentifiers, user }),
+    })) as {
+      results?: Array<{
+        alertIdentifier: string;
+        success: boolean;
+        error?: string;
+      }>;
+    };
+    return {
+      ...response,
+      results: arrayOrEmpty<{
+        alertIdentifier: string;
+        success: boolean;
+        error?: string;
+      }>(response.results),
+    };
   }
-
 }

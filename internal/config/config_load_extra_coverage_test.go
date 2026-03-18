@@ -14,19 +14,8 @@ func TestLoad_EnvLoadErrors(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
-	// 1. Create a directory named .env to cause Read error
+	// Create a directory named .env to cause Read error
 	err := os.Mkdir(filepath.Join(tempDir, ".env"), 0755)
-	require.NoError(t, err)
-
-	// 2. Mock env load errors
-	// We need to be in a temp dir for mock.env
-	cwd, _ := os.Getwd()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
-
-	err = os.Mkdir("mock.env", 0755)
-	require.NoError(t, err)
-	err = os.Mkdir("mock.env.local", 0755)
 	require.NoError(t, err)
 
 	cfg, err := Load()

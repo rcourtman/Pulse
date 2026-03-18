@@ -1,0 +1,2424 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import status_audit
+from status_audit import (
+    RC_READY_ASSERTIONS_BLOCKER,
+    RC_RELEASE_GATES_BLOCKER,
+    RELEASE_GATES_BLOCKER,
+    RELEASE_READY_ASSERTIONS_BLOCKER,
+    REPO_READY_BLOCKER,
+    audit_status_payload,
+    parse_args,
+    render_pretty,
+)
+
+
+REPO_READY_RULE = "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+RC_READY_RULE = (
+    "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
+)
+RELEASE_READY_RULE = (
+    "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
+)
+
+
+def write_file(root: Path, rel: str, content: str = "proof\n") -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def automated_assertion(
+    *,
+    lane_id: str = "L1",
+    evidence_path: str = "docs/proof_test.go",
+    proof_commands: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    return {
+        "id": "RA1",
+        "summary": "Core readiness assertion",
+        "kind": "invariant",
+        "blocking_level": "repo-ready",
+        "proof_type": "automated",
+        "lane_ids": [lane_id],
+        "subsystem_ids": [],
+        "release_gate_ids": [],
+        "proof_commands": proof_commands
+        if proof_commands is not None
+        else [{"id": "ra1", "run": ["python3", "-c", "print('ok')"]}],
+        "evidence": [{"repo": "pulse", "path": evidence_path, "kind": "file"}],
+    }
+
+
+def hybrid_assertion(
+    *,
+    assertion_id: str = "RA2",
+    lane_id: str = "L1",
+    gate_id: str = "g1",
+    evidence_path: str = "docs/hybrid_test.go",
+    blocking_level: str = "rc-ready",
+    subsystem_ids: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "id": assertion_id,
+        "summary": "Hybrid release assertion",
+        "kind": "journey",
+        "blocking_level": blocking_level,
+        "proof_type": "hybrid",
+        "lane_ids": [lane_id],
+        "subsystem_ids": list(subsystem_ids or []),
+        "release_gate_ids": [gate_id],
+        "evidence": [{"repo": "pulse", "path": evidence_path, "kind": "file"}],
+    }
+
+
+def coverage_gap(
+    *,
+    gap_id: str = "core-monitoring-product-lane",
+    lane_ids: list[str] | None = None,
+    subsystem_ids: list[str] | None = None,
+    proposed_resolution: str = "new-lane",
+    coverage_impact: int = 5,
+    evidence_path: str = "docs/coverage-gap.md",
+    status: str = "triaged",
+) -> dict[str, object]:
+    return {
+        "id": gap_id,
+        "summary": "Current lane map under-models a durable product surface.",
+        "owner": "project-owner",
+        "status": status,
+        "recorded_at": "2026-03-13",
+        "lane_ids": list(lane_ids or ["L1"]),
+        "subsystem_ids": list(subsystem_ids or []),
+        "proposed_resolution": proposed_resolution,
+        "coverage_impact": coverage_impact,
+        "evidence": [{"repo": "pulse", "path": evidence_path, "kind": "file"}],
+    }
+
+
+def candidate_lane(
+    *,
+    candidate_id: str = "core-monitoring-runtime",
+    name: str = "Core monitoring runtime",
+    gap_ids: list[str] | None = None,
+    current_lane_ids: list[str] | None = None,
+    subsystem_ids: list[str] | None = None,
+    status: str = "planned",
+    target_id: str = "v6-product-lane-expansion",
+) -> dict[str, object]:
+    return {
+        "id": candidate_id,
+        "name": name,
+        "summary": "Promote the discovered product surface into an explicit governed lane.",
+        "status": status,
+        "recorded_at": "2026-03-13",
+        "target_id": target_id,
+        "current_lane_ids": list(current_lane_ids or ["L1"]),
+        "coverage_gap_ids": list(gap_ids or ["core-monitoring-product-lane"]),
+        "subsystem_ids": list(subsystem_ids or []),
+    }
+
+
+def work_claim(
+    *,
+    claim_id: str = "claim-core-monitoring-runtime",
+    agent_id: str = "agent-control-plane-1",
+    summary: str = "Expand the core monitoring runtime lane model.",
+    target_id: str = "v6-product-lane-expansion",
+    work_kind: str = "candidate-lane",
+    work_id: str = "core-monitoring-runtime",
+    claimed_at: str = "2026-03-13T09:00:00Z",
+    heartbeat_at: str = "2026-03-13T09:15:00Z",
+    expires_at: str = "2026-03-13T11:00:00Z",
+) -> dict[str, object]:
+    return {
+        "id": claim_id,
+        "agent_id": agent_id,
+        "summary": summary,
+        "target_id": target_id,
+        "claimed_at": claimed_at,
+        "heartbeat_at": heartbeat_at,
+        "expires_at": expires_at,
+        "work_item": {
+            "kind": work_kind,
+            "id": work_id,
+        },
+    }
+
+
+def base_payload(
+    *,
+    lane_status: str = "target-met",
+    current_score: int = 8,
+    completion_state: str | None = None,
+    completion_summary: str | None = None,
+    completion_tracking: list[dict[str, str]] | None = None,
+    blockers: list[dict[str, str]] | None = None,
+    release_gate_status: str = "passed",
+    readiness_assertions: list[dict[str, object]] | None = None,
+    lane_followups: list[dict[str, object]] | None = None,
+    coverage_gaps: list[dict[str, object]] | None = None,
+    candidate_lanes: list[dict[str, object]] | None = None,
+    work_claims: list[dict[str, object]] | None = None,
+    open_decisions: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    resolved_completion_state = completion_state
+    if resolved_completion_state is None:
+        resolved_completion_state = "complete" if lane_status == "target-met" else "open"
+    resolved_completion_summary = completion_summary
+    if resolved_completion_summary is None:
+        if resolved_completion_state == "complete":
+            resolved_completion_summary = "Lane reached a coherent and complete stop point."
+        elif resolved_completion_state == "bounded-residual":
+            resolved_completion_summary = (
+                "Lane reached the current governed floor and has normalized residual work."
+            )
+        else:
+            resolved_completion_summary = "Lane still requires additional in-scope work."
+    resolved_completion_tracking = list(completion_tracking or [])
+    resolved_blockers = list(blockers or [])
+    return {
+        "version": "6.0",
+        "updated_at": "2026-03-12",
+        "execution_model": "direct-repo-sessions",
+        "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+        "readiness": {
+            "repo_ready_rule": REPO_READY_RULE,
+            "rc_ready_rule": RC_READY_RULE,
+            "release_ready_rule": RELEASE_READY_RULE,
+        },
+        "scope": {
+            "active_repos": ["pulse"],
+            "control_plane_repo": "pulse",
+            "ignored_repos": [],
+            "repo_catalog": [
+                {
+                    "id": "pulse",
+                    "purpose": "Core repo and control plane.",
+                    "visibility": "public",
+                }
+            ],
+        },
+        "source_precedence": [
+            "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+            "docs/release-control/v6/internal/status.json",
+            "docs/release-control/v6/status.schema.json",
+            "docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+            "docs/release-control/v6/internal/subsystems/registry.json",
+            "docs/release-control/v6/internal/subsystems/registry.schema.json",
+        ],
+        "priority_engine": {
+            "formula": "gap-first",
+            "floor_rule": {
+                "release_critical_lanes": ["L1"],
+                "minimum_score": 6,
+            },
+            "weights": {
+                "gap_multiplier": 4,
+                "blocker_bonus": 8,
+                "criticality_range": "0-5",
+                "staleness_range": "0-3",
+                "dependency_range": "0-3",
+            },
+        },
+        "evidence_reference_policy": {
+            "format": "repo-qualified-relative-paths",
+            "allowed_kinds": ["dir", "file"],
+            "absolute_paths_forbidden": True,
+            "local_repo": "pulse",
+        },
+        "lanes": [
+            {
+                "id": "L1",
+                "name": "Lane 1",
+                "target_score": 8,
+                "current_score": current_score,
+                "status": lane_status,
+                "completion": {
+                    "state": resolved_completion_state,
+                    "summary": resolved_completion_summary,
+                    "tracking": resolved_completion_tracking,
+                },
+                "blockers": resolved_blockers,
+                "subsystems": [],
+                "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+            }
+        ],
+        "readiness_assertions": readiness_assertions
+        or [
+            automated_assertion(),
+            hybrid_assertion(),
+            hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
+        ],
+        "release_gates": [
+            {
+                "id": "g1",
+                "summary": "Need release verification",
+                "owner": "project-owner",
+                "blocking_level": "rc-ready",
+                "minimum_evidence_tier": "local-rehearsal",
+                "status": release_gate_status,
+                "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                "lane_ids": ["L1"],
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/lane-proof.md",
+                        "kind": "file",
+                        "evidence_tier": "local-rehearsal",
+                    }
+                ],
+            },
+            {
+                "id": "g2",
+                "summary": "Need GA promotion verification",
+                "owner": "project-owner",
+                "blocking_level": "release-ready",
+                "minimum_evidence_tier": "local-rehearsal",
+                "status": "passed",
+                "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                "lane_ids": ["L1"],
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/lane-proof.md",
+                        "kind": "file",
+                        "evidence_tier": "local-rehearsal",
+                    }
+                ],
+            }
+        ],
+        "lane_followups": lane_followups or [],
+        "coverage_gaps": coverage_gaps or [],
+        "candidate_lanes": candidate_lanes or [],
+        "work_claims": work_claims or [],
+        "open_decisions": open_decisions or [],
+        "resolved_decisions": [],
+    }
+
+
+class StatusAuditTest(unittest.TestCase):
+    def test_parse_args_accepts_staged_flag(self) -> None:
+        args = parse_args(["--check", "--staged"])
+        self.assertTrue(args.check)
+        self.assertTrue(args.staged)
+
+    def test_audit_status_payload_derives_repo_and_release_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-ga-promotion",
+                    "kind": "release",
+                    "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+                    "completion_rule": "release_ready",
+                    "proof_scope": "derived",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
+            ):
+                report = audit_status_payload(base_payload())
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertTrue(report["summary"]["rc_ready"])
+            self.assertTrue(report["summary"]["release_ready"])
+            self.assertEqual(report["readiness"]["rc_blockers"], [])
+            self.assertEqual(report["readiness"]["release_blockers"], [])
+            self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                report["readiness"]["release_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                report["control_plane"]["active_target"]["blocking_levels"],
+                ["repo-ready", "rc-ready", "release-ready"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+            self.assertEqual(report["lanes"][0]["derived_status"], "target-met")
+            self.assertEqual(report["lanes"][0]["completion_state"], "complete")
+            self.assertEqual(report["readiness_assertions"][0]["proof_command_count"], 1)
+
+    def test_rc_ready_gate_pending_blocks_rc_ready_and_release_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-ga-promotion",
+                    "kind": "release",
+                    "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+                    "completion_rule": "release_ready",
+                    "proof_scope": "derived",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
+            ):
+                report = audit_status_payload(base_payload(release_gate_status="pending"))
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(
+                report["readiness"]["rc_blockers"],
+                [RC_READY_ASSERTIONS_BLOCKER, RC_RELEASE_GATES_BLOCKER],
+            )
+            self.assertEqual(
+                report["readiness"]["release_blockers"],
+                [RC_READY_ASSERTIONS_BLOCKER, RC_RELEASE_GATES_BLOCKER],
+            )
+            self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["assertions"]],
+                ["RA2"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["assertions"]],
+                ["RA2"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"],
+                {
+                    "assertions": [
+                        {
+                            "id": "RA2",
+                            "blocking_level": "rc-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                            "release_gate_ids": ["g1"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g1",
+                            "blocking_level": "rc-ready",
+                            "status": "pending",
+                            "summary": "Need release verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA2"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+
+    def test_release_ready_gate_pending_blocks_only_release_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload()
+            payload["release_gates"][1]["status"] = "pending"
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-ga-promotion",
+                    "kind": "release",
+                    "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+                    "completion_rule": "release_ready",
+                    "proof_scope": "derived",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertTrue(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["readiness"]["rc_blockers"], [])
+            self.assertEqual(
+                report["readiness"]["release_blockers"],
+                [RELEASE_READY_ASSERTIONS_BLOCKER, RELEASE_GATES_BLOCKER],
+            )
+            self.assertEqual(report["readiness_assertions"][2]["derived_status"], "gates-pending")
+            self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["assertions"]],
+                ["RA3"],
+            )
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["release_blocker_details"]["release_gates"]],
+                ["g2"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"],
+                {
+                    "assertions": [
+                        {
+                            "id": "RA3",
+                            "blocking_level": "release-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                            "release_gate_ids": ["g2"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g2",
+                            "blocking_level": "release-ready",
+                            "status": "pending",
+                            "summary": "Need GA promotion verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA3"],
+                            "subsystem_ids": [],
+                            "contract_paths": [],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+
+    def test_passed_gate_without_required_evidence_tier_stays_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload()
+            payload["release_gates"][0]["minimum_evidence_tier"] = "real-external-e2e"
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["release_gates"][0]["status"], "passed")
+            self.assertEqual(report["release_gates"][0]["effective_status"], "threshold-unmet")
+            self.assertEqual(report["release_gates"][0]["highest_evidence_tier"], "local-rehearsal")
+            self.assertEqual(report["summary"]["overclosed_release_gate_count"], 1)
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["overclosed_release_gates"]],
+                ["g1"],
+            )
+            self.assertEqual(report["readiness_assertions"][1]["derived_status"], "gates-pending")
+            self.assertEqual(
+                [item["id"] for item in report["readiness"]["rc_blocker_details"]["release_gates"]],
+                ["g1"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("overclosed_release_gates=1", pretty)
+            self.assertIn("overclosed_release_gates:", pretty)
+            self.assertIn("raw_status=passed", pretty)
+            self.assertIn("effective=threshold-unmet", pretty)
+            self.assertIn("min_tier=real-external-e2e", pretty)
+
+    def test_current_target_blockers_include_subsystem_contract_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            rules = [
+                {
+                    "id": "frontend-primitives",
+                    "lane": "L1",
+                    "contract": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": [],
+                        "require_explicit_path_policy_coverage": False,
+                        "path_policies": [],
+                    },
+                }
+            ]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=rules,
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-ga-promotion",
+                    "kind": "release",
+                    "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+                    "completion_rule": "release_ready",
+                    "proof_scope": "derived",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
+            ):
+                payload = base_payload(
+                    release_gate_status="pending",
+                    readiness_assertions=[
+                        automated_assertion(),
+                        hybrid_assertion(subsystem_ids=["frontend-primitives"]),
+                        hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
+                    ],
+                )
+                payload["lanes"][0]["subsystems"] = ["frontend-primitives"]
+                report = audit_status_payload(
+                    payload
+                )
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"],
+                {
+                    "assertions": [
+                        {
+                            "id": "RA2",
+                            "blocking_level": "rc-ready",
+                            "derived_status": "gates-pending",
+                            "summary": "Hybrid release assertion",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "subsystem_ids": ["frontend-primitives"],
+                            "contract_paths": ["docs/release-control/v6/internal/subsystems/frontend-primitives.md"],
+                            "release_gate_ids": ["g1"],
+                            "proof_command_ids": [],
+                        }
+                    ],
+                    "open_decisions": [],
+                    "release_gates": [
+                        {
+                            "id": "g1",
+                            "blocking_level": "rc-ready",
+                            "status": "pending",
+                            "summary": "Need release verification",
+                            "repo_ids": ["pulse"],
+                            "lane_ids": ["L1"],
+                            "effective_status": "pending",
+                            "highest_evidence_tier": "local-rehearsal",
+                            "minimum_evidence_tier": "local-rehearsal",
+                            "linked_assertion_ids": ["RA2"],
+                            "subsystem_ids": ["frontend-primitives"],
+                            "contract_paths": ["docs/release-control/v6/internal/subsystems/frontend-primitives.md"],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_workstreams"],
+                [
+                    {
+                        "subsystem_id": "frontend-primitives",
+                        "contract_path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+                        "assertion_ids": ["RA2"],
+                        "release_gate_ids": ["g1"],
+                        "open_decision_ids": [],
+                        "proof_command_ids": [],
+                        "lane_ids": ["L1"],
+                        "repo_ids": ["pulse"],
+                        "blocker_count": 2,
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("current_target_blockers:", pretty)
+            self.assertIn("current_target_workstreams:", pretty)
+            self.assertNotIn("active target proof scope could not be derived", pretty)
+
+    def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        readiness_assertions=[
+                            automated_assertion(evidence_path="docs/missing_test.go"),
+                            hybrid_assertion(),
+                            hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
+                        ]
+                    )
+                )
+
+            self.assertFalse(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["readiness_assertions"][0]["derived_status"], "evidence-missing")
+            self.assertEqual(report["readiness"]["rc_blockers"], [REPO_READY_BLOCKER])
+            self.assertEqual(report["readiness"]["release_blockers"], [REPO_READY_BLOCKER])
+            self.assertEqual(
+                report["readiness"]["rc_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+            self.assertEqual(
+                report["readiness"]["release_blocker_details"],
+                {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+
+    def test_automated_assertion_requires_proof_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        readiness_assertions=[
+                            automated_assertion(proof_commands=[]),
+                            hybrid_assertion(),
+                        ]
+                    )
+                )
+
+            self.assertIn(
+                "readiness_assertions[0] proof_type 'automated' must declare proof_commands",
+                report["errors"],
+            )
+
+    def test_automated_and_hybrid_assertions_require_executable_proof_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof.md")
+            write_file(pulse, "docs/hybrid.md")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        readiness_assertions=[
+                            automated_assertion(evidence_path="docs/proof.md"),
+                            hybrid_assertion(evidence_path="docs/hybrid.md"),
+                        ]
+                    )
+                )
+
+            self.assertIn(
+                "readiness_assertions[0] proof_type 'automated' must include at least one executable proof artifact",
+                report["errors"],
+            )
+            self.assertIn(
+                "readiness_assertions[1] proof_type 'hybrid' must include at least one executable proof artifact",
+                report["errors"],
+            )
+
+    def test_python_test_files_count_as_executable_proof_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.py")
+            write_file(pulse, "docs/hybrid_test.py")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        readiness_assertions=[
+                            automated_assertion(evidence_path="docs/proof_test.py"),
+                            hybrid_assertion(evidence_path="docs/hybrid_test.py"),
+                        ]
+                    )
+                )
+
+            self.assertEqual(report["errors"], [])
+
+    def test_render_pretty_includes_proof_command_counts_and_release_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-ga-promotion",
+                    "kind": "release",
+                    "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+                    "completion_rule": "release_ready",
+                    "proof_scope": "derived",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
+            ):
+                report = audit_status_payload(base_payload(release_gate_status="pending"))
+
+            pretty = render_pretty(report)
+            self.assertIn("control_plane: profile=v6 target=v6-ga-promotion", pretty)
+            self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
+            self.assertIn("rc_ready=False", pretty)
+            self.assertIn("completion=complete", pretty)
+            self.assertIn("proof_commands=1", pretty)
+            self.assertIn("overclosed_release_gates=0", pretty)
+            self.assertIn("release_gates:", pretty)
+            self.assertIn("effective=pending", pretty)
+            self.assertNotIn("lane_residuals:", pretty)
+            self.assertNotIn("overclosed_release_gates:", pretty)
+            self.assertIn("current_target_blockers:", pretty)
+            self.assertNotIn("current_target_workstreams:", pretty)
+            self.assertIn("rc_blockers:", pretty)
+            self.assertIn("rc_blocker_details:", pretty)
+            self.assertIn("release_blockers:", pretty)
+            self.assertIn("release_blocker_details:", pretty)
+            self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
+            self.assertIn("target_blocking_levels=repo-ready,rc-ready,release-ready", pretty)
+            self.assertNotIn("active target proof scope could not be derived", pretty)
+
+    def test_coverage_gap_deduces_coverage_score_and_appears_in_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(coverage_gaps=[coverage_gap(coverage_impact=7)])
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["coverage_gap_count"], 1)
+            self.assertEqual(report["summary"]["coverage_gap_total_impact"], 7)
+            self.assertEqual(report["summary"]["candidate_lane_count"], 0)
+            self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 1)
+            self.assertEqual(report["summary"]["lane_coverage_score"], 93)
+            self.assertEqual(report["summary"]["coverage_planning_score"], 93)
+            self.assertEqual(report["summary"]["lane_completion_score"], 100)
+            self.assertEqual(report["summary"]["governed_surface_score"], 93)
+            pretty = render_pretty(report)
+            self.assertIn("coverage_gaps=1", pretty)
+            self.assertIn("candidate_lanes=0", pretty)
+            self.assertIn("unplanned_coverage_gaps=1", pretty)
+            self.assertIn("coverage_score=93", pretty)
+            self.assertIn("planning_score=93", pretty)
+            self.assertIn("completion_score=100", pretty)
+            self.assertIn("governed_surface_score=93", pretty)
+            self.assertIn("coverage_gaps:", pretty)
+            self.assertIn("resolution=new-lane impact=7", pretty)
+
+    def test_candidate_lane_maps_coverage_gap_and_appears_in_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[coverage_gap(subsystem_ids=["monitoring"], status="planned")],
+                candidate_lanes=[
+                    candidate_lane(
+                        current_lane_ids=["L1"],
+                        gap_ids=["core-monitoring-product-lane"],
+                        subsystem_ids=["monitoring"],
+                    )
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch.object(
+                status_audit,
+                "subsystem_lane_map",
+                return_value={"monitoring": "L1"},
+            ), mock.patch.object(
+                status_audit,
+                "lane_subsystem_map",
+                return_value={"L1": []},
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["candidate_lane_count"], 1)
+            self.assertEqual(report["summary"]["planned_coverage_gap_count"], 1)
+            self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 0)
+            self.assertEqual(report["summary"]["coverage_planning_score"], 100)
+            pretty = render_pretty(report)
+            self.assertIn("candidate_lanes=1", pretty)
+            self.assertIn("unplanned_coverage_gaps=0", pretty)
+            self.assertIn("planning_score=100", pretty)
+            self.assertIn("candidate_lanes:", pretty)
+            self.assertIn(
+                "target=v6-product-lane-expansion repos=pulse current_lanes=L1 coverage_gaps=core-monitoring-product-lane",
+                pretty,
+            )
+            self.assertIn("name=Core monitoring runtime", pretty)
+            self.assertIn("candidate_lane_queue:", pretty)
+            self.assertIn(
+                "rank=1 candidate=core-monitoring-runtime impact=5 target=v6-product-lane-expansion",
+                pretty,
+            )
+
+    def test_mixed_planned_and_unplanned_coverage_gaps_split_coverage_and_planning_scores(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/planned-gap.md")
+            write_file(pulse, "docs/unplanned-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(
+                        gap_id="planned-gap",
+                        coverage_impact=7,
+                        evidence_path="docs/planned-gap.md",
+                        status="planned",
+                    ),
+                    coverage_gap(
+                        gap_id="unplanned-gap",
+                        coverage_impact=5,
+                        evidence_path="docs/unplanned-gap.md",
+                    ),
+                ],
+                candidate_lanes=[
+                    candidate_lane(
+                        candidate_id="planned-gap-lane",
+                        name="Planned gap lane",
+                        gap_ids=["planned-gap"],
+                        current_lane_ids=["L1"],
+                    )
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["coverage_gap_count"], 2)
+            self.assertEqual(report["summary"]["candidate_lane_count"], 1)
+            self.assertEqual(report["summary"]["planned_coverage_gap_count"], 1)
+            self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 1)
+            self.assertEqual(report["summary"]["coverage_gap_total_impact"], 12)
+            self.assertEqual(report["summary"]["planned_coverage_gap_total_impact"], 7)
+            self.assertEqual(report["summary"]["unplanned_coverage_gap_total_impact"], 5)
+            self.assertEqual(report["summary"]["lane_coverage_score"], 88)
+            self.assertEqual(report["summary"]["coverage_planning_score"], 95)
+            self.assertEqual(report["summary"]["governed_surface_score"], 88)
+            pretty = render_pretty(report)
+            self.assertIn("coverage_gaps=2", pretty)
+            self.assertIn("candidate_lanes=1", pretty)
+            self.assertIn("unplanned_coverage_gaps=1", pretty)
+            self.assertIn("coverage_score=88", pretty)
+            self.assertIn("planning_score=95", pretty)
+            self.assertIn("governed_surface_score=88", pretty)
+
+    def test_candidate_lane_queue_orders_by_coverage_impact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/gap-a.md")
+            write_file(pulse, "docs/gap-b.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned"),
+                    coverage_gap(gap_id="gap-b", coverage_impact=9, evidence_path="docs/gap-b.md", status="planned"),
+                ],
+                candidate_lanes=[
+                    candidate_lane(
+                        candidate_id="candidate-a",
+                        name="Candidate A",
+                        gap_ids=["gap-a"],
+                    ),
+                    candidate_lane(
+                        candidate_id="candidate-b",
+                        name="Candidate B",
+                        gap_ids=["gap-b"],
+                    ),
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                [item["candidate_lane_id"] for item in report["candidate_lane_queue"]],
+                ["candidate-b", "candidate-a"],
+            )
+            self.assertEqual(
+                [item["coverage_impact_total"] for item in report["candidate_lane_queue"]],
+                [9, 4],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("candidate_lane_queue:", pretty)
+            self.assertIn("rank=1 candidate=candidate-b impact=9", pretty)
+            self.assertIn("rank=2 candidate=candidate-a impact=4", pretty)
+
+    def test_active_work_claim_marks_candidate_lane_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/gap-a.md")
+            write_file(pulse, "docs/gap-b.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned"),
+                    coverage_gap(gap_id="gap-b", coverage_impact=9, evidence_path="docs/gap-b.md", status="planned"),
+                ],
+                candidate_lanes=[
+                    candidate_lane(
+                        candidate_id="candidate-a",
+                        name="Candidate A",
+                        gap_ids=["gap-a"],
+                    ),
+                    candidate_lane(
+                        candidate_id="candidate-b",
+                        name="Candidate B",
+                        gap_ids=["gap-b"],
+                    ),
+                ],
+                work_claims=[
+                    work_claim(
+                        claim_id="claim-candidate-b",
+                        agent_id="agent-2",
+                        work_id="candidate-b",
+                        expires_at="2026-03-13T12:00:00Z",
+                    )
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    payload,
+                    now_utc=datetime(2026, 3, 13, 10, 0, tzinfo=timezone.utc),
+                )
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["work_claim_count"], 1)
+            self.assertEqual(report["summary"]["active_work_claim_count"], 1)
+            self.assertEqual(report["summary"]["available_candidate_lane_count"], 1)
+            self.assertEqual(
+                [item["candidate_lane_id"] for item in report["available_candidate_lane_queue"]],
+                ["candidate-a"],
+            )
+            claimed_candidate = next(
+                item for item in report["candidate_lane_queue"] if item["candidate_lane_id"] == "candidate-b"
+            )
+            self.assertFalse(claimed_candidate["available"])
+            self.assertEqual(claimed_candidate["claim_ids"], ["claim-candidate-b"])
+            pretty = render_pretty(report)
+            self.assertIn("work_claims=1", pretty)
+            self.assertIn("active_work_claims=1", pretty)
+            self.assertIn("available_candidate_lanes=1", pretty)
+            self.assertIn("work_claims:", pretty)
+            self.assertIn("available_candidate_lane_queue:", pretty)
+            self.assertIn("claims=claim-candidate-b agents=agent-2", pretty)
+
+    def test_expired_work_claim_does_not_block_candidate_lane_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/gap-a.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned")
+                ],
+                candidate_lanes=[
+                    candidate_lane(
+                        candidate_id="candidate-a",
+                        name="Candidate A",
+                        gap_ids=["gap-a"],
+                    )
+                ],
+                work_claims=[
+                    work_claim(
+                        claim_id="claim-expired-a",
+                        agent_id="agent-3",
+                        work_id="candidate-a",
+                        claimed_at="2026-03-13T07:00:00Z",
+                        heartbeat_at="2026-03-13T07:30:00Z",
+                        expires_at="2026-03-13T08:00:00Z",
+                    )
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    payload,
+                    now_utc=datetime(2026, 3, 13, 10, 0, tzinfo=timezone.utc),
+                )
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["active_work_claim_count"], 0)
+            self.assertEqual(report["summary"]["expired_work_claim_count"], 1)
+            self.assertEqual(report["summary"]["available_candidate_lane_count"], 1)
+            self.assertEqual(len(report["warnings"]), 1)
+            self.assertIn("expired at 2026-03-13T08:00:00Z", report["warnings"][0])
+
+    def test_work_claim_rejects_same_item_and_lane_overlap_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                work_claims=[
+                    work_claim(
+                        claim_id="claim-lane-broad",
+                        agent_id="agent-1",
+                        target_id="v6-rc-stabilization",
+                        work_kind="lane",
+                        work_id="L1",
+                        claimed_at="2026-03-13T09:00:00Z",
+                        heartbeat_at="2026-03-13T09:10:00Z",
+                        expires_at="2026-03-13T11:00:00Z",
+                    ),
+                    work_claim(
+                        claim_id="claim-gate-narrow",
+                        agent_id="agent-2",
+                        target_id="v6-rc-stabilization",
+                        work_kind="release-gate",
+                        work_id="g1",
+                        claimed_at="2026-03-13T09:20:00Z",
+                        heartbeat_at="2026-03-13T09:30:00Z",
+                        expires_at="2026-03-13T11:20:00Z",
+                    ),
+                    work_claim(
+                        claim_id="claim-gate-duplicate",
+                        agent_id="agent-3",
+                        target_id="v6-rc-stabilization",
+                        work_kind="release-gate",
+                        work_id="g1",
+                        claimed_at="2026-03-13T09:40:00Z",
+                        heartbeat_at="2026-03-13T09:50:00Z",
+                        expires_at="2026-03-13T11:40:00Z",
+                    ),
+                ]
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    payload,
+                    now_utc=datetime(2026, 3, 13, 10, 0, tzinfo=timezone.utc),
+                )
+
+            self.assertEqual(
+                report["errors"],
+                [
+                    "active work claims ['claim-gate-duplicate', 'claim-gate-narrow'] overlap on release-gate:g1; only one active claim may reserve the same governed item",
+                    "active work claims ['claim-gate-narrow', 'claim-lane-broad'] overlap on lane L1; a broad lane claim blocks narrower same-lane claims until released",
+                    "active work claims ['claim-gate-duplicate', 'claim-lane-broad'] overlap on lane L1; a broad lane claim blocks narrower same-lane claims until released",
+                ],
+            )
+            self.assertEqual(report["summary"]["work_claim_conflict_count"], 3)
+            self.assertEqual(
+                [conflict["kind"] for conflict in report["work_claim_conflicts"]],
+                ["same-work-item", "lane-overlap", "lane-overlap"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("claim_conflicts=3", pretty)
+            self.assertIn("work_claim_conflicts:", pretty)
+            self.assertIn("kind=same-work-item", pretty)
+            self.assertIn("kind=lane-overlap", pretty)
+
+    def test_candidate_lane_rejects_duplicate_gap_mapping_and_invalid_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[coverage_gap(status="planned")],
+                candidate_lanes=[
+                    candidate_lane(status="invented"),
+                    candidate_lane(
+                        candidate_id="core-monitoring-runtime-duplicate",
+                        name="Core monitoring runtime duplicate",
+                    ),
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "candidate_lanes[0] has invalid status 'invented'",
+                report["errors"],
+            )
+            self.assertIn(
+                "coverage_gap 'core-monitoring-product-lane' is referenced by multiple candidate_lanes",
+                report["errors"],
+            )
+
+    def test_candidate_lane_rejects_unknown_or_completed_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(gap_id="gap-a", status="planned"),
+                    coverage_gap(gap_id="gap-b", status="planned"),
+                ],
+                candidate_lanes=[
+                    candidate_lane(
+                        candidate_id="candidate-a",
+                        name="Candidate A",
+                        gap_ids=["gap-a"],
+                        target_id="missing-target",
+                    ),
+                    candidate_lane(
+                        candidate_id="candidate-b",
+                        name="Candidate B",
+                        gap_ids=["gap-b"],
+                        target_id="v6-rc-cut",
+                    ),
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "candidate_lanes[0] references unknown target_id 'missing-target'",
+                report["errors"],
+            )
+            self.assertIn(
+                "candidate_lanes[1].target_id 'v6-rc-cut' must not reference a completed target",
+                report["errors"],
+            )
+            self.assertEqual(report["summary"]["candidate_lane_count"], 0)
+            self.assertEqual(report["summary"]["planned_coverage_gap_count"], 0)
+            self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 2)
+            self.assertEqual(report["summary"]["coverage_planning_score"], 90)
+
+    def test_candidate_lane_requires_linked_coverage_gap_to_be_planned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[coverage_gap(status="triaged")],
+                candidate_lanes=[candidate_lane()],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "candidate_lanes[0].coverage_gap_ids references coverage_gap 'core-monitoring-product-lane' with status 'triaged'; linked lane-shaping coverage gaps must be planned",
+                report["errors"],
+            )
+
+    def test_planned_lane_shaping_coverage_gap_requires_candidate_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[coverage_gap(status="planned")],
+                candidate_lanes=[],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "coverage_gap 'core-monitoring-product-lane' is planned for new-lane but is not referenced by any candidate_lane",
+                report["errors"],
+            )
+
+    def test_candidate_lane_rejects_target_update_coverage_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[coverage_gap(proposed_resolution="target-update", status="planned")],
+                candidate_lanes=[candidate_lane()],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "candidate_lanes[0].coverage_gap_ids references coverage_gap 'core-monitoring-product-lane' with proposed_resolution 'target-update'; candidate_lanes only support lane-shaping coverage gaps",
+                report["errors"],
+            )
+
+    def test_coverage_gap_validates_resolution_and_impact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/coverage-gap.md")
+
+            payload = base_payload(
+                coverage_gaps=[
+                    coverage_gap(
+                        proposed_resolution="invented",
+                        coverage_impact=0,
+                    )
+                ]
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "coverage_gaps[0] has invalid proposed_resolution 'invented'",
+                report["errors"],
+            )
+            self.assertIn(
+                "coverage_gaps[0].coverage_impact must stay within 1-100",
+                report["errors"],
+            )
+
+    def test_stable_version_on_rc_hold_emits_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": "v6-rc-stabilization",
+                    "kind": "stabilization",
+                    "completion_rule": "manual",
+                },
+            ):
+                report = audit_status_payload(
+                    base_payload(release_gate_status="pending"),
+                    current_version="6.0.0",
+                )
+
+            self.assertIn(
+                "VERSION is a stable release string while the active target is still a non-GA v6-rc-stabilization and release_ready is false; the repo is carrying a GA candidate on an RC-held line.",
+                report["warnings"],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("current_version=6.0.0", pretty)
+            self.assertIn("repo is carrying a GA candidate on an RC-held line", pretty)
+
+    def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            pulse_pro = Path(tmp) / "pulse-pro"
+            pulse_pro.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse_pro, "docs/cross-repo-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                open_decisions=[
+                    {
+                        "id": "d1",
+                        "summary": "Cross-repo decision",
+                        "owner": "project-owner",
+                        "blocking_level": "rc-ready",
+                        "status": "open",
+                        "opened_at": "2026-03-12",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ]
+            )
+            payload["scope"] = {
+                "active_repos": ["pulse", "pulse-pro"],
+                "control_plane_repo": "pulse",
+                "ignored_repos": [],
+                "repo_catalog": [
+                    {
+                        "id": "pulse",
+                        "purpose": "Core repo and control plane.",
+                        "visibility": "public",
+                    },
+                    {
+                        "id": "pulse-pro",
+                        "purpose": "Commercial operations repo.",
+                        "visibility": "private",
+                    },
+                ],
+            }
+            payload["lanes"][0]["evidence"] = [
+                {"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"},
+                {"repo": "pulse-pro", "path": "docs/cross-repo-proof.md", "kind": "file"},
+            ]
+
+            env = {
+                "PULSE_REPO_ROOT_PULSE": str(pulse),
+                "PULSE_REPO_ROOT_PULSE_PRO": str(pulse_pro),
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["lanes"][0]["repo_ids"], ["pulse", "pulse-pro"])
+            self.assertEqual(report["open_decisions"][0]["repo_ids"], ["pulse", "pulse-pro"])
+            self.assertEqual(report["release_gates"][0]["repo_ids"], ["pulse", "pulse-pro"])
+
+    def test_partial_lane_at_target_requires_bounded_residual_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] partial lanes that already meet target_score must use completion.state='bounded-residual'",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_requires_known_tracking_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="bounded-residual",
+                        completion_tracking=[{"kind": "target", "id": "missing-target"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[L1].completion.tracking references unknown target 'missing-target'",
+                report["errors"],
+            )
+
+    def test_open_lane_must_not_declare_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=6,
+                        completion_state="open",
+                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] open lanes must not declare residual tracking references",
+                report["errors"],
+            )
+
+    def test_open_lane_must_not_use_target_met_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="target-met",
+                        current_score=6,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] open completion must not pair with status='target-met'",
+                report["errors"],
+            )
+
+    def test_not_started_lane_must_keep_zero_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="not-started",
+                        current_score=1,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] not-started lanes must keep current_score at 0",
+                report["errors"],
+            )
+
+    def test_partial_lane_must_keep_non_zero_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=0,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] partial lanes must keep current_score above 0",
+                report["errors"],
+            )
+
+    def test_not_started_lane_must_use_open_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="not-started",
+                        current_score=0,
+                        completion_state="complete",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] not-started lanes must use completion.state='open'",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_use_open_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="bounded-residual",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must use completion.state='open'",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_stay_below_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=8,
+                        completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must stay below target_score",
+                report["errors"],
+            )
+
+    def test_blocked_lane_must_declare_blocker_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="open",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] blocked lanes must declare at least one blocker reference",
+                report["errors"],
+            )
+
+    def test_non_blocked_lane_must_not_declare_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=4,
+                        completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] only blocked lanes may declare blocker references",
+                report["errors"],
+            )
+
+    def test_blocked_lane_rejects_resolved_blocker_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=4,
+                        completion_state="open",
+                        blockers=[{"kind": "release-gate", "id": "g1"}],
+                        release_gate_status="passed",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[L1].blockers release gate 'g1' is already resolved and cannot keep a blocked lane open",
+                report["errors"],
+            )
+
+    def test_blocked_lane_rejects_lane_external_blocker_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="blocked",
+                current_score=4,
+                completion_state="open",
+                blockers=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="pending",
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 4,
+                    "status": "blocked",
+                    "completion": {
+                        "state": "open",
+                        "summary": "Second lane is blocked by its own gate.",
+                        "tracking": [],
+                    },
+                    "blockers": [{"kind": "release-gate", "id": "g2"}],
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][0]["status"] = "pending"
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["status"] = "passed"
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].blockers release gate 'g1' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_must_use_partial_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="blocked",
+                        current_score=8,
+                        completion_state="bounded-residual",
+                        completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] bounded-residual completion must pair with status='partial'",
+                report["errors"],
+            )
+
+    def test_complete_lane_must_use_target_met_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(
+                    base_payload(
+                        lane_status="partial",
+                        current_score=8,
+                        completion_state="complete",
+                    )
+                )
+
+            self.assertIn(
+                "lanes[0] complete completion must pair with status='target-met'",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_unrelated_release_gate_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 8,
+                    "status": "partial",
+                    "completion": {
+                        "state": "bounded-residual",
+                        "summary": "Second lane still has governed residual work.",
+                        "tracking": [{"kind": "release-gate", "id": "g2"}],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking release gate 'g1' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_unrelated_open_decision_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "open-decision", "id": "d1"}],
+                open_decisions=[
+                    {
+                        "id": "d1",
+                        "summary": "Open decision owned by another lane",
+                        "owner": "project-owner",
+                        "blocking_level": "rc-ready",
+                        "status": "open",
+                        "opened_at": "2026-03-12",
+                        "lane_ids": ["L2"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 4,
+                    "status": "partial",
+                    "completion": {
+                        "state": "open",
+                        "summary": "Second lane is still open.",
+                        "tracking": [],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking open decision 'd1' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_unrelated_assertion_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "readiness-assertion", "id": "RA2"}],
+                readiness_assertions=[
+                    automated_assertion(),
+                    hybrid_assertion(assertion_id="RA2", lane_id="L2"),
+                    hybrid_assertion(assertion_id="RA3", lane_id="L2", gate_id="g2", blocking_level="release-ready"),
+                ],
+            )
+            payload["lanes"].append(
+                {
+                    "id": "L2",
+                    "name": "Lane 2",
+                    "target_score": 8,
+                    "current_score": 8,
+                    "status": "partial",
+                    "completion": {
+                        "state": "bounded-residual",
+                        "summary": "Second lane still has governed residual work.",
+                        "tracking": [{"kind": "release-gate", "id": "g1"}],
+                    },
+                    "subsystems": [],
+                    "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
+                }
+            )
+            payload["release_gates"][0]["lane_ids"] = ["L2"]
+            payload["release_gates"][1]["lane_ids"] = ["L2"]
+            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking readiness assertion 'RA2' does not reference that lane",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_rejects_resolved_tracking_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="passed",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[L1].completion.tracking release gate 'g1' is already resolved and cannot keep a bounded residual open",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lane_accepts_lane_followup_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane still has a named non-blocking same-lane follow-up.",
+                completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
+                lane_followups=[
+                    {
+                        "id": "mobile-post-rc-hardening",
+                        "summary": "Track post-RC hardening for the lane.",
+                        "owner": "project-owner",
+                        "status": "planned",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["lane_residuals"][0]["tracking"],
+                ["lane-followup:mobile-post-rc-hardening[planned]"],
+            )
+
+    def test_bounded_residual_lane_rejects_done_lane_followup_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
+                lane_followups=[
+                    {
+                        "id": "mobile-post-rc-hardening",
+                        "summary": "Track post-RC hardening for the lane.",
+                        "owner": "project-owner",
+                        "status": "done",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lane_followups[0] has invalid status 'done'",
+                report["errors"],
+            )
+            self.assertIn(
+                "lanes[L1].completion.tracking lane followup 'mobile-post-rc-hardening' is already resolved and cannot keep a bounded residual open",
+                report["errors"],
+            )
+
+    def test_lane_followup_must_be_referenced_by_bounded_residual_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_tracking=[{"kind": "release-gate", "id": "g1"}],
+                lane_followups=[
+                    {
+                        "id": "mobile-post-rc-hardening",
+                        "summary": "Track post-RC hardening for the lane.",
+                        "owner": "project-owner",
+                        "status": "planned",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lane_followups[mobile-post-rc-hardening] is not referenced by any bounded-residual lane completion.tracking",
+                report["errors"],
+            )
+
+    def test_bounded_residual_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane still has a governed residual.",
+                completion_tracking=[{"kind": "lane-followup", "id": "lane-1-followup"}],
+                lane_followups=[
+                    {
+                        "id": "lane-1-followup",
+                        "summary": "Track the remaining named lane follow-up.",
+                        "owner": "project-owner",
+                        "status": "planned",
+                        "recorded_at": "2026-03-13",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["lane_residuals"],
+                [
+                    {
+                        "lane_id": "L1",
+                        "lane_name": "Lane 1",
+                        "summary": "Lane still has a governed residual.",
+                        "tracking": ["lane-followup:lane-1-followup[planned]"],
+                        "tracking_details": [
+                            {
+                                "kind": "lane-followup",
+                                "id": "lane-1-followup",
+                                "status": "planned",
+                                "resolved": False,
+                                "summary": "Track the remaining named lane follow-up.",
+                            }
+                        ],
+                        "unresolved_tracking_count": 1,
+                        "repo_ids": ["pulse"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("lane_residuals:", pretty)
+            self.assertIn("L1 unresolved=1 tracking=lane-followup:lane-1-followup[planned]", pretty)
+            self.assertIn("Lane still has a governed residual.", pretty)
+
+    def test_blocked_lanes_appear_in_readiness_summary_and_pretty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="blocked",
+                current_score=4,
+                completion_state="open",
+                completion_summary="Lane is blocked on the hosted-tier verification gate.",
+                blockers=[{"kind": "release-gate", "id": "g1"}],
+                release_gate_status="pending",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["blocked_lanes"],
+                [
+                    {
+                        "lane_id": "L1",
+                        "lane_name": "Lane 1",
+                        "summary": "Lane is blocked on the hosted-tier verification gate.",
+                        "blockers": ["release-gate:g1[pending]"],
+                        "blocker_details": [
+                            {
+                                "kind": "release-gate",
+                                "id": "g1",
+                                "status": "pending",
+                                "resolved": False,
+                                "summary": "Need release verification",
+                            }
+                        ],
+                        "unresolved_blocker_count": 1,
+                        "repo_ids": ["pulse"],
+                        "subsystem_ids": [],
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("blocked_lanes:", pretty)
+            self.assertIn("L1 unresolved=1 blockers=release-gate:g1[pending]", pretty)
+            self.assertIn("Lane is blocked on the hosted-tier verification gate.", pretty)
+
+    def test_target_only_bounded_residual_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane is at floor but only broader GA work is currently tracked.",
+                completion_tracking=[{"kind": "target", "id": "v6-rc-stabilization"}],
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[0].completion.tracking kind 'target' is not supported",
+                report["errors"],
+            )
+
+    def test_mixed_target_and_concrete_bounded_residual_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                lane_status="partial",
+                current_score=8,
+                completion_state="bounded-residual",
+                completion_summary="Lane is at floor and has both a concrete gate and a leftover broad target fallback.",
+                completion_tracking=[
+                    {"kind": "release-gate", "id": "g1"},
+                    {"kind": "target", "id": "v6-rc-stabilization"},
+                ],
+                release_gate_status="pending",
+            )
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "lanes[0].completion.tracking kind 'target' is not supported",
+                report["errors"],
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,5 +1,9 @@
 import { createSignal, createEffect, onMount } from 'solid-js';
 import { formatTemperature, getTemperatureSymbol } from '@/utils/temperature';
+import {
+  getThresholdSliderFillClass,
+  getThresholdSliderTextClass,
+} from '@/utils/thresholdSliderPresentation';
 
 interface ThresholdSliderProps {
   value: number;
@@ -7,6 +11,7 @@ interface ThresholdSliderProps {
   type: 'cpu' | 'memory' | 'disk' | 'temperature';
   min?: number;
   max?: number;
+  disabled?: boolean;
 }
 
 export function ThresholdSlider(props: ThresholdSliderProps) {
@@ -14,14 +19,6 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
   let thumbRef: HTMLDivElement | undefined;
   const [thumbPosition, setThumbPosition] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
-
-  // Color mapping
-  const colorMap: Record<ThresholdSliderProps['type'], string> = {
-    cpu: 'text-blue-500',
-    memory: 'text-green-500',
-    disk: 'text-amber-500',
-    temperature: 'text-rose-500',
-  };
 
   // Calculate visual position - allow full range 0-100%
   const calculateVisualPosition = (value: number) => {
@@ -69,23 +66,16 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
 
   return (
     <div
-      class="relative w-full h-3.5 overflow-visible"
-      onWheel={(e) => isDragging() && e.preventDefault()}
+      class={`relative w-full h-3.5 overflow-visible transition-opacity ${props.disabled ? 'opacity-30 grayscale pointer-events-none' : ''}`}
+      onWheel={(e) => !props.disabled && isDragging() && e.preventDefault()}
       style={{ 'touch-action': isDragging() ? 'none' : 'auto' }}
     >
       {/* Track background */}
-      <div class="absolute inset-0 h-3.5 rounded bg-gray-200 dark:bg-gray-600"></div>
+      <div class="absolute inset-0 h-3.5 rounded bg-surface-hover"></div>
 
       {/* Colored fill */}
       <div
-        class={`absolute left-0 h-3.5 rounded ${props.type === 'cpu'
-            ? 'bg-blue-500/30'
-            : props.type === 'memory'
-              ? 'bg-green-500/30'
-              : props.type === 'disk'
-                ? 'bg-amber-500/30'
-                : 'bg-rose-500/30'
-          }`}
+        class={`absolute left-0 h-3.5 rounded ${getThresholdSliderFillClass(props.type)}`}
         style={{ width: `${calculateVisualPosition(props.value)}%` }}
       ></div>
 
@@ -97,9 +87,10 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         max={props.max || 100}
         value={props.value}
         onInput={(e) => props.onChange(parseInt(e.currentTarget.value))}
-        onMouseDown={handleMouseDown}
-        onWheel={(e) => e.preventDefault()}
-        class="absolute inset-0 w-full h-3.5 opacity-0 cursor-pointer z-20"
+        onMouseDown={!props.disabled ? handleMouseDown : undefined}
+        onWheel={(e) => !props.disabled && e.preventDefault()}
+        class={`absolute inset-0 w-full h-3.5 opacity-0 ${props.disabled ? 'cursor-not-allowed' : 'cursor-pointer'} z-20`}
+        disabled={props.disabled}
         style={{ 'touch-action': 'none' }}
         title={
           props.type === 'temperature'
@@ -111,21 +102,24 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Custom thumb with value */}
       <div
         ref={thumbRef}
-        class={`absolute top-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
+        class={`absolute top-1/2 pointer-events-none z-10 ${getThresholdSliderTextClass(props.type)}`}
         style={{
           left: `${thumbPosition()}%`,
-          transform: `translateY(-50%) translateX(${thumbPosition() <= 1
+          transform: `translateY(-50%) translateX(${
+            thumbPosition() <= 1
               ? '0%' // At 0-1%, keep at left edge
               : thumbPosition() >= 99
                 ? '-100%' // At 99-100%, keep at right edge
                 : '-50%' // Otherwise center
-            })`,
+          })`,
         }}
       >
         <div class="relative">
-          <div class="w-9 h-4 bg-white dark:bg-gray-800 rounded-full shadow-md border-2 border-current flex items-center justify-center">
+          <div class="w-9 h-4 bg-surface rounded-full shadow-sm border-2 border-current flex items-center justify-center">
             <span class="text-[9px] font-semibold">
-              {props.type === 'temperature' ? `${props.value}${getTemperatureSymbol().replace('°', '°')}` : `${props.value}%`}
+              {props.type === 'temperature'
+                ? `${props.value}${getTemperatureSymbol().replace('°', '°')}`
+                : `${props.value}%`}
             </span>
           </div>
         </div>

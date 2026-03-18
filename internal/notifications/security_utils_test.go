@@ -458,6 +458,12 @@ func TestIsPrivateIP(t *testing.T) {
 			ip:       "93.184.216.34",
 			expected: false,
 		},
+		// IPv6 unspecified (RFC4291)
+		{
+			name:     ":: IPv6 unspecified",
+			ip:       "::",
+			expected: true,
+		},
 		// IPv6 loopback
 		{
 			name:     "::1 IPv6 loopback",
@@ -496,6 +502,60 @@ func TestIsPrivateIP(t *testing.T) {
 			name:     "2606:4700:4700::1111 Cloudflare DNS IPv6",
 			ip:       "2606:4700:4700::1111",
 			expected: false,
+		},
+		// CGNAT (RFC6598) 100.64.0.0/10
+		{
+			name:     "100.64.0.1 CGNAT",
+			ip:       "100.64.0.1",
+			expected: true,
+		},
+		{
+			name:     "100.127.255.254 CGNAT upper",
+			ip:       "100.127.255.254",
+			expected: true,
+		},
+		{
+			name:     "100.128.0.1 outside CGNAT",
+			ip:       "100.128.0.1",
+			expected: false,
+		},
+		// Benchmarking (RFC2544) 198.18.0.0/15
+		{
+			name:     "198.18.0.1 benchmarking",
+			ip:       "198.18.0.1",
+			expected: true,
+		},
+		{
+			name:     "198.19.255.254 benchmarking upper",
+			ip:       "198.19.255.254",
+			expected: true,
+		},
+		{
+			name:     "198.20.0.1 outside benchmarking",
+			ip:       "198.20.0.1",
+			expected: false,
+		},
+		// "This" network (RFC1122) 0.0.0.0/8
+		{
+			name:     "0.0.0.0 this network",
+			ip:       "0.0.0.0",
+			expected: true,
+		},
+		// Documentation TEST-NETs (RFC5737)
+		{
+			name:     "192.0.2.1 TEST-NET-1",
+			ip:       "192.0.2.1",
+			expected: true,
+		},
+		{
+			name:     "198.51.100.1 TEST-NET-2",
+			ip:       "198.51.100.1",
+			expected: true,
+		},
+		{
+			name:     "203.0.113.1 TEST-NET-3",
+			ip:       "203.0.113.1",
+			expected: true,
 		},
 	}
 
@@ -741,167 +801,86 @@ type contentStringer struct{}
 
 func (contentStringer) String() string { return "content" }
 
-func TestEnsurePushoverCustomFieldAliases(t *testing.T) {
+func TestNormalizePushoverWebhookCustomFields(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]interface{}
-		expected map[string]interface{}
+		input    map[string]string
+		expected map[string]string
 	}{
+		{name: "nil input returns nil", input: nil, expected: nil},
+		{name: "empty map returns empty", input: map[string]string{}, expected: map[string]string{}},
 		{
-			name:     "nil input returns nil",
-			input:    nil,
-			expected: nil,
+			name:     "token already set",
+			input:    map[string]string{"token": "my-token"},
+			expected: map[string]string{"token": "my-token"},
 		},
 		{
-			name:     "empty map returns empty",
-			input:    map[string]interface{}{},
-			expected: map[string]interface{}{},
+			name:     "user already set",
+			input:    map[string]string{"user": "my-user"},
+			expected: map[string]string{"user": "my-user"},
 		},
 		{
-			name: "token already set, no alias",
-			input: map[string]interface{}{
-				"token": "my-token",
-			},
-			expected: map[string]interface{}{
-				"token": "my-token",
-			},
+			name:     "app_token migrates to token",
+			input:    map[string]string{"app_token": "legacy-token"},
+			expected: map[string]string{"token": "legacy-token"},
 		},
 		{
-			name: "user already set, no alias",
-			input: map[string]interface{}{
-				"user": "my-user",
-			},
-			expected: map[string]interface{}{
-				"user": "my-user",
-			},
+			name:     "user_token migrates to user",
+			input:    map[string]string{"user_token": "legacy-user"},
+			expected: map[string]string{"user": "legacy-user"},
 		},
 		{
-			name: "app_token aliased to token",
-			input: map[string]interface{}{
-				"app_token": "legacy-token",
-			},
-			expected: map[string]interface{}{
-				"app_token": "legacy-token",
-				"token":     "legacy-token",
-			},
+			name:     "both aliases migrate",
+			input:    map[string]string{"app_token": "legacy-token", "user_token": "legacy-user"},
+			expected: map[string]string{"token": "legacy-token", "user": "legacy-user"},
 		},
 		{
-			name: "user_token aliased to user",
-			input: map[string]interface{}{
-				"user_token": "legacy-user",
-			},
-			expected: map[string]interface{}{
-				"user_token": "legacy-user",
-				"user":       "legacy-user",
-			},
-		},
-		{
-			name: "both aliases applied",
-			input: map[string]interface{}{
+			name: "existing canonical values take precedence",
+			input: map[string]string{
+				"token":      "primary-token",
+				"user":       "primary-user",
 				"app_token":  "legacy-token",
 				"user_token": "legacy-user",
 			},
-			expected: map[string]interface{}{
-				"app_token":  "legacy-token",
-				"user_token": "legacy-user",
-				"token":      "legacy-token",
-				"user":       "legacy-user",
-			},
+			expected: map[string]string{"token": "primary-token", "user": "primary-user"},
 		},
 		{
-			name: "existing token takes precedence over app_token",
-			input: map[string]interface{}{
-				"token":     "primary-token",
-				"app_token": "legacy-token",
-			},
-			expected: map[string]interface{}{
-				"token":     "primary-token",
-				"app_token": "legacy-token",
-			},
+			name:     "whitespace canonical values use legacy fallback",
+			input:    map[string]string{"token": "   ", "user": "", "app_token": "legacy-token", "user_token": "legacy-user"},
+			expected: map[string]string{"token": "legacy-token", "user": "legacy-user"},
 		},
 		{
-			name: "existing user takes precedence over user_token",
-			input: map[string]interface{}{
-				"user":       "primary-user",
-				"user_token": "legacy-user",
-			},
-			expected: map[string]interface{}{
-				"user":       "primary-user",
-				"user_token": "legacy-user",
-			},
+			name:     "empty legacy values are dropped",
+			input:    map[string]string{"app_token": "", "user_token": "   "},
+			expected: map[string]string{},
 		},
 		{
-			name: "empty token uses app_token alias",
-			input: map[string]interface{}{
-				"token":     "",
-				"app_token": "legacy-token",
-			},
-			expected: map[string]interface{}{
-				"token":     "legacy-token",
-				"app_token": "legacy-token",
-			},
-		},
-		{
-			name: "whitespace token uses app_token alias",
-			input: map[string]interface{}{
-				"token":     "   ",
-				"app_token": "legacy-token",
-			},
-			expected: map[string]interface{}{
-				"token":     "legacy-token",
-				"app_token": "legacy-token",
-			},
-		},
-		{
-			name: "empty legacy values not aliased",
-			input: map[string]interface{}{
-				"app_token":  "",
-				"user_token": "   ",
-			},
-			expected: map[string]interface{}{
-				"app_token":  "",
-				"user_token": "   ",
-			},
-		},
-		{
-			name: "other fields preserved",
-			input: map[string]interface{}{
-				"app_token": "legacy-token",
-				"priority":  2,
-				"sound":     "pushover",
-			},
-			expected: map[string]interface{}{
-				"app_token": "legacy-token",
-				"token":     "legacy-token",
-				"priority":  2,
-				"sound":     "pushover",
-			},
+			name:     "other fields preserved",
+			input:    map[string]string{"app_token": "legacy-token", "priority": "2", "sound": "pushover"},
+			expected: map[string]string{"token": "legacy-token", "priority": "2", "sound": "pushover"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ensurePushoverCustomFieldAliases(tt.input)
-
+			result := normalizePushoverWebhookCustomFields(tt.input)
 			if tt.expected == nil {
 				if result != nil {
-					t.Errorf("ensurePushoverCustomFieldAliases() = %v, want nil", result)
+					t.Errorf("normalizePushoverWebhookCustomFields() = %v, want nil", result)
 				}
 				return
 			}
-
 			if len(result) != len(tt.expected) {
-				t.Errorf("ensurePushoverCustomFieldAliases() length = %d, want %d", len(result), len(tt.expected))
+				t.Errorf("normalizePushoverWebhookCustomFields() length = %d, want %d", len(result), len(tt.expected))
 			}
-
 			for key, expectedValue := range tt.expected {
 				actualValue, ok := result[key]
 				if !ok {
-					t.Errorf("ensurePushoverCustomFieldAliases() missing key %q", key)
+					t.Errorf("normalizePushoverWebhookCustomFields() missing key %q", key)
 					continue
 				}
 				if actualValue != expectedValue {
-					t.Errorf("ensurePushoverCustomFieldAliases()[%q] = %v, want %v", key, actualValue, expectedValue)
+					t.Errorf("normalizePushoverWebhookCustomFields()[%q] = %v, want %v", key, actualValue, expectedValue)
 				}
 			}
 		})

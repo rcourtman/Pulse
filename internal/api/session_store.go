@@ -20,6 +20,7 @@ type SessionStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	stopOnce   sync.Once
 	crypto     *crypto.CryptoManager
 }
 
@@ -68,6 +69,79 @@ type SessionData struct {
 	SAMLSessionIndex string `json:"saml_session_index,omitempty"` // SAML SessionIndex for SLO
 }
 
+func (s *SessionStore) loadHashedSessions(persisted []sessionPersisted, now time.Time) int {
+	loaded := 0
+	for _, entry := range persisted {
+		if now.After(entry.ExpiresAt) {
+			continue
+		}
+		refreshToken := entry.OIDCRefreshToken
+		// Refresh tokens must be encrypted at rest in v6.
+		if refreshToken != "" {
+			if s.crypto != nil {
+				if decrypted, err := s.crypto.DecryptString(refreshToken); err == nil {
+					refreshToken = decrypted
+				} else {
+					log.Warn().
+						Err(err).
+						Str("session_key", entry.Key).
+						Msg("Skipping invalid OIDC refresh token; encrypted format required")
+					refreshToken = ""
+				}
+			} else {
+				log.Warn().
+					Str("session_key", entry.Key).
+					Msg("Skipping persisted OIDC refresh token because session-store crypto is unavailable")
+				refreshToken = ""
+			}
+		}
+
+		s.sessions[entry.Key] = &SessionData{
+			Username:           entry.Username,
+			ExpiresAt:          entry.ExpiresAt,
+			CreatedAt:          entry.CreatedAt,
+			UserAgent:          entry.UserAgent,
+			IP:                 entry.IP,
+			OriginalDuration:   entry.OriginalDuration,
+			OIDCRefreshToken:   refreshToken,
+			OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
+			OIDCIssuer:         entry.OIDCIssuer,
+			OIDCClientID:       entry.OIDCClientID,
+			SAMLProviderID:     entry.SAMLProviderID,
+			SAMLNameID:         entry.SAMLNameID,
+			SAMLSessionIndex:   entry.SAMLSessionIndex,
+		}
+		loaded++
+	}
+	return loaded
+}
+
+func (s *SessionStore) loadLegacySessions(legacy map[string]SessionData, now time.Time) int {
+	loaded := 0
+	for rawToken, entry := range legacy {
+		if rawToken == "" || now.After(entry.ExpiresAt) {
+			continue
+		}
+
+		session := entry
+		s.sessions[sessionHash(rawToken)] = &session
+		loaded++
+	}
+	return loaded
+}
+
+func (s *SessionStore) migrateLegacySessions(data []byte, now time.Time) (bool, error) {
+	var legacy map[string]SessionData
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return false, err
+	}
+
+	loaded := s.loadLegacySessions(legacy, now)
+	log.Info().Int("loaded", loaded).Int("total", len(legacy)).Msg("Sessions loaded from disk (legacy raw-token format)")
+	s.saveUnsafe()
+	return true, nil
+}
+
 // NewSessionStore creates a new persistent session store
 func NewSessionStore(dataPath string) *SessionStore {
 	cm, err := crypto.NewCryptoManagerAt(dataPath)
@@ -90,6 +164,21 @@ func NewSessionStore(dataPath string) *SessionStore {
 	go store.backgroundWorker()
 
 	return store
+}
+
+func (s *SessionStore) Shutdown() {
+	if s == nil {
+		return
+	}
+	s.stopOnce.Do(func() {
+		if s.saveTicker != nil {
+			s.saveTicker.Stop()
+		}
+		select {
+		case s.stopChan <- true:
+		default:
+		}
+	})
 }
 
 // backgroundWorker handles periodic saves and cleanup
@@ -349,13 +438,18 @@ func (s *SessionStore) saveUnsafe() {
 	persisted := make([]sessionPersisted, 0, len(s.sessions))
 	for key, session := range s.sessions {
 		refreshToken := session.OIDCRefreshToken
-		// Encrypt refresh token if crypto is available and token exists
-		if refreshToken != "" && s.crypto != nil {
-			if encrypted, err := s.crypto.EncryptString(refreshToken); err == nil {
-				refreshToken = encrypted
+		// Refresh tokens must not be persisted unless they can be encrypted.
+		if refreshToken != "" {
+			if s.crypto != nil {
+				if encrypted, err := s.crypto.EncryptString(refreshToken); err == nil {
+					refreshToken = encrypted
+				} else {
+					log.Error().Err(err).Msg("Failed to encrypt refresh token")
+					// Don't persist if encryption fails to prevent leak
+					refreshToken = ""
+				}
 			} else {
-				log.Error().Err(err).Msg("Failed to encrypt refresh token")
-				// Don't persist if encryption fails to prevent leak
+				log.Warn().Msg("Skipping OIDC refresh token persistence because session-store crypto is unavailable")
 				refreshToken = ""
 			}
 		}
@@ -417,57 +511,13 @@ func (s *SessionStore) load() {
 
 	var persisted []sessionPersisted
 	if err := json.Unmarshal(data, &persisted); err == nil {
-		for _, entry := range persisted {
-			if now.After(entry.ExpiresAt) {
-				continue
-			}
-			refreshToken := entry.OIDCRefreshToken
-			// Decrypt refresh token if needed (handles migration from plaintext)
-			if refreshToken != "" && s.crypto != nil {
-				if decrypted, err := s.crypto.DecryptString(refreshToken); err == nil {
-					refreshToken = decrypted
-				}
-				// If decryption fails, assume it's legacy plaintext and leave as is
-			}
-
-			s.sessions[entry.Key] = &SessionData{
-				Username:           entry.Username,
-				ExpiresAt:          entry.ExpiresAt,
-				CreatedAt:          entry.CreatedAt,
-				UserAgent:          entry.UserAgent,
-				IP:                 entry.IP,
-				OriginalDuration:   entry.OriginalDuration,
-				OIDCRefreshToken:   refreshToken,
-				OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
-				OIDCIssuer:         entry.OIDCIssuer,
-				OIDCClientID:       entry.OIDCClientID,
-				SAMLProviderID:     entry.SAMLProviderID,
-				SAMLNameID:         entry.SAMLNameID,
-				SAMLSessionIndex:   entry.SAMLSessionIndex,
-			}
-		}
-		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
+		loaded := s.loadHashedSessions(persisted, now)
+		log.Info().Int("loaded", loaded).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
 		return
 	}
 
-	// Legacy map format fallback (keys stored as raw tokens)
-	var legacy map[string]*SessionData
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal legacy sessions")
+	if migrated, err := s.migrateLegacySessions(data, now); err == nil && migrated {
 		return
 	}
-
-	loaded := 0
-	for token, session := range legacy {
-		if now.After(session.ExpiresAt) {
-			continue
-		}
-		s.sessions[sessionHash(token)] = session
-		loaded++
-	}
-
-	log.Info().
-		Int("loaded", loaded).
-		Int("total", len(legacy)).
-		Msg("Sessions loaded from disk (legacy format migrated)")
+	log.Error().Msg("Failed to decode sessions file; unsupported format")
 }

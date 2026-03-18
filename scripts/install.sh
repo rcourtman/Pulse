@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Pulse Unified Agent Installer
-# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid, QNAP QTS/QuTS
+# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
@@ -20,7 +20,6 @@
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
-#   --env <KEY=VALUE>   Set custom environment variable in service file (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --enable-commands   Enable AI command execution on agent (disabled by default)
 #   --uninstall         Remove the agent
@@ -54,89 +53,6 @@ BINARY_NAME="pulse-agent"
 INSTALL_DIR="/usr/local/bin"
 LOG_FILE="/var/log/${AGENT_NAME}.log"
 
-# QNAP QTS/QuTS hero configuration (RAM-backed /usr/local/bin — limited space)
-QNAP=false
-QNAP_VOL=""
-
-qnap_kill_pidfile() {
-    local pidfile="$1"
-    local signal="${2:-TERM}"
-    local pid=""
-
-    [[ -f "$pidfile" ]] || return 0
-
-    pid="$(cat "$pidfile" 2>/dev/null || true)"
-    if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
-        rm -f "$pidfile" 2>/dev/null || true
-        return 0
-    fi
-
-    [[ "$pid" == "$$" ]] && return 0
-    kill "-${signal}" "$pid" 2>/dev/null || true
-}
-
-stop_qnap_agents_procfs() {
-    local signal="${1:-TERM}"
-    local qnap_state_dir="${INSTALL_DIR}"
-    local wrapper_script="${qnap_state_dir}/start-pulse-agent.sh"
-    local stored_binary="${qnap_state_dir}/${BINARY_NAME}"
-    local runtime_binary="/usr/local/bin/${BINARY_NAME}"
-    local proc=""
-    local pid=""
-    local cmd=""
-    local exe_path=""
-
-    [[ -d /proc ]] || return 0
-
-    for proc in /proc/[0-9]*; do
-        [[ -e "$proc/cmdline" ]] || continue
-        pid="${proc##*/}"
-        [[ "$pid" == "$$" ]] && continue
-
-        cmd="$(tr '\000' ' ' < "$proc/cmdline" 2>/dev/null || true)"
-        exe_path="$(readlink "$proc/exe" 2>/dev/null || true)"
-        [[ -n "$cmd" ]] || continue
-
-        if [[ "$cmd" == *"${wrapper_script}"* ]] || [[ "$cmd" == *"start-pulse-agent.sh"* ]]; then
-            kill "-${signal}" "$pid" 2>/dev/null || true
-            continue
-        fi
-
-        if [[ "$exe_path" == "$runtime_binary" ]] || [[ "$exe_path" == "$stored_binary" ]]; then
-            kill "-${signal}" "$pid" 2>/dev/null || true
-        # Match only when binary is the command (first arg), not a random argument
-        elif [[ "$cmd" == "${runtime_binary} "* ]] || [[ "$cmd" == "${runtime_binary}" ]] || \
-             [[ "$cmd" == "${stored_binary} "* ]] || [[ "$cmd" == "${stored_binary}" ]]; then
-            kill "-${signal}" "$pid" 2>/dev/null || true
-        fi
-    done
-}
-
-# Stop all QNAP pulse-agent processes (wrappers first, then binaries).
-# Kill wrappers first to prevent watchdog respawn, then binaries.
-stop_qnap_agents() {
-    local qnap_state_dir="${INSTALL_DIR}"
-    local watchdog_pidfile="${qnap_state_dir}/${AGENT_NAME}.watchdog.pid"
-    local agent_pidfile="${qnap_state_dir}/${AGENT_NAME}.pid"
-
-    # 1. Kill wrapper scripts (watchdog loops)
-    qnap_kill_pidfile "$watchdog_pidfile" TERM
-    pkill -f "start-pulse-agent\.sh" 2>/dev/null || true
-    stop_qnap_agents_procfs TERM
-    sleep 1
-    # 2. Kill agent binaries at both possible paths (with or without leading /)
-    qnap_kill_pidfile "$agent_pidfile" TERM
-    pkill -f "(^|/)pulse-agent( |$)" 2>/dev/null || true
-    stop_qnap_agents_procfs TERM
-    sleep 2
-    # 3. Verify — force-kill any survivors
-    qnap_kill_pidfile "$agent_pidfile" KILL
-    pkill -9 -f "(^|/)pulse-agent( |$)" 2>/dev/null || true
-    qnap_kill_pidfile "$watchdog_pidfile" KILL
-    stop_qnap_agents_procfs KILL
-    rm -f "$agent_pidfile" "$watchdog_pidfile" 2>/dev/null || true
-}
-
 # TrueNAS SCALE configuration (immutable root filesystem)
 TRUENAS=false
 TRUENAS_STATE_DIR="/data/pulse-agent"
@@ -159,12 +75,17 @@ INSECURE="false"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
+ENROLL="false"
 KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
-CUSTOM_ENVS=()    # Array for --env KEY=VALUE pairs
+STATE_DIR="/var/lib/pulse-agent"  # Persistent state directory (overridden per platform)
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
+NON_INTERACTIVE="false"
+TOKEN_FILE_PATH=""       # Path to file containing the token
+OUTPUT_FORMAT="text"     # "text" (default) or "json"
+PREFLIGHT_ONLY="false"
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -172,17 +93,100 @@ KUBERNETES_EXPLICIT="false"
 PROXMOX_EXPLICIT="false"
 
 # --- Helper Functions ---
-log_info() { printf "[INFO] %s\n" "$1"; }
-log_warn() { printf "[WARN] %s\n" "$1"; }
-log_error() { printf "[ERROR] %s\n" "$1"; }
-fail() {
-    log_error "$1"
-    if [[ -t 0 ]]; then
-        read -r -p "Press Enter to exit..."
-    elif [[ -e /dev/tty ]]; then
-        read -r -p "Press Enter to exit..." < /dev/tty
+log_info() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[INFO] %s\n" "$(redact_token "$1")"
+    else
+        printf "[INFO] %s\n" "$1"
     fi
-    exit 1
+}
+log_warn() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[WARN] %s\n" "$(redact_token "$1")"
+    else
+        printf "[WARN] %s\n" "$1"
+    fi
+}
+log_error() {
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        printf "[ERROR] %s\n" "$(redact_token "$1")"
+    else
+        printf "[ERROR] %s\n" "$1"
+    fi
+}
+url_encode() {
+    local input="$1"
+    local output=""
+    local i c encoded
+    local old_lc_all="${LC_ALL-}"
+    LC_ALL=C
+    for ((i=0; i<${#input}; i++)); do
+        c="${input:i:1}"
+        case "$c" in
+            [a-zA-Z0-9.~_-])
+                output+="$c"
+                ;;
+            *)
+                printf -v encoded '%%%02X' "'$c"
+                output+="$encoded"
+                ;;
+        esac
+    done
+    if [[ -n "${old_lc_all}" ]]; then
+        LC_ALL="$old_lc_all"
+    else
+        unset LC_ALL
+    fi
+    printf '%s' "$output"
+}
+fail() {
+    local code="${2:-1}"
+    if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+        printf '{"phase":"error","code":"install_failed","message":"%s","exitCode":%d}\n' \
+            "$(echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr -d '\n\r')" "$code"
+    else
+        log_error "$1"
+    fi
+    if [[ "$NON_INTERACTIVE" != "true" ]]; then
+        if [[ -t 0 ]]; then
+            read -r -p "Press Enter to exit..."
+        elif [[ -e /dev/tty ]]; then
+            read -r -p "Press Enter to exit..." < /dev/tty
+        fi
+    fi
+    exit "$code"
+}
+
+# Stable exit codes by failure class
+EXIT_OK=0
+EXIT_GENERAL=1
+EXIT_UNSUPPORTED_ARCH=10
+EXIT_DOWNLOAD_FAILED=11
+EXIT_CHECKSUM_FAILED=12
+EXIT_SERVICE_START_FAILED=13
+EXIT_PREFLIGHT_FAILED=14
+EXIT_ALREADY_INSTALLED=15    # Not a failure — used with --preflight-only
+EXIT_MISSING_ARGS=16
+
+json_event() {
+    # Usage: json_event <phase> <code> <message> [exitCode]
+    if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+        local exit_code="${4:-0}"
+        printf '{"phase":"%s","code":"%s","message":"%s","exitCode":%d}\n' \
+            "$1" "$2" "$(echo "$3" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr -d '\n\r')" "$exit_code"
+    fi
+}
+
+redact_token() {
+    # Replace token values with redacted placeholder in log output
+    local msg="$1"
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        msg="${msg//$PULSE_TOKEN/[REDACTED]}"
+    fi
+    if [[ -n "$TOKEN_FILE_PATH" ]]; then
+        msg="${msg//$TOKEN_FILE_PATH/[token-file]}"
+    fi
+    echo "$msg"
 }
 
 show_help() {
@@ -199,23 +203,25 @@ Options:
   --enable-host           Enable host metrics (default: true)
   --disable-host          Disable host metrics
   --enable-docker         Force enable Docker monitoring
-  --disable-docker        Disable Docker monitoring even if detected
   --enable-kubernetes     Force enable Kubernetes monitoring
-  --disable-kubernetes    Disable Kubernetes monitoring even if detected
   --kubeconfig <path>     Path to kubeconfig file
   --kube-include-all-pods Include all non-succeeded pods
   --kube-include-all-deployments Include all deployments
   --enable-proxmox        Force enable Proxmox integration
-  --disable-proxmox       Disable Proxmox integration even if detected
-  --proxmox-type <type>   Proxmox type: pve or pbs (default: auto-detect)
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
+  --state-dir <path>      Override persistent state directory
   --disk-exclude <path>   Exclude mount point (repeatable)
-  --env <KEY=VALUE>       Set custom environment variable in service (repeatable)
-  --insecure              Skip TLS verification
+  --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
+  --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --uninstall             Remove the agent
+  --non-interactive       Skip TTY prompts (for automated/scripted installs)
+  --token-file <path>     Read token from file (alternative to --token)
+  --pulse-url <url>       Alias for --url
+  --preflight-only        Run preflight checks and exit (no install)
+  --output <format>       Output format: text (default) or json
   --help, -h              Show this help
 
 EOF
@@ -245,6 +251,429 @@ restore_selinux_contexts() {
             log_info "Setting SELinux context for installed binary..."
             chcon -t bin_t "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
         fi
+    fi
+}
+
+# --- Post-Start Health Verification ---
+# After starting the agent service, poll its readiness endpoint to verify it
+# actually started. The agent exposes /readyz on :9191 once modules are initialized.
+verify_agent_started() {
+    local health_url="http://127.0.0.1:9191/readyz"
+    local max_iterations=8
+    local interval=2
+    local iteration=0
+    local log_file="${TRUENAS_LOG_FILE:-$LOG_FILE}"
+
+    log_info "Verifying agent started successfully..."
+
+    # Brief pause to let the agent process spawn (especially for background starts like Unraid)
+    sleep 2
+
+    while [ $iteration -lt $max_iterations ]; do
+        # Check the readiness endpoint first — this is the definitive signal
+        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
+            log_info "Agent is running and healthy."
+            return 0
+        fi
+
+        # If curl failed, check whether the process is still alive.
+        # Use pgrep where available, fall back to ps + grep.
+        local agent_running=false
+        if command -v pgrep >/dev/null 2>&1; then
+            # Use -x (exact match) if supported, otherwise fall back to -f
+            pgrep -x "${BINARY_NAME}" >/dev/null 2>&1
+            local pgrep_rc=$?
+            if [ $pgrep_rc -eq 0 ]; then
+                agent_running=true
+            elif [ $pgrep_rc -ge 2 ]; then
+                # Exit code >= 2 means bad option — -x not supported, try -f
+                pgrep -f "${BINARY_NAME}" >/dev/null 2>&1 && agent_running=true
+            fi
+        else
+            # shellcheck disable=SC2009
+            # Use bracket trick ([p]ulse-agent) to prevent grep from matching itself
+            local grep_pattern="[${BINARY_NAME:0:1}]${BINARY_NAME:1}"
+            if ps -e -o comm= 2>/dev/null | grep -q "$grep_pattern" || ps aux 2>/dev/null | grep -q "$grep_pattern"; then
+                agent_running=true
+            fi
+        fi
+
+        if [ "$agent_running" = "false" ] && [ $iteration -ge 3 ]; then
+            # Only treat missing process as failure after ~8s — on Unraid the wrapper
+            # script takes several seconds before the actual binary launches.
+            log_warn "Agent process is not running!"
+            # Show last few log lines for diagnostics
+            if [ -f "$log_file" ]; then
+                log_warn "Last log lines:"
+                tail -5 "$log_file" 2>/dev/null | while IFS= read -r line; do log_warn "  $line"; done
+            fi
+            return 1
+        fi
+
+        sleep $interval
+        iteration=$((iteration + 1))
+    done
+
+    # Timed out — process alive but not ready
+    log_warn "Agent process is running but did not become ready within ~$((max_iterations * interval + 2))s."
+    log_warn "It may still be initializing. Check logs: tail -f $log_file"
+    return 1
+}
+
+stop_existing_agent_service() {
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+            log_info "Stopping existing ${AGENT_NAME} service..."
+            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+            sleep 2
+            return 0
+        fi
+    elif command -v rc-service >/dev/null 2>&1; then
+        if rc-service "${AGENT_NAME}" status >/dev/null 2>&1; then
+            log_info "Stopping existing ${AGENT_NAME} service..."
+            rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+            sleep 2
+            return 0
+        fi
+    elif command -v service >/dev/null 2>&1; then
+        if service "${AGENT_NAME}" status >/dev/null 2>&1; then
+            log_info "Stopping existing ${AGENT_NAME} service..."
+            service "${AGENT_NAME}" stop 2>/dev/null || true
+            sleep 2
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+restart_systemd_agent_service() {
+    systemctl daemon-reload
+    systemctl enable "${AGENT_NAME}" 2>/dev/null || true
+    systemctl restart "${AGENT_NAME}"
+}
+
+restart_openrc_agent_service() {
+    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+    rc-update add "${AGENT_NAME}" default 2>/dev/null || true
+    rc-service "${AGENT_NAME}" start
+}
+
+restart_service_command_agent() {
+    service "${AGENT_NAME}" stop 2>/dev/null || true
+    sleep 1
+    service "${AGENT_NAME}" start 2>/dev/null || true
+}
+
+restart_sysv_agent_service() {
+    local initscript="$1"
+    "$initscript" stop 2>/dev/null || true
+    sleep 1
+    "$initscript" start
+}
+
+teardown_systemd_agent_service() {
+    local unit_path="${1:-/etc/systemd/system/${AGENT_NAME}.service}"
+    systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+    systemctl disable "${AGENT_NAME}" 2>/dev/null || true
+    rm -f "$unit_path"
+    systemctl daemon-reload 2>/dev/null || true
+}
+
+teardown_openrc_agent_service() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
+    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+    rc-update del "${AGENT_NAME}" default 2>/dev/null || true
+    rm -f "$init_path"
+}
+
+teardown_service_command_agent() {
+    local service_path="$1"
+    service "${AGENT_NAME}" stop 2>/dev/null || true
+    if [[ -n "$service_path" ]]; then
+        rm -f "$service_path"
+    fi
+}
+
+teardown_sysv_agent_service() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
+    "$init_path" stop 2>/dev/null || true
+    if command -v update-rc.d >/dev/null 2>&1; then
+        update-rc.d -f "${AGENT_NAME}" remove >/dev/null 2>&1 || true
+    elif command -v chkconfig >/dev/null 2>&1; then
+        chkconfig "${AGENT_NAME}" off >/dev/null 2>&1 || true
+        chkconfig --del "${AGENT_NAME}" >/dev/null 2>&1 || true
+    fi
+    for RL in 0 1 2 3 4 5 6; do
+        rm -f "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
+        rm -f "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
+    done
+    rm -f "$init_path"
+    rm -f "/var/run/${AGENT_NAME}.pid"
+}
+
+enable_sysv_agent_service() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
+    if command -v update-rc.d >/dev/null 2>&1; then
+        update-rc.d "${AGENT_NAME}" defaults >/dev/null 2>&1 || true
+        log_info "Enabled service with update-rc.d."
+        return 0
+    elif command -v chkconfig >/dev/null 2>&1; then
+        chkconfig --add "${AGENT_NAME}" >/dev/null 2>&1 || true
+        chkconfig "${AGENT_NAME}" on >/dev/null 2>&1 || true
+        log_info "Enabled service with chkconfig."
+        return 0
+    fi
+
+    for RL in 2 3 4 5; do
+        if [[ -d "/etc/rc${RL}.d" ]]; then
+            ln -sf "$init_path" "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
+        fi
+    done
+    for RL in 0 1 6; do
+        if [[ -d "/etc/rc${RL}.d" ]]; then
+            ln -sf "$init_path" "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
+        fi
+    done
+    log_info "Created rc.d symlinks manually."
+}
+
+write_truenas_bootstrap_script() {
+    local platform="$1"
+    local service_link=""
+    local service_management_functions=""
+
+    if [[ "$platform" == "Linux" ]]; then
+        service_link="/etc/systemd/system/${AGENT_NAME}.service"
+        service_management_functions=$(cat <<'EOF'
+start_agent_service() {
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME" 2>/dev/null || true
+    systemctl restart "$SERVICE_NAME"
+}
+EOF
+)
+    else
+        service_link="/usr/local/etc/rc.d/${AGENT_NAME}"
+        service_management_functions="$(freebsd_enable_snippet)
+
+start_agent_service() {
+    ensure_freebsd_agent_enabled
+    service \"\${SERVICE_NAME}\" stop 2>/dev/null || true
+    sleep 1
+    service \"\${SERVICE_NAME}\" start 2>/dev/null || true
+}"
+    fi
+
+    cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<BOOTSTRAP
+#!/bin/bash
+# Pulse Agent Bootstrap for TrueNAS
+# Called by TrueNAS Init/Shutdown task on boot.
+
+set -e
+
+SERVICE_NAME="${AGENT_NAME}"
+STATE_DIR="${TRUENAS_STATE_DIR}"
+STORED_BINARY="\${STATE_DIR}/pulse-agent"
+RUNTIME_BINARY="${TRUENAS_RUNTIME_BINARY}"
+SERVICE_STORAGE="\${STATE_DIR}/pulse-agent.service"
+SERVICE_LINK="${service_link}"
+
+require_bootstrap_file() {
+    local path="\$1"
+    local label="\$2"
+    if [[ ! -f "\$path" ]]; then
+        echo "ERROR: \$label not found at \$path"
+        exit 1
+    fi
+}
+
+sync_runtime_binary() {
+    if [[ "\$RUNTIME_BINARY" == "\$STORED_BINARY" ]]; then
+        return 0
+    fi
+
+    mkdir -p "\$(dirname "\$RUNTIME_BINARY")" 2>/dev/null || true
+    cp "\$STORED_BINARY" "\$RUNTIME_BINARY"
+    chmod +x "\$RUNTIME_BINARY"
+}
+
+link_service_artifact() {
+    ln -sf "\$SERVICE_STORAGE" "\$SERVICE_LINK"
+}
+
+${service_management_functions}
+
+require_bootstrap_file "\$STORED_BINARY" "Binary"
+require_bootstrap_file "\$SERVICE_STORAGE" "Service file"
+sync_runtime_binary
+link_service_artifact
+start_agent_service
+
+echo "Pulse agent started successfully"
+BOOTSTRAP
+
+    chmod +x "$TRUENAS_BOOTSTRAP_SCRIPT"
+}
+
+freebsd_enable_snippet() {
+    cat <<'EOF'
+apply_freebsd_agent_enablement() {
+    if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
+        echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
+    else
+        sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
+            sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
+    fi
+}
+EOF
+}
+
+ensure_freebsd_agent_enabled() {
+    eval "$(freebsd_enable_snippet)"
+    apply_freebsd_agent_enablement
+}
+
+render_systemd_agent_unit() {
+    local unit_path="$1"
+    local exec_path="$2"
+    local exec_args="$3"
+    local after_targets="$4"
+    local wants_targets="$5"
+    local run_as_user="$6"
+    local log_target="$7"
+    local env_line=""
+    local wants_line=""
+    local user_line=""
+    local log_lines=""
+
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        env_line=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+    fi
+    if [[ -n "$wants_targets" ]]; then
+        wants_line=$'\n'"Wants=${wants_targets}"
+    fi
+    if [[ -n "$run_as_user" ]]; then
+        user_line=$'\n'"User=${run_as_user}"
+    fi
+    if [[ -n "$log_target" ]]; then
+        log_lines=$'\n'"StandardOutput=append:${log_target}"$'\n'"StandardError=append:${log_target}"
+    fi
+
+    cat > "$unit_path" <<EOF
+[Unit]
+Description=Pulse Unified Agent
+After=${after_targets}${wants_line}
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=${exec_path} ${exec_args}${env_line}
+Restart=always
+RestartSec=5s${user_line}${log_lines}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+render_freebsd_rc_agent_script() {
+    local script_path="$1"
+    local exec_path="$2"
+    local exec_args="$3"
+    local ssl_cert_line=""
+
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        ssl_cert_line="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+
+    cat > "$script_path" <<EOF
+#!/bin/sh
+
+# PROVIDE: pulse_agent
+# REQUIRE: LOGIN NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="pulse_agent"
+rcvar="pulse_agent_enable"
+pidfile="/var/run/\${name}.pid"
+
+command="${exec_path}"
+command_args="${exec_args}"
+
+start_cmd="\${name}_start"
+stop_cmd="\${name}_stop"
+status_cmd="\${name}_status"
+
+pulse_agent_start()
+{
+    if checkyesno \${rcvar}; then
+        echo "Starting \${name}."
+        ${ssl_cert_line}
+        /usr/sbin/daemon -r -p \${pidfile} -f \${command} \${command_args}
+    fi
+}
+
+pulse_agent_stop()
+{
+    if [ -f \${pidfile} ]; then
+        echo "Stopping \${name}."
+        kill \$(cat \${pidfile}) 2>/dev/null
+        rm -f \${pidfile}
+    else
+        echo "\${name} is not running."
+    fi
+}
+
+pulse_agent_status()
+{
+    if [ -f \${pidfile} ] && kill -0 \$(cat \${pidfile}) 2>/dev/null; then
+        echo "\${name} is running as pid \$(cat \${pidfile})."
+    else
+        echo "\${name} is not running."
+        return 1
+    fi
+}
+
+load_rc_config \$name
+run_rc_command "\$1"
+EOF
+
+    chmod +x "$script_path"
+}
+
+complete_installation_flow() {
+    local state_dir="$1"
+    local install_success_message="$2"
+    local upgrade_success_message="$3"
+    local unhealthy_log_hint="$4"
+
+    save_connection_info "$state_dir"
+    if verify_agent_started; then
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "$upgrade_success_message"
+            json_event "complete" "updated" "Installation updated"
+        else
+            log_info "$install_success_message"
+            json_event "complete" "installed" "Installation installed"
+        fi
+    else
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_warn "Upgrade complete, but the agent may not be running correctly."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+        else
+            log_warn "Installation complete, but the agent may not be running correctly."
+            if [[ -n "$unhealthy_log_hint" ]]; then
+                log_warn "Check logs: $unhealthy_log_hint"
+            fi
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+        fi
+    fi
+
+    if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then
+        log_info "To uninstall later: sudo bash ${SAVED_INSTALL_SCRIPT} --uninstall"
     fi
 }
 
@@ -345,62 +774,215 @@ detect_proxmox() {
     return 1
 }
 
+detect_proxmox_type() {
+    if [[ -d "/etc/proxmox-backup" ]] || command -v proxmox-backup-manager &>/dev/null; then
+        echo "pbs"
+        return 0
+    fi
+    if [[ -d "/etc/pve" ]] || command -v pveversion &>/dev/null; then
+        echo "pve"
+        return 0
+    fi
+    echo ""
+    return 1
+}
+
+pulse_url_uses_plain_http() {
+    local url_lower
+    url_lower=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    [[ "$url_lower" =~ ^http:// ]]
+}
+
+auto_enable_insecure_for_plain_http_url() {
+    if [[ "$INSECURE" == "true" ]]; then
+        return 0
+    fi
+    if ! pulse_url_uses_plain_http "$PULSE_URL"; then
+        return 0
+    fi
+    INSECURE="true"
+    log_info "Plain HTTP Pulse URL detected; enabling insecure mode for installer downloads and persisted agent update checks."
+}
+
+build_exec_arg_items() {
+    local include_token="${1:-true}"
+
+    EXEC_ARG_ITEMS=(--url "$PULSE_URL" --interval "$INTERVAL")
+    if [[ "$include_token" == "true" && -n "$PULSE_TOKEN" ]]; then EXEC_ARG_ITEMS+=(--token "$PULSE_TOKEN"); fi
+    # Always pass enable-host flag since agent defaults to true
+    if [[ "$ENABLE_HOST" == "true" ]]; then
+        EXEC_ARG_ITEMS+=(--enable-host)
+    else
+        EXEC_ARG_ITEMS+=(--enable-host=false)
+    fi
+    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-docker); fi
+    # Pass explicit false when Docker was explicitly disabled (prevents auto-detection)
+    if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-docker=false); fi
+    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-kubernetes); fi
+    if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARG_ITEMS+=(--kubeconfig "$KUBECONFIG_PATH"); fi
+    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-proxmox); fi
+    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARG_ITEMS+=(--proxmox-type "$PROXMOX_TYPE"); fi
+    if [[ "$INSECURE" == "true" ]]; then EXEC_ARG_ITEMS+=(--insecure); fi
+    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
+    if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-pods); fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-deployments); fi
+    if [[ -n "$AGENT_ID" ]]; then EXEC_ARG_ITEMS+=(--agent-id "$AGENT_ID"); fi
+    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARG_ITEMS+=(--hostname "$HOSTNAME_OVERRIDE"); fi
+    if [[ -n "$STATE_DIR" ]]; then EXEC_ARG_ITEMS+=(--state-dir "$STATE_DIR"); fi
+    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
+    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
+        EXEC_ARG_ITEMS+=(--disk-exclude "$pattern")
+    done
+}
+
+join_exec_arg_items() {
+    local joined=""
+    local arg=""
+    local quoted=""
+
+    for arg in ${EXEC_ARG_ITEMS[@]+"${EXEC_ARG_ITEMS[@]}"}; do
+        printf -v quoted '%q' "$arg"
+        if [[ -n "$joined" ]]; then
+            joined="$joined "
+        fi
+        joined="${joined}${quoted}"
+    done
+
+    EXEC_ARGS="$joined"
+}
+
 # Build exec args string for use in service files
 # Returns via EXEC_ARGS variable
 build_exec_args() {
-    EXEC_ARGS="--url ${PULSE_URL} --token ${PULSE_TOKEN} --interval ${INTERVAL}"
-    # Always pass enable-host flag since agent defaults to true
-    if [[ "$ENABLE_HOST" == "true" ]]; then
-        EXEC_ARGS="$EXEC_ARGS --enable-host"
-    else
-        EXEC_ARGS="$EXEC_ARGS --enable-host=false"
-    fi
-    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
-    # Pass explicit false when Docker was explicitly disabled (prevents auto-detection)
-    if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker=false"; fi
-    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-kubernetes"; fi
-    if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARGS="$EXEC_ARGS --kubeconfig ${KUBECONFIG_PATH}"; fi
-    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
-    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
-    if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
-    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
-    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
-    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
-    if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
-    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
-    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
-    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
-        EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
-    done
+    build_exec_arg_items "true"
+    join_exec_arg_items
+}
+
+build_exec_args_without_token() {
+    build_exec_arg_items "false"
+    join_exec_arg_items
 }
 
 # Build exec args as array for direct execution (proper quoting)
 # Returns via EXEC_ARGS_ARRAY variable
 build_exec_args_array() {
-    EXEC_ARGS_ARRAY=(--url "$PULSE_URL" --token "$PULSE_TOKEN" --interval "$INTERVAL")
-    # Always pass enable-host flag since agent defaults to true
-    if [[ "$ENABLE_HOST" == "true" ]]; then
-        EXEC_ARGS_ARRAY+=(--enable-host)
-    else
-        EXEC_ARGS_ARRAY+=(--enable-host=false)
+    build_exec_arg_items "true"
+    EXEC_ARGS_ARRAY=("${EXEC_ARG_ITEMS[@]}")
+}
+
+write_connection_state_value() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+
+    if [[ -z "$value" ]]; then
+        return 0
     fi
-    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
-    # Pass explicit false when Docker was explicitly disabled (prevents auto-detection)
-    if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker=false); fi
-    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-kubernetes); fi
-    if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARGS_ARRAY+=(--kubeconfig "$KUBECONFIG_PATH"); fi
-    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
-    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
-    if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
-    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
-    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
-    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
-    if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
-    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS_ARRAY+=(--hostname "$HOSTNAME_OVERRIDE"); fi
-    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
-    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
-        EXEC_ARGS_ARRAY+=(--disk-exclude "$pattern")
+
+    printf "%s='%s'\n" "$key" "$value" >> "$file"
+}
+
+read_connection_state_value() {
+    local file="$1"
+    local key="$2"
+
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+
+    awk -F= -v key="$key" '
+        $1 == key {
+            value = substr($0, index($0, "=") + 1)
+            sub(/^'\''/, "", value)
+            sub(/'\''$/, "", value)
+            print value
+            exit
+        }
+    ' "$file" 2>/dev/null || true
+}
+
+recover_connection_state() {
+    local file="$1"
+
+    if [[ -z "$PULSE_URL" ]]; then
+        PULSE_URL=$(read_connection_state_value "$file" "PULSE_URL")
+    fi
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        PULSE_TOKEN=$(read_connection_state_value "$file" "PULSE_TOKEN")
+    fi
+    if [[ -z "$AGENT_ID" ]]; then
+        AGENT_ID=$(read_connection_state_value "$file" "PULSE_AGENT_ID")
+    fi
+    if [[ -z "$HOSTNAME_OVERRIDE" ]]; then
+        HOSTNAME_OVERRIDE=$(read_connection_state_value "$file" "PULSE_HOSTNAME")
+    fi
+    if [[ "$INSECURE" != "true" ]]; then
+        local saved_insecure=""
+        saved_insecure=$(read_connection_state_value "$file" "PULSE_INSECURE_SKIP_VERIFY")
+        if [[ "$saved_insecure" == "true" ]]; then
+            INSECURE="true"
+        fi
+    fi
+    if [[ -z "$CURL_CA_BUNDLE" ]]; then
+        CURL_CA_BUNDLE=$(read_connection_state_value "$file" "PULSE_CACERT")
+    fi
+}
+
+find_connection_state_file() {
+    local conn_env=""
+
+    for conn_env in /var/lib/pulse-agent/connection.env /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env"; do
+        if [[ -f "$conn_env" ]]; then
+            printf '%s\n' "$conn_env"
+            return 0
+        fi
     done
+
+    return 1
+}
+
+# Save install script and connection details for offline uninstall
+save_connection_info() {
+    local state_dir="$1"
+    local conn_env="${state_dir}/connection.env"
+    mkdir -p "$state_dir"
+    # Save connection details so uninstall can deregister without --url/--token.
+    # Single-quote values to prevent shell interpretation on read-back.
+    # PULSE_URL is validated as ^https?:// and PULSE_TOKEN, when present, as
+    # ^[a-fA-F0-9]+$, so neither can contain single quotes.
+    : > "$conn_env"
+    write_connection_state_value "$conn_env" "PULSE_URL" "$PULSE_URL"
+    write_connection_state_value "$conn_env" "PULSE_TOKEN" "$PULSE_TOKEN"
+    write_connection_state_value "$conn_env" "PULSE_AGENT_ID" "$AGENT_ID"
+    write_connection_state_value "$conn_env" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"
+    if [[ "$INSECURE" == "true" ]]; then
+        write_connection_state_value "$conn_env" "PULSE_INSECURE_SKIP_VERIFY" "true"
+    fi
+    write_connection_state_value "$conn_env" "PULSE_CACERT" "$CURL_CA_BUNDLE"
+    chmod 600 "$conn_env"
+    # Save a copy of this install script for offline uninstall.
+    # When run via "curl | bash", $0 is /dev/stdin — not a usable file.
+    # Try local copy first, then download a fresh copy from the server.
+    local saved=false
+    if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" && "$0" != "-bash" ]]; then
+        if cp "$0" "${state_dir}/install.sh" 2>/dev/null; then
+            saved=true
+        fi
+    fi
+    if [[ "$saved" != "true" ]]; then
+        # Download from the server (we know it's reachable — we just installed from it)
+        local dl_args=(-fsSL --connect-timeout 10 --max-time 30)
+        if [[ "$INSECURE" == "true" ]]; then dl_args+=(-k); fi
+        if [[ -n "$CURL_CA_BUNDLE" ]]; then dl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
+        curl "${dl_args[@]}" -o "${state_dir}/install.sh" "${PULSE_URL}/install.sh" 2>/dev/null || true
+    fi
+    if [[ -f "${state_dir}/install.sh" ]]; then
+        chmod +x "${state_dir}/install.sh"
+        SAVED_INSTALL_SCRIPT="${state_dir}/install.sh"
+    else
+        SAVED_INSTALL_SCRIPT=""
+    fi
 }
 
 # --- Parse Arguments ---
@@ -423,16 +1005,41 @@ while [[ $# -gt 0 ]]; do
         --insecure) INSECURE="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --enroll) ENROLL="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
+        --state-dir) STATE_DIR="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
-        --env) CUSTOM_ENVS+=("$2"); shift 2 ;;
+        --non-interactive) NON_INTERACTIVE="true"; shift ;;
+        --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --pulse-url) PULSE_URL="$2"; shift 2 ;;
+        --output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+# Read token from file if --token-file was provided
+if [[ -n "$TOKEN_FILE_PATH" ]]; then
+    if [[ ! -f "$TOKEN_FILE_PATH" ]]; then
+        fail "Token file not found: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+    fi
+    PULSE_TOKEN=$(cat "$TOKEN_FILE_PATH")
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        fail "Token file is empty: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
+    fi
+    # Clean up token file after reading in non-interactive mode (deploy bootstrap tokens are one-time use)
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        rm -f "$TOKEN_FILE_PATH" 2>/dev/null || true
+    fi
+fi
+
+if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs" ]]; then
+    fail "Invalid --proxmox-type value: ${PROXMOX_TYPE} (expected 'pve' or 'pbs')"
+fi
 
 # --- Check Root ---
 if [[ $EUID -ne 0 ]]; then
@@ -464,73 +1071,6 @@ if [[ -n "$CURL_CA_BUNDLE" ]]; then
         fail "--cacert path does not exist: ${CURL_CA_BUNDLE}"
     fi
 fi
-
-# --- Validate Custom Environment Variables ---
-for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
-    if [[ "$env_pair" != *"="* ]]; then
-        fail "--env requires KEY=VALUE format, got: ${env_pair}"
-    fi
-    env_key="${env_pair%%=*}"
-    env_val="${env_pair#*=}"
-    # Validate key is a valid POSIX environment variable name
-    if ! [[ "$env_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-        fail "--env key must be a valid env var name (letters, digits, underscore): ${env_key}"
-    fi
-    # Reject values with characters that could cause injection in service files
-    # (shell interpolation, sed metacharacters, XML special chars)
-    if [[ "$env_val" =~ [\'\"\$\`\\\|\&\<\>] ]] || [[ "$env_val" == *$'\n'* ]]; then
-        fail "--env value for ${env_key} contains unsafe characters (quotes, \$, backtick, backslash, |, &, <, >, or newline are not allowed)"
-    fi
-done
-
-# --- Build Combined Environment Strings ---
-# Pre-compute environment variable strings for all service file formats.
-# Includes SSL_CERT_FILE (from --cacert) and custom vars (from --env).
-SYSTEMD_ENV_LINES=""
-SHELL_EXPORT_LINES=""
-PLIST_ENV_ENTRIES=""
-
-if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}\""
-    SHELL_EXPORT_LINES+=$'\n'"export ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
-    PLIST_ENV_ENTRIES+="
-        <key>${SSL_CERT_ENV_NAME}</key>
-        <string>${SSL_CERT_ENV_VALUE}</string>"
-fi
-for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
-    env_key="${env_pair%%=*}"
-    env_val="${env_pair#*=}"
-    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${env_key}=${env_val}\""
-    SHELL_EXPORT_LINES+=$'\n'"export ${env_key}='${env_val}'"
-    PLIST_ENV_ENTRIES+="
-        <key>${env_key}</key>
-        <string>${env_val}</string>"
-    log_info "Custom environment: ${env_key}=${env_val}"
-done
-
-# Wrap plist entries in EnvironmentVariables dict if any exist
-PLIST_ENV_BLOCK=""
-if [[ -n "$PLIST_ENV_ENTRIES" ]]; then
-    PLIST_ENV_BLOCK="
-    <key>EnvironmentVariables</key>
-    <dict>${PLIST_ENV_ENTRIES}
-    </dict>"
-fi
-
-# SED_EXPORT_LINES: for sed placeholder replacement in rc.d/init.d templates.
-# No leading newline; each export on its own line.
-SED_EXPORT_LINES=""
-if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-    SED_EXPORT_LINES+="export ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
-fi
-for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
-    env_key="${env_pair%%=*}"
-    env_val="${env_pair#*=}"
-    if [[ -n "$SED_EXPORT_LINES" ]]; then
-        SED_EXPORT_LINES+=$'\n'"    "
-    fi
-    SED_EXPORT_LINES+="export ${env_key}='${env_val}'"
-done
 
 # --- Platform Auto-Detection ---
 # Only auto-detect if flags weren't explicitly set
@@ -566,75 +1106,112 @@ if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
     fi
 fi
 
+if [[ "$ENABLE_PROXMOX" == "true" && -z "$PROXMOX_TYPE" ]]; then
+    auto_type="$(detect_proxmox_type || true)"
+    if [[ -n "$auto_type" ]]; then
+        PROXMOX_TYPE="$auto_type"
+        log_info "Proxmox mode detected: ${PROXMOX_TYPE}"
+    fi
+fi
+
 # Summary of what will be monitored
 log_info "Monitoring configuration:"
-log_info "  Host metrics: $ENABLE_HOST"
+log_info "  Agent metrics: $ENABLE_HOST"
 log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
+if [[ "$ENABLE_PROXMOX" == "true" && -n "$PROXMOX_TYPE" ]]; then
+    log_info "  Proxmox type: $PROXMOX_TYPE"
+fi
 
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
 
+    # Recover connection details from the canonical installer-owned state artifact
+    # if command line input is only partial. Read keys explicitly instead of
+    # sourcing the file so uninstall cannot execute persisted shell content.
+    if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]; then
+        local conn_env=""
+        conn_env=$(find_connection_state_file || true)
+        if [[ -n "$conn_env" ]]; then
+            log_info "Recovering connection details from ${conn_env}..."
+            recover_connection_state "$conn_env"
+        fi
+    fi
+
     # Try to notify the Pulse server about uninstallation if we have connection details
-    # This ensures the host record is removed and any linked PVE nodes are updated immediately.
-    if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
-        # Try to recover agent ID if not provided
+    # This ensures the agent record is removed and any linked PVE nodes are updated immediately.
+    if [[ -n "$PULSE_URL" ]]; then
+        # Try to recover agent ID if not provided.
+        # Priority: agent-id file (canonical) > hostname API lookup (fallback)
         if [[ -z "$AGENT_ID" ]]; then
-            if [[ -f /var/lib/pulse-agent/agent-id ]]; then
-                AGENT_ID=$(cat /var/lib/pulse-agent/agent-id)
-            elif [[ -f "$TRUENAS_STATE_DIR/agent-id" ]]; then
-                AGENT_ID=$(cat "$TRUENAS_STATE_DIR/agent-id")
+            # Primary: canonical agent-id file
+            for aid_path in /var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id"; do
+                if [[ -f "$aid_path" ]]; then
+                    AGENT_ID=$(cat "$aid_path")
+                    log_info "Recovered agent ID from ${aid_path}"
+                    break
+                fi
+            done
+        fi
+        if [[ -z "$AGENT_ID" ]]; then
+            # API fallback: prefer explicit hostname continuity from the caller,
+            # otherwise fall back to the local hostname.
+            LOOKUP_HOSTNAME="$HOSTNAME_OVERRIDE"
+            if [[ -z "$LOOKUP_HOSTNAME" ]]; then
+                LOOKUP_HOSTNAME=$(hostname 2>/dev/null || true)
+            fi
+            if [[ -n "$LOOKUP_HOSTNAME" ]]; then
+                LOOKUP_ARGS=(-fsSL --connect-timeout 5)
+                if [[ -n "$PULSE_TOKEN" ]]; then LOOKUP_ARGS+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
+                if [[ "$INSECURE" == "true" ]]; then LOOKUP_ARGS+=(-k); fi
+                if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+                LOOKUP_HOSTNAME_ESCAPED=$(url_encode "$LOOKUP_HOSTNAME")
+                LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME_ESCAPED}" 2>/dev/null || true)
+                if [[ -n "$LOOKUP_RESP" ]]; then
+                    # Extract .agent.id from JSON (portable, no jq dependency)
+                    AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
+                    if [[ -n "$AGENT_ID" ]]; then
+                        log_info "Recovered agent ID via server lookup: ${AGENT_ID}"
+                    fi
+                fi
             fi
         fi
 
         if [[ -n "$AGENT_ID" ]]; then
             log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
-            CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
+            CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json")
+            if [[ -n "$PULSE_TOKEN" ]]; then CURL_ARGS+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
             if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
             if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-            
+
             # Send unregistration request (ignore errors as we are uninstalling anyway)
-            curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
+            curl "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
         fi
     fi
 
-    # Kill any running agent processes first
-    pkill -f "pulse-agent" 2>/dev/null || true
-    pkill -f "pulse-host-agent" 2>/dev/null || true
-    pkill -f "pulse-docker-agent" 2>/dev/null || true
+    # Kill any running agent processes first.
+    # Use -x (exact process name match) to avoid killing THIS uninstall script,
+    # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
+    pkill -x "pulse-agent" 2>/dev/null || true
+    # Kill Unraid wrapper scripts — both current (start-pulse-agent.sh) and
+    # legacy naming conventions.
+    pkill -f "start-pulse-agent.sh" 2>/dev/null || true
     sleep 1
 
     # Systemd - unified agent
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-        systemctl disable "${AGENT_NAME}" 2>/dev/null || true
-        rm -f "/etc/systemd/system/${AGENT_NAME}.service"
-        
-        # Legacy agents cleanup
-        systemctl stop pulse-host-agent 2>/dev/null || true
-        systemctl disable pulse-host-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-host-agent.service
-        
-        systemctl stop pulse-docker-agent 2>/dev/null || true
-        systemctl disable pulse-docker-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-docker-agent.service
-        
-        systemctl daemon-reload 2>/dev/null || true
+        teardown_systemd_agent_service
     fi
 
     # Remove legacy binaries
-    rm -f /usr/local/bin/pulse-host-agent
-    rm -f /usr/local/bin/pulse-docker-agent
 
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
     rm -rf /var/lib/pulse-agent
 
     # Remove log files
     rm -f /var/log/pulse-agent.log
-    rm -f /var/log/pulse-host-agent.log
-    rm -f /var/log/pulse-docker-agent.log
 
     # Launchd (macOS)
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -643,21 +1220,13 @@ if [[ "$UNINSTALL" == "true" ]]; then
         launchctl unload "$PLIST" 2>/dev/null || true
         rm -f "$PLIST"
         
-        # Legacy agents
-        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
-        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
     fi
 
     # Synology DSM (handles both DSM 7+ systemd and DSM 6.x upstart)
     if [[ -d /usr/syno ]]; then
         # DSM 7+ uses systemd
         if [[ -f "/etc/systemd/system/${AGENT_NAME}.service" ]]; then
-            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-            systemctl disable "${AGENT_NAME}" 2>/dev/null || true
-            rm -f "/etc/systemd/system/${AGENT_NAME}.service"
-            systemctl daemon-reload 2>/dev/null || true
+            teardown_systemd_agent_service
         fi
         # DSM 6.x uses upstart
         if [[ -f "/etc/init/${AGENT_NAME}.conf" ]]; then
@@ -668,24 +1237,20 @@ if [[ "$UNINSTALL" == "true" ]]; then
 
     # Unraid
     if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
-        log_info "Removing Unraid installation (including legacy agents)..."
-        # Stop running agents (unified + legacy)
-        pkill -f "pulse-agent" 2>/dev/null || true
-        pkill -f "pulse-host-agent" 2>/dev/null || true
-        pkill -f "pulse-docker-agent" 2>/dev/null || true
+        log_info "Removing Unraid installation..."
+        # Stop running agents and their wrapper scripts.
+        pkill -x "pulse-agent" 2>/dev/null || true
+        pkill -f "start-pulse-agent.sh" 2>/dev/null || true
         sleep 1
         
         # Remove from /boot/config/go - all pulse-related entries
         GO_SCRIPT="/boot/config/go"
         if [[ -f "$GO_SCRIPT" ]]; then
-            # Remove unified agent entries
-            sed -i '/# Pulse Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            # Remove unified agent entries (line-by-line, not range-based,
+            # to avoid consuming adjacent non-pulse entries when no trailing
+            # blank line separates them).
+            sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
             sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-            # Remove legacy agent entries
-            sed -i '/# Pulse Host Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/# Pulse Docker Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/pulse-host-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/pulse-docker-agent/d' "$GO_SCRIPT" 2>/dev/null || true
         fi
         
         # Remove installation directories
@@ -694,8 +1259,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
         
         # Remove binaries from RAM disk
         rm -f "${INSTALL_DIR}/${BINARY_NAME}"
-        rm -f /usr/local/bin/pulse-host-agent
-        rm -f /usr/local/bin/pulse-docker-agent
         
         # Remove log directory
         rm -rf /var/log/pulse
@@ -705,14 +1268,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
     if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; then
         if [[ "$(uname -s)" == "Linux" ]]; then
             log_info "Removing TrueNAS SCALE installation..."
-            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-            systemctl disable "${AGENT_NAME}" 2>/dev/null || true
-            rm -f "/etc/systemd/system/${AGENT_NAME}.service"
-            systemctl daemon-reload 2>/dev/null || true
+            teardown_systemd_agent_service
         elif [[ "$(uname -s)" == "FreeBSD" ]]; then
             log_info "Removing TrueNAS CORE installation..."
-            service "${AGENT_NAME}" stop 2>/dev/null || true
-            rm -f "/usr/local/etc/rc.d/${AGENT_NAME}"
+            teardown_service_command_agent "/usr/local/etc/rc.d/${AGENT_NAME}"
         fi
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
@@ -725,69 +1284,14 @@ if [[ "$UNINSTALL" == "true" ]]; then
         rm -rf "$TRUENAS_STATE_DIR"
     fi
 
-    # QNAP QTS/QuTS hero
-    if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
-        log_info "Removing QNAP installation..."
-        pkill -f "pulse-agent" 2>/dev/null || true
-        sleep 1
-
-        # Remove autorun.sh entry
-        if [[ -x /etc/init.d/init_disk.sh ]]; then
-            if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
-                AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-                if [[ -f "$AUTORUN_PATH" ]]; then
-                    sed -i '/# Pulse Agent/,/^$/d' "$AUTORUN_PATH" 2>/dev/null || true
-                    sed -i '/pulse-agent/d' "$AUTORUN_PATH" 2>/dev/null || true
-                fi
-            fi
-            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-        fi
-
-        # Remove persistent state directory
-        # Try getcfg first (same detection as install), then hardcoded fallbacks
-        QNAP_UNINSTALL_VOL=""
-        if command -v getcfg >/dev/null 2>&1; then
-            QNAP_UNINSTALL_VOL=$(getcfg SHARE_DEF defVolMP -f /etc/config/def_share.info 2>/dev/null || echo "")
-        fi
-        if [[ -n "$QNAP_UNINSTALL_VOL" ]] && [[ -d "${QNAP_UNINSTALL_VOL}/.pulse-agent" ]]; then
-            rm -rf "${QNAP_UNINSTALL_VOL}/.pulse-agent"
-        fi
-        # Also clean hardcoded fallback locations
-        for vol in /share/CACHEDEV1_DATA /share/CACHEDEV2_DATA /share/MD0_DATA; do
-            rm -rf "${vol}/.pulse-agent" 2>/dev/null || true
-        done
-
-        rm -f "${INSTALL_DIR}/${BINARY_NAME}"
-        # Also clean the runtime copy the wrapper puts in /usr/local/bin at boot
-        rm -f "/usr/local/bin/${BINARY_NAME}"
-        rm -f "/etc/init.d/${AGENT_NAME}"
-        rm -f "/var/run/${AGENT_NAME}.pid"
-    fi
-
     # OpenRC (Alpine, Gentoo, Artix, etc.)
     if command -v rc-service >/dev/null 2>&1; then
-        rc-service "${AGENT_NAME}" stop 2>/dev/null || true
-        rc-update del "${AGENT_NAME}" default 2>/dev/null || true
-        rm -f "/etc/init.d/${AGENT_NAME}"
+        teardown_openrc_agent_service
     fi
 
     # SysV init (legacy systems like Asustor, older Debian/RHEL, etc.)
     if [[ -f "/etc/init.d/${AGENT_NAME}" ]]; then
-        "/etc/init.d/${AGENT_NAME}" stop 2>/dev/null || true
-        # Remove using available tools
-        if command -v update-rc.d >/dev/null 2>&1; then
-            update-rc.d -f "${AGENT_NAME}" remove >/dev/null 2>&1 || true
-        elif command -v chkconfig >/dev/null 2>&1; then
-            chkconfig "${AGENT_NAME}" off >/dev/null 2>&1 || true
-            chkconfig --del "${AGENT_NAME}" >/dev/null 2>&1 || true
-        fi
-        # Remove rc.d symlinks manually (in case tools weren't available)
-        for RL in 0 1 2 3 4 5 6; do
-            rm -f "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
-            rm -f "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
-        done
-        rm -f "/etc/init.d/${AGENT_NAME}"
-        rm -f "/var/run/${AGENT_NAME}.pid"
+        teardown_sysv_agent_service "/etc/init.d/${AGENT_NAME}"
     fi
 
     rm -f "${INSTALL_DIR}/${BINARY_NAME}"
@@ -796,10 +1300,9 @@ if [[ "$UNINSTALL" == "true" ]]; then
 fi
 
 # --- Validation ---
-if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
-    fail "Missing required arguments: --url and --token"
+if [[ -z "$PULSE_URL" ]]; then
+    fail "Missing required argument: --url (or --pulse-url)" "$EXIT_MISSING_ARGS"
 fi
-
 # Validate URL format (basic check) - case-insensitive for http:// or https://
 # Normalize to lowercase for the check
 url_lower=$(echo "$PULSE_URL" | tr '[:upper:]' '[:lower:]')
@@ -807,8 +1310,10 @@ if [[ ! "$url_lower" =~ ^https?:// ]]; then
     fail "Invalid URL format. Must start with http:// or https://"
 fi
 
-# Validate token format (should be hex string, typically 64 chars)
-if [[ ! "$PULSE_TOKEN" =~ ^[a-fA-F0-9]+$ ]]; then
+auto_enable_insecure_for_plain_http_url
+
+# Validate token format when present (should be hex string, typically 64 chars)
+if [[ -n "$PULSE_TOKEN" && ! "$PULSE_TOKEN" =~ ^[a-fA-F0-9]+$ ]]; then
     fail "Invalid token format. Token should be a hexadecimal string."
 fi
 
@@ -847,28 +1352,7 @@ is_install_dir_writable() {
     return 1
 }
 
-# QNAP QTS/QuTS hero: /usr/local/bin is on a tiny RAM disk that may not have room
-# for the agent binary. Detect early and redirect INSTALL_DIR to the persistent
-# data volume so the download/mv step never touches the RAM disk.
-if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
-    QNAP=true
-    if command -v getcfg >/dev/null 2>&1; then
-        QNAP_VOL=$(getcfg SHARE_DEF defVolMP -f /etc/config/def_share.info 2>/dev/null || echo "")
-    fi
-    if [[ -z "$QNAP_VOL" ]]; then
-        for candidate in /share/CACHEDEV1_DATA /share/CACHEDEV2_DATA /share/MD0_DATA; do
-            if [[ -d "$candidate" ]] && [[ -w "$candidate" ]]; then
-                QNAP_VOL="$candidate"
-                break
-            fi
-        done
-    fi
-    if [[ -z "$QNAP_VOL" ]]; then
-        fail "Could not find a writable QNAP data volume. Is a storage volume configured?"
-    fi
-    INSTALL_DIR="${QNAP_VOL}/.pulse-agent"
-    log_info "Detected QNAP QTS/QuTS hero. Using ${INSTALL_DIR} for installation."
-elif [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
+if [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
     TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
@@ -888,6 +1372,65 @@ elif [[ "$(uname -s)" == "FreeBSD" ]] && [[ -d /data ]] && ! is_install_dir_writ
     log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
 fi
 
+# --- Preflight-Only Mode ---
+if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
+    json_event "preflight" "checking" "Running preflight checks"
+
+    # Check 1: Architecture
+    PF_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    PF_ARCH=$(uname -m)
+    case "$PF_ARCH" in
+        x86_64|amd64) PF_ARCH="amd64" ;;
+        aarch64|arm64) PF_ARCH="arm64" ;;
+        armv7l|armhf) PF_ARCH="armv7" ;;
+        armv6l) PF_ARCH="armv6" ;;
+        i386|i686) PF_ARCH="386" ;;
+        *) fail "Unsupported architecture: $PF_ARCH" "$EXIT_UNSUPPORTED_ARCH" ;;
+    esac
+    json_event "preflight" "arch_ok" "Architecture: ${PF_OS}-${PF_ARCH}"
+
+    # Check 2: Existing agent
+    AGENT_STATUS="not_installed"
+    if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
+        AGENT_STATUS="already_installed"
+    elif command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+        AGENT_STATUS="already_installed"
+    fi
+    json_event "preflight" "$AGENT_STATUS" "Agent status: ${AGENT_STATUS}"
+
+    # Check 3: Pulse URL reachability
+    PREFLIGHT_EXIT="$EXIT_OK"
+    if [[ -n "$PULSE_URL" ]]; then
+        CURL_TEST_ARGS=(-sf --connect-timeout 5 -o /dev/null)
+        if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
+        if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+        if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
+            json_event "preflight" "pulse_reachable" "Pulse URL reachable"
+        else
+            json_event "preflight" "pulse_unreachable" "Pulse URL not reachable" "$EXIT_PREFLIGHT_FAILED"
+            PREFLIGHT_EXIT="$EXIT_PREFLIGHT_FAILED"
+        fi
+    fi
+
+    # Output summary
+    if [[ "$PREFLIGHT_EXIT" -eq 0 ]]; then
+        if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+            printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
+                "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
+        else
+            log_info "Preflight checks passed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+        fi
+    else
+        if [[ "$OUTPUT_FORMAT" == "json" ]]; then
+            printf '{"phase":"preflight_complete","code":"failed","message":"Preflight checks failed","exitCode":%d,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
+                "$PREFLIGHT_EXIT" "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
+        else
+            log_error "Preflight checks failed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+        fi
+    fi
+    exit "$PREFLIGHT_EXIT"
+fi
+
 # --- Download ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -898,7 +1441,7 @@ case "$ARCH" in
     armv7l|armhf) ARCH="armv7" ;;
     armv6l) ARCH="armv6" ;;
     i386|i686) ARCH="386" ;;
-    *) fail "Unsupported architecture: $ARCH" ;;
+    *) fail "Unsupported architecture: $ARCH" "$EXIT_UNSUPPORTED_ARCH" ;;
 esac
 
 # Construct arch param in format expected by download endpoint (e.g., linux-amd64)
@@ -917,25 +1460,47 @@ if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
-    fail "Download failed. Check URL and connectivity."
+    fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
 fi
 
 # Verify downloaded binary
 if [[ ! -s "$TMP_BIN" ]]; then
-    fail "Downloaded file is empty."
+    fail "Downloaded file is empty." "$EXIT_DOWNLOAD_FAILED"
 fi
 
 # Check if it's a valid executable (ELF for Linux, Mach-O for macOS)
 if [[ "$OS" == "linux" ]]; then
     if ! head -c 4 "$TMP_BIN" | grep -q "ELF"; then
-        fail "Downloaded file is not a valid Linux executable."
+        fail "Downloaded file is not a valid Linux executable." "$EXIT_DOWNLOAD_FAILED"
     fi
 elif [[ "$OS" == "darwin" ]]; then
     # Mach-O magic: feedface (32-bit) or feedfacf (64-bit) or cafebabe (universal)
     MAGIC=$(xxd -p -l 4 "$TMP_BIN" 2>/dev/null || head -c 4 "$TMP_BIN" | od -A n -t x1 | tr -d ' ')
     if [[ ! "$MAGIC" =~ ^(cffaedfe|cefaedfe|cafebabe|feedface|feedfacf) ]]; then
-        fail "Downloaded file is not a valid macOS executable."
+        fail "Downloaded file is not a valid macOS executable." "$EXIT_DOWNLOAD_FAILED"
     fi
+fi
+
+# Checksum verification (when header is available)
+CHECKSUM_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
+TMP_HEADERS=$(mktemp)
+TMP_FILES+=("$TMP_HEADERS")
+HEADER_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30 -D "$TMP_HEADERS" -o /dev/null)
+if [[ "$INSECURE" == "true" ]]; then HEADER_CURL_ARGS+=(-k); fi
+if [[ -n "$CURL_CA_BUNDLE" ]]; then HEADER_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+EXPECTED_SHA=""
+if curl "${HEADER_CURL_ARGS[@]}" "$CHECKSUM_URL" 2>/dev/null; then
+    EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+fi
+
+if [[ -n "$EXPECTED_SHA" ]]; then
+    ACTUAL_SHA=$(sha256sum "$TMP_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_BIN" 2>/dev/null | awk '{print $1}')
+    if [[ -n "$ACTUAL_SHA" && "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+        fail "Checksum verification failed (expected: ${EXPECTED_SHA:0:16}..., got: ${ACTUAL_SHA:0:16}...)" "$EXIT_CHECKSUM_FAILED"
+    fi
+    json_event "download" "checksum_ok" "Binary checksum verified"
+    log_info "Binary checksum verified"
 fi
 
 chmod +x "$TMP_BIN"
@@ -945,15 +1510,8 @@ chmod +x "$TMP_BIN"
 EXISTING_VERSION=""
 UPGRADE_MODE=false
 
-# On QNAP, previous installs may have the binary in /usr/local/bin (old path)
-# while INSTALL_DIR now points to the persistent data volume.
-UPGRADE_CHECK_BIN="${INSTALL_DIR}/${BINARY_NAME}"
-if [[ "$QNAP" == true ]] && [[ ! -x "$UPGRADE_CHECK_BIN" ]] && [[ -x "/usr/local/bin/${BINARY_NAME}" ]]; then
-    UPGRADE_CHECK_BIN="/usr/local/bin/${BINARY_NAME}"
-fi
-
-if [[ -x "$UPGRADE_CHECK_BIN" ]]; then
-    EXISTING_VERSION=$("$UPGRADE_CHECK_BIN" --version 2>/dev/null | head -1 || echo "unknown")
+if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
+    EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
     NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
     
     if [[ -n "$EXISTING_VERSION" && "$EXISTING_VERSION" != "unknown" ]]; then
@@ -961,34 +1519,12 @@ if [[ -x "$UPGRADE_CHECK_BIN" ]]; then
         log_info "Existing installation detected: $EXISTING_VERSION"
         log_info "Upgrading to: $NEW_VERSION"
         
-        # Stop the existing agent service gracefully
-        if command -v systemctl >/dev/null 2>&1; then
-            if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
-                log_info "Stopping existing ${AGENT_NAME} service..."
-                systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-                sleep 2
-            fi
-        elif command -v rc-service >/dev/null 2>&1; then
-            if rc-service "${AGENT_NAME}" status >/dev/null 2>&1; then
-                log_info "Stopping existing ${AGENT_NAME} service..."
-                rc-service "${AGENT_NAME}" stop 2>/dev/null || true
-                sleep 2
-            fi
-        elif command -v service >/dev/null 2>&1; then
-            if service "${AGENT_NAME}" status >/dev/null 2>&1; then
-                log_info "Stopping existing ${AGENT_NAME} service..."
-                service "${AGENT_NAME}" stop 2>/dev/null || true
-                sleep 2
-            fi
-        fi
+        # Stop the existing agent service gracefully through the installer-owned helper.
+        stop_existing_agent_service || true
         
         # Also kill any running process in case it was started manually
-        if [[ "$QNAP" == true ]]; then
-            stop_qnap_agents
-        else
-            pkill -f "^${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
-            sleep 1
-        fi
+        pkill -f "^${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        sleep 1
     fi
 elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "${AGENT_NAME}" 2>/dev/null; then
     # Service exists but binary is missing - reinstall scenario
@@ -1006,58 +1542,11 @@ if [[ "$UPGRADE_MODE" == "true" ]]; then
     log_info "Binary upgraded successfully. Updating service configuration..."
 fi
 
-# --- Legacy Cleanup ---
-# Remove old agents if they exist to prevent conflicts
-# This is critical because legacy agents use the same system ID and will cause
-# connection conflicts (rapid connect/disconnect cycles) with the unified agent.
-log_info "Checking for legacy agents..."
-
-# Kill any running legacy agent processes first (even if started manually)
-# This prevents WebSocket connection conflicts during installation
-pkill -f "pulse-host-agent" 2>/dev/null || true
-pkill -f "pulse-docker-agent" 2>/dev/null || true
-sleep 1
-
-# Legacy Host Agent - systemd cleanup
-if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet pulse-host-agent 2>/dev/null || systemctl is-enabled --quiet pulse-host-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-host-agent.service ]]; then
-        log_warn "Removing legacy pulse-host-agent..."
-        systemctl stop pulse-host-agent 2>/dev/null || true
-        systemctl disable pulse-host-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-host-agent.service
-        rm -f /usr/local/bin/pulse-host-agent
-    fi
-    if systemctl is-active --quiet pulse-docker-agent 2>/dev/null || systemctl is-enabled --quiet pulse-docker-agent 2>/dev/null || [[ -f /etc/systemd/system/pulse-docker-agent.service ]]; then
-        log_warn "Removing legacy pulse-docker-agent..."
-        systemctl stop pulse-docker-agent 2>/dev/null || true
-        systemctl disable pulse-docker-agent 2>/dev/null || true
-        rm -f /etc/systemd/system/pulse-docker-agent.service
-        rm -f /usr/local/bin/pulse-docker-agent
-    fi
-    systemctl daemon-reload 2>/dev/null || true
-fi
-
-# Legacy macOS
-if [[ "$OS" == "darwin" ]]; then
-    if launchctl list | grep -q "com.pulse.host-agent"; then
-        log_warn "Removing legacy com.pulse.host-agent..."
-        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
-        rm -f /usr/local/bin/pulse-host-agent
-    fi
-    if launchctl list | grep -q "com.pulse.docker-agent"; then
-        log_warn "Removing legacy com.pulse.docker-agent..."
-        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
-        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
-        rm -f /usr/local/bin/pulse-docker-agent
-    fi
-fi
-
 # --- Service Installation ---
 
-# If Proxmox mode is enabled on a FRESH install, clear state files for fresh registration.
-# On upgrades, preserve state to avoid creating duplicate PVE entries (#1245).
-if [[ "$ENABLE_PROXMOX" == "true" && "$UPGRADE_MODE" != "true" ]]; then
+# If Proxmox mode is enabled, clear the state files to ensure fresh registration
+# This allows re-installation to re-create the Proxmox API tokens
+if [[ "$ENABLE_PROXMOX" == "true" ]]; then
     log_info "Clearing Proxmox state for fresh registration..."
     rm -f /var/lib/pulse-agent/proxmox-registered 2>/dev/null || true
     rm -f /var/lib/pulse-agent/proxmox-pve-registered 2>/dev/null || true
@@ -1073,10 +1562,13 @@ if [[ "$OS" == "darwin" ]]; then
     PLIST_ARGS="        <string>${INSTALL_DIR}/${BINARY_NAME}</string>
         <string>--url</string>
         <string>${PULSE_URL}</string>
-        <string>--token</string>
-        <string>${PULSE_TOKEN}</string>
         <string>--interval</string>
         <string>${INTERVAL}</string>"
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--token</string>
+        <string>${PULSE_TOKEN}</string>"
+    fi
 
     # Always pass enable-host flag since agent defaults to true
     if [[ "$ENABLE_HOST" == "true" ]]; then
@@ -1099,6 +1591,14 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--kubeconfig</string>
         <string>${KUBECONFIG_PATH}</string>"
     fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--kube-include-all-pods</string>"
+    fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--kube-include-all-deployments</string>"
+    fi
     if [[ "$INSECURE" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
@@ -1107,10 +1607,19 @@ if [[ "$OS" == "darwin" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--enable-commands</string>"
     fi
+    if [[ "$ENROLL" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enroll</string>"
+    fi
     if [[ -n "$AGENT_ID" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--agent-id</string>
         <string>${AGENT_ID}</string>"
+    fi
+    if [[ -n "$STATE_DIR" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--state-dir</string>
+        <string>${STATE_DIR}</string>"
     fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
@@ -1118,6 +1627,16 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--disk-exclude</string>
         <string>${pattern}</string>"
     done
+
+    PLIST_ENV=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        PLIST_ENV="
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>${SSL_CERT_ENV_NAME}</key>
+        <string>${SSL_CERT_ENV_VALUE}</string>
+    </dict>"
+    fi
 
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1129,7 +1648,7 @@ if [[ "$OS" == "darwin" ]]; then
     <key>ProgramArguments</key>
     <array>
 ${PLIST_ARGS}
-    </array>${PLIST_ENV_BLOCK}
+    </array>${PLIST_ENV}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -1144,11 +1663,7 @@ EOF
     chmod 644 "$PLIST"
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load -w "$PLIST"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
-    fi
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -1167,37 +1682,17 @@ if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
         UNIT="/etc/systemd/system/${AGENT_NAME}.service"
         log_info "Configuring systemd service at $UNIT (DSM 7+)..."
 
-        cat > "$UNIT" <<EOF
-[Unit]
-Description=Pulse Unified Agent
-After=network.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
-Restart=always
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-        systemctl daemon-reload
-        systemctl enable "${AGENT_NAME}"
-        systemctl restart "${AGENT_NAME}"
+        render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network.target" "" "" ""
+        restart_systemd_agent_service
     else
         # DSM 6.x uses upstart
         CONF="/etc/init/${AGENT_NAME}.conf"
         log_info "Configuring Upstart service at $CONF (DSM 6.x)..."
 
-        # Build upstart env lines (env KEY=VALUE format)
         UPSTART_ENV=""
         if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            UPSTART_ENV+=$'\n'"env ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
+            UPSTART_ENV=$'\n'"env ${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
         fi
-        for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
-            UPSTART_ENV+=$'\n'"env ${env_pair%%=*}='${env_pair#*=}'"
-        done
 
         cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
@@ -1215,11 +1710,7 @@ EOF
         initctl start "${AGENT_NAME}"
     fi
 
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
-    fi
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -1235,6 +1726,7 @@ if [[ -f /etc/unraid-version ]]; then
     RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
     GO_SCRIPT="/boot/config/go"
 
+    STATE_DIR="$UNRAID_STORAGE_DIR"
     mkdir -p "$UNRAID_STORAGE_DIR"
 
     # Copy binary to persistent storage (for survival across reboots)
@@ -1248,20 +1740,19 @@ if [[ -f /etc/unraid-version ]]; then
     build_exec_args
     build_exec_args_array
 
-    # Kill any existing pulse agents (legacy or current)
+    # Kill any existing pulse agents.
     log_info "Stopping any existing pulse agents..."
     # Use process name matching to avoid killing unrelated processes
     pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
-    pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
-    pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
     sleep 2
-
-    # Clean up legacy binaries from RAM disk
-    rm -f /usr/local/bin/pulse-host-agent 2>/dev/null || true
-    rm -f /usr/local/bin/pulse-docker-agent 2>/dev/null || true
 
     # Create a wrapper script that will be called from /boot/config/go
     # This script copies from persistent storage to RAM disk on boot, then starts the agent
+    EXPORT_SSL_CERT_FILE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        EXPORT_SSL_CERT_FILE=$'\n'"export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+
     WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
     cat > "$WRAPPER_SCRIPT" <<EOF
 #!/bin/bash
@@ -1271,13 +1762,11 @@ if [[ -f /etc/unraid-version ]]; then
 
 # Kill any existing pulse-agent processes
 pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
-pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
-pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
 sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)
 cp "${UNRAID_STORED_BINARY}" "${RUNTIME_BINARY}"
-chmod +x "${RUNTIME_BINARY}"${SHELL_EXPORT_LINES}
+chmod +x "${RUNTIME_BINARY}"${EXPORT_SSL_CERT_FILE}
 
 # Watchdog loop: restart agent if it exits
 # Uses exponential backoff to prevent rapid restart loops
@@ -1304,8 +1793,8 @@ EOF
     # Add to /boot/config/go if not already present
     GO_MARKER="# Pulse Agent"
     if [[ -f "$GO_SCRIPT" ]]; then
-        # Remove any existing Pulse agent entries
-        sed -i "/${GO_MARKER}/,/^$/d" "$GO_SCRIPT" 2>/dev/null || true
+        # Remove any existing Pulse agent entries (line-by-line, not range-based)
+        sed -i "/^${GO_MARKER}$/d" "$GO_SCRIPT" 2>/dev/null || true
         sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
     else
         # Create go script if it doesn't exist
@@ -1329,282 +1818,8 @@ EOF
     bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
     disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
-    log_info "Installation complete!"
+    complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"
     log_info "The agent will start automatically on boot."
-    log_info "To check status: pgrep -a pulse-agent"
-    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
-    exit 0
-fi
-
-# 3b. QNAP QTS/QuTS hero (ephemeral /etc/init.d — wiped on every reboot)
-# QNAP detection and INSTALL_DIR redirect happens early (before download) so the
-# binary is written directly to the persistent data volume, avoiding the tiny RAM-
-# backed /usr/local/bin which can trigger "No space left on device".
-if [[ "$QNAP" == true ]]; then
-    QNAP_STATE_DIR="${INSTALL_DIR}"          # already set to ${QNAP_VOL}/.pulse-agent
-    STORED_BINARY="${QNAP_STATE_DIR}/${BINARY_NAME}"
-    WATCHDOG_PIDFILE="${QNAP_STATE_DIR}/${AGENT_NAME}.watchdog.pid"
-    AGENT_PIDFILE="${QNAP_STATE_DIR}/${AGENT_NAME}.pid"
-    LOCK_DIR="${QNAP_STATE_DIR}/${AGENT_NAME}.lock"
-
-    log_info "Binary installed to ${STORED_BINARY} (persistent storage)."
-
-    # Build command line args
-    build_exec_args
-    build_exec_args_array
-
-    # Kill any existing pulse agents (wrappers + binaries at old and new paths)
-    log_info "Stopping any existing pulse agents..."
-    stop_qnap_agents
-
-    # Create a wrapper script (stored persistently)
-    # At boot the RAM disk is empty, so the wrapper copies the binary there for
-    # runtime, then enters a watchdog loop.
-    RUNTIME_BINARY="/usr/local/bin/${BINARY_NAME}"
-    WRAPPER_SCRIPT="${QNAP_STATE_DIR}/start-pulse-agent.sh"
-    cat > "$WRAPPER_SCRIPT" <<EOF
-#!/bin/sh
-# Pulse Agent startup script for QNAP
-# Auto-generated by Pulse installer
-
-WATCHDOG_PIDFILE="${WATCHDOG_PIDFILE}"
-AGENT_PIDFILE="${AGENT_PIDFILE}"
-LOCK_DIR="${LOCK_DIR}"
-CURRENT_AGENT_PID=""
-
-kill_pidfile_process() {
-    pidfile="\$1"
-    signal="\${2:-TERM}"
-    pid=""
-
-    [ -f "\$pidfile" ] || return 0
-
-    pid=\$(cat "\$pidfile" 2>/dev/null || true)
-    case "\$pid" in
-        ''|*[!0-9]*)
-            rm -f "\$pidfile" 2>/dev/null || true
-            return 0
-            ;;
-    esac
-
-    [ "\$pid" = "\$\$" ] && return 0
-    kill "-\$signal" "\$pid" 2>/dev/null || true
-}
-
-cleanup_watchdog() {
-    agent_pid_to_cleanup="\$CURRENT_AGENT_PID"
-    owns_lock="false"
-
-    if [ -n "\$CURRENT_AGENT_PID" ]; then
-        kill "\$CURRENT_AGENT_PID" 2>/dev/null || true
-        wait "\$CURRENT_AGENT_PID" 2>/dev/null || true
-        CURRENT_AGENT_PID=""
-    fi
-
-    if [ -f "\$AGENT_PIDFILE" ]; then
-        pid=\$(cat "\$AGENT_PIDFILE" 2>/dev/null || true)
-        if [ "\$pid" = "\$\$" ] || [ -z "\$pid" ] || [ "\$pid" = "\$agent_pid_to_cleanup" ]; then
-            rm -f "\$AGENT_PIDFILE" 2>/dev/null || true
-        fi
-    fi
-
-    if [ -f "\$WATCHDOG_PIDFILE" ]; then
-        pid=\$(cat "\$WATCHDOG_PIDFILE" 2>/dev/null || true)
-        if [ "\$pid" = "\$\$" ] || [ -z "\$pid" ]; then
-            rm -f "\$WATCHDOG_PIDFILE" 2>/dev/null || true
-            owns_lock="true"
-        fi
-    fi
-
-    if [ "\$owns_lock" = "true" ]; then
-        rmdir "\$LOCK_DIR" 2>/dev/null || true
-    fi
-}
-
-handle_shutdown() {
-    cleanup_watchdog
-    exit 0
-}
-
-stop_existing_agents() {
-    proc=""
-    pid=""
-    cmd=""
-    exe_path=""
-
-    kill_pidfile_process "\$WATCHDOG_PIDFILE" TERM
-    kill_pidfile_process "\$AGENT_PIDFILE" TERM
-    pkill -f "start-pulse-agent\.sh" 2>/dev/null || true
-    pkill -f "(^|/)pulse-agent( |\$)" 2>/dev/null || true
-
-    if [ -d /proc ]; then
-        for proc in /proc/[0-9]*; do
-            [ -e "\$proc/cmdline" ] || continue
-            pid="\${proc##*/}"
-            [ "\$pid" = "\$\$" ] && continue
-
-            cmd=\$(tr '\000' ' ' < "\$proc/cmdline" 2>/dev/null || true)
-            exe_path=\$(readlink "\$proc/exe" 2>/dev/null || true)
-            [ -n "\$cmd" ] || continue
-
-            if [ "\${cmd#*"${WRAPPER_SCRIPT}"}" != "\$cmd" ] || [ "\${cmd#*start-pulse-agent.sh}" != "\$cmd" ]; then
-                kill "\$pid" 2>/dev/null || true
-                continue
-            fi
-
-            if [ "\$exe_path" = "${RUNTIME_BINARY}" ] || [ "\$exe_path" = "${STORED_BINARY}" ]; then
-                kill "\$pid" 2>/dev/null || true
-            # Match only when binary is the command (first arg)
-            elif [ "\${cmd%%\ *}" = "${RUNTIME_BINARY}" ] || [ "\${cmd%%\ *}" = "${STORED_BINARY}" ]; then
-                kill "\$pid" 2>/dev/null || true
-            fi
-        done
-    fi
-
-    sleep 1
-    kill_pidfile_process "\$AGENT_PIDFILE" KILL
-    kill_pidfile_process "\$WATCHDOG_PIDFILE" KILL
-    rm -f "\$AGENT_PIDFILE" "\$WATCHDOG_PIDFILE" 2>/dev/null || true
-}
-
-acquire_watchdog_lock() {
-    lock_attempts=0
-    max_lock_attempts=5
-
-    while ! mkdir "\$LOCK_DIR" 2>/dev/null; do
-        lock_attempts=\$((lock_attempts + 1))
-        if [ "\$lock_attempts" -ge "\$max_lock_attempts" ]; then
-            echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Stale lock detected, forcing removal" >> /var/log/${AGENT_NAME}.log
-            rm -f "\$AGENT_PIDFILE" "\$WATCHDOG_PIDFILE" 2>/dev/null || true
-            rmdir "\$LOCK_DIR" 2>/dev/null || true
-            if ! mkdir "\$LOCK_DIR" 2>/dev/null; then
-                echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] WARNING: Could not acquire lock, proceeding anyway" >> /var/log/${AGENT_NAME}.log
-            fi
-            break
-        fi
-
-        # Try to kill the existing lock holder
-        kill_pidfile_process "\$WATCHDOG_PIDFILE" TERM
-        kill_pidfile_process "\$AGENT_PIDFILE" TERM
-        sleep 1
-        kill_pidfile_process "\$AGENT_PIDFILE" KILL
-        kill_pidfile_process "\$WATCHDOG_PIDFILE" KILL
-        rm -f "\$AGENT_PIDFILE" "\$WATCHDOG_PIDFILE" 2>/dev/null || true
-        rmdir "\$LOCK_DIR" 2>/dev/null || true
-        sleep 1
-    done
-
-    echo "\$\$" > "\$WATCHDOG_PIDFILE"
-}
-
-trap 'handle_shutdown' INT TERM HUP
-trap 'cleanup_watchdog' EXIT
-
-# Kill any running pulse-agent wrappers/binaries before starting this watchdog.
-stop_existing_agents
-sleep 2
-acquire_watchdog_lock
-
-# Copy binary from persistent storage to /usr/local/bin (RAM disk, wiped on reboot).
-# If the copy fails (e.g. no space), run directly from persistent storage instead.
-AGENT_BIN="${RUNTIME_BINARY}"
-if cp "${STORED_BINARY}" "${RUNTIME_BINARY}" 2>/dev/null; then
-    chmod +x "${RUNTIME_BINARY}"
-else
-    AGENT_BIN="${STORED_BINARY}"
-fi
-${SHELL_EXPORT_LINES}
-
-# Watchdog loop: restart agent if it exits
-RESTART_DELAY=5
-MAX_RESTART_DELAY=60
-
-while true; do
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> /var/log/${AGENT_NAME}.log
-    \${AGENT_BIN} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1 &
-    CURRENT_AGENT_PID=\$!
-    echo "\$CURRENT_AGENT_PID" > "\$AGENT_PIDFILE"
-    wait "\$CURRENT_AGENT_PID"
-    EXIT_CODE=\$?
-    CURRENT_AGENT_PID=""
-    rm -f "\$AGENT_PIDFILE" 2>/dev/null || true
-
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> /var/log/${AGENT_NAME}.log
-    sleep \$RESTART_DELAY
-
-    RESTART_DELAY=\$((RESTART_DELAY * 2))
-    if [ \$RESTART_DELAY -gt \$MAX_RESTART_DELAY ]; then
-        RESTART_DELAY=\$MAX_RESTART_DELAY
-    fi
-done
-EOF
-    chmod +x "$WRAPPER_SCRIPT"
-
-    # Set up autorun.sh for boot persistence
-    # QNAP's flash config partition must be mounted to access autorun.sh
-    AUTORUN_CONFIGURED=false
-    AUTORUN_MARKER="# Pulse Agent"
-
-    # Try the init_disk.sh helper first (works across most QNAP models)
-    if [[ -x /etc/init.d/init_disk.sh ]]; then
-        FLASH_MOUNTED=false
-        if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
-            FLASH_MOUNTED=true
-        fi
-
-        if [[ "$FLASH_MOUNTED" == true ]]; then
-            # Run writes in a subshell; use `if` to capture exit code without
-            # triggering set -e abort, guaranteeing umount always runs after.
-            if (
-                AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-
-                # Remove old pulse entries if any
-                if [[ -f "$AUTORUN_PATH" ]]; then
-                    sed -i "/${AUTORUN_MARKER}/,/^$/d" "$AUTORUN_PATH" 2>/dev/null || true
-                    sed -i '/pulse-agent/d' "$AUTORUN_PATH" 2>/dev/null || true
-                else
-                    echo "#!/bin/sh" > "$AUTORUN_PATH"
-                fi
-
-                cat >> "$AUTORUN_PATH" <<AUTORUNEOF
-
-${AUTORUN_MARKER}
-${WRAPPER_SCRIPT} >> /var/log/${AGENT_NAME}.log 2>&1 &
-
-AUTORUNEOF
-                chmod +x "$AUTORUN_PATH"
-            ); then
-                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-                AUTORUN_CONFIGURED=true
-                log_info "Configured autorun.sh for boot persistence."
-            else
-                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-                log_warn "Failed to write autorun.sh entry."
-            fi
-        else
-            # Mount failed or /tmp/nasconfig_tmp not created — ensure we unmount just in case
-            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-        fi
-    fi
-
-    if [[ "$AUTORUN_CONFIGURED" != true ]]; then
-        log_warn "Could not configure autorun.sh automatically."
-        log_warn "To persist across reboots, add the following to your QNAP autorun.sh:"
-        log_warn "  ${WRAPPER_SCRIPT} >> /var/log/${AGENT_NAME}.log 2>&1 &"
-        log_warn "See: https://wiki.qnap.com/wiki/Running_Your_Own_Application_at_Startup"
-    fi
-
-    # Start the agent now
-    log_info "Starting agent with watchdog..."
-    bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
-    disown 2>/dev/null || true
-
-    log_info "Installation complete!"
-    if [[ "$AUTORUN_CONFIGURED" == true ]]; then
-        log_info "The agent will start automatically on boot."
-        log_info "IMPORTANT: Ensure 'Run user defined processes (autorun.sh)' is enabled"
-        log_info "  in QNAP Control Panel > Hardware > General."
-    fi
     log_info "To check status: pgrep -a pulse-agent"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
     exit 0
@@ -1616,6 +1831,7 @@ fi
 # Note: /data may have exec=off on some TrueNAS systems. We try multiple runtime locations.
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE/CORE installation..."
+    STATE_DIR="$TRUENAS_STATE_DIR"
 
     # Stop any existing agent before we modify binaries
     # The runtime binary may be in /root/bin or /var/tmp, not just INSTALL_DIR
@@ -1701,94 +1917,21 @@ if [[ "$TRUENAS" == true ]]; then
 
     # Store service file in /data (persists across upgrades)
     TRUENAS_SERVICE_STORAGE="$TRUENAS_STATE_DIR/${AGENT_NAME}.service"
+
     if [[ "$(uname -s)" == "Linux" ]]; then
         TRUENAS_LOG_TARGET="$LOG_FILE"
         if [[ -n "$TRUENAS_LOG_FILE" ]]; then
             TRUENAS_LOG_TARGET="$TRUENAS_LOG_FILE"
         fi
 
-        cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
-[Unit]
-Description=Pulse Unified Agent
-After=network-online.target docker.service
-Wants=network-online.target
-StartLimitIntervalSec=0
+        SYSTEMD_ENV=""
+        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+        fi
 
-[Service]
-Type=simple
-ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
-Restart=always
-RestartSec=5s
-User=root
-StandardOutput=append:${TRUENAS_LOG_TARGET}
-StandardError=append:${TRUENAS_LOG_TARGET}
-
-[Install]
-WantedBy=multi-user.target
-EOF
+        render_systemd_agent_unit "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" "${TRUENAS_LOG_TARGET}"
     elif [[ "$(uname -s)" == "FreeBSD" ]]; then
-        cat > "$TRUENAS_SERVICE_STORAGE" <<'RCEOF'
-#!/bin/sh
-
-# PROVIDE: pulse_agent
-# REQUIRE: LOGIN NETWORKING
-# KEYWORD: shutdown
-
-. /etc/rc.subr
-
-name="pulse_agent"
-rcvar="pulse_agent_enable"
-pidfile="/var/run/${name}.pid"
-
-command="RUNTIME_BINARY_PLACEHOLDER"
-command_args="EXEC_ARGS_PLACEHOLDER"
-
-start_cmd="${name}_start"
-stop_cmd="${name}_stop"
-status_cmd="${name}_status"
-
-pulse_agent_start()
-{
-    if checkyesno ${rcvar}; then
-        echo "Starting ${name}."
-        SSL_CERT_FILE_PLACEHOLDER
-        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
-    fi
-}
-
-pulse_agent_stop()
-{
-    if [ -f ${pidfile} ]; then
-        echo "Stopping ${name}."
-        kill $(cat ${pidfile}) 2>/dev/null
-        rm -f ${pidfile}
-    else
-        echo "${name} is not running."
-    fi
-}
-
-pulse_agent_status()
-{
-    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
-        echo "${name} is running as pid $(cat ${pidfile})."
-    else
-        echo "${name} is not running."
-        return 1
-    fi
-}
-
-load_rc_config $name
-run_rc_command "$1"
-RCEOF
-
-        sed -i '' "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
-            sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_SERVICE_STORAGE"
-        sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
-            sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE"
-        sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
-            sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$TRUENAS_SERVICE_STORAGE"
-
-        chmod +x "$TRUENAS_SERVICE_STORAGE"
+        render_freebsd_rc_agent_script "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}"
     fi
 
     # Store environment/config for reference
@@ -1806,105 +1949,8 @@ EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 
     # Create bootstrap script that runs on boot
-    # This script handles the runtime binary location and recreates the systemd/rc.d symlink
-    if [[ "$(uname -s)" == "Linux" ]]; then
-        cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
-#!/bin/bash
-# Pulse Agent Bootstrap for TrueNAS SCALE
-# This script is called by TrueNAS Init/Shutdown task on boot.
-# It ensures the binary is in an executable location and recreates the
-# systemd symlink (which is wiped on TrueNAS upgrades).
-
-set -e
-
-SERVICE_NAME="pulse-agent"
-STATE_DIR="STATE_DIR_PLACEHOLDER"
-STORED_BINARY="${STATE_DIR}/pulse-agent"
-RUNTIME_BINARY="RUNTIME_BINARY_PLACEHOLDER"
-SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
-SYSTEMD_LINK="/etc/systemd/system/${SERVICE_NAME}.service"
-
-if [[ ! -f "$STORED_BINARY" ]]; then
-    echo "ERROR: Binary not found at $STORED_BINARY"
-    exit 1
-fi
-
-if [[ ! -f "$SERVICE_STORAGE" ]]; then
-    echo "ERROR: Service file not found at $SERVICE_STORAGE"
-    exit 1
-fi
-
-# If runtime binary is different from stored binary, copy it
-if [[ "$RUNTIME_BINARY" != "$STORED_BINARY" ]]; then
-    # Ensure parent directory exists (e.g., /root/bin)
-    mkdir -p "$(dirname "$RUNTIME_BINARY")" 2>/dev/null || true
-    cp "$STORED_BINARY" "$RUNTIME_BINARY"
-    chmod +x "$RUNTIME_BINARY"
-fi
-
-# Create symlink (or update if exists)
-ln -sf "$SERVICE_STORAGE" "$SYSTEMD_LINK"
-
-# Reload and start
-systemctl daemon-reload
-systemctl enable "$SERVICE_NAME" 2>/dev/null || true
-systemctl restart "$SERVICE_NAME"
-
-echo "Pulse agent started successfully"
-BOOTSTRAP
-    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
-        cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
-#!/bin/bash
-# Pulse Agent Bootstrap for TrueNAS CORE
-# Called by TrueNAS Init/Shutdown task on boot.
-
-set -e
-
-SERVICE_NAME="pulse-agent"
-STATE_DIR="STATE_DIR_PLACEHOLDER"
-STORED_BINARY="${STATE_DIR}/pulse-agent"
-RUNTIME_BINARY="RUNTIME_BINARY_PLACEHOLDER"
-TRUENAS_SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
-RCSCRIPT_LINK="/usr/local/etc/rc.d/${SERVICE_NAME}"
-
-if [[ ! -f "$STORED_BINARY" ]]; then
-    echo "ERROR: Binary not found at $STORED_BINARY"
-    exit 1
-fi
-
-if [[ ! -f "$TRUENAS_SERVICE_STORAGE" ]]; then
-    echo "ERROR: Service file not found at $TRUENAS_SERVICE_STORAGE"
-    exit 1
-fi
-
-if [[ "$RUNTIME_BINARY" != "$STORED_BINARY" ]]; then
-    mkdir -p "$(dirname "$RUNTIME_BINARY")" 2>/dev/null || true
-    cp "$STORED_BINARY" "$RUNTIME_BINARY"
-    chmod +x "$RUNTIME_BINARY"
-fi
-
-ln -sf "$TRUENAS_SERVICE_STORAGE" "$RCSCRIPT_LINK"
-
-if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
-    echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
-else
-    sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
-        sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
-fi
-
-service "${SERVICE_NAME}" stop 2>/dev/null || true
-sleep 1
-service "${SERVICE_NAME}" start 2>/dev/null || true
-
-echo "Pulse agent started successfully"
-BOOTSTRAP
-    fi
-
-    sed -i '' "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT" 2>/dev/null || \
-        sed -i "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
-    sed -i '' "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_BOOTSTRAP_SCRIPT" 2>/dev/null || \
-        sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
-    chmod +x "$TRUENAS_BOOTSTRAP_SCRIPT"
+    # This script handles the runtime binary location and recreates the service symlink.
+    write_truenas_bootstrap_script "$(uname -s)"
 
     # Create systemd/rc.d symlink now
     if [[ "$(uname -s)" == "Linux" ]]; then
@@ -1937,23 +1983,13 @@ BOOTSTRAP
 
     # Enable and start service
     if [[ "$(uname -s)" == "Linux" ]]; then
-        systemctl daemon-reload
-        systemctl enable "${AGENT_NAME}" 2>/dev/null || true
-        systemctl restart "${AGENT_NAME}"
+        restart_systemd_agent_service
     elif [[ "$(uname -s)" == "FreeBSD" ]]; then
-        if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
-            echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
-        else
-            sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
-                sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
-        fi
-
-        service "${AGENT_NAME}" stop 2>/dev/null || true
-        sleep 1
-        service "${AGENT_NAME}" start 2>/dev/null || true
+        ensure_freebsd_agent_enabled
+        restart_service_command_agent
     fi
 
-    log_info "Installation complete!"
+    complete_installation_flow "$TRUENAS_STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." ""
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
     if [[ "$(uname -s)" == "Linux" ]]; then
@@ -1988,6 +2024,7 @@ description="Pulse Unified Agent"
 
 command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
 command_args="EXEC_ARGS_PLACEHOLDER"
+SSL_CERT_FILE_PLACEHOLDER
 command_background="yes"
 command_user="root"
 
@@ -1997,7 +2034,6 @@ error_log="/var/log/pulse-agent.log"
 
 # Ensure log file exists
 start_pre() {
-    SSL_CERT_FILE_PLACEHOLDER
     touch "$output_log"
 }
 
@@ -2011,17 +2047,15 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
+    SSL_CERT_LINE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
-    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
-    rc-update add "${AGENT_NAME}" default 2>/dev/null || true
-    rc-service "${AGENT_NAME}" start
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
-    fi
+    restart_openrc_agent_service
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -2033,81 +2067,10 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
     # Build command line args
     build_exec_args
 
-    # Create FreeBSD rc.d script following FreeBSD conventions
-    cat > "$RCSCRIPT" <<'RCEOF'
-#!/bin/sh
-
-# PROVIDE: pulse_agent
-# REQUIRE: LOGIN NETWORKING
-# KEYWORD: shutdown
-
-. /etc/rc.subr
-
-name="pulse_agent"
-rcvar="pulse_agent_enable"
-pidfile="/var/run/${name}.pid"
-
-# These placeholders are replaced by sed below
-command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
-command_args="EXEC_ARGS_PLACEHOLDER"
-
-start_cmd="${name}_start"
-stop_cmd="${name}_stop"
-status_cmd="${name}_status"
-
-pulse_agent_start()
-{
-    if checkyesno ${rcvar}; then
-        echo "Starting ${name}."
-        SSL_CERT_FILE_PLACEHOLDER
-        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
-    fi
-}
-
-pulse_agent_stop()
-{
-    if [ -f ${pidfile} ]; then
-        echo "Stopping ${name}."
-        kill $(cat ${pidfile}) 2>/dev/null
-        rm -f ${pidfile}
-    else
-        echo "${name} is not running."
-    fi
-}
-
-pulse_agent_status()
-{
-    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
-        echo "${name} is running as pid $(cat ${pidfile})."
-    else
-        echo "${name} is not running."
-        return 1
-    fi
-}
-
-load_rc_config $name
-run_rc_command "$1"
-RCEOF
-
-    # Replace placeholders with actual values
-    sed -i '' "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$RCSCRIPT" 2>/dev/null || \
-        sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$RCSCRIPT"
-    sed -i '' "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT" 2>/dev/null || \
-        sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT"
-    sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT" 2>/dev/null || \
-        sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT"
-    sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$RCSCRIPT" 2>/dev/null || \
-        sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$RCSCRIPT"
-
-    chmod +x "$RCSCRIPT"
+    render_freebsd_rc_agent_script "$RCSCRIPT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}"
 
     # Enable the service in rc.conf
-    if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
-        echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
-    else
-        sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
-            sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
-    fi
+    ensure_freebsd_agent_enabled
 
     # pfSense does not use the standard FreeBSD rc.d boot system.
     # Scripts in /usr/local/etc/rc.d/ must end in .sh to run at boot.
@@ -2125,16 +2088,8 @@ BOOTEOF
     fi
 
     # Stop existing agent if running
-    "$RCSCRIPT" stop 2>/dev/null || true
-    sleep 1
-
-    # Start the agent
-    "$RCSCRIPT" start
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
-    fi
+    restart_sysv_agent_service "$RCSCRIPT"
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
     exit 0
@@ -2147,67 +2102,31 @@ if command -v systemctl >/dev/null 2>&1; then
     TOKEN_FILE="${TOKEN_DIR}/token"
     log_info "Configuring Systemd service at $UNIT..."
 
-    # Write token to secure file (not visible in ps or service file)
-    mkdir -p "$TOKEN_DIR"
-    echo -n "$PULSE_TOKEN" > "$TOKEN_FILE"
-    chmod 600 "$TOKEN_FILE"
-    chown root:root "$TOKEN_FILE"
-    log_info "Token stored securely at $TOKEN_FILE (mode 600)"
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        # Write token to secure file (not visible in ps or service file)
+        mkdir -p "$TOKEN_DIR"
+        echo -n "$PULSE_TOKEN" > "$TOKEN_FILE"
+        chmod 600 "$TOKEN_FILE"
+        chown root:root "$TOKEN_FILE"
+        log_info "Token stored securely at $TOKEN_FILE (mode 600)"
+    else
+        rm -f "$TOKEN_FILE"
+        log_info "No API token provided; installer will configure token-optional agent runtime."
+    fi
 
     # Build command line args WITHOUT the token (token is read from file)
-    EXEC_ARGS="--url ${PULSE_URL} --interval ${INTERVAL}"
-    # Always pass enable-host flag since agent defaults to true
-    if [[ "$ENABLE_HOST" == "true" ]]; then
-        EXEC_ARGS="$EXEC_ARGS --enable-host"
-    else
-        EXEC_ARGS="$EXEC_ARGS --enable-host=false"
-    fi
-    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
-    # Pass explicit false when Docker was explicitly disabled (prevents auto-detection)
-    if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker=false"; fi
-    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-kubernetes"; fi
-    if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARGS="$EXEC_ARGS --kubeconfig ${KUBECONFIG_PATH}"; fi
-    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
-    if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
-    if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
-    if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
-    if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
-    if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
-    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
-    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
-        EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
-    done
+    build_exec_args_without_token
 
-    cat > "$UNIT" <<EOF
-[Unit]
-Description=Pulse Unified Agent
-After=network-online.target docker.service
-Wants=network-online.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
-Restart=always
-RestartSec=5s
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" ""
     # Restrict service file permissions (contains no secrets now, but good practice)
     chmod 644 "$UNIT"
 
     # Restore SELinux contexts (required for Fedora, RHEL, CentOS)
     restore_selinux_contexts
 
-    systemctl daemon-reload
-    systemctl enable "${AGENT_NAME}"
-    systemctl restart "${AGENT_NAME}"
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
+    restart_systemd_agent_service
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"
+    if [[ "$UPGRADE_MODE" != "true" && -n "$PULSE_TOKEN" ]]; then
         log_info "Token file: $TOKEN_FILE (mode 600, root only)"
     fi
     exit 0
@@ -2342,35 +2261,15 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
+    SSL_CERT_LINE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
 
-    # Try to enable on boot using available tools
-    if command -v update-rc.d >/dev/null 2>&1; then
-        # Debian-based systems
-        update-rc.d "${AGENT_NAME}" defaults >/dev/null 2>&1 || true
-        log_info "Enabled service with update-rc.d."
-    elif command -v chkconfig >/dev/null 2>&1; then
-        # RHEL-based systems
-        chkconfig --add "${AGENT_NAME}" >/dev/null 2>&1 || true
-        chkconfig "${AGENT_NAME}" on >/dev/null 2>&1 || true
-        log_info "Enabled service with chkconfig."
-    else
-        # Manual symlink creation for systems without tools
-        # Try to create rc.d symlinks manually
-        for RL in 2 3 4 5; do
-            if [[ -d "/etc/rc${RL}.d" ]]; then
-                ln -sf "$INITSCRIPT" "/etc/rc${RL}.d/S99${AGENT_NAME}" 2>/dev/null || true
-            fi
-        done
-        for RL in 0 1 6; do
-            if [[ -d "/etc/rc${RL}.d" ]]; then
-                ln -sf "$INITSCRIPT" "/etc/rc${RL}.d/K01${AGENT_NAME}" 2>/dev/null || true
-            fi
-        done
-        log_info "Created rc.d symlinks manually."
-    fi
+    enable_sysv_agent_service "$INITSCRIPT"
 
     # Stop existing agent if running
     "$INITSCRIPT" stop 2>/dev/null || true
@@ -2378,11 +2277,7 @@ INITEOF
 
     # Start the agent
     "$INITSCRIPT" start
-    if [[ "$UPGRADE_MODE" == "true" ]]; then
-        log_info "Upgrade complete! Agent restarted with new configuration."
-    else
-        log_info "Installation complete! Agent service started."
-    fi
+    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
     exit 0

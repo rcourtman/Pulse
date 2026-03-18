@@ -1,0 +1,102 @@
+# Upgrade to Pulse v6
+
+This guide covers practical upgrade steps for existing Pulse installs moving to v6.
+
+## Before You Upgrade
+
+- Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
+- Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
+- If you have any external integrations or scripts: review the **API Changes** section below
+
+## Upgrade Paths
+
+### systemd and Proxmox LXC installs
+
+Preferred path:
+
+- **Settings → System → Updates**
+
+If you prefer CLI, use the official installer for the target version:
+
+```bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
+  sudo bash -s -- --version vX.Y.Z
+```
+
+This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
+
+### Docker
+
+```bash
+docker pull rcourtman/pulse:latest
+docker compose up -d
+```
+
+### Kubernetes (Helm)
+
+```bash
+helm repo update
+helm upgrade pulse pulse/pulse -n pulse
+```
+
+## Post-Upgrade Checklist
+
+- Confirm version: `GET /api/version`
+- Confirm scheduler health: `GET /api/monitoring/scheduler/health`
+- Confirm unified resources API is responding: `GET /api/resources`
+- Confirm nodes are polling and no breakers are stuck open
+- Confirm notifications still send (send a test)
+- Confirm agents are connected (if used)
+
+## Migration Notes (v6)
+
+### Unified Navigation (Bookmarks and Deep Links)
+
+Legacy page aliases have been removed. Use canonical unified routes only.
+
+- Reference: `docs/MIGRATION_UNIFIED_NAV.md`
+- Optional migration aid: enable the "Classic platform shortcuts" bar (Settings → System → General).
+- Optional preference: switch to **Classic** navigation style (Settings → System → General). This is stored per browser.
+
+### API Changes
+
+Unified Resources is now the canonical model and endpoint family:
+
+- Canonical: `/api/resources`
+
+### License, Trial, and Entitlements
+
+Pulse v6 feature gating is driven by the entitlements endpoint:
+
+- `GET /api/license/entitlements`
+
+For self-hosted v6, Pulse now sells monitored coverage by monitored system rather than by installed agent. Community includes 5 monitored systems, Relay includes 8, Pro includes 15, and Pro+ includes 50. Relay also raises history to 14 days, while Pro and Pro+ raise it to 90 days.
+
+For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup rather than minting a local trial directly. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
+
+If you are upgrading an existing free instance that already exceeds the new Community cap, Pulse should not hard-break monitoring on rollout day. During grace, existing monitoring continues and only newly added counted systems are blocked until you remove systems or upgrade.
+
+#### v5 License Migration
+
+Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 Pro and Lifetime JWT-style licenses.
+
+- If you upgrade an existing v5 instance and Pulse finds a persisted v5 license with no v6 activation state yet, v6 will try to auto-exchange it on startup.
+- If auto-exchange cannot complete, your old key is left in place and the instance will prompt you to retry activation manually.
+- In the v6 license panel, you can paste either:
+  - a Pulse v6 activation key, or
+  - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
+- If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
+- Existing paid v5 customers keep their grandfathered recurring continuity until cancellation. If they cancel and later return, current v6 pricing applies.
+
+Practical recommendation:
+
+- Before upgrading, keep console access available so you can retry activation from the v6 license panel if the exchange service is temporarily unavailable.
+
+### Multi-Tenant (Opt-In)
+
+Multi-tenant mode is opt-in and additionally license-gated:
+
+- Enablement flag: `PULSE_MULTI_TENANT_ENABLED=true`
+- Capability gate: `multi_tenant`
+
+See any multi-tenant operational docs under `docs/architecture/` if you plan to run this mode.

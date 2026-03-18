@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -775,13 +777,14 @@ func TestGetSessionUsername(t *testing.T) {
 
 func TestClearCSRFCookie(t *testing.T) {
 	t.Run("nil writer does not panic", func(t *testing.T) {
-		clearCSRFCookie(nil)
+		clearCSRFCookie(nil, nil)
 		// Should not panic
 	})
 
 	t.Run("sets cookie with maxage -1", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		clearCSRFCookie(w)
+		r := httptest.NewRequest("GET", "/", nil)
+		clearCSRFCookie(w, r)
 
 		cookies := w.Result().Cookies()
 		if len(cookies) != 1 {
@@ -877,37 +880,6 @@ func TestFailedLogin_Fields(t *testing.T) {
 	}
 }
 
-func TestAuditEvent_Fields(t *testing.T) {
-	ae := AuditEvent{
-		Timestamp: fixedTimeForTest(),
-		Event:     "login_attempt",
-		User:      "admin",
-		IP:        "192.168.1.100",
-		Path:      "/api/auth/login",
-		Success:   true,
-		Details:   "successful login",
-	}
-
-	if ae.Event != "login_attempt" {
-		t.Errorf("Event = %q, want login_attempt", ae.Event)
-	}
-	if ae.User != "admin" {
-		t.Errorf("User = %q, want admin", ae.User)
-	}
-	if ae.IP != "192.168.1.100" {
-		t.Errorf("IP = %q, want 192.168.1.100", ae.IP)
-	}
-	if ae.Path != "/api/auth/login" {
-		t.Errorf("Path = %q, want /api/auth/login", ae.Path)
-	}
-	if !ae.Success {
-		t.Error("Success should be true")
-	}
-	if ae.Details != "successful login" {
-		t.Errorf("Details = %q, want 'successful login'", ae.Details)
-	}
-}
-
 func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 	handler := SecurityHeadersWithConfig(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -915,6 +887,7 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 		}),
 		false, // allowEmbedding
 		"",    // allowedOrigins
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -933,15 +906,88 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 		t.Errorf("CSP should contain frame-ancestors 'none', got: %s", csp)
 	}
 
+	// In production mode, CSP should use nonce-based directives
+	if !strings.Contains(csp, "'nonce-") {
+		t.Errorf("CSP should contain nonce in production mode, got: %s", csp)
+	}
+	if strings.Contains(csp, "'unsafe-inline'") {
+		t.Errorf("CSP should not contain 'unsafe-inline' in production mode, got: %s", csp)
+	}
+	if strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("CSP should not contain 'unsafe-eval' in production mode, got: %s", csp)
+	}
+
 	// Check other security headers are present
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
 	}
-	if got := rec.Header().Get("X-XSS-Protection"); got != "1; mode=block" {
-		t.Errorf("X-XSS-Protection = %q, want '1; mode=block'", got)
+	if got := rec.Header().Get("X-XSS-Protection"); got != "0" {
+		t.Errorf("X-XSS-Protection = %q, want '0'", got)
 	}
 	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
 		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
+	}
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("Strict-Transport-Security = %q, want empty for non-HTTPS request", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_SetsHSTSForTLSRequest(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "", false)
+
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/test", nil)
+	req.TLS = &tls.ConnectionState{}
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains; preload" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains; preload", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_DoesNotTrustForwardedProtoFromUntrustedPeer(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	req.RemoteAddr = "198.51.100.20:44321"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty for untrusted forwarded proto", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_SetsHSTSForTrustedProxyHTTPS(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains; preload" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains; preload", got)
 	}
 }
 
@@ -950,8 +996,9 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
-		true, // allowEmbedding
-		"",   // allowedOrigins - empty means allow all
+		true,  // allowEmbedding
+		"",    // allowedOrigins - empty defaults to 'self' for clickjacking protection
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -964,10 +1011,10 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledNoOrigins(t *testing.T) {
 		t.Errorf("X-Frame-Options = %q, want empty (not set)", got)
 	}
 
-	// Check CSP has frame-ancestors * (allow any)
+	// Check CSP has frame-ancestors 'self' (safe default when no origins specified)
 	csp := rec.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "frame-ancestors *") {
-		t.Errorf("CSP should contain 'frame-ancestors *', got: %s", csp)
+	if !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Errorf("CSP should contain \"frame-ancestors 'self'\", got: %s", csp)
 	}
 }
 
@@ -978,6 +1025,7 @@ func TestSecurityHeadersWithConfig_EmbeddingEnabledWithOrigins(t *testing.T) {
 		}),
 		true,                                     // allowEmbedding
 		"https://example.com, https://other.com", // allowedOrigins
+		false,                                    // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1005,6 +1053,7 @@ func TestSecurityHeadersWithConfig_EmbeddingWithEmptyOriginEntries(t *testing.T)
 		}),
 		true,                       // allowEmbedding
 		"https://example.com, , ,", // allowedOrigins with empty entries
+		false,                      // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1028,6 +1077,7 @@ func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
 		}),
 		false,
 		"",
+		false, // devMode
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1040,37 +1090,83 @@ func TestSecurityHeadersWithConfig_NextHandlerCalled(t *testing.T) {
 	}
 }
 
-func TestLogAuditEvent_Success(t *testing.T) {
-	// Should not panic and should log at Info level
-	LogAuditEvent(
-		"test_event",
-		"testuser",
-		"192.168.1.100",
-		"/api/test",
-		true,
-		"test details",
+func TestSecurityHeadersWithConfig_DevMode(t *testing.T) {
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// In dev mode, no nonce should be in context
+			if nonce := CSPNonceFromContext(r.Context()); nonce != "" {
+				t.Errorf("expected no nonce in dev mode context, got %q", nonce)
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+		false, // allowEmbedding
+		"",    // allowedOrigins
+		true,  // devMode
 	)
-	// If we got here without panic, the test passes
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	// Dev mode should have unsafe-inline and unsafe-eval
+	if !strings.Contains(csp, "'unsafe-inline'") {
+		t.Errorf("CSP in dev mode should contain 'unsafe-inline', got: %s", csp)
+	}
+	if !strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("CSP in dev mode should contain 'unsafe-eval', got: %s", csp)
+	}
+
+	// Dev mode should NOT have nonce
+	if strings.Contains(csp, "'nonce-") {
+		t.Errorf("CSP in dev mode should not contain nonce, got: %s", csp)
+	}
 }
 
-func TestLogAuditEvent_Failure(t *testing.T) {
-	// Should not panic and should log at Warn level
-	LogAuditEvent(
-		"failed_login",
-		"attacker",
-		"203.0.113.42",
-		"/api/login",
-		false,
-		"invalid credentials",
+func TestSecurityHeadersWithConfig_ProductionNonceInContext(t *testing.T) {
+	var capturedNonce string
+	handler := SecurityHeadersWithConfig(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedNonce = CSPNonceFromContext(r.Context())
+			w.WriteHeader(http.StatusOK)
+		}),
+		false, // allowEmbedding
+		"",    // allowedOrigins
+		false, // devMode (production)
 	)
-	// If we got here without panic, the test passes
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Nonce should be present in context in production mode
+	if capturedNonce == "" {
+		t.Fatal("expected nonce in production mode context, got empty string")
+	}
+
+	// Nonce in CSP header should match context nonce
+	csp := rec.Header().Get("Content-Security-Policy")
+	expectedFragment := "'nonce-" + capturedNonce + "'"
+	if !strings.Contains(csp, expectedFragment) {
+		t.Errorf("CSP should contain %s, got: %s", expectedFragment, csp)
+	}
 }
 
-func TestLogAuditEvent_EmptyFields(t *testing.T) {
-	// Should handle empty strings gracefully
-	LogAuditEvent("", "", "", "", true, "")
-	LogAuditEvent("", "", "", "", false, "")
-	// If we got here without panic, the test passes
+func TestCSPNonceFromContext_Empty(t *testing.T) {
+	ctx := context.Background()
+	if got := CSPNonceFromContext(ctx); got != "" {
+		t.Errorf("CSPNonceFromContext on empty context = %q, want empty", got)
+	}
+}
+
+func TestCSPNonceFromContext_RoundTrip(t *testing.T) {
+	ctx := context.WithValue(context.Background(), cspNonceKey{}, "test-nonce-123")
+	if got := CSPNonceFromContext(ctx); got != "test-nonce-123" {
+		t.Errorf("CSPNonceFromContext = %q, want test-nonce-123", got)
+	}
 }
 
 func TestLoadTrustedProxyCIDRs_InvalidCIDR(t *testing.T) {
@@ -1273,7 +1369,34 @@ func TestCheckCSRF_BasicAuth(t *testing.T) {
 	// Basic auth bypasses CSRF check
 	result := CheckCSRF(w, req)
 	if !result {
-		t.Error("CheckCSRF should return true when Authorization header is present")
+		t.Error("CheckCSRF should return true when Basic Authorization header is present")
+	}
+}
+
+func TestCheckCSRF_BearerAuth(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer some-token")
+
+	// Bearer auth bypasses CSRF check for token-based API clients.
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when Bearer Authorization header is present")
+	}
+}
+
+func TestCheckCSRF_UnknownAuthorizationSchemeDoesNotBypass(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("Authorization", "Digest abc123")
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "test-session-id-1234567890",
+	})
+
+	result := CheckCSRF(w, req)
+	if result {
+		t.Error("CheckCSRF should return false for unknown Authorization schemes when session cookie is present")
 	}
 }
 
@@ -1703,6 +1826,61 @@ func TestRequireAdmin_ProxyAuthNoRoleHeaderDefaultsToAdmin(t *testing.T) {
 
 	if !handlerCalled {
 		t.Error("RequireAdmin should call handler when no role checking is configured")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_NonAdminSessionForbidden(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	cfg := &config.Config{AuthUser: "admin"}
+	sessionToken := "require-admin-member-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "test-agent", "127.0.0.1", "member")
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler for non-admin session user")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(w.Body.String(), "Admin privileges required") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Admin privileges required'", w.Body.String())
+	}
+}
+
+func TestRequireAdmin_ConfiguredAdminSessionAllowed(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	cfg := &config.Config{AuthUser: "admin"}
+	sessionToken := "require-admin-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "test-agent", "127.0.0.1", "admin")
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for configured admin session user")
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)

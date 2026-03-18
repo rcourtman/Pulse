@@ -37,7 +37,7 @@ func (s *stubReportingEngine) GenerateMulti(req reporting.MultiReportRequest) ([
 }
 
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
-	handler := NewReportingHandlers(nil)
+	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/reporting", nil)
 	rr := httptest.NewRecorder()
 
@@ -53,7 +53,7 @@ func TestReportingHandlers_EngineUnavailable(t *testing.T) {
 	reporting.SetEngine(nil)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil)
+	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/reporting?resourceType=node&resourceId=1", nil)
 	rr := httptest.NewRecorder()
 
@@ -78,7 +78,7 @@ func TestReportingHandlers_InvalidFormatAndParams(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil)
+	handler := NewReportingHandlers(nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=txt&resourceType=node&resourceId=1", nil)
 	rr := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	reporting.SetEngine(engine)
 	t.Cleanup(func() { reporting.SetEngine(original) })
 
-	handler := NewReportingHandlers(nil)
+	handler := NewReportingHandlers(nil, nil)
 
 	start := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	end := time.Now().UTC().Format(time.RFC3339)
@@ -134,6 +134,85 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 
 	if engine.lastReq.ResourceType != "node" || engine.lastReq.ResourceID != "node-1" {
 		t.Fatalf("unexpected request: %+v", engine.lastReq)
+	}
+}
+
+func TestReportingHandlers_GenerateReport_RejectsLegacyResourceTypeAlias(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=container&resourceId=ct-200", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "" {
+		t.Fatalf("expected engine not to be called for legacy alias, got %+v", engine.lastReq)
+	}
+}
+
+func TestNormalizeReportResourceType_RejectsLegacyAliases(t *testing.T) {
+	tests := []string{"host", "container"}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			got, err := normalizeReportResourceType(input)
+			if err == nil {
+				t.Fatalf("expected error for legacy alias %q, got canonical type %q", input, got)
+			}
+			if !strings.Contains(err.Error(), `unsupported resourceType "`+input+`"`) {
+				t.Fatalf("unexpected error for %q: %v", input, err)
+			}
+		})
+	}
+}
+
+func TestReportingHandlers_GenerateReport_RejectsUnsupportedResourceType(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=host&resourceId=h-1", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "" {
+		t.Fatalf("expected engine not to be called for unsupported type, got %+v", engine.lastReq)
+	}
+}
+
+func TestReportingHandlers_GenerateReport_AcceptsCanonicalAppContainerType(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?format=pdf&resourceType=app-container&resourceId=docker-1",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "app-container" {
+		t.Fatalf("expected canonical resource type app-container, got %q", engine.lastReq.ResourceType)
 	}
 }
 

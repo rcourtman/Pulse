@@ -566,7 +566,7 @@ func TestCloneAlertData(t *testing.T) {
 }
 
 func TestNewHub(t *testing.T) {
-	stateGetter := func() interface{} {
+	stateGetter := func(orgID string) interface{} {
 		return map[string]string{"status": "ok"}
 	}
 
@@ -622,6 +622,21 @@ func TestHub_SetAllowedOrigins(t *testing.T) {
 	}
 }
 
+func TestHub_SetAllowedOrigins_DefensiveCopy(t *testing.T) {
+	hub := NewHub(nil)
+	origins := []string{"http://localhost:3000", "https://example.com"}
+
+	hub.SetAllowedOrigins(origins)
+	origins[0] = "https://mutated.example.com"
+
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+
+	if hub.allowedOrigins[0] != "http://localhost:3000" {
+		t.Fatalf("allowedOrigins leaked caller mutation, got %q", hub.allowedOrigins[0])
+	}
+}
+
 func TestHub_SetStateGetter(t *testing.T) {
 	hub := NewHub(nil)
 
@@ -629,16 +644,23 @@ func TestHub_SetStateGetter(t *testing.T) {
 		t.Error("getState should be nil initially when passed nil")
 	}
 
-	newGetter := func() interface{} {
-		return "new state"
+	newGetter := func(orgID string) interface{} {
+		return "new state:" + orgID
 	}
 	hub.SetStateGetter(newGetter)
 
 	hub.mu.RLock()
-	defer hub.mu.RUnlock()
-
 	if hub.getState == nil {
+		hub.mu.RUnlock()
 		t.Error("getState should be set after SetStateGetter")
+		return
+	}
+	hub.mu.RUnlock()
+	if got := hub.getStateForClient(&Client{orgID: ""}); got != "new state:default" {
+		t.Fatalf("default tenant state = %v, want %q", got, "new state:default")
+	}
+	if got := hub.getStateForClient(&Client{orgID: "org-123"}); got != "new state:org-123" {
+		t.Fatalf("tenant state = %v, want %q", got, "new state:org-123")
 	}
 }
 
@@ -838,6 +860,12 @@ func TestHub_CheckOrigin(t *testing.T) {
 				hub.SetAllowedOrigins(tc.allowedOrigins)
 			}
 
+			// When tests use forwarded headers, set a trusted proxy checker
+			// so the hub trusts X-Forwarded-* from this peer.
+			if tc.forwardedProto != "" || tc.forwardedHost != "" {
+				hub.SetTrustedProxyChecker(func(ip string) bool { return true })
+			}
+
 			req := &http.Request{
 				Host:       tc.host,
 				Header:     make(http.Header),
@@ -863,6 +891,7 @@ func TestHub_CheckOrigin(t *testing.T) {
 
 func TestHub_CheckOrigin_XForwardedScheme(t *testing.T) {
 	hub := NewHub(nil)
+	hub.SetTrustedProxyChecker(func(ip string) bool { return true })
 
 	req := &http.Request{
 		Host:   "example.com",
@@ -874,5 +903,23 @@ func TestHub_CheckOrigin_XForwardedScheme(t *testing.T) {
 	result := hub.checkOrigin(req)
 	if !result {
 		t.Error("checkOrigin should allow same-origin with X-Forwarded-Scheme")
+	}
+}
+
+func TestHub_CheckOrigin_UntrustedProxyIgnoresForwarded(t *testing.T) {
+	hub := NewHub(nil)
+	// No trusted proxy checker set — forwarded headers should be ignored
+
+	req := &http.Request{
+		Host:       "backend:8080",
+		Header:     make(http.Header),
+		RemoteAddr: "10.0.0.5:12345",
+	}
+	req.Header.Set("Origin", "http://proxy.example.com")
+	req.Header.Set("X-Forwarded-Host", "proxy.example.com")
+
+	result := hub.checkOrigin(req)
+	if result {
+		t.Error("checkOrigin should reject forwarded headers from untrusted peers")
 	}
 }

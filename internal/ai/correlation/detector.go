@@ -119,7 +119,7 @@ func NewDetector(cfg Config) *Detector {
 	// Load existing data
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load correlation data from disk")
+			log.Warn().Err(err).Msg("failed to load correlation data from disk")
 		} else if len(d.events) > 0 {
 			log.Info().Int("events", len(d.events)).Int("correlations", len(d.correlations)).
 				Msg("Loaded correlation data from disk")
@@ -150,7 +150,7 @@ func (d *Detector) RecordEvent(event Event) {
 	// Persist asynchronously
 	go func() {
 		if err := d.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save correlation data")
+			log.Warn().Err(err).Msg("failed to save correlation data")
 		}
 	}()
 }

@@ -16,6 +16,8 @@ import (
 func resetKnownHostsFns() {
 	mkdirAllFn = defaultMkdirAllFn
 	statFn = defaultStatFn
+	lstatFn = defaultLstatFn
+	chmodFn = defaultChmodFn
 	openFileFn = defaultOpenFileFn
 	openFn = defaultOpenFn
 	appendOpenFileFn = defaultAppendOpenFileFn
@@ -50,6 +52,46 @@ func TestEnsureCreatesFileAndCaches(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected keyscan once, got %d", calls)
+	}
+}
+
+func TestEnsureReconcilesCacheWithKnownHostsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	var calls int
+	keyscan := func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
+		calls++
+		return []byte(host + " ssh-ed25519 AAAA"), nil
+	}
+
+	mgr, err := NewManager(path, WithKeyscanFunc(keyscan))
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := mgr.Ensure(ctx, "example.com"); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := mgr.Ensure(ctx, "example.com"); err != nil {
+		t.Fatalf("Ensure after truncation: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected keyscan twice after cache/file mismatch, got %d", calls)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "example.com ssh-ed25519 AAAA" {
+		t.Fatalf("unexpected known_hosts contents after reconciliation: %s", got)
 	}
 }
 
@@ -420,53 +462,6 @@ func TestManagerPath(t *testing.T) {
 	}
 }
 
-func TestHostFieldMatches(t *testing.T) {
-	tests := []struct {
-		host  string
-		field string
-		want  bool
-	}{
-		// Exact matches
-		{"example.com", "example.com", true},
-		{"192.168.1.1", "192.168.1.1", true},
-
-		// Case insensitive
-		{"EXAMPLE.COM", "example.com", true},
-		{"example.com", "EXAMPLE.COM", true},
-
-		// Comma-separated hosts
-		{"example.com", "example.com,192.168.1.1", true},
-		{"192.168.1.1", "example.com,192.168.1.1", true},
-		{"other.com", "example.com,192.168.1.1", false},
-
-		// Bracketed hosts with ports
-		{"[example.com]:2222", "[example.com]:2222", true},
-		{"example.com", "[example.com]:2222", true},
-
-		// Host:port format
-		{"example.com:2222", "example.com:2222", true},
-		{"example.com", "example.com:2222", true},
-
-		// No match
-		{"other.com", "example.com", false},
-		{"example.org", "example.com", false},
-
-		// Empty cases
-		{"example.com", "", false},
-		{"", "example.com", false},
-		{"", "", false},
-	}
-
-	for _, tt := range tests {
-		name := tt.host + "_" + tt.field
-		t.Run(name, func(t *testing.T) {
-			if got := HostFieldMatches(tt.host, tt.field); got != tt.want {
-				t.Errorf("HostFieldMatches(%q, %q) = %v, want %v", tt.host, tt.field, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestEnsureKnownHostsFileMkdirError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
 	mkdirAllFn = func(string, os.FileMode) error {
@@ -481,19 +476,23 @@ func TestEnsureKnownHostsFileMkdirError(t *testing.T) {
 
 func TestEnsureKnownHostsFileStatError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
-	statFn = func(string) (os.FileInfo, error) {
+	lstatFn = func(string) (os.FileInfo, error) {
 		return nil, errors.New("stat failed")
 	}
 
 	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
-	if err := m.ensureKnownHostsFile(); err == nil {
+	err := m.ensureKnownHostsFile()
+	if err == nil {
 		t.Fatal("expected stat error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: stat") {
+		t.Fatalf("expected stat context, got %v", err)
 	}
 }
 
 func TestEnsureKnownHostsFileCreateError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
-	statFn = func(string) (os.FileInfo, error) {
+	lstatFn = func(string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
 	}
 	openFileFn = func(string, int, os.FileMode) (*os.File, error) {
@@ -503,6 +502,39 @@ func TestEnsureKnownHostsFileCreateError(t *testing.T) {
 	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
 	if err := m.ensureKnownHostsFile(); err == nil {
 		t.Fatal("expected create error")
+	}
+}
+
+func TestEnsureKnownHostsFileChmodDirError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	chmodFn = func(path string, mode os.FileMode) error {
+		return errors.New("chmod dir failed")
+	}
+
+	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
+	if err := m.ensureKnownHostsFile(); err == nil {
+		t.Fatal("expected chmod dir error")
+	}
+}
+
+func TestEnsureKnownHostsFileChmodFileError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+	if err := os.WriteFile(path, []byte("example.com ssh-ed25519 AAAA\n"), 0644); err != nil {
+		t.Fatalf("failed to write known_hosts: %v", err)
+	}
+
+	chmodFn = func(target string, mode os.FileMode) error {
+		if target == path {
+			return errors.New("chmod file failed")
+		}
+		return nil
+	}
+
+	m := &manager{path: path}
+	if err := m.ensureKnownHostsFile(); err == nil {
+		t.Fatal("expected chmod file error")
 	}
 }
 
@@ -523,8 +555,48 @@ func TestAppendHostKeyWriteError(t *testing.T) {
 		return errWriteCloser{err: errors.New("write failed")}, nil
 	}
 
-	if err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")}); err == nil {
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
 		t.Fatal("expected write error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: write entry to ignored") {
+		t.Fatalf("expected write context, got %v", err)
+	}
+}
+
+func TestAppendHostKeyCloseError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	closeErr := errors.New("close failed")
+	appendOpenFileFn = func(string) (io.WriteCloser, error) {
+		return errWriteCloser{closeErr: closeErr}, nil
+	}
+
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
+		t.Fatal("expected close error")
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("expected close error to be wrapped, got %v", err)
+	}
+}
+
+func TestAppendHostKeyWriteAndCloseErrorJoined(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	writeErr := errors.New("write failed")
+	closeErr := errors.New("close failed")
+	appendOpenFileFn = func(string) (io.WriteCloser, error) {
+		return errWriteCloser{err: writeErr, closeErr: closeErr}, nil
+	}
+
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
+		t.Fatal("expected write+close error")
+	}
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected write error to be wrapped, got %v", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("expected close error to be joined, got %v", err)
 	}
 }
 
@@ -558,8 +630,12 @@ func TestFindHostKeyLineOpenError(t *testing.T) {
 		return nil, errors.New("open failed")
 	}
 
-	if _, err := findHostKeyLine("ignored", "example.com", ""); err == nil {
+	_, err := findHostKeyLine("ignored", "example.com", "")
+	if err == nil {
 		t.Fatal("expected open error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: open ignored") {
+		t.Fatalf("expected open context, got %v", err)
 	}
 }
 
@@ -571,8 +647,12 @@ func TestFindHostKeyLineScannerError(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	if _, err := findHostKeyLine(path, "example.com", ""); err == nil {
+	_, err := findHostKeyLine(path, "example.com", "")
+	if err == nil {
 		t.Fatal("expected scanner error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: scan "+path) {
+		t.Fatalf("expected scan context, got %v", err)
 	}
 }
 
@@ -756,16 +836,178 @@ func TestKeyscanCmdRunnerDefault(t *testing.T) {
 	}
 }
 
+func TestEnsureWithPortRejectsInvalidHost(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithPort(context.Background(), "-example.com", 22); err == nil {
+		t.Fatal("expected invalid host error")
+	}
+}
+
+func TestEnsureWithPortRejectsOversizedHost(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	host := strings.Repeat("a", maxKnownHostsManagedHostBytes+1)
+	if err := mgr.EnsureWithPort(context.Background(), host, 22); err == nil {
+		t.Fatal("expected oversized host error")
+	}
+}
+
+func TestEnsureWithPortRejectsInvalidPort(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithPort(context.Background(), "example.com", maxSSHPort+1); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestEnsureWithEntriesRejectsInvalidPort(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithEntries(context.Background(), "example.com", maxSSHPort+1, [][]byte{[]byte("example.com ssh-ed25519 AAAA")}); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestEnsureKnownHostsFileRejectsSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires elevated privileges on some windows environments")
+	}
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("example.com ssh-ed25519 AAAA\n"), 0600); err != nil {
+		t.Fatalf("failed to write target file: %v", err)
+	}
+
+	link := filepath.Join(dir, "known_hosts")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	m := &manager{path: link}
+	err := m.ensureKnownHostsFile()
+	if err == nil {
+		t.Fatal("expected non-regular file error")
+	}
+	if !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("expected non-regular file error, got %v", err)
+	}
+}
+
+func TestDefaultKeyscanRejectsInvalidPort(t *testing.T) {
+	if _, err := defaultKeyscan(context.Background(), "example.com", maxSSHPort+1, time.Second); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestDefaultKeyscanTruncatesErrorOutput(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+
+	longOutput := bytes.Repeat([]byte("x"), maxKeyscanErrorPreviewBytes+128)
+	keyscanCmdRunner = func(ctx context.Context, args ...string) ([]byte, error) {
+		return longOutput, errors.New("scan failed")
+	}
+
+	_, err := defaultKeyscan(context.Background(), "example.com", 22, time.Second)
+	if err == nil {
+		t.Fatal("expected keyscan error")
+	}
+	if !strings.Contains(err.Error(), "...(truncated)") {
+		t.Fatalf("expected truncated error output marker, got %v", err)
+	}
+}
+
+func TestRunCommandCombinedOutputLimitedRejectsOversizedOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper uses sh")
+	}
+
+	output, err := runCommandCombinedOutputLimited(context.Background(), 8, "sh", "-c", "printf 123456789")
+	if !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected errCommandOutputTooLarge, got %v", err)
+	}
+	if string(output) != "12345678" {
+		t.Fatalf("unexpected captured output: %q", string(output))
+	}
+}
+
+func TestValidateManagedHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		host    string
+		wantErr bool
+	}{
+		{name: "valid hostname", host: "example.com"},
+		{name: "valid ipv4", host: "192.0.2.10"},
+		{name: "missing host", host: "", wantErr: true},
+		{name: "leading dash", host: "-example.com", wantErr: true},
+		{name: "contains whitespace", host: "bad host", wantErr: true},
+		{name: "contains control", host: "bad\nhost", wantErr: true},
+		{name: "oversized", host: strings.Repeat("a", maxKnownHostsManagedHostBytes+1), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := validateManagedHost(tt.host)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestPreviewCommandOutput(t *testing.T) {
+	if got := previewCommandOutput([]byte("hello"), 10); got != "hello" {
+		t.Fatalf("unexpected preview output: %q", got)
+	}
+
+	if got := previewCommandOutput([]byte("abcdef"), 3); got != "abc...(truncated)" {
+		t.Fatalf("unexpected truncated preview output: %q", got)
+	}
+}
+
 type errWriteCloser struct {
-	err error
+	err      error
+	closeErr error
 }
 
 func (e errWriteCloser) Write(p []byte) (int, error) {
-	return 0, e.err
+	if e.err != nil {
+		return 0, e.err
+	}
+	return len(p), nil
 }
 
 func (e errWriteCloser) Close() error {
-	return nil
+	return e.closeErr
 }
 
 type bufferWriteCloser struct {

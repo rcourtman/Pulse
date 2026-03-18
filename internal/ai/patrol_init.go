@@ -11,8 +11,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -207,19 +208,19 @@ func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.circuitBreaker = breaker
-	log.Info().Msg("Circuit breaker configured for patrol")
+	log.Info().Msg("circuit breaker configured for patrol")
 }
 
-// SetRemediationEngine sets the remediation engine for generating fix plans from findings
-func (p *PatrolService) SetRemediationEngine(engine *remediation.Engine) {
+// SetRemediationEngine sets the remediation engine for generating fix plans from findings.
+func (p *PatrolService) SetRemediationEngine(engine aicontracts.RemediationEngine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.remediationEngine = engine
-	log.Info().Msg("Remediation engine configured for patrol")
+	log.Info().Msg("remediation engine configured for patrol")
 }
 
-// GetRemediationEngine returns the remediation engine
-func (p *PatrolService) GetRemediationEngine() *remediation.Engine {
+// GetRemediationEngine returns the remediation engine.
+func (p *PatrolService) GetRemediationEngine() aicontracts.RemediationEngine {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.remediationEngine
@@ -230,7 +231,11 @@ func (p *PatrolService) SetInvestigationOrchestrator(orchestrator InvestigationO
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.investigationOrchestrator = orchestrator
-	log.Info().Msg("Investigation orchestrator configured for patrol")
+	if orchestrator != nil {
+		log.Info().Msg("investigation orchestrator configured for patrol")
+	} else {
+		log.Info().Msg("investigation orchestrator cleared from patrol")
+	}
 }
 
 // GetInvestigationOrchestrator returns the investigation orchestrator
@@ -238,6 +243,13 @@ func (p *PatrolService) GetInvestigationOrchestrator() InvestigationOrchestrator
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.investigationOrchestrator
+}
+
+// SetPushNotifyCallback sets the callback for sending push notifications via relay.
+func (p *PatrolService) SetPushNotifyCallback(cb PushNotifyCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pushNotifyCallback = cb
 }
 
 // SetUnifiedFindingCallback sets the callback for pushing findings to the unified store
@@ -262,7 +274,7 @@ func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {
 			Int("total", len(activeFindings)).
 			Msg("Unified finding callback configured and existing findings synced")
 	} else {
-		log.Info().Msg("Unified finding callback configured for patrol")
+		log.Info().Msg("unified finding callback configured for patrol")
 	}
 }
 
@@ -272,7 +284,7 @@ func (p *PatrolService) SetUnifiedFindingResolver(cb func(findingID string)) {
 	defer p.mu.Unlock()
 	p.unifiedFindingResolver = cb
 	if cb != nil {
-		log.Info().Msg("Unified finding resolver configured for patrol")
+		log.Info().Msg("unified finding resolver configured for patrol")
 	}
 }
 
@@ -388,6 +400,42 @@ func (p *PatrolService) GetKnowledgeStore() *knowledge.Store {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.knowledgeStore
+}
+
+// SetUnifiedResourceProvider sets the unified resource provider for reading
+// physical disks, Ceph clusters, etc. from the canonical resource registry.
+func (p *PatrolService) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.unifiedResourceProvider = urp
+	log.Info().Msg("AI Patrol: Unified resource provider set")
+}
+
+// SetReadState sets the typed ReadState view provider for resource iteration.
+// ReadState is required for guest intelligence gathering — when nil,
+// gatherGuestIntelligence returns an empty map.
+func (p *PatrolService) SetReadState(rs unifiedresources.ReadState) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.readState = rs
+	if rs != nil {
+		log.Info().Msg("AI Patrol: ReadState configured")
+	} else {
+		log.Info().Msg("AI Patrol: ReadState cleared")
+	}
+}
+
+// SetStateProvider updates the legacy snapshot provider used for non-resource
+// telemetry that is not yet modeled through ReadState/unified resources.
+func (p *PatrolService) SetStateProvider(sp StateProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stateProvider = sp
+	if sp != nil {
+		log.Info().Msg("AI Patrol: state provider configured")
+	} else {
+		log.Info().Msg("AI Patrol: state provider cleared")
+	}
 }
 
 // SetDiscoveryStore sets the discovery store for infrastructure context
@@ -548,6 +596,35 @@ func (p *PatrolService) GetTriggerManager() *TriggerManager {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.triggerManager
+}
+
+// SetEventTriggersEnabled controls whether event-driven patrol triggers (alert_fired, alert_cleared, anomaly)
+// are accepted. Propagates the setting to both PatrolService and the TriggerManager.
+func (p *PatrolService) SetEventTriggersEnabled(enabled bool) {
+	p.mu.Lock()
+	p.eventTriggersEnabled = enabled
+	tm := p.triggerManager
+	p.mu.Unlock()
+	if tm != nil {
+		tm.SetEventTriggersEnabled(enabled)
+	}
+}
+
+// SetQuickstartCredits sets the quickstart credit manager for free hosted patrol runs.
+func (p *PatrolService) SetQuickstartCredits(mgr QuickstartCreditManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.quickstartCredits = mgr
+	if mgr != nil {
+		log.Info().Int("remaining", mgr.CreditsRemaining()).Msg("AI Patrol: Quickstart credit manager configured")
+	}
+}
+
+// GetQuickstartCredits returns the quickstart credit manager.
+func (p *PatrolService) GetQuickstartCredits() QuickstartCreditManager {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.quickstartCredits
 }
 
 // TriggerScopedPatrol runs a targeted patrol for specific resources.

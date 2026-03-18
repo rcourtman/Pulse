@@ -47,7 +47,7 @@ For generic webhooks, use Go templates to format the JSON payload.
 - **Telegram**: include `chat_id` in the URL query string.
 - **Telegram templates**: `{{.ChatID}}` is populated from the URL query string.
 - **PagerDuty**: set `routing_key` as a custom field (or header) in the webhook config.
-- **Pushover**: add `app_token` and `user_token` custom fields (required).
+- **Pushover**: add `token` and `user` custom fields (required). Legacy `app_token` and `user_token` inputs are migrated automatically.
 
 **Example Payload:**
 ```json
@@ -62,9 +62,9 @@ For generic webhooks, use Go templates to format the JSON payload.
 - **Private IPs**: By default, webhooks to private IPs are blocked. Allow them in **Settings → System → Network → Webhook Security**.
 - **Headers**: Add custom headers (e.g., `Authorization: Bearer ...`) in the webhook config.
 
-## 🧾 Audit Webhooks (Pro)
+## 🧾 Audit Webhooks (Pro/Pro+/Cloud)
 
-Pulse Pro supports dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
+Pro, Pro+, and Cloud support dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
 
 ### Setup
 1. Go to **Settings → Security → Webhooks**.

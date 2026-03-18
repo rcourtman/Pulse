@@ -1,9 +1,10 @@
-import { Show, createSignal, createEffect, For } from 'solid-js';
+import { Show, createSignal, createEffect, createMemo, For } from 'solid-js';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
+import { buildReleaseNotesUrl } from '@/components/updateVersion';
 
 export function UpdateBanner() {
   const [isExpanded, setIsExpanded] = createSignal(false);
@@ -11,19 +12,36 @@ export function UpdateBanner() {
   const [showConfirmModal, setShowConfirmModal] = createSignal(false);
   const [isApplying, setIsApplying] = createSignal(false);
   const [copiedIndex, setCopiedIndex] = createSignal<number | null>(null);
+  let latestPlanRequestID = 0;
 
   // Fetch update plan when update info is available
-  createEffect(async () => {
+  createEffect(() => {
     const info = updateStore.updateInfo();
-    if (info?.available && info.latestVersion) {
-      try {
-        const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
-        setUpdatePlan(plan);
-      } catch (error) {
-        logger.error('Failed to fetch update plan', error);
-      }
+    const version = info?.available ? info.latestVersion?.trim() : '';
+    const requestID = ++latestPlanRequestID;
+    setUpdatePlan(null);
+
+    if (!version) {
+      return;
     }
+
+    void UpdatesAPI.getUpdatePlan(version)
+      .then((plan) => {
+        if (requestID === latestPlanRequestID) {
+          setUpdatePlan(plan);
+        }
+      })
+      .catch((error) => {
+        if (requestID === latestPlanRequestID) {
+          setUpdatePlan(null);
+        }
+        logger.error('Failed to fetch update plan', error);
+      });
   });
+
+  const releaseNotesUrl = createMemo(() =>
+    buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
+  );
 
   const handleApplyUpdate = () => {
     setShowConfirmModal(true);
@@ -49,7 +67,10 @@ export function UpdateBanner() {
   const handleCopy = async (text: string, index: number) => {
     const success = await copyToClipboard(text);
     if (!success) {
-      logger.error('Failed to copy update instruction to clipboard', new Error('clipboard copy failed'));
+      logger.error(
+        'Failed to copy update instruction to clipboard',
+        new Error('clipboard copy failed'),
+      );
       return;
     }
     setCopiedIndex(index);
@@ -83,7 +104,10 @@ export function UpdateBanner() {
 
   return (
     <Show when={updateStore.isUpdateVisible()}>
-      <div class="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown">
+      <div
+        data-testid="update-banner"
+        class="update-banner bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown"
+      >
         <div class="px-4 py-1.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -110,6 +134,13 @@ export function UpdateBanner() {
               <div class="flex items-center gap-3 flex-wrap">
                 <span class="text-sm font-medium">{getShortMessage()}</span>
 
+                {/* Pre-release badge */}
+                <Show when={updateStore.updateInfo()?.isPrerelease && !isExpanded()}>
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 rounded">
+                    Pre-release
+                  </span>
+                </Show>
+
                 {/* Apply Update Button (automated deployments) */}
                 <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
                   <button
@@ -122,7 +153,7 @@ export function UpdateBanner() {
 
                 {/* Manual Steps Badge (non-automated deployments) */}
                 <Show when={updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded()}>
-                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
                     Manual steps required
                   </span>
                 </Show>
@@ -137,7 +168,7 @@ export function UpdateBanner() {
                 )}
                 {!isExpanded() && (
                   <a
-                    href={`https://github.com/rcourtman/Pulse/releases/tag/v${updateStore.updateInfo()?.latestVersion}`}
+                    href={releaseNotesUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 underline text-sm hidden sm:inline hover:text-blue-700 dark:hover:text-blue-300"
@@ -152,7 +183,7 @@ export function UpdateBanner() {
               {/* Expand/Collapse button */}
               <button
                 onClick={() => setIsExpanded(!isExpanded())}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                 title={isExpanded() ? 'Show less' : 'Show more'}
               >
                 <svg
@@ -169,7 +200,7 @@ export function UpdateBanner() {
               {/* Dismiss button */}
               <button
                 onClick={() => updateStore.dismissUpdate()}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                 title="Dismiss this update"
               >
                 <svg
@@ -201,36 +232,85 @@ export function UpdateBanner() {
                     <span class="font-medium">Quick upgrade:</span> {getUpdateInstructions()}
                   </p>
                 )}
-                <Show when={updateStore.updateInfo()?.isPrerelease}>
-                  <p class="text-orange-600 dark:text-orange-400 text-xs">
-                    This is a pre-release version
-                  </p>
+                <Show when={updateStore.updateInfo()?.warning}>
+                  <div
+                    class={`mt-2 p-3 rounded-md border text-sm ${
+                      updateStore.updateInfo()?.isMajorUpgrade &&
+                      updateStore.updateInfo()?.isPrerelease
+                        ? 'bg-orange-50 dark:bg-orange-950 border-orange-300 dark:border-orange-700 text-orange-800 dark:text-orange-200'
+                        : updateStore.updateInfo()?.isMajorUpgrade
+                          ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                          : 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+                    }`}
+                  >
+                    <div class="flex items-start gap-2">
+                      <svg
+                        class="w-4 h-4 mt-0.5 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                      <span>{updateStore.updateInfo()?.warning}</span>
+                    </div>
+                  </div>
                 </Show>
 
                 {/* Manual Update Instructions */}
-                <Show when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}>
+                <Show
+                  when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}
+                >
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <div class="font-medium mb-2">Update Instructions:</div>
                     <div class="space-y-2">
                       <For each={updatePlan()?.instructions || []}>
                         {(instruction, index) => (
-                          <div class="bg-gray-50 dark:bg-gray-900/50 rounded border border-blue-200 dark:border-blue-700 p-2">
+                          <div class="bg-surface-alt rounded border border-blue-200 dark:border-blue-700 p-2">
                             <div class="flex items-start justify-between gap-2">
-                              <code class="text-xs text-gray-800 dark:text-gray-200 font-mono flex-1 break-all">
+                              <code class="text-xs text-base-content font-mono flex-1 break-all">
                                 {instruction}
                               </code>
                               <button
                                 onClick={() => handleCopy(instruction, index())}
-                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                                 title="Copy to clipboard"
                               >
-                                <Show when={copiedIndex() === index()} fallback={
-                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                }>
-                                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                <Show
+                                  when={copiedIndex() === index()}
+                                  fallback={
+                                    <svg
+                                      class="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                      />
+                                    </svg>
+                                  }
+                                >
+                                  <svg
+                                    class="w-4 h-4 text-green-600 dark:text-green-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M5 13l4 4L19 7"
+                                    />
                                   </svg>
                                 </Show>
                               </button>
@@ -256,7 +336,7 @@ export function UpdateBanner() {
 
                 <div class="flex gap-3 mt-2">
                   <a
-                    href={`https://github.com/rcourtman/Pulse/releases/tag/v${updateStore.updateInfo()?.latestVersion}`}
+                    href={releaseNotesUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 text-xs"
@@ -265,7 +345,7 @@ export function UpdateBanner() {
                   </a>
                   <button
                     onClick={() => updateStore.dismissUpdate()}
-                    class="text-blue-600/70 dark:text-blue-400/70 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
+                    class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
                   >
                     Don't show again for this version
                   </button>
@@ -283,12 +363,17 @@ export function UpdateBanner() {
         onConfirm={handleConfirmUpdate}
         currentVersion={updateStore.versionInfo()?.version || 'Unknown'}
         latestVersion={updateStore.updateInfo()?.latestVersion || ''}
-        plan={updatePlan() || {
-          canAutoUpdate: false,
-          requiresRoot: false,
-          rollbackSupport: false,
-        }}
+        plan={
+          updatePlan() || {
+            canAutoUpdate: false,
+            requiresRoot: false,
+            rollbackSupport: false,
+          }
+        }
         isApplying={isApplying()}
+        isPrerelease={updateStore.updateInfo()?.isPrerelease}
+        isMajorUpgrade={updateStore.updateInfo()?.isMajorUpgrade}
+        warning={updateStore.updateInfo()?.warning}
       />
     </Show>
   );

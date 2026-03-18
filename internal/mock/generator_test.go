@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -24,6 +25,42 @@ func TestGenerateMockDataIncludesDockerHosts(t *testing.T) {
 		if len(host.Containers) == 0 {
 			t.Fatalf("docker host %s has no containers", host.Hostname)
 		}
+	}
+}
+
+func TestComputeGuestCountsHandlesZeroBaselines(t *testing.T) {
+	cfg := MockConfig{
+		VMsPerNode:  0,
+		LXCsPerNode: 0,
+	}
+
+	roles := []string{"vm-heavy", "container-heavy", "light", "mixed"}
+	for _, role := range roles {
+		vmCount, lxcCount := computeGuestCounts(cfg, role)
+		if vmCount < 0 || lxcCount < 0 {
+			t.Fatalf("expected non-negative counts for role %q, got vm=%d lxc=%d", role, vmCount, lxcCount)
+		}
+	}
+}
+
+func TestGenerateMockDataWithZeroGuestBaselinesDoesNotPanic(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 4
+	cfg.VMsPerNode = 0
+	cfg.LXCsPerNode = 0
+	cfg.DockerHostCount = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+
+	for i := 0; i < 20; i++ {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("GenerateMockData panicked on iteration %d: %v", i, r)
+				}
+			}()
+			_ = GenerateMockData(cfg)
+		}()
 	}
 }
 
@@ -62,8 +99,12 @@ func TestGenerateMockDataIncludesHostAgents(t *testing.T) {
 
 	data := GenerateMockData(cfg)
 
-	if len(data.Hosts) != cfg.GenericHostCount {
-		t.Fatalf("expected %d host agents, got %d", cfg.GenericHostCount, len(data.Hosts))
+	expectedMin := cfg.GenericHostCount
+	if cfg.NodeCount > expectedMin {
+		expectedMin = cfg.NodeCount
+	}
+	if len(data.Hosts) < expectedMin {
+		t.Fatalf("expected at least %d host agents, got %d", expectedMin, len(data.Hosts))
 	}
 
 	for _, host := range data.Hosts {
@@ -75,6 +116,190 @@ func TestGenerateMockDataIncludesHostAgents(t *testing.T) {
 		}
 		if host.Status == "" {
 			t.Fatalf("host agent missing status: %+v", host)
+		}
+	}
+}
+
+func TestGenerateMockDataLinksAllNodesToHostAgents(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 7
+	cfg.GenericHostCount = 2
+	cfg.RandomMetrics = false
+
+	data := GenerateMockData(cfg)
+
+	if len(data.Hosts) < cfg.NodeCount {
+		t.Fatalf("expected enough hosts to link all nodes, got hosts=%d nodes=%d", len(data.Hosts), cfg.NodeCount)
+	}
+
+	hostsByID := make(map[string]models.Host, len(data.Hosts))
+	for _, host := range data.Hosts {
+		hostsByID[host.ID] = host
+	}
+
+	for _, node := range data.Nodes {
+		if node.LinkedAgentID == "" {
+			t.Fatalf("node %s is missing linked host agent id", node.ID)
+		}
+		host, ok := hostsByID[node.LinkedAgentID]
+		if !ok {
+			t.Fatalf("node %s linked host %s not found", node.ID, node.LinkedAgentID)
+		}
+		if host.LinkedNodeID != node.ID {
+			t.Fatalf("host %s linkedNodeID=%q, want %q", host.ID, host.LinkedNodeID, node.ID)
+		}
+	}
+}
+
+func TestGenerateMockDataPopulatesHostIORates(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 6
+	cfg.GenericHostCount = 1
+	cfg.RandomMetrics = true
+
+	data := GenerateMockData(cfg)
+
+	for _, host := range data.Hosts {
+		if host.Status == "offline" {
+			if host.NetInRate != 0 || host.NetOutRate != 0 || host.DiskReadRate != 0 || host.DiskWriteRate != 0 {
+				t.Fatalf("offline host %s should have zero I/O rates", host.ID)
+			}
+			continue
+		}
+		if host.NetInRate <= 0 || host.NetOutRate <= 0 {
+			t.Fatalf("host %s missing network rates: in=%f out=%f", host.ID, host.NetInRate, host.NetOutRate)
+		}
+		if host.DiskReadRate <= 0 || host.DiskWriteRate <= 0 {
+			t.Fatalf("host %s missing disk rates: read=%f write=%f", host.ID, host.DiskReadRate, host.DiskWriteRate)
+		}
+	}
+}
+
+func TestGenerateMockDataPopulatesDockerHostIORates(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.DockerHostCount = 3
+	cfg.RandomMetrics = true
+
+	data := GenerateMockData(cfg)
+
+	if len(data.DockerHosts) == 0 {
+		t.Fatal("expected docker hosts in mock data")
+	}
+
+	for _, host := range data.DockerHosts {
+		if host.Status == "offline" {
+			if host.NetInRate != 0 || host.NetOutRate != 0 || host.DiskReadRate != 0 || host.DiskWriteRate != 0 {
+				t.Fatalf("offline docker host %s should have zero I/O rates", host.ID)
+			}
+			if host.Temperature != nil {
+				t.Fatalf("offline docker host %s should not report temperature", host.ID)
+			}
+			continue
+		}
+		if host.NetInRate <= 0 || host.NetOutRate <= 0 {
+			t.Fatalf("docker host %s missing network rates: in=%f out=%f", host.ID, host.NetInRate, host.NetOutRate)
+		}
+		if host.DiskReadRate <= 0 || host.DiskWriteRate <= 0 {
+			t.Fatalf("docker host %s missing disk rates: read=%f write=%f", host.ID, host.DiskReadRate, host.DiskWriteRate)
+		}
+		if host.Temperature == nil {
+			t.Fatalf("docker host %s missing temperature", host.ID)
+		}
+	}
+}
+
+func TestGenerateMockDataPopulatesKubernetesUsageMetrics(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 4
+	cfg.K8sPodsPerCluster = 24
+	cfg.RandomMetrics = false
+
+	data := GenerateMockData(cfg)
+	if len(data.KubernetesClusters) != 1 {
+		t.Fatalf("expected exactly one kubernetes cluster, got %d", len(data.KubernetesClusters))
+	}
+
+	cluster := data.KubernetesClusters[0]
+	readyNodeNames := make(map[string]struct{}, len(cluster.Nodes))
+	for _, node := range cluster.Nodes {
+		if node.Ready {
+			readyNodeNames[strings.TrimSpace(node.Name)] = struct{}{}
+		}
+	}
+
+	runningPodsWithUsage := 0
+	for _, pod := range cluster.Pods {
+		if !strings.EqualFold(pod.Phase, "running") {
+			continue
+		}
+		if _, ok := readyNodeNames[strings.TrimSpace(pod.NodeName)]; !ok {
+			continue
+		}
+		if pod.UsageCPUMilliCores <= 0 || pod.UsageMemoryBytes <= 0 {
+			t.Fatalf("running pod %s missing cpu/memory usage: %+v", pod.Name, pod)
+		}
+		if pod.NetInRate <= 0 || pod.NetOutRate <= 0 {
+			t.Fatalf("running pod %s missing network rates: in=%f out=%f", pod.Name, pod.NetInRate, pod.NetOutRate)
+		}
+		if pod.EphemeralStorageCapacityBytes <= 0 || pod.EphemeralStorageUsedBytes <= 0 {
+			t.Fatalf("running pod %s missing ephemeral storage usage: %+v", pod.Name, pod)
+		}
+		if pod.DiskUsagePercent <= 0 {
+			t.Fatalf("running pod %s missing disk usage percent: %+v", pod.Name, pod)
+		}
+		runningPodsWithUsage++
+	}
+	if runningPodsWithUsage == 0 {
+		t.Fatal("expected at least one running kubernetes pod with usage metrics")
+	}
+
+	readyNodesWithUsage := 0
+	for _, node := range cluster.Nodes {
+		if !node.Ready {
+			continue
+		}
+		if node.UsageCPUMilliCores <= 0 || node.UsageMemoryBytes <= 0 {
+			t.Fatalf("ready node %s missing usage metrics: %+v", node.Name, node)
+		}
+		readyNodesWithUsage++
+	}
+	if readyNodesWithUsage == 0 {
+		t.Fatal("expected at least one ready kubernetes node with usage metrics")
+	}
+}
+
+func TestGenerateMockDataCreatesHostEntriesForKubernetesNodes(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 1
+	cfg.K8sNodesPerCluster = 3
+	cfg.K8sPodsPerCluster = 8
+	cfg.NodeCount = 0
+	cfg.RandomMetrics = false
+
+	data := GenerateMockData(cfg)
+	if len(data.KubernetesClusters) == 0 {
+		t.Fatal("expected kubernetes clusters in mock data")
+	}
+
+	hostsByName := make(map[string]models.Host, len(data.Hosts))
+	for _, host := range data.Hosts {
+		hostsByName[strings.ToLower(strings.TrimSpace(host.Hostname))] = host
+	}
+
+	for _, node := range data.KubernetesClusters[0].Nodes {
+		host, ok := hostsByName[strings.ToLower(strings.TrimSpace(node.Name))]
+		if !ok {
+			t.Fatalf("expected host entry for kubernetes node %s", node.Name)
+		}
+		if host.NetInRate <= 0 || host.NetOutRate <= 0 {
+			t.Fatalf("kubernetes node host %s missing network rates: in=%f out=%f", host.Hostname, host.NetInRate, host.NetOutRate)
+		}
+		if host.DiskReadRate <= 0 || host.DiskWriteRate <= 0 {
+			t.Fatalf("kubernetes node host %s missing disk rates: read=%f write=%f", host.Hostname, host.DiskReadRate, host.DiskWriteRate)
+		}
+		if len(host.Sensors.TemperatureCelsius) == 0 {
+			t.Fatalf("kubernetes node host %s missing temperature sensors", host.Hostname)
 		}
 	}
 }
@@ -91,8 +316,11 @@ func TestMockStateIncludesHostAgents(t *testing.T) {
 	}
 
 	frontend := state.ToFrontend()
-	if len(frontend.Hosts) == 0 {
-		t.Fatalf("expected hosts in frontend state, got %d", len(frontend.Hosts))
+	if frontend.Resources == nil {
+		t.Fatal("expected canonical frontend resources slice to be initialized")
+	}
+	if frontend.ConnectedInfrastructure == nil {
+		t.Fatal("expected canonical connectedInfrastructure slice to be initialized")
 	}
 }
 
@@ -161,5 +389,59 @@ func TestCloneStateCopiesPMGInstances(t *testing.T) {
 	cloned.PMGInstances[0].Name = "modified"
 	if state.PMGInstances[0].Name == "modified" {
 		t.Fatal("expected PMG instances to be deep-copied")
+	}
+}
+
+func TestCloneStatePreservesIgnoredInfrastructureEntries(t *testing.T) {
+	state := models.StateSnapshot{
+		RemovedDockerHosts: []models.RemovedDockerHost{
+			{ID: "docker-1", Hostname: "docker.local"},
+		},
+		RemovedHostAgents: []models.RemovedHostAgent{
+			{ID: "agent-1", Hostname: "host.local"},
+		},
+		RemovedKubernetesClusters: []models.RemovedKubernetesCluster{
+			{ID: "cluster-1", Name: "cluster.local"},
+		},
+	}
+
+	cloned := cloneState(state)
+
+	if len(cloned.RemovedDockerHosts) != 1 {
+		t.Fatalf("expected cloned state to include removed docker hosts, got %d", len(cloned.RemovedDockerHosts))
+	}
+	if len(cloned.RemovedHostAgents) != 1 {
+		t.Fatalf("expected cloned state to include removed host agents, got %d", len(cloned.RemovedHostAgents))
+	}
+	if len(cloned.RemovedKubernetesClusters) != 1 {
+		t.Fatalf("expected cloned state to include removed kubernetes clusters, got %d", len(cloned.RemovedKubernetesClusters))
+	}
+
+	cloned.RemovedDockerHosts[0].Hostname = "mutated-docker.local"
+	cloned.RemovedHostAgents[0].Hostname = "mutated-host.local"
+	cloned.RemovedKubernetesClusters[0].Name = "mutated-cluster.local"
+
+	if state.RemovedDockerHosts[0].Hostname == "mutated-docker.local" {
+		t.Fatal("expected removed docker hosts to be copied")
+	}
+	if state.RemovedHostAgents[0].Hostname == "mutated-host.local" {
+		t.Fatal("expected removed host agents to be copied")
+	}
+	if state.RemovedKubernetesClusters[0].Name == "mutated-cluster.local" {
+		t.Fatal("expected removed kubernetes clusters to be copied")
+	}
+}
+
+func TestGenerateMockDataInitializesIgnoredInfrastructureSlices(t *testing.T) {
+	data := GenerateMockData(DefaultConfig)
+
+	if data.RemovedDockerHosts == nil {
+		t.Fatal("expected GenerateMockData to initialize RemovedDockerHosts")
+	}
+	if data.RemovedHostAgents == nil {
+		t.Fatal("expected GenerateMockData to initialize RemovedHostAgents")
+	}
+	if data.RemovedKubernetesClusters == nil {
+		t.Fatal("expected GenerateMockData to initialize RemovedKubernetesClusters")
 	}
 }

@@ -9,7 +9,7 @@
 
 import { createSignal } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { acknowledgeFinding, snoozeFinding, dismissFinding, undismissFinding, setFindingNote } from '@/api/patrol';
+import { acknowledgeFinding, snoozeFinding, dismissFinding, setFindingNote } from '@/api/patrol';
 import type {
   RemediationPlan,
   CircuitBreakerStatus,
@@ -17,28 +17,63 @@ import type {
   ApprovalRequest,
   ApprovalExecutionResult,
 } from '@/api/ai';
+import {
+  doesFindingNeedAttention,
+  hasPendingInvestigationFixApproval,
+  isPatrolInvestigationFixApproval,
+} from '@/utils/aiFindingPresentation';
+import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { logger } from '@/utils/logger';
 
 // ============================================
 // Enum validation helpers
 // ============================================
 
-const VALID_INVESTIGATION_STATUSES = new Set<string>(['pending', 'running', 'completed', 'failed', 'needs_attention']);
+const VALID_INVESTIGATION_STATUSES = new Set<string>([
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'needs_attention',
+]);
 const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
-  'resolved', 'fix_queued', 'fix_executed', 'fix_failed',
-  'needs_attention', 'cannot_fix', 'timed_out', 'fix_verified', 'fix_verification_failed',
+  'resolved',
+  'fix_queued',
+  'fix_executed',
+  'fix_failed',
+  'needs_attention',
+  'cannot_fix',
+  'timed_out',
+  'fix_verified',
+  'fix_verification_failed',
+  'fix_verification_unknown',
 ]);
 const VALID_SEVERITIES = new Set<string>(['critical', 'warning', 'info', 'watch']);
-const VALID_SOURCES = new Set<string>(['threshold', 'ai-patrol', 'ai-chat', 'anomaly', 'correlation', 'forecast']);
+const VALID_SOURCES = new Set<string>([
+  'threshold',
+  'ai-patrol',
+  'ai-chat',
+  'anomaly',
+  'correlation',
+  'forecast',
+]);
 
-function validateInvestigationStatus(value: string | undefined): UnifiedFinding['investigationStatus'] {
+function validateInvestigationStatus(
+  value: string | undefined,
+): UnifiedFinding['investigationStatus'] {
   if (!value) return undefined;
-  return VALID_INVESTIGATION_STATUSES.has(value) ? value as UnifiedFinding['investigationStatus'] : undefined;
+  return VALID_INVESTIGATION_STATUSES.has(value)
+    ? (value as UnifiedFinding['investigationStatus'])
+    : undefined;
 }
 
-function validateInvestigationOutcome(value: string | undefined): UnifiedFinding['investigationOutcome'] {
+function validateInvestigationOutcome(
+  value: string | undefined,
+): UnifiedFinding['investigationOutcome'] {
   if (!value) return undefined;
-  return VALID_INVESTIGATION_OUTCOMES.has(value) ? value as UnifiedFinding['investigationOutcome'] : undefined;
+  return VALID_INVESTIGATION_OUTCOMES.has(value)
+    ? (value as UnifiedFinding['investigationOutcome'])
+    : undefined;
 }
 
 function validateSeverity(value: string | undefined): UnifiedFinding['severity'] {
@@ -61,7 +96,7 @@ export interface UnifiedFinding {
   resourceId: string;
   resourceName: string;
   resourceType: string;
-  alertId?: string;
+  alertIdentifier?: string;
   alertType?: string;
   isThreshold?: boolean;
   category: string;
@@ -81,9 +116,30 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol Autonomy)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
+  investigationOutcome?:
+    | 'resolved'
+    | 'fix_queued'
+    | 'fix_executed'
+    | 'fix_failed'
+    | 'needs_attention'
+    | 'cannot_fix'
+    | 'timed_out'
+    | 'fix_verified'
+    | 'fix_verification_failed'
+    | 'fix_verification_unknown';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
+  loopState?: string;
+  lifecycle?: Array<{
+    at: string;
+    type: string;
+    message?: string;
+    from?: string;
+    to?: string;
+    metadata?: Record<string, string>;
+  }>;
+  regressionCount?: number;
+  lastRegressionAt?: string;
 }
 
 const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
@@ -104,12 +160,61 @@ const [plansError, setPlansError] = createSignal<string | null>(null);
 
 const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 const [approvalsError, setApprovalsError] = createSignal<string | null>(null);
+const [pendingApprovalsNow, setPendingApprovalsNow] = createSignal(Date.now());
+
+let pendingApprovalExpiryTimer: ReturnType<typeof setTimeout> | undefined;
+
+function syncPendingApprovalExpiryTimer(approvals: ApprovalRequest[]) {
+  if (pendingApprovalExpiryTimer) {
+    clearTimeout(pendingApprovalExpiryTimer);
+    pendingApprovalExpiryTimer = undefined;
+  }
+
+  const now = Date.now();
+  setPendingApprovalsNow(now);
+
+  let nextExpiry: number | null = null;
+  for (const approval of approvals) {
+    if (approval.status !== 'pending') {
+      continue;
+    }
+
+    const expiry = getApprovalExpiryTime(approval);
+    if (expiry === null || expiry <= now) {
+      continue;
+    }
+
+    if (nextExpiry === null || expiry < nextExpiry) {
+      nextExpiry = expiry;
+    }
+  }
+
+  if (nextExpiry === null) {
+    return;
+  }
+
+  pendingApprovalExpiryTimer = setTimeout(() => {
+    syncPendingApprovalExpiryTimer(pendingApprovals());
+  }, Math.max(0, nextExpiry - Date.now() + 1));
+}
+
+function setPendingApprovalsWithExpiryTracking(approvals: ApprovalRequest[]) {
+  setPendingApprovals(approvals);
+  syncPendingApprovalExpiryTimer(approvals);
+}
+
+function getLivePendingApprovals() {
+  const now = pendingApprovalsNow();
+  return pendingApprovals().filter((approval) => isLivePendingApproval(approval, now));
+}
 
 // ============================================
 // Circuit Breaker
 // ============================================
 
-const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(null);
+const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(
+  null,
+);
 
 // ============================================
 // Store API
@@ -117,9 +222,15 @@ const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBrea
 
 export const aiIntelligenceStore = {
   // Unified Findings
-  get findings() { return unifiedFindings(); },
-  get findingsLoading() { return findingsLoading(); },
-  get findingsError() { return findingsError(); },
+  get findings() {
+    return unifiedFindings();
+  },
+  get findingsLoading() {
+    return findingsLoading();
+  },
+  get findingsError() {
+    return findingsError();
+  },
   findingsSignal: unifiedFindings,
 
   async loadFindings() {
@@ -131,6 +242,7 @@ export const aiIntelligenceStore = {
       const now = Date.now();
 
       const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
+        const alertIdentifier = item.alertIdentifier;
         let status = item.status as UnifiedFinding['status'] | undefined;
         if (!status) {
           if (item.resolved_at) {
@@ -150,7 +262,7 @@ export const aiIntelligenceStore = {
           resourceId: item.resource_id,
           resourceName: item.resource_name || item.resource_id,
           resourceType: item.resource_type || 'unknown',
-          alertId: item.alert_id,
+          alertIdentifier,
           isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
           category: item.category || 'general',
           severity: validateSeverity(item.severity),
@@ -171,6 +283,10 @@ export const aiIntelligenceStore = {
           investigationOutcome: validateInvestigationOutcome(item.investigation_outcome),
           lastInvestigatedAt: item.last_investigated_at || undefined,
           investigationAttempts: item.investigation_attempts || 0,
+          loopState: item.loop_state || undefined,
+          lifecycle: item.lifecycle || [],
+          regressionCount: item.regression_count || 0,
+          lastRegressionAt: item.last_regression_at || undefined,
         };
       });
 
@@ -184,9 +300,15 @@ export const aiIntelligenceStore = {
   },
 
   // Remediation Plans
-  get remediationPlans() { return remediationPlans(); },
-  get plansLoading() { return plansLoading(); },
-  get plansError() { return plansError(); },
+  get remediationPlans() {
+    return remediationPlans();
+  },
+  get plansLoading() {
+    return plansLoading();
+  },
+  get plansError() {
+    return plansError();
+  },
   remediationPlansSignal: remediationPlans,
 
   async loadRemediationPlans() {
@@ -273,23 +395,12 @@ export const aiIntelligenceStore = {
     }
   },
 
-  async restoreFinding(findingId: string) {
-    try {
-      await undismissFinding(findingId);
-      await this.loadFindings();
-      return true;
-    } catch (e) {
-      logger.error('Failed to restore finding:', e);
-      return false;
-    }
-  },
-
   async setFindingNote(findingId: string, note: string) {
     try {
       await setFindingNote(findingId, note);
       // Update local state immediately for responsiveness
-      setUnifiedFindings(prev =>
-        prev.map(f => f.id === findingId ? { ...f, userNote: note } : f),
+      setUnifiedFindings((prev) =>
+        prev.map((f) => (f.id === findingId ? { ...f, userNote: note } : f)),
       );
       return true;
     } catch (e) {
@@ -299,25 +410,28 @@ export const aiIntelligenceStore = {
   },
 
   // Pending Approvals
-  get pendingApprovals() { return pendingApprovals(); },
-  get approvalsError() { return approvalsError(); },
-  pendingApprovalsSignal: pendingApprovals,
+  get pendingApprovals() {
+    return getLivePendingApprovals();
+  },
+  get approvalsError() {
+    return approvalsError();
+  },
+  pendingApprovalsSignal: getLivePendingApprovals,
 
   get pendingApprovalCount() {
-    return pendingApprovals().filter(a => a.status === 'pending').length;
+    return getLivePendingApprovals().length;
   },
 
   get findingsWithPendingApprovals() {
-    const approvals = pendingApprovals().filter(a => a.status === 'pending');
-    const findingIds = new Set(approvals.filter(a => a.toolId === 'investigation_fix').map(a => a.targetId));
-    return unifiedFindings().filter(f => findingIds.has(f.id));
+    const approvals = getLivePendingApprovals();
+    return unifiedFindings().filter((finding) =>
+      hasPendingInvestigationFixApproval(finding.id, approvals),
+    );
   },
 
   get findingsNeedingAttention() {
-    const actionableOutcomes = new Set(['fix_verification_failed', 'fix_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
-    return unifiedFindings().filter(f =>
-      f.status === 'active' && f.investigationOutcome && actionableOutcomes.has(f.investigationOutcome)
-    );
+    const approvals = getLivePendingApprovals();
+    return unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals));
   },
 
   get needsAttentionCount() {
@@ -327,8 +441,8 @@ export const aiIntelligenceStore = {
   async loadPendingApprovals() {
     setApprovalsError(null);
     try {
-      const approvals = await AIAPI.getPendingApprovals();
-      setPendingApprovals(approvals);
+      const approvals = (await AIAPI.getPendingApprovals()).filter(isPatrolInvestigationFixApproval);
+      setPendingApprovalsWithExpiryTracking(approvals);
     } catch (e) {
       logger.error('Failed to load pending approvals:', e);
       setApprovalsError(e instanceof Error ? e.message : 'Failed to load approvals');
@@ -360,7 +474,9 @@ export const aiIntelligenceStore = {
   },
 
   // Circuit Breaker
-  get circuitBreakerStatus() { return circuitBreakerStatus(); },
+  get circuitBreakerStatus() {
+    return circuitBreakerStatus();
+  },
   circuitBreakerStatusSignal: circuitBreakerStatus,
 
   async loadCircuitBreakerStatus() {

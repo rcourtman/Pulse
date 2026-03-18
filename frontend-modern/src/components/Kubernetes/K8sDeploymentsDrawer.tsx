@@ -1,0 +1,318 @@
+import type { Component } from 'solid-js';
+import { For, Show, createMemo, createResource, createSignal, createEffect } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
+import { apiFetchJSON } from '@/utils/apiClient';
+import { Card } from '@/components/shared/Card';
+import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
+import { SearchField } from '@/components/shared/SearchField';
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import {
+  getK8sDeploymentsDrawerPresentation,
+  getK8sDeploymentsEmptyState,
+  getK8sDeploymentsLoadingState,
+} from '@/utils/k8sDeploymentPresentation';
+import { getSimpleStatusIndicator } from '@/utils/status';
+
+const PAGE_LIMIT = 100;
+const MAX_PAGES = 20;
+
+type K8sDeploymentResource = {
+  id: string;
+  name?: string;
+  status?: string;
+  kubernetes?: {
+    namespace?: string;
+    desiredReplicas?: number;
+    updatedReplicas?: number;
+    readyReplicas?: number;
+    availableReplicas?: number;
+  };
+};
+
+type ResourcesListResponse = {
+  data?: K8sDeploymentResource[];
+  meta?: {
+    totalPages?: number;
+  };
+};
+
+const normalize = (value?: string | null) => (value || '').trim();
+
+const buildDeploymentsUrl = (cluster: string, page: number) => {
+  const params = new URLSearchParams();
+  params.set('type', 'k8s-deployment');
+  params.set('cluster', cluster);
+  params.set('page', String(page));
+  params.set('limit', String(PAGE_LIMIT));
+  return `/api/resources?${params.toString()}`;
+};
+
+const fetchAllDeployments = async (cluster: string): Promise<K8sDeploymentResource[]> => {
+  const first = await apiFetchJSON<ResourcesListResponse>(buildDeploymentsUrl(cluster, 1), {
+    cache: 'no-store',
+  });
+  const firstData = Array.isArray(first?.data) ? first.data : [];
+  const totalPages = Number.isFinite(first?.meta?.totalPages)
+    ? Math.max(1, Number(first.meta?.totalPages))
+    : 1;
+
+  const deployments: K8sDeploymentResource[] = [...firstData];
+
+  const cappedPages = Math.min(totalPages, MAX_PAGES);
+  if (cappedPages > 1) {
+    const requests: Array<Promise<ResourcesListResponse>> = [];
+    for (let page = 2; page <= cappedPages; page += 1) {
+      requests.push(
+        apiFetchJSON<ResourcesListResponse>(buildDeploymentsUrl(cluster, page), {
+          cache: 'no-store',
+        }),
+      );
+    }
+
+    const settled = await Promise.allSettled(requests);
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') continue;
+      const data = Array.isArray(result.value?.data) ? result.value.data : [];
+      deployments.push(...data);
+    }
+  }
+
+  return Array.from(new Map(deployments.map((d) => [d.id, d])).values());
+};
+
+export const K8sDeploymentsDrawer: Component<{
+  cluster: string;
+  initialNamespace?: string | null;
+}> = (props) => {
+  const navigate = useNavigate();
+  const [namespace, setNamespace] = createSignal('');
+  const [search, setSearch] = createSignal('');
+  const [lastAppliedNamespace, setLastAppliedNamespace] = createSignal('');
+  const drawerPresentation = getK8sDeploymentsDrawerPresentation();
+
+  const clusterName = createMemo(() => normalize(props.cluster));
+
+  const [deployments] = createResource(
+    clusterName,
+    async (cluster) => {
+      if (!cluster) return [];
+      return fetchAllDeployments(cluster);
+    },
+    { initialValue: [] },
+  );
+
+  const namespaceOptions = createMemo(() => {
+    const set = new Set<string>();
+    for (const dep of deployments()) {
+      const ns = normalize(dep.kubernetes?.namespace);
+      if (ns) set.add(ns);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  });
+
+  createEffect(() => {
+    // Allow other drawer tabs (e.g., Namespaces) to prefill the namespace filter.
+    const next = normalize(props.initialNamespace);
+    if (!next) return;
+    if (next.toLowerCase() === normalize(lastAppliedNamespace()).toLowerCase()) return;
+    const exists = namespaceOptions().some((ns) => ns.toLowerCase() === next.toLowerCase());
+    if (exists) {
+      setNamespace(next);
+      setLastAppliedNamespace(next);
+    }
+  });
+
+  createEffect(() => {
+    const current = normalize(namespace());
+    if (!current) return;
+    const exists = namespaceOptions().some((ns) => ns.toLowerCase() === current.toLowerCase());
+    if (!exists) {
+      setNamespace('');
+    }
+  });
+
+  const filteredDeployments = createMemo(() => {
+    const ns = normalize(namespace());
+    const term = normalize(search()).toLowerCase();
+
+    return deployments()
+      .filter((dep) => {
+        if (ns && normalize(dep.kubernetes?.namespace) !== ns) return false;
+        if (!term) return true;
+        const name = normalize(dep.name) || dep.id;
+        return name.toLowerCase().includes(term);
+      })
+      .sort((a, b) => {
+        const aName = (normalize(a.name) || a.id).toLowerCase();
+        const bName = (normalize(b.name) || b.id).toLowerCase();
+        if (aName !== bName) return aName < bName ? -1 : 1;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+  });
+
+  const openPods = (ns?: string) => {
+    const cluster = clusterName();
+    if (!cluster) return;
+    navigate(
+      buildWorkloadsPath({
+        type: 'pod',
+        context: cluster,
+        namespace: normalize(ns) || null,
+      }),
+    );
+  };
+
+  return (
+    <div class="space-y-3">
+      <Card padding="md">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-base-content">{drawerPresentation.title}</div>
+            <div class="text-xs text-muted">{drawerPresentation.description}</div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <SearchField
+              value={search()}
+              onChange={setSearch}
+              placeholder={drawerPresentation.searchPlaceholder}
+              class="w-[12rem]"
+              inputClass="py-1 text-xs font-medium shadow-sm"
+            />
+
+            <Show when={namespaceOptions().length > 0}>
+              <LabeledFilterSelect
+                id="k8s-deployments-namespace"
+                label={drawerPresentation.namespaceFilterLabel}
+                value={namespace()}
+                onChange={(e) => setNamespace(e.currentTarget.value)}
+                selectClass="min-w-[10rem]"
+              >
+                <option value="">{drawerPresentation.allNamespacesLabel}</option>
+                <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
+              </LabeledFilterSelect>
+            </Show>
+
+            <button
+              type="button"
+              onClick={() => openPods(namespace() || undefined)}
+              class="rounded-md border border-border px-3 py-1 text-xs font-semibold shadow-sm hover:bg-surface-hover"
+            >
+              {drawerPresentation.openPodsLabel}
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Show
+        when={deployments.loading}
+        fallback={
+          <Show
+            when={filteredDeployments().length > 0}
+            fallback={
+              <Card padding="lg">
+                <EmptyState {...getK8sDeploymentsEmptyState(deployments().length > 0)} />
+              </Card>
+            }
+          >
+            <Card padding="none" tone="card" class="overflow-hidden">
+              <div class="overflow-x-auto">
+                <Table class="w-full min-w-[760px] border-collapse text-xs">
+                  <TableHeader class="bg-surface-alt text-muted border-b border-border">
+                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.deploymentColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.namespaceColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.desiredColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.updatedColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.readyColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.availableColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.actionsColumnLabel}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class="divide-y divide-border-subtle">
+                    <For each={filteredDeployments()}>
+                      {(dep) => {
+                        const name = () => normalize(dep.name) || dep.id;
+                        const ns = () => normalize(dep.kubernetes?.namespace) || '—';
+                        const desired = () => dep.kubernetes?.desiredReplicas ?? 0;
+                        const updated = () => dep.kubernetes?.updatedReplicas ?? 0;
+                        const ready = () => dep.kubernetes?.readyReplicas ?? 0;
+                        const available = () => dep.kubernetes?.availableReplicas ?? 0;
+                        const status = () => getSimpleStatusIndicator(dep.status);
+
+                        return (
+                          <TableRow class="hover:bg-surface-hover">
+                            <TableCell class="px-3 py-2">
+                              <div class="flex items-center gap-2 min-w-0">
+                                <StatusDot
+                                  size="sm"
+                                  variant={status().variant}
+                                  title={dep.status || 'unknown'}
+                                  ariaHidden
+                                />
+                                <span
+                                  class="font-semibold text-base-content truncate"
+                                  title={name()}
+                                >
+                                  {name()}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{ns()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{desired()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{updated()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{ready()}</TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">{available()}</TableCell>
+                            <TableCell class="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => openPods(dep.kubernetes?.namespace)}
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                              >
+                                {drawerPresentation.viewPodsLabel}
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }}
+                    </For>
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </Show>
+        }
+      >
+        <Card padding="lg">
+          <EmptyState {...getK8sDeploymentsLoadingState()} />
+        </Card>
+      </Show>
+    </div>
+  );
+};
+
+export default K8sDeploymentsDrawer;

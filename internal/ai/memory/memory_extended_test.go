@@ -227,14 +227,14 @@ func TestRemediationLog_LogCommand_Failed(t *testing.T) {
 func TestRemediationLog_GetForFinding(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		FindingID:  "finding-123",
 		Problem:    "High memory usage",
 		Action:     "Restart service",
 		Outcome:    OutcomeResolved,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-200",
 		FindingID:  "finding-456",
 		Problem:    "Disk full",
@@ -254,12 +254,12 @@ func TestRemediationLog_GetForFinding(t *testing.T) {
 func TestRemediationLog_GetRecentRemediations(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem: "Issue 1",
 		Action:  "Action 1",
 		Outcome: OutcomeResolved,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem: "Issue 2",
 		Action:  "Action 2",
 		Outcome: OutcomeResolved,
@@ -276,7 +276,7 @@ func TestRemediationLog_GetRecentRemediations(t *testing.T) {
 func TestRemediationLog_FormatForContext(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		Problem:    "High memory usage",
 		Action:     "Restart nginx",
@@ -313,7 +313,7 @@ func TestRemediationLog_Persistence(t *testing.T) {
 		DataDir:    tmpDir,
 	})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		Problem:    "Test problem",
 		Action:     "Test action",
@@ -453,7 +453,7 @@ func TestRemediationLog_TrimRecords(t *testing.T) {
 
 	// Add 5 records (exceeds max of 3)
 	for i := 0; i < 5; i++ {
-		r.Log(RemediationRecord{
+		_ = r.Log(RemediationRecord{
 			ResourceID: "vm-100",
 			Problem:    "Problem",
 			Action:     "Action",

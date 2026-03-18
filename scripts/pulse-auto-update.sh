@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Configuration
-GITHUB_REPO="rcourtman/Pulse"
+GITHUB_REPO="${GITHUB_REPO:-rcourtman/Pulse}"
 INSTALL_DIR="/opt/pulse"
 CONFIG_DIR="/etc/pulse"
 LOG_TAG="pulse-auto-update"
@@ -26,8 +26,13 @@ check_auto_updates_enabled() {
     # Check system.json for autoUpdateEnabled flag (note: no 's' - matches Go struct)
     if [[ -f "$CONFIG_DIR/system.json" ]]; then
         local enabled=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"autoUpdateEnabled"[[:space:]]*:[[:space:]]*true' || true)
+        local channel=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
         if [[ -z "$enabled" ]]; then
             log info "Auto-updates disabled in configuration"
+            exit 0
+        fi
+        if [[ "$channel" == "rc" ]]; then
+            log info "RC channel detected; unattended auto-updates run only on stable"
             exit 0
         fi
     fi
@@ -140,25 +145,15 @@ detect_service_name() {
     fi
 }
 
-restart_service_if_needed() {
-    local service_name=$1
-    local service_was_active=$2
-
-    if [[ "$service_was_active" == "true" ]]; then
-        log info "Starting Pulse service after failed update"
-        systemctl start "$service_name" || true
-    fi
+resolve_install_script_url() {
+    local target_version=$1
+    printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$target_version"
 }
 
 # Perform the update
 perform_update() {
     local new_version=$1
     local service_name=$(detect_service_name)
-    local service_was_active=false
-
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        service_was_active=true
-    fi
     
     log info "Starting update to $new_version"
     
@@ -181,6 +176,8 @@ perform_update() {
     
     # Download update using install script (safest method)
     log info "Downloading and installing update"
+    local install_script_url
+    install_script_url=$(resolve_install_script_url "$new_version")
     
     # Run install script with specific version
     local marker_file="$INSTALL_DIR/BUILD_FROM_SOURCE"
@@ -193,7 +190,7 @@ perform_update() {
         fi
     fi
 
-    if curl -sSL "https://github.com/$GITHUB_REPO/releases/latest/download/install.sh" | \
+    if curl -sSL "$install_script_url" | \
        bash -s -- "${installer_args[@]}" 2>&1 | \
        while IFS= read -r line; do
            log info "installer: $line"
@@ -226,7 +223,8 @@ perform_update() {
                 cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
             fi
             
-            restart_service_if_needed "$service_name" "$service_was_active"
+            # Restart service with old version
+            systemctl restart "$service_name" || true
             
             # Clean up backup
             rm -rf "$backup_dir"
@@ -248,8 +246,6 @@ perform_update() {
         if [[ -f "$backup_dir/VERSION" ]]; then
             cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
         fi
-
-        restart_service_if_needed "$service_name" "$service_was_active"
         
         # Clean up backup
         rm -rf "$backup_dir"

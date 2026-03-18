@@ -33,7 +33,7 @@ Pulse can also collect temperatures by SSHing into each host and running `sensor
 ### Setup
 
 1. Generate the node setup command from the UI:
-   **Settings -> Proxmox -> Add Node**
+   **Settings -> Infrastructure -> Add Node**
 2. Run the command on each Proxmox host. The setup script can:
    - Create the required API user and permissions
    - Add a restricted SSH key entry for temperature collection
@@ -103,21 +103,3 @@ sudo sed -i '/# pulse-managed-key$/d;/# pulse-proxy-key$/d' /root/.ssh/authorize
 ```
 
 Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.
-
-### LXC Container Config Cleanup
-
-The v4 installer also added mount entries for `/run/pulse-sensor-proxy` to the LXC container config (`/etc/pve/lxc/<ctid>.conf`). After a host reboot, `/run` is cleared and the mount source no longer exists, which prevents the container from starting. To check for and remove stale entries:
-
-```bash
-# Check for stale sensor-proxy mount entries
-grep -n 'pulse-sensor-proxy' /etc/pve/lxc/*.conf
-
-# Remove mp<N> entries (container must be stopped)
-# Replace mp0 with the actual key shown in the grep output (mp0, mp1, etc.)
-pct set <ctid> -delete mp0
-
-# Remove lxc.mount.entry lines
-sed -i '/lxc\.mount\.entry:.*pulse-sensor-proxy/d' /etc/pve/lxc/<ctid>.conf
-```
-
-Re-running the Pulse installer on the Proxmox host also performs this cleanup automatically.

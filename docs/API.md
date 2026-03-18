@@ -43,8 +43,8 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `monitoring:read`
 - `settings:read`
 - `settings:write`
-- `host-agent:config:read`
-- `host-agent:manage`
+- `agent:config:read`
+- `agent:manage`
 
 Endpoints that require admin access are noted below.
 
@@ -74,21 +74,76 @@ Lightweight HTML status page for quick checks.
 
 ### Unified Resources
 `GET /api/resources`
-Returns a unified, flattened resource list. Requires `monitoring:read`.
+Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
+
+Query params:
+- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
+- `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
+- `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
+- `parent`: parent resource ID
+- `cluster`: cluster name
+- `namespace`: Kubernetes namespace (filters Kubernetes resources only)
+- `q`: name search (contains match)
+- `tags`: comma-separated tags
+- `page`: page number (default `1`)
+- `limit`: page size (default `50`, max `100`)
+- `sort`: `name` (default), `status`, `type`, `lastSeen`
+- `order`: `asc` (default) or `desc`
+
+Note: `GET /api/resources` is optimized for list views. Some large, platform-specific fields may be omitted from the list response and are only returned by `GET /api/resources/{id}`.
 
 `GET /api/resources/stats`
-Summary counts and health rollups.
+Returns aggregations (counts + health rollups).
+
+`GET /api/resources/k8s/namespaces?cluster=<clusterName>`
+Returns namespace-level rollups (pods + deployments) for a Kubernetes cluster. Requires `monitoring:read`.
+```json
+{
+  "cluster": "prod-k8s",
+  "data": [
+    {
+      "namespace": "default",
+      "pods": { "total": 12, "online": 10, "warning": 2, "offline": 0, "unknown": 0 },
+      "deployments": { "total": 3, "online": 3, "warning": 0, "offline": 0, "unknown": 0 }
+    }
+  ]
+}
+```
 
 `GET /api/resources/{id}`
 Fetch a single resource by ID.
 
+`GET /api/resources/{id}/children`
+Returns child resources for the parent ID.
+
+`GET /api/resources/{id}/metrics`
+Returns the resource metrics payload.
+
+`POST /api/resources/{id}/link`
+Manually link two resources.
+```json
+{ "targetId": "resource-id", "reason": "optional note" }
+```
+
+`POST /api/resources/{id}/unlink`
+Manually unlink two resources.
+```json
+{ "targetId": "resource-id", "reason": "optional note" }
+```
+
+`POST /api/resources/{id}/report-merge`
+Report an incorrect merge (creates exclusions).
+```json
+{ "sources": ["proxmox", "agent"], "notes": "optional note" }
+```
+
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.
 
-- `GET /api/hosts/metadata` (admin or `monitoring:read`)
-- `GET /api/hosts/metadata/{hostId}` (admin or `monitoring:read`)
-- `PUT /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
-- `DELETE /api/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `GET /api/agents/metadata` (admin or `monitoring:read`)
+- `GET /api/agents/metadata/{agentId}` (admin or `monitoring:read`)
+- `PUT /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
+- `DELETE /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
 
 - `GET /api/guests/metadata` (admin or `monitoring:read`)
 - `GET /api/guests/metadata/{guestId}` (admin or `monitoring:read`)
@@ -100,10 +155,10 @@ User notes, tags, and custom URLs for resources.
 - `PUT /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
 - `DELETE /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
 
-- `GET /api/docker/hosts/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:read`)
-- `PUT /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `GET /api/docker/runtimes/metadata` (admin or `monitoring:read`)
+- `GET /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:read`)
+- `PUT /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
+- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
 
 ### Version Info
 `GET /api/version`
@@ -111,12 +166,12 @@ Returns version, build time, and update status.
 Example response:
 ```json
 {
-  "version": "5.0.16",
-  "buildTime": "2026-01-19T22:20:18Z",
+  "version": "6.0.0",
+  "buildTime": "2026-02-21T00:00:00Z",
   "channel": "stable",
   "deploymentType": "systemd",
-  "updateAvailable": true,
-  "latestVersion": "5.0.17"
+  "updateAvailable": false,
+  "latestVersion": "6.0.0"
 }
 ```
 Version fields are returned as plain semantic versions (no leading `v`).
@@ -138,7 +193,7 @@ Returns a small public config payload (update channel, auto-update enabled).
 {
   "type": "pve",
   "name": "Proxmox 1",
-  "host": "https://192.168.1.10:8006",
+  "host": "https://198.51.100.10:8006",
   "user": "root@pam",
   "password": "password"
 }
@@ -188,15 +243,69 @@ Request body:
 
 ### Setup Script (Public)
 `GET /api/setup-script`
-Returns the Proxmox/PBS setup script. Requires a temporary setup token (`auth_token`) in the query.
+Returns the Proxmox/PBS setup script as a shell-script download. Accepts an
+optional temporary setup token in the `setup_token` query for embedded
+non-interactive bootstrap; otherwise the script prompts for the one-time setup
+token at runtime. Canonical callers must send a supported `type` of `pve` or
+`pbs` plus non-empty `host` and `pulse_url`; the route no longer generates
+placeholder-host scripts for later repair or reconstructs Pulse identity from
+the request origin. The route now shares the same canonical type boundary as
+`/api/setup-script-url`, rejecting unsupported node types instead of treating
+unknown values as PBS, and it normalizes the supplied `host` before script
+generation so downloaded artifacts and rerun URLs preserve the same canonical
+node identity as the bootstrap response. The optional `backup_perms=true`
+query is supported only for `type=pve`.
 
 ### Setup Script URL
 `POST /api/setup-script-url` (auth)
 Generates a one-time setup token and URL for `/api/setup-script`.
+Canonical callers must send a supported `type` of `pve` or `pbs` plus a
+non-empty `host`; the backend normalizes that host before minting the setup
+token and now returns the canonical bootstrap identity back in the response as
+`type`, `host`, `url`, `downloadURL`, `scriptFileName`, `command`, `commandWithEnv`,
+`commandWithoutEnv`, `setupToken`, `tokenHint`, and `expires`. The returned
+commands are canonical root-or-sudo `curl -fsSL` bootstrap commands for the
+generated setup script, while `url`, `downloadURL`, and `scriptFileName` are
+the runtime-owned artifact metadata used by copy and manual download surfaces.
+The request body is a single canonical JSON object only; unknown fields and trailing JSON are
+rejected as invalid request shape, and `backupPerms:true` is supported only for
+`type:"pve"`. This route stays on the normal
+authenticated bootstrap boundary: when Pulse auth is already configured it
+requires a real authenticated session or API token, and setup tokens do not
+authorize the request itself. Pulse-managed Proxmox monitor-token names on the
+setup/bootstrap path derive from the canonical Pulse endpoint, not request-local
+host fallbacks, so setup-script and turnkey node-add flows stay on one
+deterministic `pulse-<canonical-scope-slug>` identity per Pulse instance.
+`setupToken` remains bootstrap transport data for `/api/setup-script` and
+`/api/auto-register`, while `tokenHint` is the operator-facing display field
+for quick-setup surfaces and must stay masked instead of exposing the full
+one-time token in UI copy. Shared frontend consumers may validate
+`setupToken`, but they should not retain or display it once the returned
+bootstrap artifact and `tokenHint` are available; visible quick-setup previews
+should use the non-secret `commandWithoutEnv` form while copy actions keep
+using the token-bearing `commandWithEnv` artifact, and manual download flows
+should use the token-bearing `downloadURL` artifact instead of rebuilding a
+plain setup-script URL from non-secret preview state. Non-frontend bootstrap
+consumers such as the runtime-side Unified Agent bootstrap flow and shell installer must fail closed on that
+same full artifact contract too, rejecting missing or mismatched
+`downloadURL`, `tokenHint`, or expired `expires` values instead of accepting a
+reduced setup-token-only response shape.
 
 ### Auto-Register (Public)
 `POST /api/auto-register`
-Auto-registers a node using the temporary setup token.
+Registers a node through the canonical `/api/auto-register` contract using a temporary
+setup token carried in the JSON `authToken` field. Canonical callers must send
+a supported `type` of `pve` or `pbs`, an explicit `source` marker of `agent` or
+`script`, a canonical Pulse-managed `tokenId` in the form
+`pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` matching the requested
+type, an explicit `serverName`, and missing-token requests now fail with
+`Pulse setup token required`. Incomplete token completion requests now fail
+with `tokenId and tokenValue must be provided together`, and other missing
+canonical request fields fail with explicit `Missing required canonical
+auto-register fields: ...` guidance.
+Success responses now carry the canonical stored identity and caller boundary
+back to the installer or runtime-side Unified Agent:
+`{"status":"success","action":"use_token","type":"pve|pbs","source":"agent|script","host":"https://...","nodeId":"<stored-name>","nodeName":"<stored-name>",...}`.
 
 ### Agent Install Command
 `POST /api/agent-install-command` (auth)
@@ -213,12 +322,12 @@ Service discovery is used by Pulse Assistant and the UI to inventory web service
 - `GET /api/discovery/status`
 - `PUT /api/discovery/settings` (admin, `settings:write`)
 - `GET /api/discovery/type/{type}`
-- `GET /api/discovery/host/{host}`
-- `GET /api/discovery/{type}/{host}/{id}`
-- `POST /api/discovery/{type}/{host}/{id}` (trigger discovery, optional `force`)
-- `DELETE /api/discovery/{type}/{host}/{id}`
-- `GET /api/discovery/{type}/{host}/{id}/progress`
-- `PUT /api/discovery/{type}/{host}/{id}/notes`
+- `GET /api/discovery/agent/{agentId}`
+- `GET /api/discovery/{type}/{targetId}/{resourceId}`
+- `POST /api/discovery/{type}/{targetId}/{resourceId}` (trigger discovery, optional `force`)
+- `DELETE /api/discovery/{type}/{targetId}/{resourceId}`
+- `GET /api/discovery/{type}/{targetId}/{resourceId}/progress`
+- `PUT /api/discovery/{type}/{targetId}/{resourceId}/notes`
 
 ### Test Notification
 `POST /api/test-notification` (auth)
@@ -241,18 +350,24 @@ Returns storage chart data.
 `GET /api/storage/`
 Detailed storage usage per node and pool.
 
-### Backup History
-`GET /api/backups/unified`
-Combined view of PVE and PBS backups.
+### Recovery (formerly Backups / Snapshots)
+Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
+See `docs/architecture/RECOVERY_CONTRACT.md` for the provider-neutral contract (subjects, points, rollups, and filter semantics).
 
-Other backup endpoints:
-- `GET /api/backups`
-- `GET /api/backups/pve`
-- `GET /api/backups/pbs`
-
-### Snapshots
-`GET /api/snapshots`
-Returns guest snapshot history for the current tenant.
+- `GET /api/recovery/points`
+  - Query params:
+    - Core filters: `provider`, `kind`, `mode`, `outcome`, `subjectResourceId`, `rollupId`
+    - Time window: `from` (RFC3339), `to` (RFC3339)
+    - Paging: `page`, `limit`
+    - Normalized filters: `q`, `cluster`, `node`, `namespace`, `scope=workload`, `verification` (`verified` | `unverified` | `unknown`)
+- `GET /api/recovery/rollups`
+  - Query params: `provider`, `kind`, `mode`, `outcome`, `subjectResourceId`, `rollupId`, `from` (RFC3339), `to` (RFC3339), `page`, `limit`
+- `GET /api/recovery/series`
+  - Returns per-day counts for the activity chart.
+  - Query params: same filters as `/api/recovery/points` (except paging), plus `tzOffsetMinutes` (integer; UTC offset minutes for day bucketing)
+- `GET /api/recovery/facets`
+  - Returns distinct filter values (clusters/nodes/namespaces) and capability flags (size/verification/entity id present).
+  - Query params: same filters as `/api/recovery/points` (except paging)
 
 ---
 
@@ -280,10 +395,31 @@ Triggers a test alert to all configured channels.
 ### Audit Webhooks (Pro)
 - `GET /api/admin/webhooks/audit` (admin, `settings:read`)
 - `POST /api/admin/webhooks/audit` (admin, `settings:write`)
+  - Body: `{ "urls": ["https://..."] }`
+  - Strict JSON contract: unknown fields and trailing payload are rejected.
+  - Maximum `20` webhook URLs per update request.
+  - URLs are normalized (trimmed) and duplicate entries are ignored.
+  - Endpoint fails closed if URL validation runtime is unavailable.
 
 ### Advanced Reporting (Pro)
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+- `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
+  - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+
+Validation and limits:
+- `start` and `end` must be RFC3339 when provided.
+- `start` must be before `end`.
+- Maximum report window is 366 days.
+- `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars.
+- `title` must be <= 256 chars.
+- Multi-report body max size is 1MB and rejects trailing payload or unknown JSON fields.
+
+Common reporting error codes:
+- `invalid_format`, `missing_params`, `invalid_resource_type`, `invalid_resource_id`
+- `invalid_metric_type`, `invalid_title`
+- `invalid_start`, `invalid_end`, `invalid_range`, `range_too_large`
+- `no_resources`, `too_many_resources`, `body_too_large`, `invalid_body`
 
 ### Queue and Dead-Letter Tools
 - `GET /api/notifications/queue/stats` (admin)
@@ -310,7 +446,6 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `POST /api/alerts/acknowledge` (body: `{ "id": "alert-id" }`)
 - `POST /api/alerts/unacknowledge` (body: `{ "id": "alert-id" }`)
 - `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
-- Legacy path-based endpoints: `POST /api/alerts/{id}/acknowledge`, `/unacknowledge`, `/clear`
 
 ---
 
@@ -372,7 +507,7 @@ Returns a new raw token (shown once) and updates stored hashes:
 
 ## 🧾 Audit Log (Pro)
 
-These endpoints require admin access and the `settings:read` scope. In OSS builds, the list endpoint returns an empty set and `persistentLogging: false`.
+These endpoints require admin access and the `settings:read` scope. On Community, the list endpoint returns an empty set and `persistentLogging: false`.
 
 ### List Audit Events
 `GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
@@ -386,7 +521,7 @@ Response:
       "timestamp": "2024-01-12T10:15:30Z",
       "event": "login",
       "user": "admin",
-      "ip": "10.0.0.10",
+      "ip": "198.51.100.10",
       "path": "/api/login",
       "success": true,
       "details": "Successful login",
@@ -498,7 +633,7 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/infra-updates` (requires `monitoring:read`)
 - `GET /api/infra-updates/summary` (requires `monitoring:read`)
 - `POST /api/infra-updates/check` (requires `monitoring:write`)
-- `GET /api/infra-updates/host/{hostId}` (requires `monitoring:read`)
+- `GET /api/infra-updates/agent/{agentId}` (requires `monitoring:read`)
 - `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
 
 ### Diagnostics
@@ -519,21 +654,37 @@ Returns minimal server info for installer scripts.
 
 ## 🔑 OIDC / SSO
 
-### Get OIDC Config
-`GET /api/security/oidc`
-Retrieve current OIDC provider settings.
+### Provider Login
+- `GET /api/oidc/{providerID}/login`
+- `GET /api/oidc/{providerID}/callback`
 
-### Update OIDC Config
-`POST /api/security/oidc`
-Configure OIDC provider details (Issuer, Client ID, etc).
+OIDC and SAML configuration is managed via SSO providers.
 
-### Login
-`GET /api/oidc/login`
-Initiate OIDC login flow.
+### SSO Provider Management (Pro)
+- `GET /api/security/sso/providers` (admin)
+- `POST /api/security/sso/providers` (admin)
+- `GET /api/security/sso/providers/{id}` (admin)
+- `PUT /api/security/sso/providers/{id}` (admin)
+- `DELETE /api/security/sso/providers/{id}` (admin)
+
+Provider mutation request contract:
+- Max request body: 1MB.
+- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Provider IDs must match server validation.
+- SAML providers require `advanced_sso` feature entitlement.
+
+### SSO Test and Metadata Preview (Pro)
+- `POST /api/security/sso/providers/test` (admin)
+- `POST /api/security/sso/providers/metadata/preview` (admin)
+
+Test/preview request contract:
+- Max request body: 32KB.
+- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Common errors include `invalid_json`, `validation_error`, `rate_limited`, `body_too_large`.
 
 ---
 
-## 💳 License (Pulse Pro)
+## 💳 License (Relay / Pro / Pro+ / Cloud)
 
 ### License Status (Admin)
 `GET /api/license/status`
@@ -598,9 +749,83 @@ Returns all users with their role assignments.
 
 ---
 
-## 🤖 Pulse AI *(v5)*
+## 🏢 Organizations (Enterprise)
 
-**Pro gating:** endpoints labeled "(Pro)" require a Pulse Pro license and return `402 Payment Required` if the feature is not licensed.
+Multi-tenant organization management. Requires `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` feature. All endpoints require authentication.
+
+See [MULTI_TENANT.md](MULTI_TENANT.md) for setup and architecture details.
+
+### List Organizations
+`GET /api/orgs` (requires `settings:read`)
+Returns organizations accessible to the authenticated user.
+
+### Create Organization
+`POST /api/orgs` (requires `settings:write`, session auth only)
+```json
+{ "id": "acme-corp", "displayName": "Acme Corporation" }
+```
+The creator becomes the owner and first member. Organization IDs must be lowercase alphanumeric with hyphens, 3-64 characters.
+
+### Get Organization
+`GET /api/orgs/{id}` (requires `settings:read`)
+Returns organization details. User must be a member.
+
+### Update Organization
+`PUT /api/orgs/{id}` (requires `settings:write`, session auth only)
+```json
+{ "displayName": "Updated Name" }
+```
+Admin or owner role required. The default organization cannot be updated.
+
+### Delete Organization
+`DELETE /api/orgs/{id}` (requires `settings:write`, session auth only)
+Admin or owner role required. The default organization cannot be deleted.
+
+### List Members
+`GET /api/orgs/{id}/members` (requires `settings:read`)
+Returns all members with their roles. User must be a member of the org.
+
+### Add or Update Member
+`POST /api/orgs/{id}/members` (requires `settings:write`, session auth only)
+```json
+{ "userId": "jane", "role": "editor" }
+```
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. Setting role to `owner` transfers ownership (only current owner can do this). Default org members cannot be managed.
+
+### Remove Member
+`DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
+Admin or owner role required. The organization owner cannot be removed.
+
+### List Outgoing Shares
+`GET /api/orgs/{id}/shares` (requires `settings:read`)
+Returns resources shared outbound from this organization to others.
+
+### List Incoming Shares
+`GET /api/orgs/{id}/shares/incoming` (requires `settings:read`)
+Returns resources shared inbound to this organization from other organizations.
+
+### Create Share
+`POST /api/orgs/{id}/shares` (requires `settings:write`, session auth only)
+```json
+{
+  "targetOrgId": "partner-org",
+  "resourceType": "vm",
+  "resourceId": "vm-101",
+  "resourceName": "Web Server",
+  "accessRole": "viewer"
+}
+```
+Share a resource with another organization. Valid resource types: `vm`, `container`, `agent`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
+
+### Delete Share
+`DELETE /api/orgs/{id}/shares/{shareId}` (requires `settings:write`, session auth only)
+Revoke a resource share. Admin or owner role required.
+
+---
+
+## 🤖 Pulse AI
+
+**Paid gating:** endpoints labeled with a paid plan require the relevant Relay, Pro, Pro+, or Cloud capability and return `402 Payment Required` if the feature is not licensed.
 
 ### Get AI Settings
 `GET /api/settings/ai`
@@ -646,12 +871,6 @@ Streaming variant of execute (used by the UI for incremental responses).
 - `POST /api/ai/sessions/{id}/revert`
 - `POST /api/ai/sessions/{id}/unrevert`
 
-### Legacy Chat Sessions (UI Sync)
-- `GET /api/ai/chat/sessions`
-- `GET /api/ai/chat/sessions/{id}`
-- `PUT /api/ai/chat/sessions/{id}`
-- `DELETE /api/ai/chat/sessions/{id}`
-
 ### Question Answers
 - `POST /api/ai/question/{id}/answer`
 
@@ -660,7 +879,7 @@ Streaming variant of execute (used by the UI for incremental responses).
 ```json
 { "cluster_id": "cluster-id" }
 ```
-Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
+Requires Pro, Pro+, or Cloud with the `kubernetes_ai` feature enabled.
 
 ### Alert Investigation (Pro)
 `POST /api/ai/investigate-alert`
@@ -749,7 +968,7 @@ Request bodies:
 - `POST /api/ai/cost/reset` (admin)
 - `GET /api/ai/cost/export` (admin)
 
-## 📈 Metrics Store (v5)
+## 📈 Metrics Store
 
 Auth required: `monitoring:read`.
 
@@ -768,7 +987,7 @@ Query params:
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
-> **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
+> **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
 > **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ---
@@ -796,73 +1015,49 @@ Returns the current server version for agent update checks.
 `GET /install.sh`
 Serves the universal `install.sh` used to install `pulse-agent` on target machines.
 
-`GET /api/install/install.sh`
-API-prefixed alias for the unified agent installer script.
-
 ### Unified Agent Installer (Windows)
 `GET /install.ps1`
 Serves the PowerShell installer for Windows.
 
-`GET /api/install/install.ps1`
-API-prefixed alias for the unified agent PowerShell installer.
-
-### Docker Server Installer Script
-`GET /api/install/install-docker.sh`
-Serves the turnkey Docker installer script that generates a `docker-compose.yml` and `.env`.
-
-### Legacy Agents (Deprecated)
-`GET /download/pulse-host-agent` - *Deprecated, use pulse-agent*
-`GET /download/pulse-docker-agent` - *Deprecated, use pulse-agent --enable-docker*
-
-Host-agent downloads accept `?platform=<os>&arch=<arch>` and expose a checksum endpoint:
-- `/download/pulse-host-agent.sha256?platform=linux&arch=amd64`
-
-Legacy install/uninstall scripts:
-- `GET /install-docker-agent.sh`
-- `GET /install-container-agent.sh`
-- `GET /install-host-agent.sh`
-- `GET /install-host-agent.ps1`
-- `GET /uninstall-host-agent.sh`
-- `GET /uninstall-host-agent.ps1`
-
 ### Submit Reports
-`POST /api/agents/host/report` - Host metrics
+`POST /api/agents/agent/report` - Agent metrics
 `POST /api/agents/docker/report` - Docker container metrics
 `POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
-### Host Agent Management
-`GET /api/agents/host/lookup?id=<host_id>`  
-`GET /api/agents/host/lookup?hostname=<hostname>`  
-Looks up a host by ID or hostname/display name. Requires `host-agent:report`.
+### Agent Management
+`GET /api/agents/agent/lookup?id=<agent_id>`  
+`GET /api/agents/agent/lookup?hostname=<hostname>`  
+Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 
-`POST /api/agents/host/uninstall`  
-Host agent self-unregister during uninstall. Requires `host-agent:report`.
+`POST /api/agents/agent/uninstall`  
+Agent self-unregister during uninstall. Requires `agent:report`.
 
-`POST /api/agents/host/unlink` (admin, `host-agent:manage`)  
-Unlinks a host agent from a node.
+`POST /api/agents/agent/unlink` (admin, `agent:manage`)  
+Unlinks an agent from a node.
 
-`DELETE /api/agents/host/{host_id}` (admin, `host-agent:manage`)  
-Removes a host agent from state.
+`DELETE /api/agents/agent/{agent_id}` (admin, `agent:manage`)  
+Removes an agent from state.
 
-### Host Agent Linking (Admin)
-- `POST /api/agents/host/link` (admin, `host-agent:manage`)
-- `POST /api/agents/host/unlink` (admin, `host-agent:manage`)
+### Agent Linking (Admin)
+- `POST /api/agents/agent/link` (admin, `agent:manage`)
+- `POST /api/agents/agent/unlink` (admin, `agent:manage`)
 
 ### Agent Remote Config
-`GET /api/agents/host/{agent_id}/config`  
-Returns the server-side config payload for an agent (used by remote config and debugging). Requires `host-agent:config:read`.
+`GET /api/agents/agent/{agent_id}/config`  
+Returns the server-side config payload for an agent (used by remote config and debugging). Requires `agent:config:read`.
 
-`PATCH /api/agents/host/{agent_id}/config` (admin, `host-agent:manage`)  
+`PATCH /api/agents/agent/{agent_id}/config` (admin, `agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).
 
 ### Docker Agent Management (Admin)
 - `POST /api/agents/docker/commands/{commandId}/ack` (`docker:report`)
-- `DELETE /api/agents/docker/hosts/{hostId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
-- `POST /api/agents/docker/hosts/{hostId}/allow-reenroll` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/unhide` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/pending-uninstall` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/display-name` (`docker:manage`)
-- `POST /api/agents/docker/hosts/{hostId}/check-updates` (`docker:manage`)
+- `DELETE /api/agents/docker/runtimes/{agentId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
+- `POST /api/agents/docker/runtimes/{agentId}/allow-reenroll` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/unhide` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/pending-uninstall` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/display-name` (`docker:manage`)
+- `POST /api/agents/docker/runtimes/{agentId}/check-updates` (`docker:manage`)
+- `POST /api/agents/docker/runtimes/{agentId}/update-all` (`docker:manage`)
 - `POST /api/agents/docker/containers/update` (`docker:manage`)
 
 ### Kubernetes Agent Management (Admin)
@@ -892,10 +1087,41 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 
 ---
 
+## 🐟 TrueNAS
+
+TrueNAS connection management endpoints for adding, testing, and removing TrueNAS SCALE/CORE instances.
+
+### Connection Management (Admin)
+- `GET /api/truenas/connections` (admin, `settings:read`) — List configured TrueNAS connections.
+- `POST /api/truenas/connections` (admin, `settings:write`) — Add a new TrueNAS connection.
+- `POST /api/truenas/connections/test` (admin, `settings:write`) — Test a TrueNAS connection before saving.
+- `DELETE /api/truenas/connections/{id}` (admin, `settings:write`) — Remove a TrueNAS connection.
+
+TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, alerts) are surfaced through the unified `/api/resources` endpoint with `source=truenas`.
+
+---
+
+## 📱 Relay / Mobile Remote Access (Relay and Above)
+
+End-to-end encrypted relay protocol for mobile connectivity.
+
+> Mobile app status: public rollout is coming soon; current pairing endpoints are primarily used for staged beta onboarding.
+
+### Relay Configuration (Admin, Relay and Above)
+- `GET /api/settings/relay` (admin, `settings:read`, Relay+) — Get current relay configuration.
+- `PUT /api/settings/relay` (admin, `settings:write`, Relay+) — Update relay configuration.
+- `GET /api/settings/relay/status` (admin, `settings:read`, Relay+) — Get relay connection status.
+
+### Mobile Onboarding
+- `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for mobile app pairing.
+- `POST /api/onboarding/validate` (`settings:read`) — Validate a mobile onboarding connection.
+- `GET /api/onboarding/deep-link` (`settings:read`) — Generate deep-link URL for mobile app.
+
+---
+
 ## 🔌 WebSocket Endpoints
 
 - `GET /ws` – Primary UI WebSocket (browser sessions).
-- `GET /socket.io/` – Legacy Socket.IO compatibility endpoint.
 - `GET /api/agent/ws` – Agent WebSocket used for AI command execution.
 
 ---

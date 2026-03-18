@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestDiscoveryResultAddError_PopulatesStructuredAndLegacy(t *testing.T) {
+func TestDiscoveryResultAddError_PopulatesStructuredAndBoundaryLegacy(t *testing.T) {
 	t.Parallel()
 
 	var r DiscoveryResult
@@ -13,10 +13,6 @@ func TestDiscoveryResultAddError_PopulatesStructuredAndLegacy(t *testing.T) {
 	if len(r.StructuredErrors) != 1 {
 		t.Fatalf("StructuredErrors len = %d, want %d", len(r.StructuredErrors), 1)
 	}
-	if len(r.Errors) != 1 {
-		t.Fatalf("Errors len = %d, want %d", len(r.Errors), 1)
-	}
-
 	se := r.StructuredErrors[0]
 	if se.Phase != "docker_bridge_network" {
 		t.Fatalf("StructuredErrors[0].Phase = %q, want %q", se.Phase, "docker_bridge_network")
@@ -34,33 +30,39 @@ func TestDiscoveryResultAddError_PopulatesStructuredAndLegacy(t *testing.T) {
 		t.Fatalf("StructuredErrors[0].Timestamp should be set")
 	}
 
-	if r.Errors[0] != "Docker bridge network [192.168.1.10:8006]: request timed out" {
-		t.Fatalf("Errors[0] = %q", r.Errors[0])
+	legacy := r.LegacyErrors()
+	if len(legacy) != 1 {
+		t.Fatalf("LegacyErrors len = %d, want %d", len(legacy), 1)
+	}
+	if legacy[0] != "Docker bridge network [192.168.1.10:8006]: request timed out" {
+		t.Fatalf("LegacyErrors[0] = %q", legacy[0])
 	}
 }
 
-func TestDiscoveryResultAddError_LegacyFormattingVariants(t *testing.T) {
+func TestDiscoveryResultLegacyErrors_FormattingVariants(t *testing.T) {
 	t.Parallel()
 
 	t.Run("ip-only", func(t *testing.T) {
 		var r DiscoveryResult
 		r.AddError("extra_targets", "phase_error", "failed", "10.0.0.1", 0)
-		if len(r.Errors) != 1 {
-			t.Fatalf("Errors len = %d, want %d", len(r.Errors), 1)
+		legacy := r.LegacyErrors()
+		if len(legacy) != 1 {
+			t.Fatalf("LegacyErrors len = %d, want %d", len(legacy), 1)
 		}
-		if r.Errors[0] != "Additional targets [10.0.0.1]: failed" {
-			t.Fatalf("Errors[0] = %q", r.Errors[0])
+		if legacy[0] != "Additional targets [10.0.0.1]: failed" {
+			t.Fatalf("LegacyErrors[0] = %q", legacy[0])
 		}
 	})
 
 	t.Run("no-address", func(t *testing.T) {
 		var r DiscoveryResult
 		r.AddError("unknown_phase", "phase_error", "failed", "", 0)
-		if len(r.Errors) != 1 {
-			t.Fatalf("Errors len = %d, want %d", len(r.Errors), 1)
+		legacy := r.LegacyErrors()
+		if len(legacy) != 1 {
+			t.Fatalf("LegacyErrors len = %d, want %d", len(legacy), 1)
 		}
-		if r.Errors[0] != "unknown_phase: failed" {
-			t.Fatalf("Errors[0] = %q", r.Errors[0])
+		if legacy[0] != "unknown_phase: failed" {
+			t.Fatalf("LegacyErrors[0] = %q", legacy[0])
 		}
 	})
 }

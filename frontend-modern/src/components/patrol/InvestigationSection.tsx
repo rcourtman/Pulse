@@ -6,15 +6,27 @@
  * a collapsible investigation thread.
  */
 
-import { Component, createSignal, createResource, createEffect, onCleanup, Show, For } from 'solid-js';
+import {
+  Component,
+  createSignal,
+  createResource,
+  createEffect,
+  onCleanup,
+  Show,
+  For,
+} from 'solid-js';
 import {
   getInvestigation,
   reinvestigateFinding,
-  investigationStatusLabels,
-  investigationOutcomeLabels,
-  investigationOutcomeColors,
   formatTimestamp,
 } from '@/api/patrol';
+import {
+  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeLabel,
+  getInvestigationStatusLabel,
+  getInvestigationStatusBadgeClasses,
+} from '@/utils/aiFindingPresentation';
+import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { InvestigationMessages } from './InvestigationMessages';
 import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
@@ -26,15 +38,6 @@ interface InvestigationSectionProps {
   investigationOutcome?: string;
   investigationAttempts?: number;
 }
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-};
-
 
 export const InvestigationSection: Component<InvestigationSectionProps> = (props) => {
   const [showThread, setShowThread] = createSignal(false);
@@ -49,14 +52,16 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       } catch {
         return null;
       }
-    }
+    },
   );
 
   // Auto-poll while investigation is active
   createEffect(() => {
     const inv = investigation();
-    const isActive = inv?.status === 'running' || inv?.status === 'pending'
-      || props.investigationStatus === 'running';
+    const isActive =
+      inv?.status === 'running' ||
+      inv?.status === 'pending' ||
+      props.investigationStatus === 'running';
     if (!isActive) return;
 
     const interval = setInterval(() => refetch(), 5000);
@@ -68,7 +73,15 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     const inv = investigation();
     if (!inv) return true; // No investigation yet
     if (inv.status === 'running') return false;
-    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix' || inv.outcome === 'timed_out' || inv.outcome === 'fix_verification_failed' || inv.outcome === 'fix_failed';
+    return (
+      inv.status === 'failed' ||
+      inv.status === 'needs_attention' ||
+      inv.outcome === 'cannot_fix' ||
+      inv.outcome === 'timed_out' ||
+      inv.outcome === 'fix_verification_failed' ||
+      inv.outcome === 'fix_verification_unknown' ||
+      inv.outcome === 'fix_failed'
+    );
   };
 
   const handleReinvestigate = async (e: Event) => {
@@ -88,29 +101,32 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   };
 
   return (
-    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+    <div class="mt-3 pt-3 border-t border-border-subtle">
       {/* Header */}
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Investigation</span>
+          <span class="text-sm font-medium text-base-content">Investigation</span>
           {/* Show outcome badge when available, otherwise show status badge */}
-          <Show when={investigation()?.outcome}
+          <Show
+            when={investigation()?.outcome}
             fallback={
               <Show when={investigation()?.status}>
-                <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}>
-                  {investigationStatusLabels[investigation()!.status] || investigation()!.status}
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationStatusBadgeClasses(investigation()!.status)}`}
+                >
+                  {getInvestigationStatusLabel(investigation()!.status)}
                 </span>
               </Show>
             }
           >
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${investigationOutcomeColors[investigation()!.outcome!] || investigationOutcomeColors.needs_attention}`}>
-              {investigationOutcomeLabels[investigation()!.outcome!] || investigation()!.outcome}
+            <span
+              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(investigation()!.outcome!)}`}
+            >
+              {getInvestigationOutcomeLabel(investigation()!.outcome!)}
             </span>
           </Show>
           <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
-            <span class="text-[10px] text-gray-500 dark:text-gray-400">
-              attempt {props.investigationAttempts}
-            </span>
+            <span class="text-[10px] text-muted">attempt {props.investigationAttempts}</span>
           </Show>
         </div>
         <Show when={canReinvestigate()}>
@@ -118,29 +134,34 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             type="button"
             onClick={handleReinvestigate}
             disabled={reinvestigating()}
-            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50"
+            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors disabled:opacity-50"
           >
             <RefreshCwIcon class={`w-3 h-3 ${reinvestigating() ? 'animate-spin' : ''}`} />
             Re-investigate
           </button>
         </Show>
         <Show when={!canReinvestigate() && Date.now() < cooldownUntil()}>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Re-investigation started</span>
+          <span class="text-xs text-muted">Re-investigation started</span>
         </Show>
       </div>
 
       {/* Loading */}
-      <Show when={investigation.loading}>
-        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 py-2">
+      <Show
+        when={
+          !getInvestigationSectionState(investigation.loading, !!investigation()).empty &&
+          getInvestigationSectionState(investigation.loading, !!investigation()).text
+        }
+      >
+        <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          Loading investigation...
+          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
         </div>
       </Show>
 
       {/* No investigation data */}
-      <Show when={!investigation.loading && !investigation()}>
-        <p class="text-xs text-gray-500 dark:text-gray-400 py-1">
-          No investigation data available. Enable patrol autonomy to investigate findings.
+      <Show when={getInvestigationSectionState(investigation.loading, !!investigation()).empty}>
+        <p class="text-xs text-muted py-1">
+          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
         </p>
       </Show>
 
@@ -149,17 +170,26 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         {(inv) => (
           <div class="space-y-2">
             {/* Error message for failed investigations */}
-            <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
-              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2">
+            <Show
+              when={
+                inv().error &&
+                (inv().status === 'failed' ||
+                  inv().outcome === 'timed_out' ||
+                  inv().outcome === 'fix_failed' ||
+                  inv().outcome === 'fix_verification_failed' ||
+                  inv().outcome === 'fix_verification_unknown' ||
+                  inv().outcome === 'needs_attention' ||
+                  inv().outcome === 'cannot_fix')
+              }
+            >
+              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-2">
                 {inv().error}
               </div>
             </Show>
 
             {/* Summary */}
             <Show when={inv().summary}>
-              <div class="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded p-2">
-                {inv().summary}
-              </div>
+              <div class="text-sm text-muted bg-surface-alt rounded p-2">{inv().summary}</div>
             </Show>
 
             {/* Tools used + turn count */}
@@ -168,18 +198,18 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 <div class="flex items-center gap-1 flex-wrap">
                   <For each={inv().tools_used}>
                     {(tool) => (
-                      <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
+                      <span class="px-1.5 py-0.5 rounded text-base-content text-[10px] font-medium">
                         {tool}
                       </span>
                     )}
                   </For>
                 </div>
               </Show>
-              <span class="text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="text-[10px] text-muted">
                 {inv().turn_count} turn{inv().turn_count === 1 ? '' : 's'}
               </span>
               <Show when={inv().started_at}>
-                <span class="text-[10px] text-gray-500 dark:text-gray-400">
+                <span class="text-[10px] text-muted">
                   started {formatTimestamp(inv().started_at)}
                 </span>
               </Show>
@@ -188,7 +218,10 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             {/* Show thread toggle */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setShowThread(!showThread()); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowThread(!showThread());
+              }}
               class="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
             >
               {showThread() ? 'Hide investigation thread' : 'Show investigation thread'}
@@ -198,7 +231,12 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
 

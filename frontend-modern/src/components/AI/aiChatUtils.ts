@@ -1,52 +1,8 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { ModelInfo } from '@/types/ai';
-
-// Provider display names for grouped model selection
-export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  deepseek: 'DeepSeek',
-  gemini: 'Google Gemini',
-  ollama: 'Ollama',
-};
-
-// Known provider prefixes — only these are treated as explicit "provider:model" delimiters.
-// This avoids misinterpreting colons in model names like "llama3.2:latest" or "model:free".
-const KNOWN_PROVIDERS = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama'];
-
-// Parse provider from model ID (format: "provider:model-name")
-export function getProviderFromModelId(modelId: string): string {
-  // Check for explicit known provider prefix (e.g. "openai:gpt-4o")
-  const colonIndex = modelId.indexOf(':');
-  if (colonIndex > 0) {
-    const prefix = modelId.substring(0, colonIndex);
-    if (KNOWN_PROVIDERS.includes(prefix)) {
-      return prefix;
-    }
-  }
-  // Vendor-prefixed names like "google/gemini-*" or "meta-llama/llama-*" are
-  // OpenRouter model IDs routed through the OpenAI-compatible provider.
-  if (modelId.includes('/')) {
-    return 'openai';
-  }
-  // Strip colon suffix for detection (e.g. "llama3.2:latest" → "llama3.2")
-  const name = colonIndex > 0 ? modelId.substring(0, colonIndex) : modelId;
-  // Default detection for models without prefix
-  if (name.startsWith('claude') || name.startsWith('opus') || name.startsWith('sonnet') || name.startsWith('haiku')) {
-    return 'anthropic';
-  }
-  if (name.startsWith('gpt') || name.startsWith('o1') || name.startsWith('o3') || name.startsWith('o4')) {
-    return 'openai';
-  }
-  if (name.startsWith('deepseek')) {
-    return 'deepseek';
-  }
-  if (name.startsWith('gemini')) {
-    return 'gemini';
-  }
-  return 'ollama';
-}
+export { getProviderFromModelId } from '@/utils/aiProviderPresentation';
+import { getProviderFromModelId } from '@/utils/aiProviderPresentation';
 
 // Group models by provider for grouped rendering
 export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
@@ -106,9 +62,37 @@ export const renderMarkdown = (content: unknown): string => {
     // Sanitize to prevent XSS from malicious LLM output or injected content
     return DOMPurify.sanitize(rawHtml, {
       // Allow common formatting tags but block scripts, iframes, etc.
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre', 'blockquote',
-        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'hr', 'table',
-        'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+      ALLOWED_TAGS: [
+        'p',
+        'br',
+        'strong',
+        'em',
+        'b',
+        'i',
+        'u',
+        'code',
+        'pre',
+        'blockquote',
+        'ul',
+        'ol',
+        'li',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'a',
+        'hr',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        'span',
+        'div',
+      ],
       ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
       // Force all links to open in new tab and prevent opener attacks
       ADD_ATTR: ['target', 'rel'],
@@ -116,7 +100,13 @@ export const renderMarkdown = (content: unknown): string => {
   } catch {
     // If parsing fails, escape HTML entities as fallback
     return normalized.replace(/[&<>"']/g, (char) => {
-      const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      const entities: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
       return entities[char];
     });
   }
@@ -131,21 +121,15 @@ export const sanitizeThinking = (content: string): string => {
   // don't partially sanitize the error and prevent the higher-level pattern from matching.
   let sanitized = content.replace(
     /failed to send command: write tcp [\d.:->\s]+/g,
-    'failed to send command: connection error'
+    'failed to send command: connection error',
   );
 
   sanitized = sanitized.replace(
     /write tcp [\d.:]+->[\d.:]+: i\/o timeout/g,
-    'connection timed out'
+    'connection timed out',
   );
-  sanitized = sanitized.replace(
-    /read tcp [\d.:]+: i\/o timeout/g,
-    'connection timed out'
-  );
-  sanitized = sanitized.replace(
-    /dial tcp [\d.:]+: connection refused/g,
-    'connection refused'
-  );
+  sanitized = sanitized.replace(/read tcp [\d.:]+: i\/o timeout/g, 'connection timed out');
+  sanitized = sanitized.replace(/dial tcp [\d.:]+: connection refused/g, 'connection refused');
   return sanitized;
 };
 

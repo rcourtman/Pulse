@@ -107,7 +107,7 @@ func TestSaveSystemSettings_EnvWriteError(t *testing.T) {
 
 	// Create .env file so it tries to update it
 	envFile := filepath.Join(tempDir, ".env")
-	os.WriteFile(envFile, []byte("UPDATE_CHANNEL=beta"), 0600)
+	_ = os.WriteFile(envFile, []byte("UPDATE_CHANNEL=beta"), 0600)
 
 	// Use mock FS to fail write to .env
 	// We need mockFSWriteSpecific from persistence_coverage_test.go

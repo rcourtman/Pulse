@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -49,8 +51,13 @@ func TestExecuteFileEdit_Validation(t *testing.T) {
 		},
 		{
 			name:    "Invalid Docker Container",
-			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "docker_container": "bad name!"},
+			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "container": "bad name!"},
 			wantErr: "invalid character",
+		},
+		{
+			name:    "Legacy AppContainer Rejected",
+			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "app_container": "nginx"},
+			wantErr: "app_container is no longer supported; use app-container",
 		},
 		{
 			name:    "Unknown Action",
@@ -117,7 +124,7 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 
 	// If I want to trigger the BLOCK, I need:
 	// 1. ResolveResource returns LXC.
-	// 2. Routing returns "direct" transport on "host" type.
+	// 2. Routing returns "direct" transport on "agent" type.
 
 	// This happens if `findAgent` returns an agent that is NOT the node agent?
 	// Or if the node agent is found via hostname match of the LXC name?
@@ -126,13 +133,27 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 
 	err := exec.validateWriteExecutionContext("my-lxc", CommandRoutingResult{
 		Transport:     "direct",
-		TargetType:    "host", // Agent matched directly, assuming it's a host
+		TargetType:    "agent", // Agent matched directly as an agent target
 		AgentHostname: "my-lxc",
 		AgentID:       "agent-1",
-		ResolvedKind:  "lxc", // But resolving matched LXC
+		ResolvedKind:  "system-container", // But resolving matched system container
 		ResolvedNode:  "pve1",
 	})
 
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Message, "write would execute on the Proxmox node instead of inside the lxc")
+	assert.Contains(t, err.Message, "write would execute on the host node instead of inside the system-container")
+}
+
+func TestFormatFileApprovalNeeded_JSONSafe(t *testing.T) {
+	formatted := formatFileApprovalNeeded(`/tmp/"cfg".json`, `host"name`, "write", 42, "approval-1")
+	assert.True(t, strings.HasPrefix(formatted, "APPROVAL_REQUIRED: "))
+
+	raw := strings.TrimPrefix(formatted, "APPROVAL_REQUIRED: ")
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(raw), &payload))
+	assert.Equal(t, "approval_required", payload["type"])
+	assert.Equal(t, "file_write", payload["action"])
+	assert.Equal(t, `/tmp/"cfg".json`, payload["path"])
+	assert.Equal(t, `host"name`, payload["host"])
+	assert.Equal(t, float64(42), payload["size"])
 }

@@ -79,11 +79,6 @@ func TestRequireScopeAllowsMatchingScope(t *testing.T) {
 	}
 }
 
-func TestRespondMissingScopeNilWriter(t *testing.T) {
-	// Should not panic when called with nil writer
-	respondMissingScope(nil, "some-scope")
-}
-
 func TestAttachAPITokenRecordNilRecord(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	originalCtx := req.Context()

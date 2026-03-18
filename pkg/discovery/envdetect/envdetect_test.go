@@ -13,10 +13,10 @@ func TestEnvironment_String(t *testing.T) {
 	}{
 		{Unknown, "unknown"},
 		{Native, "native"},
-		{DockerHost, "docker_host"},
-		{DockerBridge, "docker_bridge"},
-		{LXCPrivileged, "lxc_privileged"},
-		{LXCUnprivileged, "lxc_unprivileged"},
+		{DockerHost, "docker-host"},
+		{DockerBridge, "docker-bridge"},
+		{LXCPrivileged, "lxc-privileged"},
+		{LXCUnprivileged, "lxc-unprivileged"},
 		{Environment(99), "unknown"}, // Invalid value
 	}
 

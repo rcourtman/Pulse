@@ -97,19 +97,13 @@ func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
 		t.Fatalf("WriteMessage: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close on invalid JSON")
 	}
 }
 
-func TestHandleWebSocket_RegistrationPayloadMarshalError(t *testing.T) {
-	orig := jsonMarshal
-	t.Cleanup(func() { jsonMarshal = orig })
-	jsonMarshal = func(any) ([]byte, error) {
-		return nil, errors.New("boom")
-	}
-
+func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
 	s := NewServer(nil)
 	ts := newWSServer(t, s)
 	defer ts.Close()
@@ -120,19 +114,11 @@ func TestHandleWebSocket_RegistrationPayloadMarshalError(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", nil))
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
-		t.Fatalf("expected server to close on marshal error")
+		t.Fatalf("expected server to close on missing payload")
 	}
 }
 
@@ -151,10 +137,74 @@ func TestHandleWebSocket_RegistrationPayloadUnmarshalError(t *testing.T) {
 		t.Fatalf("WriteMessage: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close on invalid payload")
 	}
+}
+
+func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
+	s := NewServer(func(string, string) bool { return false })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "bad",
+	}))
+
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected server to close connection after rejection send failure")
+	}
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+}
+
+func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
+
+	waitFor(t, 2*time.Second, func() bool { return s.IsAgentConnected("a1") })
+
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected no registration ack when send fails")
+	}
+
+	conn.Close()
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 }
 
 func TestHandleWebSocket_PongHandler(t *testing.T) {
@@ -168,15 +218,11 @@ func TestHandleWebSocket_PongHandler(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	if err := conn.WriteControl(websocket.PongMessage, []byte("pong"), time.Now().Add(time.Second)); err != nil {
@@ -258,7 +304,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 
 	s.mu.Lock()
 	s.agents["a1"] = ac
-	s.pendingReqs["req-full"] = make(chan CommandResultPayload)
+	s.pendingReqs[pendingRequestKey("a1", "req-full")] = make(chan CommandResultPayload)
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -281,8 +327,57 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	delete(s.pendingReqs, "req-full")
+	delete(s.pendingReqs, pendingRequestKey("a1", "req-full"))
 	s.mu.Unlock()
+}
+
+func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
+	s := NewServer(nil)
+	serverConn, clientConn, cleanup := newConnPair(t)
+	defer cleanup()
+
+	ac := &agentConn{
+		conn:  serverConn,
+		agent: ConnectedAgent{AgentID: "a1"},
+		done:  make(chan struct{}),
+	}
+
+	foreignCh := make(chan CommandResultPayload, 1)
+
+	s.mu.Lock()
+	s.agents["a1"] = ac
+	s.pendingReqs[pendingRequestKey("a2", "req-shared")] = foreignCh
+	s.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.readLoop(ac)
+		close(done)
+	}()
+
+	wsWriteMessage(t, clientConn, Message{
+		Type:      MsgTypeAgentPing,
+		Timestamp: time.Now(),
+	})
+	clientConn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("readLoop did not exit")
+	}
+
+	select {
+	case <-foreignCh:
+		t.Fatalf("expected result not to be delivered across agents")
+	default:
+	}
 }
 
 func TestPingLoopSuccessAndStop(t *testing.T) {
@@ -350,7 +445,7 @@ func TestPingLoopFailuresClose(t *testing.T) {
 
 func TestSendMessageMarshalError(t *testing.T) {
 	s := NewServer(nil)
-	if err := s.sendMessage(nil, Message{Payload: make(chan int)}); err == nil {
+	if err := s.sendMessage(nil, Message{Payload: json.RawMessage("{")}); err == nil {
 		t.Fatalf("expected marshal error")
 	}
 }
@@ -371,7 +466,11 @@ func TestExecuteCommandSendError(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r1", Timeout: 1})
+	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r1",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil {
 		t.Fatalf("expected send error")
 	}
@@ -391,14 +490,22 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-timeout", Timeout: 1})
+	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r-timeout",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{RequestID: "r-cancel", Timeout: 1})
+	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
+		RequestID: "r-cancel",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil {
 		t.Fatalf("expected cancel error")
 	}
@@ -421,7 +528,7 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	go func() {
 		for {
 			s.mu.RLock()
-			ch := s.pendingReqs["r-default"]
+			ch := s.pendingReqs[pendingRequestKey("a1", "r-default")]
 			s.mu.RUnlock()
 			if ch != nil {
 				ch <- CommandResultPayload{RequestID: "r-default", Success: true}
@@ -431,7 +538,10 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 		}
 	}()
 
-	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-default"})
+	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r-default",
+		Command:   "echo ok",
+	})
 	if err != nil || result == nil || !result.Success {
 		t.Fatalf("expected success, got result=%v err=%v", result, err)
 	}
@@ -448,15 +558,11 @@ func TestReadFileRoundTrip(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	agentDone := make(chan error, 1)
@@ -475,16 +581,12 @@ func TestReadFileRoundTrip(t *testing.T) {
 				agentDone <- err
 				return
 			}
-			agentDone <- conn.WriteJSON(Message{
-				Type:      MsgTypeCommandResult,
-				Timestamp: time.Now(),
-				Payload: CommandResultPayload{
-					RequestID: payload.RequestID,
-					Success:   true,
-					Stdout:    "data",
-					ExitCode:  0,
-				},
-			})
+			agentDone <- conn.WriteJSON(mustNewMessage(t, MsgTypeCommandResult, "", CommandResultPayload{
+				RequestID: payload.RequestID,
+				Success:   true,
+				Stdout:    "data",
+				ExitCode:  0,
+			}))
 			return
 		}
 	}()
@@ -520,18 +622,150 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-timeout"}); err == nil {
+	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{
+		RequestID: "read-timeout",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected timeout error")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := s.ReadFile(ctx, "a1", ReadFilePayload{RequestID: "read-cancel"}); err == nil {
+	if _, err := s.ReadFile(ctx, "a1", ReadFilePayload{
+		RequestID: "read-cancel",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected cancel error")
 	}
 
 	serverConn.Close()
-	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-send"}); err == nil {
+	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{
+		RequestID: "read-send",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected send error")
 	}
+}
+
+func TestShutdownRejectsNewWebSocketConnections(t *testing.T) {
+	s := NewServer(nil)
+	s.Shutdown()
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if conn != nil {
+		conn.Close()
+	}
+	if err == nil {
+		t.Fatalf("expected websocket dial to fail during shutdown")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response when dial fails")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
+	}
+}
+
+func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+
+	if !s.IsAgentConnected("a1") {
+		t.Fatalf("expected agent to be connected")
+	}
+
+	s.Shutdown()
+	s.Shutdown()
+
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected connection to be closed after shutdown")
+	}
+}
+
+func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
+	t.Run("execute_command", func(t *testing.T) {
+		s := NewServer(nil)
+		serverConn, _, cleanup := newConnPair(t)
+		defer cleanup()
+
+		ac := &agentConn{
+			conn:  serverConn,
+			agent: ConnectedAgent{AgentID: "a1"},
+			done:  make(chan struct{}),
+		}
+		s.mu.Lock()
+		s.agents["a1"] = ac
+		s.mu.Unlock()
+
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", Timeout: 60})
+			errCh <- err
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		s.Shutdown()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, errServerShuttingDown) {
+				t.Fatalf("expected shutdown error, got %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("execute command did not unblock on shutdown")
+		}
+	})
+
+	t.Run("read_file", func(t *testing.T) {
+		s := NewServer(nil)
+		serverConn, _, cleanup := newConnPair(t)
+		defer cleanup()
+
+		ac := &agentConn{
+			conn:  serverConn,
+			agent: ConnectedAgent{AgentID: "a1"},
+			done:  make(chan struct{}),
+		}
+		s.mu.Lock()
+		s.agents["a1"] = ac
+		s.mu.Unlock()
+
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-shutdown", Path: "/tmp/test"})
+			errCh <- err
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		s.Shutdown()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, errServerShuttingDown) {
+				t.Fatalf("expected shutdown error, got %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("read file did not unblock on shutdown")
+		}
+	})
 }

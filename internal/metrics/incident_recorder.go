@@ -3,11 +3,17 @@ package metrics
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,7 +39,15 @@ const (
 	IncidentWindowStatusRecording IncidentWindowStatus = "recording"
 	IncidentWindowStatusComplete  IncidentWindowStatus = "complete"
 	IncidentWindowStatusTruncated IncidentWindowStatus = "truncated" // Stopped due to limits
+
+	incidentRecorderDirPerm      = 0o700
+	incidentRecorderFilePerm     = 0o600
+	maxIncidentWindowsFileSize   = 16 << 20 // 16 MiB
+	maxWindowIDResourceSegment   = 64
+	unknownWindowResourceSegment = "unknown"
 )
+
+var errUnsafeIncidentPersistencePath = errors.New("unsafe incident recorder persistence path")
 
 // IncidentDataPoint represents a single data point in an incident window
 type IncidentDataPoint struct {
@@ -106,8 +120,15 @@ type IncidentRecorder struct {
 	filePath string
 
 	// Control
-	stopCh  chan struct{}
-	running bool
+	stopCh   chan struct{}
+	loopDone chan struct{}
+	running  bool
+
+	// Async save coordination
+	saveMu         sync.Mutex
+	saveCond       *sync.Cond
+	saveInProgress bool
+	saveRequested  bool
 }
 
 // NewIncidentRecorder creates a new incident recorder
@@ -130,20 +151,39 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 	if cfg.RetentionDuration <= 0 {
 		cfg.RetentionDuration = 24 * time.Hour
 	}
+	if cfg.DataDir != "" {
+		trimmed := strings.TrimSpace(cfg.DataDir)
+		if trimmed == "" {
+			log.Warn().Msg("Ignoring incident recorder data dir: blank after trimming whitespace")
+			cfg.DataDir = ""
+		} else {
+			cfg.DataDir = filepath.Clean(trimmed)
+		}
+	}
+
+	dataDir := strings.TrimSpace(cfg.DataDir)
+	if dataDir != "" {
+		dataDir = filepath.Clean(dataDir)
+	}
 
 	recorder := &IncidentRecorder{
 		config:            cfg,
 		activeWindows:     make(map[string]*IncidentWindow),
 		completedWindows:  make([]*IncidentWindow, 0),
 		preIncidentBuffer: make(map[string][]IncidentDataPoint),
-		dataDir:           cfg.DataDir,
+		dataDir:           dataDir,
 		stopCh:            make(chan struct{}),
+		loopDone:          make(chan struct{}),
 	}
+	recorder.saveCond = sync.NewCond(&recorder.saveMu)
 
-	if cfg.DataDir != "" {
-		recorder.filePath = filepath.Join(cfg.DataDir, "incident_windows.json")
+	if dataDir != "" {
+		recorder.filePath = filepath.Join(dataDir, "incident_windows.json")
 		if err := recorder.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load incident windows from disk")
+			log.Warn().
+				Str("file_path", recorder.filePath).
+				Err(err).
+				Msg("Failed to load incident windows from disk")
 		}
 	}
 
@@ -164,12 +204,20 @@ func (r *IncidentRecorder) Start() {
 		r.mu.Unlock()
 		return
 	}
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
 	r.running = true
-	r.stopCh = make(chan struct{})
+	r.stopCh = stopCh
+	r.loopDone = loopDone
 	r.mu.Unlock()
 
-	go r.recordingLoop()
-	log.Info().Msg("Incident recorder started")
+	go r.recordingLoop(stopCh, loopDone)
+	log.Info().
+		Dur("sample_interval", r.config.SampleInterval).
+		Dur("pre_incident_window", r.config.PreIncidentWindow).
+		Dur("post_incident_window", r.config.PostIncidentWindow).
+		Int("max_data_points_per_window", r.config.MaxDataPointsPerWindow).
+		Msg("Incident recorder started")
 }
 
 // Stop stops the incident recorder
@@ -181,23 +229,37 @@ func (r *IncidentRecorder) Stop() {
 	}
 	r.running = false
 	close(r.stopCh)
+	loopDone := r.loopDone
 	r.mu.Unlock()
+
+	if loopDone != nil {
+		<-loopDone
+	}
+
+	// Flush any async save goroutine triggered before shutdown so TempDir cleanup
+	// and final persistence do not race a background rename/write.
+	r.waitForPendingSaves()
 
 	// Save to disk
 	if err := r.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save incident windows on stop")
+		log.Warn().
+			Str("file_path", r.filePath).
+			Err(err).
+			Msg("Failed to save incident windows on stop")
 	}
-	log.Info().Msg("Incident recorder stopped")
+	log.Info().Msg("incident recorder stopped")
 }
 
 // recordingLoop runs in the background to maintain pre-incident buffers and active windows
-func (r *IncidentRecorder) recordingLoop() {
+func (r *IncidentRecorder) recordingLoop(stopCh <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
 	ticker := time.NewTicker(r.config.SampleInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			r.recordSample()
@@ -208,13 +270,13 @@ func (r *IncidentRecorder) recordingLoop() {
 // recordSample captures a data point for all active windows and buffers
 func (r *IncidentRecorder) recordSample() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.provider == nil {
+		r.mu.Unlock()
 		return
 	}
 
 	now := time.Now()
+	shouldSave := false
 
 	// Record for active windows
 	for _, window := range r.activeWindows {
@@ -224,14 +286,20 @@ func (r *IncidentRecorder) recordSample() {
 
 		// Check if we've exceeded the post-incident window
 		if window.EndTime != nil && now.After(*window.EndTime) {
-			r.completeWindow(window)
+			r.completeWindowLocked(window)
+			shouldSave = true
 			continue
 		}
 
 		// Check if we've exceeded max data points
 		if len(window.DataPoints) >= r.config.MaxDataPointsPerWindow {
 			window.Status = IncidentWindowStatusTruncated
-			r.completeWindow(window)
+			log.Warn().
+				Str("window_id", window.ID).
+				Str("resource_id", window.ResourceID).
+				Int("max_data_points_per_window", r.config.MaxDataPointsPerWindow).
+				Msg("Truncating incident window after reaching max data points")
+			r.completeWindowLocked(window)
 			continue
 		}
 
@@ -239,15 +307,16 @@ func (r *IncidentRecorder) recordSample() {
 		metrics, err := r.provider.GetCurrentMetrics(window.ResourceID)
 		if err != nil {
 			log.Debug().
+				Str("window_id", window.ID).
 				Str("resource_id", window.ResourceID).
 				Err(err).
-				Msg("Failed to get metrics for incident window")
+				Msg("failed to get metrics for incident window")
 			continue
 		}
 
 		window.DataPoints = append(window.DataPoints, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   copyMetrics(metrics),
 		})
 	}
 
@@ -259,6 +328,10 @@ func (r *IncidentRecorder) recordSample() {
 	for _, resourceID := range monitoredResources {
 		metrics, err := r.provider.GetCurrentMetrics(resourceID)
 		if err != nil {
+			log.Debug().
+				Str("resource_id", resourceID).
+				Err(err).
+				Msg("Failed to get metrics for pre-incident buffer")
 			continue
 		}
 
@@ -266,7 +339,7 @@ func (r *IncidentRecorder) recordSample() {
 		buffer := r.preIncidentBuffer[resourceID]
 		buffer = append(buffer, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   copyMetrics(metrics),
 		})
 
 		// Keep only last PreIncidentWindow duration
@@ -281,12 +354,19 @@ func (r *IncidentRecorder) recordSample() {
 
 	// Clean up buffers for resources no longer monitored
 	monitoredSet := make(map[string]bool, len(monitoredResources))
-	for _, id := range monitoredResources {
-		monitoredSet[id] = true
+	for _, resourceID := range monitoredResources {
+		monitoredSet[resourceID] = true
 	}
 	for resourceID := range r.preIncidentBuffer {
 		if !monitoredSet[resourceID] {
 			delete(r.preIncidentBuffer, resourceID)
+		}
+	}
+	r.mu.Unlock()
+
+	if shouldSave {
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
 		}
 	}
 }
@@ -310,12 +390,13 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 	windowID := generateWindowID(resourceID)
 	now := time.Now()
 	endTime := now.Add(r.config.PostIncidentWindow)
+	normalizedResourceType := normalizeIncidentResourceType(resourceType)
 
 	window := &IncidentWindow{
 		ID:           windowID,
 		ResourceID:   resourceID,
 		ResourceName: resourceName,
-		ResourceType: resourceType,
+		ResourceType: normalizedResourceType,
 		TriggerType:  triggerType,
 		TriggerID:    triggerID,
 		StartTime:    now.Add(-r.config.PreIncidentWindow), // Include pre-incident data
@@ -326,7 +407,7 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 
 	// Copy pre-incident buffer if available
 	if preBuffer, ok := r.preIncidentBuffer[resourceID]; ok {
-		window.DataPoints = append(window.DataPoints, preBuffer...)
+		window.DataPoints = append(window.DataPoints, copyDataPoints(preBuffer)...)
 	}
 
 	r.activeWindows[windowID] = window
@@ -335,23 +416,39 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 		Str("window_id", windowID).
 		Str("resource_id", resourceID).
 		Str("trigger_type", triggerType).
-		Msg("Started incident recording")
+		Msg("started incident recording")
 
 	return windowID
+}
+
+func normalizeIncidentResourceType(resourceType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(normalized); ok {
+		return canonical
+	}
+	return normalized
 }
 
 // StopRecording stops recording for a specific window
 func (r *IncidentRecorder) StopRecording(windowID string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	shouldSave := false
 	if window, ok := r.activeWindows[windowID]; ok {
-		r.completeWindow(window)
+		r.completeWindowLocked(window)
+		shouldSave = true
+	}
+	r.mu.Unlock()
+
+	if shouldSave {
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
 	}
 }
 
-// completeWindow finalizes a recording window
-func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
+// completeWindowLocked finalizes a recording window.
+// Caller must hold r.mu.
+func (r *IncidentRecorder) completeWindowLocked(window *IncidentWindow) {
 	if window.Status != IncidentWindowStatusRecording && window.Status != IncidentWindowStatusTruncated {
 		return
 	}
@@ -375,13 +472,19 @@ func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
 	log.Info().
 		Str("window_id", window.ID).
 		Str("resource_id", window.ResourceID).
+		Str("status", string(window.Status)).
 		Int("data_points", len(window.DataPoints)).
-		Msg("Completed incident recording")
+		Msg("completed incident recording")
 
 	// Save asynchronously
 	go func() {
 		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
+			log.Warn().
+				Str("window_id", window.ID).
+				Str("resource_id", window.ResourceID).
+				Str("file_path", r.filePath).
+				Err(err).
+				Msg("Failed to save incident windows")
 		}
 	}()
 }
@@ -521,116 +624,121 @@ func (r *IncidentRecorder) GetWindowsForResource(resourceID string, limit int) [
 	return result
 }
 
-// GetRecentWindows returns recent incident windows across all resources
-func (r *IncidentRecorder) GetRecentWindows(limit int) []*IncidentWindow {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var result []*IncidentWindow
-
-	// Add active windows
-	for _, window := range r.activeWindows {
-		result = append(result, copyWindow(window))
-	}
-
-	// Add completed windows (most recent first)
-	start := len(r.completedWindows) - 1
-	for i := start; i >= 0 && len(result) < limit; i-- {
-		result = append(result, copyWindow(r.completedWindows[i]))
-	}
-
-	return result
-}
-
-// FormatForContext formats incident data for AI prompt injection
-func (r *IncidentRecorder) FormatForContext(resourceID string, windowID string) string {
-	var window *IncidentWindow
-
-	if windowID != "" {
-		window = r.GetWindow(windowID)
-	} else if resourceID != "" {
-		windows := r.GetWindowsForResource(resourceID, 1)
-		if len(windows) > 0 {
-			window = windows[0]
-		}
-	}
-
-	if window == nil {
-		return ""
-	}
-
-	result := "\n## Incident Recording Data\n"
-	result += "High-frequency metrics captured during incident:\n\n"
-
-	if window.Summary != nil {
-		result += "### Summary\n"
-		result += "- Duration: " + window.Summary.Duration.String() + "\n"
-		result += "- Data points: " + intToString(window.Summary.DataPoints) + "\n"
-
-		if len(window.Summary.Peaks) > 0 {
-			result += "\nPeak values:\n"
-			for metric, value := range window.Summary.Peaks {
-				result += "- " + metric + ": " + floatToString(value) + "\n"
-			}
-		}
-
-		if len(window.Summary.Changes) > 0 {
-			result += "\nChanges during incident:\n"
-			for metric, change := range window.Summary.Changes {
-				result += "- " + metric + ": " + signedFloatToString(change) + "\n"
-			}
-		}
-	}
-
-	// Include recent data points (last 10)
-	if len(window.DataPoints) > 0 {
-		result += "\n### Recent Data Points\n"
-		start := len(window.DataPoints) - 10
-		if start < 0 {
-			start = 0
-		}
-		for i := start; i < len(window.DataPoints); i++ {
-			dp := window.DataPoints[i]
-			result += dp.Timestamp.Format("15:04:05") + ": "
-			for metric, value := range dp.Metrics {
-				result += metric + "=" + floatToString(value) + " "
-			}
-			result += "\n"
-		}
-	}
-
-	return result
-}
-
 // saveToDisk persists completed windows
 func (r *IncidentRecorder) saveToDisk() error {
 	if r.filePath == "" {
 		return nil
 	}
 
-	r.mu.RLock()
 	data := struct {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
 	}{
-		CompletedWindows: r.completedWindows,
+		CompletedWindows: r.snapshotCompletedWindows(),
 	}
-	r.mu.RUnlock()
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
+		return fmt.Errorf("incident recorder save: marshal completed windows: %w", err)
+	}
+
+	if err := ensureOwnerOnlyDir(r.dataDir); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(r.dataDir, 0755); err != nil {
+	if info, err := os.Lstat(r.filePath); err == nil {
+		if err := validateRegularFilePath(r.filePath, info); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
-	tmpPath := r.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
+	tmpFile, err := os.CreateTemp(r.dataDir, filepath.Base(r.filePath)+".*.tmp")
+	if err != nil {
 		return err
 	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
-	return os.Rename(tmpPath, r.filePath)
+	if err := tmpFile.Chmod(incidentRecorderFilePerm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(jsonData); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, r.filePath); err != nil {
+		return err
+	}
+	cleanup = false
+	return os.Chmod(r.filePath, incidentRecorderFilePerm)
+}
+
+func (r *IncidentRecorder) snapshotCompletedWindows() []*IncidentWindow {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	snapshot := make([]*IncidentWindow, len(r.completedWindows))
+	for i, window := range r.completedWindows {
+		snapshot[i] = copyWindow(window)
+	}
+	return snapshot
+}
+
+func (r *IncidentRecorder) requestAsyncSave() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	r.saveRequested = true
+	if r.saveInProgress {
+		r.saveMu.Unlock()
+		return
+	}
+	r.saveInProgress = true
+	r.saveMu.Unlock()
+
+	go r.saveLoop()
+}
+
+func (r *IncidentRecorder) saveLoop() {
+	for {
+		r.saveMu.Lock()
+		if !r.saveRequested {
+			r.saveInProgress = false
+			r.saveCond.Broadcast()
+			r.saveMu.Unlock()
+			return
+		}
+		r.saveRequested = false
+		r.saveMu.Unlock()
+
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
+	}
+}
+
+func (r *IncidentRecorder) waitForPendingSaves() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	for r.saveInProgress || r.saveRequested {
+		r.saveCond.Wait()
+	}
+	r.saveMu.Unlock()
 }
 
 // loadFromDisk loads completed windows
@@ -639,12 +747,12 @@ func (r *IncidentRecorder) loadFromDisk() error {
 		return nil
 	}
 
-	jsonData, err := os.ReadFile(r.filePath)
+	jsonData, err := readBoundedRegularFile(r.filePath, maxIncidentWindowsFileSize)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("incident recorder load: read file %q: %w", r.filePath, err)
 	}
 
 	var data struct {
@@ -652,50 +760,142 @@ func (r *IncidentRecorder) loadFromDisk() error {
 	}
 
 	if err := json.Unmarshal(jsonData, &data); err != nil {
-		return err
+		return fmt.Errorf("incident recorder load: parse file %q: %w", r.filePath, err)
 	}
 
-	r.completedWindows = data.CompletedWindows
+	r.completedWindows = make([]*IncidentWindow, 0, len(data.CompletedWindows))
+	for _, window := range data.CompletedWindows {
+		if window == nil {
+			continue
+		}
+		r.completedWindows = append(r.completedWindows, window)
+	}
 	r.trimCompletedWindows()
 
-	return nil
+	return os.Chmod(r.filePath, incidentRecorderFilePerm)
 }
 
 // Helper functions
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, incidentRecorderDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, incidentRecorderDirPerm)
+}
+
+func validateRegularFilePath(path string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: refusing symlink path %q", errUnsafeIncidentPersistencePath, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: non-regular path %q", errUnsafeIncidentPersistencePath, path)
+	}
+	return nil
+}
+
+func readBoundedRegularFile(path string, maxSize int64) ([]byte, error) {
+	initialInfo, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFilePath(path, initialInfo); err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && initialInfo.Size() > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeds size limit (%d bytes)", errUnsafeIncidentPersistencePath, path, initialInfo.Size())
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	openInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFilePath(path, openInfo); err != nil {
+		return nil, err
+	}
+	if !os.SameFile(initialInfo, openInfo) {
+		return nil, fmt.Errorf("%w: file %q changed during read", errUnsafeIncidentPersistencePath, path)
+	}
+
+	reader := io.Reader(file)
+	if maxSize > 0 {
+		reader = io.LimitReader(file, maxSize+1)
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && int64(len(data)) > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeded size limit while reading", errUnsafeIncidentPersistencePath, path)
+	}
+	return data, nil
+}
 
 func copyWindow(w *IncidentWindow) *IncidentWindow {
 	if w == nil {
 		return nil
 	}
-	copy := *w
+	windowCopy := *w
 	if w.EndTime != nil {
 		t := *w.EndTime
-		copy.EndTime = &t
+		windowCopy.EndTime = &t
 	}
-	if w.DataPoints != nil {
-		copy.DataPoints = make([]IncidentDataPoint, len(w.DataPoints))
-		for i, dp := range w.DataPoints {
-			copy.DataPoints[i] = dp
-			if dp.Metrics != nil {
-				copy.DataPoints[i].Metrics = make(map[string]float64)
-				for k, v := range dp.Metrics {
-					copy.DataPoints[i].Metrics[k] = v
-				}
-			}
-		}
-	}
+	windowCopy.DataPoints = copyDataPoints(w.DataPoints)
 	if w.Summary != nil {
 		s := *w.Summary
-		copy.Summary = &s
+		s.Peaks = copyMetrics(w.Summary.Peaks)
+		s.Lows = copyMetrics(w.Summary.Lows)
+		s.Averages = copyMetrics(w.Summary.Averages)
+		s.Changes = copyMetrics(w.Summary.Changes)
+		if w.Summary.Anomalies != nil {
+			s.Anomalies = append([]string(nil), w.Summary.Anomalies...)
+		}
+		windowCopy.Summary = &s
 	}
-	return &copy
+	return &windowCopy
 }
 
 var windowCounter int64
 
 func generateWindowID(resourceID string) string {
-	windowCounter++
-	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(windowCounter%1000))
+	counter := atomic.AddInt64(&windowCounter, 1)
+	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(counter))
+}
+
+func copyDataPoints(points []IncidentDataPoint) []IncidentDataPoint {
+	copied := make([]IncidentDataPoint, len(points))
+	for i, dp := range points {
+		copied[i] = dp
+		copied[i].Metrics = copyMetrics(dp.Metrics)
+		if dp.Metadata != nil {
+			copied[i].Metadata = make(map[string]interface{}, len(dp.Metadata))
+			for k, v := range dp.Metadata {
+				copied[i].Metadata[k] = v
+			}
+		}
+	}
+	return copied
+}
+
+func copyMetrics(metrics map[string]float64) map[string]float64 {
+	if metrics == nil {
+		return nil
+	}
+
+	copied := make(map[string]float64, len(metrics))
+	for k, v := range metrics {
+		copied[k] = v
+	}
+	return copied
 }
 
 func intToString(n int) string {
@@ -715,28 +915,4 @@ func intToString(n int) string {
 		result = "-" + result
 	}
 	return result
-}
-
-func floatToString(f float64) string {
-	// Simple formatting - 2 decimal places
-	intPart := int(f)
-	fracPart := int((f - float64(intPart)) * 100)
-	if fracPart < 0 {
-		fracPart = -fracPart
-	}
-	return intToString(intPart) + "." + padLeft(intToString(fracPart), 2, '0')
-}
-
-func signedFloatToString(f float64) string {
-	if f >= 0 {
-		return "+" + floatToString(f)
-	}
-	return floatToString(f)
-}
-
-func padLeft(s string, length int, pad rune) string {
-	for len(s) < length {
-		s = string(pad) + s
-	}
-	return s
 }

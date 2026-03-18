@@ -27,27 +27,42 @@ import { layoutStore } from '@/utils/layout';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
-import { apiFetch } from './utils/apiClient';
+import type { TimeRange } from './api/charts';
+import {
+  apiFetch,
+  getOrgID as getSelectedOrgID,
+  setOrgID as setSelectedOrgID,
+} from './utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 import { SettingsAPI } from './api/settings';
+import { OrgsAPI } from '@/api/orgs';
+import type { Organization } from '@/api/orgs';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
+import { TrialBanner } from './components/shared/TrialBanner';
+import { MonitoredSystemLimitWarningBanner } from './components/shared/MonitoredSystemLimitWarningBanner';
+import { ActiveUseTrialNudge } from './components/shared/ActiveUseTrialNudge';
+import { WhatsNewModal } from './components/shared/WhatsNewModal';
+import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
+import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
+import { MobileNavBar } from './components/shared/MobileNavBar';
 import { createTooltipSystem } from './components/shared/Tooltip';
+import { OrgSwitcher } from './components/OrgSwitcher';
 import type { State, Alert } from '@/types/api';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import { startMetricsSampler } from './stores/metricsSampler';
-import { seedFromBackend } from './stores/metricsHistory';
-import { getMetricsViewMode } from './stores/metricsViewMode';
+import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
-import MonitorIcon from 'lucide-solid/icons/monitor';
+import LayoutDashboardIcon from 'lucide-solid/icons/layout-dashboard';
+import ServerIcon from 'lucide-solid/icons/server';
+import HardDriveIcon from 'lucide-solid/icons/hard-drive';
+import ArchiveIcon from 'lucide-solid/icons/archive';
 import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
-import NetworkIcon from 'lucide-solid/icons/network';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
@@ -55,40 +70,90 @@ import { UpdateProgressModal } from './components/UpdateProgressModal';
 import type { UpdateStatus } from './api/updates';
 import { AIChat } from './components/AI/Chat';
 import { aiChatStore } from './stores/aiChat';
-import { useResourcesAsLegacy } from './hooks/useResources';
-import { updateSystemSettingsFromResponse, markSystemSettingsLoadedWithDefaults } from './stores/systemSettings';
-import { initKioskMode, isKioskMode, setKioskMode, subscribeToKioskMode, getKioskModePreference } from './utils/url';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import {
+  updateSystemSettingsFromResponse,
+  markSystemSettingsLoadedWithDefaults,
+} from './stores/systemSettings';
+import {
+  fetchInfrastructureSummaryAndCache,
+  hasFreshInfrastructureSummaryCache,
+} from '@/utils/infrastructureSummaryCache';
+import {
+  initKioskMode,
+  setKioskMode,
+  getKioskModePreference,
+  getPulseWebSocketUrl,
+} from './utils/url';
+import { useKioskMode, syncKioskMode } from '@/hooks/useKioskMode';
+import { getActiveTabForPath } from './routing/navigation';
+import {
+  buildRecoveryPath,
+  DASHBOARD_PATH,
+  buildInfrastructurePath,
+  buildStoragePath,
+  buildWorkloadsPath,
+} from './routing/resourceLinks';
+import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
+import {
+  isHostedModeEnabled,
+  isMultiTenantEnabled,
+  isPro,
+  licenseLoaded,
+  loadLicenseStatus,
+} from '@/stores/license';
 
+import { showToast } from '@/utils/toast';
+import {
+  applyThemeClass,
+  computeIsDark,
+  getStoredThemePreference,
+  hasStoredThemePreference,
+  normalizeThemePreference,
+  persistThemePreference,
+  type ThemePreference,
+} from '@/utils/theme';
+
+function isPublicRoutePath(pathname: string): boolean {
+  // Public routes must be viewable without authentication.
+  // Keep the list small and explicit.
+  return (
+    pathname === '/pricing' ||
+    pathname === '/cloud' ||
+    pathname === '/cloud/signup' ||
+    pathname === '/preview/setup-complete'
+  );
+}
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
-const Backups = lazy(() => import('./components/Backups/Backups'));
-const Replication = lazy(() => import('./components/Replication/Replication'));
-const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
+const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
-const DockerHosts = lazy(() =>
-  import('./components/Docker/DockerHosts').then((module) => ({ default: module.DockerHosts })),
-);
-const KubernetesClusters = lazy(() =>
-  import('./components/Kubernetes/KubernetesClusters').then((module) => ({
-    default: module.KubernetesClusters,
-  })),
-);
-const HostsOverview = lazy(() =>
-  import('./components/Hosts/HostsOverview').then((module) => ({
-    default: module.HostsOverview,
-  })),
-);
+const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
+const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
-
+const NotFoundPage = lazy(() => import('./pages/NotFound'));
+const PricingPage = lazy(() => import('./pages/PricingV6'));
+const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
+const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
+const Operations = lazy(() => import('./pages/Operations'));
+const SetupCompletionPreviewPage = lazy(() =>
+  import('./components/SetupWizard/SetupCompletionPreview').then((module) => ({
+    default: module.SetupCompletionPreview,
+  })),
+);
+const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
+const STORAGE_PATH = buildStoragePath();
+const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -104,7 +169,7 @@ export const useWebSocket = () => {
 };
 
 // Dark mode context for reactive theme switching
-export const DarkModeContext = createContext<() => boolean>(() => false);
+export const DarkModeContext = createContext<() => boolean>();
 export const useDarkMode = () => {
   const context = useContext(DarkModeContext);
   if (!context) {
@@ -112,31 +177,6 @@ export const useDarkMode = () => {
   }
   return context;
 };
-
-// Docker route component - uses unified resources via useResourcesAsLegacy hook
-function DockerRoute() {
-  const wsContext = useContext(WebSocketContext);
-  if (!wsContext) {
-    return <div>Loading...</div>;
-  }
-  const { activeAlerts } = wsContext;
-  const { asDockerHosts } = useResourcesAsLegacy();
-
-  return <DockerHosts hosts={asDockerHosts() as any} activeAlerts={activeAlerts} />;
-}
-
-// Hosts route component - HostsOverview uses useResourcesAsLegacy directly for proper reactivity
-function HostsRoute() {
-  return <HostsOverview />;
-}
-
-function KubernetesRoute() {
-  const wsContext = useContext(WebSocketContext);
-  if (!wsContext) {
-    return <div>Loading...</div>;
-  }
-  return <KubernetesClusters clusters={wsContext.state.kubernetesClusters ?? []} />;
-}
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
 function isUpdateInProgress(status: string | undefined): boolean {
@@ -218,7 +258,7 @@ function GlobalUpdateProgressWatcher() {
       onClose={() => setShowProgressModal(false)}
       onViewHistory={() => {
         setShowProgressModal(false);
-        navigate('/settings/updates');
+        navigate('/settings/system-updates');
       }}
       connected={wsContext?.connected}
       reconnecting={wsContext?.reconnecting}
@@ -227,18 +267,20 @@ function GlobalUpdateProgressWatcher() {
 }
 
 function App() {
+  const LegacyOperationsSettingsRedirect = () => {
+    const location = useLocation();
+    const canonicalPath =
+      location.pathname.replace(/^\/settings\/operations(?=\/|$)/, '/operations') || '/operations';
+    return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
+  };
+
   // Initialize kiosk mode from URL params immediately (persists to sessionStorage)
   // This must happen before any renders so kiosk state is available everywhere
   initKioskMode();
+  syncKioskMode(); // Re-sync shared signal after URL params are processed
 
   // Reactive kiosk state for App-level components (banners, etc.)
-  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskModeSignal(enabled);
-    });
-    onCleanup(unsubscribe);
-  });
+  const kioskMode = useKioskMode();
 
   const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
@@ -250,35 +292,62 @@ function App() {
   };
   const alertsActivation = useAlertsActivation();
 
-  // Start metrics sampler for sparklines
+  // Start metrics collector (always runs for Storage page)
   onMount(() => {
-    startMetricsSampler();
-
-    // If user already has sparklines mode enabled, seed historical data immediately
-    if (getMetricsViewMode() === 'sparklines') {
-      seedFromBackend('1h').catch(() => {
-        // Errors are already logged in seedFromBackend
-      });
-    }
+    startMetricsCollector();
   });
 
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
+  let hasPrewarmedInfrastructureCharts = false;
+
+  const getInfrastructureTrendRangeForPrewarm = (): TimeRange => '1h';
+
+  const shouldPrewarmInfrastructure = (): boolean => {
+    if (typeof window === 'undefined') return false;
+
+    // Respect data-saver / very slow connections.
+    // We treat this as an optimization, not a correctness requirement.
+    const conn = (
+      navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }
+    ).connection;
+    if (conn?.saveData) return false;
+    const effective = conn?.effectiveType;
+    if (typeof effective === 'string' && (effective === 'slow-2g' || effective === '2g')) {
+      return false;
+    }
+
+    const pathname = window.location.pathname;
+    if (!pathname) return true;
+    if (pathname === ROOT_INFRASTRUCTURE_PATH) return false;
+    return true;
+  };
+
+  const prewarmInfrastructureCharts = () => {
+    if (hasPrewarmedInfrastructureCharts || !shouldPrewarmInfrastructure()) {
+      return;
+    }
+
+    const range = getInfrastructureTrendRangeForPrewarm();
+    if (hasFreshInfrastructureSummaryCache(range)) {
+      hasPrewarmedInfrastructureCharts = true;
+      return;
+    }
+
+    hasPrewarmedInfrastructureCharts = true;
+    void fetchInfrastructureSummaryAndCache(range, { caller: 'App prewarm' }).catch(() => {
+      // Non-blocking prewarm; ignore failures.
+    });
+  };
+
   const preloadLazyRoutes = () => {
     if (hasPreloadedRoutes || typeof window === 'undefined') {
       return;
     }
     hasPreloadedRoutes = true;
     const loaders: Array<() => Promise<unknown>> = [
-      () => import('./components/Storage/Storage'),
-      () => import('./components/Backups/Backups'),
-      () => import('./components/Replication/Replication'),
-      () => import('./components/PMG/MailGateway'),
-      () => import('./components/Hosts/HostsOverview'),
-
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
-      () => import('./components/Docker/DockerHosts'),
     ];
 
     loaders.forEach((load) => {
@@ -289,36 +358,8 @@ function App() {
   };
 
   const fallbackState: State = {
-    nodes: [],
-    vms: [],
-    containers: [],
-    dockerHosts: [],
-    removedDockerHosts: [],
-    removedHosts: [],
-    hosts: [],
-    storage: [],
-    cephClusters: [],
-    physicalDisks: [],
-    pbs: [],
-    pmg: [],
-    replicationJobs: [],
+    connectedInfrastructure: [],
     metrics: [],
-    pveBackups: {
-      backupTasks: [],
-      storageBackups: [],
-      guestSnapshots: [],
-    },
-    pbsBackups: [],
-    pmgBackups: [],
-    backups: {
-      pve: {
-        backupTasks: [],
-        storageBackups: [],
-        guestSnapshots: [],
-      },
-      pbs: [],
-      pmg: [],
-    },
     performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
@@ -338,15 +379,21 @@ function App() {
     },
     activeAlerts: [],
     recentlyResolved: [],
-    lastUpdate: '',
+    lastUpdate: 0,
+    resources: [],
   };
 
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
-  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
-  // Store full security status for Login component (hideLocalLogin, oidcEnabled, etc.)
+  const [organizations, setOrganizations] = createSignal<Organization[]>([
+    { id: 'default', displayName: 'Default Organization' },
+  ]);
+  const [activeOrgID, setActiveOrgID] = createSignal(getSelectedOrgID() || 'default');
+  const [orgsLoading, setOrgsLoading] = createSignal(false);
+  // Store full security status for Login component (hideLocalLogin, SSO providers, etc.)
+  // Store full security status for Login component (hideLocalLogin, SSO providers, etc.)
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{
     username?: string;
@@ -361,18 +408,107 @@ function App() {
 
   // Data update indicator
   const [dataUpdated, setDataUpdated] = createSignal(false);
-  let updateTimeout: number;
+  let updateTimeout: number | undefined;
 
   // Last update time formatting
   const [lastUpdateText, setLastUpdateText] = createSignal('');
 
-  const formatLastUpdate = (timestamp: string) => {
+  const loadOrganizations = async () => {
+    setOrgsLoading(true);
+    try {
+      if (!licenseLoaded()) {
+        await loadLicenseStatus();
+      }
+
+      if (!isMultiTenantEnabled()) {
+        const storedOrgID = getSelectedOrgID();
+        const hostedOrgID =
+          isHostedModeEnabled() && storedOrgID && storedOrgID !== 'default'
+            ? storedOrgID
+            : 'default';
+        setOrganizations([
+          {
+            id: hostedOrgID,
+            displayName: hostedOrgID === 'default' ? 'Default Organization' : hostedOrgID,
+          },
+        ]);
+        setSelectedOrgID(hostedOrgID);
+        setActiveOrgID(hostedOrgID);
+        return;
+      }
+
+      const fetched = await OrgsAPI.list();
+      const orgList =
+        fetched.length > 0 ? fetched : [{ id: 'default', displayName: 'Default Organization' }];
+      setOrganizations(orgList);
+
+      const storedOrgID = getSelectedOrgID();
+      const selected =
+        (storedOrgID && orgList.some((org) => org.id === storedOrgID) ? storedOrgID : null) ||
+        orgList[0]?.id ||
+        'default';
+
+      setSelectedOrgID(selected);
+      setActiveOrgID(selected);
+    } catch (error) {
+      logger.warn('Failed to load organizations, falling back to default org', error);
+      showToast('error', 'Failed to load organizations. Using default.');
+      const fallback = [{ id: 'default', displayName: 'Default Organization' }];
+      setOrganizations(fallback);
+      setSelectedOrgID('default');
+      setActiveOrgID('default');
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
+
+  const handleOrgSwitch = (nextOrgID: string) => {
+    const target = nextOrgID?.trim() || 'default';
+    if (target === activeOrgID()) {
+      return;
+    }
+
+    if (target !== 'default' && !organizations().some((org) => org.id === target)) {
+      showToast('error', 'Organization no longer exists');
+      return;
+    }
+
+    setSelectedOrgID(target);
+    setActiveOrgID(target);
+
+    eventBus.emit('org_switched', target);
+
+    // Clear org-specific client-side caches
+    try {
+      localStorage.removeItem(STORAGE_KEYS.GUEST_METADATA);
+      localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA);
+      localStorage.removeItem(STORAGE_KEYS.DOCKER_METADATA + '_hosts');
+    } catch {
+      /* ignore storage errors */
+    }
+
+    try {
+      const store = wsStore();
+      if (store && typeof store.switchUrl === 'function') {
+        store.switchUrl(getPulseWebSocketUrl());
+      } else {
+        store?.reconnect();
+      }
+      showToast('success', 'Organization switched');
+    } catch (error) {
+      logger.error('Failed to switch organization', error);
+      showToast('error', 'Failed to switch organization');
+    }
+  };
+
+  const formatLastUpdate = (timestamp: number) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    return date.toLocaleTimeString(undefined, {
+    return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
+      hour12: true,
     });
   };
 
@@ -380,11 +516,19 @@ function App() {
   createEffect(() => {
     // Watch for state changes
     const updateTime = state().lastUpdate;
-    if (updateTime && updateTime !== '') {
+    if (updateTime > 0) {
       setDataUpdated(true);
       setLastUpdateText(formatLastUpdate(updateTime));
-      window.clearTimeout(updateTimeout);
+      if (updateTimeout !== undefined) {
+        window.clearTimeout(updateTimeout);
+      }
       updateTimeout = window.setTimeout(() => setDataUpdated(false), POLLING_INTERVALS.DATA_FLASH);
+    }
+  });
+
+  onCleanup(() => {
+    if (updateTimeout !== undefined) {
+      window.clearTimeout(updateTimeout);
     }
   });
 
@@ -401,20 +545,41 @@ function App() {
   });
 
   createEffect(() => {
+    if (isLoading() || needsAuth() || hasPrewarmedInfrastructureCharts) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(
+        () => {
+          prewarmInfrastructureCharts();
+        },
+        { timeout: 2_000 },
+      );
+      onCleanup(() => {
+        window.cancelIdleCallback(id);
+      });
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      prewarmInfrastructureCharts();
+    }, 500);
+    onCleanup(() => {
+      window.clearTimeout(timeout);
+    });
+  });
+
+  createEffect(() => {
     if (isLoading() || needsAuth() || hasFetchedVersionInfo) {
       return;
     }
     hasFetchedVersionInfo = true;
 
-    UpdatesAPI.getVersion()
-      .then((version) => {
-        setVersionInfo(version);
-        // Check for updates after loading version info (non-blocking)
-        updateStore.checkForUpdates();
-      })
-      .catch((error) => {
-        logger.error('Failed to load version', error);
-      });
+    void syncVersionInfoFromUpdateStore();
   });
 
   let alertsInitialized = false;
@@ -434,70 +599,81 @@ function App() {
 
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  async function syncVersionInfoFromUpdateStore() {
+    const cachedVersion = updateStore.versionInfo();
+    if (cachedVersion) {
+      setVersionInfo(cachedVersion);
+    }
 
-  // Dark mode - initialize immediately from localStorage to prevent flash
-  // This addresses issue #443 where dark mode wasn't persisting
-  // Priority: 1. localStorage (user's last choice on this device)
-  //           2. System preference
-  //           3. Server preference (loaded later for cross-device sync)
-  const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-  const hasLocalPreference = savedDarkMode !== null;
-  const initialDarkMode = hasLocalPreference
-    ? savedDarkMode === 'true'
-    : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const [darkMode, setDarkMode] = createSignal(initialDarkMode);
-  const [, setHasLoadedServerTheme] = createSignal(false);
+    await updateStore.checkForUpdates();
 
-  // Apply dark mode immediately on initialization
-  if (initialDarkMode) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
+    const resolvedVersion = updateStore.versionInfo();
+    if (resolvedVersion) {
+      setVersionInfo(resolvedVersion);
+    }
   }
 
-  // Toggle dark mode
-  const toggleDarkMode = async () => {
-    const newMode = !darkMode();
-    setDarkMode(newMode);
-    localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(newMode));
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    logger.info('Theme changed', { mode: newMode ? 'dark' : 'light' });
+  // Theme settings
+  // Single source of truth:
+  // 1) localStorage preference
+  // 2) system preference
+  // 3) server preference (only when no local preference exists)
+  const initialThemePref = getStoredThemePreference();
+  const [themePreference, setThemePreference] = createSignal<ThemePreference>(initialThemePref);
+  const [, setHasLoadedServerTheme] = createSignal(false);
+
+  const [darkMode, setDarkMode] = createSignal(computeIsDark(initialThemePref));
+
+  // Apply dark mode immediately on initialization
+  applyThemeClass(darkMode());
+
+  // Handle explicit theme changes
+  const handleThemeChange = async (newPref: ThemePreference) => {
+    setThemePreference(newPref);
+    persistThemePreference(newPref);
+
+    const isDark = computeIsDark(newPref);
+    setDarkMode(isDark);
+    applyThemeClass(isDark);
+
+    logger.info('Theme changed', { pref: newPref, active: isDark ? 'dark' : 'light' });
 
     // Save theme preference to server if authenticated
     if (!needsAuth()) {
       try {
-        await SettingsAPI.updateSystemSettings({ theme: newMode ? 'dark' : 'light' });
+        await SettingsAPI.updateSystemSettings({ theme: newPref });
         logger.info('Theme preference saved to server');
       } catch (error) {
         logger.error('Failed to save theme preference to server', error);
-        // Don't show error to user - local change still works
       }
     }
   };
 
   // Don't initialize dark mode here - will be handled based on auth state
 
-  // Listen for theme changes from other browser instances
+  // Listen for theme changes from other browser instances and system pref
   onMount(() => {
-    const handleThemeChange = (theme?: string) => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const systemThemeListener = (e: MediaQueryListEvent) => {
+      if (themePreference() === 'system') {
+        const isDark = e.matches;
+        setDarkMode(isDark);
+        applyThemeClass(isDark);
+      }
+    };
+    mediaQuery.addEventListener('change', systemThemeListener);
+
+    const handleRemoteThemeChange = (theme?: string) => {
       if (!theme) return;
       logger.info('Received theme change from another browser instance', { theme });
-      const isDark = theme === 'dark';
 
-      // Update local state
+      const pref = normalizeThemePreference(theme);
+      setThemePreference(pref);
+      persistThemePreference(pref);
+
+      const isDark = computeIsDark(pref);
       setDarkMode(isDark);
-      localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(isDark));
-
-      // Update DOM
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      applyThemeClass(isDark);
     };
 
     // Handle WebSocket reconnection - refresh alert config to restore activation state
@@ -509,16 +685,16 @@ function App() {
     };
 
     // Subscribe to events
-    eventBus.on('theme_changed', handleThemeChange);
+    eventBus.on('theme_changed', handleRemoteThemeChange);
     eventBus.on('websocket_reconnected', handleWebSocketReconnected);
 
     // Cleanup on unmount
     onCleanup(() => {
-      eventBus.off('theme_changed', handleThemeChange);
+      mediaQuery.removeEventListener('change', systemThemeListener);
+      eventBus.off('theme_changed', handleRemoteThemeChange);
       eventBus.off('websocket_reconnected', handleWebSocketReconnected);
     });
   });
-
 
   // Check auth on mount
   onMount(async () => {
@@ -528,7 +704,7 @@ function App() {
     const justLoggedOut = localStorage.getItem('just_logged_out');
 
     // First check security status to see if auth is configured
-    // We need this for ALL paths to properly set hideLocalLogin, oidcEnabled, etc.
+    // We need this for ALL paths to properly set hideLocalLogin, SSO providers, etc.
     try {
       const securityRes = await apiFetch('/api/security/status');
 
@@ -554,7 +730,7 @@ function App() {
       if (justLoggedOut) {
         localStorage.removeItem('just_logged_out');
         logger.debug('[App] User logged out, showing login page');
-        // Parse security data to get hideLocalLogin, oidcEnabled, etc.
+        // Parse security data to get hideLocalLogin, SSO providers, etc.
         if (securityRes.ok) {
           const securityData = await securityRes.json();
           setSecurityStatus(securityData as SecurityStatus);
@@ -575,13 +751,6 @@ function App() {
       // Store full security status for Login component
       setSecurityStatus(securityData as SecurityStatus);
 
-      // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
-      if (securityData.deprecatedDisableAuth === true) {
-        logger.warn(
-          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
-        );
-      }
-
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
 
@@ -593,114 +762,75 @@ function App() {
           logoutURL: securityData.proxyAuthLogoutURL,
         });
         setNeedsAuth(false);
+        await loadOrganizations();
         // Initialize WebSocket for proxy auth users
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
-            }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
+            setThemePreference(pref);
+            persistThemePreference(pref);
+            const isDark = computeIsDark(pref);
+            setDarkMode(isDark);
+            applyThemeClass(isDark);
           }
-        } else {
+
           setHasLoadedServerTheme(true);
-          // Still load system settings for other features (Docker update actions, etc.)
-          SettingsAPI.getSystemSettings()
-            .then((settings) => updateSystemSettingsFromResponse(settings))
-            .catch((error) => {
-              logger.warn('Failed to load system settings', error);
-              markSystemSettingsLoadedWithDefaults();
-            });
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
 
-        // Load version info
-        UpdatesAPI.getVersion()
-          .then((version) => {
-            setVersionInfo(version);
-            // Check for updates after loading version info (non-blocking)
-            updateStore.checkForUpdates();
-          })
-          .catch((error) => logger.error('Failed to load version', error));
+        void syncVersionInfoFromUpdateStore();
 
         setIsLoading(false);
         return;
       }
 
-      // Check for OIDC session
-      if (securityData.oidcEnabled && securityData.oidcUsername) {
-        logger.info('[App] OIDC session detected', { user: securityData.oidcUsername });
-        setHasAuth(true); // OIDC is enabled, so auth is configured
+      // Check for SSO session
+      if (securityData.ssoEnabled && securityData.ssoSessionUsername) {
+        logger.info('[App] SSO session detected', { user: securityData.ssoSessionUsername });
+        setHasAuth(true); // SSO is enabled, so auth is configured
         setProxyAuthInfo({
-          username: securityData.oidcUsername,
-          logoutURL: securityData.oidcLogoutURL, // OIDC logout URL from IdP
+          username: securityData.ssoSessionUsername,
+          logoutURL: securityData.ssoLogoutURL, // Optional SSO logout URL from IdP
         });
         setNeedsAuth(false);
-        // Initialize WebSocket for OIDC users
+        await loadOrganizations();
+        // Initialize WebSocket for SSO users
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
-            }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          // Only apply server theme if user has no local preference on this device.
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
+            setThemePreference(pref);
+            persistThemePreference(pref);
+            const isDark = computeIsDark(pref);
+            setDarkMode(isDark);
+            applyThemeClass(isDark);
           }
-        } else {
+
           setHasLoadedServerTheme(true);
-          // Still load system settings for other features (Docker update actions, etc.)
-          SettingsAPI.getSystemSettings()
-            .then((settings) => updateSystemSettingsFromResponse(settings))
-            .catch((error) => {
-              logger.warn('Failed to load system settings', error);
-              markSystemSettingsLoadedWithDefaults();
-            });
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
 
-        // Load version info
-        UpdatesAPI.getVersion()
-          .then((version) => {
-            setVersionInfo(version);
-            // Check for updates after loading version info (non-blocking)
-            updateStore.checkForUpdates();
-          })
-          .catch((error) => logger.error('Failed to load version', error));
+        void syncVersionInfoFromUpdateStore();
 
         setIsLoading(false);
         return;
@@ -726,45 +856,31 @@ function App() {
         setNeedsAuth(true);
       } else {
         setNeedsAuth(false);
+        await loadOrganizations();
         // Only initialize WebSocket after successful auth check
         setWsStore(acquireWsStore());
 
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            // Update system settings store (for Docker update actions, etc.)
-            updateSystemSettingsFromResponse(systemSettings);
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
-            }
-            setHasLoadedServerTheme(true);
-            // Also load full-width mode from server
-            layoutStore.loadFromServer();
-          } catch (error) {
-            logger.error('Failed to load theme from server', error);
-            // Ensure settings are marked as loaded so UI doesn't stay in loading state
-            markSystemSettingsLoadedWithDefaults();
+        // Load system settings (theme + server-wide feature flags + layout prefs)
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          updateSystemSettingsFromResponse(systemSettings);
+
+          // Only apply server theme if user has no local preference on this device.
+          if (!hasStoredThemePreference() && systemSettings.theme && systemSettings.theme !== '') {
+            const pref = normalizeThemePreference(systemSettings.theme);
+            setThemePreference(pref);
+            persistThemePreference(pref);
+            const isDark = computeIsDark(pref);
+            setDarkMode(isDark);
+            applyThemeClass(isDark);
           }
-        } else {
-          // We have a local preference, just mark that we've checked the server
+
           setHasLoadedServerTheme(true);
-          // Still load system settings for other features (Docker update actions, etc.)
-          SettingsAPI.getSystemSettings()
-            .then((settings) => updateSystemSettingsFromResponse(settings))
-            .catch((error) => {
-              logger.warn('Failed to load system settings', error);
-              // Ensure settings are marked as loaded so UI doesn't stay in loading state
-              markSystemSettingsLoadedWithDefaults();
-            });
+          layoutStore.loadFromServer();
+        } catch (error) {
+          logger.error('Failed to load system settings from server', error);
+          // Ensure settings are marked as loaded so UI doesn't stay in loading state
+          markSystemSettingsLoadedWithDefaults();
         }
       }
     } catch (error) {
@@ -818,7 +934,6 @@ function App() {
     // Keys to clear on logout (auth and per-session caches)
     const keysToRemove = [
       STORAGE_KEYS.AUTH,
-      STORAGE_KEYS.LEGACY_TOKEN,
       STORAGE_KEYS.GUEST_METADATA,
       STORAGE_KEYS.DOCKER_METADATA,
       STORAGE_KEYS.DOCKER_METADATA + '_hosts',
@@ -839,22 +954,45 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
-  // Dashboard view - uses unified resources via useResourcesAsLegacy hook
-  const DashboardView = () => {
-    const { asVMs, asContainers, asNodes } = useResourcesAsLegacy();
-
-    return (
-      <Dashboard vms={asVMs() as any} containers={asContainers() as any} nodes={asNodes() as any} />
-    );
+  // Workloads view - v2 resources only
+  const WorkloadsView = () => {
+    return <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />;
   };
 
+  // V2 is GA - always serve V2 at canonical routes.
+
   const SettingsRoute = () => (
-    <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+    <SettingsPage
+      darkMode={darkMode}
+      themePreference={themePreference}
+      setThemePreference={handleThemeChange}
+    />
   );
 
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
-    // Check AI settings on mount and setup keyboard shortcut
+    const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
+    const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+    const location = useLocation();
+    const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
+
+    useKeyboardShortcuts({
+      enabled: () => !needsAuth(),
+      isShortcutsOpen: shortcutsOpen,
+      isCommandPaletteOpen: commandPaletteOpen,
+      onToggleShortcuts: () => {
+        setCommandPaletteOpen(false);
+        setShortcutsOpen((prev) => !prev);
+      },
+      onCloseShortcuts: () => setShortcutsOpen(false),
+      onToggleCommandPalette: () => {
+        setShortcutsOpen(false);
+        setCommandPaletteOpen((prev) => !prev);
+      },
+      onCloseCommandPalette: () => setCommandPaletteOpen(false),
+    });
+
+    // Check AI settings on mount and setup escape handling
     onMount(() => {
       // Only check AI settings if already authenticated (not on login screen)
       // Otherwise, the 401 response triggers a redirect loop
@@ -874,14 +1012,7 @@ function App() {
         });
       }
 
-      // Keyboard shortcut: Cmd/Ctrl+K to toggle AI
       const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-          e.preventDefault();
-          if (aiChatStore.enabled) {
-            aiChatStore.toggle();
-          }
-        }
         // Escape to close
         if (e.key === 'Escape' && aiChatStore.isOpen) {
           aiChatStore.close();
@@ -898,57 +1029,96 @@ function App() {
       <Show
         when={!isLoading()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-            <div class="text-gray-600 dark:text-gray-400">Loading...</div>
+          <div class="min-h-screen flex items-center justify-center bg-base">
+            <div class="text-muted">Loading...</div>
           </div>
         }
       >
-        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
-          <ErrorBoundary>
-            <Show when={enhancedStore()} fallback={
-              <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
-              </div>
-            }>
-              <WebSocketContext.Provider value={enhancedStore()!}>
-                <DarkModeContext.Provider value={darkMode}>
-                  <Show when={!kioskMode()}>
-                    <SecurityWarning />
-                    <DemoBanner />
-                    <UpdateBanner />
-                    <GitHubStarBanner />
-                    <GlobalUpdateProgressWatcher />
-                  </Show>
-                  {/* Main layout container - flexbox to allow AI panel to push content */}
-                  <div class="flex h-screen overflow-hidden">
-                    {/* Main content area - shrinks when AI panel is open, scrolls independently */}
-                    <div class={`flex-1 min-w-0 overflow-y-auto bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}>
-                      <AppLayout
-                        connected={connected}
-                        reconnecting={reconnecting}
-                        dataUpdated={dataUpdated}
-                        lastUpdateText={lastUpdateText}
-                        versionInfo={versionInfo}
-                        hasAuth={hasAuth}
-                        needsAuth={needsAuth}
-                        proxyAuthInfo={proxyAuthInfo}
-                        handleLogout={handleLogout}
-                        state={state}
-                        tokenScopes={() => securityStatus()?.tokenScopes}
-                      >
-                        {props.children}
-                      </AppLayout>
+        <Show
+          when={isPublicRoute()}
+          fallback={
+            <Show
+              when={!needsAuth()}
+              fallback={
+                <Login
+                  onLogin={handleLogin}
+                  hasAuth={hasAuth()}
+                  securityStatus={securityStatus() ?? undefined}
+                />
+              }
+            >
+              <ErrorBoundary>
+                <Show
+                  when={enhancedStore()}
+                  fallback={
+                    <div class="min-h-screen flex items-center justify-center bg-base">
+                      <div class="text-muted">Initializing...</div>
                     </div>
-                    {/* AI Panel - slides in from right, pushes content */}
-                    <AIChat onClose={() => aiChatStore.close()} />
-                  </div>
-                  <TokenRevealDialog />
-                  {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
-                  <TooltipRoot />
-                </DarkModeContext.Provider>
-              </WebSocketContext.Provider>
+                  }
+                >
+                  <WebSocketContext.Provider value={enhancedStore()!}>
+                    <DarkModeContext.Provider value={darkMode}>
+                      <Show when={!kioskMode()}>
+                        <SecurityWarning />
+                        <DemoBanner />
+                        <UpdateBanner />
+                        <TrialBanner />
+                        <MonitoredSystemLimitWarningBanner />
+                        <ActiveUseTrialNudge />
+                        <GitHubStarBanner />
+                        <WhatsNewModal />
+                        <GlobalUpdateProgressWatcher />
+                      </Show>
+                      {/* Main layout container - flexbox to allow AI panel to push content */}
+                      <div class="flex h-screen overflow-hidden">
+                        {/* Main content area - shrinks when AI panel is open, scrolls independently */}
+                        <div
+                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-4 sm:py-6 transition-all duration-300`}
+                        >
+                          <AppLayout
+                            connected={connected}
+                            reconnecting={reconnecting}
+                            dataUpdated={dataUpdated}
+                            lastUpdateText={lastUpdateText}
+                            versionInfo={versionInfo}
+                            hasAuth={hasAuth}
+                            needsAuth={needsAuth}
+                            proxyAuthInfo={proxyAuthInfo}
+                            handleLogout={handleLogout}
+                            state={state}
+                            tokenScopes={() => securityStatus()?.tokenScopes}
+                            organizations={organizations}
+                            activeOrgID={activeOrgID}
+                            orgsLoading={orgsLoading}
+                            onSwitchOrg={handleOrgSwitch}
+                          >
+                            {props.children}
+                          </AppLayout>
+                        </div>
+                        {/* AI Panel - slides in from right, pushes content */}
+                        <AIChat onClose={() => aiChatStore.close()} />
+                      </div>
+                      <KeyboardShortcutsModal
+                        isOpen={shortcutsOpen()}
+                        onClose={() => setShortcutsOpen(false)}
+                      />
+                      <CommandPaletteModal
+                        isOpen={commandPaletteOpen()}
+                        onClose={() => setCommandPaletteOpen(false)}
+                      />
+                      <TokenRevealDialog />
+                      {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
+                      <TooltipRoot />
+                    </DarkModeContext.Provider>
+                  </WebSocketContext.Provider>
+                </Show>
+              </ErrorBoundary>
             </Show>
-          </ErrorBoundary>
+          }
+        >
+          <div class="min-h-screen bg-base text-base-content font-sans">
+            <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{props.children}</div>
+          </div>
         </Show>
         <ToastContainer />
       </Show>
@@ -958,24 +1128,24 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
-      <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route path="/proxmox/overview" component={DashboardView} />
-      <Route path="/proxmox/storage" component={StorageComponent} />
-      <Route path="/proxmox/ceph" component={CephPage} />
-      <Route path="/proxmox/replication" component={Replication} />
-      <Route path="/proxmox/mail" component={MailGateway} />
-      <Route path="/proxmox/backups" component={Backups} />
-      <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
-      <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
-      <Route path="/docker" component={DockerRoute} />
-      <Route path="/kubernetes" component={KubernetesRoute} />
-      <Route path="/hosts" component={HostsRoute} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/cloud" component={CloudPricingPage} />
+      <Route path="/cloud/signup" component={HostedSignupPage} />
+      <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
+      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+      <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
+      <Route path={STORAGE_PATH} component={StorageComponent} />
+      <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
+      <Route path="/ceph" component={CephPage} />
+      <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
 
-      <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
+      <Route path="/settings/operations/*" component={LegacyOperationsSettingsRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
+      <Route path="/operations/*" component={Operations} />
+      <Route path="*all" component={NotFoundPage} />
     </Router>
   );
 }
@@ -987,12 +1157,13 @@ function ConnectionStatusBadge(props: {
 }) {
   return (
     <div
-      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${props.connected()
-        ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-        : props.reconnecting()
-          ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-          : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
-        } ${props.class ?? ''}`}
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
+        props.connected()
+          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
+          : props.reconnecting()
+            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
+            : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
+      } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -1015,13 +1186,14 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0"></span>
       </Show>
       <Show when={!props.connected() && !props.reconnecting()}>
-        <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
+        <span class="h-2.5 w-2.5 rounded-full bg-slate-600 flex-shrink-0"></span>
       </Show>
       <span
-        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())
-          ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
-          : 'max-w-[100px] ml-1 opacity-100'
-          }`}
+        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
+          props.connected() || (!props.connected() && !props.reconnecting())
+            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
+            : 'max-w-[100px] ml-1 opacity-100'
+        }`}
       >
         {props.connected()
           ? 'Connected'
@@ -1045,39 +1217,42 @@ function AppLayout(props: {
   handleLogout: () => void;
   state: () => State;
   tokenScopes: () => string[] | undefined;
+  organizations: () => Organization[];
+  activeOrgID: () => string;
+  orgsLoading: () => boolean;
+  onSwitchOrg: (orgID: string) => void;
   children?: JSX.Element;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const readSeenPlatforms = (): Record<string, boolean> => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.PLATFORMS_SEEN);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, boolean>;
-        if (parsed && typeof parsed === 'object') {
-          return parsed;
-        }
-      }
-    } catch (error) {
-      logger.warn('Failed to parse stored platform visibility preferences', error);
+  // Reactive kiosk mode state (shared across all components)
+  const kioskMode = useKioskMode();
+
+  // Kiosk-mode header auto-hide/reveal state
+  const [headerVisible, setHeaderVisible] = createSignal(true);
+  let headerEl: HTMLDivElement | undefined;
+  let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const clearHeaderHideTimeout = () => {
+    if (headerHideTimeout !== undefined) {
+      clearTimeout(headerHideTimeout);
+      headerHideTimeout = undefined;
     }
-    return {};
   };
 
-  const [seenPlatforms, setSeenPlatforms] = createSignal<Record<string, boolean>>(readSeenPlatforms());
+  const showHeader = () => {
+    clearHeaderHideTimeout();
+    setHeaderVisible(true);
+  };
 
-  // Reactive kiosk mode state
-  const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
-
-  // Subscribe to kiosk mode changes from other sources (like URL params)
-  onMount(() => {
-    const unsubscribe = subscribeToKioskMode((enabled) => {
-      setKioskModeSignal(enabled);
-    });
-    onCleanup(unsubscribe);
-  });
+  const scheduleHideHeader = (delayMs: number) => {
+    clearHeaderHideTimeout();
+    headerHideTimeout = setTimeout(() => {
+      setHeaderVisible(false);
+      headerHideTimeout = undefined;
+    }, delayMs);
+  };
 
   // Auto-enable kiosk mode for monitoring-only tokens (if no user preference is set)
   createEffect(() => {
@@ -1094,136 +1269,209 @@ function AppLayout(props: {
   });
 
   const toggleKioskMode = () => {
-    const newValue = !kioskMode();
-    setKioskMode(newValue);
-    setKioskModeSignal(newValue);
+    setKioskMode(!kioskMode());
   };
 
-  const persistSeenPlatforms = (map: Record<string, boolean>) => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(STORAGE_KEYS.PLATFORMS_SEEN, JSON.stringify(map));
-    } catch (error) {
-      logger.warn('Failed to persist platform visibility preferences', error);
+  // Kiosk-mode header behavior: visible briefly on entry, hover/touch to reveal, Escape to exit.
+  createEffect(() => {
+    if (kioskMode()) {
+      setHeaderVisible(true);
+      scheduleHideHeader(1500);
+    } else {
+      clearHeaderHideTimeout();
+      setHeaderVisible(true);
     }
-  };
+  });
 
-  const markPlatformSeen = (platformId: string) => {
-    setSeenPlatforms((current) => {
-      if (current[platformId]) {
-        return current;
+  createEffect(() => {
+    if (!kioskMode()) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        toggleKioskMode();
       }
-      const updated = { ...current, [platformId]: true };
-      persistSeenPlatforms(updated);
-      return updated;
-    });
-  };
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
+  // Kiosk route guard: redirect away from config/control-plane pages.
+  // Data pages (dashboard, infrastructure, workloads, storage, recovery, ceph) are allowed.
+  // Alerts allows read-only tabs (overview, history); config tabs redirect.
+  createEffect(() => {
+    if (!kioskMode()) return;
+    const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+
+    const blockedPrefixes = ['/settings', '/operations', '/ai'];
+    const isBlocked = blockedPrefixes.some(
+      (p) => normalizedPath === p || normalizedPath.startsWith(p + '/'),
+    );
+
+    const isAlertsPath = normalizedPath === '/alerts' || normalizedPath.startsWith('/alerts/');
+    const isAlertConfigTab =
+      isAlertsPath &&
+      normalizedPath !== '/alerts' &&
+      normalizedPath !== '/alerts/overview' &&
+      normalizedPath !== '/alerts/history' &&
+      !normalizedPath.startsWith('/alerts/overview/') &&
+      !normalizedPath.startsWith('/alerts/history/');
+
+    if ((isBlocked || isAlertConfigTab) && normalizedPath !== DASHBOARD_PATH) {
+      navigate(DASHBOARD_PATH, { replace: true });
+    }
+  });
+
+  createEffect(() => {
+    if (!kioskMode()) return;
+
+    // Touch support: tapping near the top shows header briefly.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      if (e.clientY > 60) return;
+      showHeader();
+      scheduleHideHeader(3000);
+    };
+
+    // Use capture so it works even when the header is hidden (pointer-events: none).
+    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+    onCleanup(() => window.removeEventListener('pointerdown', onPointerDown, true));
+
+    // Fallback for environments without PointerEvent support.
+    if (typeof (window as any).PointerEvent === 'undefined') {
+      const onTouchStart = (e: TouchEvent) => {
+        const t = e.touches?.[0];
+        if (!t) return;
+        if (t.clientY > 60) return;
+        showHeader();
+        scheduleHideHeader(3000);
+      };
+      window.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+      onCleanup(() => window.removeEventListener('touchstart', onTouchStart, true));
+    }
+  });
+
+  onCleanup(() => {
+    clearHeaderHideTimeout();
+  });
 
   // Determine active tab from current path
-  const getActiveTab = () => {
-    const path = location.pathname;
-    if (path.startsWith('/proxmox')) return 'proxmox';
-    if (path.startsWith('/docker')) return 'docker';
-    if (path.startsWith('/kubernetes')) return 'kubernetes';
-    if (path.startsWith('/hosts')) return 'hosts';
-    if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
-    if (path.startsWith('/alerts')) return 'alerts';
-    if (path.startsWith('/ai')) return 'ai';
-    if (path.startsWith('/settings')) return 'settings';
-    return 'proxmox';
+  const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
+  const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
+
+  type PlatformTab = {
+    id: string;
+    label: string;
+    route: string;
+    settingsRoute: string;
+    tooltip: string;
+    enabled: boolean;
+    live: boolean;
+    icon: JSX.Element;
+    alwaysShow: boolean;
+    badge?: string;
   };
-  const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
-  const hasKubernetesClusters = createMemo(() => (props.state().kubernetesClusters?.length ?? 0) > 0);
-  const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
-  const hasProxmoxHosts = createMemo(
-    () =>
-      (props.state().nodes?.length ?? 0) > 0 ||
-      (props.state().vms?.length ?? 0) > 0 ||
-      (props.state().containers?.length ?? 0) > 0,
-  );
 
-  createEffect(() => {
-    if (hasDockerHosts()) {
-      markPlatformSeen('docker');
-    }
-  });
-
-  createEffect(() => {
-    if (hasKubernetesClusters()) {
-      markPlatformSeen('kubernetes');
-    }
-  });
-
-  createEffect(() => {
-    if (hasProxmoxHosts()) {
-      markPlatformSeen('proxmox');
-    }
-  });
-
-  createEffect(() => {
-    if (hasHosts()) {
-      markPlatformSeen('hosts');
-    }
-  });
-
-  const platformTabs = createMemo(() => {
-    const allPlatforms = [
+  const platformTabsDesktop = createMemo(() => {
+    const allPlatforms: PlatformTab[] = [
       {
-        id: 'proxmox' as const,
-        label: 'Proxmox',
-        route: '/proxmox/overview',
+        id: 'dashboard' as const,
+        label: 'Dashboard',
+        route: DASHBOARD_PATH,
         settingsRoute: '/settings',
-        tooltip: 'Monitor Proxmox clusters and nodes',
-        enabled: hasProxmoxHosts() || !!seenPlatforms()['proxmox'],
-        live: hasProxmoxHosts(),
-        icon: (
-          <ProxmoxIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true, // Proxmox is the default, always show
+        tooltip: 'Environment overview and command center',
+        enabled: true,
+        live: true,
+        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
       },
       {
-        id: 'docker' as const,
-        label: 'Docker',
-        route: '/docker',
-        settingsRoute: '/settings/docker',
-        tooltip: 'Monitor Docker hosts and containers',
-        enabled: hasDockerHosts() || !!seenPlatforms()['docker'],
-        live: hasDockerHosts(),
-        icon: (
-          <BoxesIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true, // Docker is commonly used, keep visible
+        id: 'infrastructure' as const,
+        label: 'Infrastructure',
+        route: ROOT_INFRASTRUCTURE_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'All agents and nodes across platforms',
+        enabled: true,
+        live: true,
+        icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
       },
       {
-        id: 'kubernetes' as const,
-        label: 'Kubernetes',
-        route: '/kubernetes',
-        settingsRoute: '/settings/agents',
-        tooltip: 'Monitor Kubernetes clusters and workloads',
-        enabled: hasKubernetesClusters(),
-        live: hasKubernetesClusters(),
-        icon: (
-          <NetworkIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: false, // Only show when clusters exist
+        id: 'workloads' as const,
+        label: 'Workloads',
+        route: ROOT_WORKLOADS_PATH,
+        settingsRoute: '/settings/workloads/docker',
+        tooltip: 'VMs, containers, and Kubernetes workloads',
+        enabled: true,
+        live: true,
+        icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
       },
-      {
-        id: 'hosts' as const,
-        label: 'Hosts',
-        route: '/hosts',
-        settingsRoute: '/settings/host-agents',
-        tooltip: 'Monitor hosts with the host agent',
-        enabled: hasHosts() || !!seenPlatforms()['hosts'],
-        live: hasHosts(),
-        icon: (
-          <MonitorIcon class="w-4 h-4 shrink-0" />
+      ...buildStorageRecoveryTabSpecs().map((tab) => ({
+        ...tab,
+        enabled: true,
+        live: true,
+        icon: tab.id.startsWith('storage') ? (
+          <HardDriveIcon class="w-4 h-4 shrink-0" />
+        ) : (
+          <ArchiveIcon class="w-4 h-4 shrink-0" />
         ),
-        alwaysShow: true, // Hosts is commonly used, keep visible
-      },
+        alwaysShow: true,
+      })),
     ];
 
     // Filter out platforms that should be hidden when not configured
-    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
+    return allPlatforms.filter((p) => p.alwaysShow || p.enabled);
+  });
+
+  const platformTabsMobile = createMemo(() => {
+    const allPlatforms: PlatformTab[] = [
+      {
+        id: 'dashboard' as const,
+        label: 'Dashboard',
+        route: DASHBOARD_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'Environment overview and command center',
+        enabled: true,
+        live: true,
+        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      },
+      {
+        id: 'infrastructure' as const,
+        label: 'Infrastructure',
+        route: ROOT_INFRASTRUCTURE_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'All agents and nodes across platforms',
+        enabled: true,
+        live: true,
+        icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      },
+      {
+        id: 'workloads' as const,
+        label: 'Workloads',
+        route: ROOT_WORKLOADS_PATH,
+        settingsRoute: '/settings/workloads/docker',
+        tooltip: 'VMs, containers, and Kubernetes workloads',
+        enabled: true,
+        live: true,
+        icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      },
+      ...buildStorageRecoveryTabSpecs().map((tab) => ({
+        ...tab,
+        enabled: true,
+        live: true,
+        icon: tab.id.startsWith('storage') ? (
+          <HardDriveIcon class="w-4 h-4 shrink-0" />
+        ) : (
+          <ArchiveIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      })),
+    ];
+
+    return allPlatforms.filter((p) => p.alwaysShow || p.enabled);
   });
 
   const utilityTabs = createMemo(() => {
@@ -1247,11 +1495,11 @@ function AppLayout(props: {
     // If no scopes (session auth), show settings
     // If scopes include '*' (wildcard) or 'settings:read', show settings
     const scopes = props.tokenScopes();
-    const hasSettingsAccess = !scopes || scopes.length === 0 ||
-      scopes.includes('*') || scopes.includes('settings:read');
+    const hasSettingsAccess =
+      !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read');
 
     const tabs: Array<{
-      id: 'alerts' | 'ai' | 'settings';
+      id: 'alerts' | 'ai' | 'operations' | 'settings';
       label: string;
       route: string;
       tooltip: string;
@@ -1260,27 +1508,37 @@ function AppLayout(props: {
       breakdown: { warning: number; critical: number } | undefined;
       icon: JSX.Element;
     }> = [
-        {
-          id: 'alerts',
-          label: 'Alerts',
-          route: '/alerts',
-          tooltip: 'Review active alerts and automation rules',
-          badge: null,
-          count: activeAlertCount,
-          breakdown,
-          icon: <BellIcon class="w-4 h-4 shrink-0" />,
-        },
-        {
-          id: 'ai',
-          label: 'Patrol',
-          route: '/ai',
-          tooltip: 'Pulse Patrol monitoring and analysis',
-          badge: null, // Patrol is free with BYOK; auto-fix is Pro
-          count: undefined,
-          breakdown: undefined,
-          icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
-        },
-      ];
+      {
+        id: 'alerts',
+        label: 'Alerts',
+        route: '/alerts',
+        tooltip: 'Review active alerts and automation rules',
+        badge: null,
+        count: activeAlertCount,
+        breakdown,
+        icon: <BellIcon class="w-4 h-4 shrink-0" />,
+      },
+      {
+        id: 'ai',
+        label: 'Patrol',
+        route: '/ai',
+        tooltip: 'Pulse Patrol monitoring and analysis',
+        badge: null, // Patrol is free with BYOK; auto-fix is Pro
+        count: undefined,
+        breakdown: undefined,
+        icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
+      },
+      {
+        id: 'operations',
+        label: 'Operations',
+        route: '/operations',
+        tooltip: 'System operations, diagnostics, and reporting',
+        badge: null,
+        count: undefined,
+        breakdown: undefined,
+        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
+      },
+    ];
 
     // Only show settings tab if user has access
     if (hasSettingsAccess) {
@@ -1299,7 +1557,7 @@ function AppLayout(props: {
     return tabs;
   });
 
-  const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {
+  const handlePlatformClick = (platform: PlatformTab) => {
     if (platform.enabled) {
       navigate(platform.route);
     } else {
@@ -1312,9 +1570,62 @@ function AppLayout(props: {
   };
 
   return (
-    <div class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''}`}>
+    <div
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 md:pb-0' : ''}`}
+    >
       {/* Header - simplified in kiosk mode */}
-      <div class={`header mb-3 flex items-center gap-2 ${kioskMode() ? 'justify-end' : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}>
+      <Show when={kioskMode()}>
+        <div
+          class="fixed top-0 left-0 right-0 z-40 h-4 bg-transparent"
+          aria-hidden="true"
+          onMouseEnter={() => {
+            if (!kioskMode()) return;
+            showHeader();
+          }}
+          onMouseLeave={() => {
+            if (!kioskMode()) return;
+            scheduleHideHeader(500);
+          }}
+        />
+      </Show>
+      <div
+        class={`header mb-3 flex items-center gap-2 ${
+          kioskMode()
+            ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
+            : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
+        }`}
+        style={
+          kioskMode()
+            ? {
+                transform: headerVisible() ? 'translateY(0)' : 'translateY(-100%)',
+                opacity: headerVisible() ? 1 : 0,
+                transition: `transform ${headerVisible() ? 200 : 300}ms ease, opacity ${headerVisible() ? 200 : 300}ms ease`,
+                'pointer-events': headerVisible() ? 'auto' : 'none',
+              }
+            : undefined
+        }
+        ref={(el) => {
+          headerEl = el;
+        }}
+        onMouseEnter={() => {
+          if (!kioskMode()) return;
+          showHeader();
+        }}
+        onMouseLeave={() => {
+          if (!kioskMode()) return;
+          scheduleHideHeader(500);
+        }}
+        onFocusIn={() => {
+          if (!kioskMode()) return;
+          showHeader();
+        }}
+        onFocusOut={(event) => {
+          if (!kioskMode()) return;
+          const next = event.relatedTarget as Node | null;
+          if (next && headerEl?.contains(next)) return;
+          scheduleHideHeader(500);
+        }}
+      >
         <Show when={!kioskMode()}>
           <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
             <div class="flex items-center gap-2">
@@ -1345,7 +1656,7 @@ function AppLayout(props: {
                   r="26"
                 />
               </svg>
-              <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+              <span class="text-lg font-medium text-base-content">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
                   RC
@@ -1354,39 +1665,52 @@ function AppLayout(props: {
             </div>
           </div>
         </Show>
-        <div class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}>
+        <div
+          class={`header-controls flex items-center gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
+        >
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
+              <Show when={isMultiTenantEnabled()}>
+                <OrgSwitcher
+                  orgs={props.organizations()}
+                  selectedOrgId={props.activeOrgID()}
+                  loading={props.orgsLoading()}
+                  onChange={props.onSwitchOrg}
+                />
+              </Show>
               {/* Kiosk Mode Toggle */}
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-7 w-7 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
+                class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
+                  kioskMode()
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+                    : 'bg-surface-hover text-base-content hover:bg-border'
+                }`}
+                title={
+                  kioskMode()
+                    ? 'Exit kiosk mode (show navigation)'
+                    : 'Enter kiosk mode (hide navigation)'
+                }
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
                 aria-pressed={kioskMode()}
               >
-                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-3 w-3 flex-shrink-0" />}>
-                  <Minimize2Icon class="h-3 w-3 flex-shrink-0" />
+                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-4 w-4 flex-shrink-0" />}>
+                  <Minimize2Icon class="h-4 w-4 flex-shrink-0" />
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
-                  {props.proxyAuthInfo()?.username}
-                </span>
+                <span class="text-xs px-2 py-1 text-muted">{props.proxyAuthInfo()?.username}</span>
               </Show>
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 transition hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                class="group relative flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
                 title="Logout"
                 aria-label="Logout"
               >
                 <svg
-                  class="h-3 w-3 flex-shrink-0"
+                  class="h-4 w-4 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1413,26 +1737,26 @@ function AppLayout(props: {
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
+          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-            <For each={platformTabs()}>
+            <For each={platformTabsDesktop()}>
               {(platform) => {
-                const isActive = () => getActiveTab() === platform.id;
+                const isActive = () => getActiveTabDesktop() === platform.id;
                 const disabled = () => !platform.enabled;
                 const baseClasses =
                   'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
                 const className = () => {
                   if (isActive()) {
-                    return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                    return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
                   }
                   if (disabled()) {
-                    return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
+                    return `${baseClasses} cursor-not-allowed text-muted opacity-70 bg-base`;
                   }
-                  return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                  return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
                 };
 
                 const title = () =>
@@ -1449,7 +1773,14 @@ function AppLayout(props: {
                     title={title()}
                   >
                     {platform.icon}
-                    <span class="hidden xs:inline">{platform.label}</span>
+                    <span class="hidden xs:inline-flex items-center gap-1">
+                      <span>{platform.label}</span>
+                      <Show when={platform.badge}>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
+                          {platform.badge}
+                        </span>
+                      </Show>
+                    </span>
                     <span class="xs:hidden">{platform.label.charAt(0)}</span>
                   </div>
                 );
@@ -1460,15 +1791,15 @@ function AppLayout(props: {
             <div class="flex items-end gap-1 pl-1 sm:pl-4">
               <For each={utilityTabs()}>
                 {(tab) => {
-                  const isActive = () => getActiveTab() === tab.id;
+                  const isActive = () => getActiveTabDesktop() === tab.id;
                   const baseClasses =
                     'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
                   const className = () => {
                     if (isActive()) {
-                      return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                      return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
                     }
-                    return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                    return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
                   };
 
                   return (
@@ -1483,35 +1814,39 @@ function AppLayout(props: {
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
                         <span class="xs:hidden">{tab.label.charAt(0)}</span>
-                        {tab.id === 'alerts' && (() => {
-                          const total = tab.count ?? 0;
-                          if (total <= 0) {
-                            return null;
-                          }
-                          return (
-                            <span class="inline-flex items-center gap-1">
-                              {tab.breakdown && tab.breakdown.critical > 0 && (
-                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
-                                  {tab.breakdown.critical}
-                                </span>
-                              )}
-                              {tab.breakdown && tab.breakdown.warning > 0 && (
-                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
-                                  {tab.breakdown.warning}
-                                </span>
-                              )}
-                            </span>
-                          );
-                        })()}
+                        {tab.id === 'alerts' &&
+                          (() => {
+                            const total = tab.count ?? 0;
+                            if (total <= 0) {
+                              return null;
+                            }
+                            return (
+                              <span class="inline-flex items-center gap-1">
+                                {tab.breakdown && tab.breakdown.critical > 0 && (
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                                    {tab.breakdown.critical}
+                                  </span>
+                                )}
+                                {tab.breakdown && tab.breakdown.warning > 0 && (
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                                    {tab.breakdown.warning}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                       </span>
                       <Show when={tab.badge === 'update'}>
                         <span class="ml-1 flex items-center">
                           <span class="sr-only">Update available</span>
-                          <span aria-hidden="true" class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                          <span
+                            aria-hidden="true"
+                            class="block h-2 w-2 rounded-full bg-red-500 animate-pulse"
+                          ></span>
                         </span>
                       </Show>
                       <Show when={tab.badge === 'pro'}>
-                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 rounded">
+                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 rounded">
                           Pro
                         </span>
                       </Show>
@@ -1527,33 +1862,59 @@ function AppLayout(props: {
       {/* Main Content */}
       <main
         id="main"
-        class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr rounded-tl shadow mb-2"
+        class="tab-content block bg-surface rounded-b rounded-tr rounded-tl shadow mb-2"
       >
         <div class="pulse-panel">
-          <Suspense fallback={<div class="p-6 text-sm text-gray-500 dark:text-gray-400">Loading view...</div>}>
+          <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>
         </div>
       </main>
 
+      <Show when={!kioskMode()}>
+        <MobileNavBar
+          activeTab={getActiveTabMobile}
+          platformTabs={platformTabsMobile}
+          utilityTabs={utilityTabs}
+          onPlatformClick={handlePlatformClick}
+          onUtilityClick={handleUtilityClick}
+        />
+      </Show>
+
       {/* Footer - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
-        <footer class="text-center text-xs text-gray-500 dark:text-gray-400 py-4">
-          Pulse | Version:{' '}
-          <a
-            href="https://github.com/rcourtman/Pulse/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            {props.versionInfo()?.version || 'loading...'}
-          </a>
-          {props.versionInfo()?.isDevelopment && ' (Development)'}
-          {props.versionInfo()?.isDocker && ' - Docker'}
-          <Show when={props.lastUpdateText()}>
-            <span class="mx-2">|</span>
-            <span>Last refresh: {props.lastUpdateText()}</span>
-          </Show>
+        <footer class="px-4 py-4 text-xs leading-relaxed text-muted">
+          <div class="text-center">
+            <span>Pulse | Version: </span>
+            <a
+              href="https://github.com/rcourtman/Pulse/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex min-h-10 sm:min-h-9 items-center break-all rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {props.versionInfo()?.version || 'loading...'}
+            </a>
+            {props.versionInfo()?.isDevelopment && ' (Development)'}
+            {props.versionInfo()?.isDocker && ' - Docker'}
+          </div>
+          <div class="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <Show when={props.lastUpdateText()}>
+              <>
+                <span>Last refresh: {props.lastUpdateText()}</span>
+                <Show when={isPro()}>
+                  <span aria-hidden="true">|</span>
+                </Show>
+              </>
+            </Show>
+            <Show when={isPro()}>
+              <a
+                href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
+                class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Get Support
+              </a>
+            </Show>
+          </div>
         </footer>
       </Show>
 
@@ -1562,8 +1923,12 @@ function AppLayout(props: {
         <button
           type="button"
           onClick={() => aiChatStore.toggle()}
-          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-20 translate-y-0"
-          title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
+          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
+          title={
+            aiChatStore.context.context?.name
+              ? `Pulse Assistant - ${aiChatStore.context.context.name}`
+              : 'Pulse Assistant (⌘K)'
+          }
           aria-label="Expand Pulse Assistant"
         >
           <svg

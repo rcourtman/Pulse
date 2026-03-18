@@ -41,7 +41,7 @@ Examples:
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by resource type: vm, container, node, docker (for findings)",
+						Description: "Filter by canonical v6 resource type: vm, system-container, app-container, node (for findings)",
 					},
 					"resource_id": {
 						Type:        "string",
@@ -142,10 +142,9 @@ func (e *PulseToolExecutor) executeListAlerts(_ context.Context, args map[string
 		filtered = []ActiveAlert{}
 	}
 
-	response := AlertsResponse{
-		Alerts: filtered,
-		Count:  len(filtered),
-	}
+	response := EmptyAlertsResponse()
+	response.Alerts = filtered
+	response.Count = len(filtered)
 
 	if offset > 0 || len(allAlerts) > limit {
 		response.Pagination = &PaginationInfo{
@@ -155,7 +154,7 @@ func (e *PulseToolExecutor) executeListAlerts(_ context.Context, args map[string
 		}
 	}
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -174,9 +173,15 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType != "" {
-		validTypes := map[string]bool{"vm": true, "container": true, "node": true, "docker": true}
+		resourceType = canonicalAlertFindingResourceType(resourceType)
+		validTypes := map[string]bool{
+			"vm":               true,
+			"system-container": true,
+			"node":             true,
+			"app-container":    true,
+		}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, container, node, or docker", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, node, or app-container", resourceType)), nil
 		}
 	}
 
@@ -190,18 +195,6 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		allDismissed = e.findingsProvider.GetDismissedFindings()
 	}
 
-	normalizeType := func(value string) string {
-		normalized := strings.ToLower(strings.TrimSpace(value))
-		switch normalized {
-		case "docker container", "docker-container", "docker_container":
-			return "docker"
-		case "lxc", "lxc container", "lxc-container", "lxc_container":
-			return "container"
-		default:
-			return normalized
-		}
-	}
-
 	matches := func(f Finding) bool {
 		if severityFilter != "" && f.Severity != severityFilter {
 			return false
@@ -209,7 +202,7 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		if resourceID != "" && f.ResourceID != resourceID {
 			return false
 		}
-		if resourceType != "" && normalizeType(f.ResourceType) != resourceType {
+		if resourceType != "" && canonicalAlertFindingResourceType(f.ResourceType) != resourceType {
 			return false
 		}
 		return true
@@ -262,13 +255,12 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		dismissed = []Finding{}
 	}
 
-	response := FindingsResponse{
-		Active:    active,
-		Dismissed: dismissed,
-		Counts: FindingCounts{
-			Active:    totalActive,
-			Dismissed: totalDismissed,
-		},
+	response := EmptyFindingsResponse()
+	response.Active = active
+	response.Dismissed = dismissed
+	response.Counts = FindingCounts{
+		Active:    totalActive,
+		Dismissed: totalDismissed,
 	}
 
 	total := totalActive + totalDismissed
@@ -280,7 +272,11 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		}
 	}
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+func canonicalAlertFindingResourceType(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
 }
 
 func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -307,6 +303,7 @@ func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[st
 		"finding_id":      findingID,
 		"action":          "resolved",
 		"resolution_note": resolutionNote,
+		"verification":    map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 
@@ -334,34 +331,35 @@ func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[st
 	}
 
 	return NewJSONResult(map[string]interface{}{
-		"success":    true,
-		"finding_id": findingID,
-		"action":     "dismissed",
-		"reason":     reason,
-		"note":       note,
+		"success":      true,
+		"finding_id":   findingID,
+		"action":       "dismissed",
+		"reason":       reason,
+		"note":         note,
+		"verification": map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 
 // ========== Resolved Alerts Tool Implementation ==========
 
 func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	typeFilter, _ := args["type"].(string)
 	levelFilter, _ := args["level"].(string)
 	limit := intArg(args, "limit", 50)
 
-	state := e.stateProvider.GetState()
+	if e.alertProvider == nil {
+		return NewTextResult("Alert provider not available."), nil
+	}
 
-	if len(state.RecentlyResolved) == 0 {
+	recentlyResolved := e.alertProvider.GetRecentlyResolved(24 * 60) // past 24 hours
+
+	if len(recentlyResolved) == 0 {
 		return NewTextResult("No recently resolved alerts."), nil
 	}
 
 	var alerts []ResolvedAlertSummary
 
-	for _, alert := range state.RecentlyResolved {
+	for _, alert := range recentlyResolved {
 		// Apply filters
 		if typeFilter != "" && !strings.EqualFold(alert.Type, typeFilter) {
 			continue
@@ -394,10 +392,9 @@ func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args ma
 		alerts = []ResolvedAlertSummary{}
 	}
 
-	response := ResolvedAlertsResponse{
-		Alerts: alerts,
-		Total:  len(state.RecentlyResolved),
-	}
+	response := EmptyResolvedAlertsResponse()
+	response.Alerts = alerts
+	response.Total = len(recentlyResolved)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }

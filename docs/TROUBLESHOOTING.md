@@ -46,12 +46,12 @@ sudo pulse bootstrap-token
 #### Audit Log verification shows unsigned events
 - **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
 - **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
-- **Fix**: Ensure `.encryption.key` is present and Pulse Pro audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+- **Fix**: Ensure `.encryption.key` is present and Pro/Pro+/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
 
 #### Audit Log is empty
 - **Symptom**: Audit Log shows zero events or "Console Logging Only."
-- **Root cause**: OSS build uses console logging only, or Pulse Pro audit logging is not enabled.
-- **Fix**: Use Pulse Pro with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+- **Root cause**: Community plan uses console logging only, or Pro/Pro+/Cloud audit logging is not enabled.
+- **Fix**: Use Pro, Pro+, or Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
 
 #### Audit Log verification fails for older events
 - **Symptom**: Older events fail verification while newer events pass.
@@ -88,6 +88,33 @@ sudo pulse bootstrap-token
 - If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
 - Check Pulse logs for HTTP status codes and response bodies.
 
+### TrueNAS
+
+#### "TrueNAS service unavailable"
+- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid URL and API key.
+- Check that the TrueNAS system is reachable from the Pulse server (default HTTPS port).
+- Verify the API key has read access. Test with:
+  ```bash
+  curl -sk -H "Authorization: Bearer <api-key>" https://<truenas-ip>/api/v2.0/system/info
+  ```
+
+#### TrueNAS pools/datasets not appearing
+- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
+- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+
+### Navigation (v6)
+
+#### Old bookmarks don't work
+- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
+- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+### Relay / Mobile
+
+#### Relay showing "Disconnected"
+- Confirm a valid Relay, Pro, Pro+, or Cloud license is active (**Settings → License**).
+- Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
+- Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
+
 ---
 
 ## 🛠️ Advanced Diagnostics
@@ -113,7 +140,14 @@ At minimum, ensure the user/token has read access for inventory and metrics:
 - `VM.Monitor`
 - `Datastore.Audit`
 
-For VM disk usage via QEMU guest agent, also ensure `VM.GuestAgent.Audit` (PVE 9+).
+For VM guest agent features on PVE 9+, also ensure:
+
+- `VM.GuestAgent.Audit` — required for disk usage and guest info
+- `VM.GuestAgent.FileRead` — required for accurate memory monitoring (excludes buff/cache)
+
+Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token.
+
+**Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
 
 ### Recovery Mode
 If you are completely locked out, you can trigger a recovery token from localhost:

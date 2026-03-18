@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type noExecutorChatService struct{}
@@ -140,7 +141,7 @@ func samplePatrolState() models.StateSnapshot {
 				ID:     "node-1",
 				Name:   "node-1",
 				Status: "online",
-				CPU:    0.15,
+				CPU:    0.92, // 92% — triggers triage flag so state is non-quiet
 				Memory: models.Memory{Usage: 20.0},
 				Disk:   models.Disk{Usage: 10.0},
 			},
@@ -203,7 +204,7 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 	t.Run("nil service", func(t *testing.T) {
 		ps := NewPatrolService(nil, nil)
-		_, err := ps.runAIAnalysis(context.Background(), models.StateSnapshot{}, nil)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil)
 		if err == nil {
 			t.Fatal("expected error when aiService is nil")
 		}
@@ -222,7 +223,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 			costStore: store,
 		}
 		ps := NewPatrolService(svc, nil)
-		_, err := ps.runAIAnalysis(context.Background(), models.StateSnapshot{}, nil)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil)
 		if err == nil || !strings.Contains(err.Error(), "patrol skipped") {
 			t.Fatalf("expected budget error, got %v", err)
 		}
@@ -232,7 +233,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc := &Service{}
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysis(context.Background(), samplePatrolState(), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
 		if err == nil || !strings.Contains(err.Error(), "chat service not available") {
 			t.Fatalf("expected chat service error, got %v", err)
 		}
@@ -243,7 +244,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc.SetChatService(&noExecutorChatService{})
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysis(context.Background(), samplePatrolState(), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
 		if err == nil || !strings.Contains(err.Error(), "executor access") {
 			t.Fatalf("expected executor access error, got %v", err)
 		}
@@ -254,7 +255,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc.SetChatService(&mockChatService{executor: nil})
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysis(context.Background(), samplePatrolState(), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
 		if err == nil || !strings.Contains(err.Error(), "tool executor not available") {
 			t.Fatalf("expected executor nil error, got %v", err)
 		}
@@ -285,7 +286,7 @@ func TestSeedResourceInventory_QuietSummary(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, nil)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, nil)
 	if !strings.Contains(out, "# Nodes: All 2") {
 		t.Fatalf("expected quiet node summary, got: %s", out)
 	}
@@ -293,13 +294,19 @@ func TestSeedResourceInventory_QuietSummary(t *testing.T) {
 
 func TestRunAIAnalysis_StreamEvents(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	svc := &Service{}
+	svc := &Service{
+		cfg: &config.AIConfig{
+			Model:       "openai:gpt-4o-mini",
+			PatrolModel: "openai:gpt-4o-mini",
+		},
+		costStore: cost.NewStore(cost.DefaultMaxDays),
+	}
 	svc.SetChatService(&streamChatService{executor: executor})
 
 	ps := NewPatrolService(svc, nil)
 	scope := &PatrolScope{NoStream: true}
 
-	res, err := ps.runAIAnalysis(context.Background(), samplePatrolState(), scope)
+	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
 	if err != nil {
 		t.Fatalf("runAIAnalysis failed: %v", err)
 	}
@@ -308,6 +315,60 @@ func TestRunAIAnalysis_StreamEvents(t *testing.T) {
 	}
 	if len(res.ToolCalls) == 0 {
 		t.Fatalf("expected tool calls to be recorded")
+	}
+
+	summary := svc.costStore.GetSummary(1)
+	if summary.Totals.InputTokens != 5 || summary.Totals.OutputTokens != 7 {
+		t.Fatalf("expected patrol usage to be recorded (5/7), got %d/%d", summary.Totals.InputTokens, summary.Totals.OutputTokens)
+	}
+
+	foundPatrol := false
+	for _, useCase := range summary.UseCases {
+		if useCase.UseCase == "patrol" {
+			foundPatrol = true
+			break
+		}
+	}
+	if !foundPatrol {
+		t.Fatalf("expected patrol use-case in summary, got %+v", summary.UseCases)
+	}
+}
+
+func TestRunEvaluationPass_RecordsCostUsage(t *testing.T) {
+	svc := &Service{
+		cfg: &config.AIConfig{
+			Model:       "openai:gpt-4o-mini",
+			PatrolModel: "openai:gpt-4o-mini",
+		},
+		costStore: cost.NewStore(cost.DefaultMaxDays),
+	}
+	svc.SetChatService(&streamChatService{})
+	ps := NewPatrolService(svc, nil)
+
+	signals := []DetectedSignal{
+		{
+			SignalType:        SignalHighCPU,
+			ResourceID:        "node-1",
+			ResourceName:      "node-1",
+			ResourceType:      "node",
+			SuggestedSeverity: "warning",
+			Category:          "performance",
+			Summary:           "High CPU",
+			Evidence:          "cpu=95",
+		},
+	}
+
+	resp, err := ps.runEvaluationPass(context.Background(), nil, signals)
+	if err != nil {
+		t.Fatalf("runEvaluationPass failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	summary := svc.costStore.GetSummary(1)
+	if summary.Totals.InputTokens != 5 || summary.Totals.OutputTokens != 7 {
+		t.Fatalf("expected eval usage to be recorded (5/7), got %d/%d", summary.Totals.InputTokens, summary.Totals.OutputTokens)
 	}
 }
 
@@ -365,37 +426,6 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 				},
 			},
 		},
-		Storage: []models.Storage{
-			{
-				ID:     "store-1",
-				Name:   "store-1",
-				Type:   "zfs",
-				Usage:  70.0,
-				Used:   700 * 1024 * 1024,
-				Total:  1000 * 1024 * 1024,
-				Shared: true,
-				Active: true,
-				ZFSPool: &models.ZFSPool{
-					State:          "DEGRADED",
-					ReadErrors:     1,
-					WriteErrors:    2,
-					ChecksumErrors: 3,
-				},
-			},
-		},
-		CephClusters: []models.CephCluster{
-			{
-				Name:          "ceph-1",
-				Health:        "HEALTH_WARN",
-				HealthMessage: "OSD down",
-				UsagePercent:  45.0,
-				UsedBytes:     450 * 1024 * 1024,
-				TotalBytes:    1000 * 1024 * 1024,
-				NumOSDs:       3,
-				NumOSDsUp:     2,
-				NumOSDsIn:     3,
-			},
-		},
 		PBSInstances: []models.PBSInstance{
 			{
 				Name: "pbs-1",
@@ -406,13 +436,94 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, now, false, nil)
+	usedBytes := int64(450 * 1024 * 1024)
+	totalBytes := int64(1000 * 1024 * 1024)
+	storeUsedBytes := int64(700 * 1024 * 1024)
+	storeTotalBytes := int64(1000 * 1024 * 1024)
+	diskSizeBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypeStorage {
+				return []unifiedresources.Resource{
+					{
+						ID:     "store-1",
+						Name:   "store-1",
+						Type:   unifiedresources.ResourceTypeStorage,
+						Status: unifiedresources.StatusWarning,
+						Storage: &unifiedresources.StorageMeta{
+							Type:              "zfs",
+							Shared:            true,
+							IsZFS:             true,
+							ZFSPoolState:      "DEGRADED",
+							ZFSReadErrors:     1,
+							ZFSWriteErrors:    2,
+							ZFSChecksumErrors: 3,
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{
+								Used:    &storeUsedBytes,
+								Total:   &storeTotalBytes,
+								Percent: 70.0,
+							},
+						},
+					},
+				}
+			}
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						ID:         "disk-1",
+						Name:       "disk-1",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						Status:     unifiedresources.StatusOffline,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/nvme0n1",
+							Model:       "Samsung PM9A3",
+							DiskType:    "nvme",
+							SizeBytes:   diskSizeBytes,
+							Health:      "FAILED",
+							Wearout:     12,
+							Temperature: 58,
+						},
+					},
+				}
+			}
+			if t == unifiedresources.ResourceTypeCeph {
+				return []unifiedresources.Resource{
+					{
+						Name: "ceph-1",
+						Type: unifiedresources.ResourceTypeCeph,
+						Ceph: &unifiedresources.CephMeta{
+							HealthStatus:  "HEALTH_WARN",
+							HealthMessage: "OSD down",
+							NumOSDs:       3,
+							NumOSDsUp:     2,
+							NumOSDsIn:     3,
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{
+								Used:  &usedBytes,
+								Total: &totalBytes,
+							},
+						},
+					},
+				}
+			}
+			return nil
+		},
+	})
+
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, now, false, nil)
 	for _, part := range []string{
 		"# Node Metrics",
 		"# Guest Metrics",
 		"# Docker",
 		"health=unhealthy",
 		"# Storage",
+		"## Pools",
+		"## Physical Disks",
+		"/dev/nvme0n1 (Samsung PM9A3)",
 		"ZFS errors",
 		"# Ceph",
 		"Message: OSD down",
@@ -424,29 +535,155 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 	}
 }
 
+func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 55},
+			Memory: &unifiedresources.MetricValue{Percent: 65},
+			Disk:   &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	vmView := unifiedresources.NewVMView(&unifiedresources.Resource{
+		ID:     "qemu/101",
+		Name:   "vm-1",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: "running",
+		Proxmox: &unifiedresources.ProxmoxData{
+			SourceID:   "qemu/101",
+			VMID:       101,
+			NodeName:   "node-1",
+			LastBackup: now.Add(-2 * time.Hour),
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 10},
+			Memory: &unifiedresources.MetricValue{Percent: 30},
+			Disk:   &unifiedresources.MetricValue{Percent: 20},
+		},
+	})
+	dockerHostView := unifiedresources.NewDockerHostView(&unifiedresources.Resource{
+		ID:     "docker-1",
+		Name:   "docker-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{
+			Hostname: "docker-1",
+		},
+		ChildCount: 2,
+	})
+	parentID := "docker-1"
+	appRunning := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "dc-1",
+		Name:     "web",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "running",
+			Health:         "unhealthy",
+		},
+	})
+	appStopped := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "dc-2",
+		Name:     "db",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOffline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "exited",
+		},
+	})
+	runtimeState.readState = &mockReadState{
+		nodes:       []*unifiedresources.NodeView{&nodeView},
+		vms:         []*unifiedresources.VMView{&vmView},
+		dockerHosts: []*unifiedresources.DockerHostView{&dockerHostView},
+		dockerCtrs:  []*unifiedresources.DockerContainerView{&appRunning, &appStopped},
+		pbs: []*unifiedresources.PBSInstanceView{
+			func() *unifiedresources.PBSInstanceView {
+				pbs := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
+					ID:     "pbs-1",
+					Name:   "pbs-1",
+					Type:   unifiedresources.ResourceTypePBS,
+					Status: unifiedresources.StatusOnline,
+					PBS: &unifiedresources.PBSData{
+						Datastores: []unifiedresources.PBSDatastoreMeta{
+							{
+								Name:         "store",
+								Used:         550 * 1024 * 1024,
+								Total:        1000 * 1024 * 1024,
+								UsagePercent: 55,
+							},
+						},
+					},
+				})
+				return &pbs
+			}(),
+		},
+	}
+
+	ps.SetReadState(nil)
+
+	out := ps.seedResourceInventoryState(runtimeState, nil, cfg, now, false, nil)
+	for _, part := range []string{
+		"# Node Metrics",
+		"| node-1 | online | 55% | 65% | 40%",
+		"# Guest Metrics",
+		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+		"# Docker",
+		"| docker-1 | 2 | 1 | 1 |",
+		"docker-1/web: health=unhealthy",
+		"# PBS Datastores",
+		"pbs-1/store: 55% used",
+	} {
+		if !strings.Contains(out, part) {
+			t.Fatalf("expected runtime-state-backed output to contain %q, got: %s", part, out)
+		}
+	}
+}
+
 func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	cfg := DefaultPatrolConfig()
 	now := time.Now()
 
-	state := models.StateSnapshot{
-		PhysicalDisks: []models.PhysicalDisk{
-			{
-				Node:        "node-1",
-				DevPath:     "/dev/sda",
-				Model:       "disk",
-				Health:      "UNKNOWN",
-				Wearout:     100,
-				Temperature: 40,
-			},
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						Name:       "disk",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/sda",
+							Model:       "disk",
+							Health:      "PASSED",
+							Wearout:     100,
+							Temperature: 40,
+						},
+					},
+				}
+			}
+			return nil
 		},
+	})
+
+	state := models.StateSnapshot{
 		ConnectionHealth: map[string]bool{
 			"node-1": true,
 			"node-2": true,
 		},
 	}
 
-	out := ps.seedHealthAndAlerts(state, nil, cfg, now)
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, state), nil, cfg, now)
 	if !strings.Contains(out, "All 1 disks healthy") {
 		t.Fatalf("expected healthy disk summary, got: %s", out)
 	}
@@ -460,17 +697,43 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 	cfg := DefaultPatrolConfig()
 	now := time.Now()
 
-	state := models.StateSnapshot{
-		PhysicalDisks: []models.PhysicalDisk{
-			{
-				Node:        "node-1",
-				DevPath:     "/dev/sda",
-				Model:       "disk",
-				Health:      "FAILED",
-				Wearout:     10,
-				Temperature: 60,
-			},
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						Name:       "disk",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/sda",
+							Model:       "disk",
+							Health:      "FAILED",
+							Wearout:     10,
+							Temperature: 60,
+						},
+					},
+				}
+			}
+			return nil
 		},
+	})
+
+	// Wire ReadState for K8s clusters and Hosts (legacy fallbacks removed).
+	k8sView := unifiedresources.NewK8sClusterView(&unifiedresources.Resource{
+		ID: "k8s-1", Name: "k1", Type: unifiedresources.ResourceTypeK8sCluster,
+		ChildCount: 1,
+	})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeAgent,
+		Agent: &unifiedresources.AgentData{Hostname: "host-1"},
+	})
+	ps.SetReadState(&mockReadState{
+		k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
+		hosts:       []*unifiedresources.HostView{&hostView},
+	})
+
+	state := models.StateSnapshot{
 		ActiveAlerts: []models.Alert{
 			{Level: "warning", Message: "CPU high", StartTime: now.Add(-time.Hour)},
 		},
@@ -482,14 +745,11 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 			"node-2": false,
 		},
 		KubernetesClusters: []models.KubernetesCluster{
-			{Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
-		},
-		Hosts: []models.Host{
-			{ID: "host-1", Hostname: "host-1"},
+			{ID: "k8s-1", Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
 		},
 	}
 
-	out := ps.seedHealthAndAlerts(state, nil, cfg, now)
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, state), nil, cfg, now)
 	for _, part := range []string{
 		"# Disk Health",
 		"/dev/sda",
@@ -502,6 +762,74 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 	} {
 		if !strings.Contains(out, part) {
 			t.Fatalf("expected output to contain %q, got: %s", part, out)
+		}
+	}
+}
+
+func TestSeedHealthAndAlertsState_UsesRuntimeStateProviders(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{
+		ConnectionHealth: map[string]bool{
+			"node-1": true,
+			"node-2": false,
+		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "k8s-1", Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
+		},
+	})
+
+	k8sView := unifiedresources.NewK8sClusterView(&unifiedresources.Resource{
+		ID: "k8s-1", Name: "k1", Type: unifiedresources.ResourceTypeK8sCluster,
+		ChildCount: 1,
+	})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeAgent,
+		Agent: &unifiedresources.AgentData{Hostname: "host-1"},
+	})
+	runtimeState.readState = &mockReadState{
+		k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
+		hosts:       []*unifiedresources.HostView{&hostView},
+	}
+	runtimeState.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					Name:       "disk",
+					Type:       unifiedresources.ResourceTypePhysicalDisk,
+					ParentName: "node-1",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Model:       "disk",
+						Health:      "FAILED",
+						Wearout:     10,
+						Temperature: 60,
+					},
+				},
+			}
+		},
+	}
+
+	// Clear service-level providers to prove this path uses the captured runtime state.
+	ps.SetReadState(nil)
+	ps.SetUnifiedResourceProvider(nil)
+
+	out := ps.seedHealthAndAlertsState(runtimeState, nil, cfg, now)
+	for _, part := range []string{
+		"# Disk Health",
+		"/dev/sda",
+		"# Connections",
+		"Disconnected: node-2",
+		"# Kubernetes Clusters",
+		"# Hosts",
+	} {
+		if !strings.Contains(out, part) {
+			t.Fatalf("expected runtime-state-backed output to contain %q, got: %s", part, out)
 		}
 	}
 }

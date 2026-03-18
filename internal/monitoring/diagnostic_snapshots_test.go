@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -350,7 +352,7 @@ func TestRecordGuestSnapshot(t *testing.T) {
 		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
 			Name:         "testvm",
 			Status:       "running",
-			MemorySource: "balloon",
+			MemorySource: "status-mem",
 		})
 
 		if len(m.guestSnapshots) != 1 {
@@ -369,8 +371,30 @@ func TestRecordGuestSnapshot(t *testing.T) {
 		if snapshot.Status != "running" {
 			t.Errorf("Status = %q, want %q", snapshot.Status, "running")
 		}
-		if snapshot.MemorySource != "balloon" {
-			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "balloon")
+		if snapshot.MemorySource != "status-mem" {
+			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "status-mem")
+		}
+	})
+
+	t.Run("canonicalizes guest memory source alias on record", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:         "testvm",
+			Status:       "running",
+			MemorySource: "meminfo-total-minus-used",
+		})
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		snapshot := m.guestSnapshots[key]
+		if snapshot.MemorySource != "derived-total-minus-used" {
+			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "derived-total-minus-used")
+		}
+		if snapshot.FallbackReason != "derived-total-minus-used" {
+			t.Errorf("FallbackReason = %q, want %q", snapshot.FallbackReason, "derived-total-minus-used")
 		}
 	})
 
@@ -488,7 +512,7 @@ func TestRecordGuestSnapshot(t *testing.T) {
 		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
 			Name:         "newname",
 			Status:       "running",
-			MemorySource: "balloon",
+			MemorySource: "status-mem",
 		})
 
 		if len(m.guestSnapshots) != 1 {
@@ -504,8 +528,8 @@ func TestRecordGuestSnapshot(t *testing.T) {
 		if snapshot.Status != "running" {
 			t.Errorf("Status = %q, want %q", snapshot.Status, "running")
 		}
-		if snapshot.MemorySource != "balloon" {
-			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "balloon")
+		if snapshot.MemorySource != "status-mem" {
+			t.Errorf("MemorySource = %q, want %q", snapshot.MemorySource, "status-mem")
 		}
 	})
 
@@ -758,6 +782,91 @@ func TestLogNodeMemorySource(t *testing.T) {
 	})
 }
 
+func TestLogGuestMemorySource(t *testing.T) {
+	t.Run("nil Monitor is no-op", func(t *testing.T) {
+		var m *Monitor
+		m.logGuestMemorySource("instance", "qemu", "node1", 100, GuestMemorySnapshot{
+			MemorySource: "agent",
+		})
+	})
+
+	t.Run("same source as existing snapshot - no log emitted", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		key := makeGuestSnapshotKey("pve1", "qemu", "node1", 100)
+		m.guestSnapshots[key] = GuestMemorySnapshot{
+			MemorySource: "agent",
+		}
+
+		m.logGuestMemorySource("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			MemorySource: "agent",
+		})
+	})
+
+	t.Run("fallback source triggers warn level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.logGuestMemorySource("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:           "vm1",
+			Status:         "running",
+			MemorySource:   "derived-total-minus-used",
+			FallbackReason: "derived-total-minus-used",
+		})
+	})
+
+	t.Run("preferred source triggers debug level", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.logGuestMemorySource("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:         "vm1",
+			Status:       "running",
+			MemorySource: "available-field",
+		})
+	})
+
+	t.Run("raw and memory fields are logged when populated", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.logGuestMemorySource("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Name:           "vm1",
+			Status:         "running",
+			MemorySource:   "rrd-memavailable",
+			FallbackReason: "rrd-memavailable",
+			Memory: models.Memory{
+				Total: 8_000_000_000,
+				Used:  3_000_000_000,
+				Free:  5_000_000_000,
+				Usage: 0.375,
+			},
+			Raw: VMMemoryRaw{
+				ListingMem:            3_000_000_000,
+				ListingMaxMem:         8_000_000_000,
+				StatusMem:             3_100_000_000,
+				StatusFreeMem:         4_900_000_000,
+				StatusMaxMem:          8_000_000_000,
+				MemInfoAvailable:      4_800_000_000,
+				MemInfoBuffers:        200_000_000,
+				MemInfoCached:         700_000_000,
+				MemInfoTotalMinusUsed: 4_900_000_000,
+				HostAgentTotal:        8_000_000_000,
+				HostAgentUsed:         3_200_000_000,
+			},
+		})
+	})
+}
+
 func TestRecordNodeSnapshot(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -909,6 +1018,25 @@ func TestRecordNodeSnapshot(t *testing.T) {
 	}
 }
 
+func TestRecordNodeSnapshotCanonicalizesMemorySource(t *testing.T) {
+	m := &Monitor{
+		nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+		guestSnapshots: make(map[string]GuestMemorySnapshot),
+	}
+
+	m.recordNodeSnapshot("pve1", "node1", NodeMemorySnapshot{
+		MemorySource: "avail-field",
+	})
+
+	snapshot := m.nodeSnapshots[makeNodeSnapshotKey("pve1", "node1")]
+	if snapshot.MemorySource != "available-field" {
+		t.Fatalf("MemorySource = %q, want available-field", snapshot.MemorySource)
+	}
+	if snapshot.FallbackReason != "" {
+		t.Fatalf("FallbackReason = %q, want empty", snapshot.FallbackReason)
+	}
+}
+
 func TestRecordNodeSnapshot_MultipleSnapshots(t *testing.T) {
 	t.Run("records multiple nodes with different keys", func(t *testing.T) {
 		m := &Monitor{
@@ -984,6 +1112,36 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		}
 	})
 
+	t.Run("guest notes normalize to empty array", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 100)] = GuestMemorySnapshot{
+			Instance: "pve1",
+			Node:     "node1",
+			GuestType:"qemu",
+			VMID:     100,
+		}
+
+		result := m.GetDiagnosticSnapshots()
+		if len(result.Guests) != 1 {
+			t.Fatalf("Guests length = %d, want 1", len(result.Guests))
+		}
+		if result.Guests[0].Notes == nil {
+			t.Fatal("guest notes should normalize to an empty slice")
+		}
+
+		payload, err := json.Marshal(result.Guests[0])
+		if err != nil {
+			t.Fatalf("marshal guest snapshot: %v", err)
+		}
+		if !strings.Contains(string(payload), `"notes":[]`) {
+			t.Fatalf("expected guest snapshot to retain notes array, got %s", payload)
+		}
+	})
+
 	t.Run("empty Monitor returns empty set", func(t *testing.T) {
 		m := &Monitor{
 			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
@@ -1024,8 +1182,11 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		if result.Nodes[0].Node != "node1" {
 			t.Errorf("Node = %q, want %q", result.Nodes[0].Node, "node1")
 		}
-		if result.Nodes[0].MemorySource != "rrd-available" {
-			t.Errorf("MemorySource = %q, want %q", result.Nodes[0].MemorySource, "rrd-available")
+		if result.Nodes[0].MemorySource != "rrd-memavailable" {
+			t.Errorf("MemorySource = %q, want %q", result.Nodes[0].MemorySource, "rrd-memavailable")
+		}
+		if result.Nodes[0].FallbackReason != "rrd-memavailable" {
+			t.Errorf("FallbackReason = %q, want %q", result.Nodes[0].FallbackReason, "rrd-memavailable")
 		}
 	})
 
@@ -1041,7 +1202,7 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 			Node:         "node1",
 			VMID:         100,
 			Name:         "testvm",
-			MemorySource: "balloon",
+			MemorySource: "listing",
 		}
 
 		result := m.GetDiagnosticSnapshots()
@@ -1064,6 +1225,12 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		}
 		if result.Guests[0].Name != "testvm" {
 			t.Errorf("Name = %q, want %q", result.Guests[0].Name, "testvm")
+		}
+		if result.Guests[0].MemorySource != "cluster-resources" {
+			t.Errorf("MemorySource = %q, want %q", result.Guests[0].MemorySource, "cluster-resources")
+		}
+		if result.Guests[0].FallbackReason != "cluster-resources" {
+			t.Errorf("FallbackReason = %q, want %q", result.Guests[0].FallbackReason, "cluster-resources")
 		}
 	})
 

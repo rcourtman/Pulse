@@ -237,8 +237,8 @@ func TestDetectEnvironment_LXCPrivileged_SystemdDetectVirt(t *testing.T) {
 	if profile.Type != LXCPrivileged {
 		t.Fatalf("Type = %v, want %v", profile.Type, LXCPrivileged)
 	}
-	if profile.Metadata["lxc_privileged"] != "true" {
-		t.Fatalf("lxc_privileged = %q, want true", profile.Metadata["lxc_privileged"])
+	if profile.Metadata["lxc-privileged"] != "true" {
+		t.Fatalf("lxc-privileged = %q, want true", profile.Metadata["lxc-privileged"])
 	}
 	if len(profile.Phases) != 1 || profile.Phases[0].Name != "lxc_host_networks" {
 		t.Fatalf("Phases = %#v, want single lxc_host_networks phase", profile.Phases)

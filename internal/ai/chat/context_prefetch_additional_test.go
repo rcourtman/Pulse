@@ -7,15 +7,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
-
-type mockPrefetchStateProvider struct {
-	state models.StateSnapshot
-}
-
-func (m mockPrefetchStateProvider) GetState() models.StateSnapshot {
-	return m.state
-}
 
 type mockDiscoveryProvider struct {
 	existing     map[string]*tools.ResourceDiscoveryInfo
@@ -23,19 +16,19 @@ type mockDiscoveryProvider struct {
 	triggerErr   error
 }
 
-func (m *mockDiscoveryProvider) key(resourceType, hostID, resourceID string) string {
-	return resourceType + ":" + hostID + ":" + resourceID
+func (m *mockDiscoveryProvider) key(resourceType, targetID, resourceID string) string {
+	return resourceType + ":" + targetID + ":" + resourceID
 }
 
 func (m *mockDiscoveryProvider) GetDiscovery(id string) (*tools.ResourceDiscoveryInfo, error) {
 	return nil, nil
 }
 
-func (m *mockDiscoveryProvider) GetDiscoveryByResource(resourceType, hostID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
+func (m *mockDiscoveryProvider) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
 	if m.existing == nil {
 		return nil, nil
 	}
-	return m.existing[m.key(resourceType, hostID, resourceID)], nil
+	return m.existing[m.key(resourceType, targetID, resourceID)], nil
 }
 
 func (m *mockDiscoveryProvider) ListDiscoveries() ([]*tools.ResourceDiscoveryInfo, error) {
@@ -46,7 +39,7 @@ func (m *mockDiscoveryProvider) ListDiscoveriesByType(resourceType string) ([]*t
 	return nil, nil
 }
 
-func (m *mockDiscoveryProvider) ListDiscoveriesByHost(hostID string) ([]*tools.ResourceDiscoveryInfo, error) {
+func (m *mockDiscoveryProvider) ListDiscoveriesByTarget(targetID string) ([]*tools.ResourceDiscoveryInfo, error) {
 	return nil, nil
 }
 
@@ -54,16 +47,16 @@ func (m *mockDiscoveryProvider) FormatForAIContext(discoveries []*tools.Resource
 	return ""
 }
 
-func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
-	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, hostID, resourceID))
+func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
+	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, targetID, resourceID))
 	if m.triggerErr != nil {
 		return nil, m.triggerErr
 	}
 	return &tools.ResourceDiscoveryInfo{
 		ResourceType: resourceType,
-		HostID:       hostID,
+		TargetID:     targetID,
 		ResourceID:   resourceID,
-		Hostname:     hostID,
+		Hostname:     targetID,
 		ServiceType:  "nginx",
 		ServiceName:  "nginx",
 		ConfigPaths:  []string{"/etc/nginx/nginx.conf"},
@@ -71,16 +64,22 @@ func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceTy
 	}, nil
 }
 
-func TestContextPrefetcher_NoStateProvider(t *testing.T) {
+func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState {
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	return rr
+}
+
+func TestContextPrefetcher_NoReadState(t *testing.T) {
 	prefetcher := NewContextPrefetcher(nil, nil)
 	if ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil); ctx != nil {
-		t.Fatalf("expected nil context when state provider missing")
+		t.Fatalf("expected nil context when ReadState missing")
 	}
 }
 
 func TestContextPrefetcher_UnresolvedMention(t *testing.T) {
 	state := models.StateSnapshot{}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(state), nil)
 	ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil)
 	if ctx == nil || !strings.Contains(ctx.Summary, "NOT found") {
 		t.Fatalf("expected unresolved mention summary, got %#v", ctx)
@@ -121,26 +120,27 @@ func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
 		}},
 	}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
-	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1", state)
+	rs := newTestReadState(state)
+	prefetcher := NewContextPrefetcher(rs, nil)
+	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1")
 	if len(mentions) == 0 {
 		t.Fatalf("expected mentions to be detected")
 	}
 
-	foundDocker := false
+	foundAppContainer := false
 	for _, m := range mentions {
-		if m.ResourceType == "docker" && m.Name == "homepage" {
-			foundDocker = true
+		if m.ResourceType == "app-container" && m.Name == "homepage" {
+			foundAppContainer = true
 			if m.TargetHost == "" {
-				t.Fatalf("expected docker mention to have target host")
+				t.Fatalf("expected app-container mention to have target host")
 			}
 			if len(m.BindMounts) == 0 {
-				t.Fatalf("expected docker bind mounts to be captured")
+				t.Fatalf("expected app-container bind mounts to be captured")
 			}
 		}
 	}
-	if !foundDocker {
-		t.Fatalf("expected docker mention")
+	if !foundAppContainer {
+		t.Fatalf("expected app-container mention")
 	}
 }
 
@@ -161,16 +161,28 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		Hosts: []models.Host{{ID: "host1", Hostname: "host1"}},
 	}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
 	structured := []StructuredMention{
-		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
-		{ID: "host:host1", Name: "host1", Type: "host"},
-		{ID: "container:node1:201", Name: "beta", Type: "container", Node: "node1"},
+		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "app-container"},
+		{ID: "agent:host1", Name: "host1", Type: "agent"},
+		{ID: "system-container:node1:201", Name: "beta", Type: "system-container", Node: "node1"},
+		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "app-container"},
 	}
+	state.DockerHosts = append(state.DockerHosts, models.DockerHost{
+		ID:       "resource:docker:abc",
+		Hostname: "dock2",
+		Containers: []models.DockerContainer{{
+			ID:   "cid-simple",
+			Name: "homepage2",
+		}},
+	})
 
-	mentions := prefetcher.resolveStructuredMentions(structured, state)
-	if len(mentions) != 3 {
-		t.Fatalf("expected 3 mentions, got %d", len(mentions))
+	// Build ReadState from the full state (after appending second docker host)
+	rs := newTestReadState(state)
+	prefetcher := NewContextPrefetcher(rs, nil)
+
+	mentions := prefetcher.resolveStructuredMentions(structured)
+	if len(mentions) != 4 {
+		t.Fatalf("expected 4 mentions, got %d", len(mentions))
 	}
 
 	if mentions[0].ResourceID != "cid:part" {
@@ -179,30 +191,74 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	if len(mentions[0].BindMounts) == 0 {
 		t.Fatalf("expected bind mounts on docker mention")
 	}
-	if mentions[1].ResourceType != "host" {
-		t.Fatalf("expected host mention, got %q", mentions[1].ResourceType)
+	if mentions[1].ResourceType != "agent" {
+		t.Fatalf("expected agent mention, got %q", mentions[1].ResourceType)
 	}
-	if mentions[2].ResourceType != "lxc" {
-		t.Fatalf("expected container type normalized to lxc, got %q", mentions[2].ResourceType)
+	if mentions[2].ResourceType != "system-container" {
+		t.Fatalf("expected system-container mention type, got %q", mentions[2].ResourceType)
+	}
+	if mentions[3].TargetID != "resource:docker:abc" {
+		t.Fatalf("expected docker target ID with colons preserved, got %q", mentions[3].TargetID)
+	}
+	if mentions[3].ResourceID != "cid-simple" {
+		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[3].ResourceID)
 	}
 
-	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}}, state)
+	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}})
 	if len(unknown) != 1 || unknown[0].ResourceType != "weird" {
 		t.Fatalf("expected unknown type to be preserved")
+	}
+
+	legacyHost := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "host:host1", Name: "host1", Type: "host"}})
+	if len(legacyHost) != 0 {
+		t.Fatalf("expected legacy host mention to be ignored, got %#v", legacyHost)
+	}
+}
+
+func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyContainerAliases(t *testing.T) {
+	rs := newTestReadState(models.StateSnapshot{})
+	prefetcher := NewContextPrefetcher(rs, nil)
+
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
+		{
+			ID:   "lxc:node1:201",
+			Name: "beta",
+			Type: "lxc",
+			Node: "node1",
+		},
+		{
+			ID:   "container:node1:202",
+			Name: "gamma",
+			Type: "container",
+			Node: "node1",
+		},
+		{
+			ID:   "docker:host1:abc123",
+			Name: "homepage",
+			Type: "docker",
+		},
+		{
+			ID:   "docker:host1:abc123",
+			Name: "homepage",
+			Type: "docker-container",
+		},
+	})
+	if len(mentions) != 0 {
+		t.Fatalf("expected legacy container aliases to be ignored, got %#v", mentions)
 	}
 }
 
 func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), provider)
 
 	provider.existing[provider.key("vm", "node1", "101")] = &tools.ResourceDiscoveryInfo{
 		ResourceType: "vm",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ResourceID:   "101",
 	}
 
-	mention := ResourceMention{ResourceType: "vm", HostID: "node1", ResourceID: "101", Name: "alpha"}
+	mention := ResourceMention{ResourceType: "vm", TargetID: "node1", ResourceID: "101", Name: "alpha"}
 	res, err := prefetcher.getOrTriggerDiscovery(context.Background(), mention)
 	if err != nil || res == nil {
 		t.Fatalf("expected cached discovery, got err=%v res=%v", err, res)
@@ -211,7 +267,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected no trigger when cached discovery exists")
 	}
 
-	mention2 := ResourceMention{ResourceType: "docker", HostID: "dock1", ResourceID: "cid1", Name: "homepage"}
+	mention2 := ResourceMention{ResourceType: "app-container", TargetID: "dock1", ResourceID: "cid1", Name: "homepage"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention2)
 	if err != nil || res == nil {
 		t.Fatalf("expected discovery trigger to succeed")
@@ -220,22 +276,22 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected trigger to be called once")
 	}
 
-	mention3 := ResourceMention{ResourceType: "host", HostID: "host1", ResourceID: "host1", Name: "host1"}
+	mention3 := ResourceMention{ResourceType: "agent", TargetID: "host1", ResourceID: "host1", Name: "host1"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention3)
 	if err != nil || res != nil {
-		t.Fatalf("expected no discovery for host type")
+		t.Fatalf("expected no discovery for agent type")
 	}
 }
 
 func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 
 	mentions := []ResourceMention{
 		{
 			Name:           "homepage",
-			ResourceType:   "docker",
+			ResourceType:   "app-container",
 			ResourceID:     "cid1",
-			HostID:         "dock1",
+			TargetID:       "dock1",
 			DockerHostName: "dock1",
 			DockerHostType: "standalone",
 			TargetHost:     "dock1",
@@ -245,20 +301,20 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 			Name:         "beta",
 			ResourceType: "lxc",
 			ResourceID:   "201",
-			HostID:       "node1",
+			TargetID:     "node1",
 		},
 	}
 
 	discoveries := []*tools.ResourceDiscoveryInfo{{
 		ResourceType: "docker",
-		HostID:       "dock1",
+		TargetID:     "dock1",
 		ResourceID:   "cid1",
 		Hostname:     "dock1",
 		ConfigPaths:  []string{"/etc/homepage/config"},
 		LogPaths:     []string{"/var/log/homepage.log"},
 	}, {
 		ResourceType: "lxc",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ResourceID:   "201",
 		Hostname:     "node1",
 		LogPaths:     []string{"journalctl -u service"},
@@ -267,7 +323,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 
 	summary := prefetcher.formatContextSummary(mentions, discoveries)
 	if !strings.Contains(summary, "Docker container") {
-		t.Fatalf("expected docker context in summary")
+		t.Fatalf("expected app-container docker context in summary")
 	}
 	if !strings.Contains(summary, "target_host") {
 		t.Fatalf("expected target_host in summary")
@@ -303,21 +359,124 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{
 		"vm:node1:101": {
 			ResourceType: "vm",
-			HostID:       "node1",
+			TargetID:     "node1",
 			ResourceID:   "101",
 			Hostname:     "node1",
 			ServiceType:  "nginx",
 		},
 	}}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(state), provider)
 	ctx := prefetcher.Prefetch(context.Background(), "@alpha", []StructuredMention{
 		{ID: "vm:node1:101", Name: "alpha", Type: "vm", Node: "node1"},
 	})
 	if ctx == nil || len(ctx.Mentions) != 1 {
 		t.Fatalf("expected structured mention to be resolved")
 	}
-	if !strings.Contains(ctx.Summary, "alpha") {
-		t.Fatalf("expected summary to include resource name")
+	if !strings.Contains(ctx.Summary, "Governed resource") {
+		t.Fatalf("expected governed summary heading, got %q", ctx.Summary)
+	}
+	if strings.Contains(ctx.Summary, "alpha") {
+		t.Fatalf("expected governed summary to avoid raw resource name, got %q", ctx.Summary)
+	}
+	if !strings.Contains(ctx.Summary, "virtual machine resource") {
+		t.Fatalf("expected aiSafeSummary in governed output, got %q", ctx.Summary)
+	}
+}
+
+func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *testing.T) {
+	state := models.StateSnapshot{
+		Containers: []models.Container{{
+			ID:   "lxc-1",
+			Name: "customer-db",
+			VMID: 201,
+			Node: "node1",
+			Type: "lxc",
+			Tags: []string{"customer-data"},
+		}},
+	}
+	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
+	prefetcher := NewContextPrefetcher(newTestReadState(state), provider)
+
+	ctx := prefetcher.Prefetch(context.Background(), "@customer-db", []StructuredMention{
+		{ID: "system-container:node1:201", Name: "customer-db", Type: "system-container", Node: "node1"},
+	})
+	if ctx == nil || len(ctx.Mentions) != 1 {
+		t.Fatalf("expected structured mention to be resolved")
+	}
+	if len(provider.triggeredKey) != 0 {
+		t.Fatalf("expected governed mention to skip discovery trigger, got %#v", provider.triggeredKey)
+	}
+	if !strings.Contains(ctx.Summary, "local-only context") {
+		t.Fatalf("expected aiSafeSummary local-only wording, got %q", ctx.Summary)
+	}
+	if !strings.Contains(ctx.Summary, "routing=local-only") {
+		t.Fatalf("expected policy routing in summary, got %q", ctx.Summary)
+	}
+	if strings.Contains(ctx.Summary, "customer-db") {
+		t.Fatalf("expected restricted summary to avoid raw resource name, got %q", ctx.Summary)
+	}
+	if strings.Contains(ctx.Summary, "target_host") {
+		t.Fatalf("expected restricted summary to withhold target_host, got %q", ctx.Summary)
+	}
+}
+
+func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	summary := prefetcher.formatContextSummary([]ResourceMention{{
+		Name:          "customer-db",
+		ResourceType:  "system-container",
+		ResourceID:    "201",
+		TargetID:      "node1",
+		AISafeSummary: "system container resource; status online; local-only context",
+		Policy: &unifiedresources.ResourcePolicy{
+			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope:                unifiedresources.ResourceRoutingScopeLocalOnly,
+				AllowCloudSummary:    false,
+				AllowCloudRawSignals: false,
+				Redact: []unifiedresources.ResourceRedactionHint{
+					unifiedresources.ResourceRedactionAlias,
+					unifiedresources.ResourceRedactionHostname,
+					unifiedresources.ResourceRedactionPath,
+				},
+			},
+		},
+	}}, nil)
+
+	if !strings.Contains(summary, "Governed resource") {
+		t.Fatalf("expected governed heading, got %q", summary)
+	}
+	if !strings.Contains(summary, "Redactions: alias, hostname, path") {
+		t.Fatalf("expected redaction list, got %q", summary)
+	}
+	if strings.Contains(summary, "customer-db") {
+		t.Fatalf("expected governed formatter to avoid raw name, got %q", summary)
+	}
+	if strings.Contains(summary, "target_host") {
+		t.Fatalf("expected governed formatter to withhold target_host, got %q", summary)
+	}
+}
+
+func TestCanonicalMentionResourceType(t *testing.T) {
+	testCases := []struct {
+		in   string
+		want string
+	}{
+		{in: "docker", want: "app-container"},
+		{in: "docker-container", want: "docker-container"},
+		{in: "app_container", want: "app_container"},
+		{in: "dockerhost", want: "dockerhost"},
+		{in: "k8s_cluster", want: "k8s_cluster"},
+		{in: "k8s_pod", want: "k8s_pod"},
+		{in: "k8s_deployment", want: "k8s_deployment"},
+		{in: "system-container", want: "system-container"},
+	}
+
+	for _, tc := range testCases {
+		if got := canonicalMentionResourceType(tc.in); got != tc.want {
+			t.Fatalf("canonicalMentionResourceType(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

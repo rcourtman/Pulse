@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, fireEvent, screen, cleanup, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
-import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable';
+import { ThresholdsTable } from '../ThresholdsTable';
+import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helpers';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
-import type { Host } from '@/types/api';
+import type { Agent, Alert } from '@/types/api';
 
 const [getPathname, setPathname] = createSignal('/alerts/thresholds/containers');
 const mockNavigate = vi.fn();
@@ -12,7 +13,9 @@ const mockNavigate = vi.fn();
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => ({
-    get pathname() { return getPathname(); }
+    get pathname() {
+      return getPathname();
+    },
   }),
 }));
 
@@ -22,8 +25,12 @@ vi.mock('../ResourceTable', () => ({
     resources?: any[];
     groupedResources?: Record<string, any[]>;
     formatMetricValue?: (metric: string, value: number | undefined) => string;
+    onToggleDisabled?: (id: string, forceState?: boolean) => void;
+    onToggleNodeConnectivity?: (id: string, forceState?: boolean) => void;
   }) => {
-    const resources = props.resources || (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
+    const resources =
+      props.resources ||
+      (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
     const title = props.title ?? 'unnamed';
     return (
       <div data-testid={`resource-table-${title}`}>
@@ -32,8 +39,26 @@ vi.mock('../ResourceTable', () => ({
           <div data-testid={`resource-row-${r.id}`}>
             <div data-testid={`resource-name-${r.id}`}>{r.name}</div>
             <div data-testid={`resource-cpu-${r.id}`}>
-              {props.formatMetricValue && r.thresholds ? props.formatMetricValue('cpu', r.thresholds.cpu) : (r.thresholds?.cpu ?? '')}
+              {props.formatMetricValue && r.thresholds
+                ? props.formatMetricValue('cpu', r.thresholds.cpu)
+                : (r.thresholds?.cpu ?? '')}
             </div>
+            {props.onToggleDisabled ? (
+              <button
+                data-testid={`toggle-disabled-${r.id}`}
+                onClick={() => props.onToggleDisabled?.(r.id, true)}
+              >
+                Disable
+              </button>
+            ) : null}
+            {props.onToggleNodeConnectivity ? (
+              <button
+                data-testid={`toggle-connectivity-${r.id}`}
+                onClick={() => props.onToggleNodeConnectivity?.(r.id, true)}
+              >
+                Disable connectivity
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
@@ -45,9 +70,7 @@ vi.mock('../ResourceTable', () => ({
 
 vi.mock('../Thresholds/sections/CollapsibleSection', () => ({
   CollapsibleSection: (props: any) => (
-    <div data-testid={`section-${props.title}`}>
-      {props.children}
-    </div>
+    <div data-testid={`section-${props.title}`}>{props.children}</div>
   ),
 }));
 
@@ -98,7 +121,7 @@ const baseProps = () => ({
   setRawOverridesConfig: vi.fn(),
   allGuests: () => [],
   nodes: [],
-  hosts: [],
+  agents: [],
   storage: [],
   dockerHosts: [],
   pbsInstances: [],
@@ -113,8 +136,8 @@ const baseProps = () => ({
   setGuestPoweredOffSeverity: vi.fn(),
   nodeDefaults: {},
   setNodeDefaults: vi.fn(),
-  hostDefaults: { cpu: 80, memory: 85, disk: 90 },
-  setHostDefaults: vi.fn(),
+  agentDefaults: { cpu: 80, memory: 85, disk: 90 },
+  setAgentDefaults: vi.fn(),
   dockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   dockerDisableConnectivity: () => false,
   setDockerDisableConnectivity: vi.fn(),
@@ -125,13 +148,13 @@ const baseProps = () => ({
   setStorageDefault: vi.fn(),
   resetGuestDefaults: vi.fn(),
   resetNodeDefaults: vi.fn(),
-  resetHostDefaults: vi.fn(),
+  resetAgentDefaults: vi.fn(),
   resetDockerDefaults: vi.fn(),
   resetDockerIgnoredPrefixes: vi.fn(),
   resetStorageDefault: vi.fn(),
   factoryGuestDefaults: {},
   factoryNodeDefaults: {},
-  factoryHostDefaults: { cpu: 80, memory: 85, disk: 90 },
+  factoryAgentDefaults: { cpu: 80, memory: 85, disk: 90 },
   factoryDockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   factoryStorageDefault: 85,
   backupDefaults: () => ({ enabled: false, warningDays: 7, criticalDays: 14 }),
@@ -154,7 +177,7 @@ const baseProps = () => ({
     criticalSizeGiB: 0,
   } as SnapshotAlertConfig,
   resetSnapshotDefaults: vi.fn(),
-  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, host: 5 }),
+  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, agent: 5 }),
   metricTimeThresholds: () => ({}),
   setMetricTimeThresholds: vi.fn(),
   activeAlerts: {},
@@ -163,8 +186,8 @@ const baseProps = () => ({
   setDisableAllNodes: vi.fn(),
   disableAllGuests: () => false,
   setDisableAllGuests: vi.fn(),
-  disableAllHosts: () => false,
-  setDisableAllHosts: vi.fn(),
+  disableAllAgents: () => false,
+  setDisableAllAgents: vi.fn(),
   disableAllStorage: () => false,
   setDisableAllStorage: vi.fn(),
   disableAllPBS: () => false,
@@ -181,8 +204,8 @@ const baseProps = () => ({
   setDisableAllNodesOffline: vi.fn(),
   disableAllGuestsOffline: () => false,
   setDisableAllGuestsOffline: vi.fn(),
-  disableAllHostsOffline: () => false,
-  setDisableAllHostsOffline: vi.fn(),
+  disableAllAgentsOffline: () => false,
+  setDisableAllAgentsOffline: vi.fn(),
   disableAllPBSOffline: () => false,
   setDisableAllPBSOffline: vi.fn(),
   disableAllPMGOffline: () => false,
@@ -227,29 +250,43 @@ describe('ThresholdsTable navigation and redirection', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', { replace: true });
   });
 
-  it('redirects legacy docker path to containers', () => {
-    setPathname('/alerts/thresholds/docker');
-    render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/containers', { replace: true, scroll: false });
+  it('loads agents tab from canonical route', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host: Agent = {
+      id: 'legacy-h1',
+      hostname: 'legacy-host',
+      displayName: 'Legacy Host',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+    };
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+    });
   });
 
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const hostsTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Host Agents'));
+    const hostsTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('Agents'));
     if (hostsTab) fireEvent.click(hostsTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/hosts');
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/agents');
 
-    const mailTab = screen.getAllByRole('button').find(el => el.textContent?.includes('Mail Gateway'));
+    const mailTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('Mail Gateway'));
     if (mailTab) fireEvent.click(mailTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/mail-gateway');
   });
 });
 
 describe('ThresholdsTable Resource Rendering', () => {
-  it('renders host agents correctly', async () => {
-    setPathname('/alerts/thresholds/hosts');
-    const host: Host = {
+  it('renders agents correctly', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host: Agent = {
       id: 'h1',
       hostname: 'host1',
       displayName: 'Host 1',
@@ -258,13 +295,13 @@ describe('ThresholdsTable Resource Rendering', () => {
       memory: { total: 100, used: 50, free: 50, usage: 50 },
     };
 
-    render(() => <ThresholdsTable {...(baseProps() as any)} hosts={[host]} />);
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Host Agents')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-count-Host Agents')).toHaveTextContent('1');
+    expect(screen.getByTestId('resource-count-Agents')).toHaveTextContent('1');
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
@@ -284,11 +321,9 @@ describe('ThresholdsTable Resource Rendering', () => {
       node: 'pve1',
     };
 
-    render(() => <ThresholdsTable
-      {...(baseProps() as any)}
-      nodes={[node]}
-      allGuests={() => [guest]}
-    />);
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} nodes={[node]} allGuests={() => [guest]} />
+    ));
 
     await waitFor(() => {
       expect(screen.getByTestId('section-Proxmox Nodes')).toBeInTheDocument();
@@ -299,13 +334,12 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
   });
-
 });
 
 describe('ThresholdsTable Metric Formatting', () => {
   it('formats metrics correctly', async () => {
-    setPathname('/alerts/thresholds/hosts');
-    const host: Host = {
+    setPathname('/alerts/thresholds/agents');
+    const host: Agent = {
       id: 'h1',
       hostname: 'host1',
       displayName: 'Host 1',
@@ -317,20 +351,225 @@ describe('ThresholdsTable Metric Formatting', () => {
     const override = {
       id: 'h1',
       name: 'host1',
-      type: 'hostAgent' as const,
+      type: 'agent' as const,
       thresholds: {
-        cpu: 85
-      }
+        cpu: 85,
+      },
     };
 
-    render(() => <ThresholdsTable
-      {...(baseProps() as any)}
-      hosts={[host]}
-      overrides={() => [override]}
-    />);
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} agents={[host]} overrides={() => [override]} />
+    ));
 
     await waitFor(() => {
       expect(screen.getByTestId('resource-cpu-h1')).toHaveTextContent('85%');
     });
+  });
+});
+
+describe('ThresholdsTable V6 ID compatibility', () => {
+  it('matches agent overrides keyed by actionable agent ID', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host = {
+      id: 'resource:host:abc123',
+      type: 'agent',
+      name: 'host-v6',
+      displayName: 'Host V6',
+      platformId: 'host-platform-1',
+      platformType: 'agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 123,
+      agent: { agentId: 'agent-host-123' },
+      platformData: { agent: { agentId: 'agent-host-123' } },
+    } as any;
+    const override = {
+      id: 'agent-host-123',
+      name: 'Host V6',
+      type: 'agent' as const,
+      thresholds: { cpu: 88 },
+    };
+
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} agents={[host]} overrides={() => [override]} />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-agent-host-123')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('resource-row-resource:host:abc123')).not.toBeInTheDocument();
+  });
+
+  it('matches docker-host overrides keyed by actionable hostSourceId', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'resource:docker:xyz789',
+      type: 'docker-host',
+      name: 'docker-v6',
+      displayName: 'Docker Host V6',
+      platformId: 'docker-platform-1',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 456,
+      platformData: { docker: { hostSourceId: 'docker-source-123' } },
+    } as any;
+    const override = {
+      id: 'docker-source-123',
+      name: 'Docker Host V6',
+      type: 'dockerHost' as const,
+      disableConnectivity: true,
+      thresholds: {},
+    };
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        overrides={() => [override]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-docker-source-123')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('resource-row-resource:docker:xyz789')).not.toBeInTheDocument();
+  });
+
+  it('matches docker-container overrides keyed by actionable docker host ID', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'resource:docker:parent1',
+      type: 'docker-host',
+      name: 'docker-parent',
+      displayName: 'Docker Parent',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 789,
+      platformData: { docker: { hostSourceId: 'docker-source-parent' } },
+    } as any;
+    const container = {
+      id: 'container-hash-1',
+      parentId: 'resource:docker:parent1',
+      type: 'docker-container',
+      name: '/nginx',
+      displayName: 'nginx',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'running',
+      lastSeen: 789,
+    } as any;
+    const override = {
+      id: 'docker:docker-source-parent/container-hash-1',
+      name: 'nginx',
+      type: 'dockerContainer' as const,
+      thresholds: { cpu: 92 },
+    };
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        allResources={[container]}
+        overrides={() => [override]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-row-docker:docker-source-parent/container-hash-1'),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByTestId('resource-row-docker:resource:docker:parent1/container-hash-1'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('removes docker host offline alerts using legacy compatibility IDs', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const removeAlerts = vi.fn();
+    const dockerHost = {
+      id: 'docker-source-123',
+      type: 'dockerHost',
+      name: 'docker-v6',
+      displayName: 'Docker Host V6',
+      disableConnectivity: false,
+      disabled: false,
+      thresholds: {},
+    } as any;
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        removeAlerts={removeAlerts}
+      />
+    ));
+
+    await fireEvent.click(screen.getByTestId('toggle-connectivity-docker-source-123'));
+
+    expect(removeAlerts).toHaveBeenCalledTimes(1);
+    const predicate = removeAlerts.mock.calls[0][0] as (alert: Alert) => boolean;
+    expect(
+      predicate({
+        id: 'docker:docker-source-123::connectivity',
+        type: 'offline',
+        level: 'critical',
+        resourceId: 'docker:docker-source-123',
+        resourceName: 'Docker Host V6',
+        node: '',
+        instance: '',
+        message: 'offline',
+        value: 0,
+        threshold: 0,
+        startTime: new Date().toISOString(),
+        acknowledged: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('removes PBS offline alerts using legacy compatibility IDs when disabled', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const removeAlerts = vi.fn();
+    const pbs = {
+      id: 'pbs-main',
+      type: 'pbs',
+      name: 'PBS Main',
+      displayName: 'PBS Main',
+      disableConnectivity: false,
+      disabled: false,
+      thresholds: {},
+    } as any;
+
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} pbsInstances={[pbs]} removeAlerts={removeAlerts} />
+    ));
+
+    await fireEvent.click(screen.getByTestId('toggle-disabled-pbs-main'));
+
+    expect(removeAlerts).toHaveBeenCalledTimes(1);
+    const predicate = removeAlerts.mock.calls[0][0] as (alert: Alert) => boolean;
+    expect(
+      predicate({
+        id: 'pbs:pbs-main::connectivity',
+        type: 'offline',
+        level: 'critical',
+        resourceId: 'pbs-main',
+        resourceName: 'PBS Main',
+        node: '',
+        instance: '',
+        message: 'offline',
+        value: 0,
+        threshold: 0,
+        startTime: new Date().toISOString(),
+        acknowledged: false,
+      }),
+    ).toBe(true);
   });
 });

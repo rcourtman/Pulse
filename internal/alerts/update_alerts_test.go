@@ -159,6 +159,12 @@ func TestCheckDockerContainerImageUpdate(t *testing.T) {
 				if a.Level != AlertLevelWarning {
 					t.Errorf("Expected level %q, got %q", AlertLevelWarning, a.Level)
 				}
+				if got := a.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+					t.Errorf("canonicalAlertKind = %v, want severity-threshold", got)
+				}
+				if got := a.Metadata["canonicalSpecID"]; got != testResourceID+"-image-update" {
+					t.Errorf("canonicalSpecID = %v, want %s", got, testResourceID+"-image-update")
+				}
 				break
 			}
 		}
@@ -291,7 +297,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 
 	alertID := "docker-container-update-" + newResourceID
 	m.mu.RLock()
-	alert, hasAlert := m.activeAlerts[alertID]
+	alert, hasAlert := testLookupActiveAlert(t, m, alertID)
 	resourceFirstSeen, hasResourceTracking := m.dockerUpdateFirstSeen[newResourceID]
 	identityFirstSeen, hasIdentityTracking := m.dockerUpdateFirstSeenByIdentity[dockerUpdateTrackingKey(newHost, container)]
 	m.mu.RUnlock()
@@ -401,5 +407,119 @@ func TestDockerUpdateTrackingCleanup(t *testing.T) {
 	}
 	if !hasOtherByIdentity {
 		t.Error("Expected other host identity tracking to remain")
+	}
+}
+
+func TestDockerUpdateTrackingHostKeyFallbackOrder(t *testing.T) {
+	tests := []struct {
+		name string
+		host models.DockerHost
+		want string
+	}{
+		{
+			name: "agent id preferred",
+			host: models.DockerHost{
+				AgentID: " Agent-01 ",
+				TokenID: "token-should-not-be-used",
+			},
+			want: "agent:agent-01",
+		},
+		{
+			name: "token fallback",
+			host: models.DockerHost{
+				TokenID: " Token-01 ",
+			},
+			want: "token:token-01",
+		},
+		{
+			name: "machine fallback",
+			host: models.DockerHost{
+				MachineID: " Machine-01 ",
+			},
+			want: "machine:machine-01",
+		},
+		{
+			name: "hostname fallback",
+			host: models.DockerHost{
+				Hostname: " Docker-Host.Local ",
+			},
+			want: "hostname:docker-host.local",
+		},
+		{
+			name: "id fallback",
+			host: models.DockerHost{
+				ID: " Host-01 ",
+			},
+			want: "id:host-01",
+		},
+		{
+			name: "display name fallback",
+			host: models.DockerHost{
+				DisplayName: " Primary Host ",
+			},
+			want: "name:primary host",
+		},
+		{
+			name: "unknown fallback",
+			host: models.DockerHost{},
+			want: "unknown-host",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dockerUpdateTrackingHostKey(tt.host)
+			if got != tt.want {
+				t.Fatalf("expected host key %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestDockerUpdateTrackingContainerKeyFallbackOrder(t *testing.T) {
+	tests := []struct {
+		name      string
+		container models.DockerContainer
+		want      string
+	}{
+		{
+			name: "id preferred",
+			container: models.DockerContainer{
+				ID:    " Container-01 ",
+				Name:  "/ignored-name",
+				Image: "ignored-image",
+			},
+			want: "id:container-01",
+		},
+		{
+			name: "name fallback trims leading slash",
+			container: models.DockerContainer{
+				Name:  " /Web ",
+				Image: "ignored-image",
+			},
+			want: "name:web",
+		},
+		{
+			name: "image fallback",
+			container: models.DockerContainer{
+				Name:  "   ",
+				Image: " Nginx:1.27 ",
+			},
+			want: "image:nginx:1.27",
+		},
+		{
+			name:      "unknown fallback",
+			container: models.DockerContainer{},
+			want:      "unknown-container",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dockerUpdateTrackingContainerKey(tt.container)
+			if got != tt.want {
+				t.Fatalf("expected container key %q, got %q", tt.want, got)
+			}
+		})
 	}
 }

@@ -50,7 +50,7 @@ func TestHub_Tenant_Broadcasting(t *testing.T) {
 			"org2": map[string]string{"baz": "qux"},
 		},
 	}
-	hub.SetStateGetterForTenant(mockState.GetState)
+	hub.SetStateGetter(mockState.GetState)
 
 	// Test GetTenantClientCount
 	assert.Equal(t, 0, hub.GetTenantClientCount("org1"))

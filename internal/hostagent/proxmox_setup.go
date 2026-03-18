@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -23,26 +24,109 @@ type ProxmoxSetup struct {
 	httpClient         *http.Client
 	pulseURL           string
 	apiToken           string
-	proxmoxType        string // "pve", "pbs", or "" for auto-detect
+	proxmoxType        proxmoxProductType // pve, pbs, or unknown for auto-detect
 	hostname           string
 	reportIP           string
 	insecureSkipVerify bool
 	collector          SystemCollector
+	stateDir           string          // directory for registration state files
 	retryBackoffs      []time.Duration // overridable for testing; nil uses defaults
 }
 
 // ProxmoxSetupResult contains the result of a successful Proxmox setup.
 type ProxmoxSetupResult struct {
 	ProxmoxType string // "pve" or "pbs"
-	TokenID     string // Full token ID (e.g., "pulse-monitor@pam!pulse-pulse-example-com")
+	TokenID     string // Full token ID (e.g., "pulse-monitor@pve!pulse-pulse-example-com")
 	TokenValue  string // The secret token value
 	NodeHost    string // The host URL for auto-registration
+	NodeName    string // The canonical stored node identity returned by Pulse
 	Registered  bool   // Whether the node was successfully registered with Pulse
+}
+
+type proxmoxProductType string
+
+const (
+	proxmoxProductUnknown proxmoxProductType = ""
+	proxmoxProductPVE     proxmoxProductType = "pve"
+	proxmoxProductPBS     proxmoxProductType = "pbs"
+)
+
+type autoRegisterSource string
+
+const autoRegisterSourceAgent autoRegisterSource = "agent"
+
+type autoRegisterRequest struct {
+	Type       proxmoxProductType `json:"type"`
+	Host       string             `json:"host"`
+	ServerName string             `json:"serverName"`
+	AuthToken  string             `json:"authToken,omitempty"`
+	TokenID    string             `json:"tokenId"`
+	TokenValue string             `json:"tokenValue"`
+	Source     autoRegisterSource `json:"source"`
+}
+
+type autoRegisterResponse struct {
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+	Action     string `json:"action"`
+	Type       string `json:"type"`
+	Source     string `json:"source"`
+	Host       string `json:"host"`
+	NodeID     string `json:"nodeId"`
+	NodeName   string `json:"nodeName"`
+	TokenID    string `json:"tokenId"`
+	TokenValue string `json:"tokenValue"`
+}
+
+type setupScriptURLRequest struct {
+	Type        string `json:"type"`
+	Host        string `json:"host"`
+	BackupPerms bool   `json:"backupPerms"`
+}
+
+type setupScriptURLResponse struct {
+	Type              string `json:"type"`
+	Host              string `json:"host"`
+	URL               string `json:"url"`
+	DownloadURL       string `json:"downloadURL"`
+	ScriptFileName    string `json:"scriptFileName"`
+	Command           string `json:"command"`
+	CommandWithEnv    string `json:"commandWithEnv"`
+	CommandWithoutEnv string `json:"commandWithoutEnv"`
+	SetupToken        string `json:"setupToken"`
+	TokenHint         string `json:"tokenHint"`
+	Expires           int64  `json:"expires"`
+}
+
+func validateSetupScriptCommand(command string, expectedScriptURL string, setupToken string, tokenRequired bool) error {
+	trimmedCommand := strings.TrimSpace(command)
+	if trimmedCommand == "" {
+		return fmt.Errorf("missing command")
+	}
+	if !strings.Contains(trimmedCommand, expectedScriptURL) {
+		return fmt.Errorf("command url mismatch")
+	}
+	if !strings.Contains(trimmedCommand, `if [ "$(id -u)" -eq 0 ]; then`) {
+		return fmt.Errorf("command missing direct-root path")
+	}
+	if !strings.Contains(trimmedCommand, `elif command -v sudo >/dev/null 2>&1; then`) {
+		return fmt.Errorf("command missing sudo path")
+	}
+	if tokenRequired {
+		if !strings.Contains(trimmedCommand, "PULSE_SETUP_TOKEN=") || !strings.Contains(trimmedCommand, setupToken) {
+			return fmt.Errorf("command missing setup token transport")
+		}
+		return nil
+	}
+	if strings.Contains(trimmedCommand, "PULSE_SETUP_TOKEN=") || strings.Contains(trimmedCommand, setupToken) {
+		return fmt.Errorf("command leaked setup token transport")
+	}
+	return nil
 }
 
 const (
 	proxmoxUser    = "pulse-monitor"
-	proxmoxUserPVE = "pulse-monitor@pam"
+	proxmoxUserPVE = "pulse-monitor@pve"
 	proxmoxUserPBS = "pulse-monitor@pbs"
 	proxmoxComment = "Pulse monitoring service"
 )
@@ -106,45 +190,8 @@ func proxmoxTokenScope(candidates ...string) string {
 	return "server"
 }
 
-func proxmoxMonitorTokenScope(hostname, pulseURL string) string {
-	parts := make([]string, 0, 2)
-	seen := make(map[string]struct{}, 2)
-
-	for _, candidate := range []string{hostname, pulseURL} {
-		host := proxmoxTokenHostCandidate(candidate)
-		if host == "" {
-			continue
-		}
-		slug := proxmoxTokenSlug(host)
-		if slug == "" {
-			continue
-		}
-		if _, exists := seen[slug]; exists {
-			continue
-		}
-		seen[slug] = struct{}{}
-		parts = append(parts, slug)
-	}
-
-	if len(parts) == 0 {
-		return "server"
-	}
-
-	scope := parts[0]
-	const maxScopeLen = 48
-	for _, part := range parts[1:] {
-		candidate := scope + "-" + part
-		if len(candidate) > maxScopeLen {
-			break
-		}
-		scope = candidate
-	}
-
-	return scope
-}
-
 func (p *ProxmoxSetup) monitorTokenName() string {
-	return "pulse-" + proxmoxMonitorTokenScope(p.hostname, p.pulseURL)
+	return "pulse-" + proxmoxTokenScope(p.pulseURL, p.hostname)
 }
 
 func tokenAlreadyExists(err error, output string) bool {
@@ -167,7 +214,9 @@ func (p *ProxmoxSetup) probePVEPrivilege(ctx context.Context, privilege string) 
 	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", roleName, "-privs", privilege); err != nil {
 		return false
 	}
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "delete", roleName)
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "delete", roleName); err != nil {
+		p.logger.Debug().Err(err).Str("role", roleName).Msg("Failed to cleanup temporary PVE privilege probe role")
+	}
 	return true
 }
 
@@ -179,7 +228,7 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 
 	// Extra privileges are optional, but enable additional features:
 	// - Sys.Audit: required for pending apt updates + some cluster/ceph visibility
-	// - VM.Monitor (PVE 8) or VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9+): guest agent data
+	// - VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+): guest agent data
 	// - Datastore.Audit: improved storage visibility
 	var extraPrivs []string
 
@@ -191,11 +240,6 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 		extraPrivs = append(extraPrivs, "VM.Monitor")
 	} else if p.probePVEPrivilege(ctx, "VM.GuestAgent.Audit") {
 		extraPrivs = append(extraPrivs, "VM.GuestAgent.Audit")
-		// VM.GuestAgent.FileRead is needed for reading /proc/meminfo via the
-		// guest agent file-read endpoint (accurate memory excluding buff/cache).
-		if p.probePVEPrivilege(ctx, "VM.GuestAgent.FileRead") {
-			extraPrivs = append(extraPrivs, "VM.GuestAgent.FileRead")
-		}
 	}
 
 	if p.probePVEPrivilege(ctx, "Datastore.Audit") {
@@ -219,28 +263,68 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 	}
 
 	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin")
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin"); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to apply PVEDatastoreAdmin role on /storage")
+	}
 }
 
-var (
-	stateFilePath = "/var/lib/pulse-agent/proxmox-registered" // Legacy, kept for backward compat
-	stateFileDir  = "/var/lib/pulse-agent"
-	// Per-type state files for multi-product support (PVE+PBS on same host)
-	stateFilePVE = "/var/lib/pulse-agent/proxmox-pve-registered"
-	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
+const (
+	proxmoxStateDirPerm  = 0700
+	proxmoxStateFilePerm = 0600
 )
 
+// State file path methods — derive from the configurable stateDir.
+func (p *ProxmoxSetup) legacyStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-registered")
+}
+
+func (p *ProxmoxSetup) pveStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-pve-registered")
+}
+
+func (p *ProxmoxSetup) pbsStateFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-pbs-registered")
+}
+
+func parseProxmoxProductType(rawType string) proxmoxProductType {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case string(proxmoxProductPVE):
+		return proxmoxProductPVE
+	case string(proxmoxProductPBS):
+		return proxmoxProductPBS
+	default:
+		return proxmoxProductUnknown
+	}
+}
+
+func proxmoxProductTypesToStrings(types []proxmoxProductType) []string {
+	if len(types) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(types))
+	for _, t := range types {
+		result = append(result, string(t))
+	}
+
+	return result
+}
+
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
-func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
+func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP, stateDir string, insecure bool) *ProxmoxSetup {
+	if stateDir == "" {
+		stateDir = defaultStateDir
+	}
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
 		collector:          collector,
 		pulseURL:           strings.TrimRight(pulseURL, "/"),
 		apiToken:           apiToken,
-		proxmoxType:        proxmoxType,
+		proxmoxType:        proxmoxProductType(proxmoxType),
 		hostname:           hostname,
 		reportIP:           reportIP,
+		stateDir:           stateDir,
 		insecureSkipVerify: insecure,
 	}
 }
@@ -250,6 +334,18 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 // 2. Creates the monitoring user and API token
 // 3. Registers the node with Pulse via auto-register
 func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
+	pulseURL, err := normalizePulseURL(p.pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	p.pulseURL = pulseURL
+
+	ptypeStr, err := normalizeProxmoxType(string(p.proxmoxType))
+	if err != nil {
+		return nil, err
+	}
+	ptype := proxmoxProductType(ptypeStr)
+
 	// Check if already registered (idempotency)
 	if p.isAlreadyRegistered() {
 		p.logger.Info().Msg("Proxmox node already registered, skipping setup")
@@ -257,14 +353,13 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 
 	// Detect Proxmox type
-	ptype := p.proxmoxType
-	if ptype == "" {
+	if ptype == proxmoxProductUnknown {
 		detected := p.detectProxmoxType()
-		if detected == "" {
+		if detected == proxmoxProductUnknown {
 			return nil, fmt.Errorf("this system does not appear to be a Proxmox VE or PBS node")
 		}
 		ptype = detected
-		p.logger.Info().Str("type", ptype).Msg("Auto-detected Proxmox type")
+		p.logger.Info().Str("type", string(ptype)).Msg("Auto-detected Proxmox type")
 	}
 
 	// Create monitoring user and token
@@ -276,24 +371,26 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	p.logger.Info().Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Get the host URL for registration
-	hostURL := p.getHostURL(ptype)
+	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
-	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to register Proxmox node with Pulse; if the node does not appear, delete /var/lib/pulse-agent/proxmox-pve-registered (or proxmox-pbs-registered) to force re-registration")
+	registerResp, err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to register with Pulse (node may already exist)")
 	} else {
 		registered = true
 		p.markAsRegistered()
 		p.markTypeAsRegistered(ptype)
-		p.logger.Info().Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
+		p.logger.Info().Str("host", hostURL).Str("node", registerResp.NodeName).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
 	return &ProxmoxSetupResult{
-		ProxmoxType: ptype,
+		ProxmoxType: string(ptype),
 		TokenID:     tokenID,
 		TokenValue:  tokenValue,
 		NodeHost:    hostURL,
+		NodeName:    registerResp.NodeName,
 		Registered:  registered,
 	}, nil
 }
@@ -303,13 +400,25 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 // supported configuration). Each type gets its own registration and state tracking.
 // Returns results for all types that were processed (skipping already-registered ones).
 func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
+	pulseURL, err := normalizePulseURL(p.pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	p.pulseURL = pulseURL
+
+	forcedTypeStr, err := normalizeProxmoxType(string(p.proxmoxType))
+	if err != nil {
+		return nil, err
+	}
+	forcedType := proxmoxProductType(forcedTypeStr)
+
 	var results []*ProxmoxSetupResult
 
 	// If a specific type is forced, only run that
-	if p.proxmoxType != "" {
-		result, err := p.runForType(ctx, p.proxmoxType)
+	if forcedType != "" {
+		result, err := p.runForType(ctx, forcedType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("setup proxmox type %s: %w", p.proxmoxType, err)
 		}
 		if result != nil {
 			results = append(results, result)
@@ -323,13 +432,13 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 		return nil, fmt.Errorf("this system does not appear to be a Proxmox VE or PBS node")
 	}
 
-	p.logger.Info().Strs("types", types).Msg("Auto-detected Proxmox products")
+	p.logger.Info().Strs("types", proxmoxProductTypesToStrings(types)).Msg("Auto-detected Proxmox products")
 
 	// Register each type
 	for _, ptype := range types {
 		result, err := p.runForType(ctx, ptype)
 		if err != nil {
-			p.logger.Error().Err(err).Str("type", ptype).Msg("Failed to setup Proxmox type")
+			p.logger.Error().Err(err).Str("type", string(ptype)).Msg("Failed to setup Proxmox type")
 			continue // Don't fail completely, try other types
 		}
 		if result != nil {
@@ -341,14 +450,20 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 }
 
 // runForType executes setup for a specific Proxmox type.
-func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSetupResult, error) {
+func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType) (*ProxmoxSetupResult, error) {
+	normalizedTypeStr, err := normalizeProxmoxType(string(ptype))
+	if err != nil || normalizedTypeStr == "" {
+		return nil, fmt.Errorf("invalid proxmox type %q: must be pve or pbs", ptype)
+	}
+	ptype = proxmoxProductType(normalizedTypeStr)
+
 	// Check if this type is already registered
 	if p.isTypeRegistered(ptype) {
-		p.logger.Info().Str("type", ptype).Msg("Proxmox type already registered, skipping")
+		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
 		return nil, nil
 	}
 
-	p.logger.Info().Str("type", ptype).Msg("Setting up Proxmox type")
+	p.logger.Info().Str("type", string(ptype)).Msg("Setting up Proxmox type")
 
 	// Create monitoring user and token
 	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
@@ -356,26 +471,28 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 		return nil, fmt.Errorf("failed to create %s API token: %w", ptype, err)
 	}
 
-	p.logger.Info().Str("type", ptype).Str("token_id", tokenID).Msg("Created Proxmox API token")
+	p.logger.Info().Str("type", string(ptype)).Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Get the host URL for registration
-	hostURL := p.getHostURL(ptype)
+	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
-	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to register Proxmox node with Pulse; if the node does not appear, delete /var/lib/pulse-agent/proxmox-pve-registered (or proxmox-pbs-registered) to force re-registration")
+	registerResp, err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue)
+	if err != nil {
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to register with Pulse (node may already exist)")
 	} else {
 		registered = true
 		p.markTypeAsRegistered(ptype)
-		p.logger.Info().Str("type", ptype).Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
+		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).Str("node", registerResp.NodeName).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
 	return &ProxmoxSetupResult{
-		ProxmoxType: ptype,
+		ProxmoxType: string(ptype),
 		TokenID:     tokenID,
 		TokenValue:  tokenValue,
 		NodeHost:    hostURL,
+		NodeName:    registerResp.NodeName,
 		Registered:  registered,
 	}, nil
 }
@@ -383,12 +500,12 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 // detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
 // For backward compatibility, returns the first detected type.
 // Use detectProxmoxTypes() to get all detected types.
-func (p *ProxmoxSetup) detectProxmoxType() string {
+func (p *ProxmoxSetup) detectProxmoxType() proxmoxProductType {
 	types := p.detectProxmoxTypes()
 	if len(types) > 0 {
 		return types[0]
 	}
-	return ""
+	return proxmoxProductUnknown
 }
 
 // detectProxmoxTypes checks for ALL Proxmox products on this system.
@@ -397,36 +514,46 @@ func (p *ProxmoxSetup) detectProxmoxType() string {
 // detectProxmoxTypes checks for ALL Proxmox products on this system.
 // Returns a slice of detected types (e.g., ["pve", "pbs"] if both are installed).
 // This is common when PBS is installed directly on a PVE host.
-func (p *ProxmoxSetup) detectProxmoxTypes() []string {
-	var types []string
+func (p *ProxmoxSetup) detectProxmoxTypes() []proxmoxProductType {
+	var types []proxmoxProductType
 
 	// Check for PVE
 	if _, err := p.collector.LookPath("pvesh"); err == nil {
-		types = append(types, "pve")
+		types = append(types, proxmoxProductPVE)
 	}
 
 	// Check for PBS
 	if _, err := p.collector.LookPath("proxmox-backup-manager"); err == nil {
-		types = append(types, "pbs")
+		types = append(types, proxmoxProductPBS)
 	}
 
 	return types
 }
 
 // setupToken creates the monitoring user and API token.
-func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype string) (string, string, error) {
+func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype proxmoxProductType) (string, string, error) {
 	tokenName := p.monitorTokenName()
 
-	if ptype == "pve" {
+	switch ptype {
+	case proxmoxProductPVE:
 		return p.setupPVEToken(ctx, tokenName)
+	case proxmoxProductPBS:
+		return p.setupPBSToken(ctx, tokenName)
+	default:
+		return "", "", fmt.Errorf("unsupported Proxmox type %q", ptype)
 	}
-	return p.setupPBSToken(ctx, tokenName)
 }
 
 // setupPVEToken creates a PVE monitoring user and token.
 func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment); err != nil {
+		if isAlreadyExistsOutput(out) {
+			p.logger.Debug().Msg("Proxmox PVE monitor user already exists")
+		} else {
+			p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to create Proxmox PVE monitor user")
+		}
+	}
 
 	// Apply baseline + optional enhanced permissions (Sys.Audit, guest agent access).
 	p.configurePVEPermissions(ctx)
@@ -459,10 +586,18 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 // setupPBSToken creates a PBS monitoring user and token.
 func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS); err != nil {
+		if isAlreadyExistsOutput(out) {
+			p.logger.Debug().Msg("Proxmox PBS monitor user already exists")
+		} else {
+			p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to create Proxmox PBS monitor user")
+		}
+	}
 
 	// Add Audit role
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS); err != nil {
+		p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to apply PBS Audit role to monitor user")
+	}
 
 	// Create token
 	output, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
@@ -487,7 +622,9 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 
 	// Add Audit role for the token itself
 	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPBS, tokenName)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID); err != nil {
+		p.logger.Warn().Err(err).Str("token_id", tokenID).Str("output", strings.TrimSpace(out)).Msg("Failed to apply PBS Audit role to token")
+	}
 
 	return tokenID, tokenValue, nil
 }
@@ -498,7 +635,7 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 // ┌──────────────┬──────────────────────────────────────┐
 // │ key          │ value                                │
 // ╞══════════════╪══════════════════════════════════════╡
-// │ full-tokenid │ pulse-monitor@pam!pulse-token        │
+// │ full-tokenid │ pulse-monitor@pve!pulse-token        │
 // ├──────────────┼──────────────────────────────────────┤
 // │ info         │ {"privsep":"0"}                      │
 // ├──────────────┼──────────────────────────────────────┤
@@ -550,10 +687,14 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 
 // getHostURL constructs the host URL for this Proxmox node.
 // Uses the local IP that can reach Pulse, falling back to intelligent IP selection.
-func (p *ProxmoxSetup) getHostURL(ptype string) string {
+func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType) string {
 	port := "8006"
-	if ptype == "pbs" {
+	if ptype == proxmoxProductPBS {
 		port = "8007"
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	// Priority 1: User-specified ReportIP override from configuration.
@@ -561,18 +702,21 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	// connections when auto-detection picks the wrong one (e.g., Issue #1061).
 	if p.reportIP != "" {
 		p.logger.Info().Str("ip", p.reportIP).Msg("Using user-specified ReportIP for Proxmox registration")
-		return fmt.Sprintf("https://%s:%s", p.reportIP, port)
+		return formatHTTPSURL(p.reportIP, port)
 	}
 
 	// Priority 2: Try to determine which local IP is used to connect to Pulse
 	// This ensures we pick an IP that can actually communicate with the Pulse server
 	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
 		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
-		return fmt.Sprintf("https://%s:%s", reachableIP, port)
+		return formatHTTPSURL(reachableIP, port)
 	}
 
 	// Fallback: Get all IPs and select the best one based on heuristics
-	if out, err := p.collector.CommandCombinedOutput(context.Background(), "hostname", "-I"); err == nil {
+	hostnameCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if out, err := p.collector.CommandCombinedOutput(hostnameCtx, "hostname", "-I"); err == nil {
 		ips := strings.Fields(out)
 		if len(ips) > 0 {
 			// Get the IP that the system hostname currently resolves to
@@ -580,7 +724,7 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 
 			bestIP := selectBestIP(ips, hostnameIP)
 			if bestIP != "" {
-				return fmt.Sprintf("https://%s:%s", bestIP, port)
+				return formatHTTPSURL(bestIP, port)
 			}
 		}
 	}
@@ -590,7 +734,7 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	if hostname == "" {
 		hostname = "localhost"
 	}
-	return fmt.Sprintf("https://%s:%s", hostname, port)
+	return formatHTTPSURL(hostname, port)
 }
 
 // getIPThatReachesPulse determines which local IP is used to connect to the Pulse server.
@@ -602,32 +746,41 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	}
 
 	// Parse the Pulse URL to get host:port
-	u, err := url.Parse(p.pulseURL)
+	pulseServerURL, err := url.Parse(p.pulseURL)
 	if err != nil {
 		return ""
 	}
 
-	host := u.Host
-	if !strings.Contains(host, ":") {
-		// If port is missing, try to infer it from scheme
-		if u.Scheme == "https" {
-			host += ":443"
-		} else if u.Scheme == "http" {
-			host += ":80"
-		} else {
-			// Pulse default if scheme is missing or weird
-			host += ":7655"
+	host := pulseServerURL.Hostname()
+	if host == "" {
+		return ""
+	}
+
+	port := pulseServerURL.Port()
+	if port == "" {
+		switch pulseServerURL.Scheme {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		default:
+			port = "7655"
 		}
 	}
+	target := net.JoinHostPort(host, port)
 
 	// Create a UDP "connection" to determine local address (doesn't actually send data)
 	// We use a short timeout as this is just a routing table lookup.
-	conn, err := p.collector.DialTimeout("udp", host, 500*time.Millisecond)
+	conn, err := p.collector.DialTimeout("udp", target, 500*time.Millisecond)
 	if err != nil {
-		p.logger.Debug().Err(err).Str("target", host).Msg("Could not determine local IP for Pulse connection (routing check failed)")
+		p.logger.Debug().Err(err).Str("target", target).Msg("Could not determine local IP for Pulse connection (routing check failed)")
 		return ""
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close local route probe connection")
+		}
+	}()
 
 	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok || localAddr == nil {
@@ -643,11 +796,23 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	return ""
 }
 
+func formatHTTPSURL(host, port string) string {
+	return (&url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(host, port),
+	}).String()
+}
+
 // getIPForHostname resolves the system hostname to an IP address.
 func (p *ProxmoxSetup) getIPForHostname() string {
 	hostname := p.hostname
 	if hostname == "" {
-		hostname, _ = p.collector.Hostname()
+		var err error
+		hostname, err = p.collector.Hostname()
+		if err != nil {
+			p.logger.Debug().Err(err).Msg("Could not resolve system hostname")
+			return ""
+		}
 	}
 	if hostname == "" {
 		return ""
@@ -736,8 +901,12 @@ func scoreIPv4(ip string) int {
 	// Parse first two octets
 	first := 0
 	second := 0
-	fmt.Sscanf(parts[0], "%d", &first)
-	fmt.Sscanf(parts[1], "%d", &second)
+	if _, err := fmt.Sscanf(parts[0], "%d", &first); err != nil {
+		return 0
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &second); err != nil {
+		return 0
+	}
 
 	// Scoring logic:
 	// - 192.168.x.x: Very common home/office LAN, highest priority (score 100)
@@ -779,105 +948,268 @@ func (e *clientError) Error() string {
 	return fmt.Sprintf("auto-register returned HTTP %d: %s", e.statusCode, e.body)
 }
 
-func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte) error {
+// permanentError wraps an error that should not be retried (e.g. malformed URL).
+type permanentError struct {
+	err error
+}
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
+func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expectedType proxmoxProductType, expectedSource autoRegisterSource, expectedHost, expectedTokenID, expectedTokenValue string) (autoRegisterResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return autoRegisterResponse{}, &permanentError{fmt.Errorf("create request: %w", err)}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(p.apiToken); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("X-API-Token", token)
-	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return autoRegisterResponse{}, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close auto-register response body")
+		}
+	}()
 
 	if resp.StatusCode >= 400 {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		bodyStr := strings.TrimSpace(string(bodyBytes))
 		if resp.StatusCode < 500 {
-			return &clientError{statusCode: resp.StatusCode, body: bodyStr}
+			return autoRegisterResponse{}, &clientError{statusCode: resp.StatusCode, body: bodyStr}
 		}
-		return fmt.Errorf("auto-register returned HTTP %d: %s", resp.StatusCode, bodyStr)
+		return autoRegisterResponse{}, fmt.Errorf("auto-register returned HTTP %d: %s", resp.StatusCode, bodyStr)
 	}
-	return nil
+
+	var parsed autoRegisterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return autoRegisterResponse{}, fmt.Errorf("decode auto-register response: %w", err)
+	}
+	if strings.TrimSpace(parsed.Status) != "success" {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response missing success status")
+	}
+	if strings.TrimSpace(parsed.Action) != "use_token" {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response missing use_token action")
+	}
+	if strings.TrimSpace(parsed.Type) != strings.TrimSpace(string(expectedType)) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response type mismatch")
+	}
+	if strings.TrimSpace(parsed.Source) != strings.TrimSpace(string(expectedSource)) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response source mismatch")
+	}
+	if strings.TrimSpace(parsed.Host) != strings.TrimSpace(expectedHost) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response host mismatch")
+	}
+	if strings.TrimSpace(parsed.NodeID) == "" {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response missing nodeId")
+	}
+	if strings.TrimSpace(parsed.NodeName) == "" {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response missing nodeName")
+	}
+	if strings.TrimSpace(parsed.NodeName) != strings.TrimSpace(parsed.NodeID) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response node identity mismatch")
+	}
+	if strings.TrimSpace(parsed.TokenID) != strings.TrimSpace(expectedTokenID) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response tokenId mismatch")
+	}
+	if strings.TrimSpace(expectedTokenValue) != "" && strings.TrimSpace(parsed.TokenValue) != strings.TrimSpace(expectedTokenValue) {
+		return autoRegisterResponse{}, fmt.Errorf("auto-register response tokenValue mismatch")
+	}
+	return parsed, nil
 }
 
-// registerWithPulse calls the auto-register endpoint to add the node.
-func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype, hostURL, tokenID, tokenValue string) error {
-	payload := map[string]interface{}{
-		"type":       ptype,
-		"host":       hostURL,
-		"serverName": p.hostname,
-		"tokenId":    tokenID,
-		"tokenValue": tokenValue,
-		"source":     "agent", // Indicates this was registered via agent
+func (p *ProxmoxSetup) fetchSetupToken(ctx context.Context, ptype proxmoxProductType, hostURL string) (string, error) {
+	payload := setupScriptURLRequest{
+		Type:        string(ptype),
+		Host:        hostURL,
+		BackupPerms: false,
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
+		return "", fmt.Errorf("marshal setup token payload: %w", err)
 	}
 
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/setup-script-url", bytes.NewReader(body))
+	if err != nil {
+		return "", &permanentError{fmt.Errorf("create setup token request: %w", err)}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(p.apiToken); token != "" {
+		req.Header.Set("X-API-Token", token)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("setup token request failed: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close setup token response body")
+		}
+	}()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if resp.StatusCode < 500 {
+			return "", &clientError{statusCode: resp.StatusCode, body: bodyStr}
+		}
+		return "", fmt.Errorf("setup token endpoint returned HTTP %d: %s", resp.StatusCode, bodyStr)
+	}
+
+	var parsed setupScriptURLResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("decode setup token response: %w", err)
+	}
+	if strings.TrimSpace(parsed.Type) != strings.TrimSpace(string(ptype)) {
+		return "", fmt.Errorf("setup token response type mismatch")
+	}
+	if strings.TrimSpace(parsed.Host) != strings.TrimSpace(hostURL) {
+		return "", fmt.Errorf("setup token response host mismatch")
+	}
+	expectedScriptURL := fmt.Sprintf(
+		"%s/api/setup-script?host=%s&pulse_url=%s&type=%s",
+		p.pulseURL,
+		url.QueryEscape(hostURL),
+		url.QueryEscape(p.pulseURL),
+		url.QueryEscape(string(ptype)),
+	)
+	if strings.TrimSpace(parsed.URL) != expectedScriptURL {
+		return "", fmt.Errorf("setup token response url mismatch")
+	}
+	expectedFileName := fmt.Sprintf("pulse-setup-%s.sh", strings.TrimSpace(string(ptype)))
+	if strings.TrimSpace(parsed.ScriptFileName) != expectedFileName {
+		return "", fmt.Errorf("setup token response scriptFileName mismatch")
+	}
+	if strings.TrimSpace(parsed.SetupToken) == "" {
+		return "", fmt.Errorf("setup token response missing setupToken")
+	}
+	expectedDownloadURL := expectedScriptURL
+	if parsedURL, err := url.Parse(expectedScriptURL); err == nil {
+		query := parsedURL.Query()
+		query.Set("setup_token", strings.TrimSpace(parsed.SetupToken))
+		parsedURL.RawQuery = query.Encode()
+		expectedDownloadURL = parsedURL.String()
+	}
+	if strings.TrimSpace(parsed.DownloadURL) != expectedDownloadURL {
+		return "", fmt.Errorf("setup token response downloadURL mismatch")
+	}
+	if strings.TrimSpace(parsed.TokenHint) == "" {
+		return "", fmt.Errorf("setup token response missing tokenHint")
+	}
+	if strings.TrimSpace(parsed.TokenHint) == strings.TrimSpace(parsed.SetupToken) {
+		return "", fmt.Errorf("setup token response tokenHint must mask setupToken")
+	}
+	if err := validateSetupScriptCommand(parsed.Command, expectedScriptURL, strings.TrimSpace(parsed.SetupToken), true); err != nil {
+		return "", fmt.Errorf("setup token response command invalid: %w", err)
+	}
+	if err := validateSetupScriptCommand(parsed.CommandWithEnv, expectedScriptURL, strings.TrimSpace(parsed.SetupToken), true); err != nil {
+		return "", fmt.Errorf("setup token response commandWithEnv invalid: %w", err)
+	}
+	if err := validateSetupScriptCommand(parsed.CommandWithoutEnv, expectedScriptURL, strings.TrimSpace(parsed.SetupToken), false); err != nil {
+		return "", fmt.Errorf("setup token response commandWithoutEnv invalid: %w", err)
+	}
+	if parsed.Expires <= time.Now().Unix() {
+		return "", fmt.Errorf("setup token response missing live expiry")
+	}
+	return strings.TrimSpace(parsed.SetupToken), nil
+}
+
+// registerWithPulse calls the auto-register endpoint to add the node.
+func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL, tokenID, tokenValue string) (autoRegisterResponse, error) {
 	backoffs := p.retryBackoffs
 	if backoffs == nil {
 		backoffs = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 40 * time.Second, 60 * time.Second}
 	}
 
 	var lastErr error
-
 	for attempt := 0; attempt <= len(backoffs); attempt++ {
 		if attempt > 0 {
 			p.logger.Info().
 				Int("attempt", attempt+1).
 				Int("max_attempts", len(backoffs)+1).
-				Str("type", ptype).
+				Str("type", string(ptype)).
 				Msg("Retrying Proxmox auto-registration with Pulse")
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return autoRegisterResponse{}, ctx.Err()
 			case <-time.After(backoffs[attempt-1]):
 			}
 		}
 
-		err := p.doRegisterRequest(ctx, body)
+		setupToken, err := p.fetchSetupToken(ctx, ptype, hostURL)
+		if err != nil {
+			lastErr = fmt.Errorf("fetch setup token: %w", err)
+			var ce *clientError
+			var pe *permanentError
+			if errors.As(lastErr, &ce) || errors.As(lastErr, &pe) {
+				return autoRegisterResponse{}, lastErr
+			}
+			p.logger.Warn().Err(lastErr).
+				Int("attempt", attempt+1).
+				Int("max_attempts", len(backoffs)+1).
+				Str("type", string(ptype)).
+				Msg("Proxmox setup token fetch failed")
+			continue
+		}
+
+		payload := autoRegisterRequest{
+			Type:       ptype,
+			Host:       hostURL,
+			ServerName: p.hostname,
+			AuthToken:  setupToken,
+			TokenID:    tokenID,
+			TokenValue: tokenValue,
+			Source:     autoRegisterSourceAgent,
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return autoRegisterResponse{}, fmt.Errorf("marshal payload: %w", err)
+		}
+
+		parsed, err := p.doRegisterRequest(ctx, body, ptype, autoRegisterSourceAgent, hostURL, tokenID, tokenValue)
 		if err == nil {
 			if attempt > 0 {
-				p.logger.Info().Int("attempt", attempt+1).Str("type", ptype).Msg("Proxmox auto-registration succeeded after retry")
+				p.logger.Info().Int("attempt", attempt+1).Str("type", string(ptype)).Msg("Proxmox auto-registration succeeded after retry")
 			}
-			return nil
+			return parsed, nil
 		}
 		lastErr = err
 
-		// Don't retry client errors (4xx) - they won't self-resolve.
+		// Don't retry client errors (4xx) or permanent errors (e.g. malformed URL).
 		var ce *clientError
-		if errors.As(err, &ce) {
-			return err
+		var pe *permanentError
+		if errors.As(err, &ce) || errors.As(err, &pe) {
+			return autoRegisterResponse{}, err
 		}
 
 		p.logger.Warn().Err(err).
 			Int("attempt", attempt+1).
 			Int("max_attempts", len(backoffs)+1).
-			Str("type", ptype).
+			Str("type", string(ptype)).
 			Msg("Proxmox auto-registration attempt failed")
 	}
 
-	return fmt.Errorf("all %d registration attempts failed: %w", len(backoffs)+1, lastErr)
+	return autoRegisterResponse{}, fmt.Errorf("all %d registration attempts failed: %w", len(backoffs)+1, lastErr)
+}
+
+func isAlreadyExistsOutput(output string) bool {
+	text := strings.ToLower(strings.TrimSpace(output))
+	return strings.Contains(text, "already exists")
 }
 
 // isAlreadyRegistered checks if we've already done Proxmox setup.
 // This uses the legacy single state file for backward compatibility.
 func (p *ProxmoxSetup) isAlreadyRegistered() bool {
-	_, err := p.collector.Stat(stateFilePath)
+	_, err := p.collector.Stat(p.legacyStateFilePath())
 	return err == nil
 }
 
 // isTypeRegistered checks if a specific Proxmox type has been registered.
-func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
+func (p *ProxmoxSetup) isTypeRegistered(ptype proxmoxProductType) bool {
 	// Check per-type state file first (new behavior)
 	stateFile := p.stateFileForType(ptype)
 	if _, err := p.collector.Stat(stateFile); err == nil {
@@ -885,7 +1217,7 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 	}
 
 	// Check legacy state file for backward compat
-	if _, err := p.collector.Stat(stateFilePath); err == nil {
+	if _, err := p.collector.Stat(p.legacyStateFilePath()); err == nil {
 		// Legacy file exists. The old detection logic was:
 		// 1. If pvesh exists → registered "pve"
 		// 2. Else if proxmox-backup-manager exists → registered "pbs"
@@ -900,22 +1232,22 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 
 		// The old code registered the "first" type it found
 		// If PVE is installed, it was always detected first
-		if ptype == "pve" {
+		if ptype == proxmoxProductPVE {
 			for _, t := range types {
-				if t == "pve" {
+				if t == proxmoxProductPVE {
 					return true
 				}
 			}
 		}
 		// If PBS-only host (no PVE), PBS was what was registered
-		if ptype == "pbs" {
+		if ptype == proxmoxProductPBS {
 			hasPVE := false
 			hasPBS := false
 			for _, t := range types {
-				if t == "pve" {
+				if t == proxmoxProductPVE {
 					hasPVE = true
 				}
-				if t == "pbs" {
+				if t == proxmoxProductPBS {
 					hasPBS = true
 				}
 			}
@@ -929,38 +1261,53 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 }
 
 // stateFileForType returns the state file path for a specific Proxmox type.
-func (p *ProxmoxSetup) stateFileForType(ptype string) string {
+func (p *ProxmoxSetup) stateFileForType(ptype proxmoxProductType) string {
 	switch ptype {
-	case "pve":
-		return stateFilePVE
-	case "pbs":
-		return stateFilePBS
+	case proxmoxProductPVE:
+		return p.pveStateFilePath()
+	case proxmoxProductPBS:
+		return p.pbsStateFilePath()
 	default:
-		return stateFilePath
+		return p.legacyStateFilePath()
 	}
 }
 
 // markAsRegistered creates a state file to indicate setup is complete.
 func (p *ProxmoxSetup) markAsRegistered() {
-	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
+	if err := p.collector.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
+	if err := p.collector.Chmod(p.stateDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
+	}
 
-	if err := p.collector.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
+	legacyPath := p.legacyStateFilePath()
+	if err := p.collector.WriteFile(legacyPath, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to write state file")
+		return
+	}
+	if err := p.collector.Chmod(legacyPath, proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state file permissions")
 	}
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
-func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
-	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
+func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
+	if err := p.collector.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
+	if err := p.collector.Chmod(p.stateDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
+	}
 
 	stateFile := p.stateFileForType(ptype)
-	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
+	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to write type state file")
+		return
+	}
+	if err := p.collector.Chmod(stateFile, proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to enforce type state file permissions")
 	}
 }

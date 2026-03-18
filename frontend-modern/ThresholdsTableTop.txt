@@ -1,0 +1,326 @@
+1: import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
+2: import { useNavigate, useLocation } from '@solidjs/router';
+3: import Toggle from '@/components/shared/Toggle';
+4: import { Card } from '@/components/shared/Card';
+5: import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
+6: import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
+7: import Server from 'lucide-solid/icons/server';
+8: import Monitor from 'lucide-solid/icons/monitor';
+9: import HardDrive from 'lucide-solid/icons/hard-drive';
+10: import Database from 'lucide-solid/icons/database';
+11: import Archive from 'lucide-solid/icons/archive';
+12: import Camera from 'lucide-solid/icons/camera';
+13: import Mail from 'lucide-solid/icons/mail';
+14: import Users from 'lucide-solid/icons/users';
+15: import Boxes from 'lucide-solid/icons/boxes';
+16: import { unwrap } from 'solid-js/store';
+17: import type { Resource } from '@/types/resource';
+18: 
+19: // Workaround for eslint false-positive when `For` is used only in JSX
+20: const __ensureForUsage = For;
+21: void __ensureForUsage;
+22: import type {
+23: Alert,
+24: PBSInstance,
+25: PMGInstance,
+26: } from '@/types/api';
+27: import type {
+28: RawOverrideConfig,
+29: PMGThresholdDefaults,
+30: SnapshotAlertConfig,
+31: BackupAlertConfig,
+32: } from '@/types/alerts';
+33: import { ResourceTable } from './ResourceTable';
+34: import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
+35: import { useAlertsActivation } from '@/stores/alertsActivation';
+36: import { logger } from '@/utils/logger';
+37: import { formatTemperature } from '@/utils/temperature';
+38: type OverrideType =
+39: | 'guest'
+40: | 'node'
+41: | 'hostAgent'
+42: | 'hostDisk'
+43: | 'storage'
+44: | 'pbs'
+45: | 'pmg'
+46: | 'dockerHost'
+47: | 'dockerContainer';
+48: 
+49: type OfflineState = 'off' | 'warning' | 'critical';
+50: 
+51: interface Override {
+52: id: string;
+53: name: string;
+54: type: OverrideType;
+55: resourceType?: string;
+56: vmid?: number;
+57: node?: string;
+58: instance?: string;
+59: disabled?: boolean;
+60: disableConnectivity?: boolean; // For nodes only - disable offline alerts
+61: poweredOffSeverity?: 'warning' | 'critical';
+62: note?: string;
+63: backup?: BackupAlertConfig;
+64: snapshot?: SnapshotAlertConfig;
+65: thresholds: {
+66: cpu?: number;
+67: memory?: number;
+68: disk?: number;
+69: diskRead?: number;
+70: diskWrite?: number;
+71: networkIn?: number;
+72: networkOut?: number;
+73: usage?: number; // For storage devices
+74: temperature?: number; // For nodes only - CPU temperature in °C
+75: };
+76: }
+77: 
+78: const normalizeThresholdLabel = (label: string): string =>
+79: label
+80: .trim()
+81: .toLowerCase()
+82: .replace(' %', '')
+83: .replace(' °c', '')
+84: .replace(' mb/s', '')
+85: .replace('disk r', 'diskRead')
+86: .replace('disk w', 'diskWrite')
+87: .replace('net in', 'networkIn')
+88: .replace('net out', 'networkOut')
+89: .replace('disk temp', 'diskTemperature');
+90: 
+91: const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
+92: key,
+93: label,
+94: normalized: normalizeThresholdLabel(label),
+95: });
+96: 
+97: const PMG_THRESHOLD_COLUMNS = [
+98: pmgColumn('queueTotalWarning', 'Queue Warn'),
+99: pmgColumn('queueTotalCritical', 'Queue Crit'),
+100: pmgColumn('deferredQueueWarn', 'Deferred Warn'),
+101: pmgColumn('deferredQueueCritical', 'Deferred Crit'),
+102: pmgColumn('holdQueueWarn', 'Hold Warn'),
+103: pmgColumn('holdQueueCritical', 'Hold Crit'),
+104: pmgColumn('oldestMessageWarnMins', 'Oldest Warn (min)'),
+105: pmgColumn('oldestMessageCritMins', 'Oldest Crit (min)'),
+106: pmgColumn('quarantineSpamWarn', 'Spam Warn'),
+107: pmgColumn('quarantineSpamCritical', 'Spam Crit'),
+108: pmgColumn('quarantineVirusWarn', 'Virus Warn'),
+109: pmgColumn('quarantineVirusCritical', 'Virus Crit'),
+110: pmgColumn('quarantineGrowthWarnPct', 'Growth Warn %'),
+111: pmgColumn('quarantineGrowthWarnMin', 'Growth Warn Min'),
+112: pmgColumn('quarantineGrowthCritPct', 'Growth Crit %'),
+113: pmgColumn('quarantineGrowthCritMin', 'Growth Crit Min'),
+114: ] as const;
+115: 
+116: const PMG_NORMALIZED_TO_KEY = new Map(
+117: PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
+118: );
+119: 
+120: const PMG_KEY_TO_NORMALIZED = new Map(
+121: PMG_THRESHOLD_COLUMNS.map((column) => [column.key, column.normalized]),
+122: );
+123: 
+124: export const normalizeDockerIgnoredInput = (value: string): string[] =>
+125: value
+126: .split('\n')
+127: .map((entry) => entry.trim())
+128: .filter((entry) => entry.length > 0);
+129: 
+130: const DEFAULT_SNAPSHOT_WARNING = 30;
+131: const DEFAULT_SNAPSHOT_CRITICAL = 45;
+132: const DEFAULT_SNAPSHOT_WARNING_SIZE = 0;
+133: const DEFAULT_SNAPSHOT_CRITICAL_SIZE = 0;
+134: const DEFAULT_BACKUP_WARNING = 7;
+135: const DEFAULT_BACKUP_CRITICAL = 14;
+136: const DEFAULT_BACKUP_FRESH_HOURS = 24;
+137: const DEFAULT_BACKUP_STALE_HOURS = 72;
+138: 
+139: // Simple threshold object for the UI
+140: interface SimpleThresholds {
+141: cpu?: number;
+142: memory?: number;
+143: disk?: number;
+144: diskRead?: number;
+145: diskWrite?: number;
+146: networkIn?: number;
+147: networkOut?: number;
+148: temperature?: number; // For nodes only
+149: diskTemperature?: number; // For host agents
+150: [key: string]: number | undefined; // Add index signature for compatibility
+151: }
+152: 
+153: interface ThresholdsTableProps {
+154: overrides: () => Override[];
+155: setOverrides: (overrides: Override[]) => void;
+156: rawOverridesConfig: () => Record<string, RawOverrideConfig>;
+157: setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
+158: allGuests: () => Resource[];
+159: nodes: Resource[];
+160: hosts: Resource[];
+161: storage: Resource[];
+162: dockerHosts: Resource[];
+163: allResources: Resource[];
+164: pbsInstances?: PBSInstance[]; // PBS instances from state
+165: pmgInstances?: PMGInstance[]; // PMG instances from state
+166: pmgThresholds: () => PMGThresholdDefaults;
+167: setPMGThresholds: (
+168: value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
+169: ) => void;
+170: guestDefaults: SimpleThresholds;
+171: setGuestDefaults: (
+172: value:
+173: | Record<string, number | undefined>
+174: | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+175: ) => void;
+176: guestDisableConnectivity: () => boolean;
+177: setGuestDisableConnectivity: (value: boolean) => void;
+178: guestPoweredOffSeverity: () => 'warning' | 'critical';
+179: setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
+180: nodeDefaults: SimpleThresholds;
+181: pbsDefaults?: SimpleThresholds;
+182: hostDefaults: SimpleThresholds;
+183: setNodeDefaults: (
+184: value:
+185: | Record<string, number | undefined>
+186: | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+187: ) => void;
+188: setPBSDefaults?: (
+189: value:
+190: | Record<string, number | undefined>
+191: | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+192: ) => void;
+193: setHostDefaults: (
+194: value:
+195: | Record<string, number | undefined>
+196: | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+197: ) => void;
+198: dockerDefaults: {
+199: cpu: number;
+200: memory: number;
+201: disk: number;
+202: restartCount: number;
+203: restartWindow: number;
+204: memoryWarnPct: number;
+205: memoryCriticalPct: number;
+206: serviceWarnGapPercent: number;
+207: serviceCriticalGapPercent: number;
+208: };
+209: dockerDisableConnectivity: () => boolean;
+210: setDockerDisableConnectivity: (value: boolean) => void;
+211: dockerPoweredOffSeverity: () => 'warning' | 'critical';
+212: setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
+213: setDockerDefaults: (
+214: value:
+215: | {
+216: cpu: number;
+217: memory: number;
+218: disk: number;
+219: restartCount: number;
+220: restartWindow: number;
+221: memoryWarnPct: number;
+222: memoryCriticalPct: number;
+223: serviceWarnGapPercent: number;
+224: serviceCriticalGapPercent: number;
+225: }
+226: | ((prev: {
+227: cpu: number;
+228: memory: number;
+229: disk: number;
+230: restartCount: number;
+231: restartWindow: number;
+232: memoryWarnPct: number;
+233: memoryCriticalPct: number;
+234: serviceWarnGapPercent: number;
+235: serviceCriticalGapPercent: number;
+236: }) => {
+237: cpu: number;
+238: memory: number;
+239: disk: number;
+240: restartCount: number;
+241: restartWindow: number;
+242: memoryWarnPct: number;
+243: memoryCriticalPct: number;
+244: serviceWarnGapPercent: number;
+245: serviceCriticalGapPercent: number;
+246: }),
+247: ) => void;
+248: dockerIgnoredPrefixes: () => string[];
+249: setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+250: ignoredGuestPrefixes: () => string[];
+251: setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
+252: guestTagWhitelist: () => string[];
+253: setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
+254: guestTagBlacklist: () => string[];
+255: setGuestTagBlacklist: (value: string[] | ((prev: string[]) => string[])) => void;
+256: storageDefault: () => number;
+257: setStorageDefault: (value: number) => void;
+258: resetGuestDefaults?: () => void;
+259: resetNodeDefaults?: () => void;
+260: resetPBSDefaults?: () => void;
+261: resetHostDefaults?: () => void;
+262: resetDockerDefaults?: () => void;
+263: resetDockerIgnoredPrefixes?: () => void;
+264: resetStorageDefault?: () => void;
+265: factoryGuestDefaults?: Record<string, number | undefined>;
+266: factoryNodeDefaults?: Record<string, number | undefined>;
+267: factoryPBSDefaults?: Record<string, number | undefined>;
+268: factoryHostDefaults?: Record<string, number | undefined>;
+269: factoryDockerDefaults?: Record<string, number | undefined>;
+270: factoryStorageDefault?: number;
+271: timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
+272: metricTimeThresholds: () => Record<string, Record<string, number>>;
+273: setMetricTimeThresholds: (
+274: value:
+275: | Record<string, Record<string, number>>
+276: | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
+277: ) => void;
+278: snapshotDefaults: () => SnapshotAlertConfig;
+279: setSnapshotDefaults: (
+280: value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+281: ) => void;
+282: snapshotFactoryDefaults?: SnapshotAlertConfig;
+283: resetSnapshotDefaults?: () => void;
+284: backupDefaults: () => BackupAlertConfig;
+285: setBackupDefaults: (
+286: value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
+287: ) => void;
+288: backupFactoryDefaults?: BackupAlertConfig;
+289: resetBackupDefaults?: () => void;
+290: setHasUnsavedChanges: (value: boolean) => void;
+291: activeAlerts?: Record<string, Alert>;
+292: removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
+293: // Global disable flags
+294: disableAllNodes: () => boolean;
+295: setDisableAllNodes: (value: boolean) => void;
+296: disableAllGuests: () => boolean;
+297: setDisableAllGuests: (value: boolean) => void;
+298: disableAllHosts: () => boolean;
+299: setDisableAllHosts: (value: boolean) => void;
+300: disableAllStorage: () => boolean;
+301: setDisableAllStorage: (value: boolean) => void;
+302: disableAllPBS: () => boolean;
+303: setDisableAllPBS: (value: boolean) => void;
+304: disableAllPMG: () => boolean;
+305: setDisableAllPMG: (value: boolean) => void;
+306: disableAllDockerHosts: () => boolean;
+307: setDisableAllDockerHosts: (value: boolean) => void;
+308: disableAllDockerServices: () => boolean;
+309: setDisableAllDockerServices: (value: boolean) => void;
+310: disableAllDockerContainers: () => boolean;
+311: setDisableAllDockerContainers: (value: boolean) => void;
+312: // Global disable offline alerts flags
+313: disableAllNodesOffline: () => boolean;
+314: setDisableAllNodesOffline: (value: boolean) => void;
+315: disableAllGuestsOffline: () => boolean;
+316: setDisableAllGuestsOffline: (value: boolean) => void;
+317: disableAllHostsOffline: () => boolean;
+318: setDisableAllHostsOffline: (value: boolean) => void;
+319: disableAllPBSOffline: () => boolean;
+320: setDisableAllPBSOffline: (value: boolean) => void;
+321: disableAllPMGOffline: () => boolean;
+322: setDisableAllPMGOffline: (value: boolean) => void;
+323: disableAllDockerHostsOffline: () => boolean;
+324: setDisableAllDockerHostsOffline: (value: boolean) => void;
+325: }
+326: 

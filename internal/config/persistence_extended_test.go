@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func TestConfigPersistence_MigrateWebhooksIfNeeded(t *testing.T) {
 		{ID: "webhook-1", URL: "http://example.com/legacy"},
 	}
 	data, _ := json.Marshal(legacyWebhooks)
-	os.WriteFile(legacyFile, data, 0644)
+	_ = os.WriteFile(legacyFile, data, 0644)
 
 	// 2. Migrate
 	if err := cp.MigrateWebhooksIfNeeded(); err != nil {
@@ -59,6 +60,7 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 			CompletedAt:      time.Now().Add(-59 * time.Minute),
 			DurationMs:       60000,
 			Type:             "quick",
+			AlertIdentifier:  "instance:node:100::metric/cpu",
 			ResourcesChecked: 10,
 			NewFindings:      2,
 		},
@@ -76,6 +78,9 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 	if len(history.Runs) != 1 || history.Runs[0].ID != "run-1" {
 		t.Errorf("Patrol history mismatch: %+v", history)
 	}
+	if history.Runs[0].AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Errorf("Expected canonical alert identifier after load, got %q", history.Runs[0].AlertIdentifier)
+	}
 
 	// Test non-existent file
 	cp2 := config.NewConfigPersistence(t.TempDir())
@@ -88,6 +93,84 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 	}
 }
 
+func TestConfigPersistence_AIChatSessionsMigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	chatFile := filepath.Join(tempDir, "ai_chat_sessions.json")
+
+	plaintext := config.AIChatSessionsData{
+		Version:   1,
+		LastSaved: time.Now().UTC(),
+		Sessions: map[string]*config.AIChatSession{
+			"session-1": {
+				ID:        "session-1",
+				Title:     "Legacy chat",
+				UpdatedAt: time.Now().UTC(),
+			},
+		},
+	}
+	raw, err := json.MarshalIndent(plaintext, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal plaintext chat sessions: %v", err)
+	}
+	if err := os.WriteFile(chatFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadAIChatSessions()
+	if err != nil {
+		t.Fatalf("LoadAIChatSessions failed: %v", err)
+	}
+	if len(loaded.Sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(loaded.Sessions))
+	}
+
+	rewritten, err := os.ReadFile(chatFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten chat sessions: %v", err)
+	}
+	if bytes.Equal(rewritten, raw) {
+		t.Fatalf("expected plaintext ai chat sessions file to be rewritten encrypted")
+	}
+}
+
+func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
+	record := config.PatrolRunRecord{
+		ID:              "run-1",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+	}
+
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal patrol run record: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode patrol run payload: %v", err)
+	}
+	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
+	}
+	if _, ok := payload["legacy_alert_id"]; ok {
+		t.Fatalf("did not expect legacy_alert_id in canonical payload, got %#v", payload["legacy_alert_id"])
+	}
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
+	}
+
+	var decoded config.PatrolRunRecord
+	if err := json.Unmarshal([]byte(`{
+		"id":"run-1",
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded); err != nil {
+		t.Fatalf("unmarshal canonical patrol run: %v", err)
+	}
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decoded.AlertIdentifier)
+	}
+}
+
 func TestConfigPersistence_UpdateEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
@@ -96,7 +179,7 @@ func TestConfigPersistence_UpdateEnvFile(t *testing.T) {
 AUTO_UPDATE_ENABLED=false
 POLLING_INTERVAL=10
 CUSTOM_VAR=value`
-	os.WriteFile(envFile, []byte(initialContent), 0644)
+	_ = os.WriteFile(envFile, []byte(initialContent), 0644)
 
 	cp := config.NewConfigPersistence(tempDir)
 

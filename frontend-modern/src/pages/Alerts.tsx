@@ -2,490 +2,331 @@ import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup }
 import { useBeforeLeave } from '@solidjs/router';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { JSX } from 'solid-js';
+
+import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import type { RawOverrideConfig, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
+import { AlertsAPI } from '@/api/alerts';
+import { NotificationsAPI, Webhook } from '@/api/notifications';
+import {
+  hasFeature,
+  licenseLoaded,
+  licenseLoading as entitlementsLoading,
+  loadLicenseStatus,
+} from '@/stores/license';
+import { useLocation, useNavigate } from '@solidjs/router';
+import { logger } from '@/utils/logger';
+import { Card } from '@/components/shared/Card';
+import {
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
+import { PageControls } from '@/components/shared/PageControls';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { notificationStore } from '@/stores/notifications';
+import { showErrorWithDetail } from '@/utils/toast';
+import { eventBus } from '@/stores/events';
+import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import Calendar from 'lucide-solid/icons/calendar';
+import { SearchInput } from '@/components/shared/SearchInput';
+import { STORAGE_KEYS } from '@/utils/localStorage';
+
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
-import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
-import { Card } from '@/components/shared/Card';
-
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import type { PMGThresholdDefaults } from '@/types/alerts';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
-import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
-import { ScrollableTable } from '@/components/shared/ScrollableTable';
+import {
+  formField,
+  formControl,
+  formHelpText,
+  labelClass,
+  controlClass,
+} from '@/components/shared/Form';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { useWebSocket } from '@/App';
-import { notificationStore } from '@/stores/notifications';
-import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { AlertsAPI } from '@/api/alerts';
-import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
+import { useResources } from '@/hooks/useResources';
+import { aiChatStore } from '@/stores/aiChat';
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
+import type { Incident, PBSInstance, PMGInstance } from '@/types/api';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
-import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, Incident, IncidentEvent, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
-import { useNavigate, useLocation } from '@solidjs/router';
+import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
+import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
+import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
+import {
+  getAlertHistoryStatusPresentation,
+  getAlertIncidentAcknowledgedBadgeClass,
+  getAlertIncidentEventFilterActionButtonClass,
+  getAlertIncidentEventFilterChipClass,
+  getAlertIncidentEventFilterContainerClass,
+  getAlertIncidentEventFilterLabelClass,
+  getAlertIncidentLevelBadgeClass,
+  getAlertIncidentTimelineCommandClass,
+  getAlertIncidentTimelineDetailClass,
+  getAlertIncidentNoteSaveButtonClass,
+  getAlertIncidentNoteTextareaClass,
+  getAlertIncidentTimelineEventCardClass,
+  getAlertIncidentTimelineHeadingClass,
+  getAlertIncidentTimelineMetaRowClass,
+  getAlertIncidentTimelineOutputClass,
+  getAlertResourceIncidentAcknowledgedByLabel,
+  getAlertResourceIncidentCardClass,
+  getAlertResourceIncidentCountLabel,
+  getAlertResourceIncidentEmptyState,
+  getAlertResourceIncidentFilteredEventsEmptyState,
+  getAlertResourceIncidentLoadFailure,
+  getAlertResourceIncidentLoadingState,
+  getAlertResourceIncidentNoteSaveFailure,
+  getAlertResourceIncidentNoteSavedLabel,
+  getAlertResourceIncidentNotePlaceholder,
+  getAlertResourceIncidentPanelTitle,
+  getAlertResourceIncidentRefreshLabel,
+  getAlertResourceIncidentSaveNoteLabel,
+  getAlertResourceIncidentSummaryRowClass,
+  getAlertResourceIncidentTimelineFailure,
+  getAlertResourceIncidentToggleLabel,
+  getAlertResourceIncidentToggleButtonClass,
+  getAlertResourceIncidentTruncatedEventsLabel,
+  getAlertResourceIncidentViewTitle,
+  getAlertIncidentStatusPresentation,
+} from '@/utils/alertIncidentPresentation';
+import {
+  getAlertHistoryResourceTypeBadgeClass,
+  getAlertHistorySourcePresentation,
+} from '@/utils/alertHistoryPresentation';
+import {
+  getAlertAdministrationClearHistoryConfirmation,
+  getAlertAdministrationClearHistoryError,
+  getAlertAdministrationClearHistoryLabel,
+  getAlertAdministrationSectionDescription,
+  getAlertAdministrationSectionTitle,
+} from '@/utils/alertAdministrationPresentation';
+import {
+  getAlertActivationFailure,
+  getAlertActivationPresentation,
+  getAlertActivationSuccess,
+  getAlertDeactivationFailure,
+  getAlertDeactivationSuccess,
+} from '@/utils/alertActivationPresentation';
+import {
+  getAlertFrequencyClearFilterButtonClass,
+  getAlertFrequencySelectionPresentation,
+} from '@/utils/alertFrequencyPresentation';
+import { getAlertSeverityDotClass } from '@/utils/alertSeverityPresentation';
+import {
+  getAlertsTabGroups,
+  getAlertsMobileTabClass,
+  getAlertsSidebarTabClass,
+  getAlertsTabTitle,
+} from '@/utils/alertTabsPresentation';
+import {
+  getAlertGroupingCardClass,
+  getAlertGroupingCheckboxClass,
+} from '@/utils/alertGroupingPresentation';
+import {
+  getAlertQuietDayButtonClass,
+  getAlertQuietSuppressCardClass,
+  getAlertQuietSuppressCheckboxClass,
+} from '@/utils/alertSchedulePresentation';
+import {
+  getAlertDestinationsConfigLoadError,
+  getAlertDestinationsLoadErrorBanner,
+  getAlertDestinationsAppriseTargetsHelp,
+  getAlertDestinationsAppriseTestLabel,
+  getAlertDestinationsAppriseTestFailure,
+  getAlertDestinationsAppriseTestSuccess,
+  getAlertDestinationsAppriseValidationError,
+  getAlertDestinationsRetryLabel,
+  getAlertDestinationsStatusLabel,
+  getAlertDestinationsWebhookLoadError,
+  getAlertDestinationsEmailTestFailure,
+  getAlertDestinationsEmailTestSuccess,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HELP,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL,
+  ALERT_DESTINATIONS_APPRISE_MODE_HELP,
+  ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL,
+  ALERT_DESTINATIONS_APPRISE_MODE_LABEL,
+  ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION,
+  ALERT_DESTINATIONS_APPRISE_PANEL_TITLE,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP,
+  ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TLS_HELP,
+  ALERT_DESTINATIONS_APPRISE_TLS_LABEL,
+  ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION,
+  ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
+} from '@/utils/alertDestinationsPresentation';
+import {
+  getAlertWebhookMutationFailure,
+  getAlertWebhookMutationSuccess,
+  getAlertWebhookTestFailure,
+  getAlertWebhookTestSuccess,
+  getAlertWebhooksSectionDescription,
+  getAlertWebhooksSectionTitle,
+} from '@/utils/alertWebhookPresentation';
+import {
+  getAlertBucketCountLabel,
+  getAlertsPageHeaderMeta,
+  getAlertHistoryLoadingState,
+  getAlertHistoryEmptyState,
+  getAlertHistorySearchPlaceholder,
+  getAlertTimelineEmptyState,
+  getAlertTimelineFailureState,
+  getAlertTimelineFilterEmptyState,
+  getAlertTimelineLoadingState,
+  getAlertTimelineUnavailableState,
+} from '@/utils/alertOverviewPresentation';
+import {
+  ALERT_CONFIG_COOLDOWN_DESCRIPTION,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX,
+  ALERT_CONFIG_COOLDOWN_PERIOD_HELP,
+  ALERT_CONFIG_COOLDOWN_PERIOD_LABEL,
+  ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX,
+  ALERT_CONFIG_COOLDOWN_TITLE,
+  ALERT_CONFIG_ESCALATION_ADD_LABEL,
+  ALERT_CONFIG_ESCALATION_AFTER_LABEL,
+  ALERT_CONFIG_ESCALATION_DESCRIPTION,
+  ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX,
+  ALERT_CONFIG_ESCALATION_NOTIFY_LABEL,
+  ALERT_CONFIG_ESCALATION_TITLE,
+  ALERT_CONFIG_ESCALATION_REMOVE_TITLE,
+  ALERT_CONFIG_GROUPING_BY_GUEST,
+  ALERT_CONFIG_GROUPING_BY_NODE,
+  ALERT_CONFIG_GROUPING_DESCRIPTION,
+  ALERT_CONFIG_GROUPING_STRATEGY_LABEL,
+  ALERT_CONFIG_GROUPING_WINDOW_HELP,
+  ALERT_CONFIG_GROUPING_WINDOW_LABEL,
+  ALERT_CONFIG_GROUPING_TITLE,
+  ALERT_CONFIG_QUIET_HOURS_TITLE,
+  ALERT_CONFIG_QUIET_HOURS_DESCRIPTION,
+  ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL,
+  ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL,
+  ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL,
+  ALERT_CONFIG_RECOVERY_DESCRIPTION,
+  ALERT_CONFIG_RECOVERY_TITLE,
+  ALERT_CONFIG_SCHEDULING_DESCRIPTION,
+  ALERT_CONFIG_SCHEDULING_TITLE,
+  ALERT_CONFIG_SUMMARY_DESCRIPTION,
+  ALERT_CONFIG_SUMMARY_TITLE,
+  getAlertConfigResetDefaultsLabel,
+  getAlertConfigResetDefaultsTitle,
+  getAlertConfigEscalationHelp,
+  getAlertConfigEscalationNotifyLabel,
+  getAlertConfigQuietHourSuppressOptions,
+  getAlertConfigDiscardedSuccess,
+  getAlertConfigDiscardLabel,
+  getAlertConfigReloadFailure,
+  getAlertConfigRecoveryHelp,
+  getAlertConfigSaveFailure,
+  getAlertConfigSaveSuccess,
+  getAlertConfigSaveChangesLabel,
+  getAlertConfigSummaryAllDisabled,
+  getAlertConfigSummaryCooldown,
+  getAlertConfigSummaryEscalation,
+  getAlertConfigSummaryGrouping,
+  getAlertConfigSummaryQuietHours,
+  getAlertConfigSummaryRecoveryEnabled,
+  getAlertConfigSummarySuppressing,
+  getAlertConfigToggleStatusLabel,
+  getAlertConfigUnsavedChangesLabel,
+  getAlertConfigLeaveConfirmation,
+} from '@/utils/alertConfigPresentation';
+import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
+
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { logger } from '@/utils/logger';
+import { filterIncidentEvents } from '@/features/alerts/types';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
-import Calendar from 'lucide-solid/icons/calendar';
-
-type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
-
-const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
-  overview: {
-    title: 'Alerts Overview',
-    description: 'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
-  },
-  thresholds: {
-    title: 'Alert Thresholds',
-    description: 'Tune resource thresholds and override rules for nodes, guests, and containers.',
-  },
-  destinations: {
-    title: 'Notification Destinations',
-    description: 'Configure email, webhooks, and escalation paths for alert delivery.',
-  },
-  schedule: {
-    title: 'Maintenance Schedule',
-    description: 'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
-  },
-  history: {
-    title: 'Alert History',
-    description: 'Review previously triggered alerts and their resolution timeline.',
-  },
-};
-
-export const ALERT_TAB_SEGMENTS: Record<AlertTab, string> = {
-  overview: 'overview',
-  thresholds: 'thresholds',
-  destinations: 'destinations',
-  schedule: 'schedule',
-  history: 'history',
-};
-
-export const pathForTab = (
-  tab: AlertTab,
-  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
-): string => {
-  const segment = segments[tab];
-  return segment ? `/alerts/${segment}` : '/alerts';
-};
-
-export const tabFromPath = (
-  pathname: string,
-  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
-): AlertTab => {
-  const normalizedPath = pathname.replace(/\/+$/, '') || '/alerts';
-  const parts = normalizedPath.split('/').filter(Boolean);
-
-  if (parts[0] !== 'alerts') {
-    return 'overview';
-  }
-
-  const segment = parts[1] ?? '';
-  if (!segment) {
-    return 'overview';
-  }
-
-  const entry = (Object.entries(segments) as [AlertTab, string][])
-    .find(([, value]) => value === segment);
-
-  if (entry) {
-    return entry[0];
-  }
-
-  if (segment === 'custom-rules') {
-    return 'thresholds';
-  }
-
-  return 'overview';
-};
-
-const INCIDENT_EVENT_TYPES = [
-  'alert_fired',
-  'alert_acknowledged',
-  'alert_unacknowledged',
-  'alert_resolved',
-  'ai_analysis',
-  'command',
-  'runbook',
-  'note',
-] as const;
-
-const INCIDENT_EVENT_LABELS: Record<(typeof INCIDENT_EVENT_TYPES)[number], string> = {
-  alert_fired: 'Fired',
-  alert_acknowledged: 'Ack',
-  alert_unacknowledged: 'Unack',
-  alert_resolved: 'Resolved',
-  ai_analysis: 'Patrol',
-  command: 'Cmd',
-  runbook: 'Runbook',
-  note: 'Note',
-};
-
-const filterIncidentEvents = (
-  events: IncidentEvent[] | undefined,
-  filters: Set<string>,
-): IncidentEvent[] => {
-  if (!events || events.length === 0) {
-    return [];
-  }
-  if (filters.size === 0 || filters.size === INCIDENT_EVENT_TYPES.length) {
-    return events;
-  }
-  return events.filter((event) => filters.has(event.type));
-};
-
-function IncidentEventFilters(props: {
-  filters: () => Set<string>;
-  setFilters: (next: Set<string>) => void;
-}) {
-  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
-    const next = new Set(props.filters());
-    if (next.has(type)) {
-      next.delete(type);
-    } else {
-      next.add(type);
-    }
-    props.setFilters(next);
-  };
-
-  return (
-    <div class="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
-      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Filters</span>
-      <button
-        type="button"
-        class="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-        onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
-      >
-        All
-      </button>
-      <button
-        type="button"
-        class="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-        onClick={() => props.setFilters(new Set())}
-      >
-        None
-      </button>
-      <For each={INCIDENT_EVENT_TYPES}>
-        {(type) => {
-          const selected = () => props.filters().has(type);
-          return (
-            <button
-              type="button"
-              class={`px-2 py-0.5 rounded border text-[10px] ${selected()
-                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-300'
-                }`}
-              onClick={() => toggleFilter(type)}
-            >
-              {INCIDENT_EVENT_LABELS[type]}
-            </button>
-          );
-        }}
-      </For>
-    </div>
-  );
-}
-
-// Store reference interfaces
-interface DestinationsRef {
-  emailConfig?: () => EmailConfig;
-  appriseConfig?: () => AppriseConfig;
-}
-
-// Override interface for both guests and nodes
-type OverrideType =
-  | 'guest'
-  | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'dockerHost'
-  | 'dockerContainer';
-
-interface Override {
-  id: string; // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
-  name: string; // Display name
-  type: OverrideType;
-  resourceType?: string; // VM, CT, Node, Storage, or PBS
-  vmid?: number; // Only for guests
-  node?: string; // Node name (for guests and storage), undefined for nodes themselves
-  instance?: string;
-  disabled?: boolean; // Completely disable alerts for this guest/storage
-  disableConnectivity?: boolean; // For nodes/hosts - disable offline/connectivity alerts
-  poweredOffSeverity?: 'warning' | 'critical';
-  backup?: BackupAlertConfig;
-  snapshot?: SnapshotAlertConfig;
-  thresholds: {
-    cpu?: number;
-    memory?: number;
-    disk?: number;
-    diskRead?: number;
-    diskWrite?: number;
-    networkIn?: number;
-    networkOut?: number;
-    usage?: number; // For storage devices
-    temperature?: number;
-  };
-}
-
-// Local email config with UI-specific fields
-interface UIEmailConfig {
-  enabled: boolean;
-  provider: string;
-  server: string; // Fixed: use 'server' not 'smtpHost'
-  port: number; // Fixed: use 'port' not 'smtpPort'
-  username: string;
-  password: string;
-  from: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
-  rateLimit: number;
-}
-
-interface UIAppriseConfig {
-  enabled: boolean;
-  mode: 'cli' | 'http';
-  targetsText: string;
-  cliPath: string;
-  timeoutSeconds: number;
-  serverUrl: string;
-  configKey: string;
-  apiKey: string;
-  apiKeyHeader: string;
-  skipTlsVerify: boolean;
-}
-
-interface QuietHoursConfig {
-  enabled: boolean;
-  start: string;
-  end: string;
-  timezone: string;
-  days: Record<string, boolean>;
-  suppress: {
-    performance: boolean;
-    storage: boolean;
-    offline: boolean;
-  };
-}
-
-interface CooldownConfig {
-  enabled: boolean;
-  minutes: number;
-  maxAlerts: number;
-}
-
-interface GroupingConfig {
-  enabled: boolean;
-  window: number;
-  maxGroupSize?: number;
-  byNode?: boolean;
-  byGuest?: boolean;
-}
-
-type EscalationNotifyTarget = 'email' | 'webhook' | 'all';
-
-interface EscalationLevel {
-  after: number;
-  notify: EscalationNotifyTarget;
-}
-
-interface EscalationConfig {
-  enabled: boolean;
-  levels: EscalationLevel[];
-}
-
-const COOLDOWN_MIN_MINUTES = 5;
-const COOLDOWN_MAX_MINUTES = 120;
-const COOLDOWN_DEFAULT_MINUTES = 30;
-const MAX_ALERTS_MIN = 1;
-const MAX_ALERTS_MAX = 10;
-const MAX_ALERTS_DEFAULT = 3;
-const GROUPING_WINDOW_DEFAULT_SECONDS = 30; // Keep in sync with backend default in internal/alerts/alerts.go
-const GROUPING_WINDOW_DEFAULT_MINUTES = Math.max(
-  0,
-  Math.round(GROUPING_WINDOW_DEFAULT_SECONDS / 60),
-);
-
-export const clampCooldownMinutes = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return COOLDOWN_MIN_MINUTES;
-  }
-  return Math.min(COOLDOWN_MAX_MINUTES, Math.max(COOLDOWN_MIN_MINUTES, numericValue));
-};
-
-export const fallbackCooldownMinutes = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return COOLDOWN_DEFAULT_MINUTES;
-  }
-  return clampCooldownMinutes(numericValue);
-};
-
-export const clampMaxAlertsPerHour = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
-    return MAX_ALERTS_MIN;
-  }
-  return Math.min(MAX_ALERTS_MAX, Math.max(MAX_ALERTS_MIN, numericValue));
-};
-
-export const fallbackMaxAlertsPerHour = (value?: number): number => {
-  const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return MAX_ALERTS_DEFAULT;
-  }
-  return clampMaxAlertsPerHour(numericValue);
-};
-
-const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-export const createDefaultQuietHours = (): QuietHoursConfig => ({
-  enabled: false,
-  start: '22:00',
-  end: '08:00',
-  timezone: getLocalTimezone(),
-  days: {
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: false,
-    sunday: false,
-  },
-  suppress: {
-    performance: false,
-    storage: false,
-    offline: false,
-  },
-});
-
-export const createDefaultCooldown = (): CooldownConfig => ({
-  enabled: true,
-  minutes: COOLDOWN_DEFAULT_MINUTES,
-  maxAlerts: MAX_ALERTS_DEFAULT,
-});
-
-export const createDefaultGrouping = (): GroupingConfig => ({
-  enabled: true,
-  window: GROUPING_WINDOW_DEFAULT_MINUTES,
-  byNode: true,
-  byGuest: false,
-});
-
-export const createDefaultResolveNotifications = (): boolean => true;
-
-const createDefaultAppriseConfig = (): UIAppriseConfig => ({
-  enabled: false,
-  mode: 'cli',
-  targetsText: '',
-  cliPath: 'apprise',
-  timeoutSeconds: 15,
-  serverUrl: '',
-  configKey: '',
-  apiKey: '',
-  apiKeyHeader: 'X-API-KEY',
-  skipTlsVerify: false,
-});
-
-const parseAppriseTargets = (value: string): string[] =>
-  value
-    .split(/\r?\n|,/)
-    .map((entry) => entry.trim())
-    .filter((entry, index, arr) => entry.length > 0 && arr.indexOf(entry) === index);
-
-const formatAppriseTargets = (targets: string[] | undefined | null): string =>
-  targets && targets.length > 0 ? targets.join('\n') : '';
-
-export const normalizeMetricDelayMap = (
-  input: Record<string, Record<string, number>> | undefined | null,
-): Record<string, Record<string, number>> => {
-  if (!input) return {};
-  const normalized: Record<string, Record<string, number>> = {};
-
-  Object.entries(input).forEach(([rawType, metrics]) => {
-    if (!metrics) return;
-    const typeKey = rawType.trim().toLowerCase();
-    if (!typeKey) return;
-
-    const entries: Record<string, number> = {};
-    Object.entries(metrics).forEach(([rawMetric, value]) => {
-      if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return;
-      const metricKey = rawMetric.trim().toLowerCase();
-      if (!metricKey) return;
-      entries[metricKey] = Math.round(value);
-    });
-
-    if (Object.keys(entries).length > 0) {
-      normalized[typeKey] = entries;
-    }
-  });
-
-  return normalized;
-};
-
-export const createDefaultEscalation = (): EscalationConfig => ({
-  enabled: false,
-  levels: [],
-});
-
-export const getTriggerValue = (
-  threshold: number | boolean | HysteresisThreshold | undefined,
-): number => {
-  if (typeof threshold === 'number') {
-    return threshold; // Legacy format
-  }
-  if (typeof threshold === 'boolean') {
-    return 0;
-  }
-  if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
-    return threshold.trigger; // New hysteresis format
-  }
-  return 0; // Default fallback
-};
-
-export const extractTriggerValues = (
-  thresholds: RawOverrideConfig,
-): Record<string, number> => {
-  const result: Record<string, number> = {};
-  Object.entries(thresholds).forEach(([key, value]) => {
-    // Skip non-threshold fields
-    if (
-      key === 'disabled' ||
-      key === 'disableConnectivity' ||
-      key === 'poweredOffSeverity' ||
-      key === 'note' ||
-      key === 'backup' ||
-      key === 'snapshot'
-    )
-      return;
-    if (typeof value === 'string') return;
-    result[key] = getTriggerValue(value as any);
-  });
-  return result;
-};
-
-const DEFAULT_DELAY_SECONDS = 5;
+import { OverviewTab } from '@/features/alerts/OverviewTab';
+import {
+  pathForTab,
+  tabFromPath,
+  type AlertTab,
+  type DestinationsRef,
+  type Override,
+  type UIEmailConfig,
+  type UIAppriseConfig,
+  type QuietHoursConfig,
+  type CooldownConfig,
+  type GroupingConfig,
+  type EscalationConfig,
+  type EscalationLevel,
+  type EscalationNotifyTarget,
+  INCIDENT_EVENT_TYPES,
+  GROUPING_WINDOW_DEFAULT_SECONDS,
+  INCIDENT_EVENT_LABELS,
+  fallbackCooldownMinutes,
+  clampCooldownMinutes,
+} from '@/features/alerts/types';
+import {
+  clampMaxAlertsPerHour,
+  fallbackMaxAlertsPerHour,
+  createDefaultQuietHours,
+  createDefaultCooldown,
+  createDefaultGrouping,
+  createDefaultResolveNotifications,
+  createDefaultAppriseConfig,
+  createDefaultEmailConfig,
+  normalizeEmailConfigFromAPI,
+  parseAppriseTargets,
+  formatAppriseTargets,
+  normalizeMetricDelayMap,
+  createDefaultEscalation,
+  getTriggerValue,
+  extractTriggerValues,
+  unifiedTypeToAlertDisplayType,
+  alertTypeDisplayLabel,
+  platformData,
+  guessNumericId,
+  DEFAULT_DELAY_SECONDS,
+} from '@/features/alerts/helpers';
 
 export function Alerts() {
-  const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const { activeAlerts, updateAlert, removeAlerts } = useWebSocket();
+  const { get: getResource, resources: allResources, byType, children } = useResources();
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
   const areAlertsDisabled = createMemo(() => !isAlertsActive());
+  const alertActivationPresentation = createMemo(() =>
+    getAlertActivationPresentation({
+      isActive: isAlertsActive(),
+      isBusy: alertsActivation.isLoading() || isSwitchingActivation(),
+    }),
+  );
 
   const handleActivateAlerts = async () => {
     if (alertsActivation.isLoading() || isSwitchingActivation()) {
@@ -495,14 +336,14 @@ export function Alerts() {
     try {
       const success = await alertsActivation.activate();
       if (success) {
-        notificationStore.success('Alerts activated! You\'ll now receive alerts when issues are detected.');
+        notificationStore.success(getAlertActivationSuccess());
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after activation', error);
         }
       } else {
-        notificationStore.error('Unable to activate alerts. Please try again.');
+        notificationStore.error(getAlertActivationFailure());
       }
     } finally {
       setIsSwitchingActivation(false);
@@ -517,30 +358,28 @@ export function Alerts() {
     try {
       const success = await alertsActivation.deactivate();
       if (success) {
-        notificationStore.success('Alerts deactivated. Nothing will be sent until you activate them again.');
+        notificationStore.success(getAlertDeactivationSuccess());
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after deactivation', error);
         }
       } else {
-        notificationStore.error('Unable to deactivate alerts. Please try again.');
+        notificationStore.error(getAlertDeactivationFailure());
       }
     } catch (error) {
       logger.error('Deactivate alerts failed', error);
-      notificationStore.error('Unable to deactivate alerts. Please try again.');
+      notificationStore.error(getAlertDeactivationFailure());
     } finally {
       setIsSwitchingActivation(false);
     }
   };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
+  const alertsPageHeaderMeta = getAlertsPageHeaderMeta();
 
   const headerMeta = () =>
-    ALERT_HEADER_META[activeTab()] ?? {
-      title: 'Alerts',
-      description: 'Manage alerting configuration.',
-    };
+    alertsPageHeaderMeta[activeTab()] ?? alertsPageHeaderMeta.default;
 
   createEffect(() => {
     const currentPath = location.pathname;
@@ -553,10 +392,21 @@ export function Alerts() {
     const expectedPath = pathForTab(tab);
 
     // Allow sub-paths for thresholds tab (e.g., /alerts/thresholds/proxmox)
-    const isThresholdsSubPath = tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
+    const isThresholdsSubPath =
+      tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
 
     if (currentPath !== expectedPath && !isThresholdsSubPath) {
       navigate(expectedPath, { replace: true });
+    }
+  });
+
+  createEffect(() => {
+    const activation = alertsActivation.activationState();
+    if (activation === null) {
+      return;
+    }
+    if (activation !== 'active' && activeTab() !== 'overview') {
+      handleTabChange('overview');
     }
   });
 
@@ -569,33 +419,28 @@ export function Alerts() {
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
+  const [isLoadingDestinations, setIsLoadingDestinations] = createSignal(false);
+  const [destConfigLoadError, setDestConfigLoadError] = createSignal<string | null>(null);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
 
-  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
-  const [licenseLoading, setLicenseLoading] = createSignal(false);
-  const hasAIAlertsFeature = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return true;
-    return Boolean(status.features?.['ai_alerts']);
-  });
+  const licenseLoading = createMemo(() => !licenseLoaded() || entitlementsLoading());
+  const hasAIAlertsFeature = createMemo(() => !licenseLoaded() || hasFeature('ai_alerts'));
+
+  createEffect((wasPaywallVisible) => {
+    const isPaywallVisible =
+      licenseLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('ai_alerts', 'alerts_page');
+    }
+    return isPaywallVisible;
+  }, false);
 
   onMount(() => {
-    void (async () => {
-      setLicenseLoading(true);
-      try {
-        const status = await LicenseAPI.getFeatures();
-        setLicenseFeatures(status);
-      } catch (err) {
-        logger.debug('Failed to load license status for AI alerts gating', err);
-        setLicenseFeatures(null);
-      } finally {
-        setLicenseLoading(false);
-      }
-    })();
+    void loadLicenseStatus();
   });
 
   const dismissQuickTip = () => {
@@ -621,7 +466,7 @@ export function Alerts() {
   // Warn when navigating within the app
   useBeforeLeave((e) => {
     if (hasUnsavedChanges()) {
-      if (!confirm('You have unsaved changes that will be lost. Discard changes and leave?')) {
+      if (!confirm(getAlertConfigLeaveConfirmation())) {
         e.preventDefault();
       }
     }
@@ -670,8 +515,9 @@ export function Alerts() {
   const [scheduleEscalation, setScheduleEscalation] =
     createSignal<EscalationConfig>(createDefaultEscalation());
 
-  const [notifyOnResolve, setNotifyOnResolve] =
-    createSignal<boolean>(createDefaultResolveNotifications());
+  const [notifyOnResolve, setNotifyOnResolve] = createSignal<boolean>(
+    createDefaultResolveNotifications(),
+  );
 
   // Set up destinationsRef.emailConfig function immediately
   destinationsRef.emailConfig = () => {
@@ -706,6 +552,78 @@ export function Alerts() {
     } as AppriseConfig;
   };
 
+  const pd = platformData;
+  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const uniqueIds = (...values: unknown[]): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((value) => {
+      const normalized = asString(value);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ids.push(normalized);
+    });
+    return ids;
+  };
+  const hostOverrideIdCandidates = (resource: Resource): string[] => {
+    const data = pd(resource);
+    const agent = asRecord(data?.agent);
+    return uniqueIds(
+      getActionableAgentIdFromResource(resource),
+      resource.discoveryTarget?.agentId,
+      resource.agent?.agentId,
+      agent?.agentId,
+      data?.agentId,
+      resource.id,
+    );
+  };
+  const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
+    const data = pd(resource);
+    const docker = asRecord(data?.docker);
+    const discoveryTarget = resource.discoveryTarget;
+    return uniqueIds(
+      isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+        ? discoveryTarget?.resourceId
+        : undefined,
+      docker?.hostSourceId,
+      data?.hostSourceId,
+      discoveryTarget?.agentId,
+      resource.id,
+    );
+  };
+  const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
+    uniqueIds(
+      ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
+    );
+  const agentResources = createMemo(() =>
+    allResources().filter(
+      (resource) =>
+        (resource.type === 'agent' ||
+          resource.type === 'pbs' ||
+          resource.type === 'pmg' ||
+          resource.type === 'truenas') &&
+        hasAgentFacet(resource),
+    ),
+  );
+  const pbsInstances = createMemo<PBSInstance[]>(() =>
+    allResources()
+      .filter((resource) => resource.type === 'pbs')
+      .map(pbsInstanceFromResource)
+      .filter((resource): resource is PBSInstance => Boolean(resource)),
+  );
+  const pbsInstanceById = createMemo(
+    () => new Map(pbsInstances().map((instance) => [instance.id, instance])),
+  );
+  const pmgInstances = createMemo<PMGInstance[]>(() =>
+    allResources()
+      .filter((resource) => resource.type === 'pmg')
+      .map(pmgInstanceFromResource)
+      .filter((resource): resource is PMGInstance => Boolean(resource)),
+  );
+
   // Process raw overrides config when state changes
   createEffect(() => {
     // Skip this effect if there are unsaved changes to prevent losing focus
@@ -714,30 +632,58 @@ export function Alerts() {
     }
 
     const rawConfig = rawOverridesConfig();
-    if (
-      Object.keys(rawConfig).length > 0 &&
-      state.nodes &&
-      state.vms &&
-      state.containers &&
-      state.storage
-    ) {
+    if (Object.keys(rawConfig).length > 0 && byType('agent').length > 0) {
+      const nodeResources = byType('agent');
+      const vmResources = byType('vm');
+      const containerResources = [...byType('system-container'), ...byType('oci-container')];
+      const storageResources = allResources().filter(
+        (r) => r.type === 'storage' || r.type === 'datastore',
+      );
+      const agentResourceList = agentResources();
+      const dockerHostResources = byType('docker-host');
+
       // Convert overrides object to array format
       const overridesList: Override[] = [];
 
-      const dockerHostsList: DockerHost[] = state.dockerHosts || [];
-      const dockerHostMap = new Map<string, DockerHost>();
-      const dockerContainerMap = new Map<string, { host: DockerHost; container: DockerContainer }>();
-      const hostAgentMap = new Map<string, Host>();
+      const dockerHostMap = new Map<string, Resource>();
+      const dockerContainerMap = new Map<
+        string,
+        { host: Resource; container: Resource; containerShortId: string }
+      >();
+      const agentMap = new Map<string, Resource>();
 
-      dockerHostsList.forEach((host) => {
-        dockerHostMap.set(host.id, host);
-        (host.containers || []).forEach((container) => {
-          const resourceId = `docker:${host.id}/${container.id}`;
-          dockerContainerMap.set(resourceId, { host, container });
+      const storageCoords = (r: Resource): { node: string; instance: string } => {
+        const data = pd(r);
+        if (r.type === 'datastore') {
+          const instance =
+            (data?.pbsInstanceId as string | undefined) || r.parentId || r.platformId || 'pbs';
+          const node = (data?.pbsInstanceName as string | undefined) || instance;
+          return { node, instance };
+        }
+        return {
+          node: (data?.node as string | undefined) || '',
+          instance: (data?.instance as string | undefined) || r.platformId || '',
+        };
+      };
+
+      dockerHostResources.forEach((host) => {
+        dockerHostOverrideIdCandidates(host).forEach((id) => {
+          dockerHostMap.set(id, host);
+        });
+        const containers = children(host.id).filter((r) => r.type === 'app-container');
+        containers.forEach((container) => {
+          const shortId = container.id.includes('/')
+            ? container.id.split('/').pop()!
+            : container.id;
+          dockerContainerOverrideIdCandidates(host, shortId).forEach((resourceId) => {
+            dockerContainerMap.set(resourceId, { host, container, containerShortId: shortId });
+          });
         });
       });
-      (state.hosts || []).forEach((host) => {
-        hostAgentMap.set(host.id, host);
+      agentResourceList.forEach((agentResource) => {
+        hostOverrideIdCandidates(agentResource).forEach((id) => {
+          agentMap.set(id, agentResource);
+        });
       });
 
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
@@ -746,9 +692,13 @@ export function Alerts() {
         if (dockerHost) {
           overridesList.push({
             id: key,
-            name: dockerHost.displayName?.trim() || dockerHost.hostname || dockerHost.id,
+            name:
+              dockerHost.displayName?.trim() ||
+              dockerHost.identity?.hostname ||
+              dockerHost.name ||
+              dockerHost.id,
             type: 'dockerHost',
-            resourceType: 'Container Host',
+            resourceType: 'Container Runtime',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -758,14 +708,14 @@ export function Alerts() {
         // Docker container override stored as docker:hostId/containerId
         const dockerContainer = dockerContainerMap.get(key);
         if (dockerContainer) {
-          const { host, container } = dockerContainer;
-          const containerName = container.name?.replace(/^\/+/, '') || container.id;
+          const { host, container, containerShortId } = dockerContainer;
+          const containerName = container.name?.replace(/^\/+/, '') || containerShortId;
           overridesList.push({
             id: key,
             name: containerName,
             type: 'dockerContainer',
             resourceType: 'Container',
-            node: host.hostname,
+            node: host.identity?.hostname ?? host.name,
             instance: host.displayName,
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
@@ -806,48 +756,58 @@ export function Alerts() {
           }
 
           overridesList.push({
-            id: hostId || key,
+            id: key,
             name: hostId || key,
             type: 'dockerHost',
-            resourceType: 'Container Host',
+            resourceType: 'Container Runtime',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
           return;
         }
 
-        // Host disk override stored as host:<hostId>/disk:<mountpoint>
-        const diskMatch = key.match(/^host:(.+)\/disk:(.+)$/);
+        // Agent disk override stored as agent:<agentId>/disk:<mountpoint>.
+        const diskMatch = key.match(/^agent:(.+)\/disk:(.+)$/);
         if (diskMatch) {
-          const [, hostId, diskLabel] = diskMatch;
-          const host = hostAgentMap.get(hostId);
+          const [, agentId, diskLabel] = diskMatch;
+          const agent = agentMap.get(agentId);
           const displayName = diskLabel.replace(/-/g, '/');
 
           overridesList.push({
             id: key,
             name: displayName,
-            type: 'hostDisk',
-            resourceType: 'Host Disk',
-            node: host?.displayName?.trim() || host?.hostname || hostId,
+            type: 'agentDisk',
+            resourceType: 'Agent Disk',
+            node: agent?.displayName?.trim() || agent?.identity?.hostname || agent?.name || agentId,
             disabled: thresholds.disabled || false,
             thresholds: extractTriggerValues(thresholds),
           });
           return;
         }
 
-        // Host agent override stored by host ID
-        const hostAgent = hostAgentMap.get(key);
-        if (hostAgent) {
+        // Agent override stored by agent ID
+        const agentResource = agentMap.get(key);
+        if (agentResource) {
           const displayName =
-            hostAgent.displayName?.trim() || hostAgent.hostname || hostAgent.id;
+            agentResource.displayName?.trim() ||
+            agentResource.identity?.hostname ||
+            agentResource.name ||
+            agentResource.id;
+          const data = pd(agentResource);
+          const agent = asRecord(data?.agent);
 
           overridesList.push({
-            id: hostAgent.id,
+            id: key,
             name: displayName,
-            type: 'hostAgent',
-            resourceType: 'Host Agent',
-            node: hostAgent.hostname,
-            instance: hostAgent.platform || hostAgent.osName || '',
+            type: 'agent',
+            resourceType: 'Agent',
+            node: agentResource.identity?.hostname ?? agentResource.name,
+            instance:
+              asString(agent?.platform) ||
+              asString(agent?.osName) ||
+              asString(data?.platform) ||
+              asString(data?.osName) ||
+              '',
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
@@ -857,7 +817,7 @@ export function Alerts() {
 
         // Check if it's a PBS server override (starts with "pbs-")
         if (key.startsWith('pbs-')) {
-          const pbs = (state.pbs || []).find((p) => p.id === key);
+          const pbs = pbsInstanceById().get(key);
           if (pbs) {
             overridesList.push({
               id: key,
@@ -870,44 +830,46 @@ export function Alerts() {
           }
         } else {
           // Check if it's a node override by looking for matching node
-          const node = (state.nodes || []).find((n) => n.id === key);
+          const node = nodeResources.find((n) => n.id === key);
           if (node) {
             overridesList.push({
               id: key,
               name: node.name,
-              type: 'node',
-              resourceType: 'Node',
+              type: 'agent',
+              resourceType: 'Agent',
               disableConnectivity: thresholds.disableConnectivity || false,
               thresholds: extractTriggerValues(thresholds),
             });
           } else {
             // Check if it's a storage device
-            const storage = (state.storage || []).find((s) => s.id === key);
+            const storage = storageResources.find((s) => s.id === key);
             if (storage) {
+              const coords = storageCoords(storage);
               overridesList.push({
                 id: key,
                 name: storage.name,
                 type: 'storage',
                 resourceType: 'Storage',
-                node: storage.node,
-                instance: storage.instance,
+                node: coords.node,
+                instance: coords.instance,
                 disabled: thresholds.disabled || false,
                 thresholds: extractTriggerValues(thresholds),
               });
             } else {
               // Find the guest by matching the full ID
-              const vm = (state.vms || []).find((g) => g.id === key);
-              const container = (state.containers || []).find((g) => g.id === key);
+              const vm = vmResources.find((g) => g.id === key);
+              const container = containerResources.find((g) => g.id === key);
               const guest = vm || container;
               if (guest) {
+                const data = pd(guest);
                 overridesList.push({
                   id: key,
                   name: guest.name,
                   type: 'guest',
-                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-                  vmid: guest.vmid,
-                  node: guest.node,
-                  instance: guest.instance,
+                  resourceType: guest.type === 'vm' ? 'VM' : 'Container',
+                  vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
+                  node: (data?.node as string | undefined) ?? '',
+                  instance: (data?.instance as string | undefined) ?? guest.platformId,
                   disabled: thresholds.disabled || false,
                   disableConnectivity: thresholds.disableConnectivity || false,
                   poweredOffSeverity:
@@ -933,26 +895,25 @@ export function Alerts() {
         overridesList.some((newOverride) => {
           const existing = currentOverrides.find((o) => o.id === newOverride.id);
           if (!existing) return true;
-          // Check both thresholds and disableConnectivity for nodes/PBS
           const thresholdsChanged =
             JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
           const connectivityChanged =
-            (newOverride.type === 'node' ||
-              newOverride.type === 'pbs' ||
-              newOverride.type === 'dockerContainer') &&
-            newOverride.disableConnectivity !== existing.disableConnectivity;
-          const disabledChanged =
-            (newOverride.type === 'guest' || newOverride.type === 'storage' || newOverride.type === 'hostDisk') &&
-            newOverride.disabled !== existing.disabled;
+            Boolean(newOverride.disableConnectivity) !== Boolean(existing.disableConnectivity);
+          const disabledChanged = Boolean(newOverride.disabled) !== Boolean(existing.disabled);
           const severityChanged =
-            (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
-            (newOverride.poweredOffSeverity ?? null) !==
-            (existing.poweredOffSeverity ?? null);
+            (newOverride.poweredOffSeverity ?? null) !== (existing.poweredOffSeverity ?? null);
+          const backupChanged =
+            JSON.stringify(newOverride.backup ?? null) !== JSON.stringify(existing.backup ?? null);
+          const snapshotChanged =
+            JSON.stringify(newOverride.snapshot ?? null) !==
+            JSON.stringify(existing.snapshot ?? null);
           return (
             thresholdsChanged ||
             connectivityChanged ||
             disabledChanged ||
-            severityChanged
+            severityChanged ||
+            backupChanged ||
+            snapshotChanged
           );
         });
 
@@ -965,6 +926,7 @@ export function Alerts() {
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
     setIsReloadingConfig(true);
     setHasUnsavedChanges(false);
+    setDestConfigLoadError(null);
 
     // Reset to defaults before applying server state
     setGuestDefaults({
@@ -985,13 +947,12 @@ export function Alerts() {
       temperature: 80,
     });
     setStorageDefault(85);
-    setTimeThreshold(DEFAULT_DELAY_SECONDS);
     setTimeThresholds({
       guest: DEFAULT_DELAY_SECONDS,
       node: DEFAULT_DELAY_SECONDS,
       storage: DEFAULT_DELAY_SECONDS,
       pbs: DEFAULT_DELAY_SECONDS,
-      host: DEFAULT_DELAY_SECONDS,
+      agent: DEFAULT_DELAY_SECONDS,
     });
     setMetricTimeThresholds({});
     setScheduleQuietHours(createDefaultQuietHours());
@@ -999,22 +960,7 @@ export function Alerts() {
     setScheduleGrouping(createDefaultGrouping());
     setScheduleEscalation(createDefaultEscalation());
 
-    setEmailConfig({
-      enabled: false,
-      provider: '',
-      server: '',
-      port: 587,
-      username: '',
-      password: '',
-      from: '',
-      to: [],
-      tls: true,
-      startTLS: false,
-      replyTo: '',
-      maxRetries: 3,
-      retryDelay: 5,
-      rateLimit: 60,
-    });
+    setEmailConfig(createDefaultEmailConfig());
 
     setAppriseConfig(createDefaultAppriseConfig());
 
@@ -1058,15 +1004,15 @@ export function Alerts() {
         setPBSDefaults({ ...FACTORY_PBS_DEFAULTS });
       }
 
-      if (config.hostDefaults) {
-        setHostDefaults({
-          cpu: getTriggerValue(config.hostDefaults.cpu) ?? 80,
-          memory: getTriggerValue(config.hostDefaults.memory) ?? 85,
-          disk: getTriggerValue(config.hostDefaults.disk) ?? 90,
-          diskTemperature: getTriggerValue(config.hostDefaults.diskTemperature) ?? 55,
+      if (config.agentDefaults) {
+        setAgentDefaults({
+          cpu: getTriggerValue(config.agentDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.agentDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.agentDefaults.disk) ?? 90,
+          diskTemperature: getTriggerValue(config.agentDefaults.diskTemperature) ?? 55,
         });
       } else {
-        setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
+        setAgentDefaults({ ...FACTORY_AGENT_DEFAULTS });
       }
 
       if (config.dockerDefaults) {
@@ -1105,12 +1051,10 @@ export function Alerts() {
         setDockerPoweredOffSeverity(
           config.dockerDefaults.statePoweredOffSeverity === 'critical' ? 'critical' : 'warning',
         );
-        setContainerUpdateAlertsEnabled(config.dockerDefaults.updateAlertDelayHours !== -1);
       } else {
         setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
         setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
         setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
-        setContainerUpdateAlertsEnabled(true);
       }
       setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
       setIgnoredGuestPrefixes(config.ignoredGuestPrefixes ?? []);
@@ -1120,25 +1064,21 @@ export function Alerts() {
       if (config.storageDefault) {
         setStorageDefault(getTriggerValue(config.storageDefault) ?? 85);
       }
-      if (config.timeThreshold !== undefined) {
-        setTimeThreshold(config.timeThreshold);
-      }
       if (config.timeThresholds) {
         setTimeThresholds({
           guest: config.timeThresholds.guest ?? DEFAULT_DELAY_SECONDS,
           node: config.timeThresholds.node ?? DEFAULT_DELAY_SECONDS,
           storage: config.timeThresholds.storage ?? DEFAULT_DELAY_SECONDS,
           pbs: config.timeThresholds.pbs ?? DEFAULT_DELAY_SECONDS,
-          host: config.timeThresholds.host ?? DEFAULT_DELAY_SECONDS,
+          agent: config.timeThresholds.agent ?? DEFAULT_DELAY_SECONDS,
         });
       } else {
-        const fallback = config.timeThreshold && config.timeThreshold > 0 ? config.timeThreshold : DEFAULT_DELAY_SECONDS;
         setTimeThresholds({
-          guest: fallback,
-          node: fallback,
-          storage: fallback,
-          pbs: fallback,
-          host: fallback,
+          guest: DEFAULT_DELAY_SECONDS,
+          node: DEFAULT_DELAY_SECONDS,
+          storage: DEFAULT_DELAY_SECONDS,
+          pbs: DEFAULT_DELAY_SECONDS,
+          agent: DEFAULT_DELAY_SECONDS,
         });
       }
       if (config.metricTimeThresholds) {
@@ -1151,7 +1091,8 @@ export function Alerts() {
       if (config.backupDefaults) {
         const enabled = Boolean(config.backupDefaults.enabled);
         const rawWarning = config.backupDefaults.warningDays ?? FACTORY_BACKUP_DEFAULTS.warningDays;
-        const rawCritical = config.backupDefaults.criticalDays ?? FACTORY_BACKUP_DEFAULTS.criticalDays;
+        const rawCritical =
+          config.backupDefaults.criticalDays ?? FACTORY_BACKUP_DEFAULTS.criticalDays;
         const safeCritical = Math.max(0, rawCritical);
         const normalizedWarning = Math.max(0, rawWarning);
         const warningDays =
@@ -1159,7 +1100,8 @@ export function Alerts() {
         const criticalDays = Math.max(safeCritical, warningDays);
         const freshHours = config.backupDefaults.freshHours ?? FACTORY_BACKUP_DEFAULTS.freshHours;
         const staleHours = config.backupDefaults.staleHours ?? FACTORY_BACKUP_DEFAULTS.staleHours;
-        const alertOrphaned = config.backupDefaults.alertOrphaned ?? FACTORY_BACKUP_DEFAULTS.alertOrphaned ?? true;
+        const alertOrphaned =
+          config.backupDefaults.alertOrphaned ?? FACTORY_BACKUP_DEFAULTS.alertOrphaned ?? true;
         const ignoreVMIDs = Array.from(
           new Set(
             (config.backupDefaults.ignoreVMIDs ?? FACTORY_BACKUP_DEFAULTS.ignoreVMIDs ?? [])
@@ -1228,7 +1170,7 @@ export function Alerts() {
       // Load global disable flags
       setDisableAllNodes(config.disableAllNodes ?? false);
       setDisableAllGuests(config.disableAllGuests ?? false);
-      setDisableAllHosts(config.disableAllHosts ?? false);
+      setDisableAllAgents(config.disableAllAgents ?? false);
       setDisableAllStorage(config.disableAllStorage ?? false);
       setDisableAllPBS(config.disableAllPBS ?? false);
       setDisableAllPMG(config.disableAllPMG ?? false);
@@ -1239,20 +1181,23 @@ export function Alerts() {
       // Load global disable offline alerts flags
       setDisableAllNodesOffline(config.disableAllNodesOffline ?? false);
       setDisableAllGuestsOffline(config.disableAllGuestsOffline ?? false);
-      setDisableAllHostsOffline(config.disableAllHostsOffline ?? false);
+      setDisableAllAgentsOffline(config.disableAllAgentsOffline ?? false);
       setDisableAllPBSOffline(config.disableAllPBSOffline ?? false);
       setDisableAllPMGOffline(config.disableAllPMGOffline ?? false);
       setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
 
-      // Clean up any host disk override keys that used old underscore sanitization.
-      // The old frontend incorrectly used '_' but the backend uses '-', so old keys
-      // were never functional for alert evaluation. Drop them silently on load.
+      // Clean up any agent disk override keys that used old underscore sanitization.
       const rawOverrides = config.overrides || {};
       const cleanedOverrides: typeof rawOverrides = {};
       for (const [key, value] of Object.entries(rawOverrides)) {
-        const diskMatch = key.match(/^(host:.+\/disk:)(.+)$/);
+        const diskMatch = key.match(/^(agent:.+\/disk:)(.+)$/);
         if (diskMatch) {
-          const normalized = diskMatch[2].toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '') || 'unknown';
+          const normalized =
+            diskMatch[2]
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '-')
+              .replace(/-{2,}/g, '-')
+              .replace(/^-|-$/g, '') || 'unknown';
           cleanedOverrides[diskMatch[1] + normalized] = value;
         } else {
           cleanedOverrides[key] = value;
@@ -1303,14 +1248,12 @@ export function Alerts() {
           });
         }
 
-        if (config.schedule.grouping || config.schedule.groupingWindow !== undefined) {
+        if (config.schedule.grouping) {
           const groupingConfig = config.schedule.grouping;
           const rawGroupingWindowSeconds =
             typeof groupingConfig?.window === 'number'
               ? groupingConfig.window
-              : typeof config.schedule.groupingWindow === 'number'
-                ? config.schedule.groupingWindow
-                : GROUPING_WINDOW_DEFAULT_SECONDS;
+              : GROUPING_WINDOW_DEFAULT_SECONDS;
           const normalizedGroupingWindowSeconds = Math.max(0, rawGroupingWindowSeconds);
           const groupingWindowMinutes = Math.round(normalizedGroupingWindowSeconds / 60);
 
@@ -1320,10 +1263,8 @@ export function Alerts() {
                 ? Boolean(groupingConfig.enabled)
                 : normalizedGroupingWindowSeconds > 0,
             window: groupingWindowMinutes,
-            byNode:
-              groupingConfig?.byNode !== undefined ? groupingConfig.byNode : true,
-            byGuest:
-              groupingConfig?.byGuest !== undefined ? groupingConfig.byGuest : false,
+            byNode: groupingConfig?.byNode !== undefined ? groupingConfig.byNode : true,
+            byGuest: groupingConfig?.byGuest !== undefined ? groupingConfig.byGuest : false,
           });
         }
 
@@ -1348,24 +1289,10 @@ export function Alerts() {
 
       try {
         const emailConfigData = await NotificationsAPI.getEmailConfig();
-        setEmailConfig({
-          enabled: emailConfigData.enabled,
-          provider: emailConfigData.provider || '',
-          server: emailConfigData.server || '',
-          port: emailConfigData.port || 587,
-          username: emailConfigData.username || '',
-          password: emailConfigData.password || '',
-          from: emailConfigData.from || '',
-          to: emailConfigData.to || [],
-          tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
-          startTLS: emailConfigData.startTLS || false,
-          replyTo: '',
-          maxRetries: 3,
-          retryDelay: 5,
-          rateLimit: 60,
-        });
+        setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
       } catch (emailErr) {
         logger.error('Failed to load email configuration:', emailErr);
+        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       }
 
       try {
@@ -1387,55 +1314,56 @@ export function Alerts() {
         });
       } catch (appriseErr) {
         logger.error('Failed to load Apprise configuration:', appriseErr);
+        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       }
 
       if (options.notify) {
-        notificationStore.success('Changes discarded');
+        notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (err) {
       logger.error('Failed to load alert configuration:', err);
+      // If the top-level config fetch failed, destination state may still hold
+      // defaults from the reset above.  Re-flag so Save stays disabled.
+      setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       if (options.notify) {
-        notificationStore.error('Failed to reload configuration');
+        notificationStore.error(getAlertConfigReloadFailure());
       }
     } finally {
       setIsReloadingConfig(false);
     }
   };
 
-  // Load existing alert configuration on mount (only once)
+  // Load existing alert configuration on mount and when org context changes.
   onMount(() => {
     void loadAlertConfiguration();
+
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      void loadAlertConfiguration();
+    });
+
+    onCleanup(() => {
+      unsubscribeOrgSwitched();
+    });
   });
 
-  // Reload email config when switching to destinations tab
+  // Reload email and apprise config when switching to destinations tab.
+  // Error is only cleared after both fetches complete successfully to avoid a
+  // timing window where Save is enabled while the reload is still in flight.
+  // A version counter prevents stale responses from overwriting fresh state.
+  let destReloadVersion = 0;
   createEffect(() => {
     if (activeTab() === 'destinations') {
-      // Reload email config from server when switching to destinations tab
-      NotificationsAPI.getEmailConfig()
-        .then((emailConfigData) => {
-          setEmailConfig({
-            enabled: emailConfigData.enabled,
-            provider: emailConfigData.provider || '',
-            server: emailConfigData.server || '',
-            port: emailConfigData.port || 587,
-            username: emailConfigData.username || '',
-            password: emailConfigData.password || '',
-            from: emailConfigData.from || '',
-            to: emailConfigData.to || [],
-            tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
-            startTLS: emailConfigData.startTLS || false,
-            replyTo: '',
-            maxRetries: 3,
-            retryDelay: 5,
-            rateLimit: 60,
-          });
-        })
-        .catch((err) => {
-          logger.error('Failed to reload email configuration:', err);
-        });
+      const thisVersion = ++destReloadVersion;
+      setIsLoadingDestinations(true);
 
-      NotificationsAPI.getAppriseConfig()
-        .then((appriseData) => {
+      const emailPromise = NotificationsAPI.getEmailConfig().then((emailConfigData) => {
+        if (thisVersion === destReloadVersion) {
+          setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
+        }
+      });
+
+      const apprisePromise = NotificationsAPI.getAppriseConfig().then((appriseData) => {
+        if (thisVersion === destReloadVersion) {
           setAppriseConfig({
             enabled: appriseData.enabled ?? false,
             mode: appriseData.mode === 'http' ? 'http' : 'cli',
@@ -1451,26 +1379,36 @@ export function Alerts() {
             apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
             skipTlsVerify: Boolean(appriseData.skipTlsVerify),
           });
-        })
-        .catch((err) => {
-          logger.error('Failed to reload Apprise configuration:', err);
-        });
+        }
+      });
+
+      void Promise.allSettled([emailPromise, apprisePromise]).then((results) => {
+        if (thisVersion !== destReloadVersion) return;
+        const failed = results.some((r) => r.status === 'rejected');
+        if (failed) {
+          const reasons = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r) => r.reason);
+          for (const reason of reasons) {
+            logger.error('Failed to reload notification configuration:', reason);
+          }
+          setDestConfigLoadError(getAlertDestinationsConfigLoadError());
+        } else {
+          setDestConfigLoadError(null);
+        }
+        setIsLoadingDestinations(false);
+      });
     }
   });
 
-  // Get all guests from state - memoize to prevent unnecessary updates
+  // Get all guests from alert resource selectors - memoize to prevent unnecessary updates
   const allGuests = createMemo(
-    () => {
-      const vms = state.vms || [];
-      const containers = state.containers || [];
-      return [...vms, ...containers];
-    },
+    () => [...byType('vm'), ...byType('system-container'), ...byType('oci-container')],
     [],
     {
       equals: (prev, next) => {
-        // Only update if the actual guest list changed
         if (prev.length !== next.length) return false;
-        return prev.every((p, i) => p.vmid === next[i].vmid && p.name === next[i].name);
+        return prev.every((p, i) => p.id === next[i].id && p.name === next[i].name);
       },
     },
   );
@@ -1497,7 +1435,7 @@ export function Alerts() {
     memory: 85,
   };
 
-  const FACTORY_HOST_DEFAULTS = {
+  const FACTORY_AGENT_DEFAULTS = {
     cpu: 80,
     memory: 85,
     disk: 90,
@@ -1535,22 +1473,31 @@ export function Alerts() {
   };
 
   // Threshold states - using trigger values for display
-  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_GUEST_DEFAULTS });
+  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_GUEST_DEFAULTS,
+  });
   const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
-  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
+  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<
+    'warning' | 'critical'
+  >('warning');
 
-  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
-  const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_PBS_DEFAULTS });
-  const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_HOST_DEFAULTS });
+  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_NODE_DEFAULTS,
+  });
+  const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_PBS_DEFAULTS,
+  });
+  const [agentDefaults, setAgentDefaults] = createSignal<Record<string, number | undefined>>({
+    ...FACTORY_AGENT_DEFAULTS,
+  });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
   const [dockerDisableConnectivity, setDockerDisableConnectivity] = createSignal(
     FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   );
-  const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<'warning' | 'critical'>(
-    FACTORY_DOCKER_STATE_SEVERITY,
-  );
-  const [containerUpdateAlertsEnabled, setContainerUpdateAlertsEnabled] = createSignal(true);
+  const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<
+    'warning' | 'critical'
+  >(FACTORY_DOCKER_STATE_SEVERITY);
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
   const [ignoredGuestPrefixes, setIgnoredGuestPrefixes] = createSignal<string[]>([]);
   const [guestTagWhitelist, setGuestTagWhitelist] = createSignal<string[]>([]);
@@ -1576,8 +1523,8 @@ export function Alerts() {
     setHasUnsavedChanges(true);
   };
 
-  const resetHostDefaults = () => {
-    setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
+  const resetAgentDefaults = () => {
+    setAgentDefaults({ ...FACTORY_AGENT_DEFAULTS });
     setHasUnsavedChanges(true);
   };
 
@@ -1585,7 +1532,6 @@ export function Alerts() {
     setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
     setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
     setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
-    setContainerUpdateAlertsEnabled(true);
     setHasUnsavedChanges(true);
   };
 
@@ -1606,16 +1552,16 @@ export function Alerts() {
     setSnapshotDefaults({ ...FACTORY_SNAPSHOT_DEFAULTS });
     setHasUnsavedChanges(true);
   };
-  const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
   const [timeThresholds, setTimeThresholds] = createSignal({
     guest: DEFAULT_DELAY_SECONDS,
     node: DEFAULT_DELAY_SECONDS,
     storage: DEFAULT_DELAY_SECONDS,
     pbs: DEFAULT_DELAY_SECONDS,
-    host: DEFAULT_DELAY_SECONDS,
+    agent: DEFAULT_DELAY_SECONDS,
   });
-  const [metricTimeThresholds, setMetricTimeThresholds] =
-    createSignal<Record<string, Record<string, number>>>({});
+  const [metricTimeThresholds, setMetricTimeThresholds] = createSignal<
+    Record<string, Record<string, number>>
+  >({});
   const [snapshotDefaults, setSnapshotDefaults] = createSignal<SnapshotAlertConfig>({
     ...FACTORY_SNAPSHOT_DEFAULTS,
   });
@@ -1642,7 +1588,7 @@ export function Alerts() {
   // Global disable flags per resource type
   const [disableAllNodes, setDisableAllNodes] = createSignal(false);
   const [disableAllGuests, setDisableAllGuests] = createSignal(false);
-  const [disableAllHosts, setDisableAllHosts] = createSignal(false);
+  const [disableAllAgents, setDisableAllAgents] = createSignal(false);
   const [disableAllStorage, setDisableAllStorage] = createSignal(false);
   const [disableAllPBS, setDisableAllPBS] = createSignal(false);
   const [disableAllPMG, setDisableAllPMG] = createSignal(false);
@@ -1653,34 +1599,33 @@ export function Alerts() {
   // Global disable offline alerts flags
   const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(false);
   const [disableAllGuestsOffline, setDisableAllGuestsOffline] = createSignal(false);
-  const [disableAllHostsOffline, setDisableAllHostsOffline] = createSignal(false);
+  const [disableAllAgentsOffline, setDisableAllAgentsOffline] = createSignal(false);
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
-  const tabGroups: {
+  const tabGroups = getAlertsTabGroups().map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      icon:
+        item.id === 'overview' ? (
+          <LayoutDashboard class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'history' ? (
+          <History class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'thresholds' ? (
+          <Gauge class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'destinations' ? (
+          <Send class="w-4 h-4" strokeWidth={2} />
+        ) : (
+          <Calendar class="w-4 h-4" strokeWidth={2} />
+        ),
+    })),
+  })) satisfies {
     id: 'status' | 'configuration';
     label: string;
     items: { id: AlertTab; label: string; icon: JSX.Element }[];
-  }[] = [
-      {
-        id: 'status',
-        label: 'Status',
-        items: [
-          { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
-        ],
-      },
-      {
-        id: 'configuration',
-        label: 'Configuration',
-        items: [
-          { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
-          { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
-        ],
-      },
-    ];
+  }[];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
   // Sidebar always starts expanded for discoverability (consistent with Settings)
@@ -1699,11 +1644,8 @@ export function Alerts() {
           />
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
-              <span
-                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
-                  }`}
-              >
-                {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
+              <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
+                {alertActivationPresentation().label}
               </span>
               <label class="relative inline-flex items-center cursor-pointer">
                 <span class="sr-only">Toggle alerts</span>
@@ -1720,14 +1662,8 @@ export function Alerts() {
                     }
                   }}
                 />
-                <div
-                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                    } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
-                >
-                  <span
-                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                  />
+                <div class={alertActivationPresentation().trackClass}>
+                  <span class={alertActivationPresentation().thumbClass} />
                 </div>
               </label>
             </div>
@@ -1752,12 +1688,12 @@ export function Alerts() {
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
-              <span class="text-sm font-medium">You have unsaved changes</span>
+              <span class="text-sm font-medium">{getAlertConfigUnsavedChangesLabel()}</span>
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
               <button
-                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={isReloadingConfig()}
+                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isReloadingConfig() || !!destConfigLoadError()}
                 onClick={async () => {
                   try {
                     // Save alert configuration with hysteresis format
@@ -1774,7 +1710,10 @@ export function Alerts() {
 
                     const snapshotConfig = snapshotDefaults();
                     const normalizedSnapshotWarning = Math.max(0, snapshotConfig.warningDays ?? 0);
-                    const normalizedSnapshotCritical = Math.max(0, snapshotConfig.criticalDays ?? 0);
+                    const normalizedSnapshotCritical = Math.max(
+                      0,
+                      snapshotConfig.criticalDays ?? 0,
+                    );
                     const finalSnapshotCritical =
                       normalizedSnapshotCritical > 0
                         ? Math.max(normalizedSnapshotCritical, normalizedSnapshotWarning)
@@ -1791,7 +1730,8 @@ export function Alerts() {
                     const dockerDefaultsValue = dockerDefaults();
                     if (
                       dockerDefaultsValue.serviceCriticalGapPercent > 0 &&
-                      dockerDefaultsValue.serviceWarnGapPercent > dockerDefaultsValue.serviceCriticalGapPercent
+                      dockerDefaultsValue.serviceWarnGapPercent >
+                        dockerDefaultsValue.serviceCriticalGapPercent
                     ) {
                       notificationStore.error(
                         'Swarm service critical gap must be greater than or equal to the warning gap when enabled.',
@@ -1802,7 +1742,9 @@ export function Alerts() {
                     const normalizedCooldownMinutes = scheduleCooldown().enabled
                       ? clampCooldownMinutes(scheduleCooldown().minutes)
                       : 0;
-                    const normalizedMaxAlertsHour = clampMaxAlertsPerHour(scheduleCooldown().maxAlerts);
+                    const normalizedMaxAlertsHour = clampMaxAlertsPerHour(
+                      scheduleCooldown().maxAlerts,
+                    );
                     const groupingState = scheduleGrouping();
                     const groupingWindowSeconds =
                       groupingState.enabled && groupingState.window >= 0
@@ -1823,7 +1765,7 @@ export function Alerts() {
                       // Global disable flags per resource type
                       disableAllNodes: disableAllNodes(),
                       disableAllGuests: disableAllGuests(),
-                      disableAllHosts: disableAllHosts(),
+                      disableAllAgents: disableAllAgents(),
                       disableAllStorage: disableAllStorage(),
                       disableAllPBS: disableAllPBS(),
                       disableAllPMG: disableAllPMG(),
@@ -1834,7 +1776,7 @@ export function Alerts() {
                       disableAllNodesOffline: disableAllNodesOffline(),
                       disableAllGuestsOffline: disableAllGuestsOffline(),
                       disableAllPBSOffline: disableAllPBSOffline(),
-                      disableAllHostsOffline: disableAllHostsOffline(),
+                      disableAllAgentsOffline: disableAllAgentsOffline(),
                       disableAllPMGOffline: disableAllPMGOffline(),
                       disableAllDockerHostsOffline: disableAllDockerHostsOffline(),
                       guestDefaults: {
@@ -1854,11 +1796,11 @@ export function Alerts() {
                         disk: createHysteresisThreshold(nodeDefaults().disk),
                         temperature: createHysteresisThreshold(nodeDefaults().temperature),
                       },
-                      hostDefaults: {
-                        cpu: createHysteresisThreshold(hostDefaults().cpu),
-                        memory: createHysteresisThreshold(hostDefaults().memory),
-                        disk: createHysteresisThreshold(hostDefaults().disk),
-                        diskTemperature: createHysteresisThreshold(hostDefaults().diskTemperature),
+                      agentDefaults: {
+                        cpu: createHysteresisThreshold(agentDefaults().cpu),
+                        memory: createHysteresisThreshold(agentDefaults().memory),
+                        disk: createHysteresisThreshold(agentDefaults().disk),
+                        diskTemperature: createHysteresisThreshold(agentDefaults().diskTemperature),
                       },
                       pbsDefaults: {
                         cpu: createHysteresisThreshold(pbsDefaults().cpu),
@@ -1876,7 +1818,6 @@ export function Alerts() {
                         serviceCriticalGapPercent: dockerDefaultsValue.serviceCriticalGapPercent,
                         stateDisableConnectivity: dockerDisableConnectivity(),
                         statePoweredOffSeverity: dockerPoweredOffSeverity(),
-                        updateAlertDelayHours: containerUpdateAlertsEnabled() ? 24 : -1,
                       },
                       dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
                         .map((prefix) => prefix.trim())
@@ -1894,7 +1835,6 @@ export function Alerts() {
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
                       hysteresisMargin: 5.0,
-                      timeThreshold: timeThreshold() || 0, // Legacy
                       timeThresholds: timeThresholds(),
                       metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
                       snapshotDefaults: {
@@ -1919,7 +1859,6 @@ export function Alerts() {
                       schedule: {
                         quietHours: scheduleQuietHours(),
                         cooldown: normalizedCooldownMinutes,
-                        groupingWindow: groupingWindowSeconds,
                         notifyOnResolve: notifyOnResolve(),
                         maxAlertsHour: normalizedMaxAlertsHour,
                         escalation: scheduleEscalation(),
@@ -1962,14 +1901,16 @@ export function Alerts() {
 
                     if (destinationsRef.appriseConfig) {
                       const appriseData = destinationsRef.appriseConfig();
-                      const updatedApprise = await NotificationsAPI.updateAppriseConfig(appriseData);
+                      const updatedApprise =
+                        await NotificationsAPI.updateAppriseConfig(appriseData);
                       setAppriseConfig({
                         enabled: updatedApprise.enabled ?? false,
                         mode: updatedApprise.mode === 'http' ? 'http' : 'cli',
                         targetsText: formatAppriseTargets(updatedApprise.targets),
                         cliPath: updatedApprise.cliPath || 'apprise',
                         timeoutSeconds:
-                          typeof updatedApprise.timeoutSeconds === 'number' && updatedApprise.timeoutSeconds > 0
+                          typeof updatedApprise.timeoutSeconds === 'number' &&
+                          updatedApprise.timeoutSeconds > 0
                             ? updatedApprise.timeoutSeconds
                             : 15,
                         serverUrl: updatedApprise.serverUrl || '',
@@ -1981,23 +1922,25 @@ export function Alerts() {
                     }
 
                     setHasUnsavedChanges(false);
-                    notificationStore.success('Configuration saved successfully!');
+                    notificationStore.success(getAlertConfigSaveSuccess());
                   } catch (err) {
                     logger.error('Failed to save configuration:', err);
-                    notificationStore.error(err instanceof Error ? err.message : 'Failed to save configuration');
+                    notificationStore.error(
+                      err instanceof Error ? err.message : getAlertConfigSaveFailure(),
+                    );
                   }
                 }}
               >
-                Save Changes
+                {getAlertConfigSaveChangesLabel()}
               </button>
               <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-border rounded-md text-base-content hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isReloadingConfig()}
                 onClick={async () => {
                   await loadAlertConfiguration({ notify: true });
                 }}
               >
-                {isReloadingConfig() ? 'Discarding...' : 'Discard'}
+                {getAlertConfigDiscardLabel(isReloadingConfig())}
               </button>
             </div>
           </div>
@@ -2007,7 +1950,7 @@ export function Alerts() {
       <div>
         <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Alerts navigation"
             aria-expanded={!sidebarCollapsed()}
           >
@@ -2015,12 +1958,12 @@ export function Alerts() {
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
             >
               <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts</h2>
+                <div class="flex items-center justify-between pb-2 border-b border-border">
+                  <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
                   <button
                     type="button"
                     onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    class="p-1 rounded-md hover:bg-surface-hover transition-colors"
                     aria-label="Collapse sidebar"
                   >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2038,7 +1981,7 @@ export function Alerts() {
                 <button
                   type="button"
                   onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
                   aria-label="Expand sidebar"
                 >
                   <svg
@@ -2061,7 +2004,7 @@ export function Alerts() {
                   {(group) => (
                     <div class="space-y-2">
                       <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-muted">
                           {group.label}
                         </p>
                       </Show>
@@ -2071,12 +2014,19 @@ export function Alerts() {
                             <button
                               type="button"
                               aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${activeTab() === item.id
-                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                                }`}
+                              aria-disabled={areAlertsDisabled()}
+                              disabled={areAlertsDisabled()}
+                              class={getAlertsSidebarTabClass({
+                                isActive: activeTab() === item.id,
+                                isDisabled: areAlertsDisabled(),
+                                collapsed: sidebarCollapsed(),
+                              })}
                               onClick={() => handleTabChange(item.id)}
-                              title={sidebarCollapsed() ? item.label : undefined}
+                              title={getAlertsTabTitle({
+                                isDisabled: areAlertsDisabled(),
+                                collapsed: sidebarCollapsed(),
+                                label: item.label,
+                              })}
                             >
                               {item.icon}
                               <Show when={!sidebarCollapsed()}>
@@ -2095,23 +2045,29 @@ export function Alerts() {
 
           <div class="flex-1 overflow-hidden">
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+              <div class="lg:hidden border-b border-border">
                 <div class="p-1">
                   <div
-                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
+                    class="flex rounded-md bg-surface-hover p-0.5 w-full overflow-x-auto"
                     style="-webkit-overflow-scrolling: touch;"
                   >
                     <For each={flatTabs}>
                       {(tab) => (
                         <button
                           type="button"
-                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${activeTab() === tab.id
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                            }`}
+                          aria-disabled={areAlertsDisabled()}
+                          disabled={areAlertsDisabled()}
+                          class={getAlertsMobileTabClass({
+                            isActive: activeTab() === tab.id,
+                            isDisabled: areAlertsDisabled(),
+                          })}
                           onClick={() => handleTabChange(tab.id)}
+                          title={getAlertsTabTitle({
+                            isDisabled: areAlertsDisabled(),
+                            label: tab.label,
+                          })}
                         >
-                          {tab.label}
+                          <span class="w-full text-center truncate block">{tab.label}</span>
                         </button>
                       )}
                     </For>
@@ -2144,8 +2100,15 @@ export function Alerts() {
                   rawOverridesConfig={rawOverridesConfig}
                   setRawOverridesConfig={setRawOverridesConfig}
                   allGuests={allGuests}
-                  state={state}
-                  hosts={state.hosts || []}
+                  pbsInstances={pbsInstances()}
+                  pmgInstances={pmgInstances()}
+                  nodes={byType('agent')}
+                  agents={agentResources()}
+                  storage={allResources().filter(
+                    (r) => r.type === 'storage' || r.type === 'datastore',
+                  )}
+                  dockerHosts={byType('docker-host')}
+                  allResources={allResources()}
                   guestDefaults={guestDefaults}
                   guestDisableConnectivity={guestDisableConnectivity}
                   setGuestDefaults={setGuestDefaults}
@@ -2154,8 +2117,8 @@ export function Alerts() {
                   setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
                   nodeDefaults={nodeDefaults}
                   setNodeDefaults={setNodeDefaults}
-                  hostDefaults={hostDefaults}
-                  setHostDefaults={setHostDefaults}
+                  agentDefaults={agentDefaults}
+                  setAgentDefaults={setAgentDefaults}
                   pbsDefaults={pbsDefaults}
                   setPBSDefaults={setPBSDefaults}
                   dockerDefaults={dockerDefaults}
@@ -2163,8 +2126,6 @@ export function Alerts() {
                   setDockerDisableConnectivity={setDockerDisableConnectivity}
                   dockerPoweredOffSeverity={dockerPoweredOffSeverity}
                   setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
-                  containerUpdateAlertsEnabled={containerUpdateAlertsEnabled}
-                  setContainerUpdateAlertsEnabled={setContainerUpdateAlertsEnabled}
                   setDockerDefaults={setDockerDefaults}
                   dockerIgnoredPrefixes={dockerIgnoredPrefixes}
                   setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
@@ -2178,7 +2139,7 @@ export function Alerts() {
                   setStorageDefault={setStorageDefault}
                   resetGuestDefaults={resetGuestDefaults}
                   resetNodeDefaults={resetNodeDefaults}
-                  resetHostDefaults={resetHostDefaults}
+                  resetAgentDefaults={resetAgentDefaults}
                   timeThresholds={timeThresholds}
                   metricTimeThresholds={metricTimeThresholds}
                   setMetricTimeThresholds={setMetricTimeThresholds}
@@ -2196,8 +2157,8 @@ export function Alerts() {
                   setDisableAllNodes={setDisableAllNodes}
                   disableAllGuests={disableAllGuests}
                   setDisableAllGuests={setDisableAllGuests}
-                  disableAllHosts={disableAllHosts}
-                  setDisableAllHosts={setDisableAllHosts}
+                  disableAllAgents={disableAllAgents}
+                  setDisableAllAgents={setDisableAllAgents}
                   disableAllStorage={disableAllStorage}
                   setDisableAllStorage={setDisableAllStorage}
                   disableAllPBS={disableAllPBS}
@@ -2214,8 +2175,8 @@ export function Alerts() {
                   setDisableAllNodesOffline={setDisableAllNodesOffline}
                   disableAllGuestsOffline={disableAllGuestsOffline}
                   setDisableAllGuestsOffline={setDisableAllGuestsOffline}
-                  disableAllHostsOffline={disableAllHostsOffline}
-                  setDisableAllHostsOffline={setDisableAllHostsOffline}
+                  disableAllAgentsOffline={disableAllAgentsOffline}
+                  setDisableAllAgentsOffline={setDisableAllAgentsOffline}
                   disableAllPBSOffline={disableAllPBSOffline}
                   setDisableAllPBSOffline={setDisableAllPBSOffline}
                   disableAllPMGOffline={disableAllPMGOffline}
@@ -2231,7 +2192,7 @@ export function Alerts() {
                   factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
                   factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
                   factoryPBSDefaults={FACTORY_PBS_DEFAULTS}
-                  factoryHostDefaults={FACTORY_HOST_DEFAULTS}
+                  factoryAgentDefaults={FACTORY_AGENT_DEFAULTS}
                   factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
                   factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
                   snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
@@ -2248,6 +2209,10 @@ export function Alerts() {
                   setEmailConfig={setEmailConfig}
                   appriseConfig={appriseConfig}
                   setAppriseConfig={setAppriseConfig}
+                  configLoadError={destConfigLoadError}
+                  isRetrying={isReloadingConfig}
+                  isLoadingDestinations={isLoadingDestinations}
+                  onRetryLoad={() => void loadAlertConfiguration()}
                 />
               </Show>
 
@@ -2272,6 +2237,8 @@ export function Alerts() {
                 <HistoryTab
                   hasAIAlertsFeature={hasAIAlertsFeature}
                   licenseLoading={licenseLoading}
+                  getResource={getResource}
+                  allResources={allResources}
                 />
               </Show>
             </div>
@@ -2283,610 +2250,20 @@ export function Alerts() {
 }
 
 // Overview Tab - Shows current alert status
-function OverviewTab(props: {
-  overrides: Override[];
-  activeAlerts: Record<string, Alert>;
-  updateAlert: (alertId: string, updates: Partial<Alert>) => void;
-  showQuickTip: () => boolean;
-  dismissQuickTip: () => void;
-  showAcknowledged: () => boolean;
-  setShowAcknowledged: (value: boolean) => void;
-  alertsDisabled: () => boolean;
-  hasAIAlertsFeature: () => boolean;
-  licenseLoading: () => boolean;
-}) {
-  const location = useLocation();
-  // Loading states for buttons
-  const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
-  const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
-  const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
-  const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
-  const [incidentEventFilters, setIncidentEventFilters] = createSignal<Set<string>>(
-    new Set(INCIDENT_EVENT_TYPES),
-  );
-  const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
-
-  const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
-    setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
-    try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
-      setIncidentTimelines((prev) => ({ ...prev, [alertId]: timeline }));
-    } catch (error) {
-      logger.error('Failed to load incident timeline', error);
-      notificationStore.error('Failed to load incident timeline');
-    } finally {
-      setIncidentLoading((prev) => ({ ...prev, [alertId]: false }));
-    }
-  };
-
-  const toggleIncidentTimeline = async (alertId: string, startedAt?: string) => {
-    const expanded = expandedIncidents();
-    const next = new Set(expanded);
-    if (next.has(alertId)) {
-      next.delete(alertId);
-      setExpandedIncidents(next);
-      return;
-    }
-    next.add(alertId);
-    setExpandedIncidents(next);
-    if (!(alertId in incidentTimelines())) {
-      await loadIncidentTimeline(alertId, startedAt);
-    }
-  };
-
-  const saveIncidentNote = async (alertId: string, startedAt?: string) => {
-    const note = (incidentNoteDrafts()[alertId] || '').trim();
-    if (!note) {
-      return;
-    }
-    setIncidentNoteSaving((prev) => new Set(prev).add(alertId));
-    try {
-      const incidentId = incidentTimelines()[alertId]?.id;
-      await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
-      setIncidentNoteDrafts((prev) => ({ ...prev, [alertId]: '' }));
-      await loadIncidentTimeline(alertId, startedAt);
-      notificationStore.success('Incident note saved');
-    } catch (error) {
-      logger.error('Failed to save incident note', error);
-      notificationStore.error('Failed to save incident note');
-    } finally {
-      setIncidentNoteSaving((prev) => {
-        const next = new Set(prev);
-        next.delete(alertId);
-        return next;
-      });
-    }
-  };
-
-  // Get alert stats from actual active alerts
-  const alertStats = createMemo(() => {
-    // Access the store properly for reactivity
-    const alertIds = Object.keys(props.activeAlerts);
-    const alerts = alertIds.map((id) => props.activeAlerts[id]);
-    return {
-      active: alerts.filter((a) => !a.acknowledged).length,
-      acknowledged: alerts.filter((a) => a.acknowledged).length,
-      total24h: alerts.length, // In real app, would filter by time
-      overrides: props.overrides.length,
-    };
-  });
-
-
-  const filteredAlerts = createMemo(() => {
-    const alerts = Object.values(props.activeAlerts);
-    // Sort: unacknowledged first, then by start time (newest first), then by id
-    // for a stable tiebreaker when multiple alerts share the same startTime.
-    return alerts
-      .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
-      .sort((a, b) => {
-        // Acknowledged status comparison first
-        if (a.acknowledged !== b.acknowledged) {
-          return a.acknowledged ? 1 : -1; // Unacknowledged first
-        }
-        // Then by time
-        const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-        if (timeDiff !== 0) return timeDiff;
-        // Stable tiebreaker: sort by id to prevent visual scrambling when
-        // multiple alerts fire in the same polling cycle (#1218)
-        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      });
-  });
-
-  const unacknowledgedAlerts = createMemo(() =>
-    Object.values(props.activeAlerts).filter((alert) => !alert.acknowledged),
-  );
-
-  const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
-
-  const scrollToAlertHash = () => {
-    const hash = location.hash;
-    if (!hash || !hash.startsWith('#alert-')) {
-      setLastHashScrolled(null);
-      return;
-    }
-    if (hash === lastHashScrolled()) {
-      return;
-    }
-    const target = document.getElementById(hash.slice(1));
-    if (!target) {
-      return;
-    }
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setLastHashScrolled(hash);
-  };
-
-  createEffect(() => {
-    location.hash;
-    filteredAlerts().length;
-    props.showAcknowledged();
-    requestAnimationFrame(scrollToAlertHash);
-  });
-
-  return (
-    <div class="space-y-4 sm:space-y-6">
-      {/* Stats Cards - only show cards not duplicated in sub-tabs */}
-      <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Acknowledged</p>
-              <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
-                {alertStats().acknowledged}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900/50 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M9 11L12 14L22 4"></path>
-                <path d="M21 12V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H16"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
-              <p class="text-lg sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">
-                {alertStats().total24h}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm" class="sm:p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Guest Overrides</p>
-              <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                {alertStats().overrides}
-              </p>
-            </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                class="sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Active Alerts */}
-      <div>
-        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
-        <Show
-          when={Object.keys(props.activeAlerts).length > 0}
-          fallback={
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-              <div class="flex justify-center mb-3">
-                <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
-                </svg>
-              </div>
-              <p class="text-sm">No active alerts</p>
-              <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
-            </div>
-          }
-        >
-          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-              <Show when={alertStats().acknowledged > 0}>
-                <button
-                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                >
-                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-                </button>
-              </Show>
-              <Show when={alertStats().active > 0}>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={bulkAckProcessing()}
-                  onClick={async () => {
-                    if (bulkAckProcessing()) return;
-                    const pending = unacknowledgedAlerts();
-                    if (pending.length === 0) {
-                      return;
-                    }
-                    setBulkAckProcessing(true);
-                    try {
-                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
-                      const successes = result.results.filter((r) => r.success);
-                      const failures = result.results.filter((r) => !r.success);
-
-                      successes.forEach((res) => {
-                        props.updateAlert(res.alertId, {
-                          acknowledged: true,
-                          ackTime: new Date().toISOString(),
-                        });
-                      });
-
-                      if (successes.length > 0) {
-                        notificationStore.success(
-                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-
-                      if (failures.length > 0) {
-                        notificationStore.error(
-                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-                    } catch (error) {
-                      logger.error('Bulk acknowledge failed', error);
-                      notificationStore.error('Failed to acknowledge alerts');
-                    } finally {
-                      setBulkAckProcessing(false);
-                    }
-                  }}
-                >
-                  {bulkAckProcessing()
-                    ? 'Acknowledging…'
-                    : `Acknowledge all (${alertStats().active})`}
-                </button>
-              </Show>
-            </div>
-          </Show>
-          <div class="space-y-2">
-            <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
-              </div>
-            </Show>
-            <For each={filteredAlerts()}>
-              {(alert) => (
-                <div
-                  id={`alert-${alert.id}`}
-                  class={`border rounded-lg p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
-                    } ${alert.acknowledged
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                    }`}
-                >
-                  <div class="flex flex-col sm:flex-row sm:items-start">
-                    <div class="flex items-start flex-1">
-                      {/* Status icon */}
-                      <div
-                        class={`mr-3 mt-0.5 transition-all ${alert.acknowledged
-                          ? 'text-green-600 dark:text-green-400'
-                          : alert.level === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-yellow-600 dark:text-yellow-400'
-                          }`}
-                      >
-                        {alert.acknowledged ? (
-                          // Checkmark for acknowledged
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        ) : (
-                          // Warning/Alert icon
-                          <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span
-                            class={`text-sm font-medium truncate ${alert.level === 'critical'
-                              ? 'text-red-700 dark:text-red-400'
-                              : 'text-yellow-700 dark:text-yellow-400'
-                              }`}
-                          >
-                            {alert.resourceName}
-                          </span>
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
-                            ({alert.type})
-                          </span>
-                          <Show when={alert.node}>
-                            <span class="text-xs text-gray-500 dark:text-gray-500">
-                              on {alert.nodeDisplayName || alert.node}
-                            </span>
-                          </Show>
-                          <Show when={alert.acknowledged}>
-                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                              Acknowledged
-                            </span>
-                          </Show>
-                        </div>
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
-                          {alert.message}
-                        </p>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          Started: {new Date(alert.startTime).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
-                      <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                          : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
-                          }`}
-                        disabled={processingAlerts().has(alert.id)}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alert.id)) return;
-
-                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
-
-                          // Store current state to avoid race conditions
-                          const wasAcknowledged = alert.acknowledged;
-
-                          try {
-                            if (wasAcknowledged) {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: false,
-                                ackTime: undefined,
-                                ackUser: undefined,
-                              });
-                              notificationStore.success('Alert restored');
-                            } else {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alert.id);
-                              // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
-                                acknowledged: true,
-                                ackTime: new Date().toISOString(),
-                              });
-                              notificationStore.success('Alert acknowledged');
-                            }
-                          } catch (err) {
-                            logger.error(
-                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                              err,
-                            );
-                            notificationStore.error(
-                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                            );
-                            // Don't update local state on error - let WebSocket keep the correct state
-                          } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            setTimeout(() => {
-                              setProcessingAlerts((prev) => {
-                                const next = new Set(prev);
-                                next.delete(alert.id);
-                                return next;
-                              });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                          }
-                        }}
-                      >
-                        {processingAlerts().has(alert.id)
-                          ? 'Processing...'
-                          : alert.acknowledged
-                            ? 'Unacknowledge'
-                            : 'Acknowledge'}
-                      </button>
-                      <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                        onClick={() => {
-                          void toggleIncidentTimeline(alert.id, alert.startTime);
-                        }}
-                      >
-                        {expandedIncidents().has(alert.id) ? 'Hide Timeline' : 'Timeline'}
-                      </button>
-                      <InvestigateAlertButton
-                        alert={alert}
-                        variant="text"
-                        size="sm"
-                        licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
-                      />
-                    </div>
-                  </div>
-                  <Show when={expandedIncidents().has(alert.id)}>
-                    <div class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-                      <Show when={incidentLoading()[alert.id]}>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
-                      </Show>
-                      <Show when={!incidentLoading()[alert.id]}>
-                        <Show when={incidentTimelines()[alert.id]}>
-                          {(timeline) => (
-                            <div class="space-y-3">
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
-                                <span>{timeline().status}</span>
-                                <Show when={timeline().acknowledged}>
-                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                    acknowledged
-                                  </span>
-                                </Show>
-                                <Show when={timeline().openedAt}>
-                                  <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
-                                </Show>
-                                <Show when={timeline().closedAt}>
-                                  <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
-                                </Show>
-                              </div>
-                              {(() => {
-                                const events = timeline().events || [];
-                                const filteredEvents = filterIncidentEvents(events, incidentEventFilters());
-                                return (
-                                  <>
-                                    <Show when={events.length > 0}>
-                                      <IncidentEventFilters
-                                        filters={incidentEventFilters}
-                                        setFilters={setIncidentEventFilters}
-                                      />
-                                    </Show>
-                                    <Show when={filteredEvents.length > 0}>
-                                      <div class="space-y-2">
-                                        <For each={filteredEvents}>
-                                          {(event) => (
-                                            <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-2">
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                <span class="font-medium text-gray-800 dark:text-gray-200">
-                                                  {event.summary}
-                                                </span>
-                                                <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                              </div>
-                                              <Show when={event.details && (event.details as { note?: string }).note}>
-                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                  {(event.details as { note?: string }).note}
-                                                </p>
-                                              </Show>
-                                              <Show when={event.details && (event.details as { command?: string }).command}>
-                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
-                                                  {(event.details as { command?: string }).command}
-                                                </p>
-                                              </Show>
-                                              <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                  {(event.details as { output_excerpt?: string }).output_excerpt}
-                                                </p>
-                                              </Show>
-                                            </div>
-                                          )}
-                                        </For>
-                                      </div>
-                                    </Show>
-                                    <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                                        No timeline events match the selected filters.
-                                      </p>
-                                    </Show>
-                                    <Show when={events.length === 0}>
-                                      <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
-                                    </Show>
-                                  </>
-                                );
-                              })()}
-                              <div class="flex flex-col gap-2">
-                                <textarea
-                                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
-                                  rows={2}
-                                  placeholder="Add a note for this incident..."
-                                  value={incidentNoteDrafts()[alert.id] || ''}
-                                  onInput={(e) => {
-                                    const value = e.currentTarget.value;
-                                    setIncidentNoteDrafts((prev) => ({ ...prev, [alert.id]: value }));
-                                  }}
-                                />
-                                <div class="flex justify-end">
-                                  <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
-                                    onClick={() => {
-                                      void saveIncidentNote(alert.id, alert.startTime);
-                                    }}
-                                  >
-                                    {incidentNoteSaving().has(alert.id) ? 'Saving...' : 'Save Note'}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </Show>
-                        <Show when={!incidentTimelines()[alert.id]}>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
-                        </Show>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
 // Thresholds Tab - Improved design
 interface ThresholdsTabProps {
-  allGuests: () => (VM | Container)[];
-  state: State;
-  hosts: Host[];
+  allGuests: () => Resource[];
+  pbsInstances: PBSInstance[];
+  pmgInstances: PMGInstance[];
+  nodes: Resource[];
+  agents: Resource[];
+  storage: Resource[];
+  dockerHosts: Resource[];
+  allResources: Resource[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   pbsDefaults: () => Record<string, number | undefined>;
-  hostDefaults: () => Record<string, number | undefined>;
+  agentDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => {
     cpu: number;
     memory: number;
@@ -2900,21 +2277,24 @@ interface ThresholdsTabProps {
   };
   dockerDisableConnectivity: () => boolean;
   dockerPoweredOffSeverity: () => 'warning' | 'critical';
-  containerUpdateAlertsEnabled: () => boolean;
   dockerIgnoredPrefixes: () => string[];
   ignoredGuestPrefixes: () => string[];
   guestTagWhitelist: () => string[];
   guestTagBlacklist: () => string[];
   storageDefault: () => number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
+  timeThresholds: () => {
+    guest: number;
+    node: number;
+    storage: number;
+    pbs: number;
+    agent: number;
+  };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   pmgThresholds: () => PMGThresholdDefaults;
   setPMGThresholds: (
-    value:
-      | PMGThresholdDefaults
-      | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
+    value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
   ) => void;
   setGuestDefaults: (
     value:
@@ -2930,7 +2310,7 @@ interface ThresholdsTabProps {
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
-  setHostDefaults: (
+  setAgentDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -2943,41 +2323,40 @@ interface ThresholdsTabProps {
   setDockerDefaults: (
     value:
       | {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }
       | ((prev: {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }) => {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }),
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }) => {
+          cpu: number;
+          memory: number;
+          disk: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }),
   ) => void;
   setDockerDisableConnectivity: (value: boolean) => void;
   setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
-  setContainerUpdateAlertsEnabled: (value: boolean) => void;
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
@@ -2990,17 +2369,13 @@ interface ThresholdsTabProps {
   ) => void;
   snapshotDefaults: () => SnapshotAlertConfig;
   setSnapshotDefaults: (
-    value:
-      | SnapshotAlertConfig
-      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+    value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
   ) => void;
   snapshotFactoryDefaults: SnapshotAlertConfig;
   resetSnapshotDefaults: () => void;
   backupDefaults: () => BackupAlertConfig;
   setBackupDefaults: (
-    value:
-      | BackupAlertConfig
-      | ((prev: BackupAlertConfig) => BackupAlertConfig),
+    value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
   ) => void;
   backupFactoryDefaults: BackupAlertConfig;
   resetBackupDefaults: () => void;
@@ -3015,8 +2390,8 @@ interface ThresholdsTabProps {
   setDisableAllNodes: (value: boolean) => void;
   disableAllGuests: () => boolean;
   setDisableAllGuests: (value: boolean) => void;
-  disableAllHosts: () => boolean;
-  setDisableAllHosts: (value: boolean) => void;
+  disableAllAgents: () => boolean;
+  setDisableAllAgents: (value: boolean) => void;
   disableAllStorage: () => boolean;
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
@@ -3034,8 +2409,8 @@ interface ThresholdsTabProps {
   setDisableAllNodesOffline: (value: boolean) => void;
   disableAllGuestsOffline: () => boolean;
   setDisableAllGuestsOffline: (value: boolean) => void;
-  disableAllHostsOffline: () => boolean;
-  setDisableAllHostsOffline: (value: boolean) => void;
+  disableAllAgentsOffline: () => boolean;
+  setDisableAllAgentsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
   disableAllPMGOffline: () => boolean;
@@ -3046,14 +2421,14 @@ interface ThresholdsTabProps {
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetPBSDefaults?: () => void;
-  resetHostDefaults?: () => void;
+  resetAgentDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
   factoryPBSDefaults?: Record<string, number | undefined>;
-  factoryHostDefaults?: Record<string, number | undefined>;
+  factoryAgentDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
 }
@@ -3066,16 +2441,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       rawOverridesConfig={props.rawOverridesConfig}
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
-      nodes={props.state.nodes || []}
-      hosts={props.hosts}
-      storage={props.state.storage || []}
-      dockerHosts={props.state.dockerHosts || []}
-      pbsInstances={props.state.pbs || []}
-      pmgInstances={props.state.pmg || []}
-      backups={props.state.backups}
-      pveBackups={props.state.pveBackups}
-      pbsBackups={props.state.pbsBackups}
-      pmgBackups={props.state.pmgBackups}
+      nodes={props.nodes}
+      agents={props.agents}
+      storage={props.storage}
+      dockerHosts={props.dockerHosts}
+      allResources={props.allResources}
+      pbsInstances={props.pbsInstances}
+      pmgInstances={props.pmgInstances}
       pmgThresholds={props.pmgThresholds}
       setPMGThresholds={props.setPMGThresholds}
       guestDefaults={props.guestDefaults()}
@@ -3085,16 +2457,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       guestPoweredOffSeverity={props.guestPoweredOffSeverity}
       setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
       nodeDefaults={props.nodeDefaults()}
-      hostDefaults={props.hostDefaults()}
+      agentDefaults={props.agentDefaults()}
       pbsDefaults={props.pbsDefaults()}
       setNodeDefaults={props.setNodeDefaults}
-      setHostDefaults={props.setHostDefaults}
+      setAgentDefaults={props.setAgentDefaults}
       setPBSDefaults={props.setPBSDefaults}
       dockerDefaults={props.dockerDefaults()}
       dockerDisableConnectivity={props.dockerDisableConnectivity}
       dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
-      containerUpdateAlertsEnabled={props.containerUpdateAlertsEnabled}
-      setContainerUpdateAlertsEnabled={props.setContainerUpdateAlertsEnabled}
       setDockerDefaults={props.setDockerDefaults}
       setDockerDisableConnectivity={props.setDockerDisableConnectivity}
       setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}
@@ -3126,8 +2496,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodes={props.setDisableAllNodes}
       disableAllGuests={props.disableAllGuests}
       setDisableAllGuests={props.setDisableAllGuests}
-      disableAllHosts={props.disableAllHosts}
-      setDisableAllHosts={props.setDisableAllHosts}
+      disableAllAgents={props.disableAllAgents}
+      setDisableAllAgents={props.setDisableAllAgents}
       disableAllStorage={props.disableAllStorage}
       setDisableAllStorage={props.setDisableAllStorage}
       disableAllPBS={props.disableAllPBS}
@@ -3144,8 +2514,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodesOffline={props.setDisableAllNodesOffline}
       disableAllGuestsOffline={props.disableAllGuestsOffline}
       setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
-      disableAllHostsOffline={props.disableAllHostsOffline}
-      setDisableAllHostsOffline={props.setDisableAllHostsOffline}
+      disableAllAgentsOffline={props.disableAllAgentsOffline}
+      setDisableAllAgentsOffline={props.setDisableAllAgentsOffline}
       disableAllPBSOffline={props.disableAllPBSOffline}
       setDisableAllPBSOffline={props.setDisableAllPBSOffline}
       disableAllPMGOffline={props.disableAllPMGOffline}
@@ -3155,14 +2525,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       resetGuestDefaults={props.resetGuestDefaults}
       resetNodeDefaults={props.resetNodeDefaults}
       resetPBSDefaults={props.resetPBSDefaults}
-      resetHostDefaults={props.resetHostDefaults}
+      resetAgentDefaults={props.resetAgentDefaults}
       resetDockerDefaults={props.resetDockerDefaults}
       resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
       resetStorageDefault={props.resetStorageDefault}
       factoryGuestDefaults={props.factoryGuestDefaults}
       factoryNodeDefaults={props.factoryNodeDefaults}
       factoryPBSDefaults={props.factoryPBSDefaults}
-      factoryHostDefaults={props.factoryHostDefaults}
+      factoryAgentDefaults={props.factoryAgentDefaults}
       factoryDockerDefaults={props.factoryDockerDefaults}
       factoryStorageDefault={props.factoryStorageDefault}
     />
@@ -3178,13 +2548,21 @@ interface DestinationsTabProps {
   setEmailConfig: (config: UIEmailConfig) => void;
   appriseConfig: () => UIAppriseConfig;
   setAppriseConfig: (config: UIAppriseConfig) => void;
+  configLoadError: () => string | null;
+  isRetrying: () => boolean;
+  isLoadingDestinations: () => boolean;
+  onRetryLoad: () => void;
 }
 
 function DestinationsTab(props: DestinationsTabProps) {
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
+  const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
+  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(true);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
+  const isLoading = () =>
+    props.isLoadingDestinations() || isLoadingWebhooks() || props.isRetrying();
   const appriseState = () => props.appriseConfig();
   const updateApprise = (partial: Partial<UIAppriseConfig>) => {
     props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
@@ -3207,7 +2585,9 @@ function DestinationsTab(props: DestinationsTabProps) {
     };
   };
   // Load webhooks on mount (email config is now loaded in parent)
-  onMount(async () => {
+  const loadWebhooks = async () => {
+    setWebhookLoadError(null);
+    setIsLoadingWebhooks(true);
     try {
       const hooks = await NotificationsAPI.getWebhooks();
       // Map to local Webhook type - preserve the service type from backend
@@ -3219,7 +2599,13 @@ function DestinationsTab(props: DestinationsTabProps) {
       );
     } catch (err) {
       logger.error('Failed to load webhooks:', err);
+      setWebhookLoadError(getAlertDestinationsWebhookLoadError());
+    } finally {
+      setIsLoadingWebhooks(false);
     }
+  };
+  onMount(() => {
+    void loadWebhooks();
   });
 
   const testEmailConfig = async () => {
@@ -3231,10 +2617,13 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'email',
         config: { ...config } as Record<string, unknown>, // Send current form data, not saved config
       });
-      notificationStore.success('Test email sent successfully! Check your inbox.');
+      notificationStore.success(getAlertDestinationsEmailTestSuccess());
     } catch (err) {
-      logger.error('Failed to send test email:', err);
-      notificationStore.error('Failed to send test email: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      logger.error(getAlertDestinationsEmailTestFailure(), err);
+      const msg =
+        err instanceof Error ? err.message : getAlertDestinationsEmailTestFailure();
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingEmail(false);
     }
@@ -3246,28 +2635,28 @@ function DestinationsTab(props: DestinationsTabProps) {
       const config = buildAppriseRequestConfig();
 
       if (!config.enabled) {
-        throw new Error('Enable Apprise notifications before sending a test.');
+        throw new Error(getAlertDestinationsAppriseValidationError('disabled'));
       }
 
       const targets = config.targets || [];
       if (config.mode === 'cli' && targets.length === 0) {
-        throw new Error('Add at least one Apprise target to test CLI delivery.');
+        throw new Error(getAlertDestinationsAppriseValidationError('missingTargets'));
       }
       if (config.mode === 'http' && !config.serverUrl) {
-        throw new Error('Enter an Apprise API server URL to test API delivery.');
+        throw new Error(getAlertDestinationsAppriseValidationError('missingServerUrl'));
       }
 
       await NotificationsAPI.testNotification({
         type: 'apprise',
         config,
       });
-      notificationStore.success('Test Apprise notification sent successfully!');
+      notificationStore.success(getAlertDestinationsAppriseTestSuccess());
     } catch (err) {
-      logger.error('Failed to send test Apprise notification:', err);
-      notificationStore.error(
-        'Failed to send test Apprise notification: ' +
-        (err instanceof Error ? err.message : 'Unknown error'),
-      );
+      logger.error(getAlertDestinationsAppriseTestFailure(), err);
+      const msg =
+        err instanceof Error ? err.message : getAlertDestinationsAppriseTestFailure();
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingApprise(false);
     }
@@ -3277,292 +2666,386 @@ function DestinationsTab(props: DestinationsTabProps) {
     setTestingWebhook(webhookId);
     try {
       if (webhookData) {
-        // Test unsaved webhook with provided configuration.
-        // Include the ID so the backend can merge redacted header/field values
-        // with the saved originals (headers are masked with ***REDACTED*** on load).
-        const payload = webhookId && webhookId !== 'temp-new-webhook'
-          ? { ...webhookData, id: webhookId }
-          : webhookData;
-        await NotificationsAPI.testWebhook(payload);
+        // Test unsaved webhook with provided configuration
+        await NotificationsAPI.testWebhook(webhookData);
       } else {
         // Test existing webhook by ID
         await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
       }
-      notificationStore.success('Test webhook sent successfully!');
+      notificationStore.success(getAlertWebhookTestSuccess());
     } catch (err) {
-      notificationStore.error(
-        'Failed to send test webhook: ' + (err instanceof Error ? err.message : 'Unknown error'),
-      );
+      const msg = err instanceof Error ? err.message : getAlertWebhookTestFailure();
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingWebhook(null);
     }
   };
 
+  const hasLoadError = () => props.configLoadError() || webhookLoadError();
+
+  const handleRetry = () => {
+    props.onRetryLoad();
+    void loadWebhooks();
+  };
+
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
-      <SettingsPanel
-        title="Email notifications"
-        description="Configure SMTP delivery for alert emails."
-        action={
-          <Toggle
-            checked={props.emailConfig().enabled}
-            onChange={(e) => {
-              props.setEmailConfig({ ...props.emailConfig(), enabled: e.currentTarget.checked });
-              props.setHasUnsavedChanges(true);
-            }}
-            containerClass="sm:self-start"
-            label={
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            }
-          />
+      <Show
+        when={!isLoading()}
+        fallback={
+          <div class="flex w-full flex-col gap-6 md:gap-8 animate-pulse pointer-events-none select-none">
+            {/* Email skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-40 rounded bg-surface-hover" />
+                  <div class="h-3 w-64 rounded bg-surface-hover" />
+                </div>
+                <div class="h-6 w-12 rounded-full bg-surface-hover" />
+              </div>
+              <div class="space-y-3">
+                <div class="h-4 w-24 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+                <div class="h-4 w-32 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+              </div>
+            </div>
+            {/* Apprise skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-44 rounded bg-surface-hover" />
+                  <div class="h-3 w-72 rounded bg-surface-hover" />
+                </div>
+                <div class="h-6 w-12 rounded-full bg-surface-hover" />
+              </div>
+              <div class="space-y-3">
+                <div class="h-4 w-28 rounded bg-surface-hover" />
+                <div class="h-10 w-full rounded bg-surface-hover" />
+              </div>
+            </div>
+            {/* Webhooks skeleton */}
+            <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-2">
+                  <div class="h-5 w-28 rounded bg-surface-hover" />
+                  <div class="h-3 w-56 rounded bg-surface-hover" />
+                </div>
+                <div class="h-4 w-20 rounded bg-surface-hover" />
+              </div>
+              <div class="h-10 w-full rounded bg-surface-hover" />
+            </div>
+          </div>
         }
-        class="min-w-0"
-        bodyClass=""
       >
-        <div
-          class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
-        >
-          <EmailProviderSelect
-            config={props.emailConfig()}
-            onChange={(config) => {
-              props.setEmailConfig(config);
-              props.setHasUnsavedChanges(true);
-            }}
-            onTest={testEmailConfig}
-            testing={testingEmail()}
-          />
-        </div>
-      </SettingsPanel>
-
-      <SettingsPanel
-        title="Apprise notifications"
-        description="Relay grouped alerts through Apprise via CLI or remote API."
-        action={
-          <div class="flex items-center gap-3 sm:self-start">
-            <Toggle
-              checked={appriseState().enabled}
-              onChange={(e) => {
-                updateApprise({ enabled: e.currentTarget.checked });
-                props.setHasUnsavedChanges(true);
-              }}
-              containerClass=""
-              label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {appriseState().enabled ? 'Enabled' : 'Disabled'}
+        <Show when={hasLoadError()}>
+          <Card tone="danger" padding="sm" class="border-red-200 dark:border-red-800 sm:p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2 text-red-800 dark:text-red-200">
+                <AlertTriangleIcon class="h-4 w-4 flex-shrink-0" />
+                <span class="text-sm font-medium">
+                  {getAlertDestinationsLoadErrorBanner(
+                    props.configLoadError() || webhookLoadError() || '',
+                  )}
                 </span>
-              }
-            />
-            <button
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-              disabled={!appriseState().enabled || testingApprise()}
-              onClick={testApprise}
-            >
-              {testingApprise() ? 'Testing...' : 'Send test'}
-            </button>
-          </div>
-        }
-        class="min-w-0"
-        bodyClass="space-y-4"
-      >
-        <div class="space-y-4">
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery mode</label>
-            <select
-              class={formControl}
-              value={appriseState().mode}
-              onInput={(e) => {
-                updateApprise({ mode: e.currentTarget.value as 'cli' | 'http' });
-                props.setHasUnsavedChanges(true);
-              }}
-            >
-              <option value="cli">Local Apprise CLI</option>
-              <option value="http">Remote Apprise API</option>
-            </select>
-            <p class={formHelpText}>Choose how Pulse should execute Apprise notifications.</p>
-          </div>
+              </div>
+              <button
+                class="flex-shrink-0 rounded-md border border-red-300 dark:border-red-700 bg-transparent px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-200 transition hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={props.isRetrying()}
+                onClick={handleRetry}
+              >
+                {getAlertDestinationsRetryLabel(props.isRetrying())}
+              </button>
+            </div>
+          </Card>
+        </Show>
 
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery targets</label>
-            <textarea
-              rows={4}
-              class={`${formControl} font-mono min-h-[120px]`}
-              value={appriseState().targetsText}
-              placeholder={`discord://token
-mailto://alerts@example.com`}
-              onInput={(e) => {
-                updateApprise({ targetsText: e.currentTarget.value });
+        <SettingsPanel
+          title={ALERT_DESTINATIONS_EMAIL_PANEL_TITLE}
+          description={ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION}
+          action={
+            <Toggle
+              checked={props.emailConfig().enabled}
+              onChange={(e) => {
+                props.setEmailConfig({ ...props.emailConfig(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
+              containerClass="sm:self-start"
+                label={
+                  <span class="text-xs font-medium text-muted">
+                    {getAlertDestinationsStatusLabel(props.emailConfig().enabled)}
+                  </span>
+                }
             />
-            <p class={formHelpText}>
-              {appriseState().mode === 'http'
-                ? 'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.'
-                : 'Enter one Apprise URL per line. Commas are also supported.'}
-            </p>
+          }
+          class="min-w-0"
+          bodyClass=""
+        >
+          <div
+            class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
+          >
+            <EmailProviderSelect
+              config={props.emailConfig()}
+              onChange={(config) => {
+                props.setEmailConfig(config);
+                props.setHasUnsavedChanges(true);
+              }}
+              onTest={testEmailConfig}
+              testing={testingEmail()}
+            />
           </div>
-          <Show when={appriseState().mode === 'cli'}>
+        </SettingsPanel>
+
+        <SettingsPanel
+          title={ALERT_DESTINATIONS_APPRISE_PANEL_TITLE}
+          description={ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION}
+          action={
+            <div class="flex items-center gap-3 sm:self-start">
+              <Toggle
+                checked={appriseState().enabled}
+                onChange={(e) => {
+                  updateApprise({ enabled: e.currentTarget.checked });
+                  props.setHasUnsavedChanges(true);
+                }}
+                containerClass=""
+                label={
+                  <span class="text-xs font-medium text-muted">
+                    {getAlertDestinationsStatusLabel(appriseState().enabled)}
+                  </span>
+                }
+              />
+              <button
+                class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!appriseState().enabled || testingApprise()}
+                onClick={testApprise}
+              >
+                {getAlertDestinationsAppriseTestLabel(testingApprise())}
+              </button>
+            </div>
+          }
+          class="min-w-0"
+          bodyClass="space-y-4"
+        >
+          <div class="space-y-4">
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
-              <input
-                type="text"
-                value={appriseState().cliPath}
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                {ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
+              </label>
+              <select
                 class={formControl}
-                placeholder="apprise"
+                value={appriseState().mode}
                 onInput={(e) => {
-                  updateApprise({ cliPath: e.currentTarget.value });
+                  updateApprise({ mode: e.currentTarget.value as 'cli' | 'http' });
+                  props.setHasUnsavedChanges(true);
+                }}
+              >
+                <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
+                <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
+              </select>
+              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_MODE_HELP}</p>
+            </div>
+
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                {ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
+              </label>
+              <textarea
+                rows={4}
+                class={`${formControl} font-mono min-h-[120px]`}
+                value={appriseState().targetsText}
+                placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
+                onInput={(e) => {
+                  updateApprise({ targetsText: e.currentTarget.value });
                   props.setHasUnsavedChanges(true);
                 }}
               />
-              <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
+              <p class={formHelpText}>
+                {getAlertDestinationsAppriseTargetsHelp(appriseState().mode)}
+              </p>
             </div>
-          </Show>
+            <Show when={appriseState().mode === 'cli'}>
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
+                </label>
+                <input
+                  type="text"
+                  value={appriseState().cliPath}
+                  class={formControl}
+                  placeholder={ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER}
+                  onInput={(e) => {
+                    updateApprise({ cliPath: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP}</p>
+              </div>
+            </Show>
 
-          <Show when={appriseState().mode === 'http'}>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div class={`${formField} sm:col-span-2`}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Server URL</label>
-                <input
-                  type="text"
-                  value={appriseState().serverUrl}
-                  class={formControl}
-                  placeholder="https://apprise-api.internal:8000"
-                  onInput={(e) => {
-                    updateApprise({ serverUrl: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Point to an Apprise API endpoint such as https://host:8000.</p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Config key (optional)</label>
-                <input
-                  type="text"
-                  value={appriseState().configKey}
-                  class={formControl}
-                  placeholder="default"
-                  onInput={(e) => {
-                    updateApprise({ configKey: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Targets the /notify/&lt;key&gt; endpoint when provided.</p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key</label>
-                <input
-                  type="password"
-                  value={appriseState().apiKey}
-                  class={formControl}
-                  placeholder="Optional API key"
-                  onInput={(e) => {
-                    updateApprise({ apiKey: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Included with each request when your Apprise API requires authentication.</p>
-              </div>
-              <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key header</label>
-                <input
-                  type="text"
-                  value={appriseState().apiKeyHeader}
-                  class={formControl}
-                  placeholder="X-API-KEY"
-                  onInput={(e) => {
-                    updateApprise({ apiKeyHeader: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
-              </div>
-              <div class={`${formField} sm:col-span-2`}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>TLS verification</label>
-                <label class="inline-flex items-center gap-2">
+            <Show when={appriseState().mode === 'http'}>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class={`${formField} sm:col-span-2`}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL}
+                  </label>
                   <input
-                    type="checkbox"
-                    class="h-4 w-4 rounded border border-gray-300 dark:border-gray-600"
-                    checked={appriseState().skipTlsVerify}
-                    onChange={(e) => {
-                      updateApprise({ skipTlsVerify: e.currentTarget.checked });
+                    type="text"
+                    value={appriseState().serverUrl}
+                    class={formControl}
+                    placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
+                    onInput={(e) => {
+                      updateApprise({ serverUrl: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <span class="text-sm text-gray-600 dark:text-gray-400">Allow self-signed certificates</span>
-                </label>
-                <p class={formHelpText}>Enable only when the Apprise API uses a self-signed certificate.</p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL}
+                  </label>
+                  <input
+                    type="text"
+                    value={appriseState().configKey}
+                    class={formControl}
+                    placeholder={ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER}
+                    onInput={(e) => {
+                      updateApprise({ configKey: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP}</p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL}
+                  </label>
+                  <input
+                    type="password"
+                    value={appriseState().apiKey}
+                    class={formControl}
+                    placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER}
+                    onInput={(e) => {
+                      updateApprise({ apiKey: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HELP}</p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL}
+                  </label>
+                  <input
+                    type="text"
+                    value={appriseState().apiKeyHeader}
+                    class={formControl}
+                    placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER}
+                    onInput={(e) => {
+                      updateApprise({ apiKeyHeader: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP}</p>
+                </div>
+                <div class={`${formField} sm:col-span-2`}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
+                  </label>
+                  <label class="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border border-border"
+                      checked={appriseState().skipTlsVerify}
+                      onChange={(e) => {
+                        updateApprise({ skipTlsVerify: e.currentTarget.checked });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                    />
+                    <span class="text-sm text-muted">
+                      {ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL}
+                    </span>
+                  </label>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TLS_HELP}</p>
+                </div>
               </div>
+            </Show>
+
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                {ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL}
+              </label>
+              <input
+                type="number"
+                min="5"
+                max="120"
+                value={appriseState().timeoutSeconds}
+                class={formControl}
+                onInput={(e) => {
+                  const raw = e.currentTarget.valueAsNumber;
+                  const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
+                  updateApprise({ timeoutSeconds: safe });
+                  props.setHasUnsavedChanges(true);
+                }}
+              />
+              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP}</p>
             </div>
-          </Show>
-
-          <div class={formField}>
-            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timeout (seconds)</label>
-            <input
-              type="number"
-              min="5"
-              max="120"
-              value={appriseState().timeoutSeconds}
-              class={formControl}
-              onInput={(e) => {
-                const raw = e.currentTarget.valueAsNumber;
-                const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
-                updateApprise({ timeoutSeconds: safe });
-                props.setHasUnsavedChanges(true);
-              }}
-            />
-            <p class={formHelpText}>Maximum time to wait for Apprise to respond.</p>
           </div>
-        </div>
-      </SettingsPanel>
+        </SettingsPanel>
 
-      <SettingsPanel
-        title="Webhooks"
-        description="Push alerts to chat apps or automation systems."
-        action={
-          <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-            {webhooks().length} configured
-          </span>
-        }
-        class="min-w-0"
-        bodyClass="space-y-4"
-      >
-        <WebhookConfig
-          webhooks={webhooks()}
-          onAdd={async (webhook) => {
-            try {
-              const created = await NotificationsAPI.createWebhook(webhook);
-              setWebhooks([...webhooks(), created]);
-              notificationStore.success('Webhook added successfully');
-            } catch (err) {
-              logger.error('Failed to add webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to add webhook');
-            }
-          }}
-          onUpdate={async (webhook) => {
-            try {
-              const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
-              setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
-              notificationStore.success('Webhook updated successfully');
-            } catch (err) {
-              logger.error('Failed to update webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to update webhook');
-            }
-          }}
-          onDelete={async (id) => {
-            try {
-              await NotificationsAPI.deleteWebhook(id);
-              setWebhooks(webhooks().filter((w) => w.id !== id));
-              notificationStore.success('Webhook deleted successfully');
-            } catch (err) {
-              logger.error('Failed to delete webhook:', err);
-              notificationStore.error(err instanceof Error ? err.message : 'Failed to delete webhook');
-            }
-          }}
-          onTest={testWebhook}
-          testing={testingWebhook()}
-        />
-      </SettingsPanel>
+        <SettingsPanel
+          title={getAlertWebhooksSectionTitle()}
+          description={getAlertWebhooksSectionDescription()}
+          action={
+            <span class="text-xs text-muted whitespace-nowrap">{webhooks().length} configured</span>
+          }
+          class="min-w-0"
+          bodyClass="space-y-4"
+        >
+          <WebhookConfig
+            webhooks={webhooks()}
+            onAdd={async (webhook) => {
+              try {
+                const created = await NotificationsAPI.createWebhook(webhook);
+                setWebhooks([...webhooks(), created]);
+                notificationStore.success(getAlertWebhookMutationSuccess('add'));
+              } catch (err) {
+                logger.error('Failed to add webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('add'),
+                );
+              }
+            }}
+            onUpdate={async (webhook) => {
+              try {
+                const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
+                setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
+                notificationStore.success(getAlertWebhookMutationSuccess('update'));
+              } catch (err) {
+                logger.error('Failed to update webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('update'),
+                );
+              }
+            }}
+            onDelete={async (id) => {
+              try {
+                await NotificationsAPI.deleteWebhook(id);
+                setWebhooks(webhooks().filter((w) => w.id !== id));
+                notificationStore.success(getAlertWebhookMutationSuccess('delete'));
+              } catch (err) {
+                logger.error('Failed to delete webhook:', err);
+                notificationStore.error(
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('delete'),
+                );
+              }
+            }}
+            onTest={testWebhook}
+            testing={testingWebhook()}
+          />
+        </SettingsPanel>
+      </Show>
     </div>
   );
 }
@@ -3685,27 +3168,7 @@ function ScheduleTab(props: ScheduleTabProps) {
     'Pacific/Honolulu',
   ];
 
-  const quietHourSuppressOptions: Array<{
-    key: keyof QuietHoursConfig['suppress'];
-    label: string;
-    description: string;
-  }> = [
-      {
-        key: 'performance',
-        label: 'Performance alerts',
-        description: 'CPU, memory, disk, and network thresholds stay quiet.',
-      },
-      {
-        key: 'storage',
-        label: 'Storage alerts',
-        description: 'Silence storage usage, disk health, and ZFS events.',
-      },
-      {
-        key: 'offline',
-        label: 'Offline & power state',
-        description: 'Skip connectivity and powered-off alerts during backups.',
-      },
-    ];
+  const quietHourSuppressOptions = getAlertConfigQuietHourSuppressOptions();
 
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
@@ -3721,18 +3184,16 @@ function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            Alert scheduling
+          <h3 class="text-base font-semibold text-base-content">
+            {ALERT_CONFIG_SCHEDULING_TITLE}
           </h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Configure when and how alerts are delivered
-          </p>
+          <p class="mt-1 text-sm text-muted">{ALERT_CONFIG_SCHEDULING_DESCRIPTION}</p>
         </div>
         <button
           type="button"
           onClick={resetToDefaults}
-          class="inline-flex items-center gap-2 self-start rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
+          class="inline-flex items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-surface-hover"
+          title={getAlertConfigResetDefaultsTitle()}
         >
           <svg
             class="h-4 w-4"
@@ -3747,15 +3208,15 @@ function ScheduleTab(props: ScheduleTabProps) {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Reset to defaults
+          {getAlertConfigResetDefaultsLabel()}
         </button>
       </div>
 
       <div class="grid gap-6 xl:grid-cols-2">
         {/* Quiet Hours */}
         <SettingsPanel
-          title="Quiet hours"
-          description="Pause non-critical alerts during specific times."
+          title={ALERT_CONFIG_QUIET_HOURS_TITLE}
+          description={ALERT_CONFIG_QUIET_HOURS_DESCRIPTION}
           action={
             <Toggle
               checked={quietHours().enabled}
@@ -3765,7 +3226,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-muted">
                   {quietHours().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -3778,7 +3239,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Start time
+                    {ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL}
                   </label>
                   <input
                     type="time"
@@ -3791,7 +3252,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>End time</label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL}
+                  </label>
                   <input
                     type="time"
                     value={quietHours().end}
@@ -3803,7 +3266,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timezone</label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL}
+                  </label>
                   <select
                     value={quietHours().timezone}
                     onChange={(e) => {
@@ -3835,17 +3300,14 @@ function ScheduleTab(props: ScheduleTabProps) {
                           props.setHasUnsavedChanges(true);
                         }}
                         title={day.fullLabel}
-                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
-                          ? 'rounded-md bg-blue-500 text-white shadow-sm'
-                          : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
-                          }`}
+                        class={getAlertQuietDayButtonClass(quietHours().days[day.id])}
                       >
                         {day.label}
                       </button>
                     )}
                   </For>
                 </div>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <p class="mt-2 text-xs text-muted">
                   <Show
                     when={
                       quietHours().days.monday &&
@@ -3875,21 +3337,18 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </p>
               </div>
 
-              <div class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+              <div class="space-y-3 border-t border-border pt-4">
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} block`}>
                   Suppress categories
                 </span>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-muted">
                   Critical alerts in selected categories will stay silent during quiet hours.
                 </p>
                 <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
-                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
-                          : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                          }`}
+                        class={getAlertQuietSuppressCardClass(quietHours().suppress[option.key])}
                       >
                         <input
                           type="checkbox"
@@ -3907,10 +3366,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                           class="sr-only"
                         />
                         <div
-                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300 dark:border-gray-600'
-                            }`}
+                          class={getAlertQuietSuppressCheckboxClass(
+                            quietHours().suppress[option.key],
+                          )}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
@@ -3920,17 +3378,17 @@ function ScheduleTab(props: ScheduleTabProps) {
                               stroke="currentColor"
                               stroke-width="3"
                             >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
                             </svg>
                           </Show>
                         </div>
                         <div>
-                          <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                            {option.label}
-                          </p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">
-                            {option.description}
-                          </p>
+                          <p class="text-sm font-medium text-base-content">{option.label}</p>
+                          <p class="text-xs text-muted">{option.description}</p>
                         </div>
                       </label>
                     )}
@@ -3943,8 +3401,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Cooldown Period */}
         <SettingsPanel
-          title="Alert cooldown"
-          description="Limit alert frequency to prevent spam."
+          title={ALERT_CONFIG_COOLDOWN_TITLE}
+          description={ALERT_CONFIG_COOLDOWN_DESCRIPTION}
           action={
             <Toggle
               checked={cooldown().enabled}
@@ -3964,8 +3422,8 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {cooldown().enabled ? 'Enabled' : 'Disabled'}
+                <span class="text-xs font-medium text-muted">
+                  {getAlertConfigToggleStatusLabel(cooldown().enabled)}
                 </span>
               }
             />
@@ -3977,7 +3435,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Cooldown period
+                    {ALERT_CONFIG_COOLDOWN_PERIOD_LABEL}
                   </label>
                   <div class="relative">
                     <input
@@ -3995,18 +3453,18 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      minutes
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted">
+                      {ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX}
                     </span>
                   </div>
                   <p class={`${formHelpText} mt-1`}>
-                    Minimum time between alerts for the same issue
+                    {ALERT_CONFIG_COOLDOWN_PERIOD_HELP}
                   </p>
                 </div>
 
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Max alerts / hour
+                    {ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL}
                   </label>
                   <div class="relative">
                     <input
@@ -4024,11 +3482,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      alerts
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted">
+                      {ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX}
                     </span>
                   </div>
-                  <p class={`${formHelpText} mt-1`}>Per guest/metric combination</p>
+                  <p class={`${formHelpText} mt-1`}>{ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP}</p>
                 </div>
               </div>
             </div>
@@ -4037,8 +3495,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Alert Grouping */}
         <SettingsPanel
-          title="Smart grouping"
-          description="Bundle similar alerts together."
+          title={ALERT_CONFIG_GROUPING_TITLE}
+          description={ALERT_CONFIG_GROUPING_DESCRIPTION}
           action={
             <Toggle
               checked={grouping().enabled}
@@ -4048,8 +3506,8 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {grouping().enabled ? 'Enabled' : 'Disabled'}
+                <span class="text-xs font-medium text-muted">
+                  {getAlertConfigToggleStatusLabel(grouping().enabled)}
                 </span>
               }
             />
@@ -4060,7 +3518,7 @@ function ScheduleTab(props: ScheduleTabProps) {
             <div class="space-y-4">
               <div class={formField}>
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  Grouping window
+                  {ALERT_CONFIG_GROUPING_WINDOW_LABEL}
                 </label>
                 <div class="flex items-center gap-3">
                   <input
@@ -4074,25 +3532,22 @@ function ScheduleTab(props: ScheduleTabProps) {
                     }}
                     class="flex-1"
                   />
-                  <div class="w-16 rounded-md bg-gray-100 px-2 py-1 text-center text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                  <div class="w-16 rounded-md bg-surface-alt px-2 py-1 text-center text-sm text-base-content">
                     {grouping().window} min
                   </div>
                 </div>
                 <p class={`${formHelpText} mt-1`}>
-                  Alerts within this window are grouped together. Set to 0 to send immediately.
+                  {ALERT_CONFIG_GROUPING_WINDOW_HELP}
                 </p>
               </div>
 
               <div>
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} mb-2 block`}>
-                  Grouping strategy
+                  {ALERT_CONFIG_GROUPING_STRATEGY_LABEL}
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byNode
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                      }`}
+                    class={getAlertGroupingCardClass(grouping().byNode ?? false)}
                   >
                     <input
                       type="checkbox"
@@ -4103,12 +3558,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                    >
+                    <div class={getAlertGroupingCheckboxClass(grouping().byNode ?? false)}>
                       <Show when={grouping().byNode}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -4121,16 +3571,13 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      By Node
+                    <span class="text-sm font-medium text-base-content">
+                      {ALERT_CONFIG_GROUPING_BY_NODE}
                     </span>
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byGuest
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                      }`}
+                    class={getAlertGroupingCardClass(grouping().byGuest ?? false)}
                   >
                     <input
                       type="checkbox"
@@ -4141,12 +3588,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                    >
+                    <div class={getAlertGroupingCheckboxClass(grouping().byGuest ?? false)}>
                       <Show when={grouping().byGuest}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -4159,8 +3601,8 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      By Guest
+                    <span class="text-sm font-medium text-base-content">
+                      {ALERT_CONFIG_GROUPING_BY_GUEST}
                     </span>
                   </label>
                 </div>
@@ -4171,8 +3613,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Recovery notifications */}
         <SettingsPanel
-          title="Recovery notifications"
-          description="Send a follow-up when an alert returns to normal."
+          title={ALERT_CONFIG_RECOVERY_TITLE}
+          description={ALERT_CONFIG_RECOVERY_DESCRIPTION}
           action={
             <Toggle
               checked={notifyOnResolve()}
@@ -4182,8 +3624,8 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {notifyOnResolve() ? 'Enabled' : 'Disabled'}
+                <span class="text-xs font-medium text-muted">
+                  {getAlertConfigToggleStatusLabel(notifyOnResolve())}
                 </span>
               }
             />
@@ -4191,14 +3633,14 @@ function ScheduleTab(props: ScheduleTabProps) {
           class="space-y-3"
         >
           <p class={formHelpText}>
-            Sends on the same channels as live alerts to confirm when a condition clears.
+            {getAlertConfigRecoveryHelp()}
           </p>
         </SettingsPanel>
 
         {/* Escalation Rules */}
         <SettingsPanel
-          title="Alert escalation"
-          description="Notify additional contacts for persistent issues."
+          title={ALERT_CONFIG_ESCALATION_TITLE}
+          description={ALERT_CONFIG_ESCALATION_DESCRIPTION}
           action={
             <Toggle
               checked={escalation().enabled}
@@ -4208,8 +3650,8 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  {escalation().enabled ? 'Enabled' : 'Disabled'}
+                <span class="text-xs font-medium text-muted">
+                  {getAlertConfigToggleStatusLabel(escalation().enabled)}
                 </span>
               }
             />
@@ -4218,14 +3660,14 @@ function ScheduleTab(props: ScheduleTabProps) {
         >
           <Show when={escalation().enabled}>
             <div class="space-y-3">
-              <p class={formHelpText}>Define escalation levels for unresolved alerts:</p>
+              <p class={formHelpText}>{getAlertConfigEscalationHelp()}</p>
               <For each={escalation().levels}>
                 {(level, index) => (
-                  <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/40">
+                  <div class="flex items-center gap-3 rounded-md border border-border bg-surface-hover p-3">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                          After
+                        <span class="text-xs font-medium text-muted">
+                          {ALERT_CONFIG_ESCALATION_AFTER_LABEL}
                         </span>
                         <input
                           type="number"
@@ -4244,11 +3686,13 @@ function ScheduleTab(props: ScheduleTabProps) {
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                         />
-                        <span class="text-xs text-gray-600 dark:text-gray-400">min</span>
+                        <span class="text-xs text-muted">
+                          {ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}
+                        </span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                          Notify
+                        <span class="text-xs font-medium text-muted">
+                          {ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
                         </span>
                         <select
                           value={level.notify}
@@ -4263,21 +3707,29 @@ function ScheduleTab(props: ScheduleTabProps) {
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} flex-1`}
                         >
-                          <option value="email">Email</option>
-                          <option value="webhook">Webhooks</option>
-                          <option value="all">All Channels</option>
+                          <option value="email">
+                            {getAlertConfigEscalationNotifyLabel('email')}
+                          </option>
+                          <option value="webhook">
+                            {getAlertConfigEscalationNotifyLabel('webhook')}
+                          </option>
+                          <option value="all">
+                            {getAlertConfigEscalationNotifyLabel('all')}
+                          </option>
                         </select>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => {
-                        const newLevels = escalation().levels.filter((_, i) => i !== index());
+                        const newLevels = escalation().levels.filter(
+                          (_: EscalationLevel, i: number) => i !== index(),
+                        );
                         setEscalation({ ...escalation(), levels: newLevels });
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
-                      title="Remove escalation level"
+                      class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900"
+                      title={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                     >
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -4306,7 +3758,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   });
                   props.setHasUnsavedChanges(true);
                 }}
-                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -4316,7 +3768,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                   />
                 </svg>
-                Add Escalation Level
+                {ALERT_CONFIG_ESCALATION_ADD_LABEL}
               </button>
             </div>
           </Show>
@@ -4324,18 +3776,15 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Configuration Summary */}
         <SettingsPanel
-          title="Configuration summary"
-          description="Preview of the active schedule settings."
+          title={ALERT_CONFIG_SUMMARY_TITLE}
+          description={ALERT_CONFIG_SUMMARY_DESCRIPTION}
           tone="muted"
           padding="lg"
           bodyClass="space-y-1 text-sm text-blue-800 dark:text-blue-300"
           class="lg:col-span-2"
         >
           <Show when={quietHours().enabled}>
-            <p>
-              • Quiet hours active from {quietHours().start} to {quietHours().end} (
-              {quietHours().timezone})
-            </p>
+            <p>{getAlertConfigSummaryQuietHours(quietHours().start, quietHours().end, quietHours().timezone)}</p>
           </Show>
           <Show
             when={
@@ -4346,40 +3795,30 @@ function ScheduleTab(props: ScheduleTabProps) {
             }
           >
             <p>
-              • Suppressing{' '}
-              {quietHourSuppressOptions
-                .filter((option) => quietHours().suppress[option.key])
-                .map((option) => option.label)
-                .join(', ')}{' '}
-              during quiet hours
+              {getAlertConfigSummarySuppressing(
+                quietHourSuppressOptions
+                  .filter((option) => quietHours().suppress[option.key])
+                  .map((option) => option.label),
+              )}
             </p>
           </Show>
           <Show when={cooldown().enabled}>
-            <p>
-              • {cooldown().minutes} minute cooldown between alerts, max {cooldown().maxAlerts}{' '}
-              alerts per hour
-            </p>
+            <p>{getAlertConfigSummaryCooldown(cooldown().minutes, cooldown().maxAlerts)}</p>
           </Show>
           <Show when={grouping().enabled}>
             <p>
-              • Grouping alerts within {grouping().window} minute windows
-              <Show when={grouping().byNode || grouping().byGuest}>
-                {' '}
-                by{' '}
-                {[grouping().byNode && 'node', grouping().byGuest && 'guest']
-                  .filter(Boolean)
-                  .join(' and ')}
-              </Show>
+                {getAlertConfigSummaryGrouping(
+                  grouping().window,
+                  grouping().byNode ?? false,
+                  grouping().byGuest ?? false,
+                )}
             </p>
           </Show>
           <Show when={notifyOnResolve()}>
-            <p>• Recovery notifications enabled when alerts clear</p>
+            <p>{getAlertConfigSummaryRecoveryEnabled()}</p>
           </Show>
           <Show when={escalation().enabled && escalation().levels.length > 0}>
-            <p>
-              • {escalation().levels.length} escalation level
-              {escalation().levels.length > 1 ? 's' : ''} configured
-            </p>
+            <p>{getAlertConfigSummaryEscalation(escalation().levels.length)}</p>
           </Show>
           <Show
             when={
@@ -4389,26 +3828,82 @@ function ScheduleTab(props: ScheduleTabProps) {
               !escalation().enabled
             }
           >
-            <p>• All notification controls are disabled - alerts will be sent immediately</p>
+            <p>{getAlertConfigSummaryAllDisabled()}</p>
           </Show>
         </SettingsPanel>
       </div>
     </div>
   );
 }
+
+export function IncidentEventFilters(props: {
+  filters: () => Set<string>;
+  setFilters: (next: Set<string>) => void;
+}) {
+  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
+    const next = new Set(props.filters());
+    if (next.has(type)) {
+      next.delete(type);
+    } else {
+      next.add(type);
+    }
+    props.setFilters(next);
+  };
+
+  return (
+    <div class={getAlertIncidentEventFilterContainerClass('compact')}>
+      <span class={getAlertIncidentEventFilterLabelClass('compact')}>Filters</span>
+      <button
+        type="button"
+        class={getAlertIncidentEventFilterActionButtonClass()}
+        onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class={getAlertIncidentEventFilterActionButtonClass()}
+        onClick={() => props.setFilters(new Set())}
+      >
+        None
+      </button>
+      <For each={INCIDENT_EVENT_TYPES}>
+        {(type) => {
+          const selected = () => props.filters().has(type);
+          return (
+            <button
+              type="button"
+              class={getAlertIncidentEventFilterChipClass(selected(), 'compact')}
+              onClick={() => toggleFilter(type)}
+            >
+              {INCIDENT_EVENT_LABELS[type]}
+            </button>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
 // History Tab - Comprehensive alert table
 function HistoryTab(props: {
   hasAIAlertsFeature: () => boolean;
   licenseLoading: () => boolean;
+  getResource: ReturnType<typeof useResources>['get'];
+  allResources: ReturnType<typeof useResources>['resources'];
 }) {
-  const { state, activeAlerts } = useWebSocket();
+  const { activeAlerts } = useWebSocket();
+  const alertFrequencySelectionPresentation = createMemo(() =>
+    getAlertFrequencySelectionPresentation(),
+  );
 
   // Filter states with localStorage persistence
   const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
     'alertHistoryTimeFilter',
     '7d',
     {
-      deserialize: (raw) => (raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d'),
+      deserialize: (raw) =>
+        raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d',
     },
   );
   const [severityFilter, setSeverityFilter] = usePersistentSignal<'all' | 'warning' | 'critical'>(
@@ -4422,21 +3917,39 @@ function HistoryTab(props: {
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
-  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{ resourceId: string; resourceName: string } | null>(null);
+  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{
+    resourceId: string;
+    resourceName: string;
+  } | null>(null);
   const [resourceIncidents, setResourceIncidents] = createSignal<Record<string, Incident[]>>({});
-  const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(new Set());
+  const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<
+    Record<string, boolean>
+  >({});
+  const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(
+    new Set(),
+  );
   const [historyIncidentEventFilters, setHistoryIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
   const [resourceIncidentEventFilters, setResourceIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
+  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>(
+    {},
+  );
   const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
+  const [incidentErrors, setIncidentErrors] = createSignal<Record<string, boolean>>({});
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
   const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
+  const { isMobile } = useBreakpoint();
+  const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const activeFilterCount = createMemo(() => {
+    let count = 0;
+    if (timeFilter() !== '7d') count++;
+    if (severityFilter() !== 'all') count++;
+    return count;
+  });
   const MS_PER_HOUR = 60 * 60 * 1000;
   const userLocale =
     Intl.DateTimeFormat().resolvedOptions().locale ||
@@ -4498,9 +4011,6 @@ function HistoryTab(props: {
     }
   };
 
-  // Ref for search input
-  let searchInputRef: HTMLInputElement | undefined;
-
   // Persist filter changes to localStorage
 
   // Clear chart selection when high-level filters change
@@ -4526,34 +4036,24 @@ function HistoryTab(props: {
   onMount(() => {
     fetchHistory(timeFilter());
 
-    // Add keyboard event listeners
-    const handleKeydown = (e: KeyboardEvent) => {
-      // If already focused on an input, select, or textarea, don't interfere
-      const activeElement = document.activeElement;
-      if (
-        activeElement &&
-        (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          activeElement.tagName === 'SELECT')
-      ) {
-        // Handle Escape to clear and unfocus
-        if (e.key === 'Escape' && activeElement === searchInputRef) {
-          setSearchTerm('');
-          searchInputRef.blur();
-        }
-        return;
-      }
-
-      // If typing a letter, number, or space, focus the search input
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        searchInputRef?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeydown);
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      setAlertHistory([]);
+      setSelectedBarIndex(null);
+      setResourceIncidentPanel(null);
+      setResourceIncidents({});
+      setResourceIncidentLoading({});
+      setExpandedResourceIncidentIds(new Set<string>());
+      setIncidentTimelines({});
+      setIncidentLoading({});
+      setIncidentErrors({});
+      setExpandedIncidents(new Set<string>());
+      setIncidentNoteDrafts({});
+      setIncidentNoteSaving(new Set<string>());
+      void fetchHistory(timeFilter());
+    });
 
     onCleanup(() => {
-      document.removeEventListener('keydown', handleKeydown);
+      unsubscribeOrgSwitched();
       // Prevent pending requests from updating state after unmount
       fetchRequestId++;
     });
@@ -4598,8 +4098,8 @@ function HistoryTab(props: {
       const incidents = await AlertsAPI.getIncidentsForResource(resourceId, limit);
       setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
     } catch (error) {
-      logger.error('Failed to load resource incidents', error);
-      notificationStore.error('Failed to load resource incidents');
+      logger.error(getAlertResourceIncidentLoadFailure(), error);
+      notificationStore.error(getAlertResourceIncidentLoadFailure());
     } finally {
       setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
     }
@@ -4671,61 +4171,33 @@ function HistoryTab(props: {
     return `${startDay}, ${startTimeStr} → ${endDay}, ${endTimeStr}`;
   };
 
-  // Get resource type (VM, CT, Node, Storage, Docker, PBS, etc.)
+  // Get resource type (VM, Container, Node, Storage, Docker, PBS, etc.)
   const getResourceType = (
     resourceName: string,
     metadata?: Record<string, unknown> | undefined,
+    resourceId?: string,
   ) => {
+    // 1. Canonical path: metadata.resourceType (set by checkMetric on the backend)
     const metadataType =
-      typeof metadata?.resourceType === 'string'
-        ? (metadata.resourceType as string)
-        : undefined;
+      typeof metadata?.resourceType === 'string' ? (metadata.resourceType as string) : undefined;
     if (metadataType && metadataType.trim().length > 0) {
       return metadataType;
     }
 
-    // Check VMs and containers
-    const vm = state.vms?.find((v) => v.name === resourceName);
-    if (vm) return 'VM';
+    // 2. Unified resource lookup by ID (preferred fallback)
+    if (resourceId) {
+      const resource = props.getResource(resourceId);
+      if (resource) {
+        return unifiedTypeToAlertDisplayType(resource.type);
+      }
+    }
 
-    const container = state.containers?.find((c) => c.name === resourceName);
-    if (container) return 'CT';
-
-    // Check nodes
-    const node = state.nodes?.find((n) => n.name === resourceName);
-    if (node) return 'Node';
-
-    // Check storage
-    const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
-    if (storage) return 'Storage';
-
-    // Docker hosts
-    const dockerHost = state.dockerHosts?.find(
-      (host) =>
-        host.displayName === resourceName ||
-        host.hostname === resourceName ||
-        host.agentId === resourceName ||
-        host.id === resourceName,
-    );
-    if (dockerHost) return 'Container Host';
-
-    // Docker containers (via known hosts)
-    const dockerContainer = state.dockerHosts
-      ?.flatMap((host) => host.containers || [])
-      .find((c) => c.name === resourceName || c.id === resourceName);
-    if (dockerContainer) return 'Container';
-
-    // PBS instances
-    const pbsInstance = state.pbs?.find(
-      (pbs) => pbs.name === resourceName || pbs.host === resourceName || pbs.id === resourceName,
-    );
-    if (pbsInstance) return 'PBS';
-
-    // Ceph clusters
-    const cephCluster = state.cephClusters?.find(
-      (cluster) => cluster.name === resourceName || cluster.id === resourceName,
-    );
-    if (cephCluster) return 'Ceph';
+    // 3. Unified resource lookup by name (for old historical alerts without resourceId)
+    const resources = props.allResources();
+    const byName = resources.find((r) => r.name === resourceName || r.displayName === resourceName);
+    if (byName) {
+      return unifiedTypeToAlertDisplayType(byName.type);
+    }
 
     return 'Unknown';
   };
@@ -4745,11 +4217,8 @@ function HistoryTab(props: {
     node?: string;
     nodeDisplayName?: string;
     severity: string; // warning, critical for alerts; severity for findings
-    // Aliases for backward compat with existing rendering code
-    level: string; // same as severity
-    type: string; // same as title
-    message?: string; // same as description
     title: string;
+    rawAlertType?: string; // original backend alert type for InvestigateAlertButton
     description?: string;
     acknowledged?: boolean;
     autoResolved?: boolean;
@@ -4768,15 +4237,13 @@ function HistoryTab(props: {
         startTime: alert.startTime,
         duration: formatDuration(alert.startTime),
         resourceName: alert.resourceName,
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceType: getResourceType(alert.resourceName, alert.metadata, alert.resourceId),
         resourceId: alert.resourceId,
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        level: alert.level,
-        type: alert.type,
-        message: alert.message,
-        title: alert.type,
+        title: alertTypeDisplayLabel(alert.type),
+        rawAlertType: alert.type,
         description: alert.message,
         acknowledged: false,
       });
@@ -4797,15 +4264,13 @@ function HistoryTab(props: {
         endTime: alert.lastSeen,
         duration: formatDuration(alert.startTime, alert.lastSeen),
         resourceName: alert.resourceName,
-        resourceType: getResourceType(alert.resourceName, alert.metadata),
+        resourceType: getResourceType(alert.resourceName, alert.metadata, alert.resourceId),
         resourceId: alert.resourceId,
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        level: alert.level,
-        type: alert.type,
-        message: alert.message,
-        title: alert.type,
+        title: alertTypeDisplayLabel(alert.type),
+        rawAlertType: alert.type,
         description: alert.message,
         acknowledged: alert.acknowledged,
       });
@@ -4832,7 +4297,10 @@ function HistoryTab(props: {
         const description = item.description?.toLowerCase() ?? '';
         const nodeName = item.node?.toLowerCase() ?? '';
         return (
-          name.includes(term) || title.includes(term) || description.includes(term) || nodeName.includes(term)
+          name.includes(term) ||
+          title.includes(term) ||
+          description.includes(term) ||
+          nodeName.includes(term)
         );
       });
     }
@@ -4870,13 +4338,10 @@ function HistoryTab(props: {
       }
     }
 
-    // Sort by start time (newest first), with id as a stable tiebreaker to
-    // prevent visual scrambling when multiple alerts share the same startTime (#1218)
-    return [...filtered].sort((a, b) => {
-      const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-      if (timeDiff !== 0) return timeDiff;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    });
+    // Sort by start time (newest first)
+    return [...filtered].sort(
+      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+    );
   });
 
   const monthNames = [
@@ -4949,11 +4414,7 @@ function HistoryTab(props: {
 
     alertData().forEach((alert) => {
       const alertDate = new Date(alert.startTime);
-      const dateOnly = new Date(
-        alertDate.getFullYear(),
-        alertDate.getMonth(),
-        alertDate.getDate(),
-      );
+      const dateOnly = new Date(alertDate.getFullYear(), alertDate.getMonth(), alertDate.getDate());
       const dateKey = dateOnly.getTime();
 
       if (!groups.has(dateKey)) {
@@ -5013,8 +4474,7 @@ function HistoryTab(props: {
         }, now);
         const rawRangeHours = Math.max(1, Math.ceil((now - earliest) / msPerHour));
         const rawBucketSize = Math.max(1, Math.ceil(rawRangeHours / maxBuckets));
-        bucketSizeHours =
-          niceBucketSizes.find((size) => size >= rawBucketSize) ?? rawBucketSize;
+        bucketSizeHours = niceBucketSizes.find((size) => size >= rawBucketSize) ?? rawBucketSize;
         computedRangeHours = Math.max(rawRangeHours, bucketSizeHours);
         const bucketsNeeded = Math.min(
           Math.max(1, Math.ceil(computedRangeHours / bucketSizeHours)),
@@ -5062,20 +4522,30 @@ function HistoryTab(props: {
     };
   });
 
-  const loadIncidentTimeline = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const loadIncidentTimeline = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     setIncidentLoading((prev) => ({ ...prev, [rowKey]: true }));
     try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
+      const timeline = await AlertsAPI.getIncidentTimeline(alertIdentifier, startedAt);
       setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
+      setIncidentErrors((prev) => ({ ...prev, [rowKey]: false }));
     } catch (error) {
-      logger.error('Failed to load incident timeline', error);
-      notificationStore.error('Failed to load incident timeline');
+      logger.error(getAlertResourceIncidentTimelineFailure(), error);
+      notificationStore.error(getAlertResourceIncidentTimelineFailure());
+      setIncidentErrors((prev) => ({ ...prev, [rowKey]: true }));
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [rowKey]: false }));
     }
   };
 
-  const toggleIncidentTimeline = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const toggleIncidentTimeline = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     const expanded = expandedIncidents();
     const next = new Set(expanded);
     if (next.has(rowKey)) {
@@ -5086,11 +4556,15 @@ function HistoryTab(props: {
     next.add(rowKey);
     setExpandedIncidents(next);
     if (!(rowKey in incidentTimelines())) {
-      await loadIncidentTimeline(rowKey, alertId, startedAt);
+      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
     }
   };
 
-  const saveIncidentNote = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const saveIncidentNote = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     const note = (incidentNoteDrafts()[rowKey] || '').trim();
     if (!note) {
       return;
@@ -5098,13 +4572,13 @@ function HistoryTab(props: {
     setIncidentNoteSaving((prev) => new Set(prev).add(rowKey));
     try {
       const incidentId = incidentTimelines()[rowKey]?.id;
-      await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
+      await AlertsAPI.addIncidentNote({ alertIdentifier, incidentId, note });
       setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: '' }));
-      await loadIncidentTimeline(rowKey, alertId, startedAt);
-      notificationStore.success('Incident note saved');
+      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
+      notificationStore.success(getAlertResourceIncidentNoteSavedLabel());
     } catch (error) {
-      logger.error('Failed to save incident note', error);
-      notificationStore.error('Failed to save incident note');
+      logger.error(getAlertResourceIncidentNoteSaveFailure(), error);
+      notificationStore.error(getAlertResourceIncidentNoteSaveFailure());
     } finally {
       setIncidentNoteSaving((prev) => {
         const next = new Set(prev);
@@ -5194,18 +4668,12 @@ function HistoryTab(props: {
     const end = start + totalDurationMs;
 
     const desiredTicks = Math.min(5, trends.bucketTimes.length + 1);
-    const step = Math.max(
-      1,
-      Math.round(trends.bucketTimes.length / Math.max(1, desiredTicks - 1)),
-    );
+    const step = Math.max(1, Math.round(trends.bucketTimes.length / Math.max(1, desiredTicks - 1)));
     const ticks: Array<{ position: number; label: string }> = [];
 
     for (let index = 0; index < trends.bucketTimes.length; index += step) {
       const ts = trends.bucketTimes[index];
-      const position = Math.min(
-        1,
-        Math.max(0, (ts - start) / (totalDurationMs || 1)),
-      );
+      const position = Math.min(1, Math.max(0, (ts - start) / (totalDurationMs || 1)));
       ticks.push({
         position,
         label: formatAxisTickLabel(ts, bucketHours, totalHours),
@@ -5264,36 +4732,31 @@ function HistoryTab(props: {
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <SectionHeader
             title="Alert frequency"
-            description={
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                {alertData().length} alerts
-              </span>
-            }
+            description={<span class="text-xs text-muted">{alertData().length} alerts</span>}
             size="sm"
             class="flex-1"
           />
           <div class="flex flex-col items-start gap-2 sm:items-end">
             <Show when={selectedBucketDetails()}>
               {(selection) => (
-                <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
-                  <span class="font-medium uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">
+                <div class={alertFrequencySelectionPresentation().containerClass}>
+                  <span class={alertFrequencySelectionPresentation().labelClass}>
                     Filtered Range
                   </span>
                   <span class="font-mono text-[11px]">{selection().rangeLabel}</span>
                 </div>
               )}
             </Show>
-            <div class="flex flex-col items-start gap-1 text-xs text-gray-500 dark:text-gray-400 sm:items-end">
+            <div class="flex flex-col items-start gap-1 text-xs text-muted sm:items-end">
               <div>
-                <span class="font-medium text-gray-600 dark:text-gray-300">Bar size:</span>{' '}
-                {bucketDurationLabel()}
+                <span class="font-medium text-muted">Bar size:</span> {bucketDurationLabel()}
               </div>
               <Show when={rangeSummary()}>
                 {(summary) => (
                   <div class="flex items-center gap-1 whitespace-nowrap">
-                    <span class="font-medium text-gray-600 dark:text-gray-300">Range:</span>
+                    <span class="font-medium text-muted">Range:</span>
                     <span>{summary().startLabel}</span>
-                    <span class="text-gray-400 dark:text-gray-500">→</span>
+                    <span class="text-muted">→</span>
                     <span>{summary().endLabel}</span>
                   </div>
                 )}
@@ -5304,19 +4767,19 @@ function HistoryTab(props: {
                 <button
                   type="button"
                   onClick={() => setSelectedBarIndex(null)}
-                  class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                  class={getAlertFrequencyClearFilterButtonClass()}
                 >
                   Clear filter
                 </button>
               </Show>
-              <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-2 text-xs text-muted">
                 <span class="flex items-center gap-1">
-                  <div class="h-2 w-2 rounded-full bg-yellow-500"></div>
-                  {alertData().filter((a) => a.level === 'warning').length} warnings
+                  <div class={getAlertSeverityDotClass('warning')}></div>
+                  {alertData().filter((a) => a.severity === 'warning').length} warnings
                 </span>
                 <span class="flex items-center gap-1">
-                  <div class="h-2 w-2 rounded-full bg-red-500"></div>
-                  {alertData().filter((a) => a.level === 'critical').length} critical
+                  <div class={getAlertSeverityDotClass('critical')}></div>
+                  {alertData().filter((a) => a.severity === 'critical').length} critical
                 </span>
               </div>
             </div>
@@ -5324,7 +4787,7 @@ function HistoryTab(props: {
         </div>
 
         {/* Mini sparkline chart */}
-        <div class="mb-1 text-[10px] text-gray-400 dark:text-gray-500">
+        <div class="mb-1 text-[10px] text-muted">
           Showing {alertTrends().buckets.length} time periods ({bucketDurationLabel()} each) ·
           Total: {alertData().length} alerts
         </div>
@@ -5333,13 +4796,12 @@ function HistoryTab(props: {
         {(() => {
           const trends = alertTrends();
           return (
-            <div class="rounded bg-gray-100 p-1 dark:bg-gray-800">
+            <div class="rounded bg-surface-alt p-1">
               <div class="flex h-12 items-end gap-1">
                 {trends.buckets.map((val, i) => {
                   const scaledHeight =
                     val > 0 ? Math.min(100, Math.max(20, Math.log(val + 1) * 20)) : 0;
-                  const pixelHeight =
-                    val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
+                  const pixelHeight = val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
                   const isSelected = selectedBarIndex() === i;
                   const bucketStart = trends.bucketTimes[i];
                   const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
@@ -5348,9 +4810,12 @@ function HistoryTab(props: {
                     trends.bucketSize % 24 === 0
                       ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
                       : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
-                  const countLabel =
-                    val === 0 ? 'No alerts' : `${val} alert${val === 1 ? '' : 's'}`;
-                  const tooltipContent = [countLabel, `${bucketDurationText} period`, bucketRangeLabel].join('\n');
+                  const countLabel = getAlertBucketCountLabel(val);
+                  const tooltipContent = [
+                    countLabel,
+                    `${bucketDurationText} period`,
+                    bucketRangeLabel,
+                  ].join('\n');
                   return (
                     <div
                       class="flex-1 relative flex items-end cursor-pointer"
@@ -5367,7 +4832,7 @@ function HistoryTab(props: {
                       }}
                     >
                       {/* Background track for all slots */}
-                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-gray-300 opacity-30 dark:bg-gray-600"></div>
+                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></div>
                       {/* Actual bar */}
                       <div
                         class="relative w-full rounded-sm transition-all"
@@ -5402,16 +4867,16 @@ function HistoryTab(props: {
 
         <Show when={axisTicks().length > 0}>
           <div class="relative mt-3 h-10">
-            <div class="absolute inset-x-0 top-0 h-px bg-gray-200 dark:bg-gray-700"></div>
+            <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
             <For each={axisTicks()}>
               {(tick) => (
                 <div
                   class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
                   style={{ left: `${tick.position * 100}%` }}
                 >
-                  <div class="h-3 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <div class="h-3 w-px bg-slate-300"></div>
                   <div
-                    class="mt-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 transform"
+                    class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
                     classList={{
                       '-translate-x-1/2': tick.align === 'center',
                       '-translate-x-full': tick.align === 'end',
@@ -5427,46 +4892,52 @@ function HistoryTab(props: {
       </Card>
 
       {/* Filters */}
-      <div class="flex flex-wrap gap-2 mb-4">
-        <select
-          value={timeFilter()}
-          onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+      <Card padding="sm" class="mb-4">
+        <PageControls
+          search={
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={getAlertHistorySearchPlaceholder()}
+              class="w-full"
+              clearOnEscape
+              history={{ storageKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
+            />
+          }
+          mobileFilters={{
+            enabled: isMobile(),
+            onToggle: () => setFiltersOpen((o) => !o),
+            count: activeFilterCount(),
+          }}
+          showFilters={!isMobile() || filtersOpen()}
         >
-          <option value="24h">Last 24h</option>
-          <option value="7d">Last 7d</option>
-          <option value="30d">Last 30d</option>
-          <option value="all">All Time</option>
-        </select>
-
-        <select
-          value={severityFilter()}
-          onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-        >
-          <option value="all">All Levels</option>
-          <option value="critical">Critical Only</option>
-          <option value="warning">Warning Only</option>
-        </select>
-
-        <div class="w-full sm:flex-1 sm:max-w-xs">
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search alerts..."
-            value={searchTerm()}
-            onInput={(e) => setSearchTerm(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setSearchTerm('');
-                e.currentTarget.blur();
-              }
-            }}
-            class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 
-                   dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
-          />
-        </div>
-      </div>
+          <LabeledFilterSelect
+            id="alert-time-filter"
+            label="Period"
+            value={timeFilter()}
+            onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
+            selectClass="min-w-[7rem]"
+          >
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7d</option>
+            <option value="30d">Last 30d</option>
+            <option value="all">All Time</option>
+          </LabeledFilterSelect>
+          <LabeledFilterSelect
+            id="alert-severity-filter"
+            label="Severity"
+            value={severityFilter()}
+            onChange={(e) =>
+              setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')
+            }
+            selectClass="min-w-[7rem]"
+          >
+            <option value="all">All</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+          </LabeledFilterSelect>
+        </PageControls>
+      </Card>
 
       <Show when={resourceIncidentPanel()}>
         {(selection) => {
@@ -5477,28 +4948,33 @@ function HistoryTab(props: {
             <Card padding="md">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Resource incidents</h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <h3 class="text-sm font-semibold text-base-content">
+                    {getAlertResourceIncidentPanelTitle()}
+                  </h3>
+                  <p class="text-xs text-muted">
                     {selection().resourceName}
                     <Show when={incidents().length > 0}>
-                      <span> · {incidents().length} incident{incidents().length === 1 ? '' : 's'}</span>
+                      <span>
+                        {' '}
+                        · {getAlertResourceIncidentCountLabel(incidents().length)}
+                      </span>
                     </Show>
                   </p>
                 </div>
                 <div class="flex items-center gap-2">
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    class="px-2 py-1 text-xs border rounded-md border-border text-muted hover:bg-surface-hover disabled:opacity-50"
                     disabled={isLoading()}
                     onClick={() => {
                       void refreshResourceIncidentPanel();
                     }}
                   >
-                    {isLoading() ? 'Refreshing...' : 'Refresh'}
+                    {getAlertResourceIncidentRefreshLabel(isLoading())}
                   </button>
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    class="px-2 py-1 text-xs border rounded-md border-border text-muted hover:bg-surface-hover"
                     onClick={() => setResourceIncidentPanel(null)}
                   >
                     Close
@@ -5506,7 +4982,7 @@ function HistoryTab(props: {
                 </div>
               </div>
               <Show when={isLoading()}>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading incidents...</p>
+                <p class="mt-2 text-xs text-muted">{getAlertResourceIncidentLoadingState().text}</p>
               </Show>
               <Show when={!isLoading()}>
                 <Show when={incidents().length > 0}>
@@ -5520,78 +4996,85 @@ function HistoryTab(props: {
                 <Show
                   when={incidents().length > 0}
                   fallback={
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      No incidents recorded for this resource yet.
+                    <p class="mt-2 text-xs text-muted">
+                      {getAlertResourceIncidentEmptyState().text}
                     </p>
                   }
                 >
                   <div class="mt-3 space-y-3">
                     <For each={incidents()}>
                       {(incident) => {
-                        const statusLabel =
-                          incident.status === 'open' && incident.acknowledged
-                            ? 'acknowledged'
-                            : incident.status;
-                        const statusClasses =
-                          statusLabel === 'acknowledged'
-                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
-                            : statusLabel === 'open'
-                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
-                        const levelClasses =
-                          incident.level === 'critical'
-                            ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                            : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300';
+                        const statusPresentation = getAlertIncidentStatusPresentation(
+                          incident.status,
+                          incident.acknowledged,
+                        );
                         const isExpanded = expandedResourceIncidentIds().has(incident.id);
                         const events = incident.events || [];
-                        const filteredEvents = filterIncidentEvents(events, resourceIncidentEventFilters());
+                        const filteredEvents = filterIncidentEvents(
+                          events,
+                          resourceIncidentEventFilters(),
+                        );
                         const recentEvents =
-                          filteredEvents.length > 6 ? filteredEvents.slice(filteredEvents.length - 6) : filteredEvents;
+                          filteredEvents.length > 6
+                            ? filteredEvents.slice(filteredEvents.length - 6)
+                            : filteredEvents;
                         const lastEvent =
-                          filteredEvents.length > 0 ? filteredEvents[filteredEvents.length - 1] : undefined;
+                          filteredEvents.length > 0
+                            ? filteredEvents[filteredEvents.length - 1]
+                            : undefined;
                         const filteredLabel =
                           filteredEvents.length !== events.length
                             ? `${filteredEvents.length}/${events.length}`
                             : `${events.length}`;
                         return (
-                          <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3">
-                            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                              <span class="font-medium text-gray-800 dark:text-gray-200">
+                          <div class={getAlertResourceIncidentCardClass()}>
+                            <div class={getAlertIncidentTimelineMetaRowClass()}>
+                              <span class={getAlertIncidentTimelineHeadingClass()}>
                                 {incident.alertType}
                               </span>
-                              <span class={`px-2 py-0.5 rounded ${levelClasses}`}>{incident.level}</span>
-                              <span class={`px-2 py-0.5 rounded ${statusClasses}`}>{statusLabel}</span>
+                              <span class={getAlertIncidentLevelBadgeClass(incident.level)}>
+                                {incident.level}
+                              </span>
+                              <span class={statusPresentation.className}>
+                                {statusPresentation.label}
+                              </span>
                               <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
                               <Show when={incident.closedAt}>
-                                <span>closed {new Date(incident.closedAt as string).toLocaleString()}</span>
+                                <span>
+                                  closed {new Date(incident.closedAt as string).toLocaleString()}
+                                </span>
                               </Show>
                             </div>
                             <Show when={incident.message}>
-                              <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-                                {incident.message}
-                              </p>
+                              <p class={getAlertIncidentTimelineOutputClass()}>{incident.message}</p>
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
-                              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Acknowledged by {incident.ackUser}
+                              <p class={getAlertIncidentTimelineOutputClass()}>
+                                {getAlertResourceIncidentAcknowledgedByLabel(
+                                  incident.ackUser ?? '',
+                                )}
                               </p>
                             </Show>
                             <Show when={events.length > 0}>
-                              <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <div class={getAlertResourceIncidentSummaryRowClass()}>
                                 <span>
                                   <Show
                                     when={filteredEvents.length > 0}
-                                    fallback={<span>No events match filters</span>}
+                                    fallback={
+                                      <span>
+                                        {getAlertResourceIncidentFilteredEventsEmptyState().text}
+                                      </span>
+                                    }
                                   >
                                     Last event: {lastEvent?.summary}
                                   </Show>
                                 </span>
                                 <button
                                   type="button"
-                                  class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  class={getAlertResourceIncidentToggleButtonClass()}
                                   onClick={() => toggleResourceIncidentDetails(incident.id)}
                                 >
-                                  {isExpanded ? 'Hide events' : `Events (${filteredLabel})`}
+                                  {getAlertResourceIncidentToggleLabel(isExpanded, filteredLabel)}
                                 </button>
                               </div>
                             </Show>
@@ -5600,41 +5083,62 @@ function HistoryTab(props: {
                                 <Show
                                   when={filteredEvents.length > 0}
                                   fallback={
-                                    <p class="text-[10px] text-gray-400 dark:text-gray-500">
-                                      No events match the selected filters.
+                                    <p class="text-[10px] text-muted">
+                                      {getAlertResourceIncidentFilteredEventsEmptyState().text}
                                     </p>
                                   }
                                 >
                                   <For each={recentEvents}>
                                     {(event) => (
-                                      <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-2">
-                                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                          <span class="font-medium text-gray-800 dark:text-gray-200">
+                                      <div class="rounded border border-border bg-surface-alt p-2">
+                                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                                          <span class="font-medium text-base-content">
                                             {event.summary}
                                           </span>
                                           <span>{new Date(event.timestamp).toLocaleString()}</span>
                                         </div>
-                                        <Show when={event.details && (event.details as { note?: string }).note}>
-                                          <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { note?: string }).note
+                                          }
+                                        >
+                                          <p class="text-xs text-base-content mt-1">
                                             {(event.details as { note?: string }).note}
                                           </p>
                                         </Show>
-                                        <Show when={event.details && (event.details as { command?: string }).command}>
-                                          <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { command?: string }).command
+                                          }
+                                        >
+                                          <p class="text-xs text-base-content mt-1 font-mono">
                                             {(event.details as { command?: string }).command}
                                           </p>
                                         </Show>
-                                        <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                            {(event.details as { output_excerpt?: string }).output_excerpt}
+                                        <Show
+                                          when={
+                                            event.details &&
+                                            (event.details as { output_excerpt?: string })
+                                              .output_excerpt
+                                          }
+                                        >
+                                          <p class="text-xs text-muted mt-1">
+                                            {
+                                              (event.details as { output_excerpt?: string })
+                                                .output_excerpt
+                                            }
                                           </p>
                                         </Show>
                                       </div>
                                     )}
                                   </For>
                                   <Show when={filteredEvents.length > recentEvents.length}>
-                                    <p class="text-[10px] text-gray-400 dark:text-gray-500">
-                                      Showing last {recentEvents.length} events
+                                    <p class="text-[10px] text-muted">
+                                      {getAlertResourceIncidentTruncatedEventsLabel(
+                                        recentEvents.length,
+                                      )}
                                     </p>
                                   </Show>
                                 </Show>
@@ -5659,184 +5163,178 @@ function HistoryTab(props: {
           <Show
             when={alertData().length > 0}
             fallback={
-              <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-                <p class="text-sm">No alerts found</p>
-                <p class="text-xs mt-1">Try adjusting your filters or check back later</p>
+              <div class="text-center py-12 text-muted">
+                <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
+                <p class="text-xs mt-1">{getAlertHistoryEmptyState().description}</p>
               </div>
             }
           >
             {/* Table */}
-            <div class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-              <ScrollableTable minWidth="800px">
-                <table class="w-full min-w-[800px] text-[11px] sm:text-sm">
-                  <thead>
-                    <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+            <div class="mb-2 border border-border rounded overflow-hidden">
+              <div class="overflow-x-auto">
+                <Table class="w-full min-w-[max-content] text-[11px] sm:text-sm">
+                  <TableHeader>
+                    <TableRow class="bg-surface-hover text-muted border-b border-border">
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Timestamp
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Source
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Resource
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        {getTypeColumnLabel()}
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Severity
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Message
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Duration
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Status
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Node
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     <For each={groupedAlerts()}>
                       {(group) => (
                         <>
                           {/* Date divider */}
-                          <tr class="bg-gray-50 dark:bg-gray-900/40">
-                            <td
-                              colspan="10"
-                              class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                          <TableRow class="bg-surface-alt">
+                            <TableCell
+                              colspan={10}
+                              class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold"
                             >
                               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                                 <span class="truncate" title={group.fullLabel}>
                                   {group.label}
                                 </span>
-                                <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                <span class="text-[10px] font-medium text-muted">
                                   {(() => {
-                                    const alertCount = group.alerts.filter(a => a.source === 'alert').length;
-                                    const aiCount = group.alerts.filter(a => a.source === 'ai').length;
+                                    const alertCount = group.alerts.filter(
+                                      (a) => a.source === 'alert',
+                                    ).length;
+                                    const aiCount = group.alerts.filter(
+                                      (a) => a.source === 'ai',
+                                    ).length;
                                     const parts = [];
-                                    if (alertCount > 0) parts.push(`${alertCount} alert${alertCount === 1 ? '' : 's'}`);
-                                    if (aiCount > 0) parts.push(`${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`);
-                                    return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
+                                    if (alertCount > 0)
+                                      parts.push(
+                                        `${alertCount} alert${alertCount === 1 ? '' : 's'}`,
+                                      );
+                                    if (aiCount > 0)
+                                      parts.push(
+                                        `${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`,
+                                      );
+                                    return (
+                                      parts.join(', ') ||
+                                      `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`
+                                    );
                                   })()}
                                 </span>
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
 
                           {/* Alerts for this day */}
                           <For each={group.alerts}>
                             {(alert) => {
                               const rowKey = getIncidentRowKey(alert);
+                              const historyStatusPresentation = getAlertHistoryStatusPresentation(
+                                alert.status,
+                              );
+                              const sourcePresentation = getAlertHistorySourcePresentation(
+                                alert.source,
+                              );
                               return (
                                 <>
-                                  <tr
-                                    class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
-                                      }`}
+                                  <TableRow
+                                    class={`border-b border-border hover:bg-surface-hover ${historyStatusPresentation.rowClassName}`}
                                   >
                                     {/* Timestamp */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-muted font-mono whitespace-nowrap">
                                       {new Date(alert.startTime).toLocaleTimeString('en-US', {
                                         hour: '2-digit',
                                         minute: '2-digit',
                                       })}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Source */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
-                                          ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                                          : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
-                                          }`}
-                                      >
-                                        {alert.source === 'ai' ? 'Patrol' : 'Alert'}
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                      <span class={sourcePresentation.className}>
+                                        {sourcePresentation.label}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Resource */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-base-content truncate max-w-[150px]">
                                       {alert.resourceName}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Type */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2">
-                                      <span
-                                        class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
-                                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                          : alert.resourceType === 'CT'
-                                            ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                                            : alert.resourceType === 'Node'
-                                              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                              : alert.resourceType === 'Storage'
-                                                ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                          }`}
-                                      >
-                                        {alert.type}
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2">
+                                      <span class={getAlertHistoryResourceTypeBadgeClass(alert.resourceType)}>
+                                        {alert.resourceType}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Severity */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
-                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                          : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                          }`}
-                                      >
-                                        {alert.level}
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                      <span class={getAlertIncidentLevelBadgeClass(alert.severity)}>
+                                        {alert.severity}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Message */}
-                                    <td
-                                      class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]"
-                                      title={alert.message}
+                                    <TableCell
+                                      class="p-1 sm:p-1.5 px-1 sm:px-2 text-base-content truncate max-w-[300px]"
+                                      title={alert.description}
                                     >
-                                      {alert.message}
-                                    </td>
+                                      {alert.description}
+                                    </TableCell>
 
                                     {/* Duration */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-gray-600 dark:text-gray-400">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-muted">
                                       {alert.duration}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Status */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
-                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
-                                          : alert.status === 'acknowledged'
-                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                          }`}
-                                      >
-                                        {alert.status}
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                      <span class={historyStatusPresentation.className}>
+                                        {historyStatusPresentation.label}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Node */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 truncate">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-muted truncate">
                                       {alert.nodeDisplayName || alert.node || '—'}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Actions */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <div class="flex items-center justify-center gap-1">
                                         <Show when={alert.source === 'alert'}>
                                           <button
                                             type="button"
-                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
                                             onClick={() => {
-                                              void toggleIncidentTimeline(rowKey, alert.id, alert.startTime);
+                                              void toggleIncidentTimeline(
+                                                rowKey,
+                                                alert.id,
+                                                alert.startTime,
+                                              );
                                             }}
                                           >
                                             {expandedIncidents().has(rowKey) ? 'Hide' : 'Timeline'}
@@ -5845,101 +5343,197 @@ function HistoryTab(props: {
                                         <Show when={alert.source === 'alert' && alert.resourceId}>
                                           <button
                                             type="button"
-                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                            title="View incidents for this resource"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
+                                            title={getAlertResourceIncidentViewTitle()}
                                             onClick={() => {
-                                              void openResourceIncidentPanel(alert.resourceId as string, alert.resourceName);
+                                              void openResourceIncidentPanel(
+                                                alert.resourceId as string,
+                                                alert.resourceName,
+                                              );
                                             }}
                                           >
                                             Resource
                                           </button>
                                         </Show>
-                                        <Show when={alert.source === 'alert' && (alert.status === 'active' || alert.status === 'acknowledged')}>
+                                        <Show
+                                          when={
+                                            alert.source === 'alert' &&
+                                            (alert.status === 'active' ||
+                                              alert.status === 'acknowledged')
+                                          }
+                                        >
                                           <InvestigateAlertButton
                                             alert={{
                                               id: alert.id,
-                                              type: alert.type,
-                                              level: alert.level as 'warning' | 'critical',
+                                              type: alert.rawAlertType || alert.title,
+                                              level: alert.severity as 'warning' | 'critical',
                                               resourceId: alert.resourceId || '',
                                               resourceName: alert.resourceName,
                                               node: alert.node || '',
                                               nodeDisplayName: alert.nodeDisplayName,
                                               instance: '',
-                                              message: alert.message || '',
+                                              message: alert.description || '',
                                               value: 0,
                                               threshold: 0,
                                               startTime: alert.startTime,
                                               lastSeen: alert.startTime,
                                               acknowledged: alert.status === 'acknowledged',
                                             }}
+                                            resourceType={alert.resourceType}
                                             variant="icon"
                                             size="sm"
-                                            licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
+                                            licenseLocked={
+                                              !props.hasAIAlertsFeature() && !props.licenseLoading()
+                                            }
                                           />
                                         </Show>
                                       </div>
-                                    </td>
-                                  </tr>
-                                  <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
-                                    <tr class="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
-                                      <td colspan="11" class="p-3">
+                                    </TableCell>
+                                  </TableRow>
+                                  <Show
+                                    when={
+                                      alert.source === 'alert' && expandedIncidents().has(rowKey)
+                                    }
+                                  >
+                                    <TableRow class="bg-surface-alt border-b border-border">
+                                      <TableCell colspan={11} class="p-3">
                                         <Show when={incidentLoading()[rowKey]}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
+                                          <p class="text-xs text-muted">
+                                            {getAlertTimelineLoadingState().text}
+                                          </p>
                                         </Show>
                                         <Show when={!incidentLoading()[rowKey]}>
                                           <Show when={incidentTimelines()[rowKey]}>
                                             {(timeline) => (
                                               <div class="space-y-3">
-                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
+                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
+                                                    Incident
+                                                  </span>
                                                   <span>{timeline().status}</span>
                                                   <Show when={timeline().acknowledged}>
-                                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                    <span
+                                                      class={getAlertIncidentAcknowledgedBadgeClass()}
+                                                    >
                                                       acknowledged
                                                     </span>
                                                   </Show>
                                                   <Show when={timeline().openedAt}>
-                                                    <span>opened {new Date(timeline().openedAt).toLocaleString()}</span>
+                                                    <span>
+                                                      opened{' '}
+                                                      {new Date(
+                                                        timeline().openedAt,
+                                                      ).toLocaleString()}
+                                                    </span>
                                                   </Show>
                                                   <Show when={timeline().closedAt}>
-                                                    <span>closed {new Date(timeline().closedAt as string).toLocaleString()}</span>
+                                                    <span>
+                                                      closed{' '}
+                                                      {new Date(
+                                                        timeline().closedAt as string,
+                                                      ).toLocaleString()}
+                                                    </span>
                                                   </Show>
                                                 </div>
                                                 {(() => {
                                                   const events = timeline().events || [];
-                                                  const filteredEvents = filterIncidentEvents(events, historyIncidentEventFilters());
+                                                  const filteredEvents = filterIncidentEvents(
+                                                    events,
+                                                    historyIncidentEventFilters(),
+                                                  );
                                                   return (
                                                     <>
                                                       <Show when={events.length > 0}>
                                                         <IncidentEventFilters
                                                           filters={historyIncidentEventFilters}
-                                                          setFilters={setHistoryIncidentEventFilters}
+                                                          setFilters={
+                                                            setHistoryIncidentEventFilters
+                                                          }
                                                         />
                                                       </Show>
                                                       <Show when={filteredEvents.length > 0}>
                                                         <div class="space-y-2">
                                                           <For each={filteredEvents}>
                                                             {(event) => (
-                                                              <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/30 p-2">
-                                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                  <span class="font-medium text-gray-800 dark:text-gray-200">
+                                                              <div
+                                                                class={getAlertIncidentTimelineEventCardClass(
+                                                                  'surface',
+                                                                )}
+                                                              >
+                                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
+                                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
                                                                     {event.summary}
                                                                   </span>
-                                                                  <span>{new Date(event.timestamp).toLocaleString()}</span>
+                                                                  <span>
+                                                                    {new Date(
+                                                                      event.timestamp,
+                                                                    ).toLocaleString()}
+                                                                  </span>
                                                                 </div>
-                                                                <Show when={event.details && (event.details as { note?: string }).note}>
-                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                                    {(event.details as { note?: string }).note}
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        note?: string;
+                                                                      }
+                                                                    ).note
+                                                                  }
+                                                                >
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineDetailClass()}
+                                                                  >
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          note?: string;
+                                                                        }
+                                                                      ).note
+                                                                    }
                                                                   </p>
                                                                 </Show>
-                                                                <Show when={event.details && (event.details as { command?: string }).command}>
-                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
-                                                                    {(event.details as { command?: string }).command}
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        command?: string;
+                                                                      }
+                                                                    ).command
+                                                                  }
+                                                                >
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineCommandClass()}
+                                                                  >
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          command?: string;
+                                                                        }
+                                                                      ).command
+                                                                    }
                                                                   </p>
                                                                 </Show>
-                                                                <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                                    {(event.details as { output_excerpt?: string }).output_excerpt}
+                                                                <Show
+                                                                  when={
+                                                                    event.details &&
+                                                                    (
+                                                                      event.details as {
+                                                                        output_excerpt?: string;
+                                                                      }
+                                                                    ).output_excerpt
+                                                                  }
+                                                                >
+                                                                  <p
+                                                                    class={getAlertIncidentTimelineOutputClass()}
+                                                                  >
+                                                                    {
+                                                                      (
+                                                                        event.details as {
+                                                                          output_excerpt?: string;
+                                                                        }
+                                                                      ).output_excerpt
+                                                                    }
                                                                   </p>
                                                                 </Show>
                                                               </div>
@@ -5947,37 +5541,56 @@ function HistoryTab(props: {
                                                           </For>
                                                         </div>
                                                       </Show>
-                                                      <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                                                          No timeline events match the selected filters.
+                                                      <Show
+                                                        when={
+                                                          events.length > 0 &&
+                                                          filteredEvents.length === 0
+                                                        }
+                                                      >
+                                                        <p class="text-xs text-muted">
+                                                          {getAlertTimelineFilterEmptyState().text}
                                                         </p>
                                                       </Show>
                                                       <Show when={events.length === 0}>
-                                                        <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
+                                                        <p class="text-xs text-muted">
+                                                          {getAlertTimelineEmptyState().text}
+                                                        </p>
                                                       </Show>
                                                     </>
                                                   );
                                                 })()}
                                                 <div class="flex flex-col gap-2">
                                                   <textarea
-                                                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
+                                                    class={getAlertIncidentNoteTextareaClass()}
                                                     rows={2}
-                                                    placeholder="Add a note for this incident..."
+                                                    placeholder={getAlertResourceIncidentNotePlaceholder()}
                                                     value={incidentNoteDrafts()[rowKey] || ''}
                                                     onInput={(e) => {
                                                       const value = e.currentTarget.value;
-                                                      setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: value }));
+                                                      setIncidentNoteDrafts((prev) => ({
+                                                        ...prev,
+                                                        [rowKey]: value,
+                                                      }));
                                                     }}
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
-                                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                      disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
+                                                      class={getAlertIncidentNoteSaveButtonClass()}
+                                                      disabled={
+                                                        incidentNoteSaving().has(rowKey) ||
+                                                        !(incidentNoteDrafts()[rowKey] || '').trim()
+                                                      }
                                                       onClick={() => {
-                                                        void saveIncidentNote(rowKey, alert.id, alert.startTime);
+                                                        void saveIncidentNote(
+                                                          rowKey,
+                                                          alert.id,
+                                                          alert.startTime,
+                                                        );
                                                       }}
                                                     >
-                                                      {incidentNoteSaving().has(rowKey) ? 'Saving...' : 'Save Note'}
+                                                      {getAlertResourceIncidentSaveNoteLabel(
+                                                        incidentNoteSaving().has(rowKey),
+                                                      )}
                                                     </button>
                                                   </div>
                                                 </div>
@@ -5985,11 +5598,36 @@ function HistoryTab(props: {
                                             )}
                                           </Show>
                                           <Show when={!incidentTimelines()[rowKey]}>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                                            <Show
+                                              when={incidentErrors()[rowKey]}
+                                              fallback={
+                                                <p class="text-xs text-muted">
+                                                  {getAlertTimelineUnavailableState().text}
+                                                </p>
+                                              }
+                                            >
+                                              <div class="flex items-center gap-2">
+                                                <p class="text-xs text-error">
+                                                  {getAlertTimelineFailureState().text}
+                                                </p>
+                                                <button
+                                                  class="text-xs text-primary hover:underline"
+                                                  onClick={() =>
+                                                    loadIncidentTimeline(
+                                                      rowKey,
+                                                      alert.id,
+                                                      alert.startTime,
+                                                    )
+                                                  }
+                                                >
+                                                  {getAlertTimelineFailureState().actionLabel}
+                                                </button>
+                                              </div>
+                                            </Show>
                                           </Show>
                                         </Show>
-                                      </td>
-                                    </tr>
+                                      </TableCell>
+                                    </TableRow>
                                   </Show>
                                 </>
                               );
@@ -5998,56 +5636,46 @@ function HistoryTab(props: {
                         </>
                       )}
                     </For>
-                  </tbody>
-                </table>
-              </ScrollableTable>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </Show>
         }
       >
-        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-          <p class="text-sm">Loading alert history...</p>
+        <div class="text-center py-12 text-muted">
+          <p class="text-sm">{getAlertHistoryLoadingState().text}</p>
         </div>
       </Show>
 
-      {/* Administrative Actions - Only show if there's history to clear */}
+      {/* History actions */}
       <Show when={alertHistory().length > 0}>
-        <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+        <div class="mt-8 pt-6 border-t border-border">
+          <div class="bg-surface-alt rounded-md p-4">
             <div class="flex items-start justify-between">
               <div>
-                <h4 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
-                  Administrative Actions
+                <h4 class="text-sm font-medium text-base-content mb-1">
+                  {getAlertAdministrationSectionTitle()}
                 </h4>
-                <p class="text-xs text-gray-600 dark:text-gray-400">
-                  Permanently clear all alert history. Use with caution - this action cannot be
-                  undone.
-                </p>
+                <p class="text-xs text-muted">{getAlertAdministrationSectionDescription()}</p>
               </div>
               <button
                 type="button"
                 onClick={async () => {
-                  if (
-                    confirm(
-                      'Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.',
-                    )
-                  ) {
+                  if (confirm(getAlertAdministrationClearHistoryConfirmation())) {
                     try {
                       await AlertsAPI.clearHistory();
                       setAlertHistory([]);
                       // Alert history cleared successfully
                     } catch (err) {
-                      logger.error('Error clearing alert history:', err);
-                      notificationStore.error(
-                        'Error clearing alert history: Please check your connection and try again.',
-                      );
+                      logger.error(getAlertAdministrationClearHistoryError(), err);
+                      notificationStore.error(getAlertAdministrationClearHistoryError());
                     }
                   }
                 }}
-                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 
-                       rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
+                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900 transition-colors flex-shrink-0"
               >
-                Clear All History
+                {getAlertAdministrationClearHistoryLabel()}
               </button>
             </div>
           </div>

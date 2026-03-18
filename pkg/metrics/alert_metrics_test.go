@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
@@ -67,5 +68,54 @@ func TestMetricVectors_NotNil(t *testing.T) {
 	}
 	if AlertsRateLimitedTotal == nil {
 		t.Error("AlertsRateLimitedTotal should not be nil")
+	}
+}
+
+func TestAlertMetricsIncrements(t *testing.T) {
+	alert := &alerts.Alert{
+		ID:        "metrics-test",
+		Level:     alerts.AlertLevelCritical,
+		Type:      "unit_test_alert",
+		StartTime: time.Now().Add(-time.Minute),
+		LastSeen:  time.Now(),
+	}
+
+	fired := AlertsFiredTotal.WithLabelValues(string(alert.Level), alert.Type)
+	active := AlertsActive.WithLabelValues(string(alert.Level), alert.Type)
+	resolved := AlertsResolvedTotal.WithLabelValues(alert.Type)
+
+	firedBefore := testutil.ToFloat64(fired)
+	activeBefore := testutil.ToFloat64(active)
+	resolvedBefore := testutil.ToFloat64(resolved)
+
+	RecordAlertFired(alert)
+
+	if testutil.ToFloat64(fired) != firedBefore+1 {
+		t.Fatalf("expected fired counter increment")
+	}
+	if testutil.ToFloat64(active) != activeBefore+1 {
+		t.Fatalf("expected active gauge increment")
+	}
+
+	RecordAlertResolved(alert)
+
+	if testutil.ToFloat64(resolved) != resolvedBefore+1 {
+		t.Fatalf("expected resolved counter increment")
+	}
+	if testutil.ToFloat64(active) != activeBefore {
+		t.Fatalf("expected active gauge to return to baseline")
+	}
+
+	ackBefore := testutil.ToFloat64(AlertsAcknowledgedTotal)
+	RecordAlertAcknowledged()
+	if testutil.ToFloat64(AlertsAcknowledgedTotal) != ackBefore+1 {
+		t.Fatalf("expected acknowledged counter increment")
+	}
+
+	suppressed := AlertsSuppressedTotal.WithLabelValues("unit_test_reason")
+	suppressedBefore := testutil.ToFloat64(suppressed)
+	RecordAlertSuppressed("unit_test_reason")
+	if testutil.ToFloat64(suppressed) != suppressedBefore+1 {
+		t.Fatalf("expected suppressed counter increment")
 	}
 }

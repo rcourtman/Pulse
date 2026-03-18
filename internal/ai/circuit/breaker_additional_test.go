@@ -334,6 +334,37 @@ func TestBreaker_Allow_HalfOpen(t *testing.T) {
 	}
 }
 
+func TestBreaker_Allow_HalfOpen_OnlyOneProbeAtATime(t *testing.T) {
+	b := NewBreaker("test", DefaultConfig())
+	b.mu.Lock()
+	b.state = StateHalfOpen
+	b.mu.Unlock()
+
+	if !b.Allow() {
+		t.Fatalf("expected first half-open probe to be allowed")
+	}
+	if b.Allow() {
+		t.Fatalf("expected second half-open probe to be blocked while first is in flight")
+	}
+
+	b.RecordSuccess()
+	if !b.Allow() {
+		t.Fatalf("expected half-open probe slot to reopen after successful probe")
+	}
+}
+
+func TestBreaker_CanAllow_HalfOpenRespectsInFlightProbe(t *testing.T) {
+	b := NewBreaker("test", DefaultConfig())
+	b.mu.Lock()
+	b.state = StateHalfOpen
+	b.halfOpenProbeInFlight = true
+	b.mu.Unlock()
+
+	if b.CanAllow() {
+		t.Fatalf("expected CanAllow false when half-open probe is already in flight")
+	}
+}
+
 func TestToLower(t *testing.T) {
 	if toLower("AbC123") != "abc123" {
 		t.Fatalf("expected toLower to normalize casing")

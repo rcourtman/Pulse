@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -8,6 +9,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func patrolRuntimeStateForTest(ps *PatrolService, snap models.StateSnapshot) patrolRuntimeState {
+	if ps == nil {
+		return newPatrolRuntimeState(snap)
+	}
+	return ps.patrolRuntimeStateForSnapshot(snap)
+}
 
 func TestPatrolConfig_GetInterval(t *testing.T) {
 	tests := []struct {
@@ -253,10 +261,10 @@ func TestPatrolService_filterStateByScope_DockerContainer(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"c1"},
-		ResourceTypes: []string{"docker_container"},
+		ResourceTypes: []string{"app-container"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.DockerHosts) != 1 {
 		t.Fatalf("expected 1 docker host, got %d", len(filtered.DockerHosts))
@@ -278,10 +286,10 @@ func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"k1"},
-		ResourceTypes: []string{"kubernetes_cluster"},
+		ResourceTypes: []string{"k8s-cluster"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.KubernetesClusters) != 1 {
 		t.Fatalf("expected 1 kubernetes cluster, got %d", len(filtered.KubernetesClusters))
@@ -291,7 +299,7 @@ func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
 	}
 }
 
-func TestPatrolService_filterStateByScope_PBSDatastoreType(t *testing.T) {
+func TestPatrolService_filterStateByScope_PBSDatastoreIDWithCanonicalPBSType(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		PBSInstances: []models.PBSInstance{
@@ -306,10 +314,10 @@ func TestPatrolService_filterStateByScope_PBSDatastoreType(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"pbs1:ds1"},
-		ResourceTypes: []string{"pbs_datastore"},
+		ResourceTypes: []string{"pbs"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.PBSInstances) != 1 {
 		t.Fatalf("expected 1 PBS instance, got %d", len(filtered.PBSInstances))
@@ -430,13 +438,11 @@ func TestPatrolService_SetStreamPhase(t *testing.T) {
 
 	ps.setStreamPhase("idle")
 
-	output, phase := ps.GetCurrentStreamOutput()
+	_, phase := ps.GetCurrentStreamOutput()
 	if phase != "idle" {
 		t.Errorf("Expected phase 'idle', got '%s'", phase)
 	}
-	if output != "" {
-		t.Errorf("Expected empty output after reset to idle, got '%s'", output)
-	}
+	// Output is no longer cleared on idle; it is cleared when a new run starts.
 }
 
 func TestPatrolService_GetCurrentStreamOutput(t *testing.T) {
@@ -524,6 +530,62 @@ func TestPatrolRunRecord(t *testing.T) {
 	}
 	if record.Status != "issues_found" {
 		t.Errorf("Expected status 'issues_found', got '%s'", record.Status)
+	}
+}
+
+func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
+	record := PatrolRunRecord{
+		ID:              "run-1",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		StartedAt:       time.Now(),
+		CompletedAt:     time.Now(),
+	}
+
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal patrol run record: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode patrol run payload: %v", err)
+	}
+	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
+	}
+	if _, ok := payload["legacy_alert_id"]; ok {
+		t.Fatalf("did not expect legacy_alert_id in canonical payload, got %#v", payload["legacy_alert_id"])
+	}
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
+	}
+
+	var decodedCanonical PatrolRunRecord
+	if err := json.Unmarshal([]byte(`{
+		"id":"run-1",
+		"started_at":"2026-03-11T00:00:00Z",
+		"completed_at":"2026-03-11T00:01:00Z",
+		"duration_ms":60000,
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decodedCanonical); err != nil {
+		t.Fatalf("unmarshal canonical patrol run: %v", err)
+	}
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
+	}
+
+	var decoded PatrolRunRecord
+	if err := json.Unmarshal([]byte(`{
+		"id":"run-1",
+		"started_at":"2026-03-11T00:00:00Z",
+		"completed_at":"2026-03-11T00:01:00Z",
+		"duration_ms":60000,
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded); err != nil {
+		t.Fatalf("unmarshal canonical patrol run: %v", err)
+	}
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to populate canonical field, got %q", decoded.AlertIdentifier)
 	}
 }
 
@@ -713,15 +775,6 @@ func TestPatrolService_GetBaselineStore(t *testing.T) {
 	if ps.GetBaselineStore() != store {
 		t.Error("Expected GetBaselineStore to return the set store")
 	}
-}
-
-func TestPatrolService_SetMetricsHistoryProvider(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	// Set a nil provider (should not panic)
-	ps.SetMetricsHistoryProvider(nil)
-
-	// Verify it was set (field is internal, just checking no panic)
 }
 
 func TestJoinParts(t *testing.T) {
@@ -965,15 +1018,6 @@ func TestPatrolService_Stop(t *testing.T) {
 	default:
 		t.Error("Expected stop channel to be closed")
 	}
-}
-
-func TestPatrolService_SetKnowledgeStore(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-
-	// Setting nil knowledge store should not panic
-	ps.SetKnowledgeStore(nil)
-
-	// Verify it was set (field is internal, just checking no panic)
 }
 
 // ========================================

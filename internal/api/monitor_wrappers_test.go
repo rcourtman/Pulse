@@ -56,9 +56,9 @@ func TestAlertMonitorWrapper_Delegates(t *testing.T) {
 		t.Fatalf("unexpected config persistence")
 	}
 
-	expected := state.GetSnapshot()
-	if got := wrapper.GetState(); !reflect.DeepEqual(got, expected) {
-		t.Fatalf("unexpected state snapshot")
+	expected := monitor.BuildFrontendState()
+	if got := wrapper.BuildFrontendState(); !reflect.DeepEqual(got, expected) {
+		t.Fatalf("unexpected frontend state")
 	}
 
 	wrapper.SyncAlertState()
@@ -69,11 +69,9 @@ func TestAlertMonitorWrapper_Delegates(t *testing.T) {
 
 func TestNotificationMonitorWrapper_Delegates(t *testing.T) {
 	monitor := &monitoring.Monitor{}
-	state := models.NewState()
 	notificationMgr := &notifications.NotificationManager{}
 	configPersist := &config.ConfigPersistence{}
 
-	setUnexportedField(t, monitor, "state", state)
 	setUnexportedField(t, monitor, "notificationMgr", notificationMgr)
 	setUnexportedField(t, monitor, "configPersist", configPersist)
 
@@ -87,10 +85,5 @@ func TestNotificationMonitorWrapper_Delegates(t *testing.T) {
 	}
 	if wrapper.GetConfigPersistence() != configPersist {
 		t.Fatalf("unexpected config persistence")
-	}
-
-	expected := state.GetSnapshot()
-	if got := wrapper.GetState(); !reflect.DeepEqual(got, expected) {
-		t.Fatalf("unexpected state snapshot")
 	}
 }

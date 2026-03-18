@@ -2,20 +2,35 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
+
+// UnifiedResourceProvider gives the executor access to the unified resource
+// registry so that tool handlers can read physical disks, Ceph clusters, etc.
+// from the canonical model instead of raw StateSnapshot fields.
+type UnifiedResourceProvider interface {
+	GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource
+}
 
 // ServerVersion is the version of the MCP tool implementation
 const ServerVersion = "1.0.0"
 
-// StateProvider provides access to infrastructure state
-type StateProvider interface {
-	GetState() models.StateSnapshot
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
+
+// RecoveryPointsProvider provides paged access to persisted recovery points.
+// Tool handlers should prefer this over legacy state backup arrays when present.
+type RecoveryPointsProvider interface {
+	ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error)
 }
 
 // CommandPolicy evaluates command security
@@ -61,6 +76,7 @@ type PatternProvider interface {
 // AlertProvider provides active alerts
 type AlertProvider interface {
 	GetActiveAlerts() []ActiveAlert
+	GetRecentlyResolved(minutes int) []models.ResolvedAlert
 }
 
 // FindingsProvider provides patrol findings
@@ -121,20 +137,24 @@ type BackupProvider interface {
 	GetPBSInstances() []models.PBSInstance
 }
 
-// StorageProvider provides storage information
-type StorageProvider interface {
-	GetStorage() []models.Storage
-	GetCephClusters() []models.CephCluster
+// ReplicationProvider provides replication job information.
+type ReplicationProvider interface {
+	GetReplicationJobs() []models.ReplicationJob
 }
 
-// GuestConfigProvider provides guest configuration data (VM/LXC).
+// ConnectionHealthProvider provides instance connection health information.
+type ConnectionHealthProvider interface {
+	GetConnectionHealth() map[string]bool
+}
+
+// GuestConfigProvider provides guest configuration data (VM/system container).
 type GuestConfigProvider interface {
-	GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error)
+	GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }
 
 // DiskHealthProvider provides disk health information from host agents
 type DiskHealthProvider interface {
-	GetHosts() []models.Host
+	GetHosts() []*unifiedresources.HostView
 }
 
 // UpdatesProvider provides Docker update operations for MCP tools
@@ -148,13 +168,13 @@ type UpdatesProvider interface {
 // DiscoveryProvider provides AI-powered infrastructure discovery
 type DiscoveryProvider interface {
 	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
-	GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
+	GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
 	ListDiscoveries() ([]*ResourceDiscoveryInfo, error)
 	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error)
+	ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error)
 	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
 	// TriggerDiscovery initiates discovery for a resource and returns the result
-	TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
+	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
 }
 
 // ResolvedResourceInfo contains the minimal information needed for tool validation.
@@ -178,7 +198,7 @@ type ResolvedResourceInfo interface {
 // This structured approach replaces the long parameter list for clarity.
 type ResourceRegistration struct {
 	// Identity
-	Kind        string   // Resource type: "node", "vm", "lxc", "docker_container", etc.
+	Kind        string   // Technology/transport kind: "node", "vm", "system-container", "app-container", etc. (drives routing)
 	ProviderUID string   // Stable provider ID (container ID, VMID, pod UID)
 	Name        string   // Primary display name
 	Aliases     []string // Additional names that resolve to this resource
@@ -251,7 +271,8 @@ type ResourceDiscoveryInfo struct {
 	ID             string              `json:"id"`
 	ResourceType   string              `json:"resource_type"`
 	ResourceID     string              `json:"resource_id"`
-	HostID         string              `json:"host_id"`
+	TargetID       string              `json:"target_id,omitempty"`
+	AgentID        string              `json:"agent_id,omitempty"`
 	Hostname       string              `json:"hostname"`
 	ServiceType    string              `json:"service_type"`
 	ServiceName    string              `json:"service_name"`
@@ -324,8 +345,10 @@ type ExecutorConfig struct {
 	FindingsProvider FindingsProvider
 
 	// Optional providers - infrastructure
-	BackupProvider  BackupProvider
-	StorageProvider StorageProvider
+	BackupProvider         BackupProvider
+	ReplicationProvider    ReplicationProvider
+	ConnectionHealth       ConnectionHealthProvider
+	RecoveryPointsProvider RecoveryPointsProvider
 
 	GuestConfigProvider GuestConfigProvider
 	DiskHealthProvider  DiskHealthProvider
@@ -345,9 +368,16 @@ type ExecutorConfig struct {
 	// Optional providers - discovery
 	DiscoveryProvider DiscoveryProvider
 
+	// Optional providers - unified resources
+	UnifiedResourceProvider UnifiedResourceProvider
+	// Optional typed read access to current infrastructure state.
+	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
+	ReadState unifiedresources.ReadState
+
 	// Control settings
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
+	OrgID           string   // Tenant/org scope for approval records
 }
 
 // PulseToolExecutor implements ToolExecutor for Pulse-specific tools
@@ -365,8 +395,11 @@ type PulseToolExecutor struct {
 	findingsProvider FindingsProvider
 
 	// Infrastructure context providers
-	backupProvider  BackupProvider
-	storageProvider StorageProvider
+	backupProvider      BackupProvider
+	replicationProvider ReplicationProvider
+	connectionHealth    ConnectionHealthProvider
+	// Paged recovery points access for snapshot/backup tools.
+	recoveryPointsProvider RecoveryPointsProvider
 
 	guestConfigProvider GuestConfigProvider
 	diskHealthProvider  DiskHealthProvider
@@ -386,6 +419,11 @@ type PulseToolExecutor struct {
 	// Discovery provider
 	discoveryProvider DiscoveryProvider
 
+	// Unified resources provider
+	unifiedResourceProvider UnifiedResourceProvider
+	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
+	readState unifiedresources.ReadState
+
 	// Control settings
 	controlLevel    ControlLevel
 	protectedGuests []string
@@ -394,6 +432,7 @@ type PulseToolExecutor struct {
 	targetType   string
 	targetID     string
 	isAutonomous bool
+	orgID        string
 
 	// Session-scoped resolved context for resource validation
 	// This is set per-session by the agentic loop before tool execution
@@ -424,23 +463,25 @@ type TelemetryCallback interface {
 	// RecordRoutingMismatchBlock records when routing validation blocks an operation
 	// that targeted a parent host when a child resource was recently referenced.
 	// targetKind: "node" (the kind being targeted)
-	// childKind: "lxc", "vm", "docker_container" (the kind of the more specific resource)
+	// childKind: "system-container", "vm", "app-container" (the kind of the more specific resource)
 	RecordRoutingMismatchBlock(tool, targetKind, childKind string)
 }
 
 // NewPulseToolExecutor creates a new Pulse tool executor with the given configuration
 func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e := &PulseToolExecutor{
-		stateProvider:    cfg.StateProvider,
-		policy:           cfg.Policy,
-		agentServer:      cfg.AgentServer,
-		metricsHistory:   cfg.MetricsHistory,
-		baselineProvider: cfg.BaselineProvider,
-		patternProvider:  cfg.PatternProvider,
-		alertProvider:    cfg.AlertProvider,
-		findingsProvider: cfg.FindingsProvider,
-		backupProvider:   cfg.BackupProvider,
-		storageProvider:  cfg.StorageProvider,
+		stateProvider:          cfg.StateProvider,
+		policy:                 cfg.Policy,
+		agentServer:            cfg.AgentServer,
+		metricsHistory:         cfg.MetricsHistory,
+		baselineProvider:       cfg.BaselineProvider,
+		patternProvider:        cfg.PatternProvider,
+		alertProvider:          cfg.AlertProvider,
+		findingsProvider:       cfg.FindingsProvider,
+		backupProvider:         cfg.BackupProvider,
+		replicationProvider:    cfg.ReplicationProvider,
+		connectionHealth:       cfg.ConnectionHealth,
+		recoveryPointsProvider: cfg.RecoveryPointsProvider,
 
 		guestConfigProvider:      cfg.GuestConfigProvider,
 		diskHealthProvider:       cfg.DiskHealthProvider,
@@ -453,9 +494,36 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		topologyProvider:         cfg.TopologyProvider,
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
 		discoveryProvider:        cfg.DiscoveryProvider,
+		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
+		readState:                cfg.ReadState,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
+		orgID:                    normalizeExecutorOrgID(cfg.OrgID),
 		registry:                 NewToolRegistry(),
+	}
+
+	// Auto-wire backup, replication, and connection health adapters from
+	// stateProvider when no explicit provider was injected. Each closure
+	// captures stateProvider and fetches the specific field on demand —
+	// this avoids importing the full StateGetter interface into adapters.go.
+	if sp := e.stateProvider; sp != nil {
+		getSnapshot := func() models.StateSnapshot { return sp.ReadSnapshot() }
+		if e.backupProvider == nil {
+			e.backupProvider = NewBackupMCPAdapter(
+				func() models.Backups { return getSnapshot().Backups },
+				func() []models.PBSInstance { return getSnapshot().PBSInstances },
+			)
+		}
+		if e.replicationProvider == nil {
+			e.replicationProvider = NewReplicationMCPAdapter(
+				func() []models.ReplicationJob { return getSnapshot().ReplicationJobs },
+			)
+		}
+		if e.connectionHealth == nil {
+			e.connectionHealth = NewConnectionHealthMCPAdapter(
+				func() map[string]bool { return getSnapshot().ConnectionHealth },
+			)
+		}
 	}
 
 	// Register all tools
@@ -464,11 +532,61 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	return e
 }
 
+func normalizeExecutorOrgID(orgID string) string {
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		return "default"
+	}
+	return normalized
+}
+
+func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
+	if readState := e.getCanonicalReadState(); readState != nil {
+		return readState
+	}
+	if e.stateProvider == nil {
+		return nil
+	}
+
+	// Compatibility bridge for legacy-only wiring: derive a typed ReadState view
+	// from the latest snapshot so tool handlers can stay platform-agnostic.
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(e.stateProvider.ReadSnapshot())
+	return rr
+}
+
+func (e *PulseToolExecutor) getCanonicalReadState() unifiedresources.ReadState {
+	if e.readState != nil {
+		return e.readState
+	}
+	if readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState); ok && readState != nil {
+		return readState
+	}
+	return nil
+}
+
+func (e *PulseToolExecutor) hasReadState() bool {
+	if e.readState != nil || e.stateProvider != nil {
+		return true
+	}
+	readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState)
+	return ok && readState != nil
+}
+
+func (e *PulseToolExecutor) hasCanonicalReadState() bool {
+	return e.getCanonicalReadState() != nil
+}
+
 // SetContext sets the current execution context
 func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous bool) {
 	e.targetType = targetType
 	e.targetID = targetID
 	e.isAutonomous = autonomous
+}
+
+// SetOrgID sets the org scope used when creating approval records.
+func (e *PulseToolExecutor) SetOrgID(orgID string) {
+	e.orgID = normalizeExecutorOrgID(orgID)
 }
 
 // SetControlLevel updates the control level
@@ -503,6 +621,11 @@ func (e *PulseToolExecutor) SetMetricsHistory(provider MetricsHistoryProvider) {
 	e.metricsHistory = provider
 }
 
+// SetRecoveryPointsProvider sets a paged recovery points provider used by snapshot/backup tools.
+func (e *PulseToolExecutor) SetRecoveryPointsProvider(provider RecoveryPointsProvider) {
+	e.recoveryPointsProvider = provider
+}
+
 // SetBaselineProvider sets the baseline provider
 func (e *PulseToolExecutor) SetBaselineProvider(provider BaselineProvider) {
 	e.baselineProvider = provider
@@ -526,11 +649,6 @@ func (e *PulseToolExecutor) SetFindingsProvider(provider FindingsProvider) {
 // SetBackupProvider sets the backup provider
 func (e *PulseToolExecutor) SetBackupProvider(provider BackupProvider) {
 	e.backupProvider = provider
-}
-
-// SetStorageProvider sets the storage provider
-func (e *PulseToolExecutor) SetStorageProvider(provider StorageProvider) {
-	e.storageProvider = provider
 }
 
 // SetGuestConfigProvider sets the guest config provider
@@ -576,6 +694,11 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 // SetDiscoveryProvider sets the discovery provider for infrastructure discovery
 func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
 	e.discoveryProvider = provider
+}
+
+// SetUnifiedResourceProvider sets the unified resource provider
+func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceProvider) {
+	e.unifiedResourceProvider = provider
 }
 
 // SetResolvedContext sets the session-scoped resolved context for resource validation.
@@ -629,21 +752,21 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
 	// Check tool availability based on primary requirements
 	case "pulse_query":
-		return e.stateProvider != nil
+		return e.hasReadState()
 	case "pulse_metrics":
-		return e.stateProvider != nil || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
+		return e.hasReadState() || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
 	case "pulse_storage":
-		return e.stateProvider != nil || e.storageProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
+		return e.hasReadState() || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
 	case "pulse_docker":
-		return e.stateProvider != nil || e.updatesProvider != nil
+		return e.hasReadState() || e.updatesProvider != nil
 	case "pulse_kubernetes":
-		return e.stateProvider != nil
+		return e.hasCanonicalReadState()
 	case "pulse_alerts":
-		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.stateProvider != nil
+		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.hasReadState()
 	case "pulse_read":
 		return e.agentServer != nil
 	case "pulse_control":
-		return e.agentServer != nil && e.stateProvider != nil
+		return e.agentServer != nil && e.hasReadState()
 	case "pulse_file_edit":
 		return e.agentServer != nil
 	case "pulse_discovery":
@@ -651,12 +774,12 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_knowledge":
 		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil || e.topologyProvider != nil
 	case "pulse_pmg":
-		return e.stateProvider != nil
+		return e.hasReadState()
 	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
 	default:
-		return e.stateProvider != nil
+		return e.hasReadState()
 	}
 }
 

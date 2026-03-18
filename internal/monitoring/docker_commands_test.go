@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,6 +31,14 @@ func findDockerHost(t *testing.T, m *Monitor, id string) models.DockerHost {
 	}
 	t.Fatalf("docker host %s not found", id)
 	return models.DockerHost{}
+}
+
+func wireDockerReadState(m *Monitor, snapshot models.StateSnapshot) unifiedresources.ReadState {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	m.resourceStore = adapter
+	return adapter
 }
 
 func TestDockerStopCommandLifecycle(t *testing.T) {
@@ -1251,6 +1260,160 @@ func TestQueueDockerCheckUpdatesCommand(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+func TestQueueDockerStopCommand_AcceptsUnifiedHostID(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:          "host-unified-stop",
+		Hostname:    "unified-stop",
+		DisplayName: "Unified Stop",
+		Status:      "online",
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	readState := wireDockerReadState(monitor, models.StateSnapshot{
+		DockerHosts: []models.DockerHost{host},
+	})
+	unifiedID := readState.DockerHosts()[0].ID()
+
+	status, err := monitor.QueueDockerHostStop(unifiedID)
+	if err != nil {
+		t.Fatalf("queue stop command with unified id: %v", err)
+	}
+	if status.Status != DockerCommandStatusQueued {
+		t.Fatalf("expected queued status, got %s", status.Status)
+	}
+	if _, exists := monitor.dockerCommands[host.ID]; !exists {
+		t.Fatalf("expected command to be stored under raw host source id")
+	}
+
+	hostState := findDockerHost(t, monitor, host.ID)
+	if hostState.Command == nil || hostState.Command.Status != DockerCommandStatusQueued {
+		t.Fatalf("expected queued command state on raw host, got %#v", hostState.Command)
+	}
+}
+
+func TestQueueDockerUpdateAllCommand(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	now := time.Now().UTC()
+	host := models.DockerHost{
+		ID:       "host-update-all",
+		Hostname: "node-update-all",
+		Status:   "online",
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "app1", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, LastChecked: now}},
+			{ID: "c2", Name: "app2", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: false, LastChecked: now}},
+			{ID: "c3", Name: "app3", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, LastChecked: now}},
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	status, err := monitor.QueueDockerUpdateAllCommand(host.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, DockerCommandTypeUpdateAll, status.Type)
+	assert.Equal(t, DockerCommandStatusQueued, status.Status)
+
+	payload, fetched := monitor.FetchDockerCommandForHost(host.ID)
+	assert.NotNil(t, fetched)
+	assert.Equal(t, DockerCommandStatusDispatched, fetched.Status)
+	assert.NotNil(t, payload)
+
+	raw, ok := payload["containerIds"]
+	if !ok {
+		t.Fatalf("expected payload to include containerIds")
+	}
+	ids, ok := raw.([]string)
+	if !ok {
+		t.Fatalf("expected containerIds to be []string, got %T", raw)
+	}
+	assert.ElementsMatch(t, []string{"c1", "c3"}, ids)
+
+	// Completion should clear the active command so it won't be sent again.
+	_, _, _, err = monitor.AcknowledgeDockerHostCommand(fetched.ID, host.ID, DockerCommandStatusCompleted, "done")
+	assert.NoError(t, err)
+	payload, fetched = monitor.FetchDockerCommandForHost(host.ID)
+	assert.Nil(t, payload)
+	assert.Nil(t, fetched)
+
+	t.Run("no updates available returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:       "host-none",
+			Hostname: "node-none",
+			Status:   "online",
+			Containers: []models.DockerContainer{
+				{ID: "c1", Name: "app1", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: false, LastChecked: now}},
+			},
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		_, err := monitor.QueueDockerUpdateAllCommand(host.ID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no containers have updates available")
+	})
+}
+
+func TestQueueDockerUpdateAllCommand_AcceptsUnifiedHostID(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:          "host-unified-update-all",
+		Hostname:    "unified-update-all",
+		DisplayName: "Unified Update All",
+		Status:      "online",
+		Containers: []models.DockerContainer{
+			{
+				ID:   "container-a",
+				Name: "container-a",
+				UpdateStatus: &models.DockerContainerUpdateStatus{
+					UpdateAvailable: true,
+					LastChecked:     time.Now().UTC(),
+				},
+			},
+			{
+				ID:   "container-b",
+				Name: "container-b",
+				UpdateStatus: &models.DockerContainerUpdateStatus{
+					UpdateAvailable: false,
+					LastChecked:     time.Now().UTC(),
+				},
+			},
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	readState := wireDockerReadState(monitor, models.StateSnapshot{
+		DockerHosts: []models.DockerHost{host},
+	})
+	unifiedID := readState.DockerHosts()[0].ID()
+
+	status, err := monitor.QueueDockerUpdateAllCommand(unifiedID)
+	if err != nil {
+		t.Fatalf("queue update all command with unified id: %v", err)
+	}
+	if status.Status != DockerCommandStatusQueued {
+		t.Fatalf("expected queued status, got %s", status.Status)
+	}
+
+	payload, fetched := monitor.FetchDockerCommandForHost(host.ID)
+	if fetched == nil {
+		t.Fatal("expected command to be fetchable via raw host id")
+	}
+	containerIDs, ok := payload["containerIds"].([]string)
+	if !ok {
+		t.Fatalf("expected []string payload, got %#v", payload["containerIds"])
+	}
+	if len(containerIDs) != 1 || containerIDs[0] != "container-a" {
+		t.Fatalf("expected only updateable container id, got %#v", containerIDs)
+	}
 }
 
 func TestMarkInProgress(t *testing.T) {

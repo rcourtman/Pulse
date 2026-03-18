@@ -188,3 +188,17 @@ func TestGetOutboundIP_AllFail(t *testing.T) {
 	ip := getOutboundIP()
 	assert.Equal(t, "", ip)
 }
+
+func TestGetOutboundIP_NonUDPAddr(t *testing.T) {
+	origNetDial := netDial
+	defer func() { netDial = origNetDial }()
+
+	netDial = func(network, address string) (net.Conn, error) {
+		return &mockConn{
+			localAddr: &mockAddr{ip: "not-udp"},
+		}, nil
+	}
+
+	ip := getOutboundIP()
+	assert.Equal(t, "", ip)
+}

@@ -23,7 +23,7 @@ func TestApplyPatrolModelOverride(t *testing.T) {
 		}
 		if r.URL.Path == "/api/settings/ai/update" && r.Method == "PUT" {
 			var req aiSettingsUpdateRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			_ = json.NewDecoder(r.Body).Decode(&req)
 			if req.PatrolModel != nil {
 				currentModel = *req.PatrolModel
 			}
@@ -86,7 +86,7 @@ func TestApplyPatrolModelOverride_EnvVar(t *testing.T) {
 		}
 		if r.URL.Path == "/api/settings/ai/update" && r.Method == "PUT" {
 			var req aiSettingsUpdateRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			_ = json.NewDecoder(r.Body).Decode(&req)
 			if req.PatrolModel != nil {
 				currentModel = *req.PatrolModel
 			}

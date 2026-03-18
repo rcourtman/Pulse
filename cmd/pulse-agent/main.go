@@ -4,10 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -102,7 +104,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 1. Parse Configuration
 	cfg, err := loadConfig(args, getenv)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load unified agent configuration: %w", err)
 	}
 
 	// 2. Setup Logging
@@ -111,7 +113,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	cfg.Logger = &logger
 
 	if cfg.InsecureSkipVerify {
-		logger.Warn().Msg("TLS verification disabled for agent connections (self-signed cert mode)")
+		logger.Warn().
+			Str("component", "startup").
+			Str("action", "tls_skip_verify_enabled").
+			Msg("TLS verification disabled for agent connections (self-signed cert mode)")
 	}
 
 	// 2a. Handle Self-Test
@@ -140,7 +145,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				cfg.AgentID = lookupHostname
 			}
 		} else {
-			logger.Warn().Err(err).Msg("Failed to fetch host info for Agent ID generation")
+			logger.Warn().
+				Err(err).
+				Str("component", "startup").
+				Str("action", "agent_id_host_info_failed").
+				Msg("Failed to fetch host info for Agent ID generation")
 		}
 	}
 	if lookupHostname == "" {
@@ -162,8 +171,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AgentID:            cfg.AgentID,
 			Hostname:           lookupHostname,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			CACertPath:         cfg.CACertPath,
 			Logger:             logger,
 		})
+		defer rc.Close()
 
 		// Use a short timeout for config fetch so we don't block startup too long
 		rcCtx, rcCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -172,12 +183,23 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		if err != nil {
 			// Just log warning and proceed with local config
-			logger.Warn().Err(err).Msg("Failed to fetch remote config - using local (or previously cached) defaults")
+			logger.Warn().
+				Err(err).
+				Str("component", "remote_config").
+				Str("action", "fetch_failed").
+				Msg("Failed to fetch remote config - using local (or previously cached) defaults")
 		} else {
-			logger.Info().Msg("Successfully fetched remote configuration")
+			logger.Info().
+				Str("component", "remote_config").
+				Str("action", "fetch_succeeded").
+				Msg("Successfully fetched remote configuration")
 			if commandsEnabled != nil {
 				cfg.EnableCommands = *commandsEnabled
-				logger.Info().Bool("enabled", cfg.EnableCommands).Msg("Applied remote command execution setting")
+				logger.Info().
+					Str("component", "remote_config").
+					Str("action", "apply_enable_commands").
+					Bool("enabled", cfg.EnableCommands).
+					Msg("Applied remote command execution setting")
 			}
 			if len(settings) > 0 {
 				applyRemoteSettings(&cfg, settings, &logger)
@@ -199,9 +221,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	logger.Info().
 		Str("version", Version).
 		Str("pulse_url", cfg.PulseURL).
-		Bool("host_agent", cfg.EnableHost).
-		Bool("docker_agent", cfg.EnableDocker).
-		Bool("kubernetes_agent", cfg.EnableKubernetes).
+		Bool("host_enabled", cfg.EnableHost).
+		Bool("docker_enabled", cfg.EnableDocker).
+		Bool("kubernetes_enabled", cfg.EnableKubernetes).
 		Bool("proxmox_mode", cfg.EnableProxmox).
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
@@ -229,6 +251,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		CurrentVersion:     Version,
 		CheckInterval:      1 * time.Hour,
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		CACertPath:         cfg.CACertPath,
 		Logger:             &logger,
 		Disabled:           cfg.DisableAutoUpdate,
 	})
@@ -250,13 +273,17 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AgentVersion:       Version,
 			Tags:               cfg.Tags,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			CACertPath:         cfg.CACertPath,
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
 			EnableProxmox:      cfg.EnableProxmox,
 			ProxmoxType:        cfg.ProxmoxType,
 			EnableCommands:     cfg.EnableCommands,
+			Enroll:             cfg.Enroll,
 			DiskExclude:        cfg.DiskExclude,
+			StateDir:           cfg.StateDir,
 			ReportIP:           cfg.ReportIP,
+			DisableCeph:        cfg.DisableCeph,
 		}
 
 		agent, err := newHostAgent(hostCfg)
@@ -312,7 +339,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		dockerAgent, err = newDockerAgent(dockerCfg)
 		if err != nil {
 			// Docker isn't available yet - start retry loop in background
-			logger.Warn().Err(err).Msg("Docker not available, will retry with exponential backoff")
+			logger.Warn().
+				Err(err).
+				Str("component", "docker_agent").
+				Str("action", "initialization_failed_retry_scheduled").
+				Msg("Docker not available, will retry with exponential backoff")
 
 			g.Go(func() error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
@@ -355,7 +386,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		agent, err := newKubeAgent(kubeCfg)
 		if err != nil {
-			logger.Warn().Err(err).Msg("Kubernetes not available, will retry with exponential backoff")
+			logger.Warn().
+				Err(err).
+				Str("component", "kubernetes_agent").
+				Str("action", "initialization_failed_retry_scheduled").
+				Msg("Kubernetes not available, will retry with exponential backoff")
 
 			g.Go(func() error {
 				retried := initKubernetesWithRetry(ctx, kubeCfg, &logger)
@@ -381,7 +416,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		logger.Error().Err(err).Msg("Agent terminated with error")
 		agentUp.Set(0)
 		cleanupDockerAgent(dockerAgent, &logger)
-		return err
+		return fmt.Errorf("unified agent runtime failed: %w", err)
 	}
 
 	// 12. Cleanup
@@ -397,7 +432,11 @@ func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
 		return
 	}
 	if err := agent.Close(); err != nil {
-		logger.Warn().Err(err).Msg("Failed to close docker agent")
+		logger.Warn().
+			Err(err).
+			Str("component", "docker_agent").
+			Str("action", "shutdown_failed").
+			Msg("Failed to close docker agent")
 	}
 }
 
@@ -440,14 +479,28 @@ func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, log
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && err != http.ErrServerClosed {
-			logger.Warn().Err(err).Msg("Failed to shut down health server")
+			logger.Warn().
+				Err(err).
+				Str("component", "health_server").
+				Str("action", "shutdown_failed").
+				Str("addr", addr).
+				Msg("Failed to shut down health server")
 		}
 	}()
 
 	go func() {
-		logger.Info().Str("addr", addr).Msg("Health/metrics server listening")
+		logger.Info().
+			Str("component", "health_server").
+			Str("action", "listening").
+			Str("addr", addr).
+			Msg("Health/metrics server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Warn().Err(err).Msg("Health server stopped unexpectedly")
+			logger.Warn().
+				Err(err).
+				Str("component", "health_server").
+				Str("action", "stopped_unexpectedly").
+				Str("addr", addr).
+				Msg("Health server stopped unexpectedly")
 		}
 	}()
 }
@@ -460,6 +513,7 @@ type Config struct {
 	AgentID            string
 	Tags               []string
 	InsecureSkipVerify bool
+	CACertPath         string
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 
@@ -478,6 +532,12 @@ type Config struct {
 
 	// Security
 	EnableCommands bool // Enable command execution for AI auto-fix (disabled by default)
+
+	// Enrollment
+	Enroll bool // Exchange bootstrap token for runtime token on startup
+
+	// State directory
+	StateDir string // Persistent state directory for agent-id, proxmox registration, etc.
 
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
@@ -508,6 +568,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envHostname := strings.TrimSpace(getenv("PULSE_HOSTNAME"))
 	envAgentID := strings.TrimSpace(getenv("PULSE_AGENT_ID"))
 	envInsecure := strings.TrimSpace(getenv("PULSE_INSECURE_SKIP_VERIFY"))
+	envCACertPath := strings.TrimSpace(getenv("PULSE_CACERT"))
 	envTags := strings.TrimSpace(getenv("PULSE_TAGS"))
 	envLogLevel := strings.TrimSpace(getenv("LOG_LEVEL"))
 	envEnableHost := strings.TrimSpace(getenv("PULSE_ENABLE_HOST"))
@@ -532,6 +593,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	}
 	envKubeIncludeAllDeployments := strings.TrimSpace(getenv("PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS"))
 	envKubeMaxPods := strings.TrimSpace(getenv("PULSE_KUBE_MAX_PODS"))
+	envStateDir := strings.TrimSpace(getenv("PULSE_STATE_DIR"))
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
@@ -578,6 +640,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	hostnameFlag := fs.String("hostname", envHostname, "Override hostname")
 	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
+	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
@@ -590,12 +653,14 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Container runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for AI auto-fix (disabled by default)")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
+	enrollFlag := fs.Bool("enroll", false, "Exchange bootstrap token for runtime token (used by deploy wizard)")
 	healthAddrFlag := fs.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")
 	kubeconfigFlag := fs.String("kubeconfig", envKubeconfig, "Path to kubeconfig (optional; uses in-cluster config if available)")
 	kubeContextFlag := fs.String("kube-context", envKubeContext, "Kubeconfig context (optional)")
 	kubeIncludeAllPodsFlag := fs.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
 	kubeIncludeAllDeploymentsFlag := fs.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := fs.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
+	stateDirFlag := fs.String("state-dir", envStateDir, "Persistent state directory (default: /var/lib/pulse-agent)")
 	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
@@ -627,13 +692,43 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	// Resolve token with priority: --token > --token-file > env > default file
 	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
+
+	// When --enroll is set and a runtime token already exists from a previous
+	// enrollment, use it instead of the bootstrap token embedded in the service
+	// config. This ensures the agent survives restarts after enrollment.
+	stateDir := strings.TrimSpace(*stateDirFlag)
+	if *enrollFlag {
+		enrollStateDir := stateDir
+		if enrollStateDir == "" {
+			enrollStateDir = "/var/lib/pulse-agent"
+		}
+		runtimeTokenPath := filepath.Join(enrollStateDir, "runtime.token")
+		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
+			if t := strings.TrimSpace(string(content)); t != "" {
+				token = t
+			}
+		}
+	}
+
 	if token == "" && !*selfTest {
 		return Config{}, fmt.Errorf("Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
 	}
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
 	if err != nil {
-		logLevel = zerolog.InfoLevel
+		return Config{}, fmt.Errorf("invalid log level %q: %w", strings.TrimSpace(*logLevelFlag), err)
+	}
+	interval := *intervalFlag
+	if interval <= 0 {
+		return Config{}, fmt.Errorf("interval must be greater than 0 (got %s)", interval)
+	}
+	kubeMaxPods := *kubeMaxPodsFlag
+	if kubeMaxPods <= 0 {
+		return Config{}, fmt.Errorf("kube-max-pods must be greater than 0 (got %d)", kubeMaxPods)
+	}
+	dockerRuntime, err := normalizeDockerRuntime(*dockerRuntimeFlag)
+	if err != nil {
+		return Config{}, err
 	}
 
 	tags := gatherTags(envTags, tagFlags)
@@ -654,11 +749,12 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	return Config{
 		PulseURL:                  pulseURL,
 		APIToken:                  token,
-		Interval:                  *intervalFlag,
+		Interval:                  interval,
 		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
 		AgentID:                   strings.TrimSpace(*agentIDFlag),
 		Tags:                      tags,
 		InsecureSkipVerify:        *insecureFlag,
+		CACertPath:                strings.TrimSpace(*caCertFlag),
 		LogLevel:                  logLevel,
 		EnableHost:                *enableHostFlag,
 		EnableDocker:              *enableDockerFlag,
@@ -668,8 +764,9 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:         *disableAutoUpdateFlag,
 		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
-		DockerRuntime:             strings.TrimSpace(*dockerRuntimeFlag),
+		DockerRuntime:             dockerRuntime,
 		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
+		Enroll:                    *enrollFlag,
 		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
 		KubeContext:               strings.TrimSpace(*kubeContextFlag),
@@ -677,7 +774,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeExcludeNamespaces:     kubeExcludeNamespaces,
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
-		KubeMaxPods:               *kubeMaxPodsFlag,
+		KubeMaxPods:               kubeMaxPods,
+		StateDir:                  strings.TrimSpace(*stateDirFlag),
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,
@@ -733,6 +831,18 @@ func defaultInt(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func normalizeDockerRuntime(value string) (string, error) {
+	runtime := strings.ToLower(strings.TrimSpace(value))
+	switch runtime {
+	case "", "auto", "default":
+		return "", nil
+	case "docker", "podman":
+		return runtime, nil
+	default:
+		return "", fmt.Errorf("invalid docker runtime %q: must be auto, docker, or podman", value)
+	}
 }
 
 func parseLogLevel(value string) (zerolog.Level, error) {
@@ -835,26 +945,36 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 	attempt := 0
 
 	for {
+		if err := ctx.Err(); err != nil {
+			logger.Info().Msg("Docker retry cancelled, context done")
+			return nil
+		}
+
 		agent, err := newDockerAgent(cfg)
 		if err == nil {
 			logger.Info().
+				Str("component", "docker_agent").
+				Str("action", "retry_connect_succeeded").
 				Int("attempts", attempt+1).
 				Msg("Successfully connected to Docker after retry")
 			return agent
 		}
 
 		attempt++
-		logger.Warn().
+		retryLogEvent(logger, attempt).
 			Err(err).
+			Str("component", "docker_agent").
+			Str("action", "retry_connect_failed").
 			Int("attempt", attempt).
 			Str("next_retry", delay.String()).
 			Msg("Docker not available, will retry")
 
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Docker retry cancelled, context done")
+		if !waitForRetryDelay(ctx, delay) {
+			logger.Info().
+				Str("component", "docker_agent").
+				Str("action", "retry_cancelled").
+				Msg("Docker retry cancelled, context done")
 			return nil
-		case <-time.After(delay):
 		}
 
 		// Calculate next delay with exponential backoff, capped at retryMaxDelay
@@ -875,26 +995,36 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 	attempt := 0
 
 	for {
+		if err := ctx.Err(); err != nil {
+			logger.Info().Msg("Kubernetes retry cancelled, context done")
+			return nil
+		}
+
 		agent, err := newKubeAgent(cfg)
 		if err == nil {
 			logger.Info().
+				Str("component", "kubernetes_agent").
+				Str("action", "retry_connect_succeeded").
 				Int("attempts", attempt+1).
 				Msg("Successfully connected to Kubernetes after retry")
 			return agent
 		}
 
 		attempt++
-		logger.Warn().
+		retryLogEvent(logger, attempt).
 			Err(err).
+			Str("component", "kubernetes_agent").
+			Str("action", "retry_connect_failed").
 			Int("attempt", attempt).
 			Str("next_retry", delay.String()).
 			Msg("Kubernetes still not available, will retry")
 
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("Kubernetes retry cancelled, context done")
+		if !waitForRetryDelay(ctx, delay) {
+			logger.Info().
+				Str("component", "kubernetes_agent").
+				Str("action", "retry_cancelled").
+				Msg("Kubernetes retry cancelled, context done")
 			return nil
-		case <-time.After(delay):
 		}
 
 		// Calculate next delay with exponential backoff, capped at retryMaxDelay
@@ -902,6 +1032,41 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		if delay > retryMaxDelay {
 			delay = retryMaxDelay
 		}
+	}
+}
+
+func waitForRetryDelay(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// retryLogEvent returns a zerolog event at a level that decreases with attempt count
+// to avoid flooding logs on misconfigured systems with unbounded retries.
+//   - Attempts 1-10:  Warn  (initial visibility)
+//   - Attempts 11-50: Info  (still visible, less noisy)
+//   - Attempts 51+:   Debug (effectively silent unless debug logging enabled)
+func retryLogEvent(logger *zerolog.Logger, attempt int) *zerolog.Event {
+	switch {
+	case attempt <= 10:
+		return logger.Warn()
+	case attempt <= 50:
+		return logger.Info()
+	default:
+		return logger.Debug()
 	}
 }
 
@@ -956,7 +1121,12 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "docker_runtime":
 			if s, ok := v.(string); ok {
-				cfg.DockerRuntime = strings.TrimSpace(strings.ToLower(s))
+				runtime, err := normalizeDockerRuntime(s)
+				if err != nil {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid docker_runtime value")
+					continue
+				}
+				cfg.DockerRuntime = runtime
 				logger.Info().Str("val", s).Msg("Remote config: docker_runtime")
 			}
 		case "log_level":
@@ -972,13 +1142,19 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "interval":
 			if s, ok := v.(string); ok {
-				if d, err := time.ParseDuration(s); err == nil {
+				if d, err := time.ParseDuration(s); err == nil && d > 0 {
 					cfg.Interval = d
 					logger.Info().Str("val", s).Msg("Remote config: interval")
+				} else {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid interval value")
 				}
 			} else if f, ok := v.(float64); ok {
-				// JSON numbers are floats, assume seconds
-				cfg.Interval = time.Duration(f) * time.Second
+				if math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+					logger.Warn().Float64("val", f).Msg("Remote config: ignoring invalid interval value")
+					continue
+				}
+				// JSON numbers are floats, assume seconds.
+				cfg.Interval = time.Duration(f * float64(time.Second))
 				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
 			}
 		case "disable_auto_update":
@@ -1012,5 +1188,75 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 				logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
 			}
 		}
+	}
+	if d, ok := remoteDurationSetting(settings, "interval"); ok && d > 0 {
+		cfg.Interval = d
+		logger.Info().Dur("val", d).Msg("Remote config: interval")
+	}
+	if b, ok := remoteBoolSetting(settings, "disable_auto_update"); ok {
+		cfg.DisableAutoUpdate = b
+		logger.Info().Bool("val", b).Msg("Remote config: disable_auto_update")
+	}
+	if b, ok := remoteBoolSetting(settings, "disable_docker_update_checks"); ok {
+		cfg.DisableDockerUpdateChecks = b
+		logger.Info().Bool("val", b).Msg("Remote config: disable_docker_update_checks")
+	}
+	if b, ok := remoteBoolSetting(settings, "kube_include_all_pods"); ok {
+		cfg.KubeIncludeAllPods = b
+		logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_pods")
+	}
+	if b, ok := remoteBoolSetting(settings, "kube_include_all_deployments"); ok {
+		cfg.KubeIncludeAllDeployments = b
+		logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_deployments")
+	}
+	if s, ok := remoteStringSetting(settings, "report_ip"); ok {
+		cfg.ReportIP = s
+		logger.Info().Str("val", s).Msg("Remote config: report_ip")
+	}
+	if b, ok := remoteBoolSetting(settings, "disable_ceph"); ok {
+		cfg.DisableCeph = b
+		logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
+	}
+}
+
+func remoteBoolSetting(settings map[string]interface{}, key string) (bool, bool) {
+	value, ok := settings[key]
+	if !ok {
+		return false, false
+	}
+	parsed, ok := value.(bool)
+	return parsed, ok
+}
+
+func remoteStringSetting(settings map[string]interface{}, key string) (string, bool) {
+	value, ok := settings[key]
+	if !ok {
+		return "", false
+	}
+	parsed, ok := value.(string)
+	return parsed, ok
+}
+
+func remoteDurationSetting(settings map[string]interface{}, key string) (time.Duration, bool) {
+	value, ok := settings[key]
+	if !ok {
+		return 0, false
+	}
+
+	switch typed := value.(type) {
+	case string:
+		parsed, err := time.ParseDuration(typed)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case float64:
+		return time.Duration(typed) * time.Second, true
+	case int:
+		return time.Duration(typed) * time.Second, true
+	case int64:
+		return time.Duration(typed) * time.Second, true
+	default:
+		return 0, false
 	}
 }

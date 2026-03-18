@@ -1,13 +1,16 @@
 # Pulse Unified Agent
 
-The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
+The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces older split-agent installs with one deployment and one service for simpler operations.
+Install it on each host you want Pulse to monitor. This is the primary monitoring path for infrastructure onboarding.
 
 > Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
 ## Quick Start
 
 Generate an installation command in the UI:
-**Settings → Agents → Installation commands**
+**Settings → Unified Agents → Installation commands**
+
+Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
 ### Linux (systemd)
 ```bash
@@ -56,50 +59,33 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 ## Configuration
 
-### Installer flags (`install.sh`)
-
-These flags are accepted by the install script (i.e. `curl ... | bash -s -- <flags>`). The installer passes the relevant options through to the agent's service definition.
-
 | Flag | Env Var | Description | Default |
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
-| `--disable-host` | - | Disable host metrics | - |
-| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | auto-detect |
-| `--disable-docker` | - | Disable Docker monitoring even if detected | - |
-| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | auto-detect |
-| `--disable-kubernetes` | - | Disable Kubernetes monitoring even if detected | - |
-| `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (also enables Kubernetes) | *(auto)* |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` (auto-detect if not configured) |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
+| `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
+| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
+| `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
+| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
+| `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
+| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude from disk monitoring (repeatable or CSV) | *(none)* |
+| `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
+| `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
+| `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards supported) | *(all)* |
+| `--kube-exclude-namespace` | `PULSE_KUBE_EXCLUDE_NAMESPACES` | Exclude namespaces (repeatable or CSV, wildcards supported) | *(none)* |
 | `--kube-include-all-pods` | `PULSE_KUBE_INCLUDE_ALL_PODS` | Include all non-succeeded pods | `false` |
 | `--kube-include-all-deployments` | `PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS` | Include all deployments, not just problems | `false` |
-| `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | auto-detect |
-| `--disable-proxmox` | - | Disable Proxmox integration even if detected | - |
-| `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
-| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution | `false` |
-| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude (repeatable) | *(none)* |
-| `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
-| `--cacert` | - | Custom CA certificate path for TLS | *(none)* |
-| `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
-| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
-| `--env` | - | Set custom env var in the service file (repeatable) | *(none)* |
-| `--uninstall` | - | Remove the agent | - |
-
-### Agent-only flags
-
-These flags are accepted by the `pulse-agent` binary directly but are **not** available via the install script. Set them via environment variables in the service file, or pass them when running the agent manually.
-
-| Flag | Env Var | Description | Default |
-|------|---------|-------------|---------|
-| `--token-file` | - | Read API token from file | *(unset)* |
-| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force container runtime: `auto`, `docker`, or `podman` | `auto` |
-| `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context | *(auto)* |
-| `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards) | *(all)* |
-| `--kube-exclude-namespace` | `PULSE_KUBE_EXCLUDE_NAMESPACES` | Exclude namespaces (repeatable or CSV, wildcards) | *(none)* |
 | `--kube-max-pods` | `PULSE_KUBE_MAX_PODS` | Max pods per report | `200` |
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
+| `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
+| `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
+| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
@@ -124,9 +110,9 @@ Auto-detection behavior:
 
 To disable auto-detection, explicitly set the relevant flags or env vars, for example:
 
-- `--disable-docker` or `PULSE_ENABLE_DOCKER=false`
-- `--disable-kubernetes` or `PULSE_ENABLE_KUBERNETES=false`
-- `--disable-proxmox` or `PULSE_ENABLE_PROXMOX=false`
+- `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
+- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
+- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
 
 ## Installation Options
 
@@ -134,6 +120,18 @@ To disable auto-detection, explicitly set the relevant flags or env vars, for ex
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token>
+```
+
+### Proxmox VE Node (explicit profile)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pve
+```
+
+### Proxmox Backup Server Node (explicit profile)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pbs
 ```
 
 ### Force Enable Docker (if auto-detection fails)
@@ -145,7 +143,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Disable Docker (even if detected)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
 ```
 
 ### Host + Kubernetes Monitoring
@@ -157,7 +155,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 ### Docker Monitoring Only
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-host --enable-docker
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-host=false --enable-docker
 ```
 
 ### Exclude Specific Disks from Monitoring
@@ -216,23 +214,23 @@ The unified agent automatically checks for updates every hour. When a new versio
 
 To disable auto-updates:
 ```bash
-# During installation (inject the env var into the service file)
+# During installation
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --env PULSE_DISABLE_AUTO_UPDATE=true
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-auto-update
 
-# Or when running the agent directly
-pulse-agent --disable-auto-update
+# Or set environment variable
+PULSE_DISABLE_AUTO_UPDATE=true
 ```
 
-## Remote Configuration (Agent Profiles, Pro)
+## Remote Configuration (Agent Profiles, Pro/Pro+/Cloud)
 
-Pulse Pro can push centralized settings to agents via Agent Profiles.
+Pro, Pro+, and Cloud can push centralized settings to agents via Agent Profiles.
 
 Behavior:
-- The agent fetches remote config on startup from `/api/agents/host/{agent_id}/config`.
+- The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
 - Profile changes take effect on the next agent restart.
-- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Agents → Unified Agents** and can change live.
+- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Unified Agents** and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
 - If you use a custom signing key, set `PULSE_AGENT_CONFIG_PUBLIC_KEYS` on agents to trust the matching public key.
@@ -248,16 +246,10 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
 This removes:
 - The agent binary
 - The systemd/launchd service
-- Any legacy agents (pulse-host-agent, pulse-docker-agent)
 
-## Migration from Legacy Agents
+## Migration Notes
 
-The install script automatically removes legacy agents when installing the unified agent:
-- `pulse-host-agent` service is stopped and removed
-- `pulse-docker-agent` service is stopped and removed
-- Binaries are deleted from `/usr/local/bin/`
-
-No manual cleanup is required.
+Use the unified installer (`install.sh`) for all new and existing deployments.
 
 ## Health Checks & Metrics
 
@@ -307,15 +299,15 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=""` to disable the health/metrics s
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
 
-### Duplicate Hosts
-If cloned VMs appear as the same host:
+### Duplicate Agents
+If cloned VMs appear as the same agent:
 ```bash
 sudo rm /etc/machine-id && sudo systemd-machine-id-setup
 ```
 
 Or set a unique agent ID:
 ```bash
---agent-id my-unique-host-id
+--agent-id my-unique-agent-id
 ```
 
 ### Permission Denied (Docker)
@@ -365,16 +357,16 @@ If your Docker Swarm cluster isn't being detected:
    LOG_LEVEL=debug journalctl -u pulse-agent -f
    ```
 
-### PVE Backups Not Showing
+### PVE Backups Not Showing (Recovery)
 
 If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
 
 1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
    ```bash
-   pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
+   pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
    ```
 
-2. **Re-run setup** (v5.1.x or later): Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Newer versions grant this permission automatically.
+2. **Re-run setup**: Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Recent versions grant this permission automatically.
 
 3. **Check state file**: If re-running doesn't trigger setup, remove the state file:
    ```bash

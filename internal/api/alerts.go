@@ -3,11 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
@@ -48,81 +47,110 @@ type AlertMonitor interface {
 	GetIncidentStore() *memory.IncidentStore
 	GetNotificationManager() *notifications.NotificationManager
 	SyncAlertState()
-	GetState() models.StateSnapshot
+	BuildFrontendState() models.StateFrontend
 }
 
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor AlertMonitor
-	wsHub         *websocket.Hub
+	stateMu        sync.RWMutex
+	mtMonitor      *monitoring.MultiTenantMonitor
+	defaultMonitor AlertMonitor
+	wsHub          *websocket.Hub
 }
 
 // NewAlertHandlers creates new alert handlers
 func NewAlertHandlers(mtm *monitoring.MultiTenantMonitor, monitor AlertMonitor, wsHub *websocket.Hub) *AlertHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = NewAlertMonitorWrapper(m)
 		}
 	}
 	return &AlertHandlers{
-		mtMonitor:     mtm,
-		legacyMonitor: monitor,
-		wsHub:         wsHub,
+		mtMonitor:      mtm,
+		defaultMonitor: monitor,
+		wsHub:          wsHub,
 	}
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *AlertHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var defaultMonitor AlertMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = NewAlertMonitorWrapper(m)
+			defaultMonitor = NewAlertMonitorWrapper(m)
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
 // SetMonitor updates the monitor reference for alert handlers.
 func (h *AlertHandlers) SetMonitor(m AlertMonitor) {
-	h.legacyMonitor = m
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.defaultMonitor = m
 }
 
 func (h *AlertHandlers) getMonitor(ctx context.Context) AlertMonitor {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	defaultMonitor := h.defaultMonitor
+	h.stateMu.RUnlock()
+
 	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewAlertMonitorWrapper(m)
 		}
 	}
-	return h.legacyMonitor
+	return defaultMonitor
 }
 
-// validateAlertID validates an alert ID for security.
-// Alert IDs may contain user-supplied data (e.g., Docker hostnames), so we allow
+func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
+	if h.wsHub == nil {
+		return
+	}
+
+	orgID := GetOrgID(ctx)
+	frontendState := h.getMonitor(ctx).BuildFrontendState()
+	if orgID != "" {
+		h.wsHub.BroadcastStateToTenant(orgID, frontendState)
+		return
+	}
+	h.wsHub.BroadcastState(frontendState)
+}
+
+// validateAlertIdentifier validates an alert identifier for security.
+// Alert identifiers may contain user-supplied data (e.g., Docker hostnames), so we allow
 // printable ASCII characters while blocking control characters and path traversal.
-func validateAlertID(alertID string) bool {
+func validateAlertIdentifier(alertIdentifier string) bool {
 	// Guard against empty strings or extremely large payloads that could impact memory usage.
-	if len(alertID) == 0 || len(alertID) > 500 {
+	if len(alertIdentifier) == 0 || len(alertIdentifier) > 500 {
 		return false
 	}
 
 	// Reject attempts to traverse directories via crafted path segments.
-	if strings.Contains(alertID, "../") || strings.Contains(alertID, "/..") {
+	if strings.Contains(alertIdentifier, "../") || strings.Contains(alertIdentifier, "/..") {
 		return false
 	}
 
 	// Allow printable ASCII characters (32-126) to support user-supplied identifiers
 	// like Docker hostnames that may contain parentheses, brackets, etc.
 	// Reject control characters (0-31) and DEL (127) which could cause logging issues.
-	for _, r := range alertID {
+	for _, r := range alertIdentifier {
 		if r < 32 || r > 126 {
 			return false
 		}
 	}
 
 	// Reject IDs that start or end with spaces (likely malformed)
-	if alertID[0] == ' ' || alertID[len(alertID)-1] == ' ' {
+	if alertIdentifier[0] == ' ' || alertIdentifier[len(alertIdentifier)-1] == ' ' {
 		return false
 	}
 
@@ -143,41 +171,10 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	// Limit request body to 64KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	var config alerts.AlertConfig
-	if err := json.Unmarshal(body, &config); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	// Preserve notifyOnResolve when the client omits it from the request body.
-	// Go decodes a missing bool as false, which would silently disable recovery
-	// notifications. Use a *bool probe to distinguish "missing" from "explicitly false".
-	// Refs: #1259, #1332
-	var scheduleProbe struct {
-		Schedule struct {
-			NotifyOnResolve *bool `json:"notifyOnResolve"`
-		} `json:"schedule"`
-	}
-	if err := json.Unmarshal(body, &scheduleProbe); err == nil && scheduleProbe.Schedule.NotifyOnResolve == nil {
-		currentConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
-		config.Schedule.NotifyOnResolve = currentConfig.Schedule.NotifyOnResolve
-	}
-
-	// Migrate deprecated GroupingWindow to Grouping.Window if needed before applying.
-	groupWindow := config.Schedule.Grouping.Window
-	if groupWindow == 0 && config.Schedule.GroupingWindow != 0 {
-		groupWindow = config.Schedule.GroupingWindow
-		config.Schedule.Grouping.Window = groupWindow
-		config.Schedule.GroupingWindow = 0 // Clear deprecated field
-		log.Info().
-			Int("window", groupWindow).
-			Msg("Migrated deprecated GroupingWindow to Grouping.Window")
 	}
 
 	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
@@ -187,12 +184,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
 	notificationMgr.SetEnabled(updatedConfig.Enabled && updatedConfig.ActivationState == alerts.ActivationActive)
 	notificationMgr.SetCooldown(updatedConfig.Schedule.Cooldown)
-
-	groupWindow = updatedConfig.Schedule.Grouping.Window
-	if groupWindow == 0 && updatedConfig.Schedule.GroupingWindow != 0 {
-		groupWindow = updatedConfig.Schedule.GroupingWindow
-	}
-	notificationMgr.SetGroupingWindow(groupWindow)
+	notificationMgr.SetGroupingWindow(updatedConfig.Schedule.Grouping.Window)
 	notificationMgr.SetGroupingOptions(
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
@@ -466,7 +458,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	}
 
 	query := r.URL.Query()
-	alertID := strings.TrimSpace(query.Get("alert_id"))
+	alertID := strings.TrimSpace(query.Get("alertIdentifier"))
 	resourceID := strings.TrimSpace(query.Get("resource_id"))
 	startedAtRaw := strings.TrimSpace(query.Get("started_at"))
 	if startedAtRaw == "" {
@@ -480,8 +472,8 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	}
 
 	if alertID != "" {
-		if !validateAlertID(alertID) {
-			http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		if !validateAlertIdentifier(alertID) {
+			http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 			return
 		}
 		var startedAt time.Time
@@ -498,9 +490,9 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		if !startedAt.IsZero() {
 			incident = store.GetTimelineByAlertAt(alertID, startedAt)
 		} else {
-			incident = store.GetTimelineByAlertID(alertID)
+			incident = store.GetTimelineByAlertIdentifier(alertID)
 		}
-		if err := utils.WriteJSONResponse(w, incident); err != nil {
+		if err := utils.WriteJSONResponse(w, exportIncident(incident)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident timeline response")
 		}
 		return
@@ -512,13 +504,13 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			return
 		}
 		incidents := store.ListIncidentsByResource(resourceID, limit)
-		if err := utils.WriteJSONResponse(w, incidents); err != nil {
+		if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident list response")
 		}
 		return
 	}
 
-	http.Error(w, "Missing alert_id or resource_id", http.StatusBadRequest)
+	http.Error(w, "Missing alertIdentifier or resource_id", http.StatusBadRequest)
 }
 
 // SaveAlertIncidentNote stores a user note in the incident timeline.
@@ -536,27 +528,29 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req struct {
-		AlertID    string `json:"alert_id"`
-		IncidentID string `json:"incident_id"`
-		Note       string `json:"note"`
-		User       string `json:"user,omitempty"`
+		AlertIdentifier string `json:"alertIdentifier"`
+		IncidentID      string `json:"incident_id"`
+		Note            string `json:"note"`
+		User            string `json:"user,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	req.AlertID = strings.TrimSpace(req.AlertID)
+	req.AlertIdentifier = strings.TrimSpace(req.AlertIdentifier)
 	req.IncidentID = strings.TrimSpace(req.IncidentID)
 	req.Note = strings.TrimSpace(req.Note)
 	req.User = strings.TrimSpace(req.User)
 
-	if req.AlertID == "" && req.IncidentID == "" {
-		http.Error(w, "alert_id or incident_id is required", http.StatusBadRequest)
+	alertIdentifier := req.AlertIdentifier
+
+	if alertIdentifier == "" && req.IncidentID == "" {
+		http.Error(w, "alertIdentifier or incident_id is required", http.StatusBadRequest)
 		return
 	}
-	if req.AlertID != "" && !validateAlertID(req.AlertID) {
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if alertIdentifier != "" && !validateAlertIdentifier(alertIdentifier) {
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 	if req.Note == "" {
@@ -564,7 +558,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if ok := store.RecordNote(req.AlertID, req.IncidentID, req.Note, req.User); !ok {
+	if ok := store.RecordNote(alertIdentifier, req.IncidentID, req.Note, req.User); !ok {
 		http.Error(w, "Failed to save note", http.StatusBadRequest)
 		return
 	}
@@ -574,6 +568,109 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write incident note response")
 	}
+}
+
+type incidentEventView struct {
+	ID        string                   `json:"id"`
+	Type      memory.IncidentEventType `json:"type"`
+	Timestamp time.Time                `json:"timestamp"`
+	Summary   string                   `json:"summary"`
+	Details   map[string]interface{}   `json:"details"`
+}
+
+func emptyIncidentEventView() incidentEventView {
+	return incidentEventView{}.NormalizeCollections()
+}
+
+func (v incidentEventView) NormalizeCollections() incidentEventView {
+	if v.Details == nil {
+		v.Details = map[string]interface{}{}
+	}
+	return v
+}
+
+type incidentView struct {
+	ID              string                `json:"id"`
+	AlertIdentifier string                `json:"alertIdentifier"`
+	AlertType       string                `json:"alertType"`
+	Level           string                `json:"level"`
+	ResourceID      string                `json:"resourceId"`
+	ResourceName    string                `json:"resourceName"`
+	ResourceType    string                `json:"resourceType,omitempty"`
+	Node            string                `json:"node,omitempty"`
+	Instance        string                `json:"instance,omitempty"`
+	Message         string                `json:"message,omitempty"`
+	Status          memory.IncidentStatus `json:"status"`
+	OpenedAt        time.Time             `json:"openedAt"`
+	ClosedAt        *time.Time            `json:"closedAt,omitempty"`
+	Acknowledged    bool                  `json:"acknowledged"`
+	AckUser         string                `json:"ackUser,omitempty"`
+	AckTime         *time.Time            `json:"ackTime,omitempty"`
+	Events          []incidentEventView   `json:"events"`
+}
+
+func emptyIncidentView() incidentView {
+	return incidentView{}.NormalizeCollections()
+}
+
+func (v incidentView) NormalizeCollections() incidentView {
+	if v.Events == nil {
+		v.Events = []incidentEventView{}
+	}
+	for i := range v.Events {
+		v.Events[i] = v.Events[i].NormalizeCollections()
+	}
+	return v
+}
+
+func exportIncident(incident *memory.Incident) *incidentView {
+	if incident == nil {
+		return nil
+	}
+	events := make([]incidentEventView, 0, len(incident.Events))
+	for _, event := range incident.Events {
+		events = append(events, incidentEventView{
+			ID:        event.ID,
+			Type:      event.Type,
+			Timestamp: event.Timestamp,
+			Summary:   event.Summary,
+			Details:   event.Details,
+		}.NormalizeCollections())
+	}
+	alertIdentifier := strings.TrimSpace(incident.AlertIdentifier)
+	view := emptyIncidentView()
+	view.ID = incident.ID
+	view.AlertIdentifier = alertIdentifier
+	view.AlertType = incident.AlertType
+	view.Level = incident.Level
+	view.ResourceID = incident.ResourceID
+	view.ResourceName = incident.ResourceName
+	view.ResourceType = incident.ResourceType
+	view.Node = incident.Node
+	view.Instance = incident.Instance
+	view.Message = incident.Message
+	view.Status = incident.Status
+	view.OpenedAt = incident.OpenedAt
+	view.ClosedAt = incident.ClosedAt
+	view.Acknowledged = incident.Acknowledged
+	view.AckUser = incident.AckUser
+	view.AckTime = incident.AckTime
+	view.Events = events
+	returnValue := view.NormalizeCollections()
+	return &returnValue
+}
+
+func exportIncidents(incidents []*memory.Incident) []*incidentView {
+	if len(incidents) == 0 {
+		return []*incidentView{}
+	}
+	exported := make([]*incidentView, 0, len(incidents))
+	for _, incident := range incidents {
+		if view := exportIncident(incident); view != nil {
+			exported = append(exported, view)
+		}
+	}
+	return exported
 }
 
 // ClearAlertHistory clears all alert history
@@ -588,183 +685,51 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// UnacknowledgeAlert removes acknowledged status from an alert
-func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/unacknowledge
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/unacknowledge"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /unacknowledge")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	// Log the unacknowledge attempt
-	log.Debug().
-		Str("alertID", alertID).
-		Str("path", r.URL.Path).
-		Msg("Attempting to unacknowledge alert")
-
-	if err := h.getMonitor(r.Context()).GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
-		log.Error().
-			Err(err).
-			Str("alertID", alertID).
-			Msg("Failed to unacknowledge alert")
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	log.Info().
-		Str("alertID", alertID).
-		Msg("Alert unacknowledged successfully")
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write unacknowledge response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
-			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
-		}()
-	}
+// alertIdentifierRequest is used for endpoints that accept one canonical alert identifier in the request body.
+type alertIdentifierRequest struct {
+	AlertIdentifier string `json:"alertIdentifier"`
 }
 
-// AcknowledgeAlert acknowledges an alert
-func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
-	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
-	// So we need to find the /acknowledge suffix and extract everything before it
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/acknowledge"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /acknowledge")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	// Log the acknowledge attempt
-	log.Debug().
-		Str("alertID", alertID).
-		Str("path", r.URL.Path).
-		Msg("Attempting to acknowledge alert")
-
-	// Get the authenticated user from the auth middleware (set in X-Authenticated-User header)
-	user := w.Header().Get("X-Authenticated-User")
-	if user == "" {
-		user = "unknown" // Fallback if auth header not set (shouldn't happen in normal flow)
-	}
-
-	log.Debug().
-		Str("alertID", alertID).
-		Msg("About to call AcknowledgeAlert on manager")
-
-	if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
-		log.Error().
-			Err(err).
-			Str("alertID", alertID).
-			Msg("Failed to acknowledge alert")
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	log.Info().
-		Str("alertID", alertID).
-		Str("user", user).
-		Msg("Alert acknowledged successfully")
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write acknowledge response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
-			log.Debug().Msg("Broadcasted state after alert acknowledgment")
-		}()
-	}
+func (r alertIdentifierRequest) identifier() string {
+	return strings.TrimSpace(r.AlertIdentifier)
 }
 
-// alertIDRequest is used for endpoints that accept alert ID in request body
-// This avoids URL encoding issues with alert IDs containing special characters (/, :)
-type alertIDRequest struct {
-	ID string `json:"id"`
+type alertIdentifiersRequest struct {
+	AlertIdentifiers []string `json:"alertIdentifiers"`
+	User             string   `json:"user,omitempty"`
 }
 
-// AcknowledgeAlertByBody acknowledges an alert using ID from request body
-// POST /api/alerts/acknowledge with {"id": "alert-id"}
-// This is the preferred method as it avoids URL encoding issues with reverse proxies
+func (r alertIdentifiersRequest) identifiers() []string {
+	raw := r.AlertIdentifiers
+	identifiers := make([]string, 0, len(raw))
+	for _, identifier := range raw {
+		trimmed := strings.TrimSpace(identifier)
+		if trimmed != "" {
+			identifiers = append(identifiers, trimmed)
+		}
+	}
+	return identifiers
+}
+
+// AcknowledgeAlertByBody acknowledges an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/acknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode acknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
@@ -789,32 +754,32 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
 
-// UnacknowledgeAlertByBody unacknowledges an alert using ID from request body
-// POST /api/alerts/unacknowledge with {"id": "alert-id"}
+// UnacknowledgeAlertByBody unacknowledges an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/unacknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode unacknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
@@ -833,32 +798,32 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
 
-// ClearAlertByBody clears an alert using ID from request body
-// POST /api/alerts/clear with {"id": "alert-id"}
+// ClearAlertByBody clears an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/clear with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode clear request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
@@ -876,65 +841,9 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h.wsHub != nil {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
-		}()
-	}
-}
-
-// ClearAlert manually clears an alert
-func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
-	// Extract alert ID from URL path: /api/alerts/{id}/clear
-	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
-	// So we need to find the /clear suffix and extract everything before it
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
-
-	const suffix = "/clear"
-	if !strings.HasSuffix(path, suffix) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Msg("Path does not end with /clear")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	// Extract alert ID by removing the suffix and decoding encoded characters
-	encodedID := strings.TrimSuffix(path, suffix)
-	alertID, err := url.PathUnescape(encodedID)
-	if err != nil {
-		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !validateAlertID(alertID) {
-		log.Error().
-			Str("path", r.URL.Path).
-			Str("alertID", alertID).
-			Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
-		return
-	}
-
-	if !h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
-		http.Error(w, "Alert not found", http.StatusNotFound)
-		return
-	}
-	h.getMonitor(r.Context()).SyncAlertState()
-
-	// Send response immediately
-	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
-		log.Error().Err(err).Str("alertID", alertID).Msg("Failed to write clear alert response")
-	}
-
-	// Broadcast updated state to all WebSocket clients after response
-	// Do this in a goroutine to avoid blocking the HTTP response
-	if h.wsHub != nil {
-		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
-			log.Debug().Msg("Broadcasted state after alert clear")
+			h.broadcastStateForContext(ctx)
 		}()
 	}
 }
@@ -944,18 +853,16 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
-	var request struct {
-		AlertIDs []string `json:"alertIds"`
-		User     string   `json:"user,omitempty"`
-	}
+	var request alertIdentifiersRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if len(request.AlertIDs) == 0 {
-		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+	alertIdentifiers := request.identifiers()
+	if len(alertIdentifiers) == 0 {
+		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
 		return
 	}
 
@@ -969,10 +876,10 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		results    []map[string]interface{}
 		anySuccess bool
 	)
-	for _, alertID := range request.AlertIDs {
+	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
-			"alertId": alertID,
-			"success": true,
+			"alertIdentifier": alertID,
+			"success":         true,
 		}
 		if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 			result["success"] = false
@@ -997,9 +904,9 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	// Broadcast updated state to all WebSocket clients if any alerts were acknowledged
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
 		}()
 	}
@@ -1010,17 +917,16 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
-	var request struct {
-		AlertIDs []string `json:"alertIds"`
-	}
+	var request alertIdentifiersRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if len(request.AlertIDs) == 0 {
-		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+	alertIdentifiers := request.identifiers()
+	if len(alertIdentifiers) == 0 {
+		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
 		return
 	}
 
@@ -1028,10 +934,10 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 		results    []map[string]interface{}
 		anySuccess bool
 	)
-	for _, alertID := range request.AlertIDs {
+	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
-			"alertId": alertID,
-			"success": true,
+			"alertIdentifier": alertID,
+			"success":         true,
 		}
 		if h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
 			anySuccess = true
@@ -1056,9 +962,9 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	// Broadcast updated state to all WebSocket clients after response
 	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil && anySuccess {
+		ctx := r.Context()
 		go func() {
-			state := h.getMonitor(r.Context()).GetState()
-			h.wsHub.BroadcastState(state.ToFrontend())
+			h.broadcastStateForContext(ctx)
 			log.Debug().Msg("Broadcasted state after bulk alert clear")
 		}()
 	}
@@ -1141,22 +1047,6 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.ClearAlertByBody(w, r)
-	// Legacy path-based endpoints (kept for backwards compatibility)
-	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.AcknowledgeAlert(w, r)
-	case strings.HasSuffix(path, "/unacknowledge") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.UnacknowledgeAlert(w, r)
-	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
-		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
-			return
-		}
-		h.ClearAlert(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

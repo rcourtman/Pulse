@@ -7,11 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
@@ -97,32 +95,6 @@ func TestExtractSetupToken(t *testing.T) {
 			t.Fatalf("expected empty token, got %q", got)
 		}
 	})
-}
-
-func TestDedupeStrings(t *testing.T) {
-	input := []string{"alpha", "beta", "alpha", "", "gamma", "beta", " "}
-	want := []string{"alpha", "beta", "gamma", " "}
-
-	if got := dedupeStrings(input); !reflect.DeepEqual(got, want) {
-		t.Fatalf("dedupeStrings() = %v, want %v", got, want)
-	}
-}
-
-func TestSortedHostAgentKeys(t *testing.T) {
-	if got := sortedHostAgentKeys(nil); got != nil {
-		t.Fatalf("expected nil result for nil map, got %v", got)
-	}
-
-	missing := map[string]agentbinaries.HostAgentBinary{
-		"zeta":  {},
-		"alpha": {},
-		"beta":  {},
-	}
-
-	want := []string{"alpha", "beta", "zeta"}
-	if got := sortedHostAgentKeys(missing); !reflect.DeepEqual(got, want) {
-		t.Fatalf("sortedHostAgentKeys() = %v, want %v", got, want)
-	}
 }
 
 func TestFileExists(t *testing.T) {
@@ -228,12 +200,12 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "lxc alert",
 			alert: &alerts.Alert{Type: "lxc_disk", ResourceID: "cluster/lxc/200"},
-			want:  "container",
+			want:  "system-container",
 		},
 		{
 			name:  "docker alert",
 			alert: &alerts.Alert{Type: "docker_health", ResourceID: "docker-1"},
-			want:  "docker",
+			want:  "app-container",
 		},
 		{
 			name:  "storage alert",
@@ -248,7 +220,25 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "kubernetes alert",
 			alert: &alerts.Alert{Type: "kubernetes", ResourceID: "k8s-1"},
-			want:  "kubernetes",
+			want:  "k8s",
+		},
+		{
+			name: "metadata canonical resource type",
+			alert: &alerts.Alert{
+				Type:       "custom",
+				ResourceID: "resource-1",
+				Metadata:   map[string]interface{}{"resourceType": "app-container"},
+			},
+			want: "app-container",
+		},
+		{
+			name: "metadata legacy resource type ignored",
+			alert: &alerts.Alert{
+				Type:       "custom",
+				ResourceID: "cluster/qemu/101",
+				Metadata:   map[string]interface{}{"resourceType": "host"},
+			},
+			want: "vm",
 		},
 		{
 			name:  "fallback by resource id",
@@ -258,7 +248,7 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "fallback default",
 			alert: &alerts.Alert{Type: "custom", ResourceID: "guest-1"},
-			want:  "guest",
+			want:  "vm",
 		},
 	}
 

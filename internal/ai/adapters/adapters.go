@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rs/zerolog/log"
 )
 
 // ForecastDataAdapter adapts monitoring.MetricsHistory to the forecast.DataProvider interface.
@@ -72,97 +74,98 @@ func (a *ForecastDataAdapter) GetMetricHistory(resourceID, metric string, from, 
 
 // MetricsAdapter provides current metrics for resources.
 // It implements metrics.MetricsProvider for the incident recorder.
+// Uses ReadState as the sole data source (SRC-03m migration).
 type MetricsAdapter struct {
-	stateProvider ai.StateProvider
+	readState unifiedresources.ReadState
 }
 
 // NewMetricsAdapter creates a new adapter for current metrics.
-func NewMetricsAdapter(stateProvider ai.StateProvider) *MetricsAdapter {
-	return &MetricsAdapter{stateProvider: stateProvider}
+// ReadState is the sole data source for both GetMonitoredResourceIDs and
+// GetCurrentMetrics. Returns nil if readState is nil.
+func NewMetricsAdapter(readState unifiedresources.ReadState) *MetricsAdapter {
+	if readState == nil {
+		return nil
+	}
+	return &MetricsAdapter{readState: readState}
 }
 
 // GetMonitoredResourceIDs returns all resource IDs currently being monitored.
 // This is used by the incident recorder to maintain pre-incident buffers for all resources.
+// Returns both unified IDs and Proxmox source IDs so that pre-incident buffers
+// are keyed by both (alert-triggered recordings use source IDs).
 func (a *MetricsAdapter) GetMonitoredResourceIDs() []string {
-	if a.stateProvider == nil {
-		return nil
-	}
-
-	state := a.stateProvider.GetState()
 	var ids []string
-
-	// Collect VM IDs
-	for _, vm := range state.VMs {
-		ids = append(ids, vm.ID)
+	for _, vm := range a.readState.VMs() {
+		ids = append(ids, vm.ID())
+		if sid := vm.SourceID(); sid != "" && sid != vm.ID() {
+			ids = append(ids, sid)
+		}
 	}
-
-	// Collect container IDs
-	for _, ct := range state.Containers {
-		ids = append(ids, ct.ID)
+	for _, ct := range a.readState.Containers() {
+		ids = append(ids, ct.ID())
+		if sid := ct.SourceID(); sid != "" && sid != ct.ID() {
+			ids = append(ids, sid)
+		}
 	}
-
-	// Collect node IDs
-	for _, node := range state.Nodes {
-		ids = append(ids, node.ID)
+	for _, node := range a.readState.Nodes() {
+		ids = append(ids, node.ID())
+		if sid := node.SourceID(); sid != "" && sid != node.ID() {
+			ids = append(ids, sid)
+		}
 	}
-
 	return ids
 }
 
 // GetCurrentMetrics returns current metrics for a resource.
+// Matches by unified ID, Proxmox source ID, VMID string, or name.
+// CPU/memory/disk values are normalized to 0-100 percentage scale.
 func (a *MetricsAdapter) GetCurrentMetrics(resourceID string) (map[string]float64, error) {
-	if a.stateProvider == nil {
-		return nil, nil
-	}
-
-	state := a.stateProvider.GetState()
-
 	metrics := make(map[string]float64)
 
 	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.ID == resourceID || fmt.Sprintf("%d", vm.VMID) == resourceID {
-			metrics["cpu"] = vm.CPU
-			metrics["memory"] = vm.Memory.Usage
-			metrics["disk"] = vm.Disk.Usage
-			metrics["netin"] = float64(vm.NetworkIn)
-			metrics["netout"] = float64(vm.NetworkOut)
-			metrics["diskread"] = float64(vm.DiskRead)
-			metrics["diskwrite"] = float64(vm.DiskWrite)
+	for _, vm := range a.readState.VMs() {
+		if vm.ID() == resourceID || vm.SourceID() == resourceID || fmt.Sprintf("%d", vm.VMID()) == resourceID {
+			metrics["cpu"] = vm.CPUPercent()
+			metrics["memory"] = vm.MemoryPercent()
+			metrics["disk"] = vm.DiskPercent()
+			metrics["netin"] = vm.NetIn()
+			metrics["netout"] = vm.NetOut()
+			metrics["diskread"] = vm.DiskRead()
+			metrics["diskwrite"] = vm.DiskWrite()
 			return metrics, nil
 		}
 	}
 
 	// Check containers
-	for _, ct := range state.Containers {
-		if ct.ID == resourceID || fmt.Sprintf("%d", ct.VMID) == resourceID {
-			metrics["cpu"] = ct.CPU
-			metrics["memory"] = ct.Memory.Usage
-			metrics["disk"] = ct.Disk.Usage
-			metrics["netin"] = float64(ct.NetworkIn)
-			metrics["netout"] = float64(ct.NetworkOut)
-			metrics["diskread"] = float64(ct.DiskRead)
-			metrics["diskwrite"] = float64(ct.DiskWrite)
+	for _, ct := range a.readState.Containers() {
+		if ct.ID() == resourceID || ct.SourceID() == resourceID || fmt.Sprintf("%d", ct.VMID()) == resourceID {
+			metrics["cpu"] = ct.CPUPercent()
+			metrics["memory"] = ct.MemoryPercent()
+			metrics["disk"] = ct.DiskPercent()
+			metrics["netin"] = ct.NetIn()
+			metrics["netout"] = ct.NetOut()
+			metrics["diskread"] = ct.DiskRead()
+			metrics["diskwrite"] = ct.DiskWrite()
 			return metrics, nil
 		}
 	}
 
 	// Check nodes
-	for _, node := range state.Nodes {
-		if node.ID == resourceID || node.Name == resourceID {
-			metrics["cpu"] = node.CPU
-			metrics["memory"] = node.Memory.Usage
-			metrics["disk"] = node.Disk.Usage
+	for _, node := range a.readState.Nodes() {
+		if node.ID() == resourceID || node.SourceID() == resourceID || node.Name() == resourceID {
+			metrics["cpu"] = node.CPUPercent()
+			metrics["memory"] = node.MemoryPercent()
+			metrics["disk"] = node.DiskPercent()
 			return metrics, nil
 		}
 	}
 
 	// Check storage
-	for _, storage := range state.Storage {
-		if storage.ID == resourceID || storage.Name == resourceID {
-			metrics["disk"] = storage.Usage
-			metrics["used"] = float64(storage.Used)
-			metrics["total"] = float64(storage.Total)
+	for _, sp := range a.readState.StoragePools() {
+		if sp.ID() == resourceID || sp.SourceID() == resourceID || sp.Name() == resourceID {
+			metrics["disk"] = sp.DiskPercent()
+			metrics["used"] = float64(sp.DiskUsed())
+			metrics["total"] = float64(sp.DiskTotal())
 			return metrics, nil
 		}
 	}
@@ -330,6 +333,14 @@ type KnowledgeEntry struct {
 	UpdatedAt  time.Time
 }
 
+func normalizeKnowledgeResourceID(resourceID string) string {
+	return strings.TrimSpace(resourceID)
+}
+
+func isUnsupportedKnowledgeResourceID(resourceID string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceIDAlias(resourceID)
+}
+
 // NewKnowledgeStore creates a new knowledge store
 func NewKnowledgeStore(dataDir string) *KnowledgeStore {
 	store := &KnowledgeStore{
@@ -337,7 +348,9 @@ func NewKnowledgeStore(dataDir string) *KnowledgeStore {
 		dataDir: dataDir,
 	}
 	if dataDir != "" {
-		_ = store.loadFromDisk() // Ignore error, start fresh if load fails
+		if err := store.loadFromDisk(); err != nil {
+			log.Warn().Err(err).Str("data_dir", dataDir).Msg("ai.adapters.NewKnowledgeStore: failed to load knowledge store from disk")
+		}
 	}
 	return store
 }
@@ -346,6 +359,11 @@ func NewKnowledgeStore(dataDir string) *KnowledgeStore {
 func (s *KnowledgeStore) SaveNote(resourceID, note, category string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	resourceID = normalizeKnowledgeResourceID(resourceID)
+	if isUnsupportedKnowledgeResourceID(resourceID) {
+		return fmt.Errorf("unsupported resource ID %q", resourceID)
+	}
 
 	entry := KnowledgeEntry{
 		ID:         fmt.Sprintf("note-%d", time.Now().UnixNano()),
@@ -369,6 +387,14 @@ func (s *KnowledgeStore) SaveNote(resourceID, note, category string) error {
 func (s *KnowledgeStore) GetKnowledge(resourceID string, category string) []KnowledgeEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	resourceID = normalizeKnowledgeResourceID(resourceID)
+	if isUnsupportedKnowledgeResourceID(resourceID) {
+		log.Warn().
+			Str("resource_id", resourceID).
+			Msg("ai.adapters.KnowledgeStore.GetKnowledge: ignoring unsupported resource ID")
+		return nil
+	}
 
 	entries := s.entries[resourceID]
 	if category == "" {
@@ -395,26 +421,39 @@ func (s *KnowledgeStore) saveToDisk() {
 
 	data, err := json.Marshal(s.entries)
 	if err != nil {
+		log.Warn().Err(err).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to marshal entries")
+		return
+	}
+
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return
 	}
 
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
-	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
+	// Use atomic write (temp file + fsync + rename) to prevent empty reads after a crash.
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to open temp store file")
 		return
 	}
 	if _, err := f.Write(data); err != nil {
 		f.Close()
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to write temp store file")
 		return
 	}
 	if err := f.Sync(); err != nil {
 		f.Close()
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to fsync temp store file")
 		return
 	}
 	f.Close()
-	_ = os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		log.Warn().Err(err).Str("from", tmp).Str("to", path).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to atomically replace store file")
+		if removeErr := os.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Warn().Err(removeErr).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to clean up temp store file")
+		}
+	}
 }
 
 func (s *KnowledgeStore) loadFromDisk() error {
@@ -428,11 +467,14 @@ func (s *KnowledgeStore) loadFromDisk() error {
 		return err
 	}
 
-	return json.Unmarshal(data, &s.entries)
+	if err := json.Unmarshal(data, &s.entries); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Verify interfaces are implemented
 var (
 	_ forecast.DataProvider       = (*ForecastDataAdapter)(nil)
-	_ remediation.CommandExecutor = (*CommandExecutorAdapter)(nil)
+	_ aicontracts.CommandExecutor = (*CommandExecutorAdapter)(nil)
 )

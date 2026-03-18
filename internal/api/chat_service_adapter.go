@@ -34,29 +34,19 @@ func (a *chatServiceAdapter) ExecuteStream(ctx context.Context, req ai.ChatExecu
 
 func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.PatrolExecuteRequest, callback ai.ChatStreamCallback) (*ai.PatrolStreamResponse, error) {
 	resp, err := a.svc.ExecutePatrolStream(ctx, chat.PatrolRequest{
-		Prompt:         req.Prompt,
-		SystemPrompt:   req.SystemPrompt,
-		SessionID:      req.SessionID,
-		UseCase:        req.UseCase,
-		MaxTurns:       req.MaxTurns,
-		MaxTotalTokens: req.MaxTotalTokens,
+		Prompt:       req.Prompt,
+		SystemPrompt: req.SystemPrompt,
+		SessionID:    req.SessionID,
+		UseCase:      req.UseCase,
+		MaxTurns:     req.MaxTurns,
 	}, adaptCallback(callback))
 	if err != nil {
-		// Propagate partial response (with token counts) alongside the error
-		// so callers can still record usage for budget tracking on failure.
-		if resp != nil {
-			return &ai.PatrolStreamResponse{
-				InputTokens:  resp.InputTokens,
-				OutputTokens: resp.OutputTokens,
-			}, err
-		}
 		return nil, err
 	}
 	return &ai.PatrolStreamResponse{
 		Content:      resp.Content,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
-		StopReason:   resp.StopReason,
 	}, nil
 }
 
@@ -88,7 +78,7 @@ func (a *chatServiceAdapter) GetMessages(ctx context.Context, sessionID string) 
 				IsError:   m.ToolResult.IsError,
 			}
 		}
-		result[i] = msg
+		result[i] = msg.NormalizeCollections()
 	}
 	return result, nil
 }

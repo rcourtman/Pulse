@@ -7,8 +7,19 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+type kubernetesClusterTarget struct {
+	ID          string
+	AgentID     string
+	Name        string
+	DisplayName string
+	Server      string
+	Context     string
+	Version     string
+	Status      string
+}
 
 // registerKubernetesTools registers the pulse_kubernetes tool
 func (e *PulseToolExecutor) registerKubernetesTools() {
@@ -106,120 +117,177 @@ func (e *PulseToolExecutor) executeKubernetes(ctx context.Context, args map[stri
 	}
 }
 
-func (e *PulseToolExecutor) executeGetKubernetesClusters(_ context.Context) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
+func (e *PulseToolExecutor) kubernetesReadState() (unifiedresources.ReadState, error) {
+	if rs := e.getCanonicalReadState(); rs != nil {
+		return rs, nil
+	}
+	return nil, fmt.Errorf("read state not available")
+}
+
+func matchKubernetesCluster(cluster *unifiedresources.K8sClusterView, clusterArg string) bool {
+	if cluster == nil {
+		return false
+	}
+	return cluster.ID() == clusterArg ||
+		cluster.ClusterID() == clusterArg ||
+		cluster.Name() == clusterArg ||
+		cluster.ClusterName() == clusterArg ||
+		cluster.SourceName() == clusterArg
+}
+
+func newKubernetesClusterTarget(cluster *unifiedresources.K8sClusterView) *kubernetesClusterTarget {
+	if cluster == nil {
+		return nil
 	}
 
-	state := e.stateProvider.GetState()
+	name := strings.TrimSpace(cluster.SourceName())
+	if name == "" {
+		name = strings.TrimSpace(cluster.Name())
+	}
+	displayName := strings.TrimSpace(cluster.ClusterName())
+	if displayName == "" {
+		displayName = name
+	}
+	if displayName == "" {
+		displayName = strings.TrimSpace(cluster.ID())
+	}
+	clusterID := strings.TrimSpace(cluster.ClusterID())
+	if clusterID == "" {
+		clusterID = strings.TrimSpace(cluster.ID())
+	}
 
-	if len(state.KubernetesClusters) == 0 {
+	return &kubernetesClusterTarget{
+		ID:          clusterID,
+		AgentID:     cluster.AgentID(),
+		Name:        name,
+		DisplayName: displayName,
+		Server:      cluster.Server(),
+		Context:     cluster.Context(),
+		Version:     cluster.Version(),
+		Status:      string(cluster.Status()),
+	}
+}
+
+func findKubernetesCluster(rs unifiedresources.ReadState, clusterArg string) *unifiedresources.K8sClusterView {
+	for _, cluster := range rs.K8sClusters() {
+		if matchKubernetesCluster(cluster, clusterArg) {
+			return cluster
+		}
+	}
+	return nil
+}
+
+func (e *PulseToolExecutor) executeGetKubernetesClusters(_ context.Context) (CallToolResult, error) {
+	rs, err := e.kubernetesReadState()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	clusters := rs.K8sClusters()
+	if len(clusters) == 0 {
 		return NewTextResult("No Kubernetes clusters found. Kubernetes monitoring may not be configured."), nil
 	}
 
-	var clusters []KubernetesClusterSummary
-	for _, c := range state.KubernetesClusters {
+	var summaries []KubernetesClusterSummary
+	for _, c := range clusters {
+		var clusterNodes []unifiedresources.K8sNodeView
+		for _, node := range rs.K8sNodes() {
+			if node.ParentID() == c.ID() {
+				clusterNodes = append(clusterNodes, *node)
+			}
+		}
+
 		readyNodes := 0
-		for _, node := range c.Nodes {
-			if node.Ready {
+		for _, node := range clusterNodes {
+			if node.Ready() {
 				readyNodes++
 			}
 		}
 
-		displayName := c.DisplayName
-		if c.CustomDisplayName != "" {
-			displayName = c.CustomDisplayName
+		podCount := 0
+		for _, pod := range rs.Pods() {
+			if pod.ParentID() == c.ID() {
+				podCount++
+			}
 		}
 
-		clusters = append(clusters, KubernetesClusterSummary{
-			ID:              c.ID,
-			Name:            c.Name,
-			DisplayName:     displayName,
-			Server:          c.Server,
-			Version:         c.Version,
-			Status:          c.Status,
-			NodeCount:       len(c.Nodes),
-			PodCount:        len(c.Pods),
-			DeploymentCount: len(c.Deployments),
+		depCount := 0
+		for _, dep := range rs.K8sDeployments() {
+			if dep.ParentID() == c.ID() {
+				depCount++
+			}
+		}
+
+		summaries = append(summaries, KubernetesClusterSummary{
+			ID:              c.ID(),
+			Name:            c.SourceName(),
+			DisplayName:     c.ClusterName(),
+			Server:          c.Server(),
+			Version:         c.Version(),
+			Status:          string(c.Status()),
+			NodeCount:       len(clusterNodes),
+			PodCount:        podCount,
+			DeploymentCount: depCount,
 			ReadyNodes:      readyNodes,
 		})
 	}
 
-	response := KubernetesClustersResponse{
-		Clusters: clusters,
-		Total:    len(clusters),
-	}
+	response := EmptyKubernetesClustersResponse()
+	response.Clusters = summaries
+	response.Total = len(summaries)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesNodes(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
 	}
 
-	state := e.stateProvider.GetState()
-
-	// Find the cluster (also match CustomDisplayName)
-	var cluster *KubernetesClusterSummary
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
-			}
-			cluster = &KubernetesClusterSummary{
-				ID:          c.ID,
-				Name:        c.Name,
-				DisplayName: displayName,
-			}
-
-			var nodes []KubernetesNodeSummary
-			for _, node := range c.Nodes {
-				nodes = append(nodes, KubernetesNodeSummary{
-					UID:                     node.UID,
-					Name:                    node.Name,
-					Ready:                   node.Ready,
-					Unschedulable:           node.Unschedulable,
-					Roles:                   node.Roles,
-					KubeletVersion:          node.KubeletVersion,
-					ContainerRuntimeVersion: node.ContainerRuntimeVersion,
-					OSImage:                 node.OSImage,
-					Architecture:            node.Architecture,
-					CapacityCPU:             node.CapacityCPU,
-					CapacityMemoryBytes:     node.CapacityMemoryBytes,
-					CapacityPods:            node.CapacityPods,
-					AllocatableCPU:          node.AllocCPU,
-					AllocatableMemoryBytes:  node.AllocMemoryBytes,
-					AllocatablePods:         node.AllocPods,
-				})
-			}
-
-			response := KubernetesNodesResponse{
-				Cluster: cluster.DisplayName,
-				Nodes:   nodes,
-				Total:   len(nodes),
-			}
-			if response.Nodes == nil {
-				response.Nodes = []KubernetesNodeSummary{}
-			}
-			return NewJSONResult(response), nil
-		}
+	rs, err := e.kubernetesReadState()
+	if err != nil {
+		return NewErrorResult(err), nil
 	}
 
-	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	clusterView := findKubernetesCluster(rs, clusterArg)
+	if clusterView == nil {
+		return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	}
+	cluster := newKubernetesClusterTarget(clusterView)
+
+	var nodes []KubernetesNodeSummary
+	for _, node := range rs.K8sNodes() {
+		if node.ParentID() != clusterView.ID() {
+			continue
+		}
+		nodes = append(nodes, KubernetesNodeSummary{
+			UID:                     node.NodeUID(),
+			Name:                    node.NodeName(),
+			Ready:                   node.Ready(),
+			Unschedulable:           node.Unschedulable(),
+			Roles:                   node.Roles(),
+			KubeletVersion:          node.KubeletVersion(),
+			ContainerRuntimeVersion: node.ContainerRuntimeVersion(),
+			OSImage:                 node.OSImage(),
+			Architecture:            node.Architecture(),
+			CapacityCPU:             node.CapacityCPU(),
+			CapacityMemoryBytes:     node.CapacityMemoryBytes(),
+			CapacityPods:            node.CapacityPods(),
+			AllocatableCPU:          node.AllocCPU(),
+			AllocatableMemoryBytes:  node.AllocMemoryBytes(),
+			AllocatablePods:         node.AllocPods(),
+		})
+	}
+
+	response := EmptyKubernetesNodesResponse()
+	response.Cluster = cluster.DisplayName
+	response.Nodes = nodes
+	response.Total = len(nodes)
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -230,89 +298,89 @@ func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
-
-	// Find the cluster (also match CustomDisplayName)
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
-			}
-
-			var pods []KubernetesPodSummary
-			totalPods := 0
-			filteredCount := 0
-
-			for _, pod := range c.Pods {
-				// Apply filters
-				if namespaceFilter != "" && pod.Namespace != namespaceFilter {
-					continue
-				}
-				if statusFilter != "" && !strings.EqualFold(pod.Phase, statusFilter) {
-					continue
-				}
-
-				filteredCount++
-
-				// Apply pagination
-				if totalPods < offset {
-					totalPods++
-					continue
-				}
-				if len(pods) >= limit {
-					totalPods++
-					continue
-				}
-
-				var containers []KubernetesPodContainerSummary
-				for _, container := range pod.Containers {
-					containers = append(containers, KubernetesPodContainerSummary{
-						Name:         container.Name,
-						Ready:        container.Ready,
-						State:        container.State,
-						RestartCount: container.RestartCount,
-						Reason:       container.Reason,
-					})
-				}
-
-				pods = append(pods, KubernetesPodSummary{
-					UID:        pod.UID,
-					Name:       pod.Name,
-					Namespace:  pod.Namespace,
-					NodeName:   pod.NodeName,
-					Phase:      pod.Phase,
-					Reason:     pod.Reason,
-					Restarts:   pod.Restarts,
-					QoSClass:   pod.QoSClass,
-					OwnerKind:  pod.OwnerKind,
-					OwnerName:  pod.OwnerName,
-					Containers: containers,
-				})
-				totalPods++
-			}
-
-			response := KubernetesPodsResponse{
-				Cluster:  displayName,
-				Pods:     pods,
-				Total:    len(c.Pods),
-				Filtered: filteredCount,
-			}
-			if response.Pods == nil {
-				response.Pods = []KubernetesPodSummary{}
-			}
-			return NewJSONResult(response), nil
-		}
+	rs, err := e.kubernetesReadState()
+	if err != nil {
+		return NewErrorResult(err), nil
 	}
 
-	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	clusterView := findKubernetesCluster(rs, clusterArg)
+	if clusterView == nil {
+		return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	}
+	cluster := newKubernetesClusterTarget(clusterView)
+
+	var pods []KubernetesPodSummary
+	totalClusterPods := 0
+	filteredCount := 0
+
+	for _, pod := range rs.Pods() {
+		if pod.ParentID() != clusterView.ID() {
+			continue
+		}
+		totalClusterPods++
+
+		if namespaceFilter != "" && pod.Namespace() != namespaceFilter {
+			continue
+		}
+		if statusFilter != "" && !strings.EqualFold(pod.PodPhase(), statusFilter) {
+			continue
+		}
+
+		filteredCount++
+	}
+
+	currentFilteredIndex := 0
+	addedCount := 0
+
+	for _, pod := range rs.Pods() {
+		if pod.ParentID() != clusterView.ID() {
+			continue
+		}
+
+		if namespaceFilter != "" && pod.Namespace() != namespaceFilter {
+			continue
+		}
+		if statusFilter != "" && !strings.EqualFold(pod.PodPhase(), statusFilter) {
+			continue
+		}
+
+		if currentFilteredIndex < offset {
+			currentFilteredIndex++
+			continue
+		}
+		if addedCount >= limit {
+			break
+		}
+
+		currentFilteredIndex++
+		addedCount++
+
+		var containers []KubernetesPodContainerSummary
+
+		pods = append(pods, KubernetesPodSummary{
+			UID:        pod.PodUID(),
+			Name:       pod.Name(),
+			Namespace:  pod.Namespace(),
+			NodeName:   "",
+			Phase:      pod.PodPhase(),
+			Reason:     "",
+			Restarts:   pod.Restarts(),
+			QoSClass:   "",
+			OwnerKind:  pod.OwnerKind(),
+			OwnerName:  pod.OwnerName(),
+			Containers: containers,
+		})
+	}
+
+	response := EmptyKubernetesPodsResponse()
+	response.Cluster = cluster.DisplayName
+	response.Pods = pods
+	response.Total = totalClusterPods
+	response.Filtered = filteredCount
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -322,86 +390,84 @@ func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, a
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.kubernetesReadState()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	// Find the cluster (also match CustomDisplayName)
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
-			}
+	clusterView := findKubernetesCluster(rs, clusterArg)
+	if clusterView == nil {
+		return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	}
+	cluster := newKubernetesClusterTarget(clusterView)
 
-			var deployments []KubernetesDeploymentSummary
-			filteredCount := 0
-			count := 0
+	var deployments []KubernetesDeploymentSummary
 
-			for _, dep := range c.Deployments {
-				// Apply namespace filter
-				if namespaceFilter != "" && dep.Namespace != namespaceFilter {
-					continue
-				}
-
-				filteredCount++
-
-				// Apply pagination
-				if count < offset {
-					count++
-					continue
-				}
-				if len(deployments) >= limit {
-					count++
-					continue
-				}
-
-				deployments = append(deployments, KubernetesDeploymentSummary{
-					UID:               dep.UID,
-					Name:              dep.Name,
-					Namespace:         dep.Namespace,
-					DesiredReplicas:   dep.DesiredReplicas,
-					ReadyReplicas:     dep.ReadyReplicas,
-					AvailableReplicas: dep.AvailableReplicas,
-					UpdatedReplicas:   dep.UpdatedReplicas,
-				})
-				count++
-			}
-
-			response := KubernetesDeploymentsResponse{
-				Cluster:     displayName,
-				Deployments: deployments,
-				Total:       len(c.Deployments),
-				Filtered:    filteredCount,
-			}
-			if response.Deployments == nil {
-				response.Deployments = []KubernetesDeploymentSummary{}
-			}
-			return NewJSONResult(response), nil
+	totalClusterDeployments := 0
+	for _, dep := range rs.K8sDeployments() {
+		if dep.ParentID() == clusterView.ID() {
+			totalClusterDeployments++
 		}
 	}
 
-	return NewTextResult(fmt.Sprintf("Kubernetes cluster '%s' not found.", clusterArg)), nil
+	filteredCount := 0
+	currentFilteredIndex := 0
+
+	for _, dep := range rs.K8sDeployments() {
+		if dep.ParentID() != clusterView.ID() {
+			continue
+		}
+		if namespaceFilter != "" && dep.Namespace() != namespaceFilter {
+			continue
+		}
+
+		filteredCount++
+
+		if currentFilteredIndex < offset {
+			currentFilteredIndex++
+			continue
+		}
+		if len(deployments) >= limit {
+			break
+		}
+
+		currentFilteredIndex++
+
+		deployments = append(deployments, KubernetesDeploymentSummary{
+			UID:               dep.DeploymentUID(),
+			Name:              dep.Name(),
+			Namespace:         dep.Namespace(),
+			DesiredReplicas:   dep.DesiredReplicas(),
+			UpdatedReplicas:   dep.UpdatedReplicas(),
+			ReadyReplicas:     dep.ReadyReplicas(),
+			AvailableReplicas: dep.AvailableReplicas(),
+		})
+	}
+
+	response := EmptyKubernetesDeploymentsResponse()
+	response.Cluster = cluster.DisplayName
+	response.Deployments = deployments
+	response.Total = totalClusterDeployments
+	response.Filtered = filteredCount
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 // ========== Kubernetes Control Operations ==========
 
-// findAgentForKubernetesCluster finds the agent for a Kubernetes cluster
-func (e *PulseToolExecutor) findAgentForKubernetesCluster(clusterArg string) (string, *models.KubernetesCluster, error) {
-	if e.stateProvider == nil {
-		return "", nil, fmt.Errorf("state provider not available")
+// findAgentForKubernetesCluster finds the agent for a Kubernetes cluster.
+func (e *PulseToolExecutor) findAgentForKubernetesCluster(clusterArg string) (string, *kubernetesClusterTarget, error) {
+	rs, err := e.kubernetesReadState()
+	if err != nil {
+		return "", nil, fmt.Errorf("state not available: %w", err)
 	}
-
-	state := e.stateProvider.GetState()
-
-	for i := range state.KubernetesClusters {
-		c := &state.KubernetesClusters[i]
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			if c.AgentID == "" {
-				return "", nil, fmt.Errorf("cluster '%s' has no agent configured - kubectl commands cannot be executed", clusterArg)
-			}
-			return c.AgentID, c, nil
-		}
+	cluster := newKubernetesClusterTarget(findKubernetesCluster(rs, clusterArg))
+	if cluster == nil {
+		return "", nil, fmt.Errorf("kubernetes cluster '%s' not found", clusterArg)
 	}
-	return "", nil, fmt.Errorf("kubernetes cluster '%s' not found", clusterArg)
+	if cluster.AgentID == "" {
+		return "", nil, fmt.Errorf("cluster '%s' has no agent configured - kubectl commands cannot be executed", clusterArg)
+	}
+	return cluster.AgentID, cluster, nil
 }
 
 // validateKubernetesResourceID validates a Kubernetes resource identifier (namespace, pod, deployment, container names)
@@ -420,6 +486,17 @@ func validateKubernetesResourceID(value string) error {
 		}
 	}
 	return nil
+}
+
+// buildKubectlExecCommand builds a kubectl exec command safely.
+// It runs the command via "sh -c" inside the pod and shell-escapes all
+// user-controlled values to prevent host shell injection.
+func buildKubectlExecCommand(namespace, pod, container, command string) string {
+	base := fmt.Sprintf("kubectl -n %s exec %s", shellEscape(namespace), shellEscape(pod))
+	if container != "" {
+		base += fmt.Sprintf(" -c %s", shellEscape(container))
+	}
+	return base + fmt.Sprintf(" -- sh -c %s", shellEscape(command))
 }
 
 // executeKubernetesScale scales a deployment
@@ -460,19 +537,21 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", namespace, deployment, replicas)
+	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", shellEscape(namespace), shellEscape(deployment), replicas)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		if cluster.CustomDisplayName != "" {
-			displayName = cluster.CustomDisplayName
-		}
-		approvalID := createApprovalRecord(command, "kubernetes", deployment, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
 		return NewTextResult(formatKubernetesApprovalNeeded("scale", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -482,7 +561,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -535,19 +614,21 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", namespace, deployment)
+	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", shellEscape(namespace), shellEscape(deployment))
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		if cluster.CustomDisplayName != "" {
-			displayName = cluster.CustomDisplayName
-		}
-		approvalID := createApprovalRecord(command, "kubernetes", deployment, displayName, fmt.Sprintf("Restart deployment %s", deployment))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Restart deployment %s", deployment))
 		return NewTextResult(formatKubernetesApprovalNeeded("restart", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -557,7 +638,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -610,19 +691,21 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s delete pod %s", namespace, pod)
+	command := fmt.Sprintf("kubectl -n %s delete pod %s", shellEscape(namespace), shellEscape(pod))
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		if cluster.CustomDisplayName != "" {
-			displayName = cluster.CustomDisplayName
-		}
-		approvalID := createApprovalRecord(command, "kubernetes", pod, displayName, fmt.Sprintf("Delete pod %s", pod))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Delete pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("delete_pod", pod, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -632,7 +715,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -695,24 +778,21 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
-	// Build kubectl command
-	var kubectlCmd string
-	if container != "" {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s exec %s -c %s -- %s", namespace, pod, container, command)
-	} else {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s exec %s -- %s", namespace, pod, command)
+	// Build kubectl command safely to prevent shell metacharacter breakout on the host.
+	kubectlCmd := buildKubectlExecCommand(namespace, pod, container, command)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
 	}
+	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, kubectlCmd, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		if cluster.CustomDisplayName != "" {
-			displayName = cluster.CustomDisplayName
-		}
-		approvalID := createApprovalRecord(kubectlCmd, "kubernetes", pod, displayName, fmt.Sprintf("Execute command in pod %s", pod))
+		approvalID := createApprovalRecordForOrg(e.orgID, kubectlCmd, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Execute command in pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("exec", pod, namespace, displayName, kubectlCmd, approvalID)), nil
 	}
 
@@ -722,7 +802,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    kubectlCmd,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -788,9 +868,9 @@ func (e *PulseToolExecutor) executeKubernetesLogs(ctx context.Context, args map[
 	// Build kubectl command - logs is read-only so no approval needed
 	var kubectlCmd string
 	if container != "" {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --tail=%d", namespace, pod, container, lines)
+		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --tail=%d", shellEscape(namespace), shellEscape(pod), shellEscape(container), lines)
 	} else {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s --tail=%d", namespace, pod, lines)
+		kubectlCmd = fmt.Sprintf("kubectl -n %s logs %s --tail=%d", shellEscape(namespace), shellEscape(pod), lines)
 	}
 
 	if e.agentServer == nil {
@@ -799,7 +879,7 @@ func (e *PulseToolExecutor) executeKubernetesLogs(ctx context.Context, args map[
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    kubectlCmd,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {

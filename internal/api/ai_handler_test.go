@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -123,8 +124,7 @@ func (m *MockAIService) SetPatternProvider(provider chat.MCPPatternProvider)   {
 func (m *MockAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider)   { m.Called(provider) }
-func (m *MockAIService) SetStorageProvider(provider chat.MCPStorageProvider) { m.Called(provider) }
+func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider) { m.Called(provider) }
 func (m *MockAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
 	m.Called(provider)
 }
@@ -148,6 +148,9 @@ func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelator
 }
 func (m *MockAIService) SetTopologyProvider(provider chat.TopologyProvider) { m.Called(provider) }
 func (m *MockAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
 	m.Called(provider)
 }
 
@@ -174,19 +177,10 @@ func (m *MockAIPersistence) DataDir() string {
 	return m.dataDir
 }
 
-type MockAIStateProvider struct {
-	mock.Mock
-}
-
-func (m *MockAIStateProvider) GetState() models.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(models.StateSnapshot)
-}
-
 func newTestAIHandler(cfg *config.Config, persistence AIPersistence, _ *agentexec.Server) *AIHandler {
 	handler := NewAIHandler(nil, nil, nil)
-	handler.legacyConfig = cfg
-	handler.legacyPersistence = persistence
+	handler.defaultConfig = cfg
+	handler.defaultPersistence = persistence
 	return handler
 }
 
@@ -207,7 +201,7 @@ func TestStart(t *testing.T) {
 	mockPersist.On("LoadAIConfig").Return(&config.AIConfig{Enabled: false}, nil).Once()
 	err := h.Start(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Nil(t, h.legacyService)
+	assert.Nil(t, h.defaultService)
 
 	// AI enabled
 	aiCfg := &config.AIConfig{Enabled: true, Model: "test"}
@@ -216,20 +210,20 @@ func TestStart(t *testing.T) {
 
 	err = h.Start(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Equal(t, mockSvc, h.legacyService)
+	assert.Equal(t, mockSvc, h.defaultService)
 }
 
 func TestStop(t *testing.T) {
 	mockSvc := new(MockAIService)
 	h := newTestAIHandler(nil, nil, nil)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("Stop", mock.Anything).Return(nil)
 	err := h.Stop(context.Background())
 	assert.NoError(t, err)
 
 	// Nil service
-	h.legacyService = nil
+	h.defaultService = nil
 	err = h.Stop(context.Background())
 	assert.NoError(t, err)
 }
@@ -258,7 +252,7 @@ func TestRestart(t *testing.T) {
 	mockPersist := new(MockAIPersistence)
 	mockSvc := new(MockAIService)
 	h := newTestAIHandler(nil, mockPersist, nil)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	aiCfg := &config.AIConfig{}
 	mockPersist.On("LoadAIConfig").Return(aiCfg, nil)
@@ -268,7 +262,7 @@ func TestRestart(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Service nil
-	h.legacyService = nil
+	h.defaultService = nil
 	err = h.Restart(context.Background())
 	assert.NoError(t, err)
 }
@@ -276,7 +270,7 @@ func TestRestart(t *testing.T) {
 func TestGetService(t *testing.T) {
 	mockSvc := new(MockAIService)
 	h := newTestAIHandler(nil, nil, nil)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	assert.Equal(t, mockSvc, h.GetService(context.Background()))
 }
 
@@ -307,7 +301,7 @@ func TestHandleStatus(t *testing.T) {
 	}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -329,7 +323,7 @@ func TestHandleSessions(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	sessions := []chat.Session{{ID: "s1"}, {ID: "s2"}}
@@ -347,7 +341,7 @@ func TestHandleCreateSession(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	session := &chat.Session{ID: "new-session"}
@@ -365,7 +359,7 @@ func TestHandleDeleteSession(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("DeleteSession", mock.Anything, "s1").Return(nil)
@@ -382,7 +376,7 @@ func TestHandleMessages(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	messages := []chat.Message{{Role: "user", Content: "hello"}}
@@ -394,13 +388,14 @@ func TestHandleMessages(t *testing.T) {
 	h.HandleMessages(w, req, "s1")
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"tool_calls":[]`)
 }
 
 func TestHandleChat_NotRunning(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(false)
 
@@ -416,7 +411,7 @@ func TestHandleChat_InvalidJSON(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -432,7 +427,7 @@ func TestHandleChat_Success(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 
@@ -453,11 +448,79 @@ func TestHandleChat_Success(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
 }
 
+func TestHandleChat_PreservesCanonicalMentionTypes(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			if len(reqArg.Mentions) != 3 {
+				t.Fatalf("mentions len = %d, want 3 (%+v)", len(reqArg.Mentions), reqArg.Mentions)
+			}
+			assert.Equal(t, "system-container", reqArg.Mentions[0].Type)
+			assert.Equal(t, "app-container", reqArg.Mentions[1].Type)
+			assert.Equal(t, "agent", reqArg.Mentions[2].Type)
+		})
+
+	body := `{"prompt":"hi","mentions":[{"id":"system-container:pve1:200","name":"ct200","type":"system-container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"app-container"},{"id":"agent:node-1","name":"node-1","type":"agent"}]}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			if len(reqArg.Mentions) != 1 {
+				t.Fatalf("mentions len = %d, want 1 (%+v)", len(reqArg.Mentions), reqArg.Mentions)
+			}
+			assert.Equal(t, "agent", reqArg.Mentions[0].Type)
+		})
+
+	body := `{"prompt":"hi","mentions":[{"id":"host:node-1","name":"node-1","type":"host"},{"id":"system-container:pve1:200","name":"ct200","type":"system_container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"docker_container"},{"id":"ct:pve1:201","name":"ct201","type":"container","node":"pve1"},{"id":"ct:pve1:202","name":"ct202","type":"lxc","node":"pve1"},{"id":"docker:agent-1:db","name":"db","type":"docker-container"},{"id":"k8s:cluster-1","name":"cluster-1","type":"k8s"},{"id":"agent:node-2","name":"node-2","type":"agent"}]}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestCanonicalizeChatMentionType_RejectsRemovedAliases(t *testing.T) {
+	assert.Equal(t, "", canonicalizeChatMentionType("host"))
+	assert.Equal(t, "", canonicalizeChatMentionType("container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("lxc"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker-container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("k8s"))
+	assert.Equal(t, "", canonicalizeChatMentionType("system_container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker_container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("app_container"))
+}
+
 func TestHandleAnswerQuestion(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(nil)
@@ -474,7 +537,7 @@ func TestHandleAnswerQuestion(t *testing.T) {
 func TestHandleSessions_NotRunning(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(false)
 
 	req := httptest.NewRequest("GET", "/api/ai/sessions", nil)
@@ -486,7 +549,7 @@ func TestHandleSessions_NotRunning(t *testing.T) {
 func TestHandleSessions_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ListSessions", mock.Anything).Return(([]chat.Session)(nil), assert.AnError)
 
@@ -499,7 +562,7 @@ func TestHandleSessions_Error(t *testing.T) {
 func TestHandleCreateSession_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("CreateSession", mock.Anything).Return((*chat.Session)(nil), assert.AnError)
 
@@ -512,7 +575,7 @@ func TestHandleCreateSession_Error(t *testing.T) {
 func TestHandleDeleteSession_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("DeleteSession", mock.Anything, "s1").Return(assert.AnError)
 
@@ -525,7 +588,7 @@ func TestHandleDeleteSession_Error(t *testing.T) {
 func TestHandleMessages_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetMessages", mock.Anything, "s1").Return(([]chat.Message)(nil), assert.AnError)
 
@@ -538,7 +601,7 @@ func TestHandleMessages_Error(t *testing.T) {
 func TestHandleAbort_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AbortSession", mock.Anything, "s1").Return(assert.AnError)
 
@@ -551,7 +614,7 @@ func TestHandleAbort_Error(t *testing.T) {
 func TestHandleSummarize_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -564,7 +627,7 @@ func TestHandleSummarize_Error(t *testing.T) {
 func TestHandleAnswerQuestion_InvalidJSON(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 
 	req := httptest.NewRequest("POST", "/api/ai/question/q1/answer", strings.NewReader("invalid"))
@@ -576,7 +639,7 @@ func TestHandleAnswerQuestion_InvalidJSON(t *testing.T) {
 func TestHandleAnswerQuestion_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(assert.AnError)
 
@@ -588,13 +651,25 @@ func TestHandleAnswerQuestion_Error(t *testing.T) {
 }
 
 func TestHandleChat_Options(t *testing.T) {
-	h := newTestAIHandler(nil, nil, nil)
+	h := newTestAIHandler(&config.Config{AllowedOrigins: "*"}, nil, nil)
 	req := httptest.NewRequest("OPTIONS", "/api/ai/chat", nil)
 	req.Header.Set("Origin", "http://example.com")
 	w := httptest.NewRecorder()
 	h.HandleChat(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "http://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestHandleChat_Options_DisallowedOrigin(t *testing.T) {
+	h := newTestAIHandler(&config.Config{AllowedOrigins: "https://allowed.com"}, nil, nil)
+	req := httptest.NewRequest("OPTIONS", "/api/ai/chat", nil)
+	req.Header.Set("Origin", "https://not-allowed.com")
+	w := httptest.NewRecorder()
+	h.HandleChat(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
 }
 
 func TestHandleChat_MethodNotAllowed(t *testing.T) {
@@ -609,7 +684,7 @@ func TestHandleChat_Error(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError)
 
@@ -622,10 +697,55 @@ func TestHandleChat_Error(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_BindsExecutionToRequestContext(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+
+	executeDone := make(chan struct{})
+	handlerDone := make(chan struct{})
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		cancelReq()
+		<-ctx.Done()
+		if ctx.Err() != context.Canceled {
+			t.Fatalf("expected request cancellation, got %v", ctx.Err())
+		}
+		close(executeDone)
+	})
+
+	body := `{"prompt":"hi"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body)).WithContext(reqCtx)
+	w := httptest.NewRecorder()
+
+	go func() {
+		defer close(handlerDone)
+		h.HandleChat(w, req)
+	}()
+
+	select {
+	case <-executeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected ExecuteStream context to be canceled with the request")
+	}
+
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected handler to return after request cancellation")
+	}
+}
+
 func TestHandleDiff_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -638,7 +758,7 @@ func TestHandleDiff_Error(t *testing.T) {
 func TestHandleFork_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ForkSession", mock.Anything, "s1").Return((*chat.Session)(nil), assert.AnError)
 
@@ -651,7 +771,7 @@ func TestHandleFork_Error(t *testing.T) {
 func TestHandleRevert_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("RevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -664,7 +784,7 @@ func TestHandleRevert_Error(t *testing.T) {
 func TestHandleUnrevert_Error(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
@@ -677,7 +797,7 @@ func TestHandleUnrevert_Error(t *testing.T) {
 func TestHandleStatus_NotRunning(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(false)
 
 	req := httptest.NewRequest("GET", "/api/ai/status", nil)
@@ -685,7 +805,7 @@ func TestHandleStatus_NotRunning(t *testing.T) {
 	h.HandleStatus(w, req)
 	assert.Equal(t, http.StatusOK, w.Code) // HandleStatus returns 200 even if not running
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp["running"].(bool))
 }
 
@@ -696,7 +816,7 @@ func TestMockUnimplemented(t *testing.T) {
 	mockSvc.On("UpdateControlSettings", mock.Anything).Return()
 
 	h := newTestAIHandler(nil, nil, nil)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	h.SetFindingsManager(nil)
 	h.SetMetadataUpdater(nil)
@@ -708,7 +828,7 @@ func TestMockUnimplemented(t *testing.T) {
 func TestProviders(t *testing.T) {
 	h := newTestAIHandler(nil, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	mockSvc.On("SetAlertProvider", mock.Anything).Return()
 	mockSvc.On("SetFindingsProvider", mock.Anything).Return()
@@ -716,7 +836,6 @@ func TestProviders(t *testing.T) {
 	mockSvc.On("SetPatternProvider", mock.Anything).Return()
 	mockSvc.On("SetMetricsHistory", mock.Anything).Return()
 	mockSvc.On("SetAgentProfileManager", mock.Anything).Return()
-	mockSvc.On("SetStorageProvider", mock.Anything).Return()
 	mockSvc.On("SetBackupProvider", mock.Anything).Return()
 	mockSvc.On("SetDiskHealthProvider", mock.Anything).Return()
 	mockSvc.On("SetUpdatesProvider", mock.Anything).Return()
@@ -727,7 +846,6 @@ func TestProviders(t *testing.T) {
 	h.SetPatternProvider(nil)
 	h.SetMetricsHistory(nil)
 	h.SetAgentProfileManager(nil)
-	h.SetStorageProvider(nil)
 	h.SetBackupProvider(nil)
 	h.SetDiskHealthProvider(nil)
 	h.SetUpdatesProvider(nil)
@@ -738,7 +856,7 @@ func TestProviders(t *testing.T) {
 func TestHandleAbort_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("AbortSession", mock.Anything, "s1").Return(nil)
 
@@ -751,7 +869,7 @@ func TestHandleAbort_Success(t *testing.T) {
 func TestHandleSummarize_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return(map[string]interface{}{"summary": "ok"}, nil)
 
@@ -764,7 +882,7 @@ func TestHandleSummarize_Success(t *testing.T) {
 func TestHandleDiff_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return(map[string]interface{}{"diff": "test"}, nil)
 
@@ -777,7 +895,7 @@ func TestHandleDiff_Success(t *testing.T) {
 func TestHandleFork_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("ForkSession", mock.Anything, "s1").Return(&chat.Session{ID: "s2"}, nil)
 
@@ -790,7 +908,7 @@ func TestHandleFork_Success(t *testing.T) {
 func TestHandleRevert_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("RevertSession", mock.Anything, "s1").Return(map[string]interface{}{"reverted": true}, nil)
 
@@ -803,7 +921,7 @@ func TestHandleRevert_Success(t *testing.T) {
 func TestHandleUnrevert_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return(map[string]interface{}{"unreverted": true}, nil)
 
@@ -825,7 +943,7 @@ func TestHandleStatus_NoService(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp["running"].(bool))
 }
 
@@ -861,6 +979,131 @@ func TestGetService_MultiTenantInitAndCache(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
+func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetResourceStore(tenantAdapter)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenantMonitor})
+
+	h := NewAIHandler(mtp, mtm, nil)
+	globalReadState := unifiedresources.NewRegistry(nil)
+	h.SetReadState(globalReadState)
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+
+	if gotCfg.ReadState != tenantAdapter {
+		t.Fatalf("expected tenant read state adapter, got %#v", gotCfg.ReadState)
+	}
+	if gotCfg.ReadState == globalReadState {
+		t.Fatalf("expected tenant read state to override global read state")
+	}
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestSetServiceInitializer_AppliesToExistingServices(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	legacySvc := new(MockAIService)
+	tenantSvc := new(MockAIService)
+	h.defaultService = legacySvc
+	h.services["acme"] = tenantSvc
+
+	calls := map[string]int{}
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls[GetOrgID(ctx)]++
+	})
+
+	if calls["default"] != 1 {
+		t.Fatalf("expected initializer for default service, got %d", calls["default"])
+	}
+	if calls["acme"] != 1 {
+		t.Fatalf("expected initializer for tenant service, got %d", calls["acme"])
+	}
+}
+
+func TestGetService_DefaultAppliesServiceInitializer(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	calls := 0
+	lastOrg := ""
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls++
+		lastOrg = GetOrgID(ctx)
+	})
+
+	svc := h.GetService(context.Background())
+	assert.Same(t, mockSvc, svc)
+	if calls == 0 {
+		t.Fatal("expected service initializer to be called")
+	}
+	if lastOrg != "default" {
+		t.Fatalf("expected initializer org default, got %q", lastOrg)
+	}
+}
+
+func TestGetService_MultiTenantAppliesServiceInitializerOnCreate(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	tenantMonitor := &monitoring.Monitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenantMonitor})
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+	newChatService = func(cfg chat.Config) AIService {
+		return mockSvc
+	}
+
+	h := NewAIHandler(mtp, mtm, nil)
+	calls := 0
+	var seenOrg string
+	h.SetServiceInitializer(func(ctx context.Context, svc AIService) {
+		calls++
+		seenOrg = GetOrgID(ctx)
+		if svc != mockSvc {
+			t.Fatalf("expected initializer to receive tenant service")
+		}
+	})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+	if calls != 1 {
+		t.Fatalf("expected initializer called once for tenant service, got %d", calls)
+	}
+	if seenOrg != "acme" {
+		t.Fatalf("expected initializer org acme, got %q", seenOrg)
+	}
+
+	mockSvc.AssertExpectations(t)
+}
+
 func TestRemoveTenantService(t *testing.T) {
 	h := NewAIHandler(nil, nil, nil)
 	mockSvc := new(MockAIService)
@@ -886,13 +1129,60 @@ func TestRemoveTenantService_DefaultNoop(t *testing.T) {
 	assert.True(t, exists)
 }
 
-func TestGetConfig_DefaultFallback(t *testing.T) {
+func TestGetConfig_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
 	cfg := &config.Config{APIToken: "token"}
 	h := newTestAIHandler(cfg, nil, nil)
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
 
 	result := h.getConfig(ctx)
 	assert.Same(t, cfg, result)
+}
+
+func TestGetPersistence_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
+	mockPersist := new(MockAIPersistence)
+	h := newTestAIHandler(nil, mockPersist, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+
+	result := h.getPersistence(ctx)
+	assert.Same(t, mockPersist, result)
+}
+
+func TestGetConfig_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.defaultConfig = &config.Config{APIToken: "token"}
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	result := h.getConfig(ctx)
+	assert.Nil(t, result)
+}
+
+func TestGetPersistence_NonDefaultInvalidOrgFailsClosedWhenMultiTenantAvailable(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.defaultPersistence = config.NewConfigPersistence(t.TempDir())
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
+
+	result := h.getPersistence(ctx)
+	assert.Nil(t, result)
+}
+
+func TestReadStateForOrg_NonDefaultMissingTenantReadStateFailsClosed(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+	defer mtm.Stop()
+
+	h := NewAIHandler(mtp, mtm, nil)
+	h.SetReadState(unifiedresources.NewRegistry(nil))
+
+	result := h.readStateForOrg("tenant-1")
+	assert.Nil(t, result)
 }
 
 func TestGetDataDirDefault(t *testing.T) {

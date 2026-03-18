@@ -704,3 +704,36 @@ func TestEmailTemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestEmailTemplateEscapesHTMLContent(t *testing.T) {
+	t.Parallel()
+
+	alert := &alerts.Alert{
+		ID:           "alert-html",
+		Level:        "critical",
+		Type:         "cpu<script>",
+		ResourceName: `<img src=x onerror="alert(1)">`,
+		ResourceID:   `vm-100"><script>alert(1)</script>`,
+		Node:         `node-1"><script>alert(2)</script>`,
+		Instance:     `https://pulse.example.com/?q=<script>alert(3)</script>`,
+		Message:      `High CPU <script>alert("xss")</script>`,
+		Value:        95.5,
+		Threshold:    90.0,
+		StartTime:    time.Now().Add(-5 * time.Minute),
+	}
+
+	_, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
+
+	if strings.Contains(htmlBody, "<script>") {
+		t.Fatalf("html body should escape script tags, got %q", htmlBody)
+	}
+	if strings.Contains(htmlBody, `<img src=x onerror="alert(1)">`) {
+		t.Fatalf("html body should escape html tags from resource name")
+	}
+	if !strings.Contains(htmlBody, "&lt;script&gt;alert(&#34;xss&#34;)&lt;/script&gt;") {
+		t.Fatalf("expected escaped message content in html body, got %q", htmlBody)
+	}
+	if !strings.Contains(textBody, `High CPU <script>alert("xss")</script>`) {
+		t.Fatalf("plain text body should preserve original message, got %q", textBody)
+	}
+}

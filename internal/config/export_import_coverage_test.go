@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExportConfig_ErrorPaths(t *testing.T) {
@@ -44,30 +43,4 @@ func TestImportConfig_ErrorPaths(t *testing.T) {
 	err = cp.ImportConfig(invalidEncrypted, "pass")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decrypt")
-}
-
-type mockFSRemoveError struct {
-	FileSystem
-}
-
-func (m *mockFSRemoveError) Remove(name string) error {
-	return errors.New("remove error")
-}
-
-func TestImportConfig_OIDCRemovalFailure(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := NewConfigPersistence(tempDir)
-
-	// 1. Create a valid export string
-	importStr, err := cp.ExportConfig("pass")
-	require.NoError(t, err)
-
-	// 2. Set filesystem that fails on Remove
-	mfs := &mockFSRemoveError{FileSystem: defaultFileSystem{}}
-	cp.SetFileSystem(mfs)
-
-	// 3. Import should fail when trying to remove OIDC (which it does if OIDC is nil in export)
-	err = cp.ImportConfig(importStr, "pass")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to remove existing oidc configuration")
 }

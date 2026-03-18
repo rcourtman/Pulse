@@ -601,32 +601,32 @@ func TestHostResourceID(t *testing.T) {
 		{
 			name:   "normal host ID",
 			hostID: "host-123",
-			want:   "host:host-123",
+			want:   "agent:host-123",
 		},
 		{
 			name:   "empty string returns unknown",
 			hostID: "",
-			want:   "host:unknown",
+			want:   "agent:unknown",
 		},
 		{
 			name:   "whitespace only returns unknown",
 			hostID: "   ",
-			want:   "host:unknown",
+			want:   "agent:unknown",
 		},
 		{
 			name:   "whitespace is trimmed",
 			hostID: "  host-456  ",
-			want:   "host:host-456",
+			want:   "agent:host-456",
 		},
 		{
 			name:   "UUID format",
 			hostID: "550e8400-e29b-41d4-a716-446655440000",
-			want:   "host:550e8400-e29b-41d4-a716-446655440000",
+			want:   "agent:550e8400-e29b-41d4-a716-446655440000",
 		},
 		{
 			name:   "simple hostname",
 			hostID: "server1",
-			want:   "host:server1",
+			want:   "agent:server1",
 		},
 	}
 
@@ -675,13 +675,13 @@ func TestHostDisplayName(t *testing.T) {
 			want: "id-123",
 		},
 		{
-			name: "fallback to Host literal",
+			name: "fallback to Agent literal",
 			host: models.Host{
 				ID:          "",
 				DisplayName: "",
 				Hostname:    "",
 			},
-			want: "Host",
+			want: "Agent",
 		},
 		{
 			name: "whitespace display name ignored",
@@ -746,12 +746,12 @@ func TestHostInstanceName(t *testing.T) {
 			want: "Ubuntu 22.04",
 		},
 		{
-			name: "fallback to Host Agent",
+			name: "fallback to Agent",
 			host: models.Host{
 				Platform: "",
 				OSName:   "",
 			},
-			want: "Host Agent",
+			want: "Agent",
 		},
 		{
 			name: "whitespace platform ignored",
@@ -767,7 +767,7 @@ func TestHostInstanceName(t *testing.T) {
 				Platform: "",
 				OSName:   "   ",
 			},
-			want: "Host Agent",
+			want: "Agent",
 		},
 		{
 			name: "platform with whitespace trimmed",
@@ -994,7 +994,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "/mnt/data",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:mnt-data",
+			wantID:       "agent:host-123/disk:mnt-data",
 			wantNamePart: "/mnt/data",
 		},
 		{
@@ -1004,7 +1004,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:dev-sda1",
+			wantID:       "agent:host-123/disk:dev-sda1",
 			wantNamePart: "/dev/sda1",
 		},
 		{
@@ -1014,7 +1014,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "",
 				Device:     "",
 			},
-			wantID:       "host:host-123/disk:disk",
+			wantID:       "agent:host-123/disk:disk",
 			wantNamePart: "disk",
 		},
 		{
@@ -1024,7 +1024,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "/",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:unknown",
+			wantID:       "agent:host-123/disk:unknown",
 			wantNamePart: "/",
 		},
 		{
@@ -1034,7 +1034,7 @@ func TestHostDiskResourceID(t *testing.T) {
 				Mountpoint: "   ",
 				Device:     "/dev/sda1",
 			},
-			wantID:       "host:host-123/disk:dev-sda1",
+			wantID:       "agent:host-123/disk:dev-sda1",
 			wantNamePart: "/dev/sda1",
 		},
 		{
@@ -1046,7 +1046,7 @@ func TestHostDiskResourceID(t *testing.T) {
 			disk: models.Disk{
 				Mountpoint: "/data",
 			},
-			wantID:       "host:host-123/disk:data",
+			wantID:       "agent:host-123/disk:data",
 			wantNamePart: "My Server",
 		},
 	}
@@ -1311,6 +1311,21 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 			alert: &Alert{Type: "zfs-device"},
 			want:  "storage",
 		},
+		{
+			name:  "storage-incident returns storage",
+			alert: &Alert{Type: "storage-incident"},
+			want:  "storage",
+		},
+		{
+			name:  "backup-storage-incident returns storage",
+			alert: &Alert{Type: "backup-storage-incident"},
+			want:  "storage",
+		},
+		{
+			name:  "backup-posture-incident returns storage",
+			alert: &Alert{Type: "backup-posture-incident"},
+			want:  "storage",
+		},
 
 		// Offline metrics
 		{
@@ -1374,171 +1389,96 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 	}
 }
 
-// TestCanonicalResourceTypeKeys tests the canonicalResourceTypeKeys function
+// TestCanonicalResourceTypeKeys tests the CanonicalResourceTypeKeys function
 func TestCanonicalResourceTypeKeys(t *testing.T) {
 	tests := []struct {
 		name         string
 		resourceType string
 		want         []string
 	}{
-		// Guest types
+		{name: "guest category preserved", resourceType: "guest", want: []string{"guest"}},
+		{name: "vm canonical + guest fallback", resourceType: "vm", want: []string{"vm", "guest"}},
 		{
-			name:         "guest returns guest",
-			resourceType: "guest",
-			want:         []string{"guest"},
+			name:         "system-container canonical + guest fallback",
+			resourceType: "system-container",
+			want:         []string{"system-container", "guest"},
 		},
 		{
-			name:         "qemu returns guest",
-			resourceType: "qemu",
-			want:         []string{"guest"},
+			name:         "oci-container canonical + system-container + guest fallback",
+			resourceType: "oci-container",
+			want:         []string{"oci-container", "system-container", "guest"},
 		},
 		{
-			name:         "vm returns guest",
-			resourceType: "vm",
-			want:         []string{"guest"},
+			name:         "app-container canonical + guest fallback",
+			resourceType: "app-container",
+			want:         []string{"app-container", "guest"},
 		},
 		{
-			name:         "ct returns guest",
-			resourceType: "ct",
-			want:         []string{"guest"},
+			name:         "docker-host canonical + node fallback",
+			resourceType: "docker-host",
+			want:         []string{"docker-host", "node"},
 		},
 		{
-			name:         "container returns guest",
-			resourceType: "container",
-			want:         []string{"guest"},
+			name:         "docker-service canonical + app-container + guest fallback",
+			resourceType: "docker-service",
+			want:         []string{"docker-service", "app-container", "guest"},
+		},
+		{name: "node canonical", resourceType: "node", want: []string{"node"}},
+		{name: "agent canonical + node fallback", resourceType: "agent", want: []string{"agent", "node"}},
+		{
+			name:         "agent-disk canonical + storage fallbacks",
+			resourceType: "agent-disk",
+			want:         []string{"agent-disk", "agent", "storage"},
+		},
+		{name: "pbs canonical + node fallback", resourceType: "pbs", want: []string{"pbs", "node"}},
+		{name: "pmg canonical + node fallback", resourceType: "pmg", want: []string{"pmg", "node"}},
+		{
+			name:         "k8s cluster canonical + guest fallback",
+			resourceType: "k8s-cluster",
+			want:         []string{"k8s-cluster", "guest"},
 		},
 		{
-			name:         "lxc returns guest",
-			resourceType: "lxc",
-			want:         []string{"guest"},
+			name:         "k8s node canonical + node fallback",
+			resourceType: "k8s-node",
+			want:         []string{"k8s-node", "node"},
 		},
-
-		// Docker container types
+		{name: "pod canonical + guest fallback", resourceType: "pod", want: []string{"pod", "guest"}},
+		{name: "storage canonical", resourceType: "storage", want: []string{"storage"}},
+		{name: "disk canonical + storage fallback", resourceType: "disk", want: []string{"disk", "storage"}},
 		{
-			name:         "docker returns docker and guest",
-			resourceType: "docker",
-			want:         []string{"docker", "guest"},
+			name:         "datastore canonical + storage + pbs fallback",
+			resourceType: "datastore",
+			want:         []string{"datastore", "storage", "pbs"},
 		},
+		{name: "pool canonical + storage fallback", resourceType: "pool", want: []string{"pool", "storage"}},
 		{
-			name:         "docker container with space returns docker and guest",
-			resourceType: "docker container",
-			want:         []string{"docker", "guest"},
+			name:         "dataset canonical + storage fallback",
+			resourceType: "dataset",
+			want:         []string{"dataset", "storage"},
 		},
+		{name: "ceph canonical + storage fallback", resourceType: "ceph", want: []string{"ceph", "storage"}},
 		{
-			name:         "dockercontainer returns docker and guest",
-			resourceType: "dockercontainer",
-			want:         []string{"docker", "guest"},
+			name:         "physical_disk canonical + storage fallback",
+			resourceType: "physical_disk",
+			want:         []string{"physical_disk", "disk", "storage"},
 		},
-
-		// Docker host types
-		{
-			name:         "docker host with space returns dockerhost, docker, node",
-			resourceType: "docker host",
-			want:         []string{"dockerhost", "docker", "node"},
-		},
-		{
-			name:         "dockerhost returns dockerhost, docker, node",
-			resourceType: "dockerhost",
-			want:         []string{"dockerhost", "docker", "node"},
-		},
-
-		// Node type
-		{
-			name:         "node returns node",
-			resourceType: "node",
-			want:         []string{"node"},
-		},
-
-		// PBS types
-		{
-			name:         "pbs returns pbs and node",
-			resourceType: "pbs",
-			want:         []string{"pbs", "node"},
-		},
-		{
-			name:         "pbs server with space returns pbs and node",
-			resourceType: "pbs server",
-			want:         []string{"pbs", "node"},
-		},
-		{
-			name:         "pbsserver returns pbs and node",
-			resourceType: "pbsserver",
-			want:         []string{"pbs", "node"},
-		},
-
-		// Storage type
-		{
-			name:         "storage returns storage",
-			resourceType: "storage",
-			want:         []string{"storage"},
-		},
-
-		// Case insensitivity
-		{
-			name:         "GUEST uppercase returns guest",
-			resourceType: "GUEST",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "Docker mixed case returns docker and guest",
-			resourceType: "Docker",
-			want:         []string{"docker", "guest"},
-		},
-		{
-			name:         "NODE uppercase returns node",
-			resourceType: "NODE",
-			want:         []string{"node"},
-		},
-
-		// Whitespace handling
-		{
-			name:         "guest with leading whitespace",
-			resourceType: "  guest",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "guest with trailing whitespace",
-			resourceType: "guest  ",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "guest with surrounding whitespace",
-			resourceType: "  guest  ",
-			want:         []string{"guest"},
-		},
-
-		// Unknown types return self
-		{
-			name:         "unknown type returns itself",
-			resourceType: "custom",
-			want:         []string{"custom"},
-		},
-		{
-			name:         "pmg returns itself as unknown",
-			resourceType: "pmg",
-			want:         []string{"pmg"},
-		},
-
-		// Empty and whitespace-only
-		{
-			name:         "empty string returns empty slice",
-			resourceType: "",
-			want:         []string{},
-		},
-		{
-			name:         "whitespace only returns empty slice",
-			resourceType: "   ",
-			want:         []string{},
-		},
+		{name: "unknown type passthrough", resourceType: "custom", want: []string{"custom"}},
+		{name: "legacy host alias rejected", resourceType: "host", want: []string{}},
+		{name: "legacy container alias rejected", resourceType: "container", want: []string{}},
+		{name: "legacy docker alias rejected", resourceType: "docker", want: []string{}},
+		{name: "legacy dockerhost alias rejected", resourceType: "dockerhost", want: []string{}},
+		{name: "legacy k8s alias rejected", resourceType: "k8s", want: []string{}},
+		{name: "empty string returns empty slice", resourceType: "", want: []string{}},
+		{name: "whitespace only returns empty slice", resourceType: "   ", want: []string{}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := canonicalResourceTypeKeys(tc.resourceType)
+			got := CanonicalResourceTypeKeys(tc.resourceType)
 
 			// Check length
 			if len(got) != len(tc.want) {
-				t.Errorf("canonicalResourceTypeKeys(%q) = %v (len %d), want %v (len %d)",
+				t.Errorf("CanonicalResourceTypeKeys(%q) = %v (len %d), want %v (len %d)",
 					tc.resourceType, got, len(got), tc.want, len(tc.want))
 				return
 			}
@@ -1546,7 +1486,7 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			// Check each element
 			for i, v := range got {
 				if v != tc.want[i] {
-					t.Errorf("canonicalResourceTypeKeys(%q)[%d] = %q, want %q",
+					t.Errorf("CanonicalResourceTypeKeys(%q)[%d] = %q, want %q",
 						tc.resourceType, i, v, tc.want[i])
 				}
 			}
@@ -2259,6 +2199,36 @@ func TestNormalizeMetricTimeThresholds(t *testing.T) {
 				"guest": {"": 60, "memory": -1},
 			},
 			want: nil,
+		},
+		{
+			name: "legacy host alias type key is dropped",
+			input: map[string]map[string]int{
+				"host": {"cpu": 60},
+				"vm":   {"cpu": 30},
+			},
+			want: map[string]map[string]int{
+				"vm": {"cpu": 30},
+			},
+		},
+		{
+			name: "legacy docker alias type key is dropped",
+			input: map[string]map[string]int{
+				"docker":        {"cpu": 60},
+				"app-container": {"cpu": 30},
+			},
+			want: map[string]map[string]int{
+				"app-container": {"cpu": 30},
+			},
+		},
+		{
+			name: "all bucket is preserved",
+			input: map[string]map[string]int{
+				"all":  {"cpu": 120},
+				"host": {"cpu": 60},
+			},
+			want: map[string]map[string]int{
+				"all": {"cpu": 120},
+			},
 		},
 		{
 			name: "multiple resource types",

@@ -17,15 +17,15 @@ import (
 
 // trustedConfigPublicKeysPEM contains trusted Ed25519 public keys for config verification.
 // In production builds, inject keys via ldflags to support rotation.
-var trustedConfigPublicKeysPEM = []string{
-	`-----BEGIN PUBLIC KEY-----
+var trustedConfigPublicKeysPEM = strings.TrimSpace(`
+-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAlbXZQRx8jgMzwpXbbjOGcnA+9TG0lms/auxbPzY+Tdo=
------END PUBLIC KEY-----`,
-}
+-----END PUBLIC KEY-----
+`)
 
 // SignedConfigPayload is the canonical payload used for config signing.
 type SignedConfigPayload struct {
-	HostID          string
+	AgentID         string
 	IssuedAt        time.Time
 	ExpiresAt       time.Time
 	CommandsEnabled *bool
@@ -62,7 +62,7 @@ func SignConfigPayload(payload SignedConfigPayload, privateKey ed25519.PrivateKe
 
 	canonical, err := canonicalConfigPayload(payload)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("canonicalize config payload: %w", err)
 	}
 
 	signature := ed25519.Sign(privateKey, canonical)
@@ -77,7 +77,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 	canonical, err := canonicalConfigPayload(payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalize config payload: %w", err)
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
@@ -87,7 +87,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 	keys, err := trustedConfigPublicKeys()
 	if err != nil {
-		return err
+		return fmt.Errorf("load trusted config public keys: %w", err)
 	}
 
 	for _, key := range keys {
@@ -101,7 +101,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 	type canonicalPayload struct {
-		HostID          string          `json:"hostId"`
+		AgentID         string          `json:"agentId"`
 		IssuedAt        string          `json:"issuedAt"`
 		ExpiresAt       string          `json:"expiresAt"`
 		CommandsEnabled *bool           `json:"commandsEnabled,omitempty"`
@@ -112,26 +112,30 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 	if len(payload.Settings) > 0 {
 		data, err := marshalSortedMap(payload.Settings)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal canonical settings: %w", err)
 		}
 		settings = data
 	}
 
 	canonical := canonicalPayload{
-		HostID:          payload.HostID,
+		AgentID:         strings.TrimSpace(payload.AgentID),
 		IssuedAt:        payload.IssuedAt.UTC().Format(time.RFC3339Nano),
 		ExpiresAt:       payload.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		CommandsEnabled: payload.CommandsEnabled,
 		Settings:        settings,
 	}
 
-	return json.Marshal(canonical)
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("marshal canonical payload: %w", err)
+	}
+	return data, nil
 }
 
 func trustedConfigPublicKeys() ([]ed25519.PublicKey, error) {
 	raw := utils.GetenvTrim("PULSE_AGENT_CONFIG_PUBLIC_KEYS")
 	if raw == "" {
-		raw = strings.Join(trustedConfigPublicKeysPEM, "\n")
+		raw = strings.TrimSpace(trustedConfigPublicKeysPEM)
 	}
 
 	var keys []ed25519.PublicKey
@@ -212,11 +216,11 @@ func marshalSortedMap(values map[string]interface{}) ([]byte, error) {
 		}
 		keyJSON, err := json.Marshal(key)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal settings key %q: %w", key, err)
 		}
 		valueJSON, err := marshalCanonicalValue(values[key])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal settings value for key %q: %w", key, err)
 		}
 
 		builder.Write(keyJSON)
@@ -231,7 +235,11 @@ func marshalSortedMap(values map[string]interface{}) ([]byte, error) {
 func marshalCanonicalValue(value interface{}) ([]byte, error) {
 	switch typed := value.(type) {
 	case map[string]interface{}:
-		return marshalSortedMap(typed)
+		data, err := marshalSortedMap(typed)
+		if err != nil {
+			return nil, fmt.Errorf("marshal nested map value: %w", err)
+		}
+		return data, nil
 	case []interface{}:
 		var builder strings.Builder
 		builder.WriteByte('[')
@@ -241,13 +249,17 @@ func marshalCanonicalValue(value interface{}) ([]byte, error) {
 			}
 			itemJSON, err := marshalCanonicalValue(item)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("marshal list item %d: %w", i, err)
 			}
 			builder.Write(itemJSON)
 		}
 		builder.WriteByte(']')
 		return []byte(builder.String()), nil
 	default:
-		return json.Marshal(typed)
+		data, err := json.Marshal(typed)
+		if err != nil {
+			return nil, fmt.Errorf("marshal scalar value (%T): %w", typed, err)
+		}
+		return data, nil
 	}
 }

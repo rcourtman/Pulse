@@ -2,18 +2,14 @@ package monitoring
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"math"
 	"math/rand"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,18 +19,15 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
-	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -48,6 +41,20 @@ const (
 	minTaskTimeout     = 30 * time.Second
 	maxTaskTimeout     = 3 * time.Minute
 )
+
+const mockKeepRealPollingEnv = "PULSE_MOCK_KEEP_REAL_POLLING"
+
+func keepRealPollingInMockMode() bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(mockKeepRealPollingEnv)))
+	switch raw {
+	case "", "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
 
 // newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
 // It is used to allow mocking the client creation in tests.
@@ -79,7 +86,6 @@ type PVEClientInterface interface {
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error)
-	GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error)
 	GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
@@ -100,9 +106,40 @@ type ResourceStoreInterface interface {
 	// 0 = skip entirely, 0.5 = half frequency, 1 = normal
 	GetPollingRecommendations() map[string]float64
 	// GetAll returns all resources in the store (for WebSocket broadcasts)
-	GetAll() []resources.Resource
+	GetAll() []unifiedresources.Resource
 	// PopulateFromSnapshot updates the store with data from a StateSnapshot
 	PopulateFromSnapshot(snapshot models.StateSnapshot)
+}
+
+// SupplementalRecordStore is an optional extension for resource stores that can
+// ingest source-native unified records in addition to legacy snapshots.
+type SupplementalRecordStore interface {
+	PopulateSupplementalRecords(source unifiedresources.DataSource, records []unifiedresources.IngestRecord)
+}
+
+// AtomicSnapshotResourceStore is an optional extension for stores that can
+// atomically replace their canonical registry from a snapshot plus
+// supplemental records in a single swap.
+type AtomicSnapshotResourceStore interface {
+	PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
+}
+
+// MetricsTargetResourceStore optionally resolves the history/metrics target for
+// a canonical resource in the live unified store.
+type MetricsTargetResourceStore interface {
+	MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget
+}
+
+// UnifiedResourceFreshnessStore is an optional extension for stores that track
+// their own canonical-resource freshness independent of state.LastUpdate.
+type UnifiedResourceFreshnessStore interface {
+	UnifiedResourceFreshness() time.Time
+}
+
+// MonitorSupplementalRecordsProvider emits source-native records outside the
+// poll-provider scheduling path (for example, dedicated background pollers).
+type MonitorSupplementalRecordsProvider interface {
+	SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord
 }
 
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
@@ -149,15 +186,67 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 }
 
 func (m *Monitor) getInstanceConfig(instanceName string) *config.PVEInstance {
-	if m == nil || m.config == nil {
+	if m == nil {
 		return nil
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.config == nil {
+		return nil
+	}
+
 	for i := range m.config.PVEInstances {
 		if strings.EqualFold(m.config.PVEInstances[i].Name, instanceName) {
-			return &m.config.PVEInstances[i]
+			instanceCopy := m.config.PVEInstances[i]
+			return &instanceCopy
 		}
 	}
 	return nil
+}
+
+func (m *Monitor) totalClientCount() int {
+	if m == nil {
+		return 0
+	}
+
+	total := 0
+	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
+		if provider == nil {
+			continue
+		}
+		total += len(provider.ListInstances(m))
+	}
+	return total
+}
+
+func (m *Monitor) getPVEClient(name string) (PVEClientInterface, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pveClients[name]
+	return client, ok
+}
+
+func (m *Monitor) getPBSClient(name string) (*pbs.Client, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pbsClients[name]
+	return client, ok
+}
+
+func (m *Monitor) getPMGClient(name string) (*pmg.Client, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pmgClients[name]
+	return client, ok
 }
 
 func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) []models.PhysicalDisk {
@@ -346,17 +435,17 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
 	for _, node := range nodes {
-		if node.LinkedHostAgentID == "" {
+		if node.LinkedAgentID == "" {
 			continue
 		}
-		host, ok := hostByID[node.LinkedHostAgentID]
+		host, ok := hostByID[node.LinkedAgentID]
 		if !ok || len(host.Sensors.SMART) == 0 {
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
 		log.Debug().
 			Str("nodeName", node.Name).
-			Str("hostAgentID", node.LinkedHostAgentID).
+			Str("hostAgentID", node.LinkedAgentID).
 			Int("smartDiskCount", len(host.Sensors.SMART)).
 			Msg("mergeHostAgentSMARTIntoDisks: found linked host agent with SMART data")
 	}
@@ -431,15 +520,142 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	return updated
 }
 
+func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) models.PhysicalDisk {
+	if view == nil {
+		return models.PhysicalDisk{}
+	}
+
+	return models.PhysicalDisk{
+		ID:              view.ID(),
+		Node:            view.Node(),
+		Instance:        view.Instance(),
+		DevPath:         view.DevPath(),
+		Model:           view.Model(),
+		Serial:          view.Serial(),
+		WWN:             view.WWN(),
+		Type:            view.DiskType(),
+		Size:            view.SizeBytes(),
+		Health:          view.Health(),
+		Wearout:         view.Wearout(),
+		Temperature:     view.Temperature(),
+		RPM:             view.RPM(),
+		Used:            view.Used(),
+		SmartAttributes: smartAttributesFromUnifiedMeta(view.SMART()),
+		LastChecked:     view.LastSeen(),
+	}
+}
+
+func smartAttributesFromUnifiedMeta(in *unifiedresources.SMARTMeta) *models.SMARTAttributes {
+	if in == nil {
+		return nil
+	}
+
+	out := &models.SMARTAttributes{}
+	if in.PowerOnHours != 0 {
+		value := in.PowerOnHours
+		out.PowerOnHours = &value
+	}
+	if in.PowerCycles != 0 {
+		value := in.PowerCycles
+		out.PowerCycles = &value
+	}
+	if in.ReallocatedSectors != 0 {
+		value := in.ReallocatedSectors
+		out.ReallocatedSectors = &value
+	}
+	if in.PendingSectors != 0 {
+		value := in.PendingSectors
+		out.PendingSectors = &value
+	}
+	if in.OfflineUncorrectable != 0 {
+		value := in.OfflineUncorrectable
+		out.OfflineUncorrectable = &value
+	}
+	if in.UDMACRCErrors != 0 {
+		value := in.UDMACRCErrors
+		out.UDMACRCErrors = &value
+	}
+	if in.PercentageUsed != 0 {
+		value := in.PercentageUsed
+		out.PercentageUsed = &value
+	}
+	if in.AvailableSpare != 0 {
+		value := in.AvailableSpare
+		out.AvailableSpare = &value
+	}
+	if in.MediaErrors != 0 {
+		value := in.MediaErrors
+		out.MediaErrors = &value
+	}
+	if in.UnsafeShutdowns != 0 {
+		value := in.UnsafeShutdowns
+		out.UnsafeShutdowns = &value
+	}
+	if out.PowerOnHours == nil &&
+		out.PowerCycles == nil &&
+		out.ReallocatedSectors == nil &&
+		out.PendingSectors == nil &&
+		out.OfflineUncorrectable == nil &&
+		out.UDMACRCErrors == nil &&
+		out.PercentageUsed == nil &&
+		out.AvailableSpare == nil &&
+		out.MediaErrors == nil &&
+		out.UnsafeShutdowns == nil {
+		return nil
+	}
+	return out
+}
+
+func physicalDisksForInstanceFromReadState(readState unifiedresources.ReadState, instance string) []models.PhysicalDisk {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.PhysicalDisk, 0)
+	for _, disk := range readState.PhysicalDisks() {
+		if disk == nil || disk.Instance() != instance {
+			continue
+		}
+		out = append(out, physicalDiskFromReadStateView(disk))
+	}
+	return out
+}
+
+func nodesForInstanceFromReadState(readState unifiedresources.ReadState, instance string) []models.Node {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.Node, 0)
+	for _, node := range readState.Nodes() {
+		if node == nil || node.Instance() != instance {
+			continue
+		}
+		out = append(out, nodeFromReadStateView(node))
+	}
+	return out
+}
+
+func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.Host, 0)
+	for _, host := range readState.Hosts() {
+		if host == nil {
+			continue
+		}
+		out = append(out, hostFromReadStateView(host))
+	}
+	return out
+}
+
 // writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
-	// Determine resource ID: serial (preferred) → WWN → composite fallback
-	resourceID := disk.Serial
+	resourceID := unifiedresources.PhysicalDiskMetricID(disk)
 	if resourceID == "" {
-		resourceID = disk.WWN
-	}
-	if resourceID == "" {
-		resourceID = fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+		return
 	}
 
 	// Temperature (always write if > 0)
@@ -489,200 +705,6 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	}
 }
 
-func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
-	if instance == nil {
-		return ""
-	}
-
-	for _, endpoint := range instance.ClusterEndpoints {
-		if !strings.EqualFold(endpoint.NodeName, nodeName) {
-			continue
-		}
-
-		if host := strings.TrimSpace(endpoint.Host); host != "" {
-			if label := normalizeEndpointHost(host); label != "" && !isLikelyIPAddress(label) {
-				return label
-			}
-		}
-
-		if nodeNameLabel := strings.TrimSpace(endpoint.NodeName); nodeNameLabel != "" {
-			return nodeNameLabel
-		}
-
-		if ip := strings.TrimSpace(endpoint.IP); ip != "" {
-			return ip
-		}
-	}
-
-	return ""
-}
-
-func normalizeEndpointHost(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return ""
-	}
-
-	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
-		host := parsed.Hostname()
-		if host != "" {
-			return host
-		}
-		return parsed.Host
-	}
-
-	value = strings.TrimPrefix(value, "https://")
-	value = strings.TrimPrefix(value, "http://")
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-
-	if idx := strings.Index(value, "/"); idx >= 0 {
-		value = strings.TrimSpace(value[:idx])
-	}
-
-	if idx := strings.Index(value, ":"); idx >= 0 {
-		value = strings.TrimSpace(value[:idx])
-	}
-
-	return value
-}
-
-func isLikelyIPAddress(value string) bool {
-	if value == "" {
-		return false
-	}
-
-	if ip := net.ParseIP(value); ip != nil {
-		return true
-	}
-
-	// Handle IPv6 with zone identifier (fe80::1%eth0)
-	if i := strings.Index(value, "%"); i > 0 {
-		if ip := net.ParseIP(value[:i]); ip != nil {
-			return true
-		}
-	}
-
-	return false
-}
-
-func ensureClusterEndpointURL(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return ""
-	}
-
-	lower := strings.ToLower(value)
-	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
-		return value
-	}
-
-	if _, _, err := net.SplitHostPort(value); err == nil {
-		return "https://" + value
-	}
-
-	return "https://" + net.JoinHostPort(value, "8006")
-}
-
-func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, baseFingerprint string) string {
-	// When TLS hostname verification is required (VerifySSL=true and no fingerprint),
-	// prefer hostname over IP to ensure certificate CN/SAN validation works correctly.
-	// When TLS is not verified (VerifySSL=false) or a fingerprint is provided (which
-	// bypasses hostname checks), prefer IP to reduce DNS lookups (refs #620).
-	hasFingerprint := strings.TrimSpace(endpoint.Fingerprint) != "" || strings.TrimSpace(baseFingerprint) != ""
-	requiresHostnameForTLS := verifySSL && !hasFingerprint
-
-	// Use EffectiveIP() which prefers user-specified IPOverride over auto-discovered IP
-	effectiveIP := endpoint.EffectiveIP()
-
-	if requiresHostnameForTLS {
-		// Prefer hostname for proper TLS certificate validation
-		if endpoint.Host != "" {
-			return ensureClusterEndpointURL(endpoint.Host)
-		}
-		if effectiveIP != "" {
-			return ensureClusterEndpointURL(effectiveIP)
-		}
-	} else {
-		// Prefer IP address to avoid excessive DNS lookups
-		if effectiveIP != "" {
-			return ensureClusterEndpointURL(effectiveIP)
-		}
-		if endpoint.Host != "" {
-			return ensureClusterEndpointURL(endpoint.Host)
-		}
-	}
-	return ""
-}
-
-func buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string) {
-	endpoints := make([]string, 0, len(pve.ClusterEndpoints)+1)
-	endpointFingerprints := make(map[string]string)
-	hasValidEndpoints := false
-
-	for _, ep := range pve.ClusterEndpoints {
-		effectiveURL := clusterEndpointEffectiveURL(ep, pve.VerifySSL, pve.Fingerprint)
-		if effectiveURL == "" {
-			log.Warn().
-				Str("node", ep.NodeName).
-				Msg("Skipping cluster endpoint with no host/IP")
-			continue
-		}
-
-		if parsed, err := url.Parse(effectiveURL); err == nil {
-			hostname := parsed.Hostname()
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
-		} else {
-			hostname := normalizeEndpointHost(effectiveURL)
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
-		}
-
-		endpoints = append(endpoints, effectiveURL)
-		if ep.Fingerprint != "" {
-			endpointFingerprints[effectiveURL] = ep.Fingerprint
-		}
-	}
-
-	if !hasValidEndpoints || len(endpoints) == 0 {
-		fallback := ensureClusterEndpointURL(pve.Host)
-		if fallback != "" {
-			log.Info().
-				Str("instance", pve.Name).
-				Str("mainHost", pve.Host).
-				Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
-			return []string{fallback}, endpointFingerprints
-		}
-		return nil, endpointFingerprints
-	}
-
-	mainHostURL := ensureClusterEndpointURL(pve.Host)
-	if mainHostURL != "" {
-		mainHostAlreadyIncluded := false
-		for _, ep := range endpoints {
-			if ep == mainHostURL {
-				mainHostAlreadyIncluded = true
-				break
-			}
-		}
-		if !mainHostAlreadyIncluded {
-			log.Info().
-				Str("instance", pve.Name).
-				Str("mainHost", mainHostURL).
-				Int("clusterEndpoints", len(endpoints)).
-				Msg("Adding main host as fallback for remote cluster access")
-			endpoints = append(endpoints, mainHostURL)
-		}
-	}
-
-	return endpoints, endpointFingerprints
-}
-
 // PollExecutor defines the contract for executing polling tasks.
 type PollExecutor interface {
 	Execute(ctx context.Context, task PollTask)
@@ -698,6 +720,11 @@ func newRealExecutor(m *Monitor) PollExecutor {
 
 func (r *realExecutor) Execute(ctx context.Context, task PollTask) {
 	if r == nil || r.monitor == nil {
+		return
+	}
+
+	if task.Run != nil {
+		task.Run(ctx)
 		return
 	}
 
@@ -800,19 +827,14 @@ type InstanceHealth struct {
 	PollStatus  InstancePollStatus `json:"pollStatus"`
 	Breaker     InstanceBreaker    `json:"breaker"`
 	DeadLetter  InstanceDLQ        `json:"deadLetter"`
-	Warnings    []string           `json:"warnings,omitempty"`
+	Warnings    []string           `json:"warnings"`
 }
 
-func schedulerKey(instanceType InstanceType, name string) string {
-	return string(instanceType) + "::" + name
-}
-
-func timePtr(t time.Time) *time.Time {
-	if t.IsZero() {
-		return nil
+func (h InstanceHealth) NormalizeCollections() InstanceHealth {
+	if h.Warnings == nil {
+		h.Warnings = []string{}
 	}
-	copy := t
-	return &copy
+	return h
 }
 
 // Monitor handles all monitoring operations
@@ -823,6 +845,7 @@ type Monitor struct {
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
+	pollProviders              map[InstanceType]PollProvider
 	pollMetrics                *PollMetrics
 	scheduler                  *AdaptiveScheduler
 	stalenessTracker           *StalenessTracker
@@ -839,7 +862,6 @@ type Monitor struct {
 	guestMetadataStore         *config.GuestMetadataStore
 	dockerMetadataStore        *config.DockerMetadataStore
 	hostMetadataStore          *config.HostMetadataStore
-	hostRuntimeStore           *config.HostRuntimeStore
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -872,15 +894,12 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmRRDMemCache              map[string]rrdMemCacheEntry
-	vmAgentMemCache            map[string]agentMemCacheEntry // Guest agent /proc/meminfo cache
-	removedDockerHosts         map[string]time.Time          // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerTokenBindings        map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
-	removedHosts               map[string]time.Time          // Track deliberately removed host agents (ID -> removal time)
-	removedKubernetesClusters  map[string]time.Time          // Track deliberately removed Kubernetes clusters (ID -> removal time)
-	kubernetesTokenBindings    map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
-	hostTokenBindings          map[string]string             // Track tokenID:hostname -> host identity bindings
-	lastHostRuntimePersist     map[string]time.Time          // Track last persisted host runtime write per host ID
-	runningTasks               map[string]struct{}           // Prevent overlapping polls for the same instance
+	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
+	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	removedHostAgents          map[string]time.Time // Track deliberately removed host agents (ID -> removal time)
+	hostTokenBindings          map[string]string    // Track tokenID:hostname -> host identity bindings
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -908,27 +927,34 @@ type Monitor struct {
 	nodeLastOnline           map[string]time.Time           // Track last time each node was seen online (for grace period)
 	nodePendingUpdatesCache  map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
 	resourceStore            ResourceStoreInterface         // Optional unified resource store for polling optimization
+	supplementalProviders    map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
+	recoveryManager          *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
 	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry
+	// Cluster sensor cache: temperature data collected by an agent on one Proxmox
+	// cluster node via SSH to its siblings. Keyed by lowercase node name.
+	clusterSensorsMu    sync.RWMutex
+	clusterSensorsCache map[string]clusterSensorsCacheEntry
+}
+
+// clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
+type clusterSensorsCacheEntry struct {
+	sensors   models.HostSensorSummary
+	updatedAt time.Time
 }
 
 type rrdMemCacheEntry struct {
 	available uint64
 	used      uint64
 	total     uint64
-	fetchedAt time.Time
-	negative  bool // true when the RRD fetch failed; used for backoff
-}
-
-// agentMemCacheEntry caches MemAvailable read via guest agent file-read of /proc/meminfo.
-// A zero available with negative=true means the VM doesn't support this (e.g. Windows, agent off).
-type agentMemCacheEntry struct {
-	available uint64
-	negative  bool // true = read failed, don't retry until TTL expires
+	netIn     float64
+	netOut    float64
+	hasNetIn  bool
+	hasNetOut bool
 	fetchedAt time.Time
 }
 
@@ -950,339 +976,6 @@ type agentProfileCacheEntry struct {
 }
 
 const agentProfileCacheTTL = 60 * time.Second
-
-// safePercentage calculates percentage safely, returning 0 if divisor is 0
-func safePercentage(used, total float64) float64 {
-	if total == 0 {
-		return 0
-	}
-	result := used / total * 100
-	if math.IsNaN(result) || math.IsInf(result, 0) {
-		return 0
-	}
-	return result
-}
-
-// safeFloat ensures a float value is not NaN or Inf
-func safeFloat(val float64) float64 {
-	if math.IsNaN(val) || math.IsInf(val, 0) {
-		return 0
-	}
-	return val
-}
-
-// makeGuestID generates a stable, canonical guest ID that includes instance, node, and VMID.
-// Format: {instance}:{node}:{vmid} (e.g., "delly:minipc:201")
-//
-// Using colons as separators prevents ambiguity with dashes in instance/node names.
-// This format ensures:
-// - Unique IDs across all deployment scenarios (single agent, per-node agents, mixed)
-// - Stable IDs that don't change when monitoring topology changes
-// - Easy parsing to extract instance, node, and VMID components
-//
-// For clustered setups, the instance name is the cluster name.
-// For standalone nodes, the instance name matches the node name.
-func makeGuestID(instanceName string, node string, vmid int) string {
-	return fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)
-}
-
-func (m *Monitor) beginTaskExecution(task ScheduledTask) bool {
-	if m == nil {
-		return true
-	}
-
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.runningTasks == nil {
-		m.runningTasks = make(map[string]struct{})
-	}
-
-	if _, exists := m.runningTasks[key]; exists {
-		return false
-	}
-
-	m.runningTasks[key] = struct{}{}
-	return true
-}
-
-func (m *Monitor) finishTaskExecution(task ScheduledTask) {
-	if m == nil {
-		return
-	}
-
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.runningTasks != nil {
-		delete(m.runningTasks, key)
-	}
-}
-
-func preserveRecentMissingGuestsFromResponsiveNodes(
-	instanceName string,
-	prevState models.StateSnapshot,
-	currentVMs []models.VM,
-	currentContainers []models.Container,
-	nodeEffectiveStatus map[string]string,
-	nodesWithResources map[string]bool,
-	now time.Time,
-) ([]models.VM, []models.Container, int, int) {
-	currentGuestVMIDs := make(map[int]struct{}, len(currentVMs)+len(currentContainers))
-	for _, vm := range currentVMs {
-		currentGuestVMIDs[vm.VMID] = struct{}{}
-	}
-	for _, ct := range currentContainers {
-		currentGuestVMIDs[ct.VMID] = struct{}{}
-	}
-
-	preservedVMs := 0
-	for _, vm := range prevState.VMs {
-		if vm.Instance != instanceName {
-			continue
-		}
-		if nodeEffectiveStatus[vm.Node] != "online" || !nodesWithResources[vm.Node] {
-			continue
-		}
-		if !vm.LastSeen.IsZero() && now.Sub(vm.LastSeen) >= nodeOfflineGracePeriod {
-			continue
-		}
-		if _, exists := currentGuestVMIDs[vm.VMID]; exists {
-			continue
-		}
-
-		currentVMs = append(currentVMs, vm)
-		currentGuestVMIDs[vm.VMID] = struct{}{}
-		preservedVMs++
-	}
-
-	preservedContainers := 0
-	for _, ct := range prevState.Containers {
-		if ct.Instance != instanceName {
-			continue
-		}
-		if nodeEffectiveStatus[ct.Node] != "online" || !nodesWithResources[ct.Node] {
-			continue
-		}
-		if !ct.LastSeen.IsZero() && now.Sub(ct.LastSeen) >= nodeOfflineGracePeriod {
-			continue
-		}
-		if _, exists := currentGuestVMIDs[ct.VMID]; exists {
-			continue
-		}
-
-		currentContainers = append(currentContainers, ct)
-		currentGuestVMIDs[ct.VMID] = struct{}{}
-		preservedContainers++
-	}
-
-	return currentVMs, currentContainers, preservedVMs, preservedContainers
-}
-
-// parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
-func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultVal
-	}
-	parsed, err := time.ParseDuration(val)
-	if err != nil {
-		log.Warn().
-			Str("key", key).
-			Str("value", val).
-			Err(err).
-			Dur("default", defaultVal).
-			Msg("Failed to parse duration from environment variable, using default")
-		return defaultVal
-	}
-	return parsed
-}
-
-// parseIntEnv parses an integer from an environment variable, returning defaultVal if not set or invalid
-func parseIntEnv(key string, defaultVal int) int {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultVal
-	}
-	parsed, err := strconv.Atoi(val)
-	if err != nil {
-		log.Warn().
-			Str("key", key).
-			Str("value", val).
-			Err(err).
-			Int("default", defaultVal).
-			Msg("Failed to parse integer from environment variable, using default")
-		return defaultVal
-	}
-	return parsed
-}
-
-func clampUint64ToInt64(val uint64) int64 {
-	if val > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(val)
-}
-
-func cloneStringFloatMap(src map[string]float64) map[string]float64 {
-	if len(src) == 0 {
-		return nil
-	}
-	out := make(map[string]float64, len(src))
-	for k, v := range src {
-		out[k] = v
-	}
-	return out
-}
-
-func cloneStringMap(src map[string]string) map[string]string {
-	if len(src) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(src))
-	for k, v := range src {
-		out[k] = v
-	}
-	return out
-}
-
-func convertDockerServices(services []agentsdocker.Service) []models.DockerService {
-	if len(services) == 0 {
-		return nil
-	}
-
-	result := make([]models.DockerService, 0, len(services))
-	for _, svc := range services {
-		service := models.DockerService{
-			ID:             svc.ID,
-			Name:           svc.Name,
-			Stack:          svc.Stack,
-			Image:          svc.Image,
-			Mode:           svc.Mode,
-			DesiredTasks:   svc.DesiredTasks,
-			RunningTasks:   svc.RunningTasks,
-			CompletedTasks: svc.CompletedTasks,
-		}
-
-		if len(svc.Labels) > 0 {
-			service.Labels = cloneStringMap(svc.Labels)
-		}
-
-		if len(svc.EndpointPorts) > 0 {
-			ports := make([]models.DockerServicePort, len(svc.EndpointPorts))
-			for i, port := range svc.EndpointPorts {
-				ports[i] = models.DockerServicePort{
-					Name:          port.Name,
-					Protocol:      port.Protocol,
-					TargetPort:    port.TargetPort,
-					PublishedPort: port.PublishedPort,
-					PublishMode:   port.PublishMode,
-				}
-			}
-			service.EndpointPorts = ports
-		}
-
-		if svc.UpdateStatus != nil {
-			update := &models.DockerServiceUpdate{
-				State:   svc.UpdateStatus.State,
-				Message: svc.UpdateStatus.Message,
-			}
-			if svc.UpdateStatus.CompletedAt != nil && !svc.UpdateStatus.CompletedAt.IsZero() {
-				completed := *svc.UpdateStatus.CompletedAt
-				update.CompletedAt = &completed
-			}
-			service.UpdateStatus = update
-		}
-
-		if svc.CreatedAt != nil && !svc.CreatedAt.IsZero() {
-			created := *svc.CreatedAt
-			service.CreatedAt = &created
-		}
-		if svc.UpdatedAt != nil && !svc.UpdatedAt.IsZero() {
-			updated := *svc.UpdatedAt
-			service.UpdatedAt = &updated
-		}
-
-		result = append(result, service)
-	}
-
-	return result
-}
-
-func convertDockerTasks(tasks []agentsdocker.Task) []models.DockerTask {
-	if len(tasks) == 0 {
-		return nil
-	}
-
-	result := make([]models.DockerTask, 0, len(tasks))
-	for _, task := range tasks {
-		modelTask := models.DockerTask{
-			ID:            task.ID,
-			ServiceID:     task.ServiceID,
-			ServiceName:   task.ServiceName,
-			Slot:          task.Slot,
-			NodeID:        task.NodeID,
-			NodeName:      task.NodeName,
-			DesiredState:  task.DesiredState,
-			CurrentState:  task.CurrentState,
-			Error:         task.Error,
-			Message:       task.Message,
-			ContainerID:   task.ContainerID,
-			ContainerName: task.ContainerName,
-			CreatedAt:     task.CreatedAt,
-		}
-
-		if task.UpdatedAt != nil && !task.UpdatedAt.IsZero() {
-			updated := *task.UpdatedAt
-			modelTask.UpdatedAt = &updated
-		}
-		if task.StartedAt != nil && !task.StartedAt.IsZero() {
-			started := *task.StartedAt
-			modelTask.StartedAt = &started
-		}
-		if task.CompletedAt != nil && !task.CompletedAt.IsZero() {
-			completed := *task.CompletedAt
-			modelTask.CompletedAt = &completed
-		}
-
-		result = append(result, modelTask)
-	}
-
-	return result
-}
-
-func normalizeAgentVersion(version string) string {
-	version = strings.TrimSpace(version)
-	if version == "" {
-		return ""
-	}
-	version = strings.TrimLeft(version, "vV")
-	if version == "" {
-		return ""
-	}
-	return "v" + version
-}
-
-func convertDockerSwarmInfo(info *agentsdocker.SwarmInfo) *models.DockerSwarmInfo {
-	if info == nil {
-		return nil
-	}
-
-	return &models.DockerSwarmInfo{
-		NodeID:           info.NodeID,
-		NodeRole:         info.NodeRole,
-		LocalState:       info.LocalState,
-		ControlAvailable: info.ControlAvailable,
-		ClusterID:        info.ClusterID,
-		ClusterName:      info.ClusterName,
-		Scope:            info.Scope,
-		Error:            info.Error,
-	}
-}
 
 // shouldRunBackupPoll determines whether a backup polling cycle should execute.
 // Returns whether polling should run, a human-readable skip reason, and the timestamp to record.
@@ -1321,7 +1014,6 @@ const (
 	dockerConnectionPrefix           = "docker-"
 	kubernetesConnectionPrefix       = "kubernetes-"
 	hostConnectionPrefix             = "host-"
-	hostRuntimePersistInterval       = 2 * time.Minute
 	dockerOfflineGraceMultiplier     = 4
 	dockerMinimumHealthWindow        = 30 * time.Second
 	dockerMaximumHealthWindow        = 10 * time.Minute
@@ -1333,11 +1025,7 @@ const (
 	hostMaximumHealthWindow          = 10 * time.Minute
 	nodeOfflineGracePeriod           = 60 * time.Second // Grace period before marking Proxmox nodes offline
 	nodeRRDCacheTTL                  = 30 * time.Second
-	nodeRRDNegativeTTL               = 2 * time.Minute // Backoff for nodes where RRD fetch fails
 	nodeRRDRequestTimeout            = 2 * time.Second
-	vmAgentMemCacheTTL               = 60 * time.Second // Cache guest-agent /proc/meminfo reads
-	vmAgentMemRequestTimeout         = 3 * time.Second  // Timeout for guest-agent file-read calls
-	vmAgentMemNegativeTTL            = 5 * time.Minute  // Backoff for VMs where guest-agent read fails
 )
 
 type taskOutcome struct {
@@ -1355,35 +1043,27 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	now := time.Now()
 
 	m.rrdCacheMu.RLock()
-	if entry, ok := m.nodeRRDMemCache[nodeName]; ok {
-		ttl := nodeRRDCacheTTL
-		if entry.negative {
-			ttl = nodeRRDNegativeTTL
-		}
-		if now.Sub(entry.fetchedAt) < ttl {
-			m.rrdCacheMu.RUnlock()
-			if entry.negative {
-				return rrdMemCacheEntry{}, fmt.Errorf("node RRD mem read previously failed (negative cache)")
-			}
-			return entry, nil
-		}
+	if entry, ok := m.nodeRRDMemCache[nodeName]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
+		m.rrdCacheMu.RUnlock()
+		return entry, nil
 	}
 	m.rrdCacheMu.RUnlock()
 
 	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
 	defer cancel()
 
-	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memused", "memtotal"})
+	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memused", "memtotal", "netin", "netout"})
 	if err != nil {
-		m.rrdCacheMu.Lock()
-		m.nodeRRDMemCache[nodeName] = rrdMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
 		return rrdMemCacheEntry{}, err
 	}
 
 	var memAvailable uint64
 	var memUsed uint64
 	var memTotal uint64
+	var netIn float64
+	var netOut float64
+	var hasNetIn bool
+	var hasNetOut bool
 
 	for i := len(points) - 1; i >= 0; i-- {
 		point := points[i]
@@ -1400,8 +1080,13 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 			memUsed = uint64(math.Round(*point.MemUsed))
 		}
 
-		if memTotal > 0 && (memAvailable > 0 || memUsed > 0) {
-			break
+		if !hasNetIn && point.NetIn != nil && !math.IsNaN(*point.NetIn) {
+			netIn = *point.NetIn
+			hasNetIn = true
+		}
+		if !hasNetOut && point.NetOut != nil && !math.IsNaN(*point.NetOut) {
+			netOut = *point.NetOut
+			hasNetOut = true
 		}
 	}
 
@@ -1414,17 +1099,18 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 		}
 	}
 
-	if memAvailable == 0 && memUsed == 0 {
-		m.rrdCacheMu.Lock()
-		m.nodeRRDMemCache[nodeName] = rrdMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
-		return rrdMemCacheEntry{}, fmt.Errorf("rrd mem metrics not present")
+	if memAvailable == 0 && memUsed == 0 && !hasNetIn && !hasNetOut {
+		return rrdMemCacheEntry{}, fmt.Errorf("rrd node metrics not present")
 	}
 
 	entry := rrdMemCacheEntry{
 		available: memAvailable,
 		used:      memUsed,
 		total:     memTotal,
+		netIn:     netIn,
+		netOut:    netOut,
+		hasNetIn:  hasNetIn,
+		hasNetOut: hasNetOut,
 		fetchedAt: now,
 	}
 
@@ -1435,2667 +1121,64 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	return entry, nil
 }
 
-// getVMRRDMetrics fetches Proxmox RRD memory metrics for a single VM with a
+// getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
 // short-lived cache to avoid a live API call on every poll for VMs that
 // consistently lack guest-agent memory data (e.g. Windows VMs).
-func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (rrdMemCacheEntry, error) {
+func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, node string, vmid int) (uint64, error) {
 	if client == nil || node == "" || vmid <= 0 {
-		return rrdMemCacheEntry{}, fmt.Errorf("invalid arguments for VM RRD lookup")
+		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
 	}
 
-	cacheKey := fmt.Sprintf("%s/%s/%d", instance, node, vmid)
+	cacheKey := fmt.Sprintf("%s/%d", node, vmid)
 	now := time.Now()
 
 	m.rrdCacheMu.RLock()
 	if entry, ok := m.vmRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
 		m.rrdCacheMu.RUnlock()
-		if entry.negative {
-			return rrdMemCacheEntry{}, fmt.Errorf("vm RRD mem read previously failed (negative cache)")
-		}
-		return entry, nil
+		return entry.available, nil
 	}
 	m.rrdCacheMu.RUnlock()
 
 	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
 	defer cancel()
 
-	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
+	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable"})
 	if err != nil {
-		m.rrdCacheMu.Lock()
-		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
-		return rrdMemCacheEntry{}, err
+		return 0, err
 	}
 	if len(points) == 0 {
-		m.rrdCacheMu.Lock()
-		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
-		return rrdMemCacheEntry{}, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
+		return 0, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
 	}
 
-	var memUsed uint64
-	var memTotal uint64
 	var memAvailable uint64
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
-		if memTotal == 0 && p.MaxMem != nil && !math.IsNaN(*p.MaxMem) && *p.MaxMem > 0 {
-			memTotal = uint64(math.Round(*p.MaxMem))
-		}
 		if p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && *p.MemAvailable > 0 {
 			memAvailable = uint64(math.Round(*p.MemAvailable))
-		}
-		if memUsed == 0 && p.MemUsed != nil && !math.IsNaN(*p.MemUsed) && *p.MemUsed > 0 {
-			memUsed = uint64(math.Round(*p.MemUsed))
-		}
-		if memAvailable > 0 && (memUsed > 0 || memTotal > 0) {
 			break
 		}
 	}
-	if memTotal > 0 {
-		if memAvailable > memTotal {
-			memAvailable = memTotal
-		}
-		if memUsed > memTotal {
-			memUsed = memTotal
-		}
+	if memAvailable == 0 {
+		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
 	}
 
-	if memAvailable == 0 && memUsed == 0 {
-		m.rrdCacheMu.Lock()
-		m.vmRRDMemCache[cacheKey] = rrdMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
-		return rrdMemCacheEntry{}, fmt.Errorf("rrd VM memory metrics not present for VM %s/%d", node, vmid)
-	}
-
-	entry := rrdMemCacheEntry{
-		available: memAvailable,
-		used:      memUsed,
-		total:     memTotal,
-		fetchedAt: now,
-	}
+	entry := rrdMemCacheEntry{available: memAvailable, fetchedAt: now}
 	m.rrdCacheMu.Lock()
+	if m.vmRRDMemCache == nil {
+		m.vmRRDMemCache = make(map[string]rrdMemCacheEntry)
+	}
 	m.vmRRDMemCache[cacheKey] = entry
 	m.rrdCacheMu.Unlock()
 
-	return entry, nil
-}
-
-// getVMAgentMemAvailable reads MemAvailable via the QEMU guest agent file-read
-// endpoint (/proc/meminfo). Results are cached; failed reads use a longer
-// negative-cache TTL to avoid hammering VMs that don't support it.
-func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (uint64, error) {
-	if client == nil || node == "" || vmid <= 0 {
-		return 0, fmt.Errorf("invalid arguments for guest agent mem lookup")
-	}
-
-	cacheKey := fmt.Sprintf("%s/%s/%d", instance, node, vmid)
-	now := time.Now()
-
-	m.rrdCacheMu.RLock()
-	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
-		ttl := vmAgentMemCacheTTL
-		if entry.negative {
-			ttl = vmAgentMemNegativeTTL
-		}
-		if now.Sub(entry.fetchedAt) < ttl {
-			m.rrdCacheMu.RUnlock()
-			if entry.negative {
-				return 0, fmt.Errorf("guest agent mem read previously failed (negative cache)")
-			}
-			return entry.available, nil
-		}
-	}
-	m.rrdCacheMu.RUnlock()
-
-	requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTimeout)
-	defer cancel()
-
-	available, err := client.GetVMMemAvailableFromAgent(requestCtx, node, vmid)
-	if err != nil {
-		// Negative cache: don't retry for a while
-		m.rrdCacheMu.Lock()
-		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{negative: true, fetchedAt: now}
-		m.rrdCacheMu.Unlock()
-		return 0, err
-	}
-
-	m.rrdCacheMu.Lock()
-	m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{available: available, fetchedAt: now}
-	m.rrdCacheMu.Unlock()
-
-	return available, nil
+	return memAvailable, nil
 }
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
-func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, fmt.Errorf("docker host id is required")
-	}
-
-	host, removed := m.state.RemoveDockerHost(hostID)
-	if !removed {
-		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("dockerHostID", hostID).Msg("Docker host not present in state during removal; proceeding to clear alerts")
-		}
-		host = models.DockerHost{
-			ID:          hostID,
-			Hostname:    hostID,
-			DisplayName: hostID,
-		}
-	}
-
-	// Revoke the API token associated with this Docker host
-	if host.TokenID != "" {
-		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
-		if tokenRemoved != nil {
-			m.config.SortAPITokens()
-
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("Failed to persist API token revocation after Docker host removal")
-				} else {
-					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
-				}
-			}
-		}
-	}
-
-	// Track removal to prevent resurrection from cached reports
-	removedAt := time.Now()
-
-	m.mu.Lock()
-	m.removedDockerHosts[hostID] = removedAt
-	// Unbind the token so it can be reused with a different agent if needed
-	if host.TokenID != "" {
-		delete(m.dockerTokenBindings, host.TokenID)
-		log.Debug().
-			Str("tokenID", host.TokenID).
-			Str("dockerHostID", hostID).
-			Msg("Unbound Docker agent token from removed host")
-	}
-	if cmd, ok := m.dockerCommands[hostID]; ok {
-		delete(m.dockerCommandIndex, cmd.status.ID)
-	}
-	delete(m.dockerCommands, hostID)
-	m.mu.Unlock()
-
-	m.state.AddRemovedDockerHost(models.RemovedDockerHost{
-		ID:          hostID,
-		Hostname:    host.Hostname,
-		DisplayName: host.DisplayName,
-		RemovedAt:   removedAt,
-	})
-
-	m.state.RemoveConnectionHealth(dockerConnectionPrefix + hostID)
-	if m.alertManager != nil {
-		m.alertManager.HandleDockerHostRemoved(host)
-		m.SyncAlertState()
-	}
-
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Bool("removed", removed).
-		Msg("Docker host removed and alerts cleared")
-
-	return host, nil
-}
-
-func hostRuntimeIdentityChanged(previous, current models.Host) bool {
-	if previous.ID != current.ID ||
-		previous.Hostname != current.Hostname ||
-		previous.DisplayName != current.DisplayName ||
-		previous.Platform != current.Platform ||
-		previous.OSName != current.OSName ||
-		previous.OSVersion != current.OSVersion ||
-		previous.KernelVersion != current.KernelVersion ||
-		previous.Architecture != current.Architecture ||
-		previous.CPUCount != current.CPUCount ||
-		previous.IntervalSeconds != current.IntervalSeconds ||
-		previous.AgentVersion != current.AgentVersion ||
-		previous.TokenID != current.TokenID ||
-		previous.TokenName != current.TokenName ||
-		previous.TokenHint != current.TokenHint ||
-		previous.CommandsEnabled != current.CommandsEnabled ||
-		previous.ReportIP != current.ReportIP ||
-		previous.IsLegacy != current.IsLegacy ||
-		previous.LinkedNodeID != current.LinkedNodeID ||
-		previous.LinkedVMID != current.LinkedVMID ||
-		previous.LinkedContainerID != current.LinkedContainerID {
-		return true
-	}
-
-	if len(previous.Tags) != len(current.Tags) {
-		return true
-	}
-	for i := range previous.Tags {
-		if previous.Tags[i] != current.Tags[i] {
-			return true
-		}
-	}
-
-	if len(previous.DiskExclude) != len(current.DiskExclude) {
-		return true
-	}
-	for i := range previous.DiskExclude {
-		if previous.DiskExclude[i] != current.DiskExclude[i] {
-			return true
-		}
-	}
-
-	if previous.TokenLastUsedAt == nil && current.TokenLastUsedAt == nil {
-		return false
-	}
-	if (previous.TokenLastUsedAt == nil) != (current.TokenLastUsedAt == nil) {
-		return true
-	}
-
-	return !previous.TokenLastUsedAt.Equal(*current.TokenLastUsedAt)
-}
-
-func (m *Monitor) persistHostRuntimeSnapshot(host models.Host, force bool) {
-	if m == nil || m.hostRuntimeStore == nil || strings.TrimSpace(host.ID) == "" {
-		return
-	}
-
-	now := time.Now()
-
-	m.mu.Lock()
-	if m.lastHostRuntimePersist == nil {
-		m.lastHostRuntimePersist = make(map[string]time.Time)
-	}
-	lastPersisted := m.lastHostRuntimePersist[host.ID]
-	shouldPersist := force || lastPersisted.IsZero() || now.Sub(lastPersisted) >= hostRuntimePersistInterval
-	m.mu.Unlock()
-
-	if !shouldPersist {
-		return
-	}
-
-	if err := m.hostRuntimeStore.Upsert(host); err != nil {
-		log.Warn().Err(err).Str("hostID", host.ID).Msg("Failed to persist host runtime snapshot")
-		return
-	}
-
-	m.mu.Lock()
-	if m.lastHostRuntimePersist == nil {
-		m.lastHostRuntimePersist = make(map[string]time.Time)
-	}
-	m.lastHostRuntimePersist[host.ID] = now
-	m.mu.Unlock()
-}
-
-func (m *Monitor) deletePersistedHostRuntime(hostID string) {
-	if m == nil || m.hostRuntimeStore == nil || strings.TrimSpace(hostID) == "" {
-		return
-	}
-
-	if err := m.hostRuntimeStore.Delete(hostID); err != nil {
-		log.Warn().Err(err).Str("hostID", hostID).Msg("Failed to delete persisted host runtime snapshot")
-	}
-
-	m.mu.Lock()
-	delete(m.lastHostRuntimePersist, hostID)
-	m.mu.Unlock()
-}
-
-func (m *Monitor) clearPersistedHostRuntime() {
-	if m == nil || m.hostRuntimeStore == nil {
-		return
-	}
-
-	if err := m.hostRuntimeStore.Clear(); err != nil {
-		log.Warn().Err(err).Msg("Failed to clear persisted host runtime snapshots")
-	}
-
-	m.mu.Lock()
-	m.lastHostRuntimePersist = make(map[string]time.Time)
-	m.mu.Unlock()
-}
-
-func (m *Monitor) restorePersistedHostAgents() {
-	if m == nil || m.state == nil || m.hostRuntimeStore == nil {
-		return
-	}
-
-	persisted := m.hostRuntimeStore.GetAll()
-	if len(persisted) == 0 {
-		return
-	}
-
-	now := time.Now().UTC()
-	restoredCount := 0
-	for hostID, host := range persisted {
-		resolvedID := strings.TrimSpace(host.ID)
-		if resolvedID == "" {
-			resolvedID = strings.TrimSpace(hostID)
-		}
-		hostname := strings.TrimSpace(host.Hostname)
-		if resolvedID == "" || hostname == "" {
-			continue
-		}
-
-		host.ID = resolvedID
-		host.Hostname = hostname
-		if strings.TrimSpace(host.DisplayName) == "" {
-			host.DisplayName = host.Hostname
-		}
-		if host.LastSeen.IsZero() {
-			host.LastSeen = now.Add(-hostMaximumHealthWindow)
-		}
-		host.Status = "offline"
-
-		// Keep server-side command override consistent on restore.
-		if cfg := m.GetHostAgentConfig(host.ID); cfg.CommandsEnabled != nil {
-			host.CommandsEnabled = *cfg.CommandsEnabled
-		}
-
-		m.state.UpsertHost(host)
-		m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, false)
-
-		m.mu.Lock()
-		if m.lastHostRuntimePersist == nil {
-			m.lastHostRuntimePersist = make(map[string]time.Time)
-		}
-		m.lastHostRuntimePersist[host.ID] = now
-		m.mu.Unlock()
-
-		restoredCount++
-	}
-
-	if restoredCount > 0 {
-		log.Info().Int("hosts", restoredCount).Msg("Restored host agents from persisted runtime state")
-	}
-}
-
-// RemoveHostAgent removes a host agent from monitoring state and clears related data.
-func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.Host{}, fmt.Errorf("host id is required")
-	}
-
-	host, removed := m.state.RemoveHost(hostID)
-	if !removed {
-		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("hostID", hostID).Msg("Host not present in state during removal")
-		}
-		host = models.Host{
-			ID:       hostID,
-			Hostname: hostID,
-		}
-	}
-
-	tokenID := strings.TrimSpace(host.TokenID)
-	hostname := strings.TrimSpace(host.Hostname)
-
-	tokenStillUsed := false
-	if tokenID != "" && m.state != nil {
-		for _, other := range m.state.GetHosts() {
-			if strings.TrimSpace(other.TokenID) == tokenID {
-				tokenStillUsed = true
-				break
-			}
-		}
-		if !tokenStillUsed {
-			for _, other := range m.state.GetDockerHosts() {
-				if strings.TrimSpace(other.TokenID) == tokenID {
-					tokenStillUsed = true
-					break
-				}
-			}
-		}
-	}
-
-	var tokenRemoved *config.APITokenRecord
-	if tokenID != "" && !tokenStillUsed {
-		tokenRemoved = m.config.RemoveAPIToken(tokenID)
-		if tokenRemoved != nil {
-			m.config.SortAPITokens()
-
-			if m.persistence != nil {
-				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", tokenID).Msg("Failed to persist API token revocation after host agent removal")
-				} else {
-					log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
-				}
-			}
-		}
-	} else if tokenID != "" && tokenStillUsed {
-		log.Info().
-			Str("tokenID", tokenID).
-			Str("hostID", hostID).
-			Msg("API token still used by other agents; skipping revocation during host removal")
-	}
-
-	if tokenID != "" {
-		m.mu.Lock()
-		if m.hostTokenBindings == nil {
-			m.hostTokenBindings = make(map[string]string)
-		}
-
-		if _, exists := m.hostTokenBindings[tokenID]; exists {
-			delete(m.hostTokenBindings, tokenID)
-		}
-
-		if hostname != "" {
-			key := fmt.Sprintf("%s:%s", tokenID, hostname)
-			if _, exists := m.hostTokenBindings[key]; exists {
-				delete(m.hostTokenBindings, key)
-			}
-		}
-
-		if tokenRemoved != nil {
-			prefix := tokenID + ":"
-			for key := range m.hostTokenBindings {
-				if strings.HasPrefix(key, prefix) {
-					delete(m.hostTokenBindings, key)
-				}
-			}
-		}
-		m.mu.Unlock()
-
-		log.Debug().
-			Str("tokenID", tokenID).
-			Str("hostID", hostID).
-			Bool("revoked", tokenRemoved != nil).
-			Msg("Unbound host agent token bindings after host removal")
-	}
-
-	// Track removal to prevent resurrection from cached/in-flight reports
-	removedAt := time.Now()
-
-	m.mu.Lock()
-	m.removedHosts[hostID] = removedAt
-	m.mu.Unlock()
-
-	m.state.AddRemovedHost(models.RemovedHost{
-		ID:          hostID,
-		Hostname:    host.Hostname,
-		DisplayName: host.DisplayName,
-		RemovedAt:   removedAt,
-	})
-
-	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
-
-	// Clear LinkedHostAgentID from any nodes that were linked to this host agent
-	unlinkedCount := m.state.UnlinkNodesFromHostAgent(hostID)
-	if unlinkedCount > 0 {
-		log.Info().
-			Str("hostID", hostID).
-			Int("unlinkedNodes", unlinkedCount).
-			Msg("Cleared host agent links from PVE nodes")
-	}
-
-	log.Info().
-		Str("host", host.Hostname).
-		Str("hostID", hostID).
-		Bool("removed", removed).
-		Msg("Host agent removed from monitoring")
-
-	if m.alertManager != nil {
-		m.alertManager.HandleHostRemoved(host)
-	}
-
-	m.deletePersistedHostRuntime(hostID)
-
-	return host, nil
-}
-
-// AllowHostReenroll removes a host ID from the removal blocklist so it can report again.
-func (m *Monitor) AllowHostReenroll(hostID string) error {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return fmt.Errorf("host id is required")
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, exists := m.removedHosts[hostID]; !exists {
-		log.Info().
-			Str("hostID", hostID).
-			Msg("Allow re-enroll requested but host was not blocked; ignoring")
-		return nil
-	}
-
-	delete(m.removedHosts, hostID)
-	m.state.RemoveRemovedHost(hostID)
-
-	log.Info().
-		Str("hostID", hostID).
-		Msg("Host agent removal block cleared; host may report again")
-
-	return nil
-}
-
-// LinkHostAgent manually links a host agent to a specific PVE node.
-// This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
-// After linking, the host agent's temperature/sensor data will appear on the correct node.
-func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
-	hostID = strings.TrimSpace(hostID)
-	nodeID = strings.TrimSpace(nodeID)
-	if hostID == "" {
-		return fmt.Errorf("host id is required")
-	}
-	if nodeID == "" {
-		return fmt.Errorf("node id is required")
-	}
-
-	if err := m.state.LinkHostAgentToNode(hostID, nodeID); err != nil {
-		return err
-	}
-
-	log.Info().
-		Str("hostID", hostID).
-		Str("nodeID", nodeID).
-		Msg("Manually linked host agent to PVE node")
-
-	return nil
-}
-
-// UnlinkHostAgent removes the link between a host agent and its PVE node.
-// The agent will continue to report but will appear in the Managed Agents table
-// instead of being merged with the PVE node in the Dashboard.
-func (m *Monitor) UnlinkHostAgent(hostID string) error {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return fmt.Errorf("host id is required")
-	}
-
-	if !m.state.UnlinkHostAgent(hostID) {
-		return fmt.Errorf("host not found or not linked to a node")
-	}
-
-	log.Info().
-		Str("hostID", hostID).
-		Msg("Unlinked host agent from PVE node")
-
-	return nil
-}
-
-// HostAgentConfig represents server-side configuration for a host agent.
-type HostAgentConfig struct {
-	CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"` // nil = use agent default
-	Settings        map[string]interface{} `json:"settings,omitempty"`        // Merged profile settings
-	IssuedAt        *time.Time             `json:"issuedAt,omitempty"`
-	ExpiresAt       *time.Time             `json:"expiresAt,omitempty"`
-	Signature       string                 `json:"signature,omitempty"`
-}
-
-// GetHostAgentConfig returns the server-side configuration for a host agent.
-// The agent can poll this to apply remote config overrides.
-// Uses in-memory caching to avoid disk I/O on every agent report (refs #1094).
-func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return HostAgentConfig{}
-	}
-
-	cfg := HostAgentConfig{}
-
-	// 1. Load Host Metadata (CommandsEnabled) - this is already in-memory
-	if m.hostMetadataStore != nil {
-		if meta := m.hostMetadataStore.Get(hostID); meta != nil {
-			cfg.CommandsEnabled = meta.CommandsEnabled
-		}
-	}
-
-	// 2. Load Profile Configuration from cache
-	if m.persistence != nil {
-		profiles, assignments := m.getAgentProfileCache()
-
-		var profileID string
-		for _, a := range assignments {
-			if a.AgentID == hostID {
-				profileID = a.ProfileID
-				break
-			}
-		}
-
-		if profileID != "" {
-			for _, p := range profiles {
-				if p.ID == profileID {
-					cfg.Settings = p.Config
-					break
-				}
-			}
-		}
-	}
-
-	return cfg
-}
-
-// getAgentProfileCache returns cached profiles and assignments, refreshing if stale.
-func (m *Monitor) getAgentProfileCache() ([]models.AgentProfile, []models.AgentProfileAssignment) {
-	now := time.Now()
-
-	// Fast path: check if cache is valid
-	m.agentProfileCacheMu.RLock()
-	cache := m.agentProfileCache
-	if cache != nil && now.Sub(cache.loadedAt) < agentProfileCacheTTL {
-		profiles := cache.profiles
-		assignments := cache.assignments
-		m.agentProfileCacheMu.RUnlock()
-		return profiles, assignments
-	}
-	m.agentProfileCacheMu.RUnlock()
-
-	// Slow path: reload from disk
-	m.agentProfileCacheMu.Lock()
-	defer m.agentProfileCacheMu.Unlock()
-
-	// Double-check after acquiring write lock
-	if m.agentProfileCache != nil && now.Sub(m.agentProfileCache.loadedAt) < agentProfileCacheTTL {
-		return m.agentProfileCache.profiles, m.agentProfileCache.assignments
-	}
-
-	var profiles []models.AgentProfile
-	var assignments []models.AgentProfileAssignment
-
-	if loadedAssignments, err := m.persistence.LoadAgentProfileAssignments(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load agent profile assignments for cache")
-	} else {
-		assignments = loadedAssignments
-	}
-
-	if loadedProfiles, err := m.persistence.LoadAgentProfiles(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load agent profiles for cache")
-	} else {
-		profiles = loadedProfiles
-	}
-
-	m.agentProfileCache = &agentProfileCacheEntry{
-		profiles:    profiles,
-		assignments: assignments,
-		loadedAt:    now,
-	}
-
-	return profiles, assignments
-}
-
-// InvalidateAgentProfileCache clears the agent profile cache, forcing a reload on next access.
-// Call this when profiles or assignments are modified.
-func (m *Monitor) InvalidateAgentProfileCache() {
-	m.agentProfileCacheMu.Lock()
-	m.agentProfileCache = nil
-	m.agentProfileCacheMu.Unlock()
-}
-
-// UpdateHostAgentConfig updates the server-side configuration for a host agent.
-// This allows the UI to remotely enable/disable features on agents.
-func (m *Monitor) UpdateHostAgentConfig(hostID string, commandsEnabled *bool) error {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return fmt.Errorf("host id is required")
-	}
-
-	if m.hostMetadataStore == nil {
-		return fmt.Errorf("host metadata store not initialized")
-	}
-
-	// Get existing metadata or create new
-	meta := m.hostMetadataStore.Get(hostID)
-	if meta == nil {
-		meta = &config.HostMetadata{ID: hostID}
-	}
-
-	meta.CommandsEnabled = commandsEnabled
-
-	if err := m.hostMetadataStore.Set(hostID, meta); err != nil {
-		return fmt.Errorf("failed to save host config: %w", err)
-	}
-
-	// Also update the Host model in state for immediate UI feedback
-	// The agent will confirm on its next report, but this provides instant feedback
-	if commandsEnabled != nil {
-		m.state.SetHostCommandsEnabled(hostID, *commandsEnabled)
-	}
-
-	log.Info().
-		Str("hostId", hostID).
-		Interface("commandsEnabled", commandsEnabled).
-		Msg("Host agent config updated")
-
-	return nil
-}
-
-// HideDockerHost marks a docker host as hidden without removing it from state.
-// Hidden hosts will not be shown in the frontend but will continue to accept updates.
-func (m *Monitor) HideDockerHost(hostID string) (models.DockerHost, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, fmt.Errorf("docker host id is required")
-	}
-
-	host, ok := m.state.SetDockerHostHidden(hostID, true)
-	if !ok {
-		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
-	}
-
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Msg("Docker host hidden from view")
-
-	return host, nil
-}
-
-// UnhideDockerHost marks a docker host as visible again.
-func (m *Monitor) UnhideDockerHost(hostID string) (models.DockerHost, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, fmt.Errorf("docker host id is required")
-	}
-
-	host, ok := m.state.SetDockerHostHidden(hostID, false)
-	if !ok {
-		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
-	}
-
-	// Clear removal tracking if it was marked as removed
-	m.mu.Lock()
-	delete(m.removedDockerHosts, hostID)
-	m.mu.Unlock()
-
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Msg("Docker host unhidden")
-
-	return host, nil
-}
-
-// MarkDockerHostPendingUninstall marks a docker host as pending uninstall.
-// This is used when the user has run the uninstall command and is waiting for the host to go offline.
-func (m *Monitor) MarkDockerHostPendingUninstall(hostID string) (models.DockerHost, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, fmt.Errorf("docker host id is required")
-	}
-
-	host, ok := m.state.SetDockerHostPendingUninstall(hostID, true)
-	if !ok {
-		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
-	}
-
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Msg("Docker host marked as pending uninstall")
-
-	return host, nil
-}
-
-// SetDockerHostCustomDisplayName updates the custom display name for a docker host.
-func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName string) (models.DockerHost, error) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, fmt.Errorf("docker host id is required")
-	}
-
-	customName = strings.TrimSpace(customName)
-
-	// Persist to Docker metadata store first
-	var hostMeta *config.DockerHostMetadata
-	if customName != "" {
-		hostMeta = &config.DockerHostMetadata{
-			CustomDisplayName: customName,
-		}
-	}
-	if err := m.dockerMetadataStore.SetHostMetadata(hostID, hostMeta); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to persist Docker host metadata")
-		return models.DockerHost{}, fmt.Errorf("failed to persist custom display name: %w", err)
-	}
-
-	// Update in-memory state
-	host, ok := m.state.SetDockerHostCustomDisplayName(hostID, customName)
-	if !ok {
-		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
-	}
-
-	log.Info().
-		Str("dockerHost", host.Hostname).
-		Str("dockerHostID", hostID).
-		Str("customDisplayName", customName).
-		Msg("Docker host custom display name updated")
-
-	return host, nil
-}
-
-// AllowDockerHostReenroll removes a host ID from the removal blocklist so it can report again.
-func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return fmt.Errorf("docker host id is required")
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, exists := m.removedDockerHosts[hostID]; !exists {
-		host, found := m.GetDockerHost(hostID)
-		event := log.Info().
-			Str("dockerHostID", hostID)
-		if found {
-			event = event.Str("dockerHost", host.Hostname)
-		}
-		event.Msg("Allow re-enroll requested but host was not blocked; ignoring")
-		return nil
-	}
-
-	delete(m.removedDockerHosts, hostID)
-	if cmd, exists := m.dockerCommands[hostID]; exists {
-		delete(m.dockerCommandIndex, cmd.status.ID)
-		delete(m.dockerCommands, hostID)
-	}
-	m.state.SetDockerHostCommand(hostID, nil)
-	m.state.RemoveRemovedDockerHost(hostID)
-
-	log.Info().
-		Str("dockerHostID", hostID).
-		Msg("Docker host removal block cleared; host may report again")
-
-	return nil
-}
-
-// GetDockerHost retrieves a docker host by identifier if present in state.
-func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
-	hostID = strings.TrimSpace(hostID)
-	if hostID == "" {
-		return models.DockerHost{}, false
-	}
-
-	hosts := m.state.GetDockerHosts()
-	for _, host := range hosts {
-		if host.ID == hostID {
-			return host, true
-		}
-	}
-	return models.DockerHost{}, false
-}
-
-// GetDockerHosts returns a point-in-time snapshot of all Docker hosts Pulse knows about.
-func (m *Monitor) GetDockerHosts() []models.DockerHost {
-	if m == nil || m.state == nil {
-		return nil
-	}
-	return m.state.GetDockerHosts()
-}
-
-// RebuildTokenBindings reconstructs agent-to-token binding maps from the current
-// state of Docker hosts and host agents. This should be called after API tokens
-// are reloaded from disk to ensure bindings remain consistent with the new token set.
-// It preserves bindings for tokens that still exist and removes orphaned entries.
-func (m *Monitor) RebuildTokenBindings() {
-	if m == nil || m.state == nil || m.config == nil {
-		return
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Build a set of valid token IDs from the current config
-	validTokens := make(map[string]struct{})
-	for _, token := range m.config.APITokens {
-		if token.ID != "" {
-			validTokens[token.ID] = struct{}{}
-		}
-	}
-
-	// Rebuild Docker token bindings
-	newDockerBindings := make(map[string]string)
-	dockerHosts := m.state.GetDockerHosts()
-	for _, host := range dockerHosts {
-		tokenID := strings.TrimSpace(host.TokenID)
-		if tokenID == "" {
-			continue
-		}
-		// Only keep bindings for tokens that still exist in config
-		if _, valid := validTokens[tokenID]; !valid {
-			continue
-		}
-		// Use AgentID if available, otherwise fall back to host ID
-		agentID := strings.TrimSpace(host.AgentID)
-		if agentID == "" {
-			agentID = host.ID
-		}
-		if agentID != "" {
-			newDockerBindings[tokenID] = agentID
-		}
-	}
-
-	// Rebuild Host agent token bindings
-	newHostBindings := make(map[string]string)
-	hosts := m.state.GetHosts()
-	for _, host := range hosts {
-		tokenID := strings.TrimSpace(host.TokenID)
-		if tokenID == "" {
-			continue
-		}
-		// Only keep bindings for tokens that still exist in config
-		if _, valid := validTokens[tokenID]; !valid {
-			continue
-		}
-		hostname := strings.TrimSpace(host.Hostname)
-		if hostname == "" || host.ID == "" {
-			continue
-		}
-		newHostBindings[fmt.Sprintf("%s:%s", tokenID, hostname)] = host.ID
-	}
-
-	// Log what changed
-	oldDockerCount := len(m.dockerTokenBindings)
-	oldHostCount := len(m.hostTokenBindings)
-	m.dockerTokenBindings = newDockerBindings
-	m.hostTokenBindings = newHostBindings
-
-	log.Info().
-		Int("dockerBindings", len(newDockerBindings)).
-		Int("hostBindings", len(newHostBindings)).
-		Int("previousDockerBindings", oldDockerCount).
-		Int("previousHostBindings", oldHostCount).
-		Int("validTokens", len(validTokens)).
-		Msg("Rebuilt agent token bindings after API token reload")
-}
-
-// ClearUnauthenticatedAgents removes all host agents and docker hosts from the state.
-// This should be called when security is first configured to clear any agents that
-// connected during the brief unauthenticated window before credentials were set up.
-// This prevents stale/unauthorized agent data from appearing in the UI.
-func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
-	if m == nil || m.state == nil {
-		return 0, 0
-	}
-
-	// Clear all hosts
-	hostCount := m.state.ClearAllHosts()
-	m.clearPersistedHostRuntime()
-
-	// Clear all docker hosts
-	dockerCount := m.state.ClearAllDockerHosts()
-
-	// Clear any token bindings since the tokens used by the old agents are invalid
-	m.mu.Lock()
-	m.dockerTokenBindings = make(map[string]string)
-	m.hostTokenBindings = make(map[string]string)
-	m.mu.Unlock()
-
-	if hostCount > 0 || dockerCount > 0 {
-		log.Info().
-			Int("hostsCleared", hostCount).
-			Int("dockerHostsCleared", dockerCount).
-			Msg("Cleared unauthenticated agents after security setup")
-	}
-
-	return hostCount, dockerCount
-}
-
-// QueueDockerHostStop queues a stop command for the specified docker host.
-func (m *Monitor) QueueDockerHostStop(hostID string) (models.DockerHostCommandStatus, error) {
-	return m.queueDockerStopCommand(hostID)
-}
-
-// FetchDockerCommandForHost retrieves the next command payload (if any) for the host.
-func (m *Monitor) FetchDockerCommandForHost(hostID string) (map[string]any, *models.DockerHostCommandStatus) {
-	return m.getDockerCommandPayload(hostID)
-}
-
-// AcknowledgeDockerHostCommand updates the lifecycle status for a docker host command.
-func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, message string) (models.DockerHostCommandStatus, string, bool, error) {
-	return m.acknowledgeDockerCommand(commandID, hostID, status, message)
-}
-
-// ApplyDockerReport ingests a docker agent report into the shared state.
-func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, error) {
-	hostsSnapshot := m.state.GetDockerHosts()
-	identifier, legacyIDs, previous, hasPrevious := resolveDockerHostIdentifier(report, tokenRecord, hostsSnapshot)
-	if strings.TrimSpace(identifier) == "" {
-		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
-	}
-
-	// Check if this host was deliberately removed - reject report to prevent resurrection
-	m.mu.RLock()
-	removedAt, wasRemoved := m.removedDockerHosts[identifier]
-	if !wasRemoved {
-		for _, legacyID := range legacyIDs {
-			if legacyID == "" || legacyID == identifier {
-				continue
-			}
-			if ts, ok := m.removedDockerHosts[legacyID]; ok {
-				removedAt = ts
-				wasRemoved = true
-				break
-			}
-		}
-	}
-	m.mu.RUnlock()
-
-	if wasRemoved {
-		log.Info().
-			Str("dockerHostID", identifier).
-			Time("removedAt", removedAt).
-			Msg("Rejecting report from deliberately removed Docker host")
-		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Agents -> Removed Docker Hosts or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
-	}
-
-	// Enforce token uniqueness: each token can only be bound to one agent
-	if tokenRecord != nil && tokenRecord.ID != "" {
-		tokenID := strings.TrimSpace(tokenRecord.ID)
-		agentID := strings.TrimSpace(report.Agent.ID)
-		if agentID == "" {
-			agentID = identifier
-		}
-
-		m.mu.Lock()
-		if boundAgentID, exists := m.dockerTokenBindings[tokenID]; exists {
-			if boundAgentID != agentID {
-				m.mu.Unlock()
-				// Find the conflicting host to provide helpful error message
-				conflictingHostname := "unknown"
-				for _, host := range hostsSnapshot {
-					if host.AgentID == boundAgentID || host.ID == boundAgentID {
-						conflictingHostname = host.Hostname
-						if host.CustomDisplayName != "" {
-							conflictingHostname = host.CustomDisplayName
-						} else if host.DisplayName != "" {
-							conflictingHostname = host.DisplayName
-						}
-						break
-					}
-				}
-				tokenHint := tokenHintFromRecord(tokenRecord)
-				if tokenHint != "" {
-					tokenHint = " (" + tokenHint + ")"
-				}
-				log.Warn().
-					Str("tokenID", tokenID).
-					Str("tokenHint", tokenHint).
-					Str("reportingAgentID", agentID).
-					Str("boundAgentID", boundAgentID).
-					Str("conflictingHost", conflictingHostname).
-					Msg("Rejecting Docker report: token already bound to different agent")
-				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker agent must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
-			}
-		} else {
-			// First time seeing this token - bind it to this agent
-			m.dockerTokenBindings[tokenID] = agentID
-			log.Debug().
-				Str("tokenID", tokenID).
-				Str("agentID", agentID).
-				Str("hostname", report.Host.Hostname).
-				Msg("Bound Docker agent token to agent identity")
-		}
-		m.mu.Unlock()
-	}
-
-	hostname := strings.TrimSpace(report.Host.Hostname)
-	if hostname == "" {
-		return models.DockerHost{}, fmt.Errorf("docker report missing hostname")
-	}
-
-	timestamp := report.Timestamp
-	if timestamp.IsZero() {
-		timestamp = time.Now()
-	}
-
-	agentID := strings.TrimSpace(report.Agent.ID)
-	if agentID == "" {
-		agentID = identifier
-	}
-
-	displayName := strings.TrimSpace(report.Host.Name)
-	if displayName == "" {
-		displayName = hostname
-	}
-
-	runtime := strings.ToLower(strings.TrimSpace(report.Host.Runtime))
-	switch runtime {
-	case "", "auto", "default":
-		runtime = "docker"
-	case "docker", "podman":
-		// supported runtimes
-	default:
-		runtime = "docker"
-	}
-
-	runtimeVersion := strings.TrimSpace(report.Host.RuntimeVersion)
-	dockerVersion := strings.TrimSpace(report.Host.DockerVersion)
-	if runtimeVersion == "" {
-		runtimeVersion = dockerVersion
-	}
-	if dockerVersion == "" {
-		dockerVersion = runtimeVersion
-	}
-
-	containers := make([]models.DockerContainer, 0, len(report.Containers))
-	for _, payload := range report.Containers {
-		container := models.DockerContainer{
-			ID:            payload.ID,
-			Name:          payload.Name,
-			Image:         payload.Image,
-			ImageDigest:   payload.ImageDigest,
-			State:         payload.State,
-			Status:        payload.Status,
-			Health:        payload.Health,
-			CPUPercent:    safeFloat(payload.CPUPercent),
-			MemoryUsage:   payload.MemoryUsageBytes,
-			MemoryLimit:   payload.MemoryLimitBytes,
-			MemoryPercent: safeFloat(payload.MemoryPercent),
-			UptimeSeconds: payload.UptimeSeconds,
-			RestartCount:  payload.RestartCount,
-			ExitCode:      payload.ExitCode,
-			CreatedAt:     payload.CreatedAt,
-			StartedAt:     payload.StartedAt,
-			FinishedAt:    payload.FinishedAt,
-		}
-
-		// Copy update status if provided by agent
-		if payload.UpdateStatus != nil {
-			container.UpdateStatus = &models.DockerContainerUpdateStatus{
-				UpdateAvailable: payload.UpdateStatus.UpdateAvailable,
-				CurrentDigest:   payload.UpdateStatus.CurrentDigest,
-				LatestDigest:    payload.UpdateStatus.LatestDigest,
-				LastChecked:     payload.UpdateStatus.LastChecked,
-				Error:           payload.UpdateStatus.Error,
-			}
-		}
-
-		if len(payload.Ports) > 0 {
-			ports := make([]models.DockerContainerPort, len(payload.Ports))
-			for i, port := range payload.Ports {
-				ports[i] = models.DockerContainerPort{
-					PrivatePort: port.PrivatePort,
-					PublicPort:  port.PublicPort,
-					Protocol:    port.Protocol,
-					IP:          port.IP,
-				}
-			}
-			container.Ports = ports
-		}
-
-		if len(payload.Labels) > 0 {
-			labels := make(map[string]string, len(payload.Labels))
-			for k, v := range payload.Labels {
-				labels[k] = v
-			}
-			container.Labels = labels
-		}
-
-		if len(payload.Networks) > 0 {
-			networks := make([]models.DockerContainerNetworkLink, len(payload.Networks))
-			for i, net := range payload.Networks {
-				networks[i] = models.DockerContainerNetworkLink{
-					Name: net.Name,
-					IPv4: net.IPv4,
-					IPv6: net.IPv6,
-				}
-			}
-			container.Networks = networks
-		}
-
-		container.WritableLayerBytes = payload.WritableLayerBytes
-		container.RootFilesystemBytes = payload.RootFilesystemBytes
-
-		if payload.BlockIO != nil {
-			container.BlockIO = &models.DockerContainerBlockIO{
-				ReadBytes:  payload.BlockIO.ReadBytes,
-				WriteBytes: payload.BlockIO.WriteBytes,
-			}
-
-			containerIdentifier := payload.ID
-			if strings.TrimSpace(containerIdentifier) == "" {
-				containerIdentifier = payload.Name
-			}
-			if strings.TrimSpace(containerIdentifier) != "" {
-				metrics := types.IOMetrics{
-					DiskRead:  clampUint64ToInt64(payload.BlockIO.ReadBytes),
-					DiskWrite: clampUint64ToInt64(payload.BlockIO.WriteBytes),
-					Timestamp: timestamp,
-				}
-				readRate, writeRate, _, _ := m.rateTracker.CalculateRates(fmt.Sprintf("docker:%s:%s", identifier, containerIdentifier), metrics)
-				if readRate >= 0 {
-					value := readRate
-					container.BlockIO.ReadRateBytesPerSecond = &value
-				}
-				if writeRate >= 0 {
-					value := writeRate
-					container.BlockIO.WriteRateBytesPerSecond = &value
-				}
-			}
-		}
-
-		if len(payload.Mounts) > 0 {
-			mounts := make([]models.DockerContainerMount, len(payload.Mounts))
-			for i, mount := range payload.Mounts {
-				mounts[i] = models.DockerContainerMount{
-					Type:        mount.Type,
-					Source:      mount.Source,
-					Destination: mount.Destination,
-					Mode:        mount.Mode,
-					RW:          mount.RW,
-					Propagation: mount.Propagation,
-					Name:        mount.Name,
-					Driver:      mount.Driver,
-				}
-			}
-			container.Mounts = mounts
-		}
-
-		containers = append(containers, container)
-	}
-
-	services := convertDockerServices(report.Services)
-	tasks := convertDockerTasks(report.Tasks)
-	swarmInfo := convertDockerSwarmInfo(report.Host.Swarm)
-
-	loadAverage := make([]float64, 0, len(report.Host.LoadAverage))
-	if len(report.Host.LoadAverage) > 0 {
-		loadAverage = append(loadAverage, report.Host.LoadAverage...)
-	}
-
-	var memory models.Memory
-	if report.Host.Memory.TotalBytes > 0 || report.Host.Memory.UsedBytes > 0 {
-		memory = models.Memory{
-			Total:     report.Host.Memory.TotalBytes,
-			Used:      report.Host.Memory.UsedBytes,
-			Free:      report.Host.Memory.FreeBytes,
-			Usage:     safeFloat(report.Host.Memory.Usage),
-			SwapTotal: report.Host.Memory.SwapTotal,
-			SwapUsed:  report.Host.Memory.SwapUsed,
-		}
-	}
-	// Fallback: if gopsutil's memory reading failed but Docker's TotalMemoryBytes
-	// is valid (possibly already a fallback from the agent), use that for Total.
-	// This handles Docker-in-LXC scenarios where both Docker and gopsutil may
-	// fail to read memory stats, but the agent fix provides a valid fallback.
-	if memory.Total <= 0 && report.Host.TotalMemoryBytes > 0 {
-		memory.Total = report.Host.TotalMemoryBytes
-	}
-
-	// Additional fallback for Docker-in-LXC: gopsutil may read Total and Free
-	// correctly from cgroup limits but return 0 for Used. Calculate Used from
-	// Total - Free when this happens. This fixes the "0B / 7GB" display issue.
-	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
-		memory.Used = memory.Total - memory.Free
-		if memory.Used < 0 {
-			memory.Used = 0
-		}
-		// Recalculate usage percentage
-		if memory.Total > 0 {
-			memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
-		}
-	}
-
-	disks := make([]models.Disk, 0, len(report.Host.Disks))
-	for _, disk := range report.Host.Disks {
-		// Filter virtual/system filesystems (same as ApplyHostReport) to avoid
-		// inflated disk totals from tmpfs, overlayfs, etc.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
-			continue
-		}
-		disks = append(disks, models.Disk{
-			Total:      disk.TotalBytes,
-			Used:       disk.UsedBytes,
-			Free:       disk.FreeBytes,
-			Usage:      safeFloat(disk.Usage),
-			Mountpoint: disk.Mountpoint,
-			Type:       disk.Type,
-			Device:     disk.Device,
-		})
-	}
-
-	networkIfaces := make([]models.HostNetworkInterface, 0, len(report.Host.Network))
-	for _, iface := range report.Host.Network {
-		addresses := append([]string(nil), iface.Addresses...)
-		networkIfaces = append(networkIfaces, models.HostNetworkInterface{
-			Name:      iface.Name,
-			MAC:       iface.MAC,
-			Addresses: addresses,
-			RXBytes:   iface.RXBytes,
-			TXBytes:   iface.TXBytes,
-			SpeedMbps: iface.SpeedMbps,
-		})
-	}
-
-	agentVersion := normalizeAgentVersion(report.Agent.Version)
-	if agentVersion == "" && hasPrevious {
-		agentVersion = normalizeAgentVersion(previous.AgentVersion)
-	}
-
-	host := models.DockerHost{
-		ID:                identifier,
-		AgentID:           agentID,
-		Hostname:          hostname,
-		DisplayName:       displayName,
-		MachineID:         strings.TrimSpace(report.Host.MachineID),
-		OS:                report.Host.OS,
-		KernelVersion:     report.Host.KernelVersion,
-		Architecture:      report.Host.Architecture,
-		Runtime:           runtime,
-		RuntimeVersion:    runtimeVersion,
-		DockerVersion:     dockerVersion,
-		CPUs:              report.Host.TotalCPU,
-		TotalMemoryBytes:  report.Host.TotalMemoryBytes,
-		UptimeSeconds:     report.Host.UptimeSeconds,
-		CPUUsage:          safeFloat(report.Host.CPUUsagePercent),
-		LoadAverage:       loadAverage,
-		Memory:            memory,
-		Disks:             disks,
-		NetworkInterfaces: networkIfaces,
-		Status:            "online",
-		LastSeen:          timestamp,
-		IntervalSeconds:   report.Agent.IntervalSeconds,
-		AgentVersion:      agentVersion,
-		Containers:        containers,
-		Services:          services,
-		Tasks:             tasks,
-		Swarm:             swarmInfo,
-		IsLegacy:          isLegacyDockerAgent(report.Agent.Type),
-	}
-
-	if tokenRecord != nil {
-		host.TokenID = tokenRecord.ID
-		host.TokenName = tokenRecord.Name
-		host.TokenHint = tokenHintFromRecord(tokenRecord)
-		if tokenRecord.LastUsedAt != nil {
-			t := tokenRecord.LastUsedAt.UTC()
-			host.TokenLastUsedAt = &t
-		} else {
-			t := time.Now().UTC()
-			host.TokenLastUsedAt = &t
-		}
-	} else if hasPrevious {
-		host.TokenID = previous.TokenID
-		host.TokenName = previous.TokenName
-		host.TokenHint = previous.TokenHint
-		host.TokenLastUsedAt = previous.TokenLastUsedAt
-	}
-
-	// Load custom display name from metadata store if not already set
-	if host.CustomDisplayName == "" {
-		if hostMeta := m.dockerMetadataStore.GetHostMetadata(identifier); hostMeta != nil {
-			host.CustomDisplayName = hostMeta.CustomDisplayName
-		}
-	}
-
-	m.state.UpsertDockerHost(host)
-	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
-
-	// Check if the host was previously hidden and is now visible again
-	if hasPrevious && previous.Hidden && !host.Hidden {
-		log.Info().
-			Str("dockerHost", host.Hostname).
-			Str("dockerHostID", host.ID).
-			Msg("Docker host auto-unhidden after receiving report")
-	}
-
-	// Check if the host was pending uninstall - if so, log a warning that uninstall failed and clear the flag
-	if hasPrevious && previous.PendingUninstall {
-		log.Warn().
-			Str("dockerHost", host.Hostname).
-			Str("dockerHostID", host.ID).
-			Msg("Docker host reporting again after pending uninstall - uninstall may have failed")
-
-		// Clear the pending uninstall flag since the host is clearly still active
-		m.state.SetDockerHostPendingUninstall(host.ID, false)
-	}
-
-	if m.alertManager != nil {
-		m.alertManager.CheckDockerHost(host)
-	}
-
-	// Record Docker HOST metrics for sparkline charts
-	now := time.Now()
-	hostMetricKey := fmt.Sprintf("dockerHost:%s", host.ID)
-
-	// Record host CPU usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-
-	// Record host Memory usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-
-	// Record host Disk usage (use first disk or calculate total)
-	var hostDiskPercent float64
-	if len(host.Disks) > 0 {
-		hostDiskPercent = host.Disks[0].Usage
-	}
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
-
-	// Also write to persistent SQLite store
-	if m.metricsStore != nil {
-		m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
-		m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
-		m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
-	}
-
-	// Record Docker CONTAINER metrics for sparkline charts
-	// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers
-	for _, container := range containers {
-		if container.ID == "" {
-			continue
-		}
-		// Build a unique metric key for Docker containers
-		metricKey := fmt.Sprintf("docker:%s", container.ID)
-
-		// Record CPU (already a percentage 0-100)
-		m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
-
-		// Record Memory (already a percentage 0-100)
-		m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
-
-		// Record Disk usage as percentage of writable layer vs root filesystem
-		var diskPercent float64
-		if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-			diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-			if diskPercent > 100 {
-				diskPercent = 100
-			}
-		}
-		m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
-
-		// Also write to persistent SQLite store for long-term storage
-		if m.metricsStore != nil {
-			m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
-			m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
-			m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
-		}
-	}
-
-	log.Debug().
-		Str("dockerHost", host.Hostname).
-		Int("containers", len(containers)).
-		Msg("Docker host report processed")
-
-	return host, nil
-}
-
-// ApplyHostReport ingests a host agent report into the shared state.
-func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
-	hostname := strings.TrimSpace(report.Host.Hostname)
-	if hostname == "" {
-		return models.Host{}, fmt.Errorf("host report missing hostname")
-	}
-
-	baseIdentifier := strings.TrimSpace(report.Host.ID)
-	if baseIdentifier != "" {
-		baseIdentifier = sanitizeDockerHostSuffix(baseIdentifier)
-	}
-	if baseIdentifier == "" {
-		if machine := sanitizeDockerHostSuffix(report.Host.MachineID); machine != "" {
-			baseIdentifier = machine
-		}
-	}
-	if baseIdentifier == "" {
-		if agentID := sanitizeDockerHostSuffix(report.Agent.ID); agentID != "" {
-			baseIdentifier = agentID
-		}
-	}
-	if baseIdentifier == "" {
-		if hostName := sanitizeDockerHostSuffix(hostname); hostName != "" {
-			baseIdentifier = hostName
-		}
-	}
-	if baseIdentifier == "" {
-		seedParts := uniqueNonEmptyStrings(
-			report.Host.MachineID,
-			report.Agent.ID,
-			report.Host.Hostname,
-		)
-		if len(seedParts) == 0 {
-			seedParts = []string{hostname}
-		}
-		seed := strings.Join(seedParts, "|")
-		sum := sha1.Sum([]byte(seed))
-		baseIdentifier = fmt.Sprintf("host-%s", hex.EncodeToString(sum[:6]))
-	}
-
-	existingHosts := m.state.GetHosts()
-
-	identifier := baseIdentifier
-	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
-		tokenID := strings.TrimSpace(tokenRecord.ID)
-		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
-
-		m.mu.Lock()
-		if m.hostTokenBindings == nil {
-			m.hostTokenBindings = make(map[string]string)
-		}
-		boundID := strings.TrimSpace(m.hostTokenBindings[bindingKey])
-		m.mu.Unlock()
-
-		// If we already have a binding for this token+hostname, use it to keep host IDs stable
-		// even if another colliding host disappears later.
-		if boundID != "" {
-			identifier = boundID
-		} else {
-			bindingID := baseIdentifier
-			for _, candidate := range existingHosts {
-				if candidate.ID != bindingID {
-					continue
-				}
-				if strings.TrimSpace(candidate.Hostname) == hostname && strings.TrimSpace(candidate.TokenID) == tokenID {
-					break
-				}
-
-				seed := strings.Join([]string{tokenID, hostname, bindingID}, "|")
-				sum := sha1.Sum([]byte(seed))
-				suffix := hex.EncodeToString(sum[:4])
-
-				base := bindingID
-				if base == "" {
-					base = "host"
-				}
-				if len(base) > 40 {
-					base = base[:40]
-				}
-				bindingID = fmt.Sprintf("%s-%s", base, suffix)
-				break
-			}
-
-			m.mu.Lock()
-			if m.hostTokenBindings == nil {
-				m.hostTokenBindings = make(map[string]string)
-			}
-			if existing := strings.TrimSpace(m.hostTokenBindings[bindingKey]); existing != "" {
-				identifier = existing
-			} else {
-				m.hostTokenBindings[bindingKey] = bindingID
-				log.Debug().
-					Str("tokenID", tokenID).
-					Str("hostID", bindingID).
-					Str("hostname", hostname).
-					Msg("Bound host agent token to hostname")
-				identifier = bindingID
-			}
-			m.mu.Unlock()
-		}
-	}
-
-	// Check if this host was deliberately removed - reject report to prevent resurrection.
-	// Unlike Docker agents, host agents don't have legacy IDs, so we only check the
-	// resolved identifier. The identifier is deterministic given the same machine/agent/hostname
-	// inputs, so a running agent will always resolve to the same blocked ID.
-	m.mu.RLock()
-	removedAt, wasRemoved := m.removedHosts[identifier]
-	m.mu.RUnlock()
-
-	if wasRemoved {
-		log.Info().
-			Str("hostID", identifier).
-			Time("removedAt", removedAt).
-			Msg("Rejecting report from deliberately removed host agent")
-		return models.Host{}, fmt.Errorf("host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Agents to clear this block", identifier, removedAt.Format(time.RFC3339))
-	}
-
-	var previous models.Host
-	var hasPrevious bool
-	for _, candidate := range existingHosts {
-		if candidate.ID == identifier {
-			previous = candidate
-			hasPrevious = true
-			break
-		}
-	}
-
-	displayName := strings.TrimSpace(report.Host.DisplayName)
-	if displayName == "" {
-		displayName = hostname
-	}
-
-	timestamp := report.Timestamp
-	if timestamp.IsZero() {
-		timestamp = time.Now().UTC()
-	}
-
-	memory := models.Memory{
-		Total:     report.Metrics.Memory.TotalBytes,
-		Used:      report.Metrics.Memory.UsedBytes,
-		Free:      report.Metrics.Memory.FreeBytes,
-		Usage:     safeFloat(report.Metrics.Memory.Usage),
-		SwapTotal: report.Metrics.Memory.SwapTotal,
-		SwapUsed:  report.Metrics.Memory.SwapUsed,
-	}
-
-	// Fallback for LXC environments: gopsutil may read Total and Free correctly
-	// from cgroup limits but return 0 for Used. Calculate Used from Total - Free.
-	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
-		memory.Used = memory.Total - memory.Free
-		if memory.Used < 0 {
-			memory.Used = 0
-		}
-	}
-
-	if memory.Usage <= 0 && memory.Total > 0 {
-		memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
-	}
-
-	smartSensors := convertAgentSMARTToModels(report.Sensors.SMART)
-	reportPlatform := strings.TrimSpace(strings.ToLower(report.Host.Platform))
-	if len(smartSensors) == 0 && hasPrevious && len(previous.Sensors.SMART) > 0 &&
-		(reportPlatform == "freebsd" || strings.EqualFold(previous.Platform, "freebsd")) {
-		// FreeBSD SMART collection can be intermittent; avoid wiping previously
-		// known disk temperatures on an otherwise healthy host report.
-		smartSensors = append([]models.HostDiskSMART(nil), previous.Sensors.SMART...)
-	}
-
-	disks := make([]models.Disk, 0, len(report.Disks))
-	for _, disk := range report.Disks {
-		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
-		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
-		// immutable OS images, etc. (issues #505, #690, #790).
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
-			continue
-		}
-
-		usage := safeFloat(disk.Usage)
-		if usage <= 0 && disk.TotalBytes > 0 {
-			usage = safePercentage(float64(disk.UsedBytes), float64(disk.TotalBytes))
-		}
-		disks = append(disks, models.Disk{
-			Total:      disk.TotalBytes,
-			Used:       disk.UsedBytes,
-			Free:       disk.FreeBytes,
-			Usage:      usage,
-			Mountpoint: disk.Mountpoint,
-			Type:       disk.Type,
-			Device:     disk.Device,
-		})
-	}
-
-	diskIO := make([]models.DiskIO, 0, len(report.DiskIO))
-	for _, io := range report.DiskIO {
-		diskIO = append(diskIO, models.DiskIO{
-			Device:     io.Device,
-			ReadBytes:  io.ReadBytes,
-			WriteBytes: io.WriteBytes,
-			ReadOps:    io.ReadOps,
-			WriteOps:   io.WriteOps,
-			ReadTime:   io.ReadTime,
-			WriteTime:  io.WriteTime,
-			IOTime:     io.IOTime,
-		})
-	}
-
-	network := make([]models.HostNetworkInterface, 0, len(report.Network))
-	for _, nic := range report.Network {
-		network = append(network, models.HostNetworkInterface{
-			Name:      nic.Name,
-			MAC:       nic.MAC,
-			Addresses: append([]string(nil), nic.Addresses...),
-			RXBytes:   nic.RXBytes,
-			TXBytes:   nic.TXBytes,
-			SpeedMbps: nic.SpeedMbps,
-		})
-	}
-
-	raid := make([]models.HostRAIDArray, 0, len(report.RAID))
-	for _, array := range report.RAID {
-		devices := make([]models.HostRAIDDevice, 0, len(array.Devices))
-		for _, dev := range array.Devices {
-			devices = append(devices, models.HostRAIDDevice{
-				Device: dev.Device,
-				State:  dev.State,
-				Slot:   dev.Slot,
-			})
-		}
-		raid = append(raid, models.HostRAIDArray{
-			Device:         array.Device,
-			Name:           array.Name,
-			Level:          array.Level,
-			State:          array.State,
-			TotalDevices:   array.TotalDevices,
-			ActiveDevices:  array.ActiveDevices,
-			WorkingDevices: array.WorkingDevices,
-			FailedDevices:  array.FailedDevices,
-			SpareDevices:   array.SpareDevices,
-			UUID:           array.UUID,
-			Devices:        devices,
-			RebuildPercent: array.RebuildPercent,
-			RebuildSpeed:   array.RebuildSpeed,
-		})
-	}
-
-	// Convert Ceph data from agent report
-	var cephData *models.HostCephCluster
-	if report.Ceph != nil {
-		cephData = convertAgentCephToModels(report.Ceph)
-	}
-
-	host := models.Host{
-		ID:                identifier,
-		Hostname:          hostname,
-		DisplayName:       displayName,
-		Platform:          strings.TrimSpace(strings.ToLower(report.Host.Platform)),
-		OSName:            strings.TrimSpace(report.Host.OSName),
-		OSVersion:         strings.TrimSpace(report.Host.OSVersion),
-		KernelVersion:     strings.TrimSpace(report.Host.KernelVersion),
-		Architecture:      strings.TrimSpace(report.Host.Architecture),
-		CPUCount:          report.Host.CPUCount,
-		CPUUsage:          safeFloat(report.Metrics.CPUUsagePercent),
-		LoadAverage:       append([]float64(nil), report.Host.LoadAverage...),
-		Memory:            memory,
-		Disks:             disks,
-		DiskIO:            diskIO,
-		NetworkInterfaces: network,
-		Sensors: models.HostSensorSummary{
-			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
-			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
-			Additional:         cloneStringFloatMap(report.Sensors.Additional),
-			SMART:              smartSensors,
-		},
-		RAID:            raid,
-		Ceph:            cephData,
-		Status:          "online",
-		UptimeSeconds:   report.Host.UptimeSeconds,
-		IntervalSeconds: report.Agent.IntervalSeconds,
-		LastSeen:        timestamp,
-		AgentVersion:    strings.TrimSpace(report.Agent.Version),
-		CommandsEnabled: report.Agent.CommandsEnabled,
-		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
-		Tags:            append([]string(nil), report.Tags...),
-		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
-		DiskExclude:     append([]string(nil), report.Agent.DiskExclude...),
-	}
-
-	// Apply any pending commands execution override from server config
-	// This ensures the UI remains stable when the user toggles this setting,
-	// even if the agent hasn't yet picked up the new config in this report cycle.
-	if cfg := m.GetHostAgentConfig(identifier); cfg.CommandsEnabled != nil {
-		host.CommandsEnabled = *cfg.CommandsEnabled
-	}
-
-	if len(host.LoadAverage) == 0 {
-		host.LoadAverage = nil
-	}
-	if len(host.Disks) == 0 {
-		host.Disks = nil
-	}
-	if len(host.DiskIO) == 0 {
-		host.DiskIO = nil
-	}
-	if len(host.NetworkInterfaces) == 0 {
-		host.NetworkInterfaces = nil
-	}
-	if len(host.RAID) == 0 {
-		host.RAID = nil
-	}
-
-	if tokenRecord != nil {
-		host.TokenID = tokenRecord.ID
-		host.TokenName = tokenRecord.Name
-		host.TokenHint = tokenHintFromRecord(tokenRecord)
-		if tokenRecord.LastUsedAt != nil {
-			t := tokenRecord.LastUsedAt.UTC()
-			host.TokenLastUsedAt = &t
-		} else {
-			now := time.Now().UTC()
-			host.TokenLastUsedAt = &now
-		}
-	} else if hasPrevious {
-		host.TokenID = previous.TokenID
-		host.TokenName = previous.TokenName
-		host.TokenHint = previous.TokenHint
-		host.TokenLastUsedAt = previous.TokenLastUsedAt
-	}
-
-	// Link host agent to matching PVE node/VM/container by hostname
-	// This prevents duplication when users install agents on PVE cluster nodes
-	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntity(hostname)
-	if linkedNodeID != "" {
-		host.LinkedNodeID = linkedNodeID
-		log.Debug().
-			Str("hostId", identifier).
-			Str("hostname", hostname).
-			Str("linkedNodeId", linkedNodeID).
-			Msg("Linked host agent to PVE node")
-	}
-	if linkedVMID != "" {
-		host.LinkedVMID = linkedVMID
-		log.Debug().
-			Str("hostId", identifier).
-			Str("hostname", hostname).
-			Str("linkedVmId", linkedVMID).
-			Msg("Linked host agent to VM")
-	}
-	if linkedContainerID != "" {
-		host.LinkedContainerID = linkedContainerID
-		log.Debug().
-			Str("hostId", identifier).
-			Str("hostname", hostname).
-			Str("linkedContainerId", linkedContainerID).
-			Msg("Linked host agent to container")
-	}
-
-	m.state.UpsertHost(host)
-	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
-	m.persistHostRuntimeSnapshot(host, !hasPrevious || hostRuntimeIdentityChanged(previous, host))
-
-	// Update the linked PVE node to point back to this host agent
-	if host.LinkedNodeID != "" {
-		m.linkNodeToHostAgent(host.LinkedNodeID, host.ID)
-	}
-
-	// If host reports Ceph data, also update the global CephClusters state
-	if report.Ceph != nil {
-		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, timestamp)
-		m.state.UpsertCephCluster(cephCluster)
-		log.Debug().
-			Str("hostId", identifier).
-			Str("hostname", hostname).
-			Str("fsid", cephCluster.FSID).
-			Str("health", cephCluster.Health).
-			Int("osds", cephCluster.NumOSDs).
-			Msg("Updated Ceph cluster from host agent")
-	}
-
-	if m.alertManager != nil {
-		m.alertManager.CheckHost(host)
-	}
-
-	// Record Host metrics for sparkline charts
-	now := time.Now()
-	hostMetricKey := fmt.Sprintf("host:%s", host.ID)
-
-	var hostDiskPercent float64
-	if len(host.Disks) > 0 {
-		hostDiskPercent = host.Disks[0].Usage
-	}
-
-	// Record host Network I/O (sum across all interfaces)
-	// Network bytes from the agent are cumulative totals since boot, not rates.
-	// We need to use the RateTracker to convert to bytes/second, just like VMs and containers.
-	var totalRXBytes, totalTXBytes uint64
-	for _, nic := range host.NetworkInterfaces {
-		totalRXBytes += nic.RXBytes
-		totalTXBytes += nic.TXBytes
-	}
-
-	// Calculate network rates using the RateTracker (convert cumulative bytes to bytes/sec)
-	hostRateKey := fmt.Sprintf("host:%s", host.ID)
-	currentMetrics := IOMetrics{
-		NetworkIn:  int64(totalRXBytes),
-		NetworkOut: int64(totalTXBytes),
-		Timestamp:  now,
-	}
-	_, _, netInRate, netOutRate := m.rateTracker.CalculateRates(hostRateKey, currentMetrics)
-
-	if m.metricsHistory != nil {
-		// Record host CPU usage
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-
-		// Record host Memory usage
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
-
-		// Only record network rates if we have valid data (rate >= 0 means we have enough samples)
-		if netInRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
-		}
-		if netOutRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", netOutRate, now)
-		}
-	}
-
-	// Also write to persistent SQLite store
-	if m.metricsStore != nil {
-		m.metricsStore.Write("host", host.ID, "cpu", host.CPUUsage, now)
-		m.metricsStore.Write("host", host.ID, "memory", host.Memory.Usage, now)
-		m.metricsStore.Write("host", host.ID, "disk", hostDiskPercent, now)
-		// Only write network rates if we have valid data
-		if netInRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "netin", netInRate, now)
-		}
-		if netOutRate >= 0 {
-			m.metricsStore.Write("host", host.ID, "netout", netOutRate, now)
-		}
-	}
-
-	return host, nil
-}
-
-// findLinkedProxmoxEntity searches for a PVE node, VM, or container with a matching hostname.
-// Returns the IDs of matched entities (empty string if no match).
-// When multiple entities match the same hostname (e.g., two PVE instances both have a node
-// named "pve"), this function returns empty strings to avoid incorrect linking. Users should
-// manually link agents to nodes via the UI in such cases.
-func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, containerID string) {
-	if hostname == "" {
-		return "", "", ""
-	}
-
-	// Normalize hostname for comparison (lowercase, strip domain)
-	normalizedHostname := strings.ToLower(hostname)
-	shortHostname := normalizedHostname
-	if idx := strings.Index(normalizedHostname, "."); idx > 0 {
-		shortHostname = normalizedHostname[:idx]
-	}
-
-	matchHostname := func(name string) bool {
-		normalized := strings.ToLower(name)
-		if normalized == normalizedHostname || normalized == shortHostname {
-			return true
-		}
-		// Also check short version of the candidate
-		if idx := strings.Index(normalized, "."); idx > 0 {
-			if normalized[:idx] == shortHostname {
-				return true
-			}
-		}
-		return false
-	}
-
-	state := m.GetState()
-
-	// Check PVE nodes first - but detect ambiguity when multiple nodes match
-	var matchingNodes []models.Node
-	for _, node := range state.Nodes {
-		if matchHostname(node.Name) {
-			matchingNodes = append(matchingNodes, node)
-		}
-	}
-	if len(matchingNodes) == 1 {
-		return matchingNodes[0].ID, "", ""
-	}
-	if len(matchingNodes) > 1 {
-		// Multiple nodes with the same hostname - can't auto-link, would cause data mixing
-		log.Warn().
-			Str("hostname", hostname).
-			Int("matchCount", len(matchingNodes)).
-			Strs("instances", func() []string {
-				instances := make([]string, len(matchingNodes))
-				for i, n := range matchingNodes {
-					instances[i] = n.Instance
-				}
-				return instances
-			}()).
-			Msg("Multiple PVE nodes match hostname - cannot auto-link host agent. Manual linking required via UI.")
-		return "", "", ""
-	}
-
-	// Check VMs - same pattern for ambiguity detection
-	var matchingVMs []models.VM
-	for _, vm := range state.VMs {
-		if matchHostname(vm.Name) {
-			matchingVMs = append(matchingVMs, vm)
-		}
-	}
-	if len(matchingVMs) == 1 {
-		return "", matchingVMs[0].ID, ""
-	}
-	if len(matchingVMs) > 1 {
-		log.Warn().
-			Str("hostname", hostname).
-			Int("matchCount", len(matchingVMs)).
-			Msg("Multiple VMs match hostname - cannot auto-link host agent. Manual linking required via UI.")
-		return "", "", ""
-	}
-
-	// Check containers - same pattern
-	var matchingCTs []models.Container
-	for _, ct := range state.Containers {
-		if matchHostname(ct.Name) {
-			matchingCTs = append(matchingCTs, ct)
-		}
-	}
-	if len(matchingCTs) == 1 {
-		return "", "", matchingCTs[0].ID
-	}
-	if len(matchingCTs) > 1 {
-		log.Warn().
-			Str("hostname", hostname).
-			Int("matchCount", len(matchingCTs)).
-			Msg("Multiple containers match hostname - cannot auto-link host agent. Manual linking required via UI.")
-		return "", "", ""
-	}
-
-	return "", "", ""
-}
-
-// linkNodeToHostAgent updates a PVE node to link to its host agent.
-func (m *Monitor) linkNodeToHostAgent(nodeID, hostAgentID string) {
-	m.state.LinkNodeToHostAgent(nodeID, hostAgentID)
-}
-
-const (
-	removedDockerHostsTTL = 24 * time.Hour // Clean up removed hosts tracking after 24 hours
-	removedHostsTTL       = 24 * time.Hour // Clean up removed host agents tracking after 24 hours
-)
-
-// recoverFromPanic recovers from panics in monitoring goroutines and logs them.
-// This prevents a panic in one component from crashing the entire monitoring system.
-func recoverFromPanic(goroutineName string) {
-	if r := recover(); r != nil {
-		log.Error().
-			Str("goroutine", goroutineName).
-			Interface("panic", r).
-			Stack().
-			Msg("Recovered from panic in monitoring goroutine")
-	}
-}
-
-// cleanupRemovedDockerHosts removes entries from the removed hosts map that are older than 24 hours.
-func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
-	// Collect IDs to remove first to avoid holding lock during state update
-	var toRemove []string
-
-	m.mu.Lock()
-	for hostID, removedAt := range m.removedDockerHosts {
-		if now.Sub(removedAt) > removedDockerHostsTTL {
-			toRemove = append(toRemove, hostID)
-		}
-	}
-	m.mu.Unlock()
-
-	// Remove from state and map without holding both locks
-	for _, hostID := range toRemove {
-		m.state.RemoveRemovedDockerHost(hostID)
-
-		m.mu.Lock()
-		removedAt := m.removedDockerHosts[hostID]
-		delete(m.removedDockerHosts, hostID)
-		m.mu.Unlock()
-
-		log.Debug().
-			Str("dockerHostID", hostID).
-			Time("removedAt", removedAt).
-			Msg("Cleaned up old removed Docker host entry")
-	}
-}
-
-// cleanupRemovedHosts removes entries from the removed host agents map that are older than 24 hours.
-func (m *Monitor) cleanupRemovedHosts(now time.Time) {
-	var toRemove []string
-
-	m.mu.Lock()
-	for hostID, removedAt := range m.removedHosts {
-		if now.Sub(removedAt) > removedHostsTTL {
-			toRemove = append(toRemove, hostID)
-		}
-	}
-	m.mu.Unlock()
-
-	for _, hostID := range toRemove {
-		m.state.RemoveRemovedHost(hostID)
-
-		m.mu.Lock()
-		removedAt := m.removedHosts[hostID]
-		delete(m.removedHosts, hostID)
-		m.mu.Unlock()
-
-		log.Debug().
-			Str("hostID", hostID).
-			Time("removedAt", removedAt).
-			Msg("Cleaned up old removed host agent entry")
-	}
-}
-
-// cleanupGuestMetadataCache removes stale guest metadata entries.
-// Entries older than 2x the cache TTL (10 minutes) are removed to prevent unbounded growth
-// when VMs are deleted or moved.
-func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
-	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
-
-	m.guestMetadataMu.Lock()
-	defer m.guestMetadataMu.Unlock()
-
-	for key, entry := range m.guestMetadataCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
-			delete(m.guestMetadataCache, key)
-			log.Debug().
-				Str("key", key).
-				Time("fetchedAt", entry.fetchedAt).
-				Msg("Cleaned up stale guest metadata cache entry")
-		}
-	}
-}
-
-// cleanupTrackingMaps removes stale entries from various tracking maps to prevent unbounded memory growth.
-// This cleans up auth tracking, polling timestamps, and circuit breaker state for resources
-// that haven't been accessed in over 24 hours.
-func (m *Monitor) cleanupTrackingMaps(now time.Time) {
-	const staleThreshold = 24 * time.Hour
-	cutoff := now.Add(-staleThreshold)
-	cleaned := 0
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Clean up auth tracking maps - entries older than 24 hours
-	for nodeID, ts := range m.lastAuthAttempt {
-		if ts.Before(cutoff) {
-			delete(m.lastAuthAttempt, nodeID)
-			delete(m.authFailures, nodeID)
-			cleaned++
-		}
-	}
-
-	// Clean up last cluster check timestamps
-	for instanceID, ts := range m.lastClusterCheck {
-		if ts.Before(cutoff) {
-			delete(m.lastClusterCheck, instanceID)
-			cleaned++
-		}
-	}
-
-	// Clean up last physical disk poll timestamps
-	for instanceID, ts := range m.lastPhysicalDiskPoll {
-		if ts.Before(cutoff) {
-			delete(m.lastPhysicalDiskPoll, instanceID)
-			cleaned++
-		}
-	}
-
-	// Clean up last PVE backup poll timestamps
-	for instanceID, ts := range m.lastPVEBackupPoll {
-		if ts.Before(cutoff) {
-			delete(m.lastPVEBackupPoll, instanceID)
-			cleaned++
-		}
-	}
-
-	// Clean up last PBS backup poll timestamps
-	for instanceID, ts := range m.lastPBSBackupPoll {
-		if ts.Before(cutoff) {
-			delete(m.lastPBSBackupPoll, instanceID)
-			cleaned++
-		}
-	}
-
-	// Clean up circuit breakers for keys not in active clients
-	// Build set of active keys from pveClients and pbsClients
-	activeKeys := make(map[string]struct{})
-	for key := range m.pveClients {
-		activeKeys[key] = struct{}{}
-	}
-	for key := range m.pbsClients {
-		activeKeys[key] = struct{}{}
-	}
-	for key := range m.pmgClients {
-		activeKeys[key] = struct{}{}
-	}
-
-	// Only clean up circuit breakers for inactive keys that have been idle
-	// for longer than the stale threshold
-	for key, breaker := range m.circuitBreakers {
-		if _, active := activeKeys[key]; !active {
-			// Key is not in active clients - check if breaker is stale
-			if breaker != nil {
-				_, _, _, _, lastTransition := breaker.stateDetails()
-				if now.Sub(lastTransition) > staleThreshold {
-					delete(m.circuitBreakers, key)
-					delete(m.failureCounts, key)
-					delete(m.lastOutcome, key)
-					cleaned++
-				}
-			}
-		}
-	}
-
-	if cleaned > 0 {
-		log.Debug().
-			Int("entriesCleaned", cleaned).
-			Msg("Cleaned stale entries from monitor tracking maps")
-	}
-}
-
-// cleanupDiagnosticSnapshots removes stale diagnostic snapshots.
-// Snapshots older than 1 hour are removed to prevent unbounded growth
-// when nodes/VMs are deleted or reconfigured.
-func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
-	const maxAge = 1 * time.Hour
-
-	m.diagMu.Lock()
-	defer m.diagMu.Unlock()
-
-	for key, snapshot := range m.nodeSnapshots {
-		if now.Sub(snapshot.RetrievedAt) > maxAge {
-			delete(m.nodeSnapshots, key)
-			log.Debug().
-				Str("key", key).
-				Time("retrievedAt", snapshot.RetrievedAt).
-				Msg("Cleaned up stale node snapshot")
-		}
-	}
-
-	for key, snapshot := range m.guestSnapshots {
-		if now.Sub(snapshot.RetrievedAt) > maxAge {
-			delete(m.guestSnapshots, key)
-			log.Debug().
-				Str("key", key).
-				Time("retrievedAt", snapshot.RetrievedAt).
-				Msg("Cleaned up stale guest snapshot")
-		}
-	}
-}
-
-// cleanupRRDCache removes stale RRD memory cache entries.
-// Entries older than 2x the cache TTL (1 minute) are removed to prevent unbounded growth
-// when nodes are removed from the cluster.
-func (m *Monitor) cleanupRRDCache(now time.Time) {
-	const maxAge = 2 * nodeRRDCacheTTL // 1 minute
-
-	m.rrdCacheMu.Lock()
-	defer m.rrdCacheMu.Unlock()
-
-	for key, entry := range m.nodeRRDMemCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
-			delete(m.nodeRRDMemCache, key)
-			log.Debug().
-				Str("node", key).
-				Time("fetchedAt", entry.fetchedAt).
-				Msg("Cleaned up stale RRD cache entry")
-		}
-	}
-
-	for key, entry := range m.vmRRDMemCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
-			delete(m.vmRRDMemCache, key)
-		}
-	}
-
-	// Clean up guest-agent memory cache (use longer TTL for negative entries)
-	agentMaxAge := 2 * vmAgentMemNegativeTTL
-	for key, entry := range m.vmAgentMemCache {
-		if now.Sub(entry.fetchedAt) > agentMaxAge {
-			delete(m.vmAgentMemCache, key)
-		}
-	}
-}
-
-// cleanupMetricsHistory removes stale entries from the metrics history.
-// This prevents unbounded memory growth when containers/VMs are deleted.
-func (m *Monitor) cleanupMetricsHistory() {
-	if m.metricsHistory != nil {
-		m.metricsHistory.Cleanup()
-	}
-}
-
-// cleanupRateTracker removes stale entries from the rate tracker.
-// Entries older than 24 hours are removed to prevent unbounded memory growth.
-func (m *Monitor) cleanupRateTracker(now time.Time) {
-	const staleThreshold = 24 * time.Hour
-	cutoff := now.Add(-staleThreshold)
-
-	if m.rateTracker != nil {
-		if removed := m.rateTracker.Cleanup(cutoff); removed > 0 {
-			log.Debug().
-				Int("entriesRemoved", removed).
-				Msg("Cleaned up stale rate tracker entries")
-		}
-	}
-}
-
-// evaluateDockerAgents updates health for Docker hosts based on last report time.
-func (m *Monitor) evaluateDockerAgents(now time.Time) {
-	hosts := m.state.GetDockerHosts()
-	for _, host := range hosts {
-		interval := host.IntervalSeconds
-		if interval <= 0 {
-			interval = int(dockerMinimumHealthWindow / time.Second)
-		}
-
-		window := time.Duration(interval) * time.Second * dockerOfflineGraceMultiplier
-		if window < dockerMinimumHealthWindow {
-			window = dockerMinimumHealthWindow
-		} else if window > dockerMaximumHealthWindow {
-			window = dockerMaximumHealthWindow
-		}
-
-		healthy := !host.LastSeen.IsZero() && now.Sub(host.LastSeen) <= window
-		key := dockerConnectionPrefix + host.ID
-		m.state.SetConnectionHealth(key, healthy)
-		hostCopy := host
-		if healthy {
-			hostCopy.Status = "online"
-			m.state.SetDockerHostStatus(host.ID, "online")
-			if m.alertManager != nil {
-				m.alertManager.HandleDockerHostOnline(hostCopy)
-			}
-		} else {
-			hostCopy.Status = "offline"
-			m.state.SetDockerHostStatus(host.ID, "offline")
-			if m.alertManager != nil {
-				m.alertManager.HandleDockerHostOffline(hostCopy)
-			}
-		}
-	}
-}
-
-// evaluateHostAgents updates health for host agents based on last report time.
-func (m *Monitor) evaluateHostAgents(now time.Time) {
-	hosts := m.state.GetHosts()
-	for _, host := range hosts {
-		interval := host.IntervalSeconds
-		if interval <= 0 {
-			interval = int(hostMinimumHealthWindow / time.Second)
-		}
-
-		window := time.Duration(interval) * time.Second * hostOfflineGraceMultiplier
-		if window < hostMinimumHealthWindow {
-			window = hostMinimumHealthWindow
-		} else if window > hostMaximumHealthWindow {
-			window = hostMaximumHealthWindow
-		}
-
-		age := now.Sub(host.LastSeen)
-		healthy := !host.LastSeen.IsZero() && age <= window
-		key := hostConnectionPrefix + host.ID
-		m.state.SetConnectionHealth(key, healthy)
-
-		hostCopy := host
-		if healthy {
-			hostCopy.Status = "online"
-			// Log status transition from offline to online
-			if host.Status == "offline" {
-				log.Debug().
-					Str("hostID", host.ID).
-					Str("hostname", host.Hostname).
-					Dur("age", age).
-					Dur("window", window).
-					Msg("Host agent back online")
-			}
-			m.state.SetHostStatus(host.ID, "online")
-			if m.alertManager != nil {
-				m.alertManager.HandleHostOnline(hostCopy)
-			}
-		} else {
-			hostCopy.Status = "offline"
-			// Log status transition from online to offline with diagnostic info
-			if host.Status == "online" || host.Status == "" {
-				log.Debug().
-					Str("hostID", host.ID).
-					Str("hostname", host.Hostname).
-					Time("lastSeen", host.LastSeen).
-					Dur("age", age).
-					Dur("window", window).
-					Int("intervalSeconds", host.IntervalSeconds).
-					Bool("lastSeenZero", host.LastSeen.IsZero()).
-					Msg("Host agent appears offline")
-			}
-			m.state.SetHostStatus(host.ID, "offline")
-			if m.alertManager != nil {
-				m.alertManager.HandleHostOffline(hostCopy)
-			}
-		}
-	}
-}
-
-// sortContent sorts comma-separated content values for consistent display
-func sortContent(content string) string {
-	if content == "" {
-		return ""
-	}
-	parts := strings.Split(content, ",")
-	sort.Strings(parts)
-	return strings.Join(parts, ",")
-}
-
-func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, container *models.Container) {
-	if container == nil {
-		return
-	}
-
-	ensureContainerRootDiskEntry(container)
-
-	if client == nil {
-		return
-	}
-
-	isRunning := container.Status == "running"
-
-	var status *proxmox.Container
-	if isRunning {
-		statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		statusResp, err := client.GetContainerStatus(statusCtx, nodeName, container.VMID)
-		cancel()
-		if err != nil {
-			log.Debug().
-				Err(err).
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Str("container", container.Name).
-				Int("vmid", container.VMID).
-				Msg("Container status metadata unavailable")
-		} else {
-			status = statusResp
-		}
-	}
-
-	rootDeviceHint := ""
-	var mountMetadata map[string]containerMountMetadata
-	addressSet := make(map[string]struct{})
-	addressOrder := make([]string, 0, 4)
-
-	addAddress := func(addr string) {
-		addr = strings.TrimSpace(addr)
-		if addr == "" {
-			return
-		}
-		if _, exists := addressSet[addr]; exists {
-			return
-		}
-		addressSet[addr] = struct{}{}
-		addressOrder = append(addressOrder, addr)
-	}
-
-	if status != nil {
-		for _, addr := range sanitizeGuestAddressStrings(status.IP) {
-			addAddress(addr)
-		}
-		for _, addr := range sanitizeGuestAddressStrings(status.IP6) {
-			addAddress(addr)
-		}
-		for _, addr := range parseContainerRawIPs(status.IPv4) {
-			addAddress(addr)
-		}
-		for _, addr := range parseContainerRawIPs(status.IPv6) {
-			addAddress(addr)
-		}
-	}
-
-	networkIfaces := make([]models.GuestNetworkInterface, 0, 4)
-	if status != nil {
-		networkIfaces = make([]models.GuestNetworkInterface, 0, len(status.Network))
-		for rawName, cfg := range status.Network {
-			if cfg == (proxmox.ContainerNetworkConfig{}) {
-				continue
-			}
-
-			iface := models.GuestNetworkInterface{}
-			name := strings.TrimSpace(cfg.Name)
-			if name == "" {
-				name = strings.TrimSpace(rawName)
-			}
-			if name != "" {
-				iface.Name = name
-			}
-			if mac := strings.TrimSpace(cfg.HWAddr); mac != "" {
-				iface.MAC = mac
-			}
-
-			addrCandidates := make([]string, 0, 4)
-			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP)...)
-			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP6)...)
-			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv4)...)
-			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv6)...)
-
-			if len(addrCandidates) > 0 {
-				deduped := dedupeStringsPreserveOrder(addrCandidates)
-				if len(deduped) > 0 {
-					iface.Addresses = deduped
-					for _, addr := range deduped {
-						addAddress(addr)
-					}
-				}
-			}
-
-			if iface.Name != "" || iface.MAC != "" || len(iface.Addresses) > 0 {
-				networkIfaces = append(networkIfaces, iface)
-			}
-		}
-	}
-
-	configCtx, cancelConfig := context.WithTimeout(ctx, 5*time.Second)
-	configData, configErr := client.GetContainerConfig(configCtx, nodeName, container.VMID)
-	cancelConfig()
-	if configErr != nil {
-		log.Debug().
-			Err(configErr).
-			Str("instance", instanceName).
-			Str("node", nodeName).
-			Str("container", container.Name).
-			Int("vmid", container.VMID).
-			Msg("Container config metadata unavailable")
-	} else if len(configData) > 0 {
-		mountMetadata = parseContainerMountMetadata(configData)
-		if rootDeviceHint == "" {
-			if meta, ok := mountMetadata["rootfs"]; ok && meta.Source != "" {
-				rootDeviceHint = meta.Source
-			}
-		}
-		if rootDeviceHint == "" {
-			if hint := extractContainerRootDeviceFromConfig(configData); hint != "" {
-				rootDeviceHint = hint
-			}
-		}
-		for _, detail := range parseContainerConfigNetworks(configData) {
-			if len(detail.Addresses) > 0 {
-				for _, addr := range detail.Addresses {
-					addAddress(addr)
-				}
-			}
-			mergeContainerNetworkInterface(&networkIfaces, detail)
-		}
-		// Extract OS type from container config
-		if osName := extractContainerOSType(configData); osName != "" {
-			container.OSName = osName
-		}
-		// Detect OCI containers (Proxmox VE 9.1+)
-		// Method 1: Check ostemplate for OCI registry patterns
-		if osTemplate := extractContainerOSTemplate(configData); osTemplate != "" {
-			container.OSTemplate = osTemplate
-			if isOCITemplate(osTemplate) {
-				container.IsOCI = true
-				container.Type = "oci"
-				log.Debug().
-					Str("container", container.Name).
-					Int("vmid", container.VMID).
-					Str("osTemplate", osTemplate).
-					Msg("Detected OCI container by template")
-			}
-		}
-		// Method 2: Check config fields (entrypoint, ostype, cmode)
-		// This is needed because Proxmox doesn't persist ostemplate after creation
-		if !container.IsOCI && isOCIContainerByConfig(configData) {
-			container.IsOCI = true
-			container.Type = "oci"
-			log.Debug().
-				Str("container", container.Name).
-				Int("vmid", container.VMID).
-				Msg("Detected OCI container by config (entrypoint/ostype)")
-		}
-	}
-
-	if len(addressOrder) == 0 {
-		if isRunning {
-			interfacesCtx, cancelInterfaces := context.WithTimeout(ctx, 5*time.Second)
-			ifaceDetails, ifaceErr := client.GetContainerInterfaces(interfacesCtx, nodeName, container.VMID)
-			cancelInterfaces()
-			if ifaceErr != nil {
-				log.Debug().
-					Err(ifaceErr).
-					Str("instance", instanceName).
-					Str("node", nodeName).
-					Str("container", container.Name).
-					Int("vmid", container.VMID).
-					Msg("Container interface metadata unavailable")
-			} else if len(ifaceDetails) > 0 {
-				for _, detail := range ifaceDetails {
-					parsed := containerNetworkDetails{}
-					parsed.Name = strings.TrimSpace(detail.Name)
-					parsed.MAC = strings.ToUpper(strings.TrimSpace(detail.HWAddr))
-
-					for _, addr := range detail.IPAddresses {
-						stripped := strings.TrimSpace(addr.Address)
-						if stripped == "" {
-							continue
-						}
-						if slash := strings.Index(stripped, "/"); slash > 0 {
-							stripped = stripped[:slash]
-						}
-						parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
-					}
-
-					if len(parsed.Addresses) == 0 && strings.TrimSpace(detail.Inet) != "" {
-						parts := strings.Fields(detail.Inet)
-						for _, part := range parts {
-							stripped := strings.TrimSpace(part)
-							if stripped == "" {
-								continue
-							}
-							if slash := strings.Index(stripped, "/"); slash > 0 {
-								stripped = stripped[:slash]
-							}
-							parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
-						}
-					}
-
-					parsed.Addresses = dedupeStringsPreserveOrder(parsed.Addresses)
-
-					if len(parsed.Addresses) > 0 {
-						for _, addr := range parsed.Addresses {
-							addAddress(addr)
-						}
-					}
-
-					if parsed.Name != "" || parsed.MAC != "" || len(parsed.Addresses) > 0 {
-						mergeContainerNetworkInterface(&networkIfaces, parsed)
-					}
-				}
-			}
-		}
-	}
-
-	if len(networkIfaces) > 1 {
-		sort.SliceStable(networkIfaces, func(i, j int) bool {
-			left := strings.TrimSpace(networkIfaces[i].Name)
-			right := strings.TrimSpace(networkIfaces[j].Name)
-			return left < right
-		})
-	}
-
-	if len(addressOrder) > 1 {
-		sort.Strings(addressOrder)
-	}
-
-	if len(addressOrder) > 0 {
-		container.IPAddresses = addressOrder
-	}
-
-	if len(networkIfaces) > 0 {
-		container.NetworkInterfaces = networkIfaces
-	}
-
-	if disks := convertContainerDiskInfo(status, mountMetadata); len(disks) > 0 {
-		container.Disks = disks
-	}
-
-	ensureContainerRootDiskEntry(container)
-
-	if rootDeviceHint != "" && len(container.Disks) > 0 {
-		for i := range container.Disks {
-			if container.Disks[i].Mountpoint == "/" && container.Disks[i].Device == "" {
-				container.Disks[i].Device = rootDeviceHint
-			}
-		}
-	}
-}
-
-// GetConnectionStatuses returns the current connection status for all nodes
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
+	if m == nil {
+		return map[string]bool{}
+	}
+
 	if mock.IsMockEnabled() {
 		statuses := make(map[string]bool)
 		state := mock.GetMockState()
@@ -4113,6 +1196,13 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 				statuses[pbsInst.Host] = strings.ToLower(pbsInst.Status) != "offline"
 			}
 		}
+		for _, pmgInst := range state.PMGInstances {
+			key := "pmg-" + pmgInst.Name
+			statuses[key] = strings.ToLower(pmgInst.Status) != "offline"
+			if pmgInst.Host != "" {
+				statuses[pmgInst.Host] = strings.ToLower(pmgInst.Status) != "offline"
+			}
+		}
 
 		for _, dockerHost := range state.DockerHosts {
 			key := dockerConnectionPrefix + dockerHost.ID
@@ -4121,45 +1211,15 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 		return statuses
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	statuses := make(map[string]bool)
-
-	// Check all configured PVE nodes (not just ones with clients)
-	for _, pve := range m.config.PVEInstances {
-		key := "pve-" + pve.Name
-		// Check if we have a client for this node
-		if client, exists := m.pveClients[pve.Name]; exists && client != nil {
-			// We have a client, check actual connection health from state
-			if m.state != nil && m.state.ConnectionHealth != nil {
-				statuses[key] = m.state.ConnectionHealth[pve.Name]
-			} else {
-				statuses[key] = true // Assume connected if we have a client
+	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
+		for key, connected := range m.providerConnectionStatuses(provider) {
+			if strings.TrimSpace(key) == "" {
+				continue
 			}
-		} else {
-			// No client means disconnected
-			statuses[key] = false
+			statuses[key] = connected
 		}
 	}
-
-	// Check all configured PBS nodes (not just ones with clients)
-	for _, pbs := range m.config.PBSInstances {
-		key := "pbs-" + pbs.Name
-		// Check if we have a client for this node
-		if client, exists := m.pbsClients[pbs.Name]; exists && client != nil {
-			// We have a client, check actual connection health from state
-			if m.state != nil && m.state.ConnectionHealth != nil {
-				statuses[key] = m.state.ConnectionHealth["pbs-"+pbs.Name]
-			} else {
-				statuses[key] = true // Assume connected if we have a client
-			}
-		} else {
-			// No client means disconnected
-			statuses[key] = false
-		}
-	}
-
 	return statuses
 }
 
@@ -4256,11 +1316,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 	holdDuration := defaultGuestMetadataHold
 
 	// Load guest agent timeout configuration from environment variables (refs #592)
-	guestAgentFSInfoTimeout := parseDurationEnv("GUEST_AGENT_FSINFO_TIMEOUT", defaultGuestAgentFSInfoTimeout)
-	guestAgentNetworkTimeout := parseDurationEnv("GUEST_AGENT_NETWORK_TIMEOUT", defaultGuestAgentNetworkTimeout)
-	guestAgentOSInfoTimeout := parseDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
-	guestAgentVersionTimeout := parseDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
-	guestAgentRetries := parseIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
+	guestAgentFSInfoTimeout := parsePositiveDurationEnv("GUEST_AGENT_FSINFO_TIMEOUT", defaultGuestAgentFSInfoTimeout)
+	guestAgentNetworkTimeout := parsePositiveDurationEnv("GUEST_AGENT_NETWORK_TIMEOUT", defaultGuestAgentNetworkTimeout)
+	guestAgentOSInfoTimeout := parsePositiveDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
+	guestAgentVersionTimeout := parsePositiveDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
+	guestAgentRetries := parseNonNegativeIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
 
 	// Initialize persistent metrics store (SQLite) with configurable retention
 	var metricsStore *metrics.Store
@@ -4279,13 +1339,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		metricsStoreConfig.RetentionDaily = time.Duration(cfg.MetricsRetentionDailyDays) * 24 * time.Hour
 	}
 
-	// In mock mode, extend ALL tier retentions to 90 days to match the seeded
-	// data range. Different query ranges use different tiers, so all need coverage.
-	// Also increase buffer size to handle heavy initial seeding.
+	// In mock mode, extend hourly/daily retention to 90 days to match the
+	// seeded data range (seeds write directly to hourly+daily tiers).
+	// Raw and minute tiers keep production defaults — seeded data doesn't
+	// use them, and live mock ticks at 2s intervals would bloat the DB
+	// (the old 90-day raw retention caused metrics.db to grow to ~2 GB).
 	if mock.IsMockEnabled() {
 		metricsStoreConfig.WriteBufferSize = 2000
-		metricsStoreConfig.RetentionRaw = 90 * 24 * time.Hour
-		metricsStoreConfig.RetentionMinute = 90 * 24 * time.Hour
 		metricsStoreConfig.RetentionHourly = 90 * 24 * time.Hour
 		metricsStoreConfig.RetentionDaily = 90 * 24 * time.Hour
 	}
@@ -4293,7 +1353,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if err != nil {
 		// Do not automatically delete the DB on error, as it causes data loss on transient errors (e.g. locks).
 		// If the DB is truly corrupted, the user should manually remove it.
-		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing without metrics persistence")
+		log.Error().Err(err).Msg("failed to initialize persistent metrics store - continuing without metrics persistence")
 	} else {
 		if mock.IsMockEnabled() {
 			ms.SetMaxOpenConns(10)
@@ -4318,6 +1378,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pveClients:                 make(map[string]PVEClientInterface),
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
+		pollProviders:              make(map[InstanceType]PollProvider),
 		pollMetrics:                getPollMetrics(),
 		scheduler:                  scheduler,
 		stalenessTracker:           stalenessTracker,
@@ -4334,7 +1395,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
-		hostRuntimeStore:           config.NewHostRuntimeStore(cfg.DataPath, nil),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
@@ -4358,14 +1418,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		vmRRDMemCache:              make(map[string]rrdMemCacheEntry),
-		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
-		removedHosts:               make(map[string]time.Time),
 		removedKubernetesClusters:  make(map[string]time.Time),
 		kubernetesTokenBindings:    make(map[string]string),
+		removedHostAgents:          make(map[string]time.Time),
 		hostTokenBindings:          make(map[string]string),
-		lastHostRuntimePersist:     make(map[string]time.Time),
+		clusterSensorsCache:        make(map[string]clusterSensorsCacheEntry),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
@@ -4384,6 +1443,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dlqInsightMap:              make(map[string]*dlqInsight),
 		nodeLastOnline:             make(map[string]time.Time),
 		nodePendingUpdatesCache:    make(map[string]pendingUpdatesCache),
+		supplementalProviders:      make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second
@@ -4397,28 +1457,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	m.executor = newRealExecutor(m)
+	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)
 
 	// Initialize state with config values
 	m.state.TemperatureMonitoringEnabled = cfg.TemperatureMonitoringEnabled
-
-	// Rehydrate last known host agents to preserve offline visibility/alerting
-	// when Pulse restarts while agents are offline.
-	m.restorePersistedHostAgents()
-	m.RebuildTokenBindings()
-
-	// Sync removed-agent maps from state (currently a no-op on cold start since
-	// state begins empty, but ensures consistency if state is ever restored from
-	// a snapshot or populated before Start is called).
-	for _, entry := range m.state.GetRemovedDockerHosts() {
-		m.removedDockerHosts[entry.ID] = entry.RemovedAt
-	}
-	for _, entry := range m.state.GetRemovedHosts() {
-		m.removedHosts[entry.ID] = entry.RemovedAt
-	}
-	for _, entry := range m.state.GetRemovedKubernetesClusters() {
-		m.removedKubernetesClusters[entry.ID] = entry.RemovedAt
-	}
 
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
@@ -4430,24 +1473,20 @@ func New(cfg *config.Config) (*Monitor, error) {
 		// Apply schedule settings to notification manager
 		m.notificationMgr.SetEnabled(alertConfig.Enabled && alertConfig.ActivationState == alerts.ActivationActive)
 		m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
-		groupWindow := alertConfig.Schedule.Grouping.Window
-		if groupWindow == 0 && alertConfig.Schedule.GroupingWindow != 0 {
-			groupWindow = alertConfig.Schedule.GroupingWindow
-		}
-		m.notificationMgr.SetGroupingWindow(groupWindow)
+		m.notificationMgr.SetGroupingWindow(alertConfig.Schedule.Grouping.Window)
 		m.notificationMgr.SetGroupingOptions(
 			alertConfig.Schedule.Grouping.ByNode,
 			alertConfig.Schedule.Grouping.ByGuest,
 		)
 		m.notificationMgr.SetNotifyOnResolve(alertConfig.Schedule.NotifyOnResolve)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load alert configuration")
+		log.Warn().Err(err).Msg("failed to load alert configuration")
 	}
 
 	if emailConfig, err := m.configPersist.LoadEmailConfig(); err == nil {
 		m.notificationMgr.SetEmailConfig(*emailConfig)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load email configuration")
+		log.Warn().Err(err).Msg("failed to load email configuration")
 	}
 
 	if concurrency > 0 {
@@ -4457,12 +1496,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
 		m.notificationMgr.SetAppriseConfig(*appriseConfig)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load Apprise configuration")
+		log.Warn().Err(err).Msg("failed to load Apprise configuration")
 	}
 
 	// Migrate webhooks if needed (from unencrypted to encrypted)
 	if err := m.configPersist.MigrateWebhooksIfNeeded(); err != nil {
-		log.Warn().Err(err).Msg("Failed to migrate webhooks")
+		log.Warn().Err(err).Msg("failed to migrate webhooks")
 	}
 
 	if webhooks, err := m.configPersist.LoadWebhooks(); err == nil {
@@ -4470,145 +1509,19 @@ func New(cfg *config.Config) (*Monitor, error) {
 			m.notificationMgr.AddWebhook(webhook)
 		}
 	} else {
-		log.Warn().Err(err).Msg("Failed to load webhook configuration")
+		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
 
-	// Check if mock mode is enabled before initializing clients
+	// In mock mode we keep real polling enabled by default so production metrics
+	// continue to accumulate while the UI renders mock data.
 	mockEnabled := mock.IsMockEnabled()
-
-	if mockEnabled {
-		log.Info().Msg("Mock mode enabled - skipping PVE/PBS client initialization")
+	if mockEnabled && !keepRealPollingInMockMode() {
+		log.Info().Msg("mock mode enabled - real client initialization disabled by env override")
 	} else {
-		// Initialize PVE clients
-		log.Info().Int("count", len(cfg.PVEInstances)).Msg("Initializing PVE clients")
-		for _, pve := range cfg.PVEInstances {
-			log.Info().
-				Str("name", pve.Name).
-				Str("host", pve.Host).
-				Str("user", pve.User).
-				Bool("hasToken", pve.TokenName != "").
-				Msg("Configuring PVE instance")
-
-				// Check if this is a cluster
-			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-				endpoints, endpointFingerprints := buildClusterClientEndpoints(pve)
-
-				log.Info().
-					Str("cluster", pve.ClusterName).
-					Strs("endpoints", endpoints).
-					Int("fingerprints", len(endpointFingerprints)).
-					Msg("Creating cluster-aware client")
-
-				clientConfig := config.CreateProxmoxConfig(&pve)
-				clientConfig.Timeout = cfg.ConnectionTimeout
-				clusterClient := proxmox.NewClusterClient(
-					pve.Name,
-					clientConfig,
-					endpoints,
-					endpointFingerprints,
-				)
-				m.pveClients[pve.Name] = clusterClient
-				log.Info().
-					Str("instance", pve.Name).
-					Str("cluster", pve.ClusterName).
-					Int("endpoints", len(endpoints)).
-					Msg("Cluster client created successfully")
-				// Set initial connection health to true for cluster
-				m.state.SetConnectionHealth(pve.Name, true)
-			} else {
-				// Create regular client
-				clientConfig := config.CreateProxmoxConfig(&pve)
-				clientConfig.Timeout = cfg.ConnectionTimeout
-				client, err := newProxmoxClientFunc(clientConfig)
-				if err != nil {
-					monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
-					log.Error().
-						Err(monErr).
-						Str("instance", pve.Name).
-						Str("host", pve.Host).
-						Str("user", pve.User).
-						Bool("hasPassword", pve.Password != "").
-						Bool("hasToken", pve.TokenValue != "").
-						Msg("Failed to create PVE client - node will show as disconnected")
-					// Set initial connection health to false for this node
-					m.state.SetConnectionHealth(pve.Name, false)
-					continue
-				}
-				m.pveClients[pve.Name] = client
-				log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
-				// Set initial connection health to true
-				m.state.SetConnectionHealth(pve.Name, true)
-			}
-		}
-
-		// Initialize PBS clients
-		log.Info().Int("count", len(cfg.PBSInstances)).Msg("Initializing PBS clients")
-		for _, pbsInst := range cfg.PBSInstances {
-			log.Info().
-				Str("name", pbsInst.Name).
-				Str("host", pbsInst.Host).
-				Str("user", pbsInst.User).
-				Bool("hasToken", pbsInst.TokenName != "").
-				Msg("Configuring PBS instance")
-
-			clientConfig := config.CreatePBSConfig(&pbsInst)
-			clientConfig.Timeout = 60 * time.Second // Very generous timeout for slow PBS servers
-			client, err := pbs.NewClient(clientConfig)
-			if err != nil {
-				monErr := errors.WrapConnectionError("create_pbs_client", pbsInst.Name, err)
-				log.Error().
-					Err(monErr).
-					Str("instance", pbsInst.Name).
-					Str("host", pbsInst.Host).
-					Str("user", pbsInst.User).
-					Bool("hasPassword", pbsInst.Password != "").
-					Bool("hasToken", pbsInst.TokenValue != "").
-					Msg("Failed to create PBS client - node will show as disconnected")
-				// Set initial connection health to false for this node
-				m.state.SetConnectionHealth("pbs-"+pbsInst.Name, false)
-				continue
-			}
-			m.pbsClients[pbsInst.Name] = client
-			log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
-			// Set initial connection health to true
-			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
-		}
-
-		// Initialize PMG clients
-		log.Info().Int("count", len(cfg.PMGInstances)).Msg("Initializing PMG clients")
-		for _, pmgInst := range cfg.PMGInstances {
-			log.Info().
-				Str("name", pmgInst.Name).
-				Str("host", pmgInst.Host).
-				Str("user", pmgInst.User).
-				Bool("hasToken", pmgInst.TokenName != "").
-				Msg("Configuring PMG instance")
-
-			clientConfig := config.CreatePMGConfig(&pmgInst)
-			if clientConfig.Timeout <= 0 {
-				clientConfig.Timeout = 45 * time.Second
-			}
-
-			client, err := pmg.NewClient(clientConfig)
-			if err != nil {
-				monErr := errors.WrapConnectionError("create_pmg_client", pmgInst.Name, err)
-				log.Error().
-					Err(monErr).
-					Str("instance", pmgInst.Name).
-					Str("host", pmgInst.Host).
-					Str("user", pmgInst.User).
-					Bool("hasPassword", pmgInst.Password != "").
-					Bool("hasToken", pmgInst.TokenValue != "").
-					Msg("Failed to create PMG client - gateway will show as disconnected")
-				m.state.SetConnectionHealth("pmg-"+pmgInst.Name, false)
-				continue
-			}
-
-			m.pmgClients[pmgInst.Name] = client
-			log.Info().Str("instance", pmgInst.Name).Msg("PMG client created successfully")
-			m.state.SetConnectionHealth("pmg-"+pmgInst.Name, true)
-		}
-	} // End of else block for mock mode check
+		m.initPVEClients(cfg)
+		m.initPBSClients(cfg)
+		m.initPMGClients(cfg)
+	}
 
 	// Initialize state stats
 	m.state.Stats = models.Stats{
@@ -4637,78 +1550,8 @@ func (m *Monitor) SetExecutor(exec PollExecutor) {
 }
 
 func (m *Monitor) buildInstanceInfoCache(cfg *config.Config) {
-	if m == nil || cfg == nil {
-		return
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.instanceInfoCache == nil {
-		m.instanceInfoCache = make(map[string]*instanceInfo)
-	}
-
-	add := func(instType InstanceType, name string, displayName string, connection string, metadata map[string]string) {
-		key := schedulerKey(instType, name)
-		m.instanceInfoCache[key] = &instanceInfo{
-			Key:         key,
-			Type:        instType,
-			DisplayName: displayName,
-			Connection:  connection,
-			Metadata:    metadata,
-		}
-	}
-
-	// PVE instances
-	for _, inst := range cfg.PVEInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pve-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePVE, name, display, connection, nil)
-	}
-
-	// PBS instances
-	for _, inst := range cfg.PBSInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pbs-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePBS, name, display, connection, nil)
-	}
-
-	// PMG instances
-	for _, inst := range cfg.PMGInstances {
-		name := strings.TrimSpace(inst.Name)
-		if name == "" {
-			name = strings.TrimSpace(inst.Host)
-		}
-		if name == "" {
-			name = "pmg-instance"
-		}
-		display := name
-		if display == "" {
-			display = strings.TrimSpace(inst.Host)
-		}
-		connection := strings.TrimSpace(inst.Host)
-		add(InstanceTypePMG, name, display, connection, nil)
-	}
+	_ = cfg
+	m.refreshInstanceInfoCacheFromProviders()
 }
 
 func (m *Monitor) getExecutor() PollExecutor {
@@ -4749,6 +1592,12 @@ func (m *Monitor) effectivePVEPollingInterval() time.Duration {
 }
 
 func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Duration {
+	if provider := m.getPollProvider(instanceType); provider != nil {
+		if interval := provider.BaseInterval(m); interval > 0 {
+			return interval
+		}
+	}
+
 	if m == nil || m.config == nil {
 		return DefaultSchedulerConfig().BaseInterval
 	}
@@ -4769,191 +1618,6 @@ func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Du
 	}
 }
 
-// getConfiguredHostIPs returns a list of IP addresses from all configured Proxmox hosts.
-// This is used to prevent discovery from probing hosts we already know about.
-// Caller must hold m.mu.RLock or m.mu.Lock.
-func (m *Monitor) getConfiguredHostIPs() []string {
-	if m.config == nil {
-		return nil
-	}
-
-	seen := make(map[string]struct{})
-	var ips []string
-
-	addHost := func(host string) {
-		// Parse the host to extract IP/hostname
-		host = strings.TrimSpace(host)
-		if host == "" {
-			return
-		}
-		// Remove scheme if present
-		if strings.HasPrefix(host, "https://") {
-			host = strings.TrimPrefix(host, "https://")
-		} else if strings.HasPrefix(host, "http://") {
-			host = strings.TrimPrefix(host, "http://")
-		}
-		// Remove port if present
-		if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-			// Check if it's an IPv6 address
-			if !strings.Contains(host[colonIdx:], "]") {
-				host = host[:colonIdx]
-			}
-		}
-		// Remove trailing path
-		if slashIdx := strings.Index(host, "/"); slashIdx != -1 {
-			host = host[:slashIdx]
-		}
-		host = strings.TrimSpace(host)
-		if host == "" {
-			return
-		}
-		// Check if it's already an IP
-		if ip := net.ParseIP(host); ip != nil {
-			if _, exists := seen[host]; !exists {
-				seen[host] = struct{}{}
-				ips = append(ips, host)
-			}
-			return
-		}
-		// Try to resolve hostname to IP
-		if addrs, err := net.LookupIP(host); err == nil && len(addrs) > 0 {
-			for _, addr := range addrs {
-				// Prefer IPv4
-				if v4 := addr.To4(); v4 != nil {
-					ipStr := v4.String()
-					if _, exists := seen[ipStr]; !exists {
-						seen[ipStr] = struct{}{}
-						ips = append(ips, ipStr)
-					}
-					break
-				}
-			}
-		}
-	}
-
-	// Add PVE hosts
-	for _, pve := range m.config.PVEInstances {
-		addHost(pve.Host)
-		// Also add cluster endpoints (include both auto-discovered IP and override if set)
-		for _, ep := range pve.ClusterEndpoints {
-			addHost(ep.Host)
-			addHost(ep.IP)
-			if ep.IPOverride != "" && ep.IPOverride != ep.IP {
-				addHost(ep.IPOverride)
-			}
-		}
-	}
-
-	// Add PBS hosts
-	for _, pbs := range m.config.PBSInstances {
-		addHost(pbs.Host)
-	}
-
-	// Add PMG hosts
-	for _, pmg := range m.config.PMGInstances {
-		addHost(pmg.Host)
-	}
-
-	return ips
-}
-
-// consolidateDuplicateClusters detects and merges duplicate cluster instances.
-// When multiple PVE instances belong to the same Proxmox cluster (determined by ClusterName),
-// they should be merged into a single instance with all endpoints combined.
-// This prevents duplicate VMs/containers in the UI.
-func (m *Monitor) consolidateDuplicateClusters() {
-	if m == nil || m.config == nil || len(m.config.PVEInstances) < 2 {
-		return
-	}
-
-	// Group instances by cluster name
-	clusterGroups := make(map[string][]int) // clusterName -> indices of instances
-	for i, instance := range m.config.PVEInstances {
-		if instance.IsCluster && instance.ClusterName != "" {
-			clusterGroups[instance.ClusterName] = append(clusterGroups[instance.ClusterName], i)
-		}
-	}
-
-	// Find clusters that have duplicates
-	var mergedAny bool
-	for clusterName, indices := range clusterGroups {
-		if len(indices) < 2 {
-			continue // No duplicates for this cluster
-		}
-
-		log.Warn().
-			Str("cluster", clusterName).
-			Int("duplicates", len(indices)).
-			Msg("Detected duplicate cluster instances - consolidating")
-
-		// Keep the first instance and merge all others into it
-		primaryIdx := indices[0]
-		primary := &m.config.PVEInstances[primaryIdx]
-
-		// Build a set of existing endpoint node names
-		existingEndpoints := make(map[string]bool)
-		for _, ep := range primary.ClusterEndpoints {
-			existingEndpoints[ep.NodeName] = true
-		}
-
-		// Merge endpoints from all duplicate instances
-		for _, dupIdx := range indices[1:] {
-			duplicate := m.config.PVEInstances[dupIdx]
-			log.Info().
-				Str("cluster", clusterName).
-				Str("primary", primary.Name).
-				Str("duplicate", duplicate.Name).
-				Msg("Merging duplicate cluster instance")
-
-			for _, ep := range duplicate.ClusterEndpoints {
-				if !existingEndpoints[ep.NodeName] {
-					primary.ClusterEndpoints = append(primary.ClusterEndpoints, ep)
-					existingEndpoints[ep.NodeName] = true
-					log.Info().
-						Str("cluster", clusterName).
-						Str("endpoint", ep.NodeName).
-						Msg("Added endpoint from duplicate instance")
-				}
-			}
-		}
-
-		mergedAny = true
-	}
-
-	if !mergedAny {
-		return
-	}
-
-	// Remove duplicate instances (keeping only the primary for each cluster)
-	var newInstances []config.PVEInstance
-	seenClusters := make(map[string]bool)
-
-	for _, instance := range m.config.PVEInstances {
-		if instance.IsCluster && instance.ClusterName != "" {
-			if seenClusters[instance.ClusterName] {
-				log.Info().
-					Str("cluster", instance.ClusterName).
-					Str("instance", instance.Name).
-					Msg("Removing duplicate cluster instance")
-				continue // Skip duplicates
-			}
-			seenClusters[instance.ClusterName] = true
-		}
-		newInstances = append(newInstances, instance)
-	}
-
-	m.config.PVEInstances = newInstances
-
-	// Persist the consolidated configuration
-	if m.persistence != nil {
-		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-			log.Error().Err(err).Msg("Failed to persist cluster consolidation")
-		} else {
-			log.Info().Msg("Persisted consolidated cluster configuration")
-		}
-	}
-}
-
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	// Consolidate any duplicate cluster instances before starting
@@ -4971,13 +1635,17 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.mu.Unlock()
 	defer m.stopMockMetricsSampler()
 
+	// Best-effort startup cleanup: when direct PBS is configured, remove legacy
+	// PVE-proxied PBS backup points to prevent duplicate recovery entries.
+	m.purgeStalePVEPBSBackupsBestEffort(ctx)
+
 	if mock.IsMockEnabled() {
 		m.startMockMetricsSampler(ctx)
 	}
 
 	// Initialize and start discovery service if enabled
 	if mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode enabled - skipping discovery service")
+		log.Info().Msg("mock mode enabled - skipping discovery service")
 		m.discoveryService = nil
 	} else if m.config.DiscoveryEnabled {
 		discoverySubnet := m.config.DiscoverySubnet
@@ -4999,12 +1667,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
 			m.discoveryService.Start(ctx)
-			log.Info().Msg("Discovery service initialized and started")
+			log.Info().Msg("discovery service initialized and started")
 		} else {
-			log.Error().Msg("Failed to initialize discovery service")
+			log.Error().Msg("failed to initialize discovery service")
 		}
 	} else {
-		log.Info().Msg("Discovery service disabled by configuration")
+		log.Info().Msg("discovery service disabled by configuration")
 		m.discoveryService = nil
 	}
 
@@ -5045,16 +1713,33 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
 
-		// Send notifications only to the channels specified in the escalation level
-		m.notificationMgr.SendAlertToChannels(alert, escalationLevel.Notify)
+		// Send notifications based on escalation level
+		switch escalationLevel.Notify {
+		case "email":
+			// Only send email
+			if emailConfig := m.notificationMgr.GetEmailConfig(); emailConfig.Enabled {
+				m.notificationMgr.SendAlert(alert)
+			}
+		case "webhook":
+			// Only send webhooks
+			for _, webhook := range m.notificationMgr.GetWebhooks() {
+				if webhook.Enabled {
+					m.notificationMgr.SendAlert(alert)
+					break
+				}
+			}
+		case "all":
+			// Send all notifications
+			m.notificationMgr.SendAlert(alert)
+		}
 
 		// Update WebSocket with escalation
-		wsHub.BroadcastAlert(alert)
+		m.broadcastEscalatedAlert(wsHub, alert)
 	})
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
 
-	workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+	workerCount := m.totalClientCount()
 	m.startTaskWorkers(ctx, workerCount)
 
 	pollTicker := time.NewTicker(pollingInterval)
@@ -5063,16 +1748,24 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
+	keepRealPolling := keepRealPollingInMockMode()
+
 	// Start connection retry mechanism for failed clients
 	// This handles cases where network/Proxmox isn't ready on initial startup
-	if !mock.IsMockEnabled() {
+	if !mock.IsMockEnabled() || keepRealPolling {
 		go m.retryFailedConnections(ctx)
 	}
 
-	// Do an immediate poll on start (only if not in mock mode)
+	// Do an immediate poll on start.
 	if mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode enabled - skipping real node polling")
-		go m.checkMockAlerts()
+		if keepRealPolling {
+			log.Info().Msg("mock mode enabled - running mock alerts and real metric polling")
+			go m.checkMockAlerts()
+			go m.poll(ctx, wsHub)
+		} else {
+			log.Info().Msg("mock mode enabled - skipping real node polling")
+			go m.checkMockAlerts()
+		}
 	} else {
 		go m.poll(ctx, wsHub)
 	}
@@ -5085,8 +1778,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.evaluateKubernetesAgents(now)
 			m.evaluateHostAgents(now)
 			m.cleanupRemovedDockerHosts(now)
-			m.cleanupRemovedHosts(now)
 			m.cleanupRemovedKubernetesClusters(now)
+			m.cleanupRemovedHostAgents(now)
 			m.cleanupGuestMetadataCache(now)
 			m.cleanupDiagnosticSnapshots(now)
 			m.cleanupRRDCache(now)
@@ -5096,6 +1789,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
+				if keepRealPolling {
+					// Keep real metrics flowing while mock UI mode is active.
+					go m.poll(ctx, wsHub)
+				}
 			} else {
 				// Poll real infrastructure
 				go m.poll(ctx, wsHub)
@@ -5114,165 +1811,13 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
-			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
-			frontendState := state.ToFrontend()
-			// Update and inject unified resources if resource store is available
-			m.updateResourceStore(state)
-			frontendState.Resources = m.getResourcesForBroadcast()
+			frontendState := m.buildBroadcastFrontendStateFromSnapshot(state)
 			// Use tenant-aware broadcast method
 			m.broadcastState(wsHub, frontendState)
 
 		case <-ctx.Done():
-			log.Info().Msg("Monitoring loop stopped")
+			log.Info().Msg("monitoring loop stopped")
 			return
-		}
-	}
-}
-
-var connRetryDelays = []time.Duration{
-	5 * time.Second,
-	10 * time.Second,
-	20 * time.Second,
-	40 * time.Second,
-	60 * time.Second,
-}
-
-// retryFailedConnections attempts to recreate clients that failed during initialization
-// This handles cases where Proxmox/network isn't ready when Pulse starts
-func (m *Monitor) retryFailedConnections(ctx context.Context) {
-	defer recoverFromPanic("retryFailedConnections")
-
-	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s for up to 5 minutes total
-	retryDelays := connRetryDelays
-
-	maxRetryDuration := 5 * time.Minute
-	startTime := time.Now()
-	retryIndex := 0
-
-	for {
-		// Stop retrying after max duration or if context is cancelled
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		if time.Since(startTime) > maxRetryDuration {
-			log.Info().Msg("Connection retry period expired")
-			return
-		}
-
-		// Calculate next retry delay
-		var delay time.Duration
-		if retryIndex < len(retryDelays) {
-			delay = retryDelays[retryIndex]
-			retryIndex++
-		} else {
-			delay = 60 * time.Second // Continue retrying every 60s
-		}
-
-		// Wait before retry
-		select {
-		case <-time.After(delay):
-		case <-ctx.Done():
-			return
-		}
-
-		// Check for missing clients and try to recreate them
-		m.mu.Lock()
-		missingPVE := []config.PVEInstance{}
-		missingPBS := []config.PBSInstance{}
-
-		// Find PVE instances without clients
-		for _, pve := range m.config.PVEInstances {
-			if _, exists := m.pveClients[pve.Name]; !exists {
-				missingPVE = append(missingPVE, pve)
-			}
-		}
-
-		// Find PBS instances without clients
-		for _, pbs := range m.config.PBSInstances {
-			if _, exists := m.pbsClients[pbs.Name]; !exists {
-				missingPBS = append(missingPBS, pbs)
-			}
-		}
-		m.mu.Unlock()
-
-		// If no missing clients, we're done
-		if len(missingPVE) == 0 && len(missingPBS) == 0 {
-			log.Info().Msg("All client connections established successfully")
-			return
-		}
-
-		log.Info().
-			Int("missingPVE", len(missingPVE)).
-			Int("missingPBS", len(missingPBS)).
-			Dur("nextRetry", delay).
-			Msg("Attempting to reconnect failed clients")
-
-		// Try to recreate PVE clients
-		for _, pve := range missingPVE {
-			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-				endpoints, endpointFingerprints := buildClusterClientEndpoints(pve)
-
-				clientConfig := config.CreateProxmoxConfig(&pve)
-				clientConfig.Timeout = m.config.ConnectionTimeout
-				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
-
-				m.mu.Lock()
-				m.pveClients[pve.Name] = clusterClient
-				m.state.SetConnectionHealth(pve.Name, true)
-				m.mu.Unlock()
-
-				log.Info().
-					Str("instance", pve.Name).
-					Str("cluster", pve.ClusterName).
-					Msg("Successfully reconnected cluster client")
-			} else {
-				// Create regular client
-				clientConfig := config.CreateProxmoxConfig(&pve)
-				clientConfig.Timeout = m.config.ConnectionTimeout
-				client, err := newProxmoxClientFunc(clientConfig)
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Str("instance", pve.Name).
-						Msg("Failed to reconnect PVE client, will retry")
-					continue
-				}
-
-				m.mu.Lock()
-				m.pveClients[pve.Name] = client
-				m.state.SetConnectionHealth(pve.Name, true)
-				m.mu.Unlock()
-
-				log.Info().
-					Str("instance", pve.Name).
-					Msg("Successfully reconnected PVE client")
-			}
-		}
-
-		// Try to recreate PBS clients
-		for _, pbsInst := range missingPBS {
-			clientConfig := config.CreatePBSConfig(&pbsInst)
-			clientConfig.Timeout = 60 * time.Second
-			client, err := pbs.NewClient(clientConfig)
-			if err != nil {
-				log.Warn().
-					Err(err).
-					Str("instance", pbsInst.Name).
-					Msg("Failed to reconnect PBS client, will retry")
-				continue
-			}
-
-			m.mu.Lock()
-			m.pbsClients[pbsInst.Name] = client
-			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
-			m.mu.Unlock()
-
-			log.Info().
-				Str("instance", pbsInst.Name).
-				Msg("Successfully reconnected PBS client")
 		}
 	}
 }
@@ -5286,14 +1831,14 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	if currentCount > 2 {
 		atomic.AddInt32(&m.activePollCount, -1)
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Int32("activePolls", currentCount-1).Msg("Too many concurrent polls, skipping")
+			log.Debug().Int32("activePolls", currentCount-1).Msg("too many concurrent polls, skipping")
 		}
 		return
 	}
 	defer atomic.AddInt32(&m.activePollCount, -1)
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Msg("Starting polling cycle")
+		log.Debug().Msg("starting polling cycle")
 	}
 	startTime := time.Now()
 	now := startTime
@@ -5304,11 +1849,17 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	}
 	m.updateQueueDepthMetric()
 
-	// Update performance metrics
-	m.state.Performance.LastPollDuration = time.Since(startTime).Seconds()
-	m.state.Stats.PollingCycles++
-	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
-	m.state.Stats.WebSocketClients = wsHub.GetClientCount()
+	// Update performance metrics atomically to prevent data races when
+	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).
+	wsClients := 0
+	if wsHub != nil {
+		wsClients = wsHub.GetClientCount()
+	}
+	m.state.UpdatePollStats(
+		time.Since(startTime).Seconds(),
+		int64(time.Since(m.startTime).Seconds()),
+		wsClients,
+	)
 
 	// Sync alert state so broadcasts include the latest acknowledgement data
 	m.syncAlertsToState()
@@ -5319,129 +1870,10 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	m.mu.Unlock()
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
+		log.Debug().Dur("duration", time.Since(startTime)).Msg("polling cycle completed")
 	}
 
 	// Broadcasting is now handled by the timer in Start()
-}
-
-// syncAlertsToState copies the latest alert manager data into the shared state snapshot.
-// This keeps WebSocket broadcasts aligned with in-memory acknowledgement updates.
-func (m *Monitor) syncAlertsToState() {
-	if m.pruneStaleDockerAlerts() {
-		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Msg("Pruned stale docker alerts during sync")
-		}
-	}
-
-	activeAlerts := m.alertManager.GetActiveAlerts()
-	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
-	for _, alert := range activeAlerts {
-		modelAlerts = append(modelAlerts, models.Alert{
-			ID:              alert.ID,
-			Type:            alert.Type,
-			Level:           string(alert.Level),
-			ResourceID:      alert.ResourceID,
-			ResourceName:    alert.ResourceName,
-			Node:            alert.Node,
-			NodeDisplayName: alert.NodeDisplayName,
-			Instance:        alert.Instance,
-			Message:         alert.Message,
-			Value:           alert.Value,
-			Threshold:       alert.Threshold,
-			StartTime:       alert.StartTime,
-			Acknowledged:    alert.Acknowledged,
-			AckTime:         alert.AckTime,
-			AckUser:         alert.AckUser,
-		})
-		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("Syncing acknowledged alert")
-		}
-	}
-	m.state.UpdateActiveAlerts(modelAlerts)
-
-	recentlyResolved := m.alertManager.GetRecentlyResolved()
-	if len(recentlyResolved) > 0 {
-		log.Info().Int("count", len(recentlyResolved)).Msg("Syncing recently resolved alerts")
-	}
-	m.state.UpdateRecentlyResolved(recentlyResolved)
-}
-
-// SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
-func (m *Monitor) SyncAlertState() {
-	m.syncAlertsToState()
-}
-
-// pruneStaleDockerAlerts removes docker alerts that reference hosts no longer present in state.
-func (m *Monitor) pruneStaleDockerAlerts() bool {
-	if m.alertManager == nil {
-		return false
-	}
-
-	hosts := m.state.GetDockerHosts()
-	knownHosts := make(map[string]struct{}, len(hosts))
-	for _, host := range hosts {
-		id := strings.TrimSpace(host.ID)
-		if id != "" {
-			knownHosts[id] = struct{}{}
-		}
-	}
-
-	if len(knownHosts) == 0 {
-		// Still allow stale entries to be cleared if no hosts remain.
-	}
-
-	active := m.alertManager.GetActiveAlerts()
-	processed := make(map[string]struct{})
-	cleared := false
-
-	for _, alert := range active {
-		var hostID string
-
-		switch {
-		case alert.Type == "docker-host-offline":
-			hostID = strings.TrimPrefix(alert.ID, "docker-host-offline-")
-		case strings.HasPrefix(alert.ResourceID, "docker:"):
-			resource := strings.TrimPrefix(alert.ResourceID, "docker:")
-			if idx := strings.Index(resource, "/"); idx >= 0 {
-				hostID = resource[:idx]
-			} else {
-				hostID = resource
-			}
-		default:
-			continue
-		}
-
-		hostID = strings.TrimSpace(hostID)
-		if hostID == "" {
-			continue
-		}
-
-		if _, known := knownHosts[hostID]; known {
-			continue
-		}
-		if _, alreadyCleared := processed[hostID]; alreadyCleared {
-			continue
-		}
-
-		host := models.DockerHost{
-			ID:          hostID,
-			DisplayName: alert.ResourceName,
-			Hostname:    alert.Node,
-		}
-		if host.DisplayName == "" {
-			host.DisplayName = hostID
-		}
-		if host.Hostname == "" {
-			host.Hostname = hostID
-		}
-
-		m.alertManager.HandleDockerHostRemoved(host)
-		processed[hostID] = struct{}{}
-		cleared = true
-	}
-
-	return cleared
 }
 
 func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
@@ -5463,13 +1895,13 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 	defer recoverFromPanic(fmt.Sprintf("taskWorker-%d", id))
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Int("worker", id).Msg("Task worker started")
+		log.Debug().Int("worker", id).Msg("task worker started")
 	}
 	for {
 		task, ok := m.taskQueue.WaitNext(ctx)
 		if !ok {
 			if logging.IsLevelEnabled(zerolog.DebugLevel) {
-				log.Debug().Int("worker", id).Msg("Task worker stopping")
+				log.Debug().Int("worker", id).Msg("task worker stopping")
 			}
 			return
 		}
@@ -5523,17 +1955,6 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 		return
 	}
 
-	if !m.beginTaskExecution(task) {
-		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().
-				Str("instance", task.InstanceName).
-				Str("type", string(task.InstanceType)).
-				Msg("Skipping overlapping scheduled task for instance already being polled")
-		}
-		return
-	}
-	defer m.finishTaskExecution(task)
-
 	if m.pollMetrics != nil {
 		wait := time.Duration(0)
 		if !task.NextRun.IsZero() {
@@ -5558,38 +1979,8 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 		return
 	}
 
-	pollTask := PollTask{
-		InstanceName: task.InstanceName,
-		InstanceType: string(task.InstanceType),
-	}
-
-	switch task.InstanceType {
-	case InstanceTypePVE:
-		client, ok := m.pveClients[task.InstanceName]
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
-			return
-		}
-		pollTask.PVEClient = client
-	case InstanceTypePBS:
-		client, ok := m.pbsClients[task.InstanceName]
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
-			return
-		}
-		pollTask.PBSClient = client
-	case InstanceTypePMG:
-		client, ok := m.pmgClients[task.InstanceName]
-		if !ok || client == nil {
-			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
-			return
-		}
-		pollTask.PMGClient = client
-	default:
-		log.Debug().
-			Str("instance", task.InstanceName).
-			Str("type", string(task.InstanceType)).
-			Msg("Skipping unsupported task type")
+	pollTask, ok := m.buildPollTask(task)
+	if !ok {
 		return
 	}
 
@@ -5610,6 +2001,35 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 			Dur("timeout", timeout).
 			Msg("Polling task timed out; rescheduling with fresh worker")
 	}
+}
+
+func (m *Monitor) buildPollTask(task ScheduledTask) (PollTask, bool) {
+	provider := m.getPollProvider(task.InstanceType)
+	if provider == nil {
+		log.Debug().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Msg("Skipping unsupported task type")
+		return PollTask{}, false
+	}
+
+	pollTask, err := provider.BuildPollTask(m, task.InstanceName)
+	if err != nil {
+		log.Warn().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Err(err).
+			Msg("Skipping scheduled task")
+		return PollTask{}, false
+	}
+
+	if strings.TrimSpace(pollTask.InstanceName) == "" {
+		pollTask.InstanceName = task.InstanceName
+	}
+	if strings.TrimSpace(pollTask.InstanceType) == "" {
+		pollTask.InstanceType = string(task.InstanceType)
+	}
+	return pollTask, true
 }
 
 func (m *Monitor) rescheduleTask(task ScheduledTask) {
@@ -5672,7 +2092,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 			desc.LastSuccess = snap.LastSuccess
 			desc.LastFailure = snap.LastError
 			if snap.ChangeHash != "" {
-				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+				desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 			}
 		}
 	}
@@ -5907,8 +2327,8 @@ type SchedulerHealthResponse struct {
 	Enabled    bool                `json:"enabled"`
 	Queue      QueueSnapshot       `json:"queue"`
 	DeadLetter DeadLetterSnapshot  `json:"deadLetter"`
-	Breakers   []BreakerSnapshot   `json:"breakers,omitempty"`
-	Staleness  []StalenessSnapshot `json:"staleness,omitempty"`
+	Breakers   []BreakerSnapshot   `json:"breakers"`
+	Staleness  []StalenessSnapshot `json:"staleness"`
 	Instances  []InstanceHealth    `json:"instances"`
 }
 
@@ -5918,12 +2338,29 @@ type DeadLetterSnapshot struct {
 	Tasks []DeadLetterTask `json:"tasks"`
 }
 
+func emptyDeadLetterSnapshot() DeadLetterSnapshot {
+	return DeadLetterSnapshot{
+		Tasks: []DeadLetterTask{},
+	}
+}
+
+func emptySchedulerHealthResponse(enabled bool) SchedulerHealthResponse {
+	return SchedulerHealthResponse{
+		UpdatedAt:  time.Now(),
+		Enabled:    enabled,
+		Queue:      emptyQueueSnapshot(),
+		DeadLetter: emptyDeadLetterSnapshot(),
+		Breakers:   []BreakerSnapshot{},
+		Staleness:  []StalenessSnapshot{},
+		Instances:  []InstanceHealth{},
+	}
+}
+
 // SchedulerHealth returns a complete snapshot of scheduler health for API exposure.
 func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
-	response := SchedulerHealthResponse{
-		UpdatedAt: time.Now(),
-		Enabled:   m.config != nil && m.config.AdaptivePollingEnabled,
-	}
+	response := emptySchedulerHealthResponse(m.config != nil && m.config.AdaptivePollingEnabled)
+
+	m.refreshInstanceInfoCacheFromProviders()
 
 	// Queue snapshot
 	if m.taskQueue != nil {
@@ -6186,7 +2623,7 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 				Breaker:     breakerInfo,
 				DeadLetter:  dlqInfo,
 				Warnings:    warnings,
-			})
+			}.NormalizeCollections())
 		}
 
 		response.Instances = instances
@@ -6210,3163 +2647,6 @@ func isTransientError(err error) bool {
 	return false
 }
 
-func shouldTryPortlessFallback(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "no such host") ||
-		strings.Contains(msg, "client.timeout exceeded") ||
-		strings.Contains(msg, "i/o timeout") ||
-		strings.Contains(msg, "context deadline exceeded") {
-		return true
-	}
-	return false
-}
-
-// retryPVEPortFallback handles the case where a normalized :8006 host is unreachable
-// because the actual endpoint is fronted by a reverse proxy on 443. If the initial
-// GetNodes call fails with a connection error and the host has the default PVE port,
-// retry without the default port to hit the proxy. On success, swap the client so
-// subsequent polls reuse the working endpoint.
-func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, currentClient PVEClientInterface, cause error) ([]proxmox.Node, PVEClientInterface, error) {
-	if instanceCfg == nil || !shouldTryPortlessFallback(cause) {
-		return nil, currentClient, cause
-	}
-
-	fallbackHost := config.StripDefaultPort(instanceCfg.Host, config.DefaultPVEPort)
-	if fallbackHost == "" || fallbackHost == instanceCfg.Host {
-		return nil, currentClient, cause
-	}
-
-	clientCfg := config.CreateProxmoxConfigWithHost(instanceCfg, fallbackHost, false)
-	if clientCfg.Timeout <= 0 {
-		clientCfg.Timeout = m.config.ConnectionTimeout
-	}
-
-	fallbackClient, err := newProxmoxClientFunc(clientCfg)
-	if err != nil {
-		return nil, currentClient, cause
-	}
-
-	fallbackNodes, err := fallbackClient.GetNodes(ctx)
-	if err != nil {
-		return nil, currentClient, cause
-	}
-
-	// Switch to the working host for the remainder of the poll (and future polls)
-	primaryHost := instanceCfg.Host
-
-	// Persist with an explicit port to avoid re-normalization back to :8006 on reloads.
-	persistHost := fallbackHost
-	if parsed, err := url.Parse(fallbackHost); err == nil && parsed.Host != "" && parsed.Port() == "" {
-		port := "443"
-		if strings.EqualFold(parsed.Scheme, "http") {
-			port = "80"
-		}
-		parsed.Host = net.JoinHostPort(parsed.Hostname(), port)
-		persistHost = parsed.Scheme + "://" + parsed.Host
-	}
-
-	instanceCfg.Host = persistHost
-	m.pveClients[instanceName] = fallbackClient
-
-	// Update in-memory config so subsequent polls build clients against the working port.
-	for i := range m.config.PVEInstances {
-		if m.config.PVEInstances[i].Name == instanceName {
-			m.config.PVEInstances[i].Host = persistHost
-			break
-		}
-	}
-
-	// Persist to disk so restarts keep the working endpoint.
-	if m.persistence != nil {
-		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-			log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to persist fallback PVE host")
-		}
-	}
-
-	log.Warn().
-		Str("instance", instanceName).
-		Str("primary", primaryHost).
-		Str("fallback", persistHost).
-		Msg("Primary PVE host failed; using fallback without default port")
-
-	return fallbackNodes, fallbackClient, nil
-}
-
-// pollPVEInstance polls a single PVE instance
-func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client PVEClientInterface) {
-	defer recoverFromPanic(fmt.Sprintf("pollPVEInstance-%s", instanceName))
-
-	start := time.Now()
-	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
-	var pollErr error
-	if m.pollMetrics != nil {
-		m.pollMetrics.IncInFlight("pve")
-		defer m.pollMetrics.DecInFlight("pve")
-		defer func() {
-			m.pollMetrics.RecordResult(PollResult{
-				InstanceName: instanceName,
-				InstanceType: "pve",
-				Success:      pollErr == nil,
-				Error:        pollErr,
-				StartTime:    start,
-				EndTime:      time.Now(),
-			})
-		}()
-	}
-	if m.stalenessTracker != nil {
-		defer func() {
-			if pollErr == nil {
-				m.stalenessTracker.UpdateSuccess(InstanceTypePVE, instanceName, nil)
-			} else {
-				m.stalenessTracker.UpdateError(InstanceTypePVE, instanceName)
-			}
-		}()
-	}
-	defer m.recordTaskResult(InstanceTypePVE, instanceName, pollErr)
-
-	// Check if context is cancelled
-	select {
-	case <-ctx.Done():
-		pollErr = ctx.Err()
-		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
-		}
-		return
-	default:
-	}
-
-	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PVE instance")
-	}
-
-	// Get instance config
-	var instanceCfg *config.PVEInstance
-	for _, cfg := range m.config.PVEInstances {
-		if cfg.Name == instanceName {
-			instanceCfg = &cfg
-			break
-		}
-	}
-	if instanceCfg == nil {
-		pollErr = fmt.Errorf("pve instance config not found for %s", instanceName)
-		return
-	}
-
-	// Poll nodes
-	nodes, err := client.GetNodes(ctx)
-	if err != nil {
-		if fallbackNodes, fallbackClient, fallbackErr := m.retryPVEPortFallback(ctx, instanceName, instanceCfg, client, err); fallbackErr == nil {
-			client = fallbackClient
-			nodes = fallbackNodes
-		} else {
-			monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
-			pollErr = monErr
-			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
-			m.state.SetConnectionHealth(instanceName, false)
-
-			// Track auth failure if it's an authentication error
-			if errors.IsAuthError(err) {
-				m.recordAuthFailure(instanceName, "pve")
-			}
-			return
-		}
-	}
-
-	// Reset auth failures on successful connection
-	m.resetAuthFailures(instanceName, "pve")
-
-	// Best-effort: fetch tag colour map from Proxmox datacenter config.
-	// Not all Proxmox versions expose this; errors are silently ignored.
-	type clusterOptionsGetter interface {
-		GetClusterOptions(ctx context.Context) (*proxmox.ClusterOptions, error)
-	}
-	if og, ok := client.(clusterOptionsGetter); ok {
-		if opts, err := og.GetClusterOptions(ctx); err == nil && opts != nil {
-			if colors := proxmox.ParseTagColorMap(opts.TagStyle); len(colors) > 0 {
-				m.state.MergeTagColors(colors)
-			}
-		}
-	}
-
-	// Check if client is a ClusterClient to determine health status
-	connectionHealthStr := "healthy"
-	if clusterClient, ok := client.(*proxmox.ClusterClient); ok {
-		// For cluster clients, check if all endpoints are healthy
-		healthStatus := clusterClient.GetHealthStatus()
-		healthyCount := 0
-		totalCount := len(healthStatus)
-
-		for _, isHealthy := range healthStatus {
-			if isHealthy {
-				healthyCount++
-			}
-		}
-
-		if healthyCount == 0 {
-			// All endpoints are down
-			connectionHealthStr = "error"
-			m.state.SetConnectionHealth(instanceName, false)
-		} else if healthyCount < totalCount {
-			// Some endpoints are down - check if cluster still has quorum
-			// A cluster with quorum is healthy even if some nodes are intentionally offline
-			// (e.g., backup nodes not running). Only mark as degraded if no quorum.
-			isQuorate, err := clusterClient.IsQuorate(ctx)
-			if err != nil {
-				// Couldn't check quorum - log but continue (assume healthy if we have connectivity)
-				log.Debug().
-					Str("instance", instanceName).
-					Err(err).
-					Msg("Could not check cluster quorum status")
-				isQuorate = true // Assume healthy if we can't check
-			}
-
-			if isQuorate {
-				// Cluster has quorum - healthy even with some nodes offline
-				connectionHealthStr = "healthy"
-				m.state.SetConnectionHealth(instanceName, true)
-				log.Debug().
-					Str("instance", instanceName).
-					Int("healthy", healthyCount).
-					Int("total", totalCount).
-					Msg("Cluster has quorum - some API endpoints unreachable but cluster is healthy")
-			} else {
-				// Cluster lost quorum - this is actually degraded/critical
-				connectionHealthStr = "degraded"
-				m.state.SetConnectionHealth(instanceName, true) // Still functional but degraded
-				log.Warn().
-					Str("instance", instanceName).
-					Int("healthy", healthyCount).
-					Int("total", totalCount).
-					Msg("Cluster lost quorum - degraded state")
-			}
-		} else {
-			// All endpoints are healthy
-			connectionHealthStr = "healthy"
-			m.state.SetConnectionHealth(instanceName, true)
-		}
-	} else {
-		// Regular client - simple healthy/unhealthy
-		m.state.SetConnectionHealth(instanceName, true)
-	}
-
-	// Capture previous memory metrics so we can preserve them if detailed status fails
-	prevState := m.GetState()
-	prevNodeMemory := make(map[string]models.Memory)
-	prevInstanceNodes := make([]models.Node, 0)
-	for _, existingNode := range prevState.Nodes {
-		if existingNode.Instance != instanceName {
-			continue
-		}
-		prevNodeMemory[existingNode.ID] = existingNode.Memory
-		prevInstanceNodes = append(prevInstanceNodes, existingNode)
-	}
-
-	// Convert to models
-	var modelNodes []models.Node
-	nodeEffectiveStatus := make(map[string]string) // Track effective status (with grace period) for each node
-	// Parallel node polling
-	type nodePollResult struct {
-		node            models.Node
-		effectiveStatus string
-	}
-
-	resultChan := make(chan nodePollResult, len(nodes))
-	var wg sync.WaitGroup
-
-	if debugEnabled {
-		log.Debug().
-			Str("instance", instanceName).
-			Int("nodes", len(nodes)).
-			Msg("Starting parallel node polling")
-	}
-
-	for _, node := range nodes {
-		wg.Add(1)
-		go func(node proxmox.Node) {
-			defer wg.Done()
-
-			modelNode, effectiveStatus, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevNodeMemory, prevInstanceNodes)
-
-			resultChan <- nodePollResult{
-				node:            modelNode,
-				effectiveStatus: effectiveStatus,
-			}
-		}(node)
-	}
-
-	wg.Wait()
-	close(resultChan)
-
-	for res := range resultChan {
-		modelNodes = append(modelNodes, res.node)
-		nodeEffectiveStatus[res.node.Name] = res.effectiveStatus
-	}
-
-	if len(modelNodes) == 0 && len(prevInstanceNodes) > 0 {
-		log.Warn().
-			Str("instance", instanceName).
-			Int("previousCount", len(prevInstanceNodes)).
-			Msg("No Proxmox nodes returned this cycle - preserving previous state")
-
-		// Mark connection health as degraded to reflect polling failure
-		m.state.SetConnectionHealth(instanceName, false)
-
-		preserved := make([]models.Node, 0, len(prevInstanceNodes))
-		now := time.Now()
-		withinGraceCount := 0
-		forcedOfflineCount := 0
-		for _, prevNode := range prevInstanceNodes {
-			nodeCopy := prevNode
-
-			// If a node was seen recently, keep its prior state for one grace window
-			// to avoid false-offline flips during transient cluster/resources gaps.
-			if !nodeCopy.LastSeen.IsZero() && now.Sub(nodeCopy.LastSeen) < nodeOfflineGracePeriod {
-				withinGraceCount++
-				if nodeCopy.ConnectionHealth == "" || nodeCopy.ConnectionHealth == "healthy" {
-					nodeCopy.ConnectionHealth = "degraded"
-				}
-			} else {
-				forcedOfflineCount++
-				nodeCopy.Status = "offline"
-				nodeCopy.ConnectionHealth = "error"
-				nodeCopy.Uptime = 0
-				nodeCopy.CPU = 0
-			}
-
-			preserved = append(preserved, nodeCopy)
-		}
-		log.Warn().
-			Str("instance", instanceName).
-			Int("withinGrace", withinGraceCount).
-			Int("forcedOffline", forcedOfflineCount).
-			Dur("gracePeriod", nodeOfflineGracePeriod).
-			Msg("Applied empty-node fallback state handling")
-		modelNodes = preserved
-	}
-
-	// Update state first so we have nodes available
-	m.state.UpdateNodesForInstance(instanceName, modelNodes)
-
-	// Storage fallback is used to provide disk metrics when rootfs is not available.
-	// We run this asynchronously with a short timeout so it doesn't block VM/container polling.
-	// This addresses the issue where slow storage APIs (e.g., NFS mounts) can cause the entire
-	// polling task to timeout before reaching VM/container polling.
-	storageByNode := make(map[string]models.Disk)
-	var storageByNodeMu sync.Mutex
-	storageFallbackDone := make(chan struct{})
-
-	if instanceCfg.MonitorStorage {
-		go func() {
-			defer close(storageFallbackDone)
-
-			// Use a short timeout for storage fallback - it's an optimization, not critical
-			storageFallbackTimeout := 10 * time.Second
-			storageCtx, storageCancel := context.WithTimeout(context.Background(), storageFallbackTimeout)
-			defer storageCancel()
-
-			_, err := client.GetAllStorage(storageCtx)
-			if err != nil {
-				if storageCtx.Err() != nil {
-					log.Debug().
-						Str("instance", instanceName).
-						Dur("timeout", storageFallbackTimeout).
-						Msg("Storage fallback timed out - continuing without disk fallback data")
-				}
-				return
-			}
-
-			for _, node := range nodes {
-				// Check if context was cancelled
-				select {
-				case <-storageCtx.Done():
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("Storage fallback cancelled - partial data collected")
-					return
-				default:
-				}
-
-				// Skip offline nodes to avoid 595 errors
-				if nodeEffectiveStatus[node.Node] != "online" {
-					continue
-				}
-
-				nodeStorages, err := client.GetStorage(storageCtx, node.Node)
-				if err != nil {
-					continue
-				}
-
-				// Look for local or local-lvm storage as most stable disk metric
-				for _, storage := range nodeStorages {
-					if reason, skip := readOnlyFilesystemReason(storage.Type, storage.Total, storage.Used); skip {
-						log.Debug().
-							Str("node", node.Node).
-							Str("storage", storage.Storage).
-							Str("type", storage.Type).
-							Str("skipReason", reason).
-							Uint64("total", storage.Total).
-							Uint64("used", storage.Used).
-							Msg("Skipping read-only storage while building disk fallback")
-						continue
-					}
-					if storage.Storage == "local" || storage.Storage == "local-lvm" {
-						disk := models.Disk{
-							Total: int64(storage.Total),
-							Used:  int64(storage.Used),
-							Free:  int64(storage.Available),
-							Usage: safePercentage(float64(storage.Used), float64(storage.Total)),
-						}
-						// Prefer "local" over "local-lvm"
-						storageByNodeMu.Lock()
-						if _, exists := storageByNode[node.Node]; !exists || storage.Storage == "local" {
-							storageByNode[node.Node] = disk
-							log.Debug().
-								Str("node", node.Node).
-								Str("storage", storage.Storage).
-								Float64("usage", disk.Usage).
-								Msg("Using storage for disk metrics fallback")
-						}
-						storageByNodeMu.Unlock()
-					}
-				}
-			}
-		}()
-	} else {
-		// No storage monitoring, close channel immediately
-		close(storageFallbackDone)
-	}
-
-	// Pre-populate node display name cache so guest alerts created below
-	// can resolve friendly names. CheckNode() also does this, but it runs
-	// after guest polling — without this, the first alert notification for
-	// a guest would show the raw Proxmox node name.
-	for i := range modelNodes {
-		if modelNodes[i].DisplayName != "" {
-			m.alertManager.UpdateNodeDisplayName(modelNodes[i].Name, modelNodes[i].DisplayName)
-		}
-	}
-
-	// Poll VMs and containers FIRST - this is the most critical data.
-	// This happens immediately after starting the storage fallback goroutine,
-	// so VM/container polling runs in parallel with (and is not blocked by) storage operations.
-	if instanceCfg.MonitorVMs || instanceCfg.MonitorContainers {
-		select {
-		case <-ctx.Done():
-			pollErr = ctx.Err()
-			return
-		default:
-			// Always try the efficient cluster/resources endpoint first
-			// This endpoint works on both clustered and standalone nodes
-			// Testing confirmed it works on standalone nodes like pimox
-			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
-
-			if !useClusterEndpoint {
-				// Fall back to traditional polling only if cluster/resources not available
-				// This should be rare - only for very old Proxmox versions
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("cluster/resources endpoint not available, using traditional polling")
-
-				// Check if configuration needs updating
-				if instanceCfg.IsCluster {
-					isActuallyCluster, checkErr := client.IsClusterMember(ctx)
-					if checkErr == nil && !isActuallyCluster {
-						log.Warn().
-							Str("instance", instanceName).
-							Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
-						instanceCfg.IsCluster = false
-					}
-				}
-
-				// Use optimized parallel polling for better performance
-				if instanceCfg.MonitorVMs {
-					m.pollVMsWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
-				}
-				if instanceCfg.MonitorContainers {
-					m.pollContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
-				}
-			}
-		}
-	}
-
-	// Poll physical disks for health monitoring (enabled by default unless explicitly disabled)
-	// Skip if MonitorPhysicalDisks is explicitly set to false
-	// Physical disk polling runs in a background goroutine since GetDisks can be slow
-	// and we don't want it to cause task timeouts. It has its own 5-minute interval anyway.
-	if instanceCfg.MonitorPhysicalDisks != nil && !*instanceCfg.MonitorPhysicalDisks {
-		log.Debug().Str("instance", instanceName).Msg("Physical disk monitoring explicitly disabled")
-		// Keep any existing disk data visible (don't clear it)
-	} else {
-		// Enabled by default (when nil or true)
-		// Determine polling interval (default 5 minutes to avoid spinning up HDDs too frequently)
-		pollingInterval := 5 * time.Minute
-		if instanceCfg.PhysicalDiskPollingMinutes > 0 {
-			pollingInterval = time.Duration(instanceCfg.PhysicalDiskPollingMinutes) * time.Minute
-		}
-
-		// Check if enough time has elapsed since last poll
-		m.mu.Lock()
-		lastPoll, exists := m.lastPhysicalDiskPoll[instanceName]
-		shouldPoll := !exists || time.Since(lastPoll) >= pollingInterval
-		if shouldPoll {
-			m.lastPhysicalDiskPoll[instanceName] = time.Now()
-		}
-		m.mu.Unlock()
-
-		if !shouldPoll {
-			log.Debug().
-				Str("instance", instanceName).
-				Dur("sinceLastPoll", time.Since(lastPoll)).
-				Dur("interval", pollingInterval).
-				Msg("Skipping physical disk poll - interval not elapsed")
-			// Refresh NVMe temperatures using the latest sensor data even when we skip the disk poll
-			currentState := m.state.GetSnapshot()
-			existing := make([]models.PhysicalDisk, 0)
-			for _, disk := range currentState.PhysicalDisks {
-				if disk.Instance == instanceName {
-					existing = append(existing, disk)
-				}
-			}
-			if len(existing) > 0 {
-				// Use nodes from state snapshot - they have LinkedHostAgentID populated
-				// (the local modelNodes variable doesn't have this field set)
-				updated := mergeNVMeTempsIntoDisks(existing, currentState.Nodes)
-				// Also merge SMART data from linked host agents
-				updated = mergeHostAgentSMARTIntoDisks(updated, currentState.Nodes, currentState.Hosts)
-				m.state.UpdatePhysicalDisks(instanceName, updated)
-			}
-		} else {
-			// Run physical disk polling in background to avoid blocking the main task
-			go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node, nodeStatus map[string]string, modelNodesCopy []models.Node) {
-				defer recoverFromPanic(fmt.Sprintf("pollPhysicalDisks-%s", inst))
-
-				// Use a generous timeout for disk polling
-				diskTimeout := 60 * time.Second
-				diskCtx, diskCancel := context.WithTimeout(context.Background(), diskTimeout)
-				defer diskCancel()
-
-				log.Debug().
-					Int("nodeCount", len(nodeList)).
-					Dur("interval", pollingInterval).
-					Msg("Starting disk health polling")
-
-				// Get existing disks from state to preserve data for offline nodes
-				currentState := m.state.GetSnapshot()
-				existingDisksMap := make(map[string]models.PhysicalDisk)
-				for _, disk := range currentState.PhysicalDisks {
-					if disk.Instance == inst {
-						existingDisksMap[disk.ID] = disk
-					}
-				}
-
-				// Build a map of node name -> disk exclusion patterns from linked host agents.
-				// This allows --disk-exclude on the agent to also suppress server-side
-				// Proxmox disk health/wearout alerts for the same disks.
-				diskExcludeByNode := make(map[string][]string)
-				hostByID := make(map[string]models.Host, len(currentState.Hosts))
-				for _, h := range currentState.Hosts {
-					hostByID[h.ID] = h
-				}
-				for _, n := range currentState.Nodes {
-					if n.LinkedHostAgentID == "" || n.Instance != inst {
-						continue
-					}
-					if linkedHost, ok := hostByID[n.LinkedHostAgentID]; ok && len(linkedHost.DiskExclude) > 0 && linkedHost.Status == "online" {
-						diskExcludeByNode[n.Name] = linkedHost.DiskExclude
-					}
-				}
-
-				var allDisks []models.PhysicalDisk
-				polledNodes := make(map[string]bool) // Track which nodes we successfully polled
-
-				for _, node := range nodeList {
-					// Check if context timed out
-					select {
-					case <-diskCtx.Done():
-						log.Debug().
-							Str("instance", inst).
-							Msg("Physical disk polling timed out - preserving existing data")
-						return
-					default:
-					}
-
-					// Skip offline nodes but preserve their existing disk data
-					if nodeStatus[node.Node] != "online" {
-						log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
-						continue
-					}
-
-					// Get disk list for this node
-					log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
-					disks, err := pveClient.GetDisks(diskCtx, node.Node)
-					if err != nil {
-						// Check if it's a permission error or if the endpoint doesn't exist
-						errStr := err.Error()
-						if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {
-							log.Warn().
-								Str("node", node.Node).
-								Err(err).
-								Msg("Insufficient permissions to access disk information - check API token permissions")
-						} else if strings.Contains(errStr, "404") || strings.Contains(errStr, "501") {
-							log.Info().
-								Str("node", node.Node).
-								Msg("Disk monitoring not available on this node (may be using non-standard storage)")
-						} else {
-							log.Warn().
-								Str("node", node.Node).
-								Err(err).
-								Msg("Failed to get disk list")
-						}
-						continue
-					}
-
-					// Mark this node as successfully polled
-					polledNodes[node.Node] = true
-
-					// Check each disk for health issues and add to state
-					for _, disk := range disks {
-						// Create PhysicalDisk model
-						diskID := fmt.Sprintf("%s-%s-%s", inst, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
-						physicalDisk := models.PhysicalDisk{
-							ID:          diskID,
-							Node:        node.Node,
-							Instance:    inst,
-							DevPath:     disk.DevPath,
-							Model:       disk.Model,
-							Serial:      disk.Serial,
-							WWN:         disk.WWN,
-							Type:        disk.Type,
-							Size:        disk.Size,
-							Health:      disk.Health,
-							Wearout:     disk.Wearout,
-							RPM:         disk.RPM,
-							Used:        disk.Used,
-							LastChecked: time.Now(),
-						}
-
-						allDisks = append(allDisks, physicalDisk)
-
-						log.Debug().
-							Str("node", node.Node).
-							Str("disk", disk.DevPath).
-							Str("model", disk.Model).
-							Str("health", disk.Health).
-							Int("wearout", disk.Wearout).
-							Msg("Checking disk health")
-
-						// If the linked host agent has --disk-exclude for this disk, pass a
-						// synthetic healthy disk to CheckDiskHealth so any existing alerts
-						// get cleared naturally, then skip the normal health/wearout checks.
-						if excludePatterns, ok := diskExcludeByNode[node.Node]; ok {
-							if fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
-								log.Debug().
-									Str("node", node.Node).
-									Str("disk", disk.DevPath).
-									Msg("Disk matches agent --disk-exclude, clearing any alerts")
-								// Synthetic healthy disk: health="PASSED", wearout=100 (full life)
-								// This causes CheckDiskHealth to clear both health and wearout alerts.
-								healthyDisk := disk
-								healthyDisk.Health = "PASSED"
-								healthyDisk.Wearout = 100
-								m.alertManager.CheckDiskHealth(inst, node.Node, healthyDisk)
-								continue
-							}
-						}
-
-						normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
-						if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
-							// Disk has failed or is failing - alert manager will handle this
-							log.Warn().
-								Str("node", node.Node).
-								Str("disk", disk.DevPath).
-								Str("model", disk.Model).
-								Str("health", disk.Health).
-								Int("wearout", disk.Wearout).
-								Msg("Disk health issue detected")
-
-							// Pass disk info to alert manager
-							m.alertManager.CheckDiskHealth(inst, node.Node, disk)
-						} else if disk.Wearout > 0 && disk.Wearout < 10 {
-							// Low wearout warning (less than 10% life remaining)
-							log.Warn().
-								Str("node", node.Node).
-								Str("disk", disk.DevPath).
-								Str("model", disk.Model).
-								Int("wearout", disk.Wearout).
-								Msg("SSD wearout critical - less than 10% life remaining")
-
-							// Pass to alert manager for wearout alert
-							m.alertManager.CheckDiskHealth(inst, node.Node, disk)
-						}
-					}
-				}
-
-				// Preserve existing disk data for nodes that weren't polled (offline or error)
-				for _, existingDisk := range existingDisksMap {
-					// Only preserve if we didn't poll this node
-					if !polledNodes[existingDisk.Node] {
-						// Keep the existing disk data but update the LastChecked to indicate it's stale
-						allDisks = append(allDisks, existingDisk)
-						log.Debug().
-							Str("node", existingDisk.Node).
-							Str("disk", existingDisk.DevPath).
-							Msg("Preserving existing disk data for unpolled node")
-					}
-				}
-
-				// Use nodes from state snapshot - they have LinkedHostAgentID populated
-				// (modelNodesCopy passed to this goroutine doesn't have this field set)
-				allDisks = mergeNVMeTempsIntoDisks(allDisks, currentState.Nodes)
-				// Also merge SMART data from linked host agents
-				allDisks = mergeHostAgentSMARTIntoDisks(allDisks, currentState.Nodes, currentState.Hosts)
-
-				// Write SMART metrics to persistent store
-				if m.metricsStore != nil {
-					now := time.Now()
-					for _, disk := range allDisks {
-						m.writeSMARTMetrics(disk, now)
-					}
-				}
-
-				// Update physical disks in state
-				log.Debug().
-					Str("instance", inst).
-					Int("diskCount", len(allDisks)).
-					Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
-					Msg("Updating physical disks in state")
-				m.state.UpdatePhysicalDisks(inst, allDisks)
-			}(instanceName, client, nodes, nodeEffectiveStatus, modelNodes)
-		}
-	}
-	// Note: Physical disk monitoring is now enabled by default with a 5-minute polling interval.
-	// Users can explicitly disable it in node settings. Disk data is preserved between polls.
-
-	// Wait for storage fallback to complete (with a short timeout) before using the data.
-	// This is non-blocking in the sense that VM/container polling has already completed by now.
-	// We give the storage fallback goroutine up to 2 additional seconds to finish if it's still running.
-	select {
-	case <-storageFallbackDone:
-		// Storage fallback completed normally
-	case <-time.After(2 * time.Second):
-		log.Debug().
-			Str("instance", instanceName).
-			Msg("Storage fallback still running - proceeding without waiting (disk fallback may be unavailable)")
-	}
-
-	// Update nodes with storage fallback if rootfs was not available
-	// Copy storageByNode under lock, then release to avoid holding during metric updates
-	storageByNodeMu.Lock()
-	localStorageByNode := make(map[string]models.Disk, len(storageByNode))
-	for k, v := range storageByNode {
-		localStorageByNode[k] = v
-	}
-	storageByNodeMu.Unlock()
-
-	for i := range modelNodes {
-		if modelNodes[i].Disk.Total == 0 {
-			if disk, exists := localStorageByNode[modelNodes[i].Name]; exists {
-				modelNodes[i].Disk = disk
-				log.Debug().
-					Str("node", modelNodes[i].Name).
-					Float64("usage", disk.Usage).
-					Msg("Applied storage fallback for disk metrics")
-			}
-		}
-
-		if modelNodes[i].Status == "online" {
-			// Record node metrics history only for online nodes
-			now := time.Now()
-			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
-			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
-			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
-			// Also write to persistent store
-			if m.metricsStore != nil {
-				m.metricsStore.Write("node", modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
-				m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
-				m.metricsStore.Write("node", modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
-			}
-		}
-
-		// Check thresholds for alerts
-		m.alertManager.CheckNode(modelNodes[i])
-	}
-
-	// Update state again with corrected disk metrics
-	m.state.UpdateNodesForInstance(instanceName, modelNodes)
-
-	// Clean up alerts for nodes that no longer exist
-	// Get all nodes from the global state (includes all instances)
-	existingNodes := make(map[string]bool)
-	allState := m.state.GetSnapshot()
-	for _, node := range allState.Nodes {
-		existingNodes[node.Name] = true
-	}
-	m.alertManager.CleanupAlertsForNodes(existingNodes)
-
-	// Periodically re-check cluster status for nodes marked as standalone
-	// This addresses issue #437 where clusters aren't detected on first attempt
-	if !instanceCfg.IsCluster {
-		// Check every 5 minutes if this is actually a cluster
-		if time.Since(m.lastClusterCheck[instanceName]) > 5*time.Minute {
-			m.lastClusterCheck[instanceName] = time.Now()
-
-			// Try to detect if this is actually a cluster
-			isActuallyCluster, checkErr := client.IsClusterMember(ctx)
-			if checkErr == nil && isActuallyCluster {
-				// This node is actually part of a cluster!
-				log.Info().
-					Str("instance", instanceName).
-					Msg("Detected that standalone node is actually part of a cluster - updating configuration")
-
-				// Update the configuration
-				for i := range m.config.PVEInstances {
-					if m.config.PVEInstances[i].Name == instanceName {
-						m.config.PVEInstances[i].IsCluster = true
-						// Note: We can't get the cluster name here without direct client access
-						// It will be detected on the next configuration update
-						log.Info().
-							Str("instance", instanceName).
-							Msg("Marked node as cluster member - cluster name will be detected on next update")
-
-							// Save the updated configuration
-						if m.persistence != nil {
-							if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-								log.Warn().Err(err).Msg("Failed to persist updated node configuration")
-							}
-						}
-						break
-					}
-				}
-			}
-		}
-	}
-
-	// Update cluster endpoint online status if this is a cluster
-	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
-		// Create a map of online nodes from our polling results
-		onlineNodes := make(map[string]bool)
-		for _, node := range modelNodes {
-			// Node is online if we successfully got its data
-			onlineNodes[node.Name] = node.Status == "online"
-		}
-
-		// Get Pulse connectivity status from ClusterClient if available
-		var pulseHealth map[string]proxmox.EndpointHealth
-		if clusterClient, ok := client.(*proxmox.ClusterClient); ok {
-			pulseHealth = clusterClient.GetHealthStatusWithErrors()
-		}
-
-		// Update the online status for each cluster endpoint
-		for i := range instanceCfg.ClusterEndpoints {
-			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
-				instanceCfg.ClusterEndpoints[i].Online = online
-				if online {
-					instanceCfg.ClusterEndpoints[i].LastSeen = time.Now()
-				}
-			}
-
-			// Update Pulse connectivity status
-			if pulseHealth != nil {
-				// Try to find the endpoint in the health map by matching the effective URL
-				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i], instanceCfg.VerifySSL, instanceCfg.Fingerprint)
-				if health, exists := pulseHealth[endpointURL]; exists {
-					reachable := health.Healthy
-					instanceCfg.ClusterEndpoints[i].PulseReachable = &reachable
-					if !health.LastCheck.IsZero() {
-						instanceCfg.ClusterEndpoints[i].LastPulseCheck = &health.LastCheck
-					}
-					instanceCfg.ClusterEndpoints[i].PulseError = health.LastError
-				}
-			}
-		}
-
-		// Update the config with the new online status
-		// This is needed so the UI can reflect the current status
-		for idx, cfg := range m.config.PVEInstances {
-			if cfg.Name == instanceName {
-				m.config.PVEInstances[idx].ClusterEndpoints = instanceCfg.ClusterEndpoints
-				break
-			}
-		}
-	}
-
-	// Poll storage in background if enabled - storage APIs can be slow (NFS mounts, etc.)
-	// so we run this asynchronously to prevent it from causing task timeouts.
-	// This is similar to how backup polling runs in the background.
-	if instanceCfg.MonitorStorage {
-		select {
-		case <-ctx.Done():
-			pollErr = ctx.Err()
-			return
-		default:
-			go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node) {
-				defer recoverFromPanic(fmt.Sprintf("pollStorageWithNodes-%s", inst))
-
-				// Use a generous timeout for storage polling - it's not blocking the main task
-				storageTimeout := 60 * time.Second
-				storageCtx, storageCancel := context.WithTimeout(context.Background(), storageTimeout)
-				defer storageCancel()
-
-				m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
-			}(instanceName, client, nodes)
-		}
-	}
-
-	// Poll backups if enabled - respect configured interval or cycle gating
-	if instanceCfg.MonitorBackups {
-		if !m.config.EnableBackupPolling {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("Skipping backup polling - globally disabled")
-		} else {
-			now := time.Now()
-
-			m.mu.RLock()
-			lastPoll := m.lastPVEBackupPoll[instanceName]
-			m.mu.RUnlock()
-
-			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-			if !shouldPoll {
-				if reason != "" {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("reason", reason).
-						Msg("Skipping PVE backup polling this cycle")
-				}
-			} else {
-				select {
-				case <-ctx.Done():
-					pollErr = ctx.Err()
-					return
-				default:
-					// Set initial timestamp before starting goroutine (prevents concurrent starts)
-					m.mu.Lock()
-					m.lastPVEBackupPoll[instanceName] = newLast
-					m.mu.Unlock()
-
-					// Run backup polling in a separate goroutine to avoid blocking real-time stats
-					go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
-						defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
-						timeout := m.calculateBackupOperationTimeout(inst)
-						log.Info().
-							Str("instance", inst).
-							Dur("timeout", timeout).
-							Msg("Starting background backup/snapshot polling")
-
-						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.runtimeCtx
-						if parentCtx == nil {
-							parentCtx = context.Background()
-						}
-
-						backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
-						defer cancel()
-
-						// Poll backup tasks
-						m.pollBackupTasks(backupCtx, inst, pveClient)
-
-						// Poll storage backups - pass nodes to avoid duplicate API calls
-						m.pollStorageBackupsWithNodes(backupCtx, inst, pveClient, nodes, nodeEffectiveStatus)
-
-						// Poll guest snapshots
-						m.pollGuestSnapshots(backupCtx, inst, pveClient)
-
-						duration := time.Since(startTime)
-						log.Info().
-							Str("instance", inst).
-							Dur("duration", duration).
-							Msg("Completed background backup/snapshot polling")
-
-						// Update timestamp after completion for accurate interval scheduling
-						m.mu.Lock()
-						m.lastPVEBackupPoll[inst] = time.Now()
-						m.mu.Unlock()
-					}(now, instanceName, client)
-				}
-			}
-		}
-	}
-}
-
-// pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
-// This works on both clustered and standalone nodes for efficient polling
-// When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
-// when multiple cluster nodes are configured as separate PVE instances.
-func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
-	log.Debug().
-		Str("instance", instanceName).
-		Str("clusterName", clusterName).
-		Bool("isCluster", isCluster).
-		Msg("Polling VMs and containers using efficient cluster/resources endpoint")
-
-	// Get all resources in a single API call
-	resources, err := client.GetClusterResources(ctx, "vm")
-	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
-		return false
-	}
-
-	// Seed OCI classification from previous state so we never "downgrade" to LXC
-	// if container config fetching intermittently fails (permissions or transient API errors).
-	prevState := m.GetState()
-	prevInstanceVMs := filterVMsByInstance(prevState.VMs, instanceName)
-	prevContainerIsOCI := make(map[int]bool)
-	for _, ct := range prevState.Containers {
-		if ct.Instance != instanceName {
-			continue
-		}
-		if ct.VMID <= 0 {
-			continue
-		}
-		if ct.Type == "oci" || ct.IsOCI {
-			prevContainerIsOCI[ct.VMID] = true
-		}
-	}
-
-	// Build a lookup map from VM guest ID → linked host agent.
-	// When a Pulse agent runs inside a VM, it reads /proc/meminfo directly
-	// and gets accurate MemAvailable (excluding page cache). We use this as
-	// a memory fallback before the inflated status.Mem value. Refs: #1270
-	vmIDToHostAgent := make(map[string]models.Host)
-	for _, h := range prevState.Hosts {
-		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
-			vmIDToHostAgent[h.LinkedVMID] = h
-		}
-	}
-
-	// Build a lookup for previous disk data so we can carry it forward when the
-	// guest agent call fails (prevents disk usage flickering 57% → 0% → 57%).
-	// Refs: #1319
-	prevDiskByGuestID := make(map[string]models.Disk, len(prevInstanceVMs))
-	prevVMByGuestID := make(map[string]models.VM, len(prevInstanceVMs))
-	for _, pvm := range prevInstanceVMs {
-		prevVMByGuestID[pvm.ID] = pvm
-		if pvm.Disk.Usage > 0 {
-			prevDiskByGuestID[pvm.ID] = pvm.Disk
-		}
-	}
-
-	var allVMs []models.VM
-	var allContainers []models.Container
-	templateNodeMap := make(map[int]string) // VMID -> node, for template backup orphan detection
-
-	for _, res := range resources {
-		// Generate canonical guest ID: instance:node:vmid
-		guestID := makeGuestID(instanceName, res.Node, res.VMID)
-
-		// Debug log the resource type
-		log.Debug().
-			Str("instance", instanceName).
-			Str("name", res.Name).
-			Int("vmid", res.VMID).
-			Str("type", res.Type).
-			Msg("Processing cluster resource")
-
-		// Initialize I/O metrics from cluster resources (may be 0 for VMs)
-		diskReadBytes := int64(res.DiskRead)
-		diskWriteBytes := int64(res.DiskWrite)
-		networkInBytes := int64(res.NetIn)
-		networkOutBytes := int64(res.NetOut)
-		var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
-		diskFromAgent := false            // Set true when guest agent successfully provided disk data
-		var ipAddresses []string
-		var networkInterfaces []models.GuestNetworkInterface
-		var osName, osVersion, agentVersion string
-
-		if res.Type == "qemu" {
-			// Skip templates — they are not monitored but track their VMID→node so backup
-			// orphan detection does not flag backups of templates as orphaned.
-			if res.Template == 1 {
-				templateNodeMap[res.VMID] = res.Node
-				continue
-			}
-
-			memTotal := res.MaxMem
-			memUsed := res.Mem
-			memorySource := "cluster-resources"
-			guestRaw := VMMemoryRaw{
-				ListingMem:    res.Mem,
-				ListingMaxMem: res.MaxMem,
-			}
-			var detailedStatus *proxmox.VMStatus
-			memAvailable := uint64(0)
-			memRawFree := uint64(0) // Truly free memory (MemFree), for cache segment calculation
-			memInfoTotalMinusUsed := uint64(0)
-			rrdUsed := uint64(0)
-			agentEnabled := false
-
-			// Try to get actual disk usage from guest agent if VM is running
-			diskUsed := res.Disk
-			diskTotal := res.MaxDisk
-			diskFree := diskTotal - diskUsed
-			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
-
-			// If VM shows 0 disk usage but has allocated disk, it's likely guest agent issue
-			// Set to -1 to indicate "unknown" rather than showing misleading 0%
-			if res.Type == "qemu" && diskUsed == 0 && diskTotal > 0 && res.Status == "running" {
-				diskUsage = -1
-			}
-
-			// For running VMs, always try to get filesystem info from guest agent
-			// The cluster/resources endpoint often returns 0 or incorrect values for disk usage
-			// We should prefer guest agent data when available for accurate metrics
-			if res.Status == "running" && res.Type == "qemu" {
-				// First check if agent is enabled by getting VM status
-				statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				status, err := client.GetVMStatus(statusCtx, res.Node, res.VMID)
-				cancel()
-				if err != nil {
-					log.Debug().
-						Err(err).
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Msg("Could not get VM status to check guest agent availability")
-				} else if status != nil {
-					detailedStatus = status
-					guestRaw.StatusMaxMem = detailedStatus.MaxMem
-					guestRaw.StatusMem = detailedStatus.Mem
-					guestRaw.StatusFreeMem = detailedStatus.FreeMem
-					guestRaw.Balloon = detailedStatus.Balloon
-					guestRaw.BalloonMin = detailedStatus.BalloonMin
-					guestRaw.Agent = detailedStatus.Agent.Value
-					agentEnabled = detailedStatus.Agent.Value > 0
-					if detailedStatus.MemInfo != nil {
-						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
-						guestRaw.MemInfoFree = detailedStatus.MemInfo.Free
-						guestRaw.MemInfoTotal = detailedStatus.MemInfo.Total
-						guestRaw.MemInfoAvailable = detailedStatus.MemInfo.Available
-						guestRaw.MemInfoBuffers = detailedStatus.MemInfo.Buffers
-						guestRaw.MemInfoCached = detailedStatus.MemInfo.Cached
-						guestRaw.MemInfoShared = detailedStatus.MemInfo.Shared
-
-						if detailedStatus.MemInfo.Free > 0 {
-							memRawFree = detailedStatus.MemInfo.Free
-						}
-
-						selection := selectVMAvailableFromMemInfo(detailedStatus.MemInfo)
-						memInfoTotalMinusUsed = selection.TotalMinusUsed
-						guestRaw.MemInfoTotalMinusUsed = memInfoTotalMinusUsed
-						if selection.Available > 0 {
-							memAvailable = selection.Available
-							memorySource = selection.Source
-						}
-					}
-
-					// Use actual disk I/O values from detailed status
-					diskReadBytes = int64(detailedStatus.DiskRead)
-					diskWriteBytes = int64(detailedStatus.DiskWrite)
-					networkInBytes = int64(detailedStatus.NetIn)
-					networkOutBytes = int64(detailedStatus.NetOut)
-
-					// Note: We intentionally do NOT override memTotal with balloon.
-					// The balloon value is tracked separately in memory.balloon for
-					// visualization purposes. Using balloon as total causes user
-					// confusion (showing 1GB/1GB at 100% when VM is configured for 4GB)
-					// and makes the frontend's balloon marker logic ineffective.
-					// Refs: #1070
-					if detailedStatus.MaxMem > 0 {
-						memTotal = detailedStatus.MaxMem
-					}
-					// Note: do NOT fall back to detailedStatus.FreeMem for memRawFree.
-					// FreeMem is relative to the balloon allocation (guest-visible total),
-					// while memFree is derived from MaxMem. Mixing reference frames would
-					// inflate the cache segment by the balloon gap. Only MemInfo.Free is
-					// safe because it shares the same reference frame as MemInfo.Available.
-				} else {
-					// No vmStatus available - keep cluster/resources data
-					log.Debug().
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Msg("Could not get VM status, using cluster/resources disk data")
-				}
-			}
-
-			// Preferred fallback: read /proc/meminfo directly via the QEMU guest
-			// agent's file-read endpoint. This gives real-time MemAvailable which
-			// correctly excludes reclaimable buff/cache. Results are cached (60s
-			// positive, 5min negative) so this is cheap after the first call.
-			// Refs: #1270
-			if res.Status == "running" && agentEnabled && memAvailable == 0 {
-				m.runGuestAgentVMWork(ctx, instanceName, res.Node, res.Name, res.VMID, func(agentCtx context.Context) {
-					if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
-						memAvailable = agentAvail
-						memorySource = "guest-agent-meminfo"
-						guestRaw.MemInfoAvailable = memAvailable
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Msg("QEMU memory: using guest agent /proc/meminfo (excludes reclaimable cache)")
-					}
-				})
-			}
-
-			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available
-			// and the direct file-read didn't work: try Proxmox RRD memory.
-			if res.Status == "running" && memAvailable == 0 {
-				if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil {
-					if rrdEntry.total > 0 {
-						memTotal = rrdEntry.total
-					}
-					if rrdEntry.available > 0 {
-						memAvailable = rrdEntry.available
-						memorySource = "rrd-memavailable"
-						guestRaw.RRDAvailable = rrdEntry.available
-						guestRaw.MemInfoAvailable = rrdEntry.available
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
-					} else if rrdEntry.used > 0 {
-						rrdUsed = rrdEntry.used
-						memorySource = "rrd-memused"
-						guestRaw.RRDUsed = rrdEntry.used
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("used", rrdUsed).
-							Msg("QEMU memory: using RRD memused fallback")
-					}
-				} else {
-					log.Debug().
-						Err(rrdErr).
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Msg("RRD memory data unavailable for VM, using status/cluster resources values")
-				}
-			}
-
-			// Fallback: use linked Pulse host agent's memory data.
-			// gopsutil's Used = Total - Available (excludes page cache),
-			// so we can derive accurate available memory. Refs: #1270
-			if res.Status == "running" && memAvailable == 0 {
-				if agentHost, ok := vmIDToHostAgent[guestID]; ok {
-					agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
-					if agentAvailable > 0 {
-						memAvailable = uint64(agentAvailable)
-						memorySource = "host-agent"
-						guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-						guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Int64("agentTotal", agentHost.Memory.Total).
-							Int64("agentUsed", agentHost.Memory.Used).
-							Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
-					}
-				}
-			}
-
-			if res.Status == "running" && agentEnabled {
-				m.runGuestAgentVMWork(ctx, instanceName, res.Node, res.Name, res.VMID, func(agentCtx context.Context) {
-					if detailedStatus != nil && detailedStatus.Agent.Value > 0 {
-						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", res.Name).
-							Int("vmid", res.VMID).
-							Int("agent", detailedStatus.Agent.Value).
-							Uint64("current_disk", diskUsed).
-							Uint64("current_maxdisk", diskTotal).
-							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
-
-						// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
-						fsInfoRaw, err := m.retryGuestAgentCall(agentCtx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
-							return client.GetVMFSInfo(ctx, res.Node, res.VMID)
-						})
-						var fsInfo []proxmox.VMFileSystem
-						if err == nil {
-							if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
-								fsInfo = fs
-							}
-						}
-						if err != nil {
-							// Log more helpful error messages based on the error type
-							errMsg := err.Error()
-							if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("To verify: ssh into VM and run 'systemctl status qemu-guest-agent' or 'ps aux | grep qemu-ga'")
-							} else if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") {
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Msg("Guest agent timeout - agent may be installed but not responding")
-							} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-								// Permission error - user/token lacks required permissions
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Msg("VM disk monitoring permission denied. Check permissions:")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit+VM.GuestAgent.FileRead privileges (Pulse setup adds these via PulseMonitor role)")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("• Proxmox 8: Ensure token/user has VM.Monitor privilege (Pulse setup adds this via PulseMonitor role)")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("• All versions: Sys.Audit is recommended for Ceph metrics and applied when available")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("• Re-run Pulse setup script if node was added before v4.7")
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Msg("• Verify guest agent is installed and running inside the VM")
-							} else {
-								log.Debug().
-									Err(err).
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Msg("Failed to get filesystem info from guest agent")
-							}
-						} else if len(fsInfo) == 0 {
-							log.Info().
-								Str("instance", instanceName).
-								Str("vm", res.Name).
-								Int("vmid", res.VMID).
-								Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems")
-						} else {
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", res.Name).
-								Int("filesystems", len(fsInfo)).
-								Msg("Got filesystem info from guest agent")
-
-							// Aggregate disk usage from all filesystems AND preserve individual disk data
-							var totalBytes, usedBytes uint64
-							var skippedFS []string
-							var includedFS []string
-
-							// Track seen filesystems to dedupe btrfs/zfs subvolumes that share the same pool.
-							// These filesystems mount multiple subvolumes from one storage pool, each reporting
-							// the same TotalBytes. Without deduplication, we'd sum 11 × 77GB = 851GB instead of 77GB.
-							// Key: "fstype:device:totalBytes" or "fstype::totalBytes" if device unknown.
-							seenFilesystems := make(map[string]bool)
-
-							// Log all filesystems received for debugging
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", res.Name).
-								Int("vmid", res.VMID).
-								Int("filesystem_count", len(fsInfo)).
-								Msg("Processing filesystems from guest agent")
-
-							for _, fs := range fsInfo {
-								// Skip special filesystems and mounts
-								shouldSkip, reasons := fsfilters.ShouldSkipFilesystem(fs.Type, fs.Mountpoint, fs.TotalBytes, fs.UsedBytes)
-								if shouldSkip {
-									// Check if any reason is read-only for detailed logging
-									for _, r := range reasons {
-										if strings.HasPrefix(r, "read-only-") {
-											log.Debug().
-												Str("instance", instanceName).
-												Str("vm", res.Name).
-												Int("vmid", res.VMID).
-												Str("mountpoint", fs.Mountpoint).
-												Str("type", fs.Type).
-												Float64("total_gb", float64(fs.TotalBytes)/1073741824).
-												Float64("used_gb", float64(fs.UsedBytes)/1073741824).
-												Msg("Skipping read-only filesystem from disk aggregation")
-											break
-										}
-									}
-									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,%s)",
-										fs.Mountpoint, fs.Type, strings.Join(reasons, ",")))
-									continue
-								}
-
-								// Only count real filesystems with valid data
-								// Some filesystems report 0 bytes (like unformatted or system partitions)
-								if fs.TotalBytes > 0 {
-									// Deduplication: the same device can appear multiple times when:
-									// 1. btrfs/zfs mount multiple subvolumes from a shared pool
-									// 2. Kubernetes bind-mounts volumes at both pod and plugin paths
-									// In both cases, only count the device's capacity once.
-									fsTypeLower := strings.ToLower(fs.Type)
-									countThisFS := true
-									if fs.Disk != "" {
-										// Same device at multiple mount paths → count once
-										dedupeKey := fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
-										if seenFilesystems[dedupeKey] {
-											countThisFS = false
-											log.Debug().
-												Str("instance", instanceName).
-												Str("vm", res.Name).
-												Int("vmid", res.VMID).
-												Str("mountpoint", fs.Mountpoint).
-												Str("type", fs.Type).
-												Str("device", fs.Disk).
-												Uint64("total", fs.TotalBytes).
-												Str("dedupe_key", dedupeKey).
-												Msg("Skipping duplicate device mount in total calculation")
-										} else {
-											seenFilesystems[dedupeKey] = true
-										}
-									} else if fsTypeLower == "btrfs" || fsTypeLower == "zfs" ||
-										strings.HasPrefix(fsTypeLower, "zfs") {
-										// No device info — fall back to type+size dedup for COW filesystems
-										dedupeKey := fmt.Sprintf("%s::%d", fsTypeLower, fs.TotalBytes)
-										if seenFilesystems[dedupeKey] {
-											countThisFS = false
-											log.Debug().
-												Str("instance", instanceName).
-												Str("vm", res.Name).
-												Int("vmid", res.VMID).
-												Str("mountpoint", fs.Mountpoint).
-												Str("type", fs.Type).
-												Uint64("total", fs.TotalBytes).
-												Str("dedupe_key", dedupeKey).
-												Msg("Skipping duplicate btrfs/zfs subvolume in total calculation")
-										} else {
-											seenFilesystems[dedupeKey] = true
-										}
-									}
-
-									if countThisFS {
-										totalBytes += fs.TotalBytes
-										usedBytes += fs.UsedBytes
-									}
-									includedFS = append(includedFS, fmt.Sprintf("%s(%s,%.1fGB)",
-										fs.Mountpoint, fs.Type, float64(fs.TotalBytes)/1073741824))
-
-									// Add to individual disks array (always include for display)
-									individualDisks = append(individualDisks, models.Disk{
-										Total:      int64(fs.TotalBytes),
-										Used:       int64(fs.UsedBytes),
-										Free:       int64(fs.TotalBytes - fs.UsedBytes),
-										Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
-										Mountpoint: fs.Mountpoint,
-										Type:       fs.Type,
-										Device:     fs.Disk,
-									})
-
-									log.Debug().
-										Str("instance", instanceName).
-										Str("vm", res.Name).
-										Int("vmid", res.VMID).
-										Str("mountpoint", fs.Mountpoint).
-										Str("type", fs.Type).
-										Uint64("total", fs.TotalBytes).
-										Uint64("used", fs.UsedBytes).
-										Float64("total_gb", float64(fs.TotalBytes)/1073741824).
-										Float64("used_gb", float64(fs.UsedBytes)/1073741824).
-										Bool("counted_in_total", countThisFS).
-										Msg("Including filesystem in disk usage calculation")
-								} else if fs.TotalBytes == 0 && len(fs.Mountpoint) > 0 {
-									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,0GB)", fs.Mountpoint, fs.Type))
-									log.Debug().
-										Str("instance", instanceName).
-										Str("vm", res.Name).
-										Int("vmid", res.VMID).
-										Str("mountpoint", fs.Mountpoint).
-										Str("type", fs.Type).
-										Msg("Skipping filesystem with zero total bytes")
-								}
-							}
-
-							if len(skippedFS) > 0 {
-								log.Debug().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Strs("skipped", skippedFS).
-									Msg("Skipped special filesystems")
-							}
-
-							if len(includedFS) > 0 {
-								log.Debug().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Strs("included", includedFS).
-									Msg("Filesystems included in disk calculation")
-							}
-
-							// If we got valid data from guest agent, use it
-							if totalBytes > 0 {
-								// Sanity check: if the reported disk is way larger than allocated disk,
-								// we might be getting host disk info somehow
-								allocatedDiskGB := float64(res.MaxDisk) / 1073741824
-								reportedDiskGB := float64(totalBytes) / 1073741824
-
-								// If reported disk is more than 2x the allocated disk, log for debugging
-								// This is expected for VMs with pass-through disks, NFS mounts, or ZFS datasets
-								if allocatedDiskGB > 0 && reportedDiskGB > allocatedDiskGB*2 {
-									log.Debug().
-										Str("instance", instanceName).
-										Str("vm", res.Name).
-										Int("vmid", res.VMID).
-										Float64("allocated_gb", allocatedDiskGB).
-										Float64("reported_gb", reportedDiskGB).
-										Float64("ratio", reportedDiskGB/allocatedDiskGB).
-										Strs("filesystems", includedFS).
-										Msg("VM reports disk usage significantly larger than allocated disk - possible issue with filesystem detection")
-								}
-
-								diskTotal = totalBytes
-								diskUsed = usedBytes
-								diskFree = totalBytes - usedBytes
-								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
-								diskFromAgent = true
-
-								log.Debug().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("vmid", res.VMID).
-									Uint64("totalBytes", totalBytes).
-									Uint64("usedBytes", usedBytes).
-									Float64("total_gb", float64(totalBytes)/1073741824).
-									Float64("used_gb", float64(usedBytes)/1073741824).
-									Float64("allocated_gb", allocatedDiskGB).
-									Float64("usage", diskUsage).
-									Uint64("old_disk", res.Disk).
-									Uint64("old_maxdisk", res.MaxDisk).
-									Msg("Using guest agent data for accurate disk usage (replacing cluster/resources data)")
-							} else {
-								// Only special filesystems found - show allocated disk size instead
-								if diskTotal > 0 {
-									diskUsage = -1 // Show as allocated size
-								}
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", res.Name).
-									Int("filesystems_found", len(fsInfo)).
-									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
-							}
-						}
-					}
-
-					guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(agentCtx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
-					if len(guestIPs) > 0 {
-						ipAddresses = guestIPs
-					}
-					if len(guestIfaces) > 0 {
-						networkInterfaces = guestIfaces
-					}
-					if guestOSName != "" {
-						osName = guestOSName
-					}
-					if guestOSVersion != "" {
-						osVersion = guestOSVersion
-					}
-					if guestAgentVersion != "" {
-						agentVersion = guestAgentVersion
-					}
-				})
-			}
-
-			// Carry forward previous disk data when the guest agent was expected
-			// but failed to provide data this cycle.  Proxmox cluster/resources
-			// always returns 0 for VM disk, so without the guest agent we'd show
-			// 0% or "allocated only", causing chart spikes when the agent
-			// intermittently times out. Refs: #1319
-			// Also triggers when GetVMStatus itself failed (agentEnabled stays
-			// false but the VM had real disk data last cycle).
-			// Skip when we know the agent is explicitly disabled — that's a
-			// permanent state and stale data shouldn't persist indefinitely.
-			agentExplicitlyOff := detailedStatus != nil && detailedStatus.Agent.Value == 0
-			if res.Status == "running" && res.Type == "qemu" && !diskFromAgent && !agentExplicitlyOff {
-				if prev, ok := prevDiskByGuestID[guestID]; ok && prev.Usage > 0 && prev.Total > 0 && prev.Used >= 0 && prev.Used <= prev.Total {
-					diskTotal = uint64(prev.Total)
-					diskUsed = uint64(prev.Used)
-					diskFree = diskTotal - diskUsed
-					diskUsage = prev.Usage
-					individualDisks = nil // Don't carry forward stale per-disk breakdown
-					log.Debug().
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Float64("prevUsage", prev.Usage).
-						Msg("Guest agent disk query failed; carrying forward previous disk data")
-				}
-			}
-
-			// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
-			// attempts, so those more reliable cache-aware sources get priority.
-			if res.Status == "running" && memAvailable == 0 && memInfoTotalMinusUsed > 0 {
-				memAvailable = memInfoTotalMinusUsed
-				memorySource = "meminfo-total-minus-used"
-			}
-
-			switch {
-			case res.Status != "running":
-				memorySource = "powered-off"
-				memUsed = 0
-			case memAvailable > 0:
-				if memAvailable > memTotal {
-					memAvailable = memTotal
-				}
-				memUsed = memTotal - memAvailable
-			case rrdUsed > 0:
-				memUsed = rrdUsed
-				memorySource = "rrd-memused"
-			case detailedStatus != nil && detailedStatus.Mem > 0:
-				// Prefer Mem over FreeMem: Proxmox calculates Mem as
-				// (total_mem - free_mem) using the balloon's guest-visible
-				// total, which is correct even when ballooning is active.
-				// FreeMem is relative to the balloon allocation (not MaxMem),
-				// so subtracting it from MaxMem produces wildly inflated
-				// usage when the balloon has reduced the VM's memory.
-				// Refs: #1185
-				memUsed = detailedStatus.Mem
-				memorySource = "status-mem"
-			case detailedStatus != nil && detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem:
-				memUsed = memTotal - detailedStatus.FreeMem
-				memorySource = "status-freemem"
-			}
-			if memUsed > memTotal {
-				memUsed = memTotal
-			}
-
-			sampleTime := time.Now()
-			var memory models.Memory
-			snapshotNotes := []string(nil)
-			if prev, ok := prevVMByGuestID[guestID]; ok &&
-				shouldCarryForwardPreviousVMMemory(prev, res.Status, memorySource, memTotal, memUsed, sampleTime) {
-				fallbackSource := memorySource
-				memory = prev.Memory
-				if detailedStatus != nil && detailedStatus.Balloon > 0 {
-					memory.Balloon = int64(detailedStatus.Balloon)
-				}
-				memorySource = "previous-snapshot"
-				snapshotNotes = append(snapshotNotes, "preserved-previous-memory-after-low-trust-fallback")
-				log.Debug().
-					Str("instance", instanceName).
-					Str("vm", res.Name).
-					Int("vmid", res.VMID).
-					Str("previousSource", prev.MemorySource).
-					Str("fallbackSource", fallbackSource).
-					Float64("previousUsage", prev.Memory.Usage).
-					Float64("fallbackUsage", safePercentage(float64(memUsed), float64(memTotal))).
-					Msg("Preserving previous VM memory metrics after low-trust fallback")
-			} else {
-				memFree := uint64(0)
-				if memTotal >= memUsed {
-					memFree = memTotal - memUsed
-				}
-
-				memoryUsage := safePercentage(float64(memUsed), float64(memTotal))
-				memory = models.Memory{
-					Total: int64(memTotal),
-					Used:  int64(memUsed),
-					Free:  int64(memFree),
-					Usage: memoryUsage,
-				}
-				if memory.Free < 0 {
-					memory.Free = 0
-				}
-				if memory.Used > memory.Total {
-					memory.Used = memory.Total
-				}
-				// Derive reclaimable cache: the difference between "available" memory
-				// (what the OS can reclaim) and "truly free" memory (unused pages).
-				// This lets the frontend show a split bar: used | cache | free.
-				if memRawFree > 0 && memFree > memRawFree {
-					memory.Cache = int64(memFree - memRawFree)
-					// Adjust Free to reflect truly free pages, not available
-					memory.Free = int64(memRawFree)
-				}
-				if detailedStatus != nil && detailedStatus.Balloon > 0 {
-					memory.Balloon = int64(detailedStatus.Balloon)
-				}
-			}
-
-			currentMetrics := IOMetrics{
-				DiskRead:   diskReadBytes,
-				DiskWrite:  diskWriteBytes,
-				NetworkIn:  networkInBytes,
-				NetworkOut: networkOutBytes,
-				Timestamp:  sampleTime,
-			}
-			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-
-			vm := models.VM{
-				ID:           guestID,
-				VMID:         res.VMID,
-				Name:         res.Name,
-				Node:         res.Node,
-				Instance:     instanceName,
-				Status:       res.Status,
-				Type:         "qemu",
-				CPU:          safeFloat(res.CPU),
-				CPUs:         res.MaxCPU,
-				Memory:       memory,
-				MemorySource: memorySource,
-				Disk: models.Disk{
-					Total: int64(diskTotal),
-					Used:  int64(diskUsed),
-					Free:  int64(diskFree),
-					Usage: diskUsage,
-				},
-				Disks:             individualDisks, // Individual filesystem data
-				IPAddresses:       ipAddresses,
-				OSName:            osName,
-				OSVersion:         osVersion,
-				AgentVersion:      agentVersion,
-				NetworkInterfaces: networkInterfaces,
-				NetworkIn:         max(0, int64(netInRate)),
-				NetworkOut:        max(0, int64(netOutRate)),
-				DiskRead:          max(0, int64(diskReadRate)),
-				DiskWrite:         max(0, int64(diskWriteRate)),
-				Uptime:            int64(res.Uptime),
-				Template:          res.Template == 1,
-				LastSeen:          sampleTime,
-			}
-
-			// Parse tags
-			if res.Tags != "" {
-				vm.Tags = strings.Split(res.Tags, ";")
-
-				// Log if Pulse-specific tags are detected
-				for _, tag := range vm.Tags {
-					switch tag {
-					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
-						log.Info().
-							Str("vm", vm.Name).
-							Str("node", vm.Node).
-							Str("tag", tag).
-							Msg("Pulse control tag detected on VM")
-					}
-				}
-			}
-
-			// Trigger guest metadata migration if old format exists
-			if m.guestMetadataStore != nil {
-				m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-			}
-
-			allVMs = append(allVMs, vm)
-
-			m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
-				Name:         vm.Name,
-				Status:       vm.Status,
-				RetrievedAt:  sampleTime,
-				MemorySource: memorySource,
-				Memory:       vm.Memory,
-				Raw:          guestRaw,
-				Notes:        snapshotNotes,
-			})
-
-			// For non-running VMs, zero out resource usage metrics to prevent false alerts
-			// Proxmox may report stale or residual metrics for stopped VMs
-			if vm.Status != "running" {
-				log.Debug().
-					Str("vm", vm.Name).
-					Str("status", vm.Status).
-					Float64("originalCpu", vm.CPU).
-					Float64("originalMemUsage", vm.Memory.Usage).
-					Msg("Non-running VM detected - zeroing metrics")
-
-				// Zero out all usage metrics for stopped/paused/suspended VMs
-				vm.CPU = 0
-				vm.Memory.Usage = 0
-				vm.Disk.Usage = 0
-				vm.NetworkIn = 0
-				vm.NetworkOut = 0
-				vm.DiskRead = 0
-				vm.DiskWrite = 0
-			}
-
-			// Check thresholds for alerts
-			m.alertManager.CheckGuest(vm, instanceName)
-
-		} else if res.Type == "lxc" {
-			// Skip templates — same rationale as qemu above.
-			if res.Template == 1 {
-				templateNodeMap[res.VMID] = res.Node
-				continue
-			}
-
-			// Calculate I/O rates for container
-			sampleTime := time.Now()
-			currentMetrics := IOMetrics{
-				DiskRead:   int64(res.DiskRead),
-				DiskWrite:  int64(res.DiskWrite),
-				NetworkIn:  int64(res.NetIn),
-				NetworkOut: int64(res.NetOut),
-				Timestamp:  sampleTime,
-			}
-			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-
-			// Calculate cache-aware memory for LXC containers
-			// The cluster resources API returns mem from cgroup which includes cache/buffers (inflated).
-			// Try to get more accurate memory metrics from RRD data.
-			memTotal := res.MaxMem
-			memUsed := res.Mem
-			memorySource := "cluster-resources"
-			guestRaw := VMMemoryRaw{
-				ListingMem:    res.Mem,
-				ListingMaxMem: res.MaxMem,
-			}
-
-			// For running containers, try to get RRD data for cache-aware memory calculation
-			if res.Status == "running" {
-				rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
-				rrdPoints, err := client.GetLXCRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
-				rrdCancel()
-
-				if err == nil && len(rrdPoints) > 0 {
-					// Use the most recent RRD point
-					point := rrdPoints[len(rrdPoints)-1]
-
-					if point.MaxMem != nil && *point.MaxMem > 0 {
-						guestRaw.StatusMaxMem = uint64(*point.MaxMem)
-					}
-
-					// Prefer memavailable-based calculation (excludes cache/buffers)
-					if point.MemAvailable != nil && *point.MemAvailable > 0 {
-						memAvailable := uint64(*point.MemAvailable)
-						if memAvailable <= memTotal {
-							memUsed = memTotal - memAvailable
-							memorySource = "rrd-memavailable"
-							guestRaw.MemInfoAvailable = memAvailable
-							log.Debug().
-								Str("container", res.Name).
-								Str("node", res.Node).
-								Uint64("total", memTotal).
-								Uint64("available", memAvailable).
-								Uint64("used", memUsed).
-								Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-								Msg("LXC memory: using RRD memavailable (excludes reclaimable cache)")
-						}
-					} else if point.MemUsed != nil && *point.MemUsed > 0 {
-						// Fall back to memused from RRD if available
-						memUsed = uint64(*point.MemUsed)
-						if memUsed <= memTotal {
-							memorySource = "rrd-memused"
-							guestRaw.MemInfoUsed = memUsed
-							log.Debug().
-								Str("container", res.Name).
-								Str("node", res.Node).
-								Uint64("total", memTotal).
-								Uint64("used", memUsed).
-								Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-								Msg("LXC memory: using RRD memused (excludes reclaimable cache)")
-						}
-					}
-				} else if err != nil {
-					log.Debug().
-						Err(err).
-						Str("instance", instanceName).
-						Str("container", res.Name).
-						Int("vmid", res.VMID).
-						Msg("RRD memory data unavailable for LXC, using cluster resources value")
-				}
-			}
-
-			// Clamp memory and disk values to prevent >100% usage
-			// (Proxmox can report used > total for LXC due to cgroup accounting,
-			// shared pages, or thin-provisioned disk overcommit)
-			clampedMemUsed := memUsed
-			if clampedMemUsed > memTotal && memTotal > 0 {
-				clampedMemUsed = memTotal
-			}
-			memFree := int64(memTotal) - int64(clampedMemUsed)
-			if memFree < 0 {
-				memFree = 0
-			}
-			diskUsed := res.Disk
-			if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
-				diskUsed = res.MaxDisk
-			}
-			diskFree := int64(res.MaxDisk) - int64(diskUsed)
-			if diskFree < 0 {
-				diskFree = 0
-			}
-
-			container := models.Container{
-				ID:       guestID,
-				VMID:     res.VMID,
-				Name:     res.Name,
-				Node:     res.Node,
-				Instance: instanceName,
-				Status:   res.Status,
-				Type:     "lxc",
-				CPU:      safeFloat(res.CPU),
-				CPUs:     res.MaxCPU,
-				Memory: models.Memory{
-					Total: int64(memTotal),
-					Used:  int64(clampedMemUsed),
-					Free:  memFree,
-					Usage: safePercentage(float64(clampedMemUsed), float64(memTotal)),
-				},
-				Disk: models.Disk{
-					Total: int64(res.MaxDisk),
-					Used:  int64(diskUsed),
-					Free:  diskFree,
-					Usage: safePercentage(float64(diskUsed), float64(res.MaxDisk)),
-				},
-				NetworkIn:  max(0, int64(netInRate)),
-				NetworkOut: max(0, int64(netOutRate)),
-				DiskRead:   max(0, int64(diskReadRate)),
-				DiskWrite:  max(0, int64(diskWriteRate)),
-				Uptime:     int64(res.Uptime),
-				Template:   res.Template == 1,
-				LastSeen:   time.Now(),
-			}
-
-			if prevContainerIsOCI[container.VMID] {
-				container.IsOCI = true
-				container.Type = "oci"
-			}
-
-			// Parse tags
-			if res.Tags != "" {
-				container.Tags = strings.Split(res.Tags, ";")
-
-				// Log if Pulse-specific tags are detected
-				for _, tag := range container.Tags {
-					switch tag {
-					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
-						log.Info().
-							Str("container", container.Name).
-							Str("node", container.Node).
-							Str("tag", tag).
-							Msg("Pulse control tag detected on container")
-					}
-				}
-			}
-
-			m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container)
-
-			// For non-running containers, zero out resource usage metrics to prevent false alerts.
-			// Proxmox may report stale or residual metrics for stopped containers.
-			if container.Status != "running" {
-				log.Debug().
-					Str("container", container.Name).
-					Str("status", container.Status).
-					Float64("originalCpu", container.CPU).
-					Float64("originalMemUsage", container.Memory.Usage).
-					Msg("Non-running container detected - zeroing metrics")
-
-				container.CPU = 0
-				container.Memory.Usage = 0
-				container.Disk.Usage = 0
-				container.NetworkIn = 0
-				container.NetworkOut = 0
-				container.DiskRead = 0
-				container.DiskWrite = 0
-			}
-
-			// Trigger guest metadata migration if old format exists
-			if m.guestMetadataStore != nil {
-				m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-			}
-
-			allContainers = append(allContainers, container)
-
-			m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
-				Name:         container.Name,
-				Status:       container.Status,
-				RetrievedAt:  sampleTime,
-				MemorySource: memorySource,
-				Memory:       container.Memory,
-				Raw:          guestRaw,
-			})
-
-			// Check thresholds for alerts
-			m.alertManager.CheckGuest(container, instanceName)
-		}
-	}
-
-	// Preserve VMs and containers from nodes within grace period
-	// The cluster/resources endpoint doesn't return VMs/containers from nodes Proxmox considers offline,
-	// but we want to keep showing them if the node is within grace period
-	// Count previous resources for this instance
-	prevVMCount := 0
-	prevContainerCount := 0
-	for _, vm := range prevState.VMs {
-		if vm.Instance == instanceName {
-			prevVMCount++
-		}
-	}
-	for _, container := range prevState.Containers {
-		if container.Instance == instanceName {
-			prevContainerCount++
-		}
-	}
-
-	// Build map of which nodes are covered by current resources
-	nodesWithResources := make(map[string]bool)
-	for _, res := range resources {
-		nodesWithResources[res.Node] = true
-	}
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("nodesInResources", len(nodesWithResources)).
-		Int("totalVMsFromResources", len(allVMs)).
-		Int("totalContainersFromResources", len(allContainers)).
-		Int("prevVMs", prevVMCount).
-		Int("prevContainers", prevContainerCount).
-		Msg("Cluster resources received, checking for grace period preservation")
-
-	// If we got ZERO resources but had resources before, and we have no node data,
-	// this likely means the cluster health check failed. Preserve everything.
-	if len(allVMs) == 0 && len(allContainers) == 0 &&
-		(prevVMCount > 0 || prevContainerCount > 0) &&
-		len(nodeEffectiveStatus) == 0 {
-		log.Warn().
-			Str("instance", instanceName).
-			Int("prevVMs", prevVMCount).
-			Int("prevContainers", prevContainerCount).
-			Msg("Cluster returned zero resources but had resources before - likely cluster health issue, preserving all previous resources")
-
-		// Preserve all previous VMs, containers, and template VMIDs for this instance
-		for _, vm := range prevState.VMs {
-			if vm.Instance == instanceName {
-				allVMs = append(allVMs, vm)
-			}
-		}
-		for _, container := range prevState.Containers {
-			if container.Instance == instanceName {
-				allContainers = append(allContainers, container)
-			}
-		}
-		if prevTemplates, ok := prevState.TemplateVMIDs[instanceName]; ok {
-			for vmid, node := range prevTemplates {
-				templateNodeMap[vmid] = node
-			}
-		}
-	}
-
-	// Check for nodes that are within grace period but not in cluster/resources response
-	preservedVMCount := 0
-	preservedContainerCount := 0
-	for nodeName, effectiveStatus := range nodeEffectiveStatus {
-		if effectiveStatus == "online" && !nodesWithResources[nodeName] {
-			// This node is within grace period but Proxmox didn't return its resources
-			// Preserve previous VMs and containers from this node
-			vmsBefore := len(allVMs)
-			containersBefore := len(allContainers)
-
-			// Preserve VMs from this node
-			for _, vm := range prevState.VMs {
-				if vm.Instance == instanceName && vm.Node == nodeName {
-					allVMs = append(allVMs, vm)
-				}
-			}
-
-			// Preserve containers from this node
-			for _, container := range prevState.Containers {
-				if container.Instance == instanceName && container.Node == nodeName {
-					allContainers = append(allContainers, container)
-				}
-			}
-
-			vmsPreserved := len(allVMs) - vmsBefore
-			containersPreserved := len(allContainers) - containersBefore
-			preservedVMCount += vmsPreserved
-			preservedContainerCount += containersPreserved
-
-			log.Info().
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Int("vmsPreserved", vmsPreserved).
-				Int("containersPreserved", containersPreserved).
-				Msg("Preserved VMs/containers from node in grace period")
-		}
-	}
-
-	if preservedVMCount > 0 || preservedContainerCount > 0 {
-		log.Info().
-			Str("instance", instanceName).
-			Int("totalPreservedVMs", preservedVMCount).
-			Int("totalPreservedContainers", preservedContainerCount).
-			Msg("Grace period preservation complete")
-	}
-
-	partialPreservedVMs := 0
-	partialPreservedContainers := 0
-	allVMs, allContainers, partialPreservedVMs, partialPreservedContainers = preserveRecentMissingGuestsFromResponsiveNodes(
-		instanceName,
-		prevState,
-		allVMs,
-		allContainers,
-		nodeEffectiveStatus,
-		nodesWithResources,
-		time.Now(),
-	)
-	if partialPreservedVMs > 0 || partialPreservedContainers > 0 {
-		log.Warn().
-			Str("instance", instanceName).
-			Int("preservedMissingVMs", partialPreservedVMs).
-			Int("preservedMissingContainers", partialPreservedContainers).
-			Msg("Preserved recently seen guests missing from partial cluster/resources response")
-	}
-
-	m.logSuspiciousRepeatedVMMemoryUsage(instanceName, allVMs, prevInstanceVMs)
-
-	// Always update state when using efficient polling path
-	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes
-	m.state.UpdateVMsForInstance(instanceName, allVMs)
-	m.state.UpdateTemplateVMIDsForInstance(instanceName, templateNodeMap)
-
-	// Check Docker presence for containers that need it (new, restarted, started)
-	allContainers = m.CheckContainersForDocker(ctx, allContainers)
-
-	m.state.UpdateContainersForInstance(instanceName, allContainers)
-
-	// Record guest metrics history for running guests (enables sparkline/trends view)
-	now := time.Now()
-	for _, vm := range allVMs {
-		if vm.Status == "running" {
-			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
-			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
-			if vm.Disk.Usage >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
-			}
-			if vm.DiskRead >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "diskread", float64(vm.DiskRead), now)
-			}
-			if vm.DiskWrite >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "diskwrite", float64(vm.DiskWrite), now)
-			}
-			if vm.NetworkIn >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "netin", float64(vm.NetworkIn), now)
-			}
-			if vm.NetworkOut >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "netout", float64(vm.NetworkOut), now)
-			}
-			// Also write to persistent store
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
-				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
-				if vm.Disk.Usage >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
-				}
-				if vm.DiskRead >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "diskread", float64(vm.DiskRead), now)
-				}
-				if vm.DiskWrite >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "diskwrite", float64(vm.DiskWrite), now)
-				}
-				if vm.NetworkIn >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "netin", float64(vm.NetworkIn), now)
-				}
-				if vm.NetworkOut >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "netout", float64(vm.NetworkOut), now)
-				}
-			}
-		}
-	}
-	for _, ct := range allContainers {
-		if ct.Status == "running" {
-			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
-			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
-			if ct.Disk.Usage >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
-			}
-			if ct.DiskRead >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "diskread", float64(ct.DiskRead), now)
-			}
-			if ct.DiskWrite >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "diskwrite", float64(ct.DiskWrite), now)
-			}
-			if ct.NetworkIn >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "netin", float64(ct.NetworkIn), now)
-			}
-			if ct.NetworkOut >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "netout", float64(ct.NetworkOut), now)
-			}
-			// Also write to persistent store
-			if m.metricsStore != nil {
-				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
-				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
-				if ct.Disk.Usage >= 0 {
-					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
-				}
-				if ct.DiskRead >= 0 {
-					m.metricsStore.Write("container", ct.ID, "diskread", float64(ct.DiskRead), now)
-				}
-				if ct.DiskWrite >= 0 {
-					m.metricsStore.Write("container", ct.ID, "diskwrite", float64(ct.DiskWrite), now)
-				}
-				if ct.NetworkIn >= 0 {
-					m.metricsStore.Write("container", ct.ID, "netin", float64(ct.NetworkIn), now)
-				}
-				if ct.NetworkOut >= 0 {
-					m.metricsStore.Write("container", ct.ID, "netout", float64(ct.NetworkOut), now)
-				}
-			}
-		}
-	}
-
-	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("vms", len(allVMs)).
-		Int("containers", len(allContainers)).
-		Msg("VMs and containers polled efficiently with cluster/resources")
-
-	return true
-}
-
-// pollBackupTasks polls backup tasks from a PVE instance
-func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling backup tasks")
-
-	tasks, err := client.GetBackupTasks(ctx)
-	if err != nil {
-		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get backup tasks")
-		return
-	}
-
-	var backupTasks []models.BackupTask
-	for _, task := range tasks {
-		// Extract VMID from task ID (format: "UPID:node:pid:starttime:type:vmid:user@realm:")
-		vmid := 0
-		if task.ID != "" {
-			if vmidInt, err := strconv.Atoi(task.ID); err == nil {
-				vmid = vmidInt
-			}
-		}
-
-		taskID := fmt.Sprintf("%s-%s", instanceName, task.UPID)
-
-		backupTask := models.BackupTask{
-			ID:        taskID,
-			Node:      task.Node,
-			Instance:  instanceName,
-			Type:      task.Type,
-			VMID:      vmid,
-			Status:    task.Status,
-			StartTime: time.Unix(task.StartTime, 0),
-		}
-
-		if task.EndTime > 0 {
-			backupTask.EndTime = time.Unix(task.EndTime, 0)
-		}
-
-		backupTasks = append(backupTasks, backupTask)
-	}
-
-	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
-}
-
-// pollReplicationStatus polls storage replication jobs for a PVE instance.
-func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM) {
-	log.Debug().Str("instance", instanceName).Msg("Polling replication status")
-
-	jobs, err := client.GetReplicationStatus(ctx)
-	if err != nil {
-		errMsg := err.Error()
-		lowerMsg := strings.ToLower(errMsg)
-		if strings.Contains(errMsg, "501") || strings.Contains(errMsg, "404") || strings.Contains(lowerMsg, "not implemented") || strings.Contains(lowerMsg, "not supported") {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("Replication API not available on this Proxmox instance")
-			m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
-			return
-		}
-
-		monErr := errors.WrapAPIError("get_replication_status", instanceName, err, 0)
-		log.Warn().
-			Err(monErr).
-			Str("instance", instanceName).
-			Msg("Failed to get replication status")
-		return
-	}
-
-	if len(jobs) == 0 {
-		m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
-		return
-	}
-
-	vmByID := make(map[int]models.VM, len(vms))
-	for _, vm := range vms {
-		vmByID[vm.VMID] = vm
-	}
-
-	converted := make([]models.ReplicationJob, 0, len(jobs))
-	now := time.Now()
-
-	for idx, job := range jobs {
-		guestID := job.GuestID
-		if guestID == 0 {
-			if parsed, err := strconv.Atoi(strings.TrimSpace(job.Guest)); err == nil {
-				guestID = parsed
-			}
-		}
-
-		guestName := ""
-		guestType := ""
-		guestNode := ""
-		if guestID > 0 {
-			if vm, ok := vmByID[guestID]; ok {
-				guestName = vm.Name
-				guestType = vm.Type
-				guestNode = vm.Node
-			}
-		}
-		if guestNode == "" {
-			guestNode = strings.TrimSpace(job.Source)
-		}
-
-		sourceNode := strings.TrimSpace(job.Source)
-		if sourceNode == "" {
-			sourceNode = guestNode
-		}
-
-		targetNode := strings.TrimSpace(job.Target)
-
-		var lastSyncTime *time.Time
-		if job.LastSyncTime != nil && !job.LastSyncTime.IsZero() {
-			t := job.LastSyncTime.UTC()
-			lastSyncTime = &t
-		}
-
-		var nextSyncTime *time.Time
-		if job.NextSyncTime != nil && !job.NextSyncTime.IsZero() {
-			t := job.NextSyncTime.UTC()
-			nextSyncTime = &t
-		}
-
-		lastSyncDurationHuman := job.LastSyncDurationHuman
-		if lastSyncDurationHuman == "" && job.LastSyncDurationSeconds > 0 {
-			lastSyncDurationHuman = formatSeconds(job.LastSyncDurationSeconds)
-		}
-		durationHuman := job.DurationHuman
-		if durationHuman == "" && job.DurationSeconds > 0 {
-			durationHuman = formatSeconds(job.DurationSeconds)
-		}
-
-		rateLimit := copyFloatPointer(job.RateLimitMbps)
-
-		status := job.Status
-		if status == "" {
-			status = job.State
-		}
-
-		jobID := strings.TrimSpace(job.ID)
-		if jobID == "" {
-			if job.JobNumber > 0 && guestID > 0 {
-				jobID = fmt.Sprintf("%d-%d", guestID, job.JobNumber)
-			} else {
-				jobID = fmt.Sprintf("job-%s-%d", instanceName, idx)
-			}
-		}
-
-		uniqueID := fmt.Sprintf("%s-%s", instanceName, jobID)
-
-		converted = append(converted, models.ReplicationJob{
-			ID:                      uniqueID,
-			Instance:                instanceName,
-			JobID:                   jobID,
-			JobNumber:               job.JobNumber,
-			Guest:                   job.Guest,
-			GuestID:                 guestID,
-			GuestName:               guestName,
-			GuestType:               guestType,
-			GuestNode:               guestNode,
-			SourceNode:              sourceNode,
-			SourceStorage:           job.SourceStorage,
-			TargetNode:              targetNode,
-			TargetStorage:           job.TargetStorage,
-			Schedule:                job.Schedule,
-			Type:                    job.Type,
-			Enabled:                 job.Enabled,
-			State:                   job.State,
-			Status:                  status,
-			LastSyncStatus:          job.LastSyncStatus,
-			LastSyncTime:            lastSyncTime,
-			LastSyncUnix:            job.LastSyncUnix,
-			LastSyncDurationSeconds: job.LastSyncDurationSeconds,
-			LastSyncDurationHuman:   lastSyncDurationHuman,
-			NextSyncTime:            nextSyncTime,
-			NextSyncUnix:            job.NextSyncUnix,
-			DurationSeconds:         job.DurationSeconds,
-			DurationHuman:           durationHuman,
-			FailCount:               job.FailCount,
-			Error:                   job.Error,
-			Comment:                 job.Comment,
-			RemoveJob:               job.RemoveJob,
-			RateLimitMbps:           rateLimit,
-			LastPolled:              now,
-		})
-	}
-
-	m.state.UpdateReplicationJobsForInstance(instanceName, converted)
-}
-
-func formatSeconds(total int) string {
-	if total <= 0 {
-		return ""
-	}
-	hours := total / 3600
-	minutes := (total % 3600) / 60
-	seconds := total % 60
-	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-}
-
-func copyFloatPointer(src *float64) *float64 {
-	if src == nil {
-		return nil
-	}
-	val := *src
-	return &val
-}
-
-// matchesDatastoreExclude checks if a datastore name matches any exclusion pattern.
-// Patterns can be exact names or wildcards (* for any characters).
-// Examples: "exthdd*" matches "exthdd1500gb", "*backup*" matches "my-backup-store"
-func matchesDatastoreExclude(datastoreName string, excludePatterns []string) bool {
-	if len(excludePatterns) == 0 {
-		return false
-	}
-
-	for _, pattern := range excludePatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-
-		// Contains pattern: *substring*
-		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
-			substring := strings.ToLower(pattern[1 : len(pattern)-1])
-			if strings.Contains(strings.ToLower(datastoreName), substring) {
-				return true
-			}
-			continue
-		}
-
-		// Suffix pattern: *suffix
-		if strings.HasPrefix(pattern, "*") && len(pattern) > 1 {
-			suffix := strings.ToLower(pattern[1:])
-			if strings.HasSuffix(strings.ToLower(datastoreName), suffix) {
-				return true
-			}
-			continue
-		}
-
-		// Prefix pattern: prefix*
-		if strings.HasSuffix(pattern, "*") && len(pattern) > 1 {
-			prefix := strings.ToLower(pattern[:len(pattern)-1])
-			if strings.HasPrefix(strings.ToLower(datastoreName), prefix) {
-				return true
-			}
-			continue
-		}
-
-		// Exact match (case-insensitive)
-		if strings.EqualFold(pattern, datastoreName) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// pollPBSInstance polls a single PBS instance
-func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
-	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
-
-	start := time.Now()
-	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
-	var pollErr error
-	if m.pollMetrics != nil {
-		m.pollMetrics.IncInFlight("pbs")
-		defer m.pollMetrics.DecInFlight("pbs")
-		defer func() {
-			m.pollMetrics.RecordResult(PollResult{
-				InstanceName: instanceName,
-				InstanceType: "pbs",
-				Success:      pollErr == nil,
-				Error:        pollErr,
-				StartTime:    start,
-				EndTime:      time.Now(),
-			})
-		}()
-	}
-	if m.stalenessTracker != nil {
-		defer func() {
-			if pollErr == nil {
-				m.stalenessTracker.UpdateSuccess(InstanceTypePBS, instanceName, nil)
-			} else {
-				m.stalenessTracker.UpdateError(InstanceTypePBS, instanceName)
-			}
-		}()
-	}
-	defer m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
-
-	// Check if context is cancelled
-	select {
-	case <-ctx.Done():
-		pollErr = ctx.Err()
-		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
-		}
-		return
-	default:
-	}
-
-	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
-	}
-
-	// Get instance config
-	var instanceCfg *config.PBSInstance
-	for _, cfg := range m.config.PBSInstances {
-		if cfg.Name == instanceName {
-			instanceCfg = &cfg
-			if debugEnabled {
-				log.Debug().
-					Str("instance", instanceName).
-					Bool("monitorDatastores", cfg.MonitorDatastores).
-					Msg("Found PBS instance config")
-			}
-			break
-		}
-	}
-	if instanceCfg == nil {
-		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
-		return
-	}
-
-	// Initialize PBS instance with default values
-	pbsInst := models.PBSInstance{
-		ID:               "pbs-" + instanceName,
-		Name:             instanceName,
-		Host:             instanceCfg.Host,
-		GuestURL:         instanceCfg.GuestURL,
-		Status:           "offline",
-		Version:          "unknown",
-		ConnectionHealth: "unhealthy",
-		LastSeen:         time.Now(),
-	}
-
-	// Try to get version first
-	version, versionErr := client.GetVersion(ctx)
-	if versionErr == nil {
-		pbsInst.Status = "online"
-		pbsInst.Version = version.Version
-		pbsInst.ConnectionHealth = "healthy"
-		m.resetAuthFailures(instanceName, "pbs")
-		m.state.SetConnectionHealth("pbs-"+instanceName, true)
-
-		if debugEnabled {
-			log.Debug().
-				Str("instance", instanceName).
-				Str("version", version.Version).
-				Bool("monitorDatastores", instanceCfg.MonitorDatastores).
-				Msg("PBS version retrieved successfully")
-		}
-	} else {
-		if debugEnabled {
-			log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
-		}
-
-		// Use parent context for proper cancellation chain
-		ctx2, cancel2 := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel2()
-		_, datastoreErr := client.GetDatastores(ctx2)
-		if datastoreErr == nil {
-			pbsInst.Status = "online"
-			pbsInst.Version = "connected"
-			pbsInst.ConnectionHealth = "healthy"
-			m.resetAuthFailures(instanceName, "pbs")
-			m.state.SetConnectionHealth("pbs-"+instanceName, true)
-
-			log.Info().
-				Str("instance", instanceName).
-				Msg("PBS connected (version unavailable but datastores accessible)")
-		} else {
-			pbsInst.Status = "offline"
-			pbsInst.ConnectionHealth = "error"
-			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
-			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
-			m.state.SetConnectionHealth("pbs-"+instanceName, false)
-
-			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
-				m.recordAuthFailure(instanceName, "pbs")
-				return
-			}
-		}
-	}
-
-	// Get node status (CPU, memory, etc.)
-	nodeStatus, err := client.GetNodeStatus(ctx)
-	if err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
-		}
-	} else if nodeStatus != nil {
-		pbsInst.CPU = nodeStatus.CPU
-		if nodeStatus.Memory.Total > 0 {
-			pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
-			pbsInst.MemoryUsed = nodeStatus.Memory.Used
-			pbsInst.MemoryTotal = nodeStatus.Memory.Total
-		}
-		pbsInst.Uptime = nodeStatus.Uptime
-
-		log.Debug().
-			Str("instance", instanceName).
-			Float64("cpu", pbsInst.CPU).
-			Float64("memory", pbsInst.Memory).
-			Int64("uptime", pbsInst.Uptime).
-			Msg("PBS node status retrieved")
-	}
-
-	// Poll datastores if enabled
-	if instanceCfg.MonitorDatastores {
-		datastores, err := client.GetDatastores(ctx)
-		if err != nil {
-			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
-			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get datastores")
-		} else {
-			log.Info().
-				Str("instance", instanceName).
-				Int("count", len(datastores)).
-				Msg("Got PBS datastores")
-
-			for _, ds := range datastores {
-				// Skip excluded datastores (for removable/unmounted datastores)
-				if matchesDatastoreExclude(ds.Store, instanceCfg.ExcludeDatastores) {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("datastore", ds.Store).
-						Msg("Skipping excluded datastore")
-					continue
-				}
-				total := ds.Total
-				if total == 0 && ds.TotalSpace > 0 {
-					total = ds.TotalSpace
-				}
-				used := ds.Used
-				if used == 0 && ds.UsedSpace > 0 {
-					used = ds.UsedSpace
-				}
-				avail := ds.Avail
-				if avail == 0 && ds.AvailSpace > 0 {
-					avail = ds.AvailSpace
-				}
-				if total == 0 && used > 0 && avail > 0 {
-					total = used + avail
-				}
-
-				log.Debug().
-					Str("store", ds.Store).
-					Int64("total", total).
-					Int64("used", used).
-					Int64("avail", avail).
-					Int64("orig_total", ds.Total).
-					Int64("orig_total_space", ds.TotalSpace).
-					Msg("PBS datastore details")
-
-				modelDS := models.PBSDatastore{
-					Name:                ds.Store,
-					Total:               total,
-					Used:                used,
-					Free:                avail,
-					Usage:               safePercentage(float64(used), float64(total)),
-					Status:              "available",
-					DeduplicationFactor: ds.DeduplicationFactor,
-				}
-
-				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
-				if err != nil {
-					log.Warn().Err(err).
-						Str("instance", instanceName).
-						Str("datastore", ds.Store).
-						Msg("Failed to list namespaces")
-				} else {
-					for _, ns := range namespaces {
-						nsPath := ns.NS
-						if nsPath == "" {
-							nsPath = ns.Path
-						}
-						if nsPath == "" {
-							nsPath = ns.Name
-						}
-
-						modelNS := models.PBSNamespace{
-							Path:   nsPath,
-							Parent: ns.Parent,
-							Depth:  strings.Count(nsPath, "/"),
-						}
-						modelDS.Namespaces = append(modelDS.Namespaces, modelNS)
-					}
-
-					hasRoot := false
-					for _, ns := range modelDS.Namespaces {
-						if ns.Path == "" {
-							hasRoot = true
-							break
-						}
-					}
-					if !hasRoot {
-						modelDS.Namespaces = append([]models.PBSNamespace{{Path: "", Depth: 0}}, modelDS.Namespaces...)
-					}
-				}
-
-				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
-			}
-		}
-	}
-
-	// Update state and run alerts
-	m.state.UpdatePBSInstance(pbsInst)
-	log.Info().
-		Str("instance", instanceName).
-		Str("id", pbsInst.ID).
-		Int("datastores", len(pbsInst.Datastores)).
-		Msg("PBS instance updated in state")
-
-	// Convert PBS datastores to Storage entries for unified storage view
-	if len(pbsInst.Datastores) > 0 && instanceCfg.MonitorDatastores {
-		var pbsStorages []models.Storage
-		for _, ds := range pbsInst.Datastores {
-			// Create a storage entry for this PBS datastore
-			storageID := fmt.Sprintf("pbs-%s-%s", instanceName, ds.Name)
-			pbsStorage := models.Storage{
-				ID:       storageID,
-				Name:     ds.Name,
-				Node:     instanceName, // Use PBS instance name as "node"
-				Instance: "pbs-" + instanceName,
-				Type:     "pbs",
-				Status:   ds.Status,
-				Total:    ds.Total,
-				Used:     ds.Used,
-				Free:     ds.Free,
-				Usage:    ds.Usage,
-				Content:  "backup", // PBS datastores are for backups
-				Shared:   true,     // PBS datastores are typically shared/network storage
-				Enabled:  true,
-				Active:   pbsInst.Status == "online",
-			}
-			pbsStorages = append(pbsStorages, pbsStorage)
-		}
-		m.state.UpdateStorageForInstance("pbs-"+instanceName, pbsStorages)
-		log.Debug().
-			Str("instance", instanceName).
-			Int("storageEntries", len(pbsStorages)).
-			Msg("Added PBS datastores to unified storage view")
-	}
-
-	if m.alertManager != nil {
-		m.alertManager.CheckPBS(pbsInst)
-	}
-
-	// Poll backups if enabled
-	if instanceCfg.MonitorBackups {
-		if len(pbsInst.Datastores) == 0 {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("No PBS datastores available for backup polling")
-		} else if !m.config.EnableBackupPolling {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("Skipping PBS backup polling - globally disabled")
-		} else {
-			now := time.Now()
-
-			m.mu.Lock()
-			lastPoll := m.lastPBSBackupPoll[instanceName]
-			if m.pbsBackupPollers == nil {
-				m.pbsBackupPollers = make(map[string]bool)
-			}
-			inProgress := m.pbsBackupPollers[instanceName]
-			m.mu.Unlock()
-
-			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-			if !shouldPoll {
-				if reason != "" {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("reason", reason).
-						Msg("Skipping PBS backup polling this cycle")
-				}
-			} else if inProgress {
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("PBS backup polling already in progress")
-			} else {
-				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
-				copy(datastoreSnapshot, pbsInst.Datastores)
-
-				// Atomically check and set poller flag
-				m.mu.Lock()
-				if m.pbsBackupPollers[instanceName] {
-					// Race: another goroutine started between our check and lock
-					m.mu.Unlock()
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("PBS backup polling started by another goroutine")
-				} else {
-					m.pbsBackupPollers[instanceName] = true
-					m.lastPBSBackupPoll[instanceName] = newLast
-					m.mu.Unlock()
-
-					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
-						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
-						defer func() {
-							m.mu.Lock()
-							delete(m.pbsBackupPollers, inst)
-							m.lastPBSBackupPoll[inst] = time.Now()
-							m.mu.Unlock()
-						}()
-
-						log.Info().
-							Str("instance", inst).
-							Int("datastores", len(ds)).
-							Msg("Starting background PBS backup polling")
-
-						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.runtimeCtx
-						if parentCtx == nil {
-							parentCtx = context.Background()
-						}
-						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
-						defer cancel()
-
-						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
-
-						log.Info().
-							Str("instance", inst).
-							Dur("duration", time.Since(start)).
-							Msg("Completed background PBS backup polling")
-					}(datastoreSnapshot, instanceName, now, client)
-				}
-			}
-		}
-	} else {
-		log.Debug().
-			Str("instance", instanceName).
-			Msg("PBS backup monitoring disabled")
-	}
-}
-
-// pollPMGInstance polls a single Proxmox Mail Gateway instance
-func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
-	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
-
-	start := time.Now()
-	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
-	var pollErr error
-	if m.pollMetrics != nil {
-		m.pollMetrics.IncInFlight("pmg")
-		defer m.pollMetrics.DecInFlight("pmg")
-		defer func() {
-			m.pollMetrics.RecordResult(PollResult{
-				InstanceName: instanceName,
-				InstanceType: "pmg",
-				Success:      pollErr == nil,
-				Error:        pollErr,
-				StartTime:    start,
-				EndTime:      time.Now(),
-			})
-		}()
-	}
-	if m.stalenessTracker != nil {
-		defer func() {
-			if pollErr == nil {
-				m.stalenessTracker.UpdateSuccess(InstanceTypePMG, instanceName, nil)
-			} else {
-				m.stalenessTracker.UpdateError(InstanceTypePMG, instanceName)
-			}
-		}()
-	}
-	defer m.recordTaskResult(InstanceTypePMG, instanceName, pollErr)
-
-	select {
-	case <-ctx.Done():
-		pollErr = ctx.Err()
-		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
-		}
-		return
-	default:
-	}
-
-	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PMG instance")
-	}
-
-	var instanceCfg *config.PMGInstance
-	for idx := range m.config.PMGInstances {
-		if m.config.PMGInstances[idx].Name == instanceName {
-			instanceCfg = &m.config.PMGInstances[idx]
-			break
-		}
-	}
-
-	if instanceCfg == nil {
-		log.Error().Str("instance", instanceName).Msg("PMG instance config not found")
-		pollErr = fmt.Errorf("pmg instance config not found for %s", instanceName)
-		return
-	}
-
-	now := time.Now()
-	pmgInst := models.PMGInstance{
-		ID:               "pmg-" + instanceName,
-		Name:             instanceName,
-		Host:             instanceCfg.Host,
-		GuestURL:         instanceCfg.GuestURL,
-		Status:           "offline",
-		ConnectionHealth: "unhealthy",
-		LastSeen:         now,
-		LastUpdated:      now,
-	}
-
-	version, err := client.GetVersion(ctx)
-	if err != nil {
-		monErr := errors.WrapConnectionError("pmg_get_version", instanceName, err)
-		pollErr = monErr
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PMG instance")
-		m.state.SetConnectionHealth("pmg-"+instanceName, false)
-		m.state.UpdatePMGInstance(pmgInst)
-
-		// Check PMG offline status against alert thresholds
-		if m.alertManager != nil {
-			m.alertManager.CheckPMG(pmgInst)
-		}
-
-		if errors.IsAuthError(err) {
-			m.recordAuthFailure(instanceName, "pmg")
-		}
-		return
-	}
-
-	pmgInst.Status = "online"
-	pmgInst.ConnectionHealth = "healthy"
-	if version != nil {
-		pmgInst.Version = strings.TrimSpace(version.Version)
-	}
-	m.state.SetConnectionHealth("pmg-"+instanceName, true)
-	m.resetAuthFailures(instanceName, "pmg")
-
-	cluster, err := client.GetClusterStatus(ctx, true)
-	if err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
-		}
-	}
-
-	backupNodes := make(map[string]struct{})
-
-	if len(cluster) > 0 {
-		nodes := make([]models.PMGNodeStatus, 0, len(cluster))
-		for _, entry := range cluster {
-			status := strings.ToLower(strings.TrimSpace(entry.Type))
-			if status == "" {
-				status = "online"
-			}
-			node := models.PMGNodeStatus{
-				Name:   entry.Name,
-				Status: status,
-				Role:   entry.Type,
-			}
-
-			backupNodes[entry.Name] = struct{}{}
-
-			// Fetch queue status for this node
-			if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
-				if debugEnabled {
-					log.Debug().Err(qErr).
-						Str("instance", instanceName).
-						Str("node", entry.Name).
-						Msg("Failed to fetch PMG queue status")
-				}
-			} else if queueData != nil {
-				total := queueData.Active.Int64() + queueData.Deferred.Int64() + queueData.Hold.Int64() + queueData.Incoming.Int64()
-				node.QueueStatus = &models.PMGQueueStatus{
-					Active:    queueData.Active.Int(),
-					Deferred:  queueData.Deferred.Int(),
-					Hold:      queueData.Hold.Int(),
-					Incoming:  queueData.Incoming.Int(),
-					Total:     int(total),
-					OldestAge: queueData.OldestAge.Int64(),
-					UpdatedAt: time.Now(),
-				}
-			}
-
-			nodes = append(nodes, node)
-		}
-		pmgInst.Nodes = nodes
-	}
-
-	if len(backupNodes) == 0 {
-		trimmed := strings.TrimSpace(instanceName)
-		if trimmed != "" {
-			backupNodes[trimmed] = struct{}{}
-		}
-	}
-
-	pmgBackups := make([]models.PMGBackup, 0)
-	seenBackupIDs := make(map[string]struct{})
-
-	for nodeName := range backupNodes {
-		if ctx.Err() != nil {
-			break
-		}
-
-		backups, backupErr := client.ListBackups(ctx, nodeName)
-		if backupErr != nil {
-			if debugEnabled {
-				log.Debug().Err(backupErr).
-					Str("instance", instanceName).
-					Str("node", nodeName).
-					Msg("Failed to list PMG configuration backups")
-			}
-			continue
-		}
-
-		for _, b := range backups {
-			timestamp := b.Timestamp.Int64()
-			backupTime := time.Unix(timestamp, 0)
-			id := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, timestamp)
-			if _, exists := seenBackupIDs[id]; exists {
-				continue
-			}
-			seenBackupIDs[id] = struct{}{}
-			pmgBackups = append(pmgBackups, models.PMGBackup{
-				ID:         id,
-				Instance:   instanceName,
-				Node:       nodeName,
-				Filename:   b.Filename,
-				BackupTime: backupTime,
-				Size:       b.Size.Int64(),
-			})
-		}
-	}
-
-	if debugEnabled {
-		log.Debug().
-			Str("instance", instanceName).
-			Int("backupCount", len(pmgBackups)).
-			Msg("PMG backups polled")
-	}
-
-	if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
-		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
-	} else if stats != nil {
-		pmgInst.MailStats = &models.PMGMailStats{
-			Timeframe:            "day",
-			CountTotal:           stats.Count.Float64(),
-			CountIn:              stats.CountIn.Float64(),
-			CountOut:             stats.CountOut.Float64(),
-			SpamIn:               stats.SpamIn.Float64(),
-			SpamOut:              stats.SpamOut.Float64(),
-			VirusIn:              stats.VirusIn.Float64(),
-			VirusOut:             stats.VirusOut.Float64(),
-			BouncesIn:            stats.BouncesIn.Float64(),
-			BouncesOut:           stats.BouncesOut.Float64(),
-			BytesIn:              stats.BytesIn.Float64(),
-			BytesOut:             stats.BytesOut.Float64(),
-			GreylistCount:        stats.GreylistCount.Float64(),
-			JunkIn:               stats.JunkIn.Float64(),
-			AverageProcessTimeMs: stats.AvgProcessSec.Float64() * 1000,
-			RBLRejects:           stats.RBLRejects.Float64(),
-			PregreetRejects:      stats.Pregreet.Float64(),
-			UpdatedAt:            time.Now(),
-		}
-	}
-
-	if counts, err := client.GetMailCount(ctx, 86400); err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
-		}
-	} else if len(counts) > 0 {
-		points := make([]models.PMGMailCountPoint, 0, len(counts))
-		for _, entry := range counts {
-			ts := time.Unix(entry.Time.Int64(), 0)
-			points = append(points, models.PMGMailCountPoint{
-				Timestamp:   ts,
-				Count:       entry.Count.Float64(),
-				CountIn:     entry.CountIn.Float64(),
-				CountOut:    entry.CountOut.Float64(),
-				SpamIn:      entry.SpamIn.Float64(),
-				SpamOut:     entry.SpamOut.Float64(),
-				VirusIn:     entry.VirusIn.Float64(),
-				VirusOut:    entry.VirusOut.Float64(),
-				RBLRejects:  entry.RBLRejects.Float64(),
-				Pregreet:    entry.PregreetReject.Float64(),
-				BouncesIn:   entry.BouncesIn.Float64(),
-				BouncesOut:  entry.BouncesOut.Float64(),
-				Greylist:    entry.GreylistCount.Float64(),
-				Index:       entry.Index.Int(),
-				Timeframe:   "hour",
-				WindowStart: ts,
-			})
-		}
-		pmgInst.MailCount = points
-	}
-
-	if scores, err := client.GetSpamScores(ctx); err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG spam score distribution")
-		}
-	} else if len(scores) > 0 {
-		buckets := make([]models.PMGSpamBucket, 0, len(scores))
-		for _, bucket := range scores {
-			buckets = append(buckets, models.PMGSpamBucket{
-				Score: bucket.Level,
-				Count: float64(bucket.Count.Int()),
-			})
-		}
-		pmgInst.SpamDistribution = buckets
-	}
-
-	quarantine := models.PMGQuarantineTotals{}
-	if spamStatus, err := client.GetQuarantineStatus(ctx, "spam"); err == nil && spamStatus != nil {
-		quarantine.Spam = int(spamStatus.Count.Int64())
-	}
-	if virusStatus, err := client.GetQuarantineStatus(ctx, "virus"); err == nil && virusStatus != nil {
-		quarantine.Virus = int(virusStatus.Count.Int64())
-	}
-	pmgInst.Quarantine = &quarantine
-
-	m.state.UpdatePMGBackups(instanceName, pmgBackups)
-	m.state.UpdatePMGInstance(pmgInst)
-	log.Info().
-		Str("instance", instanceName).
-		Str("status", pmgInst.Status).
-		Int("nodes", len(pmgInst.Nodes)).
-		Msg("PMG instance updated in state")
-
-	// Check PMG metrics against alert thresholds
-	if m.alertManager != nil {
-		m.alertManager.CheckPMG(pmgInst)
-	}
-}
-
-// GetState returns the current state
 func (m *Monitor) GetState() models.StateSnapshot {
 	// Check if mock mode is enabled
 	if mock.IsMockEnabled() {
@@ -9381,12 +2661,1017 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 
+// ReadSnapshot returns a snapshot of the current infrastructure state,
+// respecting mock mode when enabled.
+//
+// This is the preferred accessor for consumer code that needs the full
+// StateSnapshot (e.g., chart rendering, reporting, AI state queries).
+// This method satisfies models.SnapshotProvider — the single canonical
+// interface that all consumer packages depend on. Fields available
+// via ReadState should be accessed there instead when practical.
+func (m *Monitor) ReadSnapshot() models.StateSnapshot {
+	return m.GetState()
+}
+
+// BackupsSnapshot returns the current backup state.
+func (m *Monitor) BackupsSnapshot() models.Backups {
+	return m.GetState().Backups
+}
+
+// PBSInstancesSnapshot returns the current PBS instances.
+func (m *Monitor) PBSInstancesSnapshot() []models.PBSInstance {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	pbsViews := readState.PBSInstances()
+	if len(pbsViews) == 0 {
+		return nil
+	}
+
+	instances := make([]models.PBSInstance, 0, len(pbsViews))
+	for _, instance := range pbsViews {
+		if instance == nil {
+			continue
+		}
+		instances = append(instances, pbsInstanceFromReadStateView(instance))
+	}
+	return instances
+}
+
+// ReplicationJobsSnapshot returns the current replication jobs.
+func (m *Monitor) ReplicationJobsSnapshot() []models.ReplicationJob {
+	return m.GetState().ReplicationJobs
+}
+
+// ConnectionHealthSnapshot returns the current connection health map.
+func (m *Monitor) ConnectionHealthSnapshot() map[string]bool {
+	return m.GetState().ConnectionHealth
+}
+
+// HostsSnapshot returns the current hosts.
+func (m *Monitor) HostsSnapshot() []models.Host {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	hostViews := readState.Hosts()
+	if len(hostViews) == 0 {
+		return nil
+	}
+
+	hosts := make([]models.Host, 0, len(hostViews))
+	for _, host := range hostViews {
+		if host == nil {
+			continue
+		}
+		hosts = append(hosts, hostFromReadStateView(host))
+	}
+	return hosts
+}
+
+// VMsSnapshot returns the current VMs.
+func (m *Monitor) VMsSnapshot() []models.VM {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	vmViews := readState.VMs()
+	if len(vmViews) == 0 {
+		return nil
+	}
+
+	vms := make([]models.VM, 0, len(vmViews))
+	for _, vm := range vmViews {
+		if vm == nil {
+			continue
+		}
+		vms = append(vms, vmFromReadStateView(vm))
+	}
+	return vms
+}
+
+// ContainersSnapshot returns the current system containers.
+func (m *Monitor) ContainersSnapshot() []models.Container {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	containerViews := readState.Containers()
+	if len(containerViews) == 0 {
+		return nil
+	}
+
+	containers := make([]models.Container, 0, len(containerViews))
+	for _, container := range containerViews {
+		if container == nil {
+			continue
+		}
+		containers = append(containers, containerFromReadStateView(container))
+	}
+	return containers
+}
+
+// NodesSnapshot returns the current Proxmox nodes.
+func (m *Monitor) NodesSnapshot() []models.Node {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	nodeViews := readState.Nodes()
+	if len(nodeViews) == 0 {
+		return nil
+	}
+
+	nodes := make([]models.Node, 0, len(nodeViews))
+	for _, node := range nodeViews {
+		if node == nil {
+			continue
+		}
+		nodes = append(nodes, nodeFromReadStateView(node))
+	}
+	return nodes
+}
+
+// DockerHostsSnapshot returns the current Docker hosts.
+func (m *Monitor) DockerHostsSnapshot() []models.DockerHost {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	dockerViews := readState.DockerHosts()
+	if len(dockerViews) == 0 {
+		return nil
+	}
+
+	hosts := make([]models.DockerHost, 0, len(dockerViews))
+	for _, host := range dockerViews {
+		if host == nil {
+			continue
+		}
+		hosts = append(hosts, dockerHostFromReadStateView(host))
+	}
+	return hosts
+}
+
+// StorageSnapshot returns the current storage pools.
+func (m *Monitor) StorageSnapshot() []models.Storage {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	storagePools := readState.StoragePools()
+	if len(storagePools) == 0 {
+		return nil
+	}
+
+	storage := make([]models.Storage, 0, len(storagePools))
+	for _, pool := range storagePools {
+		if pool == nil {
+			continue
+		}
+		storage = append(storage, storageFromReadStateView(pool))
+	}
+	return storage
+}
+
+func storageFromReadStateView(view *unifiedresources.StoragePoolView) models.Storage {
+	if view == nil {
+		return models.Storage{}
+	}
+
+	storageID := strings.TrimSpace(view.SourceID())
+	if storageID == "" {
+		storageID = strings.TrimSpace(view.ID())
+	}
+
+	nodes := view.AccessibleNodes()
+	nodeIDs := storageNodeIDsFromReadState(view.Instance(), nodes)
+	total := view.DiskTotal()
+	used := view.DiskUsed()
+	free := total - used
+	if free < 0 {
+		free = 0
+	}
+
+	return models.Storage{
+		ID:        storageID,
+		Name:      view.Name(),
+		Node:      view.Node(),
+		Instance:  view.Instance(),
+		Nodes:     nodes,
+		NodeIDs:   nodeIDs,
+		NodeCount: len(nodes),
+		Type:      view.StorageType(),
+		Status:    string(view.Status()),
+		Path:      view.Path(),
+		Total:     total,
+		Used:      used,
+		Free:      free,
+		Usage:     view.DiskPercent(),
+		Content:   view.Content(),
+		Shared:    view.Shared(),
+		Enabled:   view.Enabled(),
+		Active:    view.Active(),
+		ZFSPool:   storageZFSPoolFromReadStateView(view),
+	}
+}
+
+func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
+	if view == nil {
+		return models.Node{}
+	}
+
+	name := view.NodeName()
+	displayName := ""
+	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != name {
+		displayName = trimmed
+	}
+
+	return models.Node{
+		ID:                           firstNonEmptyString(view.SourceID(), view.ID()),
+		Name:                         name,
+		DisplayName:                  displayName,
+		Instance:                     view.Instance(),
+		Host:                         view.HostURL(),
+		GuestURL:                     view.GuestURL(),
+		Status:                       string(view.Status()),
+		Type:                         "node",
+		CPU:                          view.CPUPercent(),
+		Memory:                       models.Memory{Used: view.MemoryUsed(), Total: view.MemoryTotal(), Free: maxInt64(0, view.MemoryTotal()-view.MemoryUsed()), Usage: view.MemoryPercent()},
+		Disk:                         models.Disk{Used: view.DiskUsed(), Total: view.DiskTotal(), Free: maxInt64(0, view.DiskTotal()-view.DiskUsed()), Usage: view.DiskPercent()},
+		Uptime:                       view.Uptime(),
+		LoadAverage:                  view.LoadAverage(),
+		KernelVersion:                view.KernelVersion(),
+		PVEVersion:                   view.PVEVersion(),
+		CPUInfo:                      view.CPUInfo(),
+		Temperature:                  view.TemperatureDetails(),
+		TemperatureMonitoringEnabled: view.TemperatureMonitoringEnabled(),
+		LastSeen:                     view.LastSeen(),
+		ConnectionHealth:             view.ConnectionHealth(),
+		IsClusterMember:              view.IsClusterMember(),
+		ClusterName:                  view.ClusterName(),
+		PendingUpdates:               view.PendingUpdates(),
+		PendingUpdatesCheckedAt:      view.PendingUpdatesCheckedAt(),
+		LinkedAgentID:                view.LinkedAgentID(),
+	}
+}
+
+func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
+	if view == nil {
+		return models.Host{}
+	}
+
+	displayName := ""
+	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != view.Hostname() {
+		displayName = trimmed
+	}
+
+	return models.Host{
+		ID:                firstNonEmptyString(view.AgentID(), view.ID()),
+		Hostname:          view.Hostname(),
+		DisplayName:       displayName,
+		Platform:          view.Platform(),
+		OSName:            view.OSName(),
+		OSVersion:         view.OSVersion(),
+		KernelVersion:     view.KernelVersion(),
+		Architecture:      view.Architecture(),
+		CPUCount:          view.CPUCount(),
+		CPUUsage:          view.CPUPercent(),
+		Memory:            hostMemoryFromReadStateView(view),
+		LoadAverage:       view.LoadAverage(),
+		Disks:             hostDisksFromReadStateView(view.Disks()),
+		DiskIO:            hostDiskIOFromReadStateView(view.DiskIO()),
+		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		Sensors:           hostSensorsFromReadStateView(view.Sensors()),
+		RAID:              hostRAIDFromReadStateView(view.RAID()),
+		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
+		Ceph:              hostCephFromReadStateView(view.Ceph()),
+		Status:            string(view.Status()),
+		UptimeSeconds:     view.UptimeSeconds(),
+		IntervalSeconds:   view.IntervalSeconds(),
+		LastSeen:          view.LastSeen(),
+		AgentVersion:      view.AgentVersion(),
+		MachineID:         view.MachineID(),
+		CommandsEnabled:   view.CommandsEnabled(),
+		ReportIP:          view.ReportIP(),
+		TokenID:           view.TokenID(),
+		TokenName:         view.TokenName(),
+		TokenHint:         view.TokenHint(),
+		TokenLastUsedAt:   view.TokenLastUsedAt(),
+		Tags:              view.Tags(),
+		DiskExclude:       view.DiskExclude(),
+		IsLegacy:          view.IsLegacy(),
+		NetInRate:         view.NetInRate(),
+		NetOutRate:        view.NetOutRate(),
+		DiskReadRate:      view.DiskReadRate(),
+		DiskWriteRate:     view.DiskWriteRate(),
+		LinkedNodeID:      view.LinkedNodeID(),
+		LinkedVMID:        view.LinkedVMID(),
+		LinkedContainerID: view.LinkedContainerID(),
+	}
+}
+
+func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
+	if view == nil {
+		return models.VM{}
+	}
+
+	totalMemory := view.MemoryTotal()
+	usedMemory := view.MemoryUsed()
+	totalDisk := view.DiskTotal()
+	usedDisk := view.DiskUsed()
+
+	return models.VM{
+		ID:                firstNonEmptyString(view.SourceID(), view.ID()),
+		VMID:              view.VMID(),
+		Name:              view.Name(),
+		Node:              view.Node(),
+		Instance:          view.Instance(),
+		Status:            string(view.Status()),
+		Type:              "qemu",
+		CPU:               view.CPUPercent(),
+		CPUs:              view.CPUs(),
+		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
+		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},
+		Disks:             guestDisksFromReadStateView(view.Disks()),
+		DiskStatusReason:  view.DiskStatusReason(),
+		IPAddresses:       view.IPAddresses(),
+		OSName:            view.OSName(),
+		OSVersion:         view.OSVersion(),
+		AgentVersion:      view.AgentVersion(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		NetworkIn:         maxInt64(0, int64(view.NetIn())),
+		NetworkOut:        maxInt64(0, int64(view.NetOut())),
+		DiskRead:          maxInt64(0, int64(view.DiskRead())),
+		DiskWrite:         maxInt64(0, int64(view.DiskWrite())),
+		Uptime:            view.Uptime(),
+		Template:          view.Template(),
+		LastBackup:        view.LastBackup(),
+		Tags:              view.Tags(),
+		Lock:              view.Lock(),
+		LastSeen:          view.LastSeen(),
+	}
+}
+
+func containerFromReadStateView(view *unifiedresources.ContainerView) models.Container {
+	if view == nil {
+		return models.Container{}
+	}
+
+	totalMemory := view.MemoryTotal()
+	usedMemory := view.MemoryUsed()
+	totalDisk := view.DiskTotal()
+	usedDisk := view.DiskUsed()
+
+	return models.Container{
+		ID:                firstNonEmptyString(view.SourceID(), view.ID()),
+		VMID:              view.VMID(),
+		Name:              view.Name(),
+		Node:              view.Node(),
+		Instance:          view.Instance(),
+		Status:            string(view.Status()),
+		Type:              firstNonEmptyString(view.ContainerType(), "lxc"),
+		CPU:               view.CPUPercent(),
+		CPUs:              view.CPUs(),
+		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
+		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},
+		Disks:             guestDisksFromReadStateView(view.Disks()),
+		NetworkIn:         maxInt64(0, int64(view.NetIn())),
+		NetworkOut:        maxInt64(0, int64(view.NetOut())),
+		DiskRead:          maxInt64(0, int64(view.DiskRead())),
+		DiskWrite:         maxInt64(0, int64(view.DiskWrite())),
+		Uptime:            view.Uptime(),
+		Template:          view.Template(),
+		LastBackup:        view.LastBackup(),
+		Tags:              view.Tags(),
+		Lock:              view.Lock(),
+		LastSeen:          view.LastSeen(),
+		IPAddresses:       view.IPAddresses(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		OSName:            view.OSName(),
+		IsOCI:             view.IsOCI(),
+		OSTemplate:        view.OSTemplate(),
+		HasDocker:         view.HasDocker(),
+		DockerCheckedAt:   view.DockerCheckedAt(),
+	}
+}
+
+func guestDisksFromReadStateView(disks []unifiedresources.DiskInfo) []models.Disk {
+	if len(disks) == 0 {
+		return nil
+	}
+	out := make([]models.Disk, 0, len(disks))
+	for _, disk := range disks {
+		out = append(out, models.Disk{
+			Total:      disk.Total,
+			Used:       disk.Used,
+			Free:       disk.Free,
+			Usage:      disk.Usage,
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Filesystem,
+			Device:     disk.Device,
+		})
+	}
+	return out
+}
+
+func guestNetworkInterfacesFromReadStateView(interfaces []unifiedresources.NetworkInterface) []models.GuestNetworkInterface {
+	if len(interfaces) == 0 {
+		return nil
+	}
+	out := make([]models.GuestNetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		out = append(out, models.GuestNetworkInterface{
+			Name:      iface.Name,
+			MAC:       iface.MAC,
+			Addresses: append([]string(nil), iface.Addresses...),
+			RXBytes:   maxInt64(0, int64(iface.RXBytes)),
+			TXBytes:   maxInt64(0, int64(iface.TXBytes)),
+		})
+	}
+	return out
+}
+
+func pbsInstanceFromReadStateView(view *unifiedresources.PBSInstanceView) models.PBSInstance {
+	if view == nil {
+		return models.PBSInstance{}
+	}
+
+	return models.PBSInstance{
+		ID:               firstNonEmptyString(view.InstanceID(), view.ID()),
+		Name:             view.Name(),
+		Host:             view.HostURL(),
+		GuestURL:         view.GuestURL(),
+		Status:           string(view.Status()),
+		Version:          view.Version(),
+		CPU:              view.CPUPercent(),
+		Memory:           view.MemoryPercent(),
+		MemoryUsed:       view.MemoryUsed(),
+		MemoryTotal:      view.MemoryTotal(),
+		Uptime:           view.UptimeSeconds(),
+		Datastores:       view.DatastoreDetails(),
+		BackupJobs:       view.BackupJobs(),
+		SyncJobs:         view.SyncJobs(),
+		VerifyJobs:       view.VerifyJobs(),
+		PruneJobs:        view.PruneJobs(),
+		GarbageJobs:      view.GarbageJobs(),
+		ConnectionHealth: view.ConnectionHealth(),
+		LastSeen:         view.LastSeen(),
+	}
+}
+
+func hostMemoryFromReadStateView(view *unifiedresources.HostView) models.Memory {
+	if view == nil {
+		return models.Memory{}
+	}
+	total := view.MemoryTotal()
+	used := view.MemoryUsed()
+	return models.Memory{
+		Total:     total,
+		Used:      used,
+		Free:      maxInt64(0, total-used),
+		Usage:     view.MemoryPercent(),
+		SwapUsed:  view.SwapUsed(),
+		SwapTotal: view.SwapTotal(),
+	}
+}
+
+func hostDisksFromReadStateView(disks []unifiedresources.DiskInfo) []models.Disk {
+	if len(disks) == 0 {
+		return nil
+	}
+	out := make([]models.Disk, 0, len(disks))
+	for _, disk := range disks {
+		out = append(out, models.Disk{
+			Total:      disk.Total,
+			Used:       disk.Used,
+			Free:       disk.Free,
+			Usage:      disk.Usage,
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Filesystem,
+			Device:     disk.Device,
+		})
+	}
+	return out
+}
+
+func hostDiskIOFromReadStateView(diskIO []unifiedresources.HostDiskIOMeta) []models.DiskIO {
+	if len(diskIO) == 0 {
+		return nil
+	}
+	out := make([]models.DiskIO, 0, len(diskIO))
+	for _, entry := range diskIO {
+		out = append(out, models.DiskIO{
+			Device:     entry.Device,
+			ReadBytes:  entry.ReadBytes,
+			WriteBytes: entry.WriteBytes,
+			ReadOps:    entry.ReadOps,
+			WriteOps:   entry.WriteOps,
+			IOTime:     entry.IOTimeMs,
+		})
+	}
+	return out
+}
+
+func hostNetworkInterfacesFromReadStateView(interfaces []unifiedresources.NetworkInterface) []models.HostNetworkInterface {
+	if len(interfaces) == 0 {
+		return nil
+	}
+	out := make([]models.HostNetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		out = append(out, models.HostNetworkInterface{
+			Name:      iface.Name,
+			MAC:       iface.MAC,
+			Addresses: append([]string(nil), iface.Addresses...),
+			RXBytes:   iface.RXBytes,
+			TXBytes:   iface.TXBytes,
+			SpeedMbps: int64PtrCopy(iface.SpeedMbps),
+		})
+	}
+	return out
+}
+
+func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) models.HostSensorSummary {
+	if sensors == nil {
+		return models.HostSensorSummary{}
+	}
+	out := models.HostSensorSummary{}
+	if len(sensors.TemperatureCelsius) > 0 {
+		out.TemperatureCelsius = make(map[string]float64, len(sensors.TemperatureCelsius))
+		for k, v := range sensors.TemperatureCelsius {
+			out.TemperatureCelsius[k] = v
+		}
+	}
+	if len(sensors.FanRPM) > 0 {
+		out.FanRPM = make(map[string]float64, len(sensors.FanRPM))
+		for k, v := range sensors.FanRPM {
+			out.FanRPM[k] = v
+		}
+	}
+	if len(sensors.Additional) > 0 {
+		out.Additional = make(map[string]float64, len(sensors.Additional))
+		for k, v := range sensors.Additional {
+			out.Additional[k] = v
+		}
+	}
+	if len(sensors.SMART) > 0 {
+		out.SMART = make([]models.HostDiskSMART, 0, len(sensors.SMART))
+		for _, smart := range sensors.SMART {
+			out.SMART = append(out.SMART, models.HostDiskSMART{
+				Device:      smart.Device,
+				Model:       smart.Model,
+				Serial:      smart.Serial,
+				WWN:         smart.WWN,
+				Type:        smart.Type,
+				Temperature: smart.Temperature,
+				Health:      smart.Health,
+				Standby:     smart.Standby,
+				Attributes:  smartAttributesCopy(smart.Attributes),
+			})
+		}
+	}
+	return out
+}
+
+func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.HostRAIDArray {
+	if len(raid) == 0 {
+		return nil
+	}
+	out := make([]models.HostRAIDArray, 0, len(raid))
+	for _, entry := range raid {
+		devices := make([]models.HostRAIDDevice, 0, len(entry.Devices))
+		for _, device := range entry.Devices {
+			devices = append(devices, models.HostRAIDDevice{
+				Device: device.Device,
+				State:  device.State,
+				Slot:   device.Slot,
+			})
+		}
+		out = append(out, models.HostRAIDArray{
+			Device:         entry.Device,
+			Name:           entry.Name,
+			Level:          entry.Level,
+			State:          entry.State,
+			TotalDevices:   entry.TotalDevices,
+			ActiveDevices:  entry.ActiveDevices,
+			WorkingDevices: entry.WorkingDevices,
+			FailedDevices:  entry.FailedDevices,
+			SpareDevices:   entry.SpareDevices,
+			UUID:           entry.UUID,
+			Devices:        devices,
+			RebuildPercent: entry.RebuildPercent,
+			RebuildSpeed:   entry.RebuildSpeed,
+		})
+	}
+	return out
+}
+
+func hostUnraidFromReadStateView(unraid *unifiedresources.HostUnraidMeta) *models.HostUnraidStorage {
+	if unraid == nil {
+		return nil
+	}
+	out := &models.HostUnraidStorage{
+		ArrayStarted: unraid.ArrayStarted,
+		ArrayState:   unraid.ArrayState,
+		SyncAction:   unraid.SyncAction,
+		SyncProgress: unraid.SyncProgress,
+		SyncErrors:   unraid.SyncErrors,
+		NumProtected: unraid.NumProtected,
+		NumDisabled:  unraid.NumDisabled,
+		NumInvalid:   unraid.NumInvalid,
+		NumMissing:   unraid.NumMissing,
+	}
+	if len(unraid.Disks) > 0 {
+		out.Disks = make([]models.HostUnraidDisk, 0, len(unraid.Disks))
+		for _, disk := range unraid.Disks {
+			out.Disks = append(out.Disks, models.HostUnraidDisk{
+				Name:       disk.Name,
+				Device:     disk.Device,
+				Role:       disk.Role,
+				Status:     disk.Status,
+				RawStatus:  disk.RawStatus,
+				Serial:     disk.Serial,
+				Filesystem: disk.Filesystem,
+				SizeBytes:  disk.SizeBytes,
+				Slot:       disk.Slot,
+			})
+		}
+	}
+	return out
+}
+
+func hostCephFromReadStateView(ceph *unifiedresources.HostCephMeta) *models.HostCephCluster {
+	if ceph == nil {
+		return nil
+	}
+	out := &models.HostCephCluster{
+		FSID: ceph.FSID,
+		Health: models.HostCephHealth{
+			Status: ceph.Health.Status,
+		},
+		MonMap: models.HostCephMonitorMap{
+			Epoch:   ceph.MonMap.Epoch,
+			NumMons: ceph.MonMap.NumMons,
+		},
+		MgrMap: models.HostCephManagerMap{
+			Available: ceph.MgrMap.Available,
+			NumMgrs:   ceph.MgrMap.NumMgrs,
+			ActiveMgr: ceph.MgrMap.ActiveMgr,
+			Standbys:  ceph.MgrMap.Standbys,
+		},
+		OSDMap: models.HostCephOSDMap{
+			Epoch:   ceph.OSDMap.Epoch,
+			NumOSDs: ceph.OSDMap.NumOSDs,
+			NumUp:   ceph.OSDMap.NumUp,
+			NumIn:   ceph.OSDMap.NumIn,
+			NumDown: ceph.OSDMap.NumDown,
+			NumOut:  ceph.OSDMap.NumOut,
+		},
+		PGMap: models.HostCephPGMap{
+			NumPGs:           ceph.PGMap.NumPGs,
+			BytesTotal:       ceph.PGMap.BytesTotal,
+			BytesUsed:        ceph.PGMap.BytesUsed,
+			BytesAvailable:   ceph.PGMap.BytesAvailable,
+			DataBytes:        ceph.PGMap.DataBytes,
+			UsagePercent:     ceph.PGMap.UsagePercent,
+			DegradedRatio:    ceph.PGMap.DegradedRatio,
+			MisplacedRatio:   ceph.PGMap.MisplacedRatio,
+			ReadBytesPerSec:  ceph.PGMap.ReadBytesPerSec,
+			WriteBytesPerSec: ceph.PGMap.WriteBytesPerSec,
+			ReadOpsPerSec:    ceph.PGMap.ReadOpsPerSec,
+			WriteOpsPerSec:   ceph.PGMap.WriteOpsPerSec,
+		},
+		CollectedAt: ceph.CollectedAt,
+	}
+	if len(ceph.Health.Summary) > 0 {
+		out.Health.Summary = make([]models.HostCephHealthSummary, 0, len(ceph.Health.Summary))
+		for _, summary := range ceph.Health.Summary {
+			out.Health.Summary = append(out.Health.Summary, models.HostCephHealthSummary{
+				Severity: summary.Severity,
+				Message:  summary.Message,
+			})
+		}
+	}
+	if len(ceph.Health.Checks) > 0 {
+		out.Health.Checks = make(map[string]models.HostCephCheck, len(ceph.Health.Checks))
+		for name, check := range ceph.Health.Checks {
+			out.Health.Checks[name] = models.HostCephCheck{
+				Severity: check.Severity,
+				Message:  check.Message,
+				Detail:   append([]string(nil), check.Detail...),
+			}
+		}
+	}
+	if len(ceph.MonMap.Monitors) > 0 {
+		out.MonMap.Monitors = make([]models.HostCephMonitor, 0, len(ceph.MonMap.Monitors))
+		for _, monitor := range ceph.MonMap.Monitors {
+			out.MonMap.Monitors = append(out.MonMap.Monitors, models.HostCephMonitor{
+				Name:   monitor.Name,
+				Rank:   monitor.Rank,
+				Addr:   monitor.Addr,
+				Status: monitor.Status,
+			})
+		}
+	}
+	if len(ceph.Pools) > 0 {
+		out.Pools = make([]models.HostCephPool, 0, len(ceph.Pools))
+		for _, pool := range ceph.Pools {
+			out.Pools = append(out.Pools, models.HostCephPool{
+				ID:             pool.ID,
+				Name:           pool.Name,
+				BytesUsed:      pool.BytesUsed,
+				BytesAvailable: pool.BytesAvailable,
+				Objects:        pool.Objects,
+				PercentUsed:    pool.PercentUsed,
+			})
+		}
+	}
+	if len(ceph.Services) > 0 {
+		out.Services = make([]models.HostCephService, 0, len(ceph.Services))
+		for _, service := range ceph.Services {
+			out.Services = append(out.Services, models.HostCephService{
+				Type:    service.Type,
+				Running: service.Running,
+				Total:   service.Total,
+				Daemons: append([]string(nil), service.Daemons...),
+			})
+		}
+	}
+	return out
+}
+
+func dockerHostFromReadStateView(view *unifiedresources.DockerHostView) models.DockerHost {
+	if view == nil {
+		return models.DockerHost{}
+	}
+
+	totalMemory := view.TotalMemoryBytes()
+	if totalMemory == 0 {
+		totalMemory = view.MemoryTotal()
+	}
+	usedMemory := view.MemoryUsed()
+	freeMemory := maxInt64(0, totalMemory-usedMemory)
+
+	return models.DockerHost{
+		ID:                firstNonEmptyString(view.HostSourceID(), view.ID()),
+		AgentID:           view.AgentID(),
+		Hostname:          view.Hostname(),
+		DisplayName:       view.DisplayName(),
+		CustomDisplayName: view.CustomDisplayName(),
+		MachineID:         view.MachineID(),
+		OS:                view.OS(),
+		KernelVersion:     view.KernelVersion(),
+		Architecture:      view.Architecture(),
+		Runtime:           view.Runtime(),
+		RuntimeVersion:    view.RuntimeVersion(),
+		DockerVersion:     view.DockerVersion(),
+		CPUs:              view.CPUs(),
+		TotalMemoryBytes:  totalMemory,
+		UptimeSeconds:     view.UptimeSeconds(),
+		CPUUsage:          view.CPUPercent(),
+		LoadAverage:       view.LoadAverage(),
+		Memory: models.Memory{
+			Total: totalMemory,
+			Used:  usedMemory,
+			Free:  freeMemory,
+			Usage: view.MemoryPercent(),
+		},
+		Disks:             hostDisksFromReadStateView(view.Disks()),
+		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		Status:            string(view.Status()),
+		LastSeen:          view.LastSeen(),
+		IntervalSeconds:   view.IntervalSeconds(),
+		AgentVersion:      view.AgentVersion(),
+		Containers:        view.Containers(),
+		Services:          view.Services(),
+		Tasks:             view.Tasks(),
+		Swarm:             dockerSwarmFromReadStateView(view.Swarm()),
+		TokenID:           view.TokenID(),
+		TokenName:         view.TokenName(),
+		TokenHint:         view.TokenHint(),
+		TokenLastUsedAt:   view.TokenLastUsedAt(),
+		Hidden:            view.Hidden(),
+		PendingUninstall:  view.PendingUninstall(),
+		Command:           view.Command(),
+		IsLegacy:          view.IsLegacy(),
+		NetInRate:         view.NetInRate(),
+		NetOutRate:        view.NetOutRate(),
+		DiskReadRate:      view.DiskReadRate(),
+		DiskWriteRate:     view.DiskWriteRate(),
+	}
+}
+
+func dockerSwarmFromReadStateView(in *unifiedresources.DockerSwarmInfo) *models.DockerSwarmInfo {
+	if in == nil {
+		return nil
+	}
+	return &models.DockerSwarmInfo{
+		NodeID:           in.NodeID,
+		NodeRole:         in.NodeRole,
+		LocalState:       in.LocalState,
+		ControlAvailable: in.ControlAvailable,
+		ClusterID:        in.ClusterID,
+		ClusterName:      in.ClusterName,
+		Scope:            in.Scope,
+		Error:            in.Error,
+	}
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func int64PtrCopy(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func smartAttributesCopy(in *models.SMARTAttributes) *models.SMARTAttributes {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.PowerOnHours = int64PtrCopy(in.PowerOnHours)
+	out.PowerCycles = int64PtrCopy(in.PowerCycles)
+	out.ReallocatedSectors = int64PtrCopy(in.ReallocatedSectors)
+	out.PendingSectors = int64PtrCopy(in.PendingSectors)
+	out.OfflineUncorrectable = int64PtrCopy(in.OfflineUncorrectable)
+	out.UDMACRCErrors = int64PtrCopy(in.UDMACRCErrors)
+	if in.PercentageUsed != nil {
+		value := *in.PercentageUsed
+		out.PercentageUsed = &value
+	}
+	if in.AvailableSpare != nil {
+		value := *in.AvailableSpare
+		out.AvailableSpare = &value
+	}
+	out.MediaErrors = int64PtrCopy(in.MediaErrors)
+	out.UnsafeShutdowns = int64PtrCopy(in.UnsafeShutdowns)
+	return &out
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func storageZFSPoolFromReadStateView(view *unifiedresources.StoragePoolView) *models.ZFSPool {
+	if view == nil {
+		return nil
+	}
+
+	state := strings.TrimSpace(view.ZFSPoolState())
+	if !view.IsZFS() && state == "" && view.ZFSReadErrors() == 0 && view.ZFSWriteErrors() == 0 && view.ZFSChecksumErrors() == 0 {
+		return nil
+	}
+
+	return &models.ZFSPool{
+		Name:           view.Name(),
+		State:          state,
+		ReadErrors:     view.ZFSReadErrors(),
+		WriteErrors:    view.ZFSWriteErrors(),
+		ChecksumErrors: view.ZFSChecksumErrors(),
+	}
+}
+
+func storageNodeIDsFromReadState(instance string, nodes []string) []string {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	nodeIDs := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		node = strings.TrimSpace(node)
+		if node == "" {
+			continue
+		}
+		if instance == "" {
+			nodeIDs = append(nodeIDs, node)
+			continue
+		}
+		nodeIDs = append(nodeIDs, instance+"-"+node)
+	}
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+	return nodeIDs
+}
+
+// ActiveAlertsSnapshot returns the current active alerts.
+func (m *Monitor) ActiveAlertsSnapshot() []models.Alert {
+	return m.activeAlertsSnapshot()
+}
+
+// RecentlyResolvedSnapshot returns the recently resolved alerts.
+func (m *Monitor) RecentlyResolvedSnapshot() []models.ResolvedAlert {
+	return m.recentlyResolvedAlertsSnapshot()
+}
+
+// PVEBackupsSnapshot returns the current PVE backups.
+func (m *Monitor) PVEBackupsSnapshot() models.PVEBackups {
+	return m.GetState().PVEBackups
+}
+
+// BuildFrontendState returns the current state converted to frontend format.
+// This replaces the GetState().ToFrontend() pattern in consumer code.
+func (m *Monitor) BuildFrontendState() models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+}
+
+// BuildBroadcastFrontendState returns frontend state ready for websocket
+// broadcasts, including the unified resource payload when a resource store is
+// configured.
+func (m *Monitor) BuildBroadcastFrontendState() models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+}
+
+func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
+	return snapshot.ToFrontend()
+}
+
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
+	frontendState := buildFrontendStateFromSnapshot(snapshot)
+	m.updateResourceStore(snapshot)
+	if m != nil && m.alertManager != nil {
+		if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
+			frontendState.ActiveAlerts = liveAlerts
+		}
+	}
+	unifiedResources := m.getUnifiedResourcesForBroadcast()
+	frontendState.Resources = convertResourcesForBroadcast(unifiedResources)
+	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedResources, snapshot)
+	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {
+		frontendState.LastUpdate = freshness.UnixMilli()
+	}
+	return frontendState
+}
+
+// GetLiveStateSnapshot returns the underlying monitor state snapshot without
+// applying global mock mode overrides.
+//
+// This is useful for agent management endpoints that need to reflect actual
+// registrations even when mock mode is enabled for the UI/demo experience.
+func (m *Monitor) GetLiveStateSnapshot() models.StateSnapshot {
+	if m == nil || m.state == nil {
+		return models.EmptyStateSnapshot()
+	}
+	return m.state.GetSnapshot()
+}
+
+// GetLiveHostsSnapshot returns the underlying registered host agents without
+// applying global mock mode overrides.
+func (m *Monitor) GetLiveHostsSnapshot() []models.Host {
+	if m == nil || m.state == nil {
+		return nil
+	}
+	return m.state.GetSnapshot().Hosts
+}
+
 // SetOrgID sets the organization ID for this monitor instance.
 // This is used for tenant isolation in multi-tenant deployments.
 func (m *Monitor) SetOrgID(orgID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.orgID = orgID
+	m.orgID = strings.TrimSpace(orgID)
 }
 
 // GetOrgID returns the organization ID for this monitor instance.
@@ -9397,29 +3682,40 @@ func (m *Monitor) GetOrgID() string {
 	return m.orgID
 }
 
+type stateBroadcaster interface {
+	BroadcastState(state interface{})
+	BroadcastStateToTenant(orgID string, state interface{})
+}
+
 // broadcastState broadcasts state to WebSocket clients.
-// For tenant monitors, it broadcasts only to clients of that tenant.
-// For default monitors, it broadcasts to all clients.
-func (m *Monitor) broadcastState(hub *websocket.Hub, frontendState interface{}) {
+// Monitors with an explicit org ID (including "default") are tenant-scoped.
+// Legacy monitors without an org ID broadcast globally.
+func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}) {
 	if hub == nil {
 		return
 	}
 
-	orgID := m.GetOrgID()
-	if orgID != "" && orgID != "default" {
-		// Tenant-specific broadcast
+	orgID := strings.TrimSpace(m.GetOrgID())
+	if orgID != "" {
 		hub.BroadcastStateToTenant(orgID, frontendState)
 	} else {
-		// Legacy broadcast to all clients
 		hub.BroadcastState(frontendState)
 	}
+}
+
+func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Alert) {
+	if hub == nil || alert == nil {
+		return
+	}
+
+	hub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 }
 
 // SetMockMode switches between mock data and real infrastructure data at runtime.
 func (m *Monitor) SetMockMode(enable bool) {
 	current := mock.IsMockEnabled()
 	if current == enable {
-		log.Info().Bool("mockMode", enable).Msg("Mock mode already in desired state")
+		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
 		return
 	}
 
@@ -9438,7 +3734,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 		if ctx != nil {
 			m.startMockMetricsSampler(ctx)
 		}
-		log.Info().Msg("Switched monitor to mock mode")
+		log.Info().Msg("switched monitor to mock mode")
 	} else {
 		m.stopMockMetricsSampler()
 		mock.SetEnabled(false)
@@ -9447,7 +3743,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 		m.resetStateLocked()
 		m.metricsHistory.Reset()
 		m.mu.Unlock()
-		log.Info().Msg("Switched monitor to real data mode")
+		log.Info().Msg("switched monitor to real data mode")
 	}
 
 	m.mu.RLock()
@@ -9456,18 +3752,20 @@ func (m *Monitor) SetMockMode(enable bool) {
 	m.mu.RUnlock()
 
 	if hub != nil {
-		state := m.GetState()
-		frontendState := state.ToFrontend()
-		m.updateResourceStore(state)
-		frontendState.Resources = m.getResourcesForBroadcast()
+		frontendState := m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
 		// Use tenant-aware broadcast method
 		m.broadcastState(hub, frontendState)
 	}
 
-	if !enable && ctx != nil && hub != nil {
-		// Kick off an immediate poll to repopulate state with live data
+	if enable && ctx != nil && keepRealPollingInMockMode() {
+		// Keep real metrics flowing while mock mode is enabled.
 		go m.poll(ctx, hub)
-		if m.config.DiscoveryEnabled {
+	}
+
+	if !enable && ctx != nil {
+		// Kick off an immediate poll to repopulate state with live data.
+		go m.poll(ctx, hub)
+		if hub != nil && m.config.DiscoveryEnabled {
 			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
 		}
 	}
@@ -9497,7 +3795,7 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 	defer m.mu.Unlock()
 
 	if m.discoveryService != nil {
-		log.Debug().Msg("Discovery service already running")
+		log.Debug().Msg("discovery service already running")
 		return
 	}
 
@@ -9517,9 +3815,9 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
-		log.Info().Str("subnet", subnet).Msg("Discovery service started")
+		log.Info().Str("subnet", subnet).Msg("discovery service started")
 	} else {
-		log.Error().Msg("Failed to create discovery service")
+		log.Error().Msg("failed to create discovery service")
 	}
 }
 
@@ -9531,7 +3829,7 @@ func (m *Monitor) StopDiscoveryService() {
 	if m.discoveryService != nil {
 		m.discoveryService.Stop()
 		m.discoveryService = nil
-		log.Info().Msg("Discovery service stopped")
+		log.Info().Msg("discovery service stopped")
 	}
 }
 
@@ -9539,246 +3837,14 @@ func (m *Monitor) StopDiscoveryService() {
 func (m *Monitor) EnableTemperatureMonitoring() {
 	// Temperature collection is always enabled when tempCollector is initialized
 	// This method exists for interface compatibility
-	log.Info().Msg("Temperature monitoring enabled")
+	log.Info().Msg("temperature monitoring enabled")
 }
 
 // DisableTemperatureMonitoring disables temperature data collection
 func (m *Monitor) DisableTemperatureMonitoring() {
 	// Temperature collection is always enabled when tempCollector is initialized
 	// This method exists for interface compatibility
-	log.Info().Msg("Temperature monitoring disabled")
-}
-
-// inMemoryChartThreshold is the max duration reliably covered by the in-memory
-// metrics buffer. With 1000 data-points at a 10 s polling interval the buffer
-// holds ~2.8 h of data; 2 h is a safe conservative cut-off.
-const inMemoryChartThreshold = 2 * time.Hour
-
-// chartDownsampleTarget is the number of points returned per metric when
-// falling back to the persistent store. 500 is more than enough for any
-// sparkline or thumbnail chart.
-const chartDownsampleTarget = 500
-
-// GetGuestMetrics returns historical metrics for a guest
-func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
-	return m.metricsHistory.GetAllGuestMetrics(guestID, duration)
-}
-
-// GetGuestMetricsForChart returns guest metrics optimised for chart display.
-// Short ranges are served from the in-memory ring buffer; longer ranges fall
-// back to the persistent SQLite store with LTTB downsampling.
-//
-// inMemoryKey is the key used in the in-memory buffer (e.g. "docker:abc123").
-// sqlResourceType/sqlResourceID are the type/id used in the SQLite store
-// (e.g. "dockerContainer"/"abc123").
-func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
-	if duration <= inMemoryChartThreshold || m.metricsStore == nil {
-		return m.metricsHistory.GetAllGuestMetrics(inMemoryKey, duration)
-	}
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlResult, err := m.metricsStore.QueryAll(sqlResourceType, sqlResourceID, start, end, 0)
-	if err != nil || len(sqlResult) == 0 {
-		return m.metricsHistory.GetAllGuestMetrics(inMemoryKey, duration)
-	}
-	return convertAndDownsample(sqlResult, chartDownsampleTarget)
-}
-
-// GetNodeMetrics returns historical metrics for a node
-func (m *Monitor) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []MetricPoint {
-	return m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
-}
-
-// GetNodeMetricsForChart returns node metrics for a single metric type,
-// falling back to SQLite + LTTB for longer ranges.
-func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration time.Duration) []MetricPoint {
-	if duration <= inMemoryChartThreshold || m.metricsStore == nil {
-		return m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
-	}
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlPoints, err := m.metricsStore.Query("node", nodeID, metricType, start, end, 0)
-	if err != nil || len(sqlPoints) == 0 {
-		return m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
-	}
-	converted := make([]MetricPoint, len(sqlPoints))
-	for i, p := range sqlPoints {
-		converted[i] = MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-	}
-	return lttb(converted, chartDownsampleTarget)
-}
-
-// GetStorageMetrics returns historical metrics for storage
-func (m *Monitor) GetStorageMetrics(storageID string, duration time.Duration) map[string][]MetricPoint {
-	return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
-}
-
-// GetStorageMetricsForChart returns storage metrics, falling back to SQLite +
-// LTTB for longer ranges.
-func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Duration) map[string][]MetricPoint {
-	if duration <= inMemoryChartThreshold || m.metricsStore == nil {
-		return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
-	}
-	end := time.Now()
-	start := end.Add(-duration)
-	sqlResult, err := m.metricsStore.QueryAll("storage", storageID, start, end, 0)
-	if err != nil || len(sqlResult) == 0 {
-		return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
-	}
-	return convertAndDownsample(sqlResult, chartDownsampleTarget)
-}
-
-// convertAndDownsample converts pkg/metrics.MetricPoint slices to
-// internal/types.MetricPoint slices and applies LTTB downsampling.
-func convertAndDownsample(sqlResult map[string][]metrics.MetricPoint, target int) map[string][]MetricPoint {
-	result := make(map[string][]MetricPoint, len(sqlResult))
-	for metric, points := range sqlResult {
-		converted := make([]MetricPoint, len(points))
-		for i, p := range points {
-			converted[i] = MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
-		}
-		result[metric] = lttb(converted, target)
-	}
-	return result
-}
-
-// GetAlertManager returns the alert manager
-func (m *Monitor) GetAlertManager() *alerts.Manager {
-	return m.alertManager
-}
-
-// GetIncidentStore returns the incident timeline store.
-func (m *Monitor) GetIncidentStore() *memory.IncidentStore {
-	return m.incidentStore
-}
-
-// SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
-// This enables token-efficient, real-time AI insights on specific resources
-// SetAlertTriggeredAICallback sets an additional callback for AI analysis when alerts fire
-// This enables token-efficient, real-time AI insights on specific resources
-func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.alertTriggeredAICallback = callback
-	log.Info().Msg("Alert-triggered AI callback registered")
-}
-
-// SetAlertResolvedAICallback sets an additional callback when alerts are resolved.
-// This enables AI systems (like incident recording) to stop or finalize context after resolution.
-func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
-	if m.alertManager == nil {
-		return
-	}
-	m.alertResolvedAICallback = callback
-	log.Info().Msg("Alert-resolved AI callback registered")
-}
-
-func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
-	if alert == nil {
-		return
-	}
-
-	if m.wsHub != nil {
-		m.wsHub.BroadcastAlert(alert)
-	}
-
-	log.Debug().
-		Str("alertID", alert.ID).
-		Str("level", string(alert.Level)).
-		Msg("Alert raised, sending to notification manager")
-	if m.notificationMgr != nil {
-		go m.notificationMgr.SendAlert(alert)
-	}
-
-	if m.incidentStore != nil {
-		m.incidentStore.RecordAlertFired(alert)
-	}
-
-	// Trigger AI analysis if callback is configured
-	if m.alertTriggeredAICallback != nil {
-		// Run in goroutine to avoid blocking the monitor loop
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in AI alert callback")
-				}
-			}()
-			m.alertTriggeredAICallback(alert)
-		}()
-	}
-}
-
-func (m *Monitor) handleAlertResolved(alertID string) {
-	var resolvedAlert *alerts.ResolvedAlert
-
-	if m.wsHub != nil {
-		m.wsHub.BroadcastAlertResolved(alertID)
-	}
-
-	// Always record incident timeline, regardless of notification suppression.
-	// This ensures we have a complete history even during quiet hours.
-	if m.incidentStore != nil {
-		resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-		if resolvedAlert != nil && resolvedAlert.Alert != nil {
-			m.incidentStore.RecordAlertResolved(resolvedAlert.Alert, resolvedAlert.ResolvedTime)
-		}
-	}
-
-	// Always trigger AI callback, regardless of notification suppression.
-	if m.alertResolvedAICallback != nil {
-		if resolvedAlert == nil {
-			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-		}
-		if resolvedAlert != nil && resolvedAlert.Alert != nil {
-			go m.alertResolvedAICallback(resolvedAlert.Alert)
-		}
-	}
-
-	// Handle notifications
-	if m.notificationMgr != nil {
-		m.notificationMgr.CancelAlert(alertID)
-		if m.notificationMgr.GetNotifyOnResolve() {
-			if resolvedAlert == nil {
-				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-			}
-			if resolvedAlert != nil {
-				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
-			}
-		}
-	}
-}
-
-func (m *Monitor) handleAlertAcknowledged(alert *alerts.Alert, user string) {
-	if m.incidentStore == nil || alert == nil {
-		return
-	}
-	m.incidentStore.RecordAlertAcknowledged(alert, user)
-}
-
-func (m *Monitor) handleAlertUnacknowledged(alert *alerts.Alert, user string) {
-	if m.incidentStore == nil || alert == nil {
-		return
-	}
-	m.incidentStore.RecordAlertUnacknowledged(alert, user)
-}
-
-// broadcastStateUpdate sends an immediate state update to all WebSocket clients.
-// Call this after updating state with new data that should be visible immediately.
-func (m *Monitor) broadcastStateUpdate() {
-	m.mu.RLock()
-	hub := m.wsHub
-	m.mu.RUnlock()
-
-	if hub == nil {
-		return
-	}
-
-	state := m.GetState()
-	frontendState := state.ToFrontend()
-	m.updateResourceStore(state)
-	frontendState.Resources = m.getResourcesForBroadcast()
-	// Use tenant-aware broadcast method
-	m.broadcastState(hub, frontendState)
+	log.Info().Msg("temperature monitoring disabled")
 }
 
 // SetResourceStore sets the resource store for polling optimization.
@@ -9786,9 +3852,53 @@ func (m *Monitor) broadcastStateUpdate() {
 // for nodes that have host agents providing data.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.resourceStore = store
-	log.Info().Msg("Resource store set for polling optimization")
+	m.mu.Unlock()
+	log.Info().Msg("resource store set for polling optimization")
+
+	// Immediately backfill the store from current state so ReadState
+	// consumers have data as soon as the store is wired.
+	// Guard against minimally initialized monitors (e.g., test fixtures
+	// with bare &Monitor{}) where m.state may be nil.
+	if store != nil && m.state != nil {
+		m.updateResourceStore(m.GetState())
+	}
+}
+
+// SetSupplementalRecordsProvider configures source-native resource providers
+// that ingest alongside the legacy state snapshot path.
+func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSource, provider MonitorSupplementalRecordsProvider) {
+	if m == nil {
+		return
+	}
+
+	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+	if normalized == "" {
+		return
+	}
+
+	m.mu.Lock()
+	if m.supplementalProviders == nil {
+		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+	}
+	if provider == nil {
+		delete(m.supplementalProviders, normalized)
+	} else {
+		m.supplementalProviders[normalized] = provider
+	}
+	m.mu.Unlock()
+}
+
+// SetRecoveryManager wires the recovery store manager for best-effort ingestion of
+// recovery points derived from polled backup/snapshot data.
+func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
+	m.mu.Lock()
+	m.recoveryManager = manager
+	m.mu.Unlock()
+
+	// Try cleanup during wiring so monitors that are already running still get
+	// the migration once a recovery manager becomes available.
+	go m.purgeStalePVEPBSBackupsBestEffort(context.Background())
 }
 
 // GetNotificationManager returns the notification manager
@@ -9810,6 +3920,147 @@ func (m *Monitor) GetMetricsStore() *metrics.Store {
 // This is used by the AI context builder to compute trends and predictions
 func (m *Monitor) GetMetricsHistory() *MetricsHistory {
 	return m.metricsHistory
+}
+
+// GetUnifiedResources returns the current unified resource view for this monitor.
+// Returns nil when no resource store is configured.
+func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	return store.GetAll()
+}
+
+type monitorUnifiedStateView struct {
+	resources []unifiedresources.Resource
+	readState unifiedresources.ReadState
+	freshness time.Time
+}
+
+func monitorUnifiedStateViewFromSnapshot(snapshot models.StateSnapshot) monitorUnifiedStateView {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	return monitorUnifiedStateView{
+		resources: registry.List(),
+		readState: adapter,
+		freshness: snapshot.LastUpdate,
+	}
+}
+
+func monitorUnifiedStateViewFromResources(resources []unifiedresources.Resource, freshness time.Time) monitorUnifiedStateView {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	return monitorUnifiedStateView{
+		resources: registry.List(),
+		readState: adapter,
+		freshness: freshness,
+	}
+}
+
+func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
+	if m == nil {
+		return monitorUnifiedStateView{}
+	}
+
+	if mock.IsMockEnabled() {
+		return monitorUnifiedStateViewFromSnapshot(m.GetState())
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	state := m.state
+	m.mu.RUnlock()
+
+	if store == nil {
+		return monitorUnifiedStateViewFromSnapshot(m.GetState())
+	}
+
+	resources := store.GetAll()
+	freshness := unifiedResourceFreshness(store, state)
+
+	if readState, ok := store.(unifiedresources.ReadState); ok {
+		return monitorUnifiedStateView{
+			resources: resources,
+			readState: readState,
+			freshness: freshness,
+		}
+	}
+
+	if len(resources) > 0 || state == nil {
+		return monitorUnifiedStateViewFromResources(resources, freshness)
+	}
+
+	return monitorUnifiedStateViewFromSnapshot(m.GetState())
+}
+
+func (m *Monitor) currentUnifiedResourceFreshness() time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	state := m.state
+	m.mu.RUnlock()
+	return unifiedResourceFreshness(store, state)
+}
+
+func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State) time.Time {
+	freshness := time.Time{}
+	if freshnessStore, ok := store.(UnifiedResourceFreshnessStore); ok {
+		freshness = freshnessStore.UnifiedResourceFreshness()
+	}
+	if freshness.IsZero() && state != nil {
+		freshness = state.GetLastUpdate()
+	}
+	return freshness
+}
+
+// UnifiedResourceSnapshot returns a canonical unified-resource seed plus the
+// associated freshness marker. It respects mock mode by falling back to the
+// current mock-aware state snapshot instead of the live resource store.
+func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
+	view := m.currentUnifiedStateView()
+	return view.resources, view.freshness
+}
+
+// GetUnifiedReadState returns a typed unified read-state provider when the
+// configured resource store supports it.
+func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	readState, ok := store.(unifiedresources.ReadState)
+	if !ok {
+		return nil
+	}
+	return readState
+}
+
+// GetUnifiedReadStateOrSnapshot returns unified read-state when available.
+// If the monitor has not been wired with a resource store yet, it creates an
+// ephemeral snapshot-backed adapter to preserve read access without exposing
+// direct state reads to consumer packages.
+func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
+	return m.currentUnifiedStateView().readState
 }
 
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
@@ -9853,12 +4104,140 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[Resources] Populating resource store from state snapshot")
 
-	store.PopulateFromSnapshot(state)
+	snapshotForStore := state
+	ownedSources := m.providerOwnedSnapshotSources()
+	if len(ownedSources) > 0 {
+		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
+		sourceNames := make([]string, 0, len(ownedSources))
+		for _, source := range ownedSources {
+			sourceNames = append(sourceNames, string(source))
+		}
+		log.Debug().
+			Strs("sources", sourceNames).
+			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
+	}
+
+	recordsBySource := m.collectSupplementalRecordsBySource()
+	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
+		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+		m.syncUnifiedStorageMetrics(store)
+		for source, records := range recordsBySource {
+			if len(records) == 0 {
+				continue
+			}
+			log.Debug().
+				Str("source", string(source)).
+				Int("records", len(records)).
+				Msg("[Resources] Atomically ingested supplemental records")
+		}
+		m.syncUnifiedResourceAlertsToState(store.GetAll())
+		return
+	}
+
+	store.PopulateFromSnapshot(snapshotForStore)
+	m.syncUnifiedStorageMetrics(store)
+
+	supplementalStore, ok := store.(SupplementalRecordStore)
+	if !ok {
+		m.syncUnifiedResourceAlertsToState(store.GetAll())
+		return
+	}
+
+	for source, records := range recordsBySource {
+		if len(records) == 0 {
+			continue
+		}
+		supplementalStore.PopulateSupplementalRecords(source, records)
+		log.Debug().
+			Str("source", string(source)).
+			Int("records", len(records)).
+			Msg("[Resources] Ingested supplemental records")
+	}
+
+	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
-// getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.
+func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
+	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Metrics == nil || resource.Metrics.Disk == nil {
+			continue
+		}
+
+		// Native Proxmox storage already writes to history during the storage poller.
+		if resource.Storage != nil && resource.Storage.Platform == "" {
+			hasProxmoxSource := false
+			for _, source := range resource.Sources {
+				if source == unifiedresources.SourceProxmox {
+					hasProxmoxSource = true
+					break
+				}
+			}
+			if hasProxmoxSource {
+				continue
+			}
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "storage" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+
+		disk := resource.Metrics.Disk
+		usage := disk.Percent
+		used := int64(0)
+		total := int64(0)
+		free := int64(0)
+		if disk.Used != nil {
+			used = *disk.Used
+		}
+		if disk.Total != nil {
+			total = *disk.Total
+		}
+		if total > 0 {
+			free = total - used
+			if usage == 0 && used > 0 {
+				usage = (float64(used) / float64(total)) * 100
+			}
+		}
+
+		if m.metricsHistory != nil {
+			m.metricsHistory.AddStorageMetric(targetID, "usage", usage, now)
+			if total > 0 {
+				m.metricsHistory.AddStorageMetric(targetID, "used", float64(used), now)
+				m.metricsHistory.AddStorageMetric(targetID, "total", float64(total), now)
+				m.metricsHistory.AddStorageMetric(targetID, "avail", float64(free), now)
+			}
+		}
+		if m.metricsStore != nil {
+			m.metricsStore.Write("storage", targetID, "usage", usage, now)
+			if total > 0 {
+				m.metricsStore.Write("storage", targetID, "used", float64(used), now)
+				m.metricsStore.Write("storage", targetID, "total", float64(total), now)
+				m.metricsStore.Write("storage", targetID, "avail", float64(free), now)
+			}
+		}
+	}
+}
+
+// getUnifiedResourcesForBroadcast retrieves all resources from the store.
 // Returns nil if no resource store is configured.
-func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
+func (m *Monitor) getUnifiedResourcesForBroadcast() []unifiedresources.Resource {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
@@ -9873,1033 +4252,769 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	if len(allResources) == 0 {
 		return nil
 	}
+	return allResources
+}
 
-	result := make([]models.ResourceFrontend, len(allResources))
-	for i, r := range allResources {
-		input := models.ResourceConvertInput{
-			ID:           r.ID,
-			Type:         string(r.Type),
-			Name:         r.Name,
-			DisplayName:  r.DisplayName,
-			PlatformID:   r.PlatformID,
-			PlatformType: string(r.PlatformType),
-			SourceType:   string(r.SourceType),
-			ParentID:     r.ParentID,
-			ClusterID:    r.ClusterID,
-			Status:       string(r.Status),
-			Temperature:  r.Temperature,
-			Uptime:       r.Uptime,
-			Tags:         r.Tags,
-			Labels:       r.Labels,
-			LastSeenUnix: r.LastSeen.UnixMilli(),
-		}
+// getResourcesForBroadcast retrieves all resources from the store and converts
+// them to frontend format.
+func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
+	return convertResourcesForBroadcast(m.getUnifiedResourcesForBroadcast())
+}
 
-		// Convert metrics
-		if r.CPU != nil {
-			input.CPU = &models.ResourceMetricInput{
-				Current: r.CPU.Current,
-				Total:   r.CPU.Total,
-				Used:    r.CPU.Used,
-				Free:    r.CPU.Free,
-			}
-		}
-		if r.Memory != nil {
-			input.Memory = &models.ResourceMetricInput{
-				Current: r.Memory.Current,
-				Total:   r.Memory.Total,
-				Used:    r.Memory.Used,
-				Free:    r.Memory.Free,
-			}
-		}
-		if r.Disk != nil {
-			input.Disk = &models.ResourceMetricInput{
-				Current: r.Disk.Current,
-				Total:   r.Disk.Total,
-				Used:    r.Disk.Used,
-				Free:    r.Disk.Free,
-			}
-		}
-		if r.Network != nil {
-			input.HasNetwork = true
-			input.NetworkRX = r.Network.RXBytes
-			input.NetworkTX = r.Network.TXBytes
-		}
-
-		// Convert alerts
-		if len(r.Alerts) > 0 {
-			input.Alerts = make([]models.ResourceAlertInput, len(r.Alerts))
-			for j, a := range r.Alerts {
-				input.Alerts[j] = models.ResourceAlertInput{
-					ID:            a.ID,
-					Type:          a.Type,
-					Level:         a.Level,
-					Message:       a.Message,
-					Value:         a.Value,
-					Threshold:     a.Threshold,
-					StartTimeUnix: a.StartTime.UnixMilli(),
-				}
-			}
-		}
-
-		// Convert identity
-		if r.Identity != nil {
-			input.Identity = &models.ResourceIdentityInput{
-				Hostname:  r.Identity.Hostname,
-				MachineID: r.Identity.MachineID,
-				IPs:       r.Identity.IPs,
-			}
-		}
-
-		// Pass platform data directly as json.RawMessage
-		input.PlatformData = r.PlatformData
-
-		result[i] = models.ConvertResourceToFrontend(input)
+// convertResourcesForBroadcast converts unified resources into the frontend payload shape.
+func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []models.ResourceFrontend {
+	if len(allResources) == 0 {
+		return []models.ResourceFrontend{}
+	}
+	type broadcastResource struct {
+		input      models.ResourceConvertInput
+		sortKey    string
+		resourceID string
 	}
 
+	converted := make([]broadcastResource, 0, len(allResources))
+	for _, r := range allResources {
+		input := monitorResourceToConvertInput(r)
+		sortKey := strings.ToLower(input.DisplayName)
+		if sortKey == "" {
+			sortKey = strings.ToLower(input.Name)
+		}
+		converted = append(converted, broadcastResource{
+			input:      input,
+			sortKey:    sortKey,
+			resourceID: input.ID,
+		})
+	}
+
+	sort.Slice(converted, func(i, j int) bool {
+		if converted[i].sortKey == converted[j].sortKey {
+			return converted[i].resourceID < converted[j].resourceID
+		}
+		return converted[i].sortKey < converted[j].sortKey
+	})
+
+	result := make([]models.ResourceFrontend, len(converted))
+	for i, resource := range converted {
+		result[i] = models.ConvertResourceToFrontend(resource.input)
+	}
 	return result
 }
 
-// pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
-func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
+	resourceType := monitorFrontendResourceType(resource)
+	name, displayName := monitorFrontendNames(resource, resourceType)
+	platformID := monitorPlatformID(resource, resourceType)
 
-	var allBackups []models.StorageBackup
-	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false          // Track if at least one node responded successfully
-	storagesWithBackup := 0             // Number of storages that should contain backups
-	contentSuccess := 0                 // Number of successful storage content fetches
-	contentFailures := 0                // Number of failed storage content fetches
-	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
-	hadPermissionError := false         // Track if any permission errors occurred this cycle
-	storagePreserveNeeded := map[string]struct{}{}
-	storageSuccess := map[string]struct{}{}
-
-	// Build guest lookup map to find actual node for each VMID
-	snapshot := m.state.GetSnapshot()
-	guestNodeMap := make(map[int]string) // VMID -> actual node name
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName {
-			guestNodeMap[vm.VMID] = vm.Node
-		}
-	}
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName {
-			guestNodeMap[ct.VMID] = ct.Node
-		}
-	}
-	// Also map template VMIDs so backup node assignment is correct for template backups.
-	if templates, ok := snapshot.TemplateVMIDs[instanceName]; ok {
-		for vmid, node := range templates {
-			if _, exists := guestNodeMap[vmid]; !exists {
-				guestNodeMap[vmid] = node
-			}
-		}
+	input := models.ResourceConvertInput{
+		ID:           resource.ID,
+		Type:         resourceType,
+		Name:         name,
+		DisplayName:  displayName,
+		PlatformID:   platformID,
+		PlatformType: monitorPlatformType(resource, resourceType),
+		SourceType:   monitorSourceType(resource.Sources),
+		ParentID:     monitorStringValue(resource.ParentID),
+		ClusterID:    monitorClusterID(resource),
+		Status:       monitorFrontendStatus(resource, resourceType),
+		CPU:          monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
+		Memory:       monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+		Disk:         monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
+		Temperature:  monitorTemperature(resource),
+		Uptime:       monitorUptime(resource),
+		Tags:         append([]string(nil), resource.Tags...),
+		Labels:       monitorLabels(resource),
+		LastSeenUnix: monitorLastSeenUnix(resource.LastSeen),
+		Identity:     monitorIdentity(resource, name),
+		PlatformData: monitorPlatformData(resource, resourceType, platformID),
 	}
 
-	// For each node, get storage and check content
-	for _, node := range nodes {
-		if nodeEffectiveStatus[node.Node] != "online" {
-			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
-				storagePreserveNeeded[storageName] = struct{}{}
-			}
-			continue
-		}
+	hasNetwork, rx, tx := monitorNetworkMetricInput(resource.Metrics)
+	input.HasNetwork = hasNetwork
+	input.NetworkRX = rx
+	input.NetworkTX = tx
 
-		// Get storage for this node - retry once on timeout
-		var storages []proxmox.Storage
-		var err error
-
-		for attempt := 1; attempt <= 2; attempt++ {
-			storages, err = client.GetStorage(ctx, node.Node)
-			if err == nil {
-				break // Success
-			}
-
-			// Check if it's a timeout error
-			errStr := err.Error()
-			if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
-				if attempt == 1 {
-					log.Warn().
-						Str("node", node.Node).
-						Str("instance", instanceName).
-						Msg("Storage query timed out, retrying with extended timeout...")
-					// Give it a bit more time on retry
-					time.Sleep(2 * time.Second)
-					continue
-				}
-			}
-			// Non-timeout error or second attempt failed
-			break
-		}
-
-		if err != nil {
-			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
-			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get storage for backups - skipping node")
-			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
-				storagePreserveNeeded[storageName] = struct{}{}
-			}
-			storageQueryErrors++
-			continue
-		}
-
-		hadSuccessfulNode = true
-
-		// For each storage that can contain backups or templates
-		for _, storage := range storages {
-			// Check if storage supports backup content
-			if !strings.Contains(storage.Content, "backup") {
-				continue
-			}
-			if !storageContentQueryable(storage) {
-				continue
-			}
-
-			storagesWithBackup++
-
-			// Get storage content
-			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
-			if err != nil {
-				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_content", instanceName, err).WithNode(node.Node)
-				errStr := strings.ToLower(err.Error())
-
-				// Check if this is a permission error
-				if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") ||
-					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
-					hadPermissionError = true
-					m.mu.Lock()
-					m.backupPermissionWarnings[instanceName] = "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
-					m.mu.Unlock()
-					log.Warn().
-						Str("instance", instanceName).
-						Str("node", node.Node).
-						Str("storage", storage.Storage).
-						Msg("Backup permission denied - PVEDatastoreAdmin role may be missing on /storage")
-				} else {
-					log.Debug().Err(monErr).
-						Str("node", node.Node).
-						Str("storage", storage.Storage).
-						Msg("Failed to get storage content")
-				}
-				if _, ok := storageSuccess[storage.Storage]; !ok {
-					storagePreserveNeeded[storage.Storage] = struct{}{}
-				}
-				contentFailures++
-				continue
-			}
-
-			contentSuccess++
-			storageSuccess[storage.Storage] = struct{}{}
-			delete(storagePreserveNeeded, storage.Storage)
-
-			// Convert to models
-			for _, content := range contents {
-				// Skip if we've already seen this item (shared storage duplicate)
-				if seenVolids[content.Volid] {
-					continue
-				}
-				seenVolids[content.Volid] = true
-
-				// Skip templates and ISOs - they're not backups
-				if content.Content == "vztmpl" || content.Content == "iso" {
-					continue
-				}
-
-				// Determine type from content type and VMID
-				backupType := "unknown"
-				if content.VMID == 0 {
-					backupType = "host"
-				} else if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
-					backupType = "qemu"
-				} else if strings.Contains(content.Volid, "/ct/") || strings.Contains(content.Volid, "lxc") {
-					backupType = "lxc"
-				} else if strings.Contains(content.Format, "pbs-ct") {
-					// PBS format check as fallback
-					backupType = "lxc"
-				} else if strings.Contains(content.Format, "pbs-vm") {
-					// PBS format check as fallback
-					backupType = "qemu"
-				}
-
-				// Determine the correct node: for guest backups (VMID > 0), use the actual guest's node
-				// For host backups (VMID == 0), use the node where the backup was found
-				backupNode := node.Node
-				if content.VMID > 0 {
-					if actualNode, found := guestNodeMap[content.VMID]; found {
-						backupNode = actualNode
-					}
-					// If not found in map, fall back to queried node (shouldn't happen normally)
-				}
-				isPBSStorage := strings.HasPrefix(storage.Storage, "pbs-") || storage.Type == "pbs"
-
-				// Check verification status for PBS backups
-				verified := false
-				verificationInfo := ""
-				if isPBSStorage {
-					// Check if verified flag is set
-					if content.Verified > 0 {
-						verified = true
-					}
-					// Also check verification map if available
-					if content.Verification != nil {
-						if state, ok := content.Verification["state"].(string); ok {
-							verified = (state == "ok")
-							verificationInfo = state
-						}
-					}
-				}
-
-				backup := models.StorageBackup{
-					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
-					Storage:      storage.Storage,
-					Node:         backupNode,
-					Instance:     instanceName,
-					Type:         backupType,
-					VMID:         content.VMID,
-					Time:         time.Unix(content.CTime, 0),
-					CTime:        content.CTime,
-					Size:         int64(content.Size),
-					Format:       content.Format,
-					Notes:        content.Notes,
-					Protected:    content.Protected > 0,
-					Volid:        content.Volid,
-					IsPBS:        isPBSStorage,
-					Verified:     verified,
-					Verification: verificationInfo,
-				}
-
-				allBackups = append(allBackups, backup)
-			}
-		}
-	}
-
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
-	if len(preservedStorages) > 0 {
-		log.Warn().
-			Str("instance", instanceName).
-			Strs("storages", preservedStorages).
-			Msg("Preserving previous storage backup data due to partial failures")
-	}
-
-	// Decide whether to keep existing backups when every query failed
-	if shouldPreserveBackups(len(nodes), hadSuccessfulNode, storagesWithBackup, contentSuccess) {
-		if len(nodes) > 0 && !hadSuccessfulNode {
-			log.Warn().
-				Str("instance", instanceName).
-				Int("nodes", len(nodes)).
-				Int("errors", storageQueryErrors).
-				Msg("Failed to query storage on all nodes; keeping previous backup list")
-		} else if storagesWithBackup > 0 && contentSuccess == 0 {
-			log.Warn().
-				Str("instance", instanceName).
-				Int("storages", storagesWithBackup).
-				Int("failures", contentFailures).
-				Msg("All storage content queries failed; keeping previous backup list")
-		}
-		return
-	}
-
-	// Update state with storage backups for this instance
-	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
-
-	// Sync backup times to VMs/Containers for backup status indicators
-	m.state.SyncGuestBackupTimes()
-
-	if m.alertManager != nil {
-		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
-		pveStorage := snapshot.Backups.PVE.StorageBackups
-		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
-			pveStorage = snapshot.PVEBackups.StorageBackups
-		}
-		pbsBackups := snapshot.Backups.PBS
-		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
-			pbsBackups = snapshot.PBSBackups
-		}
-		pmgBackups := snapshot.Backups.PMG
-		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
-			pmgBackups = snapshot.PMGBackups
-		}
-		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
-	}
-
-	// Clear permission warning if no permission errors occurred this cycle
-	if !hadPermissionError {
-		m.mu.Lock()
-		delete(m.backupPermissionWarnings, instanceName)
-		m.mu.Unlock()
-	}
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("count", len(allBackups)).
-		Msg("Storage backups polled")
-
-	// Immediately broadcast the updated state so frontend sees new backups
-	m.broadcastStateUpdate()
+	return input
 }
 
-func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBackup, contentSuccess int) bool {
-	if nodeCount > 0 && !hadSuccessfulNode {
+func monitorFrontendResourceType(resource unifiedresources.Resource) string {
+	switch resource.Type {
+	case unifiedresources.ResourceTypeVM:
+		return "vm"
+	case unifiedresources.ResourceTypeSystemContainer:
+		return "system-container"
+	case unifiedresources.ResourceTypeAppContainer:
+		return "app-container"
+	case unifiedresources.ResourceTypeK8sCluster:
+		return "k8s-cluster"
+	case unifiedresources.ResourceTypeK8sNode:
+		return "k8s-node"
+	case unifiedresources.ResourceTypePod:
+		return "pod"
+	case unifiedresources.ResourceTypeK8sDeployment:
+		return "k8s-deployment"
+	case unifiedresources.ResourceTypePBS:
+		return "pbs"
+	case unifiedresources.ResourceTypePMG:
+		return "pmg"
+	case unifiedresources.ResourceTypeStorage:
+		return "storage"
+	case unifiedresources.ResourceTypeCeph:
+		return "pool"
+	case unifiedresources.ResourceTypeAgent:
+		if resource.Proxmox != nil {
+			return "node"
+		}
+		if resource.Docker != nil {
+			return "docker-host"
+		}
+		return "agent"
+	default:
+		return string(resource.Type)
+	}
+}
+
+func monitorFrontendNames(resource unifiedresources.Resource, resourceType string) (string, string) {
+	name := strings.TrimSpace(resource.Name)
+	displayName := ""
+
+	switch resourceType {
+	case "node":
+		if resource.Proxmox != nil && resource.Proxmox.NodeName != "" && !strings.EqualFold(resource.Proxmox.NodeName, name) {
+			displayName = name
+			name = resource.Proxmox.NodeName
+		}
+	case "agent":
+		if resource.Agent != nil && resource.Agent.Hostname != "" && !strings.EqualFold(resource.Agent.Hostname, name) {
+			displayName = name
+			name = resource.Agent.Hostname
+		}
+	case "docker-host":
+		if resource.Docker != nil && resource.Docker.Hostname != "" && !strings.EqualFold(resource.Docker.Hostname, name) {
+			displayName = name
+			name = resource.Docker.Hostname
+		}
+	}
+
+	if name == "" {
+		name = resource.ID
+	}
+	return name, strings.TrimSpace(displayName)
+}
+
+func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "node", "vm", "system-container", "storage", "pool":
+		return "proxmox-pve"
+	case "docker-host", "app-container":
+		return "docker"
+	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
+		return "kubernetes"
+	case "pbs":
+		return "proxmox-pbs"
+	case "pmg":
+		return "proxmox-pmg"
+	case "agent":
+		return "agent"
+	default:
+		if monitorHasSource(resource.Sources, unifiedresources.SourceK8s) {
+			return "kubernetes"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceDocker) {
+			return "docker"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourcePBS) {
+			return "proxmox-pbs"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourcePMG) {
+			return "proxmox-pmg"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) {
+			return "agent"
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) {
+			return "proxmox-pve"
+		}
+		for _, source := range resource.Sources {
+			if candidate := strings.TrimSpace(string(source)); candidate != "" {
+				return candidate
+			}
+		}
+		return "unknown"
+	}
+}
+
+func monitorPlatformID(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "node", "vm", "system-container":
+		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
+			return strings.TrimSpace(resource.Proxmox.Instance)
+		}
+	case "agent":
+		if resource.Agent != nil && strings.TrimSpace(resource.Agent.AgentID) != "" {
+			return strings.TrimSpace(resource.Agent.AgentID)
+		}
+	case "docker-host":
+		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
+			return strings.TrimSpace(resource.Docker.Hostname)
+		}
+	case "app-container":
+		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
+			return strings.TrimSpace(resource.Docker.Hostname)
+		}
+		if resource.ParentID != nil {
+			return strings.TrimSpace(*resource.ParentID)
+		}
+	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
+		if resource.Kubernetes != nil && strings.TrimSpace(resource.Kubernetes.AgentID) != "" {
+			return strings.TrimSpace(resource.Kubernetes.AgentID)
+		}
+	case "pbs":
+		if resource.PBS != nil && strings.TrimSpace(resource.PBS.Hostname) != "" {
+			return strings.TrimSpace(resource.PBS.Hostname)
+		}
+	case "pmg":
+		if resource.PMG != nil && strings.TrimSpace(resource.PMG.Hostname) != "" {
+			return strings.TrimSpace(resource.PMG.Hostname)
+		}
+	}
+	return resource.ID
+}
+
+func monitorFrontendStatus(resource unifiedresources.Resource, resourceType string) string {
+	switch resourceType {
+	case "app-container":
+		switch resource.Status {
+		case unifiedresources.StatusOnline:
+			return "running"
+		case unifiedresources.StatusOffline:
+			return "stopped"
+		case unifiedresources.StatusWarning:
+			return "degraded"
+		}
+	case "pod":
+		if resource.Kubernetes != nil {
+			phase := strings.ToLower(strings.TrimSpace(resource.Kubernetes.PodPhase))
+			switch phase {
+			case "running":
+				return "running"
+			case "pending", "unknown":
+				return "degraded"
+			case "succeeded", "failed":
+				return "stopped"
+			}
+		}
+	}
+
+	switch resource.Status {
+	case unifiedresources.StatusOnline:
+		if monitorIsWorkloadType(resourceType) || resourceType == "pod" {
+			return "running"
+		}
+		return "online"
+	case unifiedresources.StatusOffline:
+		if monitorIsWorkloadType(resourceType) || resourceType == "pod" {
+			return "stopped"
+		}
+		return "offline"
+	case unifiedresources.StatusWarning:
+		return "degraded"
+	default:
+		return "unknown"
+	}
+}
+
+func monitorIsWorkloadType(resourceType string) bool {
+	switch resourceType {
+	case "app-container", "system-container", "vm", "oci-container":
 		return true
-	}
-	if storagesWithBackup > 0 && contentSuccess == 0 {
-		return true
-	}
-	return false
-}
-
-func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
-	return shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, 0)
-}
-
-func shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures int) bool {
-	// If there are datastores but all fetches failed, preserve existing backups
-	if datastoreCount > 0 && datastoreFetches == 0 && datastoreTerminalFailures == 0 {
-		return true
-	}
-	return false
-}
-
-func shouldReuseCachedPBSBackups(err error) bool {
-	if err == nil {
+	default:
 		return false
 	}
+}
 
-	msg := strings.ToLower(err.Error())
-
-	if strings.Contains(msg, "api error 404") || strings.Contains(msg, "status 404") {
-		return false
-	}
-
-	if strings.Contains(msg, "api error 400") || strings.Contains(msg, "status 400") {
-		if strings.Contains(msg, "datastore") ||
-			strings.Contains(msg, "namespace") ||
-			strings.Contains(msg, "backup group") ||
-			strings.Contains(msg, "not found") ||
-			strings.Contains(msg, "does not exist") ||
-			strings.Contains(msg, "invalid") {
-			return false
+func monitorClusterID(resource unifiedresources.Resource) string {
+	if resource.Docker != nil && resource.Docker.Swarm != nil {
+		if name := strings.TrimSpace(resource.Docker.Swarm.ClusterName); name != "" {
+			return name
+		}
+		if id := strings.TrimSpace(resource.Docker.Swarm.ClusterID); id != "" {
+			return id
 		}
 	}
 
-	if strings.Contains(msg, "does not exist") && (strings.Contains(msg, "datastore") || strings.Contains(msg, "namespace")) {
-		return false
+	clusterID := strings.TrimSpace(resource.Identity.ClusterName)
+	if clusterID == "" && resource.Proxmox != nil {
+		clusterID = strings.TrimSpace(resource.Proxmox.ClusterName)
 	}
-
-	if strings.Contains(msg, "not found") && (strings.Contains(msg, "datastore") || strings.Contains(msg, "namespace") || strings.Contains(msg, "backup")) {
-		return false
+	if clusterID == "" && resource.Kubernetes != nil {
+		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterID)
 	}
-
-	return true
+	if clusterID == "" && resource.Kubernetes != nil {
+		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterName)
+	}
+	return clusterID
 }
 
-func storageNamesForNode(instanceName, nodeName string, snapshot models.StateSnapshot) []string {
-	if nodeName == "" {
+func monitorMetricInput(metric *unifiedresources.MetricValue) *models.ResourceMetricInput {
+	if metric == nil {
 		return nil
 	}
 
-	var storages []string
-	for _, storage := range snapshot.Storage {
-		if storage.Instance != instanceName {
-			continue
-		}
-		if storage.Name == "" {
-			continue
-		}
-		if !strings.Contains(storage.Content, "backup") {
-			continue
-		}
-		if storage.Node == nodeName {
-			storages = append(storages, storage.Name)
-			continue
-		}
-		for _, node := range storage.Nodes {
-			if node == nodeName {
-				storages = append(storages, storage.Name)
+	current := metric.Percent
+	if current == 0 {
+		current = metric.Value
+	}
+	if metric.Percent != 0 && metric.Value != 0 {
+		current = math.Max(metric.Percent, metric.Value)
+	}
+
+	result := &models.ResourceMetricInput{Current: current}
+	if metric.Total != nil {
+		total := *metric.Total
+		result.Total = &total
+	}
+	if metric.Used != nil {
+		used := *metric.Used
+		result.Used = &used
+	}
+	if result.Total != nil && result.Used != nil {
+		free := *result.Total - *result.Used
+		result.Free = &free
+	}
+	return result
+}
+
+func monitorNetworkMetricInput(metrics *unifiedresources.ResourceMetrics) (bool, int64, int64) {
+	if metrics == nil || (metrics.NetIn == nil && metrics.NetOut == nil) {
+		return false, 0, 0
+	}
+
+	var rx int64
+	var tx int64
+	if metrics.NetIn != nil {
+		rx = int64(math.Round(metrics.NetIn.Value))
+	}
+	if metrics.NetOut != nil {
+		tx = int64(math.Round(metrics.NetOut.Value))
+	}
+	return true, rx, tx
+}
+
+func monitorTemperature(resource unifiedresources.Resource) *float64 {
+	if resource.Agent != nil && resource.Agent.Temperature != nil {
+		value := *resource.Agent.Temperature
+		return &value
+	}
+	if resource.Proxmox != nil && resource.Proxmox.Temperature != nil {
+		value := *resource.Proxmox.Temperature
+		return &value
+	}
+	if resource.Docker != nil && resource.Docker.Temperature != nil {
+		value := *resource.Docker.Temperature
+		return &value
+	}
+	if resource.Kubernetes != nil && resource.Kubernetes.Temperature != nil {
+		value := *resource.Kubernetes.Temperature
+		return &value
+	}
+	return nil
+}
+
+func monitorUptime(resource unifiedresources.Resource) *int64 {
+	if resource.Agent != nil && resource.Agent.UptimeSeconds > 0 {
+		value := resource.Agent.UptimeSeconds
+		return &value
+	}
+	if resource.Proxmox != nil && resource.Proxmox.Uptime > 0 {
+		value := resource.Proxmox.Uptime
+		return &value
+	}
+	if resource.Docker != nil && resource.Docker.UptimeSeconds > 0 {
+		value := resource.Docker.UptimeSeconds
+		return &value
+	}
+	if resource.Kubernetes != nil && resource.Kubernetes.UptimeSeconds > 0 {
+		value := resource.Kubernetes.UptimeSeconds
+		return &value
+	}
+	if resource.PBS != nil && resource.PBS.UptimeSeconds > 0 {
+		value := resource.PBS.UptimeSeconds
+		return &value
+	}
+	if resource.PMG != nil && resource.PMG.UptimeSeconds > 0 {
+		value := resource.PMG.UptimeSeconds
+		return &value
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.UptimeSeconds > 0 {
+		value := resource.TrueNAS.UptimeSeconds
+		return &value
+	}
+	return nil
+}
+
+func monitorLabels(resource unifiedresources.Resource) map[string]string {
+	if resource.Kubernetes == nil || len(resource.Kubernetes.Labels) == 0 {
+		return nil
+	}
+	labels := make(map[string]string, len(resource.Kubernetes.Labels))
+	for key, value := range resource.Kubernetes.Labels {
+		labels[key] = value
+	}
+	return labels
+}
+
+func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
+	hostname := ""
+	if resource.Agent != nil {
+		hostname = strings.TrimSpace(resource.Agent.Hostname)
+	}
+	if hostname == "" && resource.Docker != nil {
+		hostname = strings.TrimSpace(resource.Docker.Hostname)
+	}
+	if hostname == "" && resource.Proxmox != nil {
+		hostname = strings.TrimSpace(resource.Proxmox.NodeName)
+	}
+	if hostname == "" {
+		for _, candidate := range resource.Identity.Hostnames {
+			if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+				hostname = trimmed
 				break
 			}
 		}
 	}
-
-	return storages
-}
-
-func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
-	if len(storagesToPreserve) == 0 {
-		return current, nil
+	if hostname == "" {
+		hostname = fallbackName
 	}
 
-	existing := make(map[string]struct{}, len(current))
-	for _, backup := range current {
-		existing[backup.ID] = struct{}{}
-	}
-
-	preserved := make(map[string]struct{})
-	for _, backup := range snapshot.PVEBackups.StorageBackups {
-		if backup.Instance != instanceName {
+	ips := make([]string, 0, len(resource.Identity.IPAddresses))
+	for _, ip := range resource.Identity.IPAddresses {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed == "" {
 			continue
 		}
-		if _, ok := storagesToPreserve[backup.Storage]; !ok {
-			continue
-		}
-		if _, duplicate := existing[backup.ID]; duplicate {
-			continue
-		}
-		current = append(current, backup)
-		existing[backup.ID] = struct{}{}
-		preserved[backup.Storage] = struct{}{}
+		ips = append(ips, trimmed)
 	}
 
-	if len(preserved) == 0 {
-		return current, nil
+	machineID := strings.TrimSpace(resource.Identity.MachineID)
+	if hostname == "" && machineID == "" && len(ips) == 0 {
+		return nil
 	}
 
-	storages := make([]string, 0, len(preserved))
-	for storage := range preserved {
-		storages = append(storages, storage)
-	}
-	sort.Strings(storages)
-	return current, storages
-}
-
-func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
-	byKey := make(map[string]alerts.GuestLookup)
-	byVMID := make(map[string][]alerts.GuestLookup)
-
-	for _, vm := range snapshot.VMs {
-		info := alerts.GuestLookup{
-			ResourceID: makeGuestID(vm.Instance, vm.Node, vm.VMID),
-			Name:       vm.Name,
-			Instance:   vm.Instance,
-			Node:       vm.Node,
-			Type:       vm.Type,
-			VMID:       vm.VMID,
-		}
-		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
-		byKey[key] = info
-
-		vmidKey := strconv.Itoa(vm.VMID)
-		byVMID[vmidKey] = append(byVMID[vmidKey], info)
-
-		// Persist last-known name and type for this guest
-		if metadataStore != nil && vm.Name != "" {
-			persistGuestIdentity(metadataStore, key, vm.Name, vm.Type)
-		}
-	}
-
-	for _, ct := range snapshot.Containers {
-		info := alerts.GuestLookup{
-			ResourceID: makeGuestID(ct.Instance, ct.Node, ct.VMID),
-			Name:       ct.Name,
-			Instance:   ct.Instance,
-			Node:       ct.Node,
-			Type:       ct.Type,
-			VMID:       ct.VMID,
-		}
-		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
-		if _, exists := byKey[key]; !exists {
-			byKey[key] = info
-		}
-
-		vmidKey := strconv.Itoa(ct.VMID)
-		byVMID[vmidKey] = append(byVMID[vmidKey], info)
-
-		// Persist last-known name and type for this guest
-		if metadataStore != nil && ct.Name != "" {
-			persistGuestIdentity(metadataStore, key, ct.Name, ct.Type)
-		}
-	}
-
-	// Augment byVMID with persisted metadata for deleted guests
-	if metadataStore != nil {
-		enrichWithPersistedMetadata(metadataStore, byVMID)
-	}
-
-	// Add template VMIDs so the backup orphan-detection check does not flag backups of
-	// existing templates as orphaned. Templates are excluded from the main VM/container
-	// lists (they are not monitored), so without this they would appear as unknown guests.
-	for instance, vmids := range snapshot.TemplateVMIDs {
-		for vmid, node := range vmids {
-			info := alerts.GuestLookup{
-				ResourceID: makeGuestID(instance, node, vmid),
-				Instance:   instance,
-				Node:       node,
-				VMID:       vmid,
-			}
-			key := alerts.BuildGuestKey(instance, node, vmid)
-			if _, exists := byKey[key]; !exists {
-				byKey[key] = info
-			}
-			vmidKey := strconv.Itoa(vmid)
-			byVMID[vmidKey] = append(byVMID[vmidKey], info)
-		}
-	}
-
-	return byKey, byVMID
-}
-
-// enrichWithPersistedMetadata adds entries from the metadata store for guests
-// that no longer exist in the live inventory but have persisted identity data
-func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMID map[string][]alerts.GuestLookup) {
-	allMetadata := metadataStore.GetAll()
-	for guestKey, meta := range allMetadata {
-		if meta.LastKnownName == "" {
-			continue // No name persisted, skip
-		}
-
-		// Parse the guest key (format: instance:node:vmid)
-		// We need to extract instance, node, and vmid
-		var instance, node string
-		parts := strings.Split(guestKey, ":")
-		if len(parts) != 3 {
-			continue
-		}
-		instance, node = parts[0], parts[1]
-		vmid, err := strconv.Atoi(parts[2])
-		if err != nil {
-			continue
-		}
-
-		vmidKey := strconv.Itoa(vmid)
-
-		// Check if we already have a live entry for this exact guest
-		hasLiveEntry := false
-		for _, existing := range byVMID[vmidKey] {
-			if existing.Instance == instance && existing.Node == node && existing.VMID == vmid {
-				hasLiveEntry = true
-				break
-			}
-		}
-
-		// Only add persisted metadata if no live entry exists
-		if !hasLiveEntry {
-			byVMID[vmidKey] = append(byVMID[vmidKey], alerts.GuestLookup{
-				Name:     meta.LastKnownName,
-				Instance: instance,
-				Node:     node,
-				Type:     meta.LastKnownType,
-				VMID:     vmid,
-			})
-		}
+	return &models.ResourceIdentityInput{
+		Hostname:  hostname,
+		MachineID: machineID,
+		IPs:       ips,
 	}
 }
 
-// persistGuestIdentity updates the metadata store with the last-known name and type for a guest
-func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, name, guestType string) {
-	existing := metadataStore.Get(guestKey)
-	if existing == nil {
-		existing = &config.GuestMetadata{
-			ID:   guestKey,
-			Tags: []string{},
+func monitorPlatformData(resource unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
+	var payload interface{}
+
+	switch resourceType {
+	case "node":
+		if resource.Proxmox != nil {
+			payload = map[string]interface{}{
+				"instance":         resource.Proxmox.Instance,
+				"host":             "",
+				"guestURL":         "",
+				"pveVersion":       resource.Proxmox.PVEVersion,
+				"kernelVersion":    resource.Proxmox.KernelVersion,
+				"cpuInfo":          resource.Proxmox.CPUInfo,
+				"loadAverage":      []float64{},
+				"isClusterMember":  resource.Proxmox.ClusterName != "",
+				"clusterName":      resource.Proxmox.ClusterName,
+				"connectionHealth": monitorSourceStatus(resource.SourceStatus, unifiedresources.SourceProxmox),
+			}
+		}
+	case "vm":
+		payload = buildProxmoxVMPayload(resource)
+	case "system-container", "oci-container":
+		payload = buildProxmoxVMPayload(resource)
+	case "agent":
+		if resource.Agent != nil {
+			payload = map[string]interface{}{
+				"platform":      resource.Agent.Platform,
+				"osName":        resource.Agent.OSName,
+				"osVersion":     resource.Agent.OSVersion,
+				"kernelVersion": resource.Agent.KernelVersion,
+				"architecture":  resource.Agent.Architecture,
+				"agentVersion":  resource.Agent.AgentVersion,
+				"interfaces":    resource.Agent.NetworkInterfaces,
+				"disks":         resource.Agent.Disks,
+				"memory":        resource.Agent.Memory,
+			}
+		}
+	case "docker-host":
+		if resource.Docker != nil {
+			payload = map[string]interface{}{
+				"agentId":        platformID,
+				"runtime":        resource.Docker.Runtime,
+				"runtimeVersion": resource.Docker.RuntimeVersion,
+				"dockerVersion":  resource.Docker.DockerVersion,
+				"os":             resource.Docker.OS,
+				"kernelVersion":  resource.Docker.KernelVersion,
+				"architecture":   resource.Docker.Architecture,
+				"agentVersion":   resource.Docker.AgentVersion,
+				"swarm":          resource.Docker.Swarm,
+				"interfaces":     resource.Docker.NetworkInterfaces,
+				"disks":          resource.Docker.Disks,
+			}
+		}
+	case "app-container":
+		if resource.Docker != nil {
+			payload = map[string]interface{}{
+				"hostId":    monitorStringValue(resource.ParentID),
+				"hostName":  resource.Docker.Hostname,
+				"image":     resource.Docker.Image,
+				"state":     strings.ToLower(string(resource.Status)),
+				"status":    strings.ToLower(string(resource.Status)),
+				"health":    "",
+				"createdAt": time.Time{},
+			}
+		}
+	case "k8s-cluster":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"agentId":           resource.Kubernetes.AgentID,
+				"server":            resource.Kubernetes.Server,
+				"context":           resource.Kubernetes.Context,
+				"version":           resource.Kubernetes.Version,
+				"customDisplayName": "",
+				"hidden":            false,
+				"pendingUninstall":  resource.Kubernetes.PendingUninstall,
+				"nodeCount":         resource.ChildCount,
+			}
+		}
+	case "k8s-node":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId":               resource.Kubernetes.ClusterID,
+				"ready":                   resource.Kubernetes.Ready,
+				"unschedulable":           resource.Kubernetes.Unschedulable,
+				"kubeletVersion":          resource.Kubernetes.KubeletVersion,
+				"containerRuntimeVersion": resource.Kubernetes.ContainerRuntimeVersion,
+				"osImage":                 resource.Kubernetes.OSImage,
+				"kernelVersion":           resource.Kubernetes.KernelVersion,
+				"architecture":            resource.Kubernetes.Architecture,
+				"capacityCpuCores":        resource.Kubernetes.CapacityCPU,
+				"capacityMemoryBytes":     resource.Kubernetes.CapacityMemoryBytes,
+				"capacityPods":            resource.Kubernetes.CapacityPods,
+				"allocatableCpuCores":     resource.Kubernetes.AllocCPU,
+				"allocatableMemoryBytes":  resource.Kubernetes.AllocMemoryBytes,
+				"allocatablePods":         resource.Kubernetes.AllocPods,
+				"roles":                   append([]string(nil), resource.Kubernetes.Roles...),
+			}
+		}
+	case "pod":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId": resource.Kubernetes.ClusterID,
+				"namespace": resource.Kubernetes.Namespace,
+				"nodeName":  resource.Kubernetes.NodeName,
+				"phase":     resource.Kubernetes.PodPhase,
+				"restarts":  resource.Kubernetes.Restarts,
+				"ownerKind": resource.Kubernetes.OwnerKind,
+				"ownerName": resource.Kubernetes.OwnerName,
+			}
+		}
+	case "k8s-deployment":
+		if resource.Kubernetes != nil {
+			payload = map[string]interface{}{
+				"clusterId":         resource.Kubernetes.ClusterID,
+				"namespace":         resource.Kubernetes.Namespace,
+				"desiredReplicas":   resource.Kubernetes.DesiredReplicas,
+				"updatedReplicas":   resource.Kubernetes.UpdatedReplicas,
+				"readyReplicas":     resource.Kubernetes.ReadyReplicas,
+				"availableReplicas": resource.Kubernetes.AvailableReplicas,
+			}
+		}
+	case "pbs":
+		if resource.PBS != nil {
+			payload = map[string]interface{}{
+				"host":             resource.PBS.Hostname,
+				"version":          resource.PBS.Version,
+				"connectionHealth": resource.PBS.ConnectionHealth,
+				"memoryUsed":       monitorMetricUsed(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+				"memoryTotal":      monitorMetricTotal(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
+				"numDatastores":    resource.PBS.DatastoreCount,
+			}
+		}
+	case "pmg":
+		if resource.PMG != nil {
+			payload = map[string]interface{}{
+				"host":             resource.PMG.Hostname,
+				"version":          resource.PMG.Version,
+				"connectionHealth": resource.PMG.ConnectionHealth,
+				"nodeCount":        resource.PMG.NodeCount,
+				"queueActive":      resource.PMG.QueueActive,
+				"queueDeferred":    resource.PMG.QueueDeferred,
+				"queueHold":        resource.PMG.QueueHold,
+				"queueIncoming":    resource.PMG.QueueIncoming,
+				"queueTotal":       resource.PMG.QueueTotal,
+				"mailCountTotal":   resource.PMG.MailCountTotal,
+				"spamIn":           resource.PMG.SpamIn,
+				"virusIn":          resource.PMG.VirusIn,
+				"lastUpdated":      resource.PMG.LastUpdated,
+			}
+		}
+	case "storage", "pool":
+		nodeLabel := resource.ParentName
+		if nodeLabel == "" {
+			nodeLabel = monitorStringValue(resource.ParentID)
+		}
+		payload = map[string]interface{}{
+			"instance": platformID,
+			"node":     nodeLabel,
+			"type":     "",
+			"content":  "",
+			"shared":   false,
+			"enabled":  true,
+			"active":   resource.Status == unifiedresources.StatusOnline,
 		}
 	}
 
-	guestType = strings.TrimSpace(guestType)
-	if guestType == "" {
-		return
+	if payload == nil {
+		return nil
 	}
 
-	// Never "downgrade" OCI containers back to LXC. OCI classification can be transiently
-	// unavailable if Proxmox config reads fail due to permissions or transient API errors.
-	if existing.LastKnownType == "oci" && guestType != "oci" {
-		guestType = existing.LastKnownType
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return encoded
+}
+
+func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interface{} {
+	if len(disks) == 0 {
+		return nil
 	}
 
-	// Only update if the name or type has changed
-	if existing.LastKnownName != name || existing.LastKnownType != guestType {
-		existing.LastKnownName = name
-		existing.LastKnownType = guestType
-		// Save asynchronously to avoid blocking the monitor
-		go func() {
-			if err := metadataStore.Set(guestKey, existing); err != nil {
-				log.Error().Err(err).Str("guestKey", guestKey).Msg("Failed to persist guest identity")
-			}
-		}()
+	out := make([]map[string]interface{}, 0, len(disks))
+	for _, d := range disks {
+		usage := float64(0)
+		if d.Total > 0 {
+			usage = float64(d.Used) / float64(d.Total) * 100
+		}
+		out = append(out, map[string]interface{}{
+			"total":      d.Total,
+			"used":       d.Used,
+			"free":       d.Free,
+			"usage":      usage,
+			"mountpoint": d.Mountpoint,
+			"type":       d.Filesystem,
+			"device":     d.Device,
+		})
+	}
+	return out
+}
+
+func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interface{} {
+	if resource.Proxmox == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"vmid":       resource.Proxmox.VMID,
+		"node":       resource.Proxmox.NodeName,
+		"instance":   resource.Proxmox.Instance,
+		"cpus":       resource.Proxmox.CPUs,
+		"template":   resource.Proxmox.Template,
+		"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
+		"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
+		"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
+		"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
+			return metrics.DiskWrite
+		}),
+		"disks":       convertProxmoxDisks(resource.Proxmox.Disks),
+		"swapUsed":    resource.Proxmox.SwapUsed,
+		"swapTotal":   resource.Proxmox.SwapTotal,
+		"balloon":     resource.Proxmox.Balloon,
+		"lastBackup":  resource.Proxmox.LastBackup,
+		"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
 	}
 }
 
-func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Duration {
-	const (
-		minTimeout      = 2 * time.Minute
-		maxTimeout      = 5 * time.Minute
-		timeoutPerGuest = 2 * time.Second
-	)
-
-	timeout := minTimeout
-	snapshot := m.state.GetSnapshot()
-
-	guestCount := 0
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName && !vm.Template {
-			guestCount++
-		}
+func monitorMetricValue(metrics *unifiedresources.ResourceMetrics, pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue) *unifiedresources.MetricValue {
+	if metrics == nil {
+		return nil
 	}
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName && !ct.Template {
-			guestCount++
-		}
-	}
-
-	if guestCount > 0 {
-		dynamic := time.Duration(guestCount) * timeoutPerGuest
-		if dynamic > timeout {
-			timeout = dynamic
-		}
-	}
-
-	if timeout > maxTimeout {
-		return maxTimeout
-	}
-
-	return timeout
+	return pick(metrics)
 }
 
-// pollGuestSnapshots polls snapshots for all VMs and containers
-func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
-
-	// Get current VMs and containers from a properly-locked state snapshot.
-	// Using GetSnapshot() ensures we read a consistent view of VMs/containers
-	// with the State's internal mutex, avoiding data races.
-	snapshot := m.state.GetSnapshot()
-	var vms []models.VM
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName {
-			vms = append(vms, vm)
-		}
+func monitorMetricInt64(metrics *unifiedresources.ResourceMetrics, pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue) int64 {
+	metric := monitorMetricValue(metrics, pick)
+	if metric == nil {
+		return 0
 	}
-	var containers []models.Container
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName {
-			containers = append(containers, ct)
-		}
-	}
-
-	guestKey := func(instance, node string, vmid int) string {
-		if instance == node {
-			return fmt.Sprintf("%s-%d", node, vmid)
-		}
-		return fmt.Sprintf("%s-%s-%d", instance, node, vmid)
-	}
-
-	guestNames := make(map[string]string, len(vms)+len(containers))
-	for _, vm := range vms {
-		guestNames[guestKey(instanceName, vm.Node, vm.VMID)] = vm.Name
-	}
-	for _, ct := range containers {
-		guestNames[guestKey(instanceName, ct.Node, ct.VMID)] = ct.Name
-	}
-
-	activeGuests := 0
-	for _, vm := range vms {
-		if !vm.Template {
-			activeGuests++
-		}
-	}
-	for _, ct := range containers {
-		if !ct.Template {
-			activeGuests++
-		}
-	}
-
-	const (
-		minSnapshotTimeout      = 60 * time.Second
-		maxSnapshotTimeout      = 4 * time.Minute
-		snapshotTimeoutPerGuest = 2 * time.Second
-	)
-
-	timeout := minSnapshotTimeout
-	if activeGuests > 0 {
-		dynamic := time.Duration(activeGuests) * snapshotTimeoutPerGuest
-		if dynamic > timeout {
-			timeout = dynamic
-		}
-	}
-	if timeout > maxSnapshotTimeout {
-		timeout = maxSnapshotTimeout
-	}
-
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			log.Warn().
-				Str("instance", instanceName).
-				Msg("Skipping guest snapshot polling; backup context deadline exceeded")
-			return
-		}
-		if timeout > remaining {
-			timeout = remaining
-		}
-	}
-
-	snapshotCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("guestCount", activeGuests).
-		Dur("timeout", timeout).
-		Msg("Guest snapshot polling budget established")
-
-	var allSnapshots []models.GuestSnapshot
-	deadlineExceeded := false
-
-	// Poll VM snapshots
-	for _, vm := range vms {
-		// Skip templates
-		if vm.Template {
-			continue
-		}
-
-		snapshots, err := client.GetVMSnapshots(snapshotCtx, vm.Node, vm.VMID)
-		if err != nil {
-			if snapshotCtx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Str("node", vm.Node).
-					Int("vmid", vm.VMID).
-					Err(snapshotCtx.Err()).
-					Msg("Aborting guest snapshot polling due to context cancellation while fetching VM snapshots")
-				deadlineExceeded = true
-				break
-			}
-			// This is common for VMs without snapshots, so use debug level
-			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vm_snapshots", instanceName, err).WithNode(vm.Node)
-			log.Debug().
-				Err(monErr).
-				Str("node", vm.Node).
-				Int("vmid", vm.VMID).
-				Msg("Failed to get VM snapshots")
-			continue
-		}
-
-		for _, snap := range snapshots {
-			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, vm.Node, vm.VMID, snap.Name),
-				Name:        snap.Name,
-				Node:        vm.Node,
-				Instance:    instanceName,
-				Type:        "qemu",
-				VMID:        vm.VMID,
-				Time:        time.Unix(snap.SnapTime, 0),
-				Description: snap.Description,
-				Parent:      snap.Parent,
-				VMState:     true, // VM state support enabled
-			}
-
-			allSnapshots = append(allSnapshots, snapshot)
-		}
-	}
-
-	if deadlineExceeded {
-		log.Warn().
-			Str("instance", instanceName).
-			Msg("Guest snapshot polling timed out before completing VM collection; retaining previous snapshots")
-		return
-	}
-
-	// Poll container snapshots
-	for _, ct := range containers {
-		// Skip templates
-		if ct.Template {
-			continue
-		}
-
-		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
-		if err != nil {
-			if snapshotCtx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Str("node", ct.Node).
-					Int("vmid", ct.VMID).
-					Err(snapshotCtx.Err()).
-					Msg("Aborting guest snapshot polling due to context cancellation while fetching container snapshots")
-				deadlineExceeded = true
-				break
-			}
-			// API error 596 means snapshots not supported/available - this is expected for many containers
-			errStr := err.Error()
-			if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
-				// Silently skip containers without snapshot support
-				continue
-			}
-			// Log other errors at debug level
-			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_container_snapshots", instanceName, err).WithNode(ct.Node)
-			log.Debug().
-				Err(monErr).
-				Str("node", ct.Node).
-				Int("vmid", ct.VMID).
-				Msg("Failed to get container snapshots")
-			continue
-		}
-
-		for _, snap := range snapshots {
-			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, ct.Node, ct.VMID, snap.Name),
-				Name:        snap.Name,
-				Node:        ct.Node,
-				Instance:    instanceName,
-				Type:        "lxc",
-				VMID:        ct.VMID,
-				Time:        time.Unix(snap.SnapTime, 0),
-				Description: snap.Description,
-				Parent:      snap.Parent,
-				VMState:     false,
-			}
-
-			allSnapshots = append(allSnapshots, snapshot)
-		}
-	}
-
-	if deadlineExceeded || snapshotCtx.Err() != nil {
-		log.Warn().
-			Str("instance", instanceName).
-			Msg("Guest snapshot polling timed out before completion; retaining previous snapshots")
-		return
-	}
-
-	if len(allSnapshots) > 0 {
-		sizeMap := m.collectSnapshotSizes(snapshotCtx, instanceName, client, allSnapshots)
-		if len(sizeMap) > 0 {
-			for i := range allSnapshots {
-				if size, ok := sizeMap[allSnapshots[i].ID]; ok && size > 0 {
-					allSnapshots[i].SizeBytes = size
-				}
-			}
-		}
-	}
-
-	// Update state with guest snapshots for this instance
-	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
-
-	if m.alertManager != nil {
-		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestNames)
-	}
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("count", len(allSnapshots)).
-		Msg("Guest snapshots polled")
-
-	// Immediately broadcast the updated state so frontend sees new snapshots
-	m.broadcastStateUpdate()
+	return int64(math.Round(metric.Value))
 }
 
-func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string, client PVEClientInterface, snapshots []models.GuestSnapshot) map[string]int64 {
-	sizes := make(map[string]int64, len(snapshots))
-	if len(snapshots) == 0 {
-		return sizes
+func monitorMetricUsed(metric *unifiedresources.MetricValue) int64 {
+	if metric == nil || metric.Used == nil {
+		return 0
 	}
-
-	validSnapshots := make(map[string]struct{}, len(snapshots))
-	nodes := make(map[string]struct{})
-
-	for _, snap := range snapshots {
-		validSnapshots[snap.ID] = struct{}{}
-		if snap.Node != "" {
-			nodes[snap.Node] = struct{}{}
-		}
-	}
-
-	if len(nodes) == 0 {
-		return sizes
-	}
-
-	seenVolids := make(map[string]struct{})
-
-	for nodeName := range nodes {
-		if ctx.Err() != nil {
-			break
-		}
-
-		storages, err := client.GetStorage(ctx, nodeName)
-		if err != nil {
-			log.Debug().
-				Err(err).
-				Str("node", nodeName).
-				Str("instance", instanceName).
-				Msg("Failed to get storage list for snapshot sizing")
-			continue
-		}
-
-		for _, storage := range storages {
-			if ctx.Err() != nil {
-				break
-			}
-
-			contentTypes := strings.ToLower(storage.Content)
-			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
-				continue
-			}
-			if !storageContentQueryable(storage) {
-				continue
-			}
-
-			contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
-			if err != nil {
-				log.Debug().
-					Err(err).
-					Str("node", nodeName).
-					Str("storage", storage.Storage).
-					Str("instance", instanceName).
-					Msg("Failed to get storage content for snapshot sizing")
-				continue
-			}
-
-			for _, item := range contents {
-				if item.VMID <= 0 {
-					continue
-				}
-
-				if _, seen := seenVolids[item.Volid]; seen {
-					continue
-				}
-
-				snapName := extractSnapshotName(item.Volid)
-				if snapName == "" {
-					continue
-				}
-
-				key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
-				if _, ok := validSnapshots[key]; !ok {
-					continue
-				}
-
-				seenVolids[item.Volid] = struct{}{}
-
-				size := int64(item.Size)
-				if size < 0 {
-					size = 0
-				}
-
-				sizes[key] += size
-			}
-		}
-	}
-
-	return sizes
+	return *metric.Used
 }
 
-func extractSnapshotName(volid string) string {
-	if volid == "" {
+func monitorMetricTotal(metric *unifiedresources.MetricValue) int64 {
+	if metric == nil || metric.Total == nil {
+		return 0
+	}
+	return *metric.Total
+}
+
+func monitorSourceStatus(statuses map[unifiedresources.DataSource]unifiedresources.SourceStatus, source unifiedresources.DataSource) string {
+	if statuses == nil {
 		return ""
 	}
-
-	parts := strings.SplitN(volid, ":", 2)
-	remainder := volid
-	if len(parts) == 2 {
-		remainder = parts[1]
+	status, ok := statuses[source]
+	if !ok {
+		return ""
 	}
-
-	if idx := strings.Index(remainder, "@"); idx >= 0 && idx+1 < len(remainder) {
-		return strings.TrimSpace(remainder[idx+1:])
-	}
-
-	return ""
+	return status.Status
 }
 
+func monitorHasSource(sources []unifiedresources.DataSource, source unifiedresources.DataSource) bool {
+	for _, candidate := range sources {
+		if candidate == source {
+			return true
+		}
+	}
+	return false
+}
+
+func monitorSourceType(sources []unifiedresources.DataSource) string {
+	if len(sources) > 1 {
+		return "hybrid"
+	}
+	if len(sources) == 1 {
+		switch sources[0] {
+		case unifiedresources.SourceAgent, unifiedresources.SourceDocker, unifiedresources.SourceK8s:
+			return "agent"
+		default:
+			return "api"
+		}
+	}
+	return "api"
+}
+
+func monitorStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
+func monitorLastSeenUnix(value time.Time) int64 {
+	if value.IsZero() {
+		return time.Now().UTC().UnixMilli()
+	}
+	return value.UnixMilli()
+}
+
+// pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
 // Stop gracefully stops the monitor
 func (m *Monitor) Stop() {
-	log.Info().Msg("Stopping monitor")
+	log.Info().Msg("stopping monitor")
 
 	// Stop the alert manager to save history
 	if m.alertManager != nil {
@@ -10914,927 +5029,13 @@ func (m *Monitor) Stop() {
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
 		if err := m.metricsStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close metrics store")
+			log.Error().Err(err).Msg("failed to close metrics store")
 		} else {
-			log.Info().Msg("Metrics store closed successfully")
+			log.Info().Msg("metrics store closed successfully")
 		}
 	}
 
-	log.Info().Msg("Monitor stopped")
+	log.Info().Msg("monitor stopped")
 }
 
 // recordAuthFailure records an authentication failure for a node
-func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	nodeID := instanceName
-	if nodeType != "" {
-		nodeID = nodeType + "-" + instanceName
-	}
-
-	// Increment failure count
-	m.authFailures[nodeID]++
-	m.lastAuthAttempt[nodeID] = time.Now()
-
-	log.Warn().
-		Str("node", nodeID).
-		Int("failures", m.authFailures[nodeID]).
-		Msg("Authentication failure recorded")
-
-	// If we've exceeded the threshold, remove the node
-	const maxAuthFailures = 5
-	if m.authFailures[nodeID] >= maxAuthFailures {
-		log.Error().
-			Str("node", nodeID).
-			Int("failures", m.authFailures[nodeID]).
-			Msg("Maximum authentication failures reached, removing node from state")
-
-		// Remove from state based on type
-		if nodeType == "pve" {
-			m.removeFailedPVENode(instanceName)
-		} else if nodeType == "pbs" {
-			m.removeFailedPBSNode(instanceName)
-		} else if nodeType == "pmg" {
-			m.removeFailedPMGInstance(instanceName)
-		}
-
-		// Reset the counter since we've removed the node
-		delete(m.authFailures, nodeID)
-		delete(m.lastAuthAttempt, nodeID)
-	}
-}
-
-// resetAuthFailures resets the failure count for a node after successful auth
-func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	nodeID := instanceName
-	if nodeType != "" {
-		nodeID = nodeType + "-" + instanceName
-	}
-
-	if count, exists := m.authFailures[nodeID]; exists && count > 0 {
-		log.Info().
-			Str("node", nodeID).
-			Int("previousFailures", count).
-			Msg("Authentication succeeded, resetting failure count")
-
-		delete(m.authFailures, nodeID)
-		delete(m.lastAuthAttempt, nodeID)
-	}
-}
-
-// removeFailedPVENode updates a PVE node to show failed authentication status
-func (m *Monitor) removeFailedPVENode(instanceName string) {
-	// Get instance config to get host URL
-	var hostURL string
-	for _, cfg := range m.config.PVEInstances {
-		if cfg.Name == instanceName {
-			hostURL = cfg.Host
-			break
-		}
-	}
-
-	// Create a failed node entry to show in UI with error status
-	failedNode := models.Node{
-		ID:               instanceName + "-failed",
-		Name:             instanceName,
-		DisplayName:      instanceName,
-		Instance:         instanceName,
-		Host:             hostURL, // Include host URL even for failed nodes
-		Status:           "offline",
-		Type:             "node",
-		ConnectionHealth: "error",
-		LastSeen:         time.Now(),
-		// Set other fields to zero values to indicate no data
-		CPU:    0,
-		Memory: models.Memory{},
-		Disk:   models.Disk{},
-	}
-
-	// Update with just the failed node
-	m.state.UpdateNodesForInstance(instanceName, []models.Node{failedNode})
-
-	// Remove all other resources associated with this instance
-	m.state.UpdateVMsForInstance(instanceName, []models.VM{})
-	m.state.UpdateTemplateVMIDsForInstance(instanceName, nil)
-	m.state.UpdateContainersForInstance(instanceName, []models.Container{})
-	m.state.UpdateStorageForInstance(instanceName, []models.Storage{})
-	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
-	m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
-	m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
-	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
-
-	// Set connection health to false
-	m.state.SetConnectionHealth(instanceName, false)
-}
-
-// removeFailedPBSNode removes a PBS node and all its resources from state
-func (m *Monitor) removeFailedPBSNode(instanceName string) {
-	// Remove PBS instance by passing empty array
-	currentInstances := m.state.PBSInstances
-	var updatedInstances []models.PBSInstance
-	for _, inst := range currentInstances {
-		if inst.Name != instanceName {
-			updatedInstances = append(updatedInstances, inst)
-		}
-	}
-	m.state.UpdatePBSInstances(updatedInstances)
-
-	// Remove PBS backups
-	m.state.UpdatePBSBackups(instanceName, []models.PBSBackup{})
-
-	// Set connection health to false
-	m.state.SetConnectionHealth("pbs-"+instanceName, false)
-}
-
-// removeFailedPMGInstance removes PMG data from state when authentication fails repeatedly
-func (m *Monitor) removeFailedPMGInstance(instanceName string) {
-	currentInstances := m.state.PMGInstances
-	updated := make([]models.PMGInstance, 0, len(currentInstances))
-	for _, inst := range currentInstances {
-		if inst.Name != instanceName {
-			updated = append(updated, inst)
-		}
-	}
-
-	m.state.UpdatePMGInstances(updated)
-	m.state.UpdatePMGBackups(instanceName, nil)
-	m.state.SetConnectionHealth("pmg-"+instanceName, false)
-}
-
-// pbsBackupCacheTTL controls how long cached PBS backup snapshots are reused
-// before forcing a re-fetch. This ensures verification status changes (which
-// don't alter backup count or timestamp) are picked up periodically.
-const pbsBackupCacheTTL = 10 * time.Minute
-
-type pbsBackupGroupKey struct {
-	datastore  string
-	namespace  string
-	backupType string
-	backupID   string
-}
-
-type cachedPBSGroup struct {
-	snapshots []models.PBSBackup
-	latest    time.Time
-}
-
-type pbsBackupFetchRequest struct {
-	datastore string
-	namespace string
-	group     pbs.BackupGroup
-	cached    cachedPBSGroup
-}
-
-// pollPBSBackups fetches all backups from PBS datastores
-func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
-	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
-
-	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
-	existingGroups := m.buildPBSBackupCache(instanceName)
-
-	var allBackups []models.PBSBackup
-	datastoreCount := len(datastores) // Number of datastores to query
-	datastoreFetches := 0             // Number of successful datastore fetches
-	datastoreErrors := 0              // Number of transiently failed datastore fetches
-	datastoreTerminalFailures := 0    // Number of terminal datastore failures
-
-	// Process each datastore
-	for _, ds := range datastores {
-		if ctx.Err() != nil {
-			log.Warn().
-				Str("instance", instanceName).
-				Msg("PBS backup polling cancelled before completion")
-			return
-		}
-
-		namespacePaths := namespacePathsForDatastore(ds)
-
-		log.Info().
-			Str("instance", instanceName).
-			Str("datastore", ds.Name).
-			Int("namespaces", len(namespacePaths)).
-			Strs("namespace_paths", namespacePaths).
-			Msg("Processing datastore namespaces")
-
-		datastoreHadSuccess := false
-		datastoreHadTerminalFailure := false
-		groupsReused := 0
-		groupsRequested := 0
-
-		for _, namespace := range namespacePaths {
-			if ctx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Msg("PBS backup polling cancelled mid-datastore")
-				return
-			}
-
-			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
-			if err != nil {
-				if !shouldReuseCachedPBSBackups(err) {
-					datastoreHadTerminalFailure = true
-					log.Warn().
-						Err(err).
-						Str("instance", instanceName).
-						Str("datastore", ds.Name).
-						Str("namespace", namespace).
-						Msg("PBS backup groups returned terminal error; stale cache will be dropped for this datastore")
-					continue
-				}
-
-				log.Error().
-					Err(err).
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Str("namespace", namespace).
-					Msg("Failed to list PBS backup groups")
-				continue
-			}
-
-			datastoreHadSuccess = true
-			requests := make([]pbsBackupFetchRequest, 0, len(groups))
-
-			for _, group := range groups {
-				key := pbsBackupGroupKey{
-					datastore:  ds.Name,
-					namespace:  namespace,
-					backupType: group.BackupType,
-					backupID:   group.BackupID,
-				}
-				cached := existingGroups[key]
-
-				// Group deleted (no backups left) - ensure cached data is dropped.
-				if group.BackupCount == 0 {
-					continue
-				}
-
-				lastBackupTime := time.Unix(group.LastBackup, 0)
-				hasCachedData := len(cached.snapshots) > 0
-
-				// Check if the cached data is still within its TTL.
-				cacheAge := time.Since(m.pbsBackupCacheTimeFor(instanceName, key))
-				cacheStillFresh := cacheAge < pbsBackupCacheTTL
-
-				// Only re-fetch when the backup count changes, the most recent backup
-				// is newer, or the cache TTL has expired (to pick up verification changes).
-				if hasCachedData &&
-					cacheStillFresh &&
-					len(cached.snapshots) == group.BackupCount &&
-					!lastBackupTime.After(cached.latest) {
-
-					allBackups = append(allBackups, cached.snapshots...)
-					groupsReused++
-					continue
-				}
-
-				requests = append(requests, pbsBackupFetchRequest{
-					datastore: ds.Name,
-					namespace: namespace,
-					group:     group,
-					cached:    cached,
-				})
-			}
-
-			if len(requests) == 0 {
-				continue
-			}
-
-			groupsRequested += len(requests)
-			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
-			if len(fetched) > 0 {
-				allBackups = append(allBackups, fetched...)
-			}
-
-			// Record fetch time for each requested group so the TTL tracks freshness.
-			// We record for all requested groups — on fetch failure, fetchPBSBackupSnapshots
-			// falls back to cached data, so the timestamp prevents hammering a failing
-			// endpoint. The TTL ensures we retry within a bounded window.
-			fetchedAt := time.Now()
-			for _, req := range requests {
-				reqKey := pbsBackupGroupKey{
-					datastore:  req.datastore,
-					namespace:  req.namespace,
-					backupType: req.group.BackupType,
-					backupID:   req.group.BackupID,
-				}
-				m.setPBSBackupCacheTime(instanceName, reqKey, fetchedAt)
-			}
-		}
-
-		if datastoreHadSuccess {
-			datastoreFetches++
-			log.Info().
-				Str("instance", instanceName).
-				Str("datastore", ds.Name).
-				Int("namespaces", len(namespacePaths)).
-				Int("groups_reused", groupsReused).
-				Int("groups_refreshed", groupsRequested).
-				Msg("PBS datastore processed")
-		} else {
-			if datastoreHadTerminalFailure {
-				datastoreTerminalFailures++
-				log.Warn().
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Msg("Skipping cached PBS backups due to terminal datastore errors")
-				continue
-			}
-
-			// Preserve cached data for this datastore if we couldn't fetch anything new.
-			log.Warn().
-				Str("instance", instanceName).
-				Str("datastore", ds.Name).
-				Msg("No namespaces succeeded for PBS datastore; using cached backups")
-			for key, entry := range existingGroups {
-				if key.datastore != ds.Name || len(entry.snapshots) == 0 {
-					continue
-				}
-				allBackups = append(allBackups, entry.snapshots...)
-			}
-			datastoreErrors++
-		}
-	}
-
-	log.Info().
-		Str("instance", instanceName).
-		Int("count", len(allBackups)).
-		Msg("PBS backups fetched")
-
-	// Decide whether to keep existing backups when all queries failed
-	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
-		log.Warn().
-			Str("instance", instanceName).
-			Int("datastores", datastoreCount).
-			Int("errors", datastoreErrors).
-			Msg("All PBS datastore queries failed; keeping previous backup list")
-		return
-	}
-
-	// Update state
-	m.state.UpdatePBSBackups(instanceName, allBackups)
-
-	// Sync backup times to VMs/Containers for backup status indicators
-	m.state.SyncGuestBackupTimes()
-
-	if m.alertManager != nil {
-		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
-		pveStorage := snapshot.Backups.PVE.StorageBackups
-		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
-			pveStorage = snapshot.PVEBackups.StorageBackups
-		}
-		pbsBackups := snapshot.Backups.PBS
-		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
-			pbsBackups = snapshot.PBSBackups
-		}
-		pmgBackups := snapshot.Backups.PMG
-		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
-			pmgBackups = snapshot.PMGBackups
-		}
-		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
-	}
-
-	// Immediately broadcast the updated state so frontend sees new backups
-	m.broadcastStateUpdate()
-}
-
-func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
-	snapshot := m.state.GetSnapshot()
-	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range snapshot.PBSBackups {
-		if backup.Instance != instanceName {
-			continue
-		}
-		key := pbsBackupGroupKey{
-			datastore:  backup.Datastore,
-			namespace:  normalizePBSNamespacePath(backup.Namespace),
-			backupType: backup.BackupType,
-			backupID:   backup.VMID,
-		}
-		entry := cache[key]
-		entry.snapshots = append(entry.snapshots, backup)
-		if backup.BackupTime.After(entry.latest) {
-			entry.latest = backup.BackupTime
-		}
-		cache[key] = entry
-	}
-	return cache
-}
-
-// pbsBackupCacheTimeFor returns the last fetch time for a PBS backup group.
-func (m *Monitor) pbsBackupCacheTimeFor(instanceName string, key pbsBackupGroupKey) time.Time {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if perGroup, ok := m.pbsBackupCacheTime[instanceName]; ok {
-		return perGroup[key]
-	}
-	return time.Time{}
-}
-
-// setPBSBackupCacheTime records when a PBS backup group was last fetched.
-func (m *Monitor) setPBSBackupCacheTime(instanceName string, key pbsBackupGroupKey, t time.Time) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.pbsBackupCacheTime == nil {
-		m.pbsBackupCacheTime = make(map[string]map[pbsBackupGroupKey]time.Time)
-	}
-	if m.pbsBackupCacheTime[instanceName] == nil {
-		m.pbsBackupCacheTime[instanceName] = make(map[pbsBackupGroupKey]time.Time)
-	}
-	m.pbsBackupCacheTime[instanceName][key] = t
-}
-
-func normalizePBSNamespacePath(ns string) string {
-	if ns == "/" {
-		return ""
-	}
-	return ns
-}
-
-func namespacePathsForDatastore(ds models.PBSDatastore) []string {
-	if len(ds.Namespaces) == 0 {
-		return []string{""}
-	}
-
-	seen := make(map[string]struct{}, len(ds.Namespaces))
-	var paths []string
-	for _, ns := range ds.Namespaces {
-		path := normalizePBSNamespacePath(ns.Path)
-		if _, ok := seen[path]; ok {
-			continue
-		}
-		seen[path] = struct{}{}
-		paths = append(paths, path)
-	}
-	return paths
-}
-
-func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) []models.PBSBackup {
-	if len(requests) == 0 {
-		return nil
-	}
-
-	results := make(chan []models.PBSBackup, len(requests))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 5)
-
-	for _, req := range requests {
-		req := req
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-
-			log.Debug().
-				Str("instance", instanceName).
-				Str("datastore", req.datastore).
-				Str("namespace", req.namespace).
-				Str("type", req.group.BackupType).
-				Str("id", req.group.BackupID).
-				Msg("Refreshing PBS backup group")
-
-			snapshots, err := client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("instance", instanceName).
-					Str("datastore", req.datastore).
-					Str("namespace", req.namespace).
-					Str("type", req.group.BackupType).
-					Str("id", req.group.BackupID).
-					Msg("Failed to list PBS backup snapshots")
-
-				if len(req.cached.snapshots) > 0 && shouldReuseCachedPBSBackups(err) {
-					results <- req.cached.snapshots
-				} else if len(req.cached.snapshots) > 0 {
-					log.Warn().
-						Str("instance", instanceName).
-						Str("datastore", req.datastore).
-						Str("namespace", req.namespace).
-						Str("type", req.group.BackupType).
-						Str("id", req.group.BackupID).
-						Msg("Discarding cached PBS snapshots due to terminal API error")
-				}
-				return
-			}
-
-			results <- convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
-		}()
-	}
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var combined []models.PBSBackup
-	for backups := range results {
-		if len(backups) == 0 {
-			continue
-		}
-		combined = append(combined, backups...)
-	}
-
-	return combined
-}
-
-func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []pbs.BackupSnapshot) []models.PBSBackup {
-	backups := make([]models.PBSBackup, 0, len(snapshots))
-	for _, snapshot := range snapshots {
-		backupTime := time.Unix(snapshot.BackupTime, 0)
-		id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
-			instanceName, datastore, namespace,
-			snapshot.BackupType, snapshot.BackupID,
-			snapshot.BackupTime)
-
-		var fileNames []string
-		for _, file := range snapshot.Files {
-			switch f := file.(type) {
-			case string:
-				fileNames = append(fileNames, f)
-			case map[string]interface{}:
-				if filename, ok := f["filename"].(string); ok {
-					fileNames = append(fileNames, filename)
-				}
-			}
-		}
-
-		verified := false
-		if snapshot.Verification != nil {
-			switch v := snapshot.Verification.(type) {
-			case string:
-				verified = v == "ok"
-			case map[string]interface{}:
-				if state, ok := v["state"].(string); ok {
-					verified = state == "ok"
-				}
-			}
-
-			log.Debug().
-				Str("vmid", snapshot.BackupID).
-				Int64("time", snapshot.BackupTime).
-				Interface("verification", snapshot.Verification).
-				Bool("verified", verified).
-				Msg("PBS backup verification status")
-		}
-
-		backups = append(backups, models.PBSBackup{
-			ID:         id,
-			Instance:   instanceName,
-			Datastore:  datastore,
-			Namespace:  namespace,
-			BackupType: snapshot.BackupType,
-			VMID:       snapshot.BackupID,
-			BackupTime: backupTime,
-			Size:       snapshot.Size,
-			Protected:  snapshot.Protected,
-			Verified:   verified,
-			Comment:    snapshot.Comment,
-			Files:      fileNames,
-			Owner:      snapshot.Owner,
-		})
-	}
-
-	return backups
-}
-
-// checkMockAlerts checks alerts for mock data
-func (m *Monitor) checkMockAlerts() {
-	defer recoverFromPanic("checkMockAlerts")
-
-	log.Info().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
-	if !mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode not enabled, skipping mock alert check")
-		return
-	}
-
-	// Get mock state
-	state := mock.GetMockState()
-
-	log.Info().
-		Int("vms", len(state.VMs)).
-		Int("containers", len(state.Containers)).
-		Int("nodes", len(state.Nodes)).
-		Msg("Checking alerts for mock data")
-
-	// Clean up alerts for nodes that no longer exist
-	existingNodes := make(map[string]bool)
-	for _, node := range state.Nodes {
-		existingNodes[node.Name] = true
-		if node.Host != "" {
-			existingNodes[node.Host] = true
-		}
-	}
-	for _, pbsInst := range state.PBSInstances {
-		existingNodes[pbsInst.Name] = true
-		existingNodes["pbs-"+pbsInst.Name] = true
-		if pbsInst.Host != "" {
-			existingNodes[pbsInst.Host] = true
-		}
-	}
-	log.Info().
-		Int("trackedNodes", len(existingNodes)).
-		Msg("Collecting resources for alert cleanup in mock mode")
-	m.alertManager.CleanupAlertsForNodes(existingNodes)
-
-	guestsByKey, guestsByVMID := buildGuestLookups(state, m.guestMetadataStore)
-	pveStorage := state.Backups.PVE.StorageBackups
-	if len(pveStorage) == 0 && len(state.PVEBackups.StorageBackups) > 0 {
-		pveStorage = state.PVEBackups.StorageBackups
-	}
-	pbsBackups := state.Backups.PBS
-	if len(pbsBackups) == 0 && len(state.PBSBackups) > 0 {
-		pbsBackups = state.PBSBackups
-	}
-	pmgBackups := state.Backups.PMG
-	if len(pmgBackups) == 0 && len(state.PMGBackups) > 0 {
-		pmgBackups = state.PMGBackups
-	}
-	m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
-
-	// Limit how many guests we check per cycle to prevent blocking with large datasets
-	const maxGuestsPerCycle = 50
-	guestsChecked := 0
-
-	// Check alerts for VMs (up to limit)
-	for _, vm := range state.VMs {
-		if guestsChecked >= maxGuestsPerCycle {
-			log.Debug().
-				Int("checked", guestsChecked).
-				Int("total", len(state.VMs)+len(state.Containers)).
-				Msg("Reached guest check limit for this cycle")
-			break
-		}
-		m.alertManager.CheckGuest(vm, "mock")
-		guestsChecked++
-	}
-
-	// Check alerts for containers (if we haven't hit the limit)
-	for _, container := range state.Containers {
-		if guestsChecked >= maxGuestsPerCycle {
-			break
-		}
-		m.alertManager.CheckGuest(container, "mock")
-		guestsChecked++
-	}
-
-	// Check alerts for each node
-	for _, node := range state.Nodes {
-		m.alertManager.CheckNode(node)
-	}
-
-	// Check alerts for storage
-	log.Info().Int("storageCount", len(state.Storage)).Msg("Checking storage alerts")
-	for _, storage := range state.Storage {
-		log.Debug().
-			Str("name", storage.Name).
-			Float64("usage", storage.Usage).
-			Msg("Checking storage for alerts")
-		m.alertManager.CheckStorage(storage)
-	}
-
-	// Check alerts for PBS instances
-	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("Checking PBS alerts")
-	for _, pbsInst := range state.PBSInstances {
-		m.alertManager.CheckPBS(pbsInst)
-	}
-
-	// Check alerts for PMG instances
-	log.Info().Int("pmgCount", len(state.PMGInstances)).Msg("Checking PMG alerts")
-	for _, pmgInst := range state.PMGInstances {
-		m.alertManager.CheckPMG(pmgInst)
-	}
-
-	// Cache the latest alert snapshots directly in the mock data so the API can serve
-	// mock state without needing to grab the alert manager lock again.
-	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
-}
-func isLegacyHostAgent(agentType string) bool {
-	// Unified agent reports type="unified"
-	// Legacy standalone agents have empty type
-	return agentType != "unified"
-}
-
-func isLegacyDockerAgent(agentType string) bool {
-	// Unified agent reports type="unified"
-	// Legacy standalone agents have empty type
-	return agentType != "unified"
-}
-
-// convertAgentSMARTToModels converts agent report S.M.A.R.T. data to the models.HostDiskSMART format.
-func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSMART {
-	if len(smart) == 0 {
-		return nil
-	}
-	result := make([]models.HostDiskSMART, 0, len(smart))
-	for _, disk := range smart {
-		entry := models.HostDiskSMART{
-			Device:      disk.Device,
-			Model:       disk.Model,
-			Serial:      disk.Serial,
-			WWN:         disk.WWN,
-			Type:        disk.Type,
-			Temperature: disk.Temperature,
-			Health:      disk.Health,
-			Standby:     disk.Standby,
-		}
-		if disk.Attributes != nil {
-			entry.Attributes = convertAgentSMARTAttributes(disk.Attributes)
-		}
-		result = append(result, entry)
-	}
-	return result
-}
-
-// convertAgentSMARTAttributes converts agent SMARTAttributes to models SMARTAttributes.
-func convertAgentSMARTAttributes(src *agentshost.SMARTAttributes) *models.SMARTAttributes {
-	if src == nil {
-		return nil
-	}
-	return &models.SMARTAttributes{
-		PowerOnHours:         src.PowerOnHours,
-		PowerCycles:          src.PowerCycles,
-		ReallocatedSectors:   src.ReallocatedSectors,
-		PendingSectors:       src.PendingSectors,
-		OfflineUncorrectable: src.OfflineUncorrectable,
-		UDMACRCErrors:        src.UDMACRCErrors,
-		PercentageUsed:       src.PercentageUsed,
-		AvailableSpare:       src.AvailableSpare,
-		MediaErrors:          src.MediaErrors,
-		UnsafeShutdowns:      src.UnsafeShutdowns,
-	}
-}
-
-// convertAgentCephToModels converts agent report Ceph data to the models.HostCephCluster format.
-func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephCluster {
-	if ceph == nil {
-		return nil
-	}
-
-	collectedAt, _ := time.Parse(time.RFC3339, ceph.CollectedAt)
-
-	result := &models.HostCephCluster{
-		FSID: ceph.FSID,
-		Health: models.HostCephHealth{
-			Status: ceph.Health.Status,
-			Checks: make(map[string]models.HostCephCheck),
-		},
-		MonMap: models.HostCephMonitorMap{
-			Epoch:   ceph.MonMap.Epoch,
-			NumMons: ceph.MonMap.NumMons,
-		},
-		MgrMap: models.HostCephManagerMap{
-			Available: ceph.MgrMap.Available,
-			NumMgrs:   ceph.MgrMap.NumMgrs,
-			ActiveMgr: ceph.MgrMap.ActiveMgr,
-			Standbys:  ceph.MgrMap.Standbys,
-		},
-		OSDMap: models.HostCephOSDMap{
-			Epoch:   ceph.OSDMap.Epoch,
-			NumOSDs: ceph.OSDMap.NumOSDs,
-			NumUp:   ceph.OSDMap.NumUp,
-			NumIn:   ceph.OSDMap.NumIn,
-			NumDown: ceph.OSDMap.NumDown,
-			NumOut:  ceph.OSDMap.NumOut,
-		},
-		PGMap: models.HostCephPGMap{
-			NumPGs:           ceph.PGMap.NumPGs,
-			BytesTotal:       ceph.PGMap.BytesTotal,
-			BytesUsed:        ceph.PGMap.BytesUsed,
-			BytesAvailable:   ceph.PGMap.BytesAvailable,
-			DataBytes:        ceph.PGMap.DataBytes,
-			UsagePercent:     ceph.PGMap.UsagePercent,
-			DegradedRatio:    ceph.PGMap.DegradedRatio,
-			MisplacedRatio:   ceph.PGMap.MisplacedRatio,
-			ReadBytesPerSec:  ceph.PGMap.ReadBytesPerSec,
-			WriteBytesPerSec: ceph.PGMap.WriteBytesPerSec,
-			ReadOpsPerSec:    ceph.PGMap.ReadOpsPerSec,
-			WriteOpsPerSec:   ceph.PGMap.WriteOpsPerSec,
-		},
-		CollectedAt: collectedAt,
-	}
-
-	// Convert monitors
-	for _, mon := range ceph.MonMap.Monitors {
-		result.MonMap.Monitors = append(result.MonMap.Monitors, models.HostCephMonitor{
-			Name:   mon.Name,
-			Rank:   mon.Rank,
-			Addr:   mon.Addr,
-			Status: mon.Status,
-		})
-	}
-
-	// Convert health checks
-	for name, check := range ceph.Health.Checks {
-		result.Health.Checks[name] = models.HostCephCheck{
-			Severity: check.Severity,
-			Message:  check.Message,
-			Detail:   check.Detail,
-		}
-	}
-
-	// Convert health summary
-	for _, s := range ceph.Health.Summary {
-		result.Health.Summary = append(result.Health.Summary, models.HostCephHealthSummary{
-			Severity: s.Severity,
-			Message:  s.Message,
-		})
-	}
-
-	// Convert pools
-	for _, pool := range ceph.Pools {
-		result.Pools = append(result.Pools, models.HostCephPool{
-			ID:             pool.ID,
-			Name:           pool.Name,
-			BytesUsed:      pool.BytesUsed,
-			BytesAvailable: pool.BytesAvailable,
-			Objects:        pool.Objects,
-			PercentUsed:    pool.PercentUsed,
-		})
-	}
-
-	// Convert services
-	for _, svc := range ceph.Services {
-		result.Services = append(result.Services, models.HostCephService{
-			Type:    svc.Type,
-			Running: svc.Running,
-			Total:   svc.Total,
-			Daemons: svc.Daemons,
-		})
-	}
-
-	return result
-}
-
-// convertAgentCephToGlobalCluster converts agent Ceph data to the global CephCluster format
-// used by the State.CephClusters list.
-func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hostID string, timestamp time.Time) models.CephCluster {
-	// Use FSID as the primary ID since it's unique per Ceph cluster
-	id := ceph.FSID
-	if id == "" {
-		id = "agent-ceph-" + hostID
-	}
-
-	cluster := models.CephCluster{
-		ID:             id,
-		Instance:       "agent:" + hostname,
-		Name:           hostname + " Ceph",
-		FSID:           ceph.FSID,
-		Health:         strings.TrimPrefix(ceph.Health.Status, "HEALTH_"),
-		TotalBytes:     int64(ceph.PGMap.BytesTotal),
-		UsedBytes:      int64(ceph.PGMap.BytesUsed),
-		AvailableBytes: int64(ceph.PGMap.BytesAvailable),
-		UsagePercent:   ceph.PGMap.UsagePercent,
-		NumMons:        ceph.MonMap.NumMons,
-		NumMgrs:        ceph.MgrMap.NumMgrs,
-		NumOSDs:        ceph.OSDMap.NumOSDs,
-		NumOSDsUp:      ceph.OSDMap.NumUp,
-		NumOSDsIn:      ceph.OSDMap.NumIn,
-		NumPGs:         ceph.PGMap.NumPGs,
-		LastUpdated:    timestamp,
-	}
-
-	// Build health message from checks
-	var healthMessages []string
-	for _, check := range ceph.Health.Checks {
-		if check.Message != "" {
-			healthMessages = append(healthMessages, check.Message)
-		}
-	}
-	if len(healthMessages) > 0 {
-		cluster.HealthMessage = strings.Join(healthMessages, "; ")
-	}
-
-	// Convert pools
-	for _, pool := range ceph.Pools {
-		cluster.Pools = append(cluster.Pools, models.CephPool{
-			ID:             pool.ID,
-			Name:           pool.Name,
-			StoredBytes:    int64(pool.BytesUsed),
-			AvailableBytes: int64(pool.BytesAvailable),
-			Objects:        int64(pool.Objects),
-			PercentUsed:    pool.PercentUsed,
-		})
-	}
-
-	// Convert services
-	for _, svc := range ceph.Services {
-		cluster.Services = append(cluster.Services, models.CephServiceStatus{
-			Type:    svc.Type,
-			Running: svc.Running,
-			Total:   svc.Total,
-		})
-	}
-
-	return cluster
-}

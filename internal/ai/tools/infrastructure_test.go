@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,8 +16,8 @@ func TestExecuteGetDiskHealth(t *testing.T) {
 		ControlLevel:       ControlLevelReadOnly,
 	})
 
-	expectedHosts := []models.Host{
-		{ID: "host1", Hostname: "node1", DisplayName: "Node 1"},
+	expectedHosts := []*unifiedresources.HostView{
+		newHostView("host-resource-1", "Node 1", "host1", "node1", nil, nil, nil),
 	}
 	diskHealthProv.On("GetHosts").Return(expectedHosts)
 
@@ -42,7 +43,7 @@ func TestExecuteGetTemperatures(t *testing.T) {
 			}},
 		},
 	}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 
 	// Use pulse_metrics tool with type: "temperatures"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_metrics", map[string]interface{}{

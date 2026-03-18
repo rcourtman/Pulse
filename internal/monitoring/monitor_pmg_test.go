@@ -68,6 +68,17 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 			timestamp := time.Now().Add(-8 * 24 * time.Hour).Unix()
 			fmt.Fprintf(w, `{"data":[{"filename":"pmg-backup_2024-01-01.tgz","size":123456,"timestamp":%d}]}`, timestamp)
 
+		case "/api2/json/config/domains":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"domain":"example.com","comment":"Primary relay"}]}`)
+
+		case "/api2/json/statistics/domains":
+			if r.URL.Query().Get("starttime") == "" || r.URL.Query().Get("endtime") == "" {
+				t.Fatalf("expected starttime/endtime query, got %s", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"domain":"example.com","count":120,"spamcount":8,"viruscount":1,"bytes":1234567}]}`)
+
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -153,6 +164,20 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 	pmgBackup := snapshot.PMGBackups[0]
 	if pmgBackup.Node != "mail-gateway" {
 		t.Fatalf("expected PMG backup node mail-gateway, got %s", pmgBackup.Node)
+	}
+
+	if len(instance.RelayDomains) != 1 {
+		t.Fatalf("expected 1 relay domain, got %d", len(instance.RelayDomains))
+	}
+	if instance.RelayDomains[0].Domain != "example.com" {
+		t.Fatalf("expected relay domain example.com, got %q", instance.RelayDomains[0].Domain)
+	}
+
+	if len(instance.DomainStats) != 1 {
+		t.Fatalf("expected 1 domain stat row, got %d", len(instance.DomainStats))
+	}
+	if instance.DomainStats[0].Domain != "example.com" || instance.DomainStats[0].SpamCount != 8 {
+		t.Fatalf("unexpected domain stats: %+v", instance.DomainStats[0])
 	}
 }
 

@@ -249,7 +249,9 @@ func TestHandleVerifyAuditEvent_Failed(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 		var resp APIError
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
 		assert.Equal(t, "Audit event not found", resp.ErrorMessage)
 	})
 
@@ -298,7 +300,7 @@ func TestHandleListAuditEvents(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if resp["total"].(float64) != 2 {
 		t.Errorf("expected total 2, got %v", resp["total"])
 	}
@@ -331,7 +333,7 @@ func TestHandleGetWebhooks(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if _, ok := resp["urls"]; !ok {
 		t.Error("expected urls field in response")
 	}
@@ -347,6 +349,12 @@ func TestHandleGetWebhooks(t *testing.T) {
 
 func TestHandleUpdateWebhooks(t *testing.T) {
 	handler := NewAuditHandlers()
+	// Make hostname resolution deterministic in tests.
+	prevResolve := resolveWebhookIPs
+	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil // example.com
+	}
+	t.Cleanup(func() { resolveWebhookIPs = prevResolve })
 
 	// Test success
 	body := `{"urls": ["https://example.com/webhook"]}`

@@ -15,7 +15,6 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 		"storage": 45,
 		"pbs":     90,
 	}
-	manager.config.TimeThreshold = 15
 	manager.mu.Unlock()
 
 	testCases := []struct {
@@ -23,15 +22,14 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 		expected     int
 	}{
 		{"VM", 300},
-		{"Container", 300},
-		{"ct", 300},
+		{"Container", 0},
+		{"system-container", 300},
 		{"guest", 300},
-		{"qemu", 300},
-		{"lxc", 300},
+		{"qemu", 0},
 		{"Node", 120},
 		{"storage", 45},
 		{"PBS", 90},
-		{"UNKNOWN", 15},
+		{"UNKNOWN", 0},
 	}
 
 	for _, tc := range testCases {
@@ -45,7 +43,6 @@ func TestGetTimeThresholdMetricOverrides(t *testing.T) {
 	manager := NewManager()
 
 	manager.mu.Lock()
-	manager.config.TimeThreshold = 15
 	manager.config.TimeThresholds = map[string]int{
 		"guest":   30,
 		"node":    60,
@@ -104,20 +101,21 @@ func TestCheckMetricUsesPendingStartTime(t *testing.T) {
 		t.Fatalf("expected no active alerts after initial exceedance")
 	}
 
-	if _, ok := manager.pendingAlerts["guest-123-cpu"]; !ok {
+	if _, ok := manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")]; !ok {
 		manager.mu.Unlock()
 		t.Fatalf("expected pending alert tracking to be started")
 	}
 
 	forcedStart := time.Now().Add(-3 * time.Second)
-	manager.pendingAlerts["guest-123-cpu"] = forcedStart
+	manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")] = forcedStart
 	manager.mu.Unlock()
 
 	// Second exceedance should trigger the alert using the pending start time.
 	manager.checkMetric("guest-123", "test-vm", "node1", "qemu/123", "VM", "cpu", 90, threshold, nil)
 
 	manager.mu.Lock()
-	alert, exists := manager.activeAlerts["guest-123-cpu"]
+	canonicalState := buildCanonicalStateID("guest-123", "metric-threshold:cpu")
+	alert, exists := manager.activeAlerts[canonicalState]
 	manager.mu.Unlock()
 
 	if !exists {

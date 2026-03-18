@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -53,10 +54,35 @@ func TestIsMigrationNeeded(t *testing.T) {
 	require.False(t, IsMigrationNeeded(dataDir))
 
 	// With files - migration needed
-	os.WriteFile(filepath.Join(dataDir, "system.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(dataDir, "system.json"), []byte("{}"), 0644)
 	require.True(t, IsMigrationNeeded(dataDir))
 
 	// After migration - not needed
-	MigrateToMultiTenant(dataDir)
+	_ = MigrateToMultiTenant(dataDir)
 	require.False(t, IsMigrationNeeded(dataDir))
+}
+
+func TestMigrateToMultiTenant_SetsOwnerOnlyPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission mode assertions are not stable on windows")
+	}
+
+	dataDir := t.TempDir()
+	legacyPath := filepath.Join(dataDir, "system.json")
+	_ = os.WriteFile(legacyPath, []byte("{}"), 0o644)
+
+	require.NoError(t, MigrateToMultiTenant(dataDir))
+
+	defaultOrgDir := filepath.Join(dataDir, "orgs", "default")
+	orgInfo, err := os.Stat(defaultOrgDir)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o700), orgInfo.Mode().Perm())
+
+	migratedInfo, err := os.Stat(filepath.Join(defaultOrgDir, "system.json"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), migratedInfo.Mode().Perm())
+
+	markerInfo, err := os.Stat(filepath.Join(defaultOrgDir, ".migrated"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), markerInfo.Mode().Perm())
 }

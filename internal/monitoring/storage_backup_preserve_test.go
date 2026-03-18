@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestPreserveFailedStorageBackups(t *testing.T) {
@@ -252,7 +253,7 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
+					{ID: "local-backup@node1", Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
 				},
 			},
 			want: nil,
@@ -270,21 +271,21 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "node1",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve2", Name: "local-backup", Node: "node1", Content: "backup"},
+					{ID: "local-backup@node1", Instance: "pve2", Name: "local-backup", Node: "node1", Content: "backup"},
 				},
 			},
 			want: nil,
 		},
 		{
-			name:         "storage with empty name is skipped",
+			name:         "storage with empty name falls back to canonical ID",
 			instanceName: "pve1",
 			nodeName:     "node1",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "", Node: "node1", Content: "backup"},
+					{ID: "unnamed@node1", Instance: "pve1", Name: "", Node: "node1", Content: "backup"},
 				},
 			},
-			want: nil,
+			want: []string{"unnamed@node1"},
 		},
 		{
 			name:         "storage without backup in Content is skipped",
@@ -292,7 +293,7 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "node1",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "local", Node: "node1", Content: "images,rootdir"},
+					{ID: "local@node1", Instance: "pve1", Name: "local", Node: "node1", Content: "images,rootdir"},
 				},
 			},
 			want: nil,
@@ -303,7 +304,7 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "node1",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "backup-storage", Node: "node1", Content: "backup"},
+					{ID: "backup-storage@node1", Instance: "pve1", Name: "backup-storage", Node: "node1", Content: "backup"},
 				},
 			},
 			want: []string{"backup-storage"},
@@ -314,7 +315,7 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "node2",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "shared-backup", Node: "node1", Nodes: []string{"node1", "node2", "node3"}, Content: "backup"},
+					{ID: "shared-backup", Instance: "pve1", Name: "shared-backup", Node: "node1", Nodes: []string{"node1", "node2", "node3"}, Content: "backup"},
 				},
 			},
 			want: []string{"shared-backup"},
@@ -325,9 +326,9 @@ func TestStorageNamesForNode(t *testing.T) {
 			nodeName:     "node1",
 			snapshot: models.StateSnapshot{
 				Storage: []models.Storage{
-					{Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
-					{Instance: "pve1", Name: "nfs-backup", Node: "node1", Content: "backup,images"},
-					{Instance: "pve1", Name: "shared-backup", Node: "node2", Nodes: []string{"node1", "node2"}, Content: "backup"},
+					{ID: "local-backup@node1", Instance: "pve1", Name: "local-backup", Node: "node1", Content: "backup"},
+					{ID: "nfs-backup@node1", Instance: "pve1", Name: "nfs-backup", Node: "node1", Content: "backup,images"},
+					{ID: "shared-backup", Instance: "pve1", Name: "shared-backup", Node: "node2", Nodes: []string{"node1", "node2"}, Content: "backup"},
 				},
 			},
 			want: []string{"local-backup", "nfs-backup", "shared-backup"},
@@ -336,7 +337,9 @@ func TestStorageNamesForNode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := storageNamesForNode(tt.instanceName, tt.nodeName, tt.snapshot)
+			registry := unifiedresources.NewRegistry(nil)
+			registry.IngestSnapshot(tt.snapshot)
+			got := storageNamesForNode(registry, tt.instanceName, tt.nodeName)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("storageNamesForNode() = %v, want %v", got, tt.want)
 			}

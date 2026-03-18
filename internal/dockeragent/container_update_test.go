@@ -15,7 +15,7 @@ import (
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
-	"github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -225,6 +225,9 @@ func TestUpdateContainer_Errors(t *testing.T) {
 func TestUpdateContainer_Success(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -296,9 +299,80 @@ func TestUpdateContainer_Success(t *testing.T) {
 	mu.Unlock()
 }
 
+func TestUpdateContainer_StoppedContainerPreservesStoppedState(t *testing.T) {
+	logger := zerolog.Nop()
+	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
+	swap(t, &nowFn, func() time.Time {
+		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
+	})
+
+	done := make(chan struct{})
+
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+				if id == "new123" {
+					inspect := baseInspect()
+					if inspect.State != nil {
+						inspect.State.Running = false
+					}
+					inspect.ContainerJSONBase.Image = "sha256:new0000000000"
+					return inspect, nil
+				}
+				inspect := baseInspect()
+				if inspect.State != nil {
+					inspect.State.Running = false
+				}
+				return inspect, nil
+			},
+			imagePullFn: func(context.Context, string, image.PullOptions) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("{}")), nil
+			},
+			containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
+				t.Fatalf("did not expect ContainerStop to be called for stopped container")
+				return nil
+			},
+			containerRenameFn: func(context.Context, string, string) error {
+				return nil
+			},
+			containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+				return containertypes.CreateResponse{ID: "new123"}, nil
+			},
+			networkConnectFn: func(context.Context, string, string, *network.EndpointSettings) error {
+				return nil
+			},
+			containerStartFn: func(context.Context, string, containertypes.StartOptions) error {
+				t.Fatalf("did not expect ContainerStart to be called for stopped container")
+				return nil
+			},
+			containerRemoveFn: func(context.Context, string, containertypes.RemoveOptions) error {
+				close(done)
+				return nil
+			},
+		},
+		logger: logger,
+	}
+
+	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
+	if !result.Success {
+		t.Fatalf("expected success, got error %q", result.Error)
+	}
+	if result.NewImageDigest == "" {
+		t.Fatalf("expected new image digest")
+	}
+
+	<-done
+}
+
 func TestUpdateContainer_CleanupError(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -423,6 +497,19 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("container id unmarshalable payload", func(t *testing.T) {
+		cmd := agentsdocker.Command{
+			ID:   "cmd2d",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": make(chan int),
+			},
+		}
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("ack error stops early", func(t *testing.T) {
 		badTarget := TargetConfig{URL: "http://example.com/\x7f"}
 		agent.hostID = "host1"
@@ -532,90 +619,6 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 
 		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
 			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("success ack includes container id mapping payload", func(t *testing.T) {
-		var (
-			mu   sync.Mutex
-			acks []agentsdocker.CommandAck
-		)
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			var ack agentsdocker.CommandAck
-			_ = json.Unmarshal(body, &ack)
-			mu.Lock()
-			acks = append(acks, ack)
-			mu.Unlock()
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		agent := &Agent{
-			logger: zerolog.Nop(),
-			hostID: "host1",
-			httpClients: map[bool]*http.Client{
-				false: server.Client(),
-			},
-			docker: &fakeDockerClient{
-				containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
-					inspect := baseInspect()
-					if id == "new123" {
-						inspect.ContainerJSONBase.Image = "sha256:new0000000000"
-					}
-					return inspect, nil
-				},
-				imagePullFn: func(context.Context, string, image.PullOptions) (io.ReadCloser, error) {
-					return io.NopCloser(strings.NewReader("{}")), nil
-				},
-				containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
-					return nil
-				},
-				containerRenameFn: func(context.Context, string, string) error {
-					return nil
-				},
-				containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
-					return containertypes.CreateResponse{ID: "new123"}, nil
-				},
-				containerStartFn: func(context.Context, string, containertypes.StartOptions) error {
-					return nil
-				},
-			},
-		}
-
-		cmd := agentsdocker.Command{
-			ID:   "cmd6",
-			Type: agentsdocker.CommandTypeUpdateContainer,
-			Payload: map[string]any{
-				"containerId": "container1",
-			},
-		}
-
-		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		mu.Lock()
-		defer mu.Unlock()
-
-		var completed *agentsdocker.CommandAck
-		for i := range acks {
-			if acks[i].Status == agentsdocker.CommandStatusCompleted {
-				completed = &acks[i]
-				break
-			}
-		}
-		if completed == nil {
-			t.Fatalf("expected a completed ack, got %d total acks", len(acks))
-		}
-		if completed.Payload == nil {
-			t.Fatalf("expected completed ack payload to be set")
-		}
-		if got, _ := completed.Payload["oldContainerId"].(string); got != "container1" {
-			t.Fatalf("oldContainerId = %q, want %q", got, "container1")
-		}
-		if got, _ := completed.Payload["newContainerId"].(string); got != "new123" {
-			t.Fatalf("newContainerId = %q, want %q", got, "new123")
 		}
 	})
 }

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -589,7 +591,7 @@ func TestSessionStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		t.Fatalf("failed to make dir readonly: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
 	// saveUnsafe should handle error gracefully (logs but doesn't panic)
@@ -684,7 +686,7 @@ func TestSessionStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestSessionStore_Load_LegacyFormat(t *testing.T) {
+func TestSessionStore_Load_MigratesLegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create legacy format JSON (map[token]sessionData) with snake_case fields
@@ -707,22 +709,127 @@ func TestSessionStore_Load_LegacyFormat(t *testing.T) {
 
 	store.load()
 
-	// Should load the two non-expired sessions (raw-token-1 and raw-token-2)
-	// The expired one (raw-token-expired) should be skipped
 	if len(store.sessions) != 2 {
-		t.Errorf("expected 2 sessions from legacy format, got %d", len(store.sessions))
+		t.Fatalf("store should load 2 active legacy sessions, got %d", len(store.sessions))
 	}
 
-	// Verify sessions are hashed and can be validated
-	// The legacy format stores raw tokens as keys, which get hashed during migration
 	if !store.ValidateSession("raw-token-1") {
-		t.Error("should validate session for raw-token-1 after legacy migration")
+		t.Fatal("raw-token-1 should validate after legacy load")
 	}
 	if !store.ValidateSession("raw-token-2") {
-		t.Error("should validate session for raw-token-2 after legacy migration")
+		t.Fatal("raw-token-2 should validate after legacy load")
 	}
-	// Expired token should not be valid
 	if store.ValidateSession("raw-token-expired") {
-		t.Error("expired session should not be loaded from legacy format")
+		t.Fatal("expired raw-token-expired session should be filtered during legacy load")
+	}
+
+	if _, ok := store.sessions[sessionHash("raw-token-1")]; !ok {
+		t.Fatal("raw-token-1 should be stored under its hashed key")
+	}
+	if _, ok := store.sessions[sessionHash("raw-token-2")]; !ok {
+		t.Fatal("raw-token-2 should be stored under its hashed key")
+	}
+
+	savedData, err := os.ReadFile(sessionsFile)
+	if err != nil {
+		t.Fatalf("failed to read migrated sessions file: %v", err)
+	}
+
+	var persisted []sessionPersisted
+	if err := json.Unmarshal(savedData, &persisted); err != nil {
+		t.Fatalf("migrated sessions file should be hashed array format: %v", err)
+	}
+	if len(persisted) != 2 {
+		t.Fatalf("migrated sessions file should contain 2 active sessions, got %d", len(persisted))
+	}
+}
+
+func TestSessionStore_InitReconfiguresDataPath(t *testing.T) {
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+
+	dirOne := t.TempDir()
+	dirTwo := t.TempDir()
+
+	InitSessionStore(dirOne)
+	GetSessionStore().CreateSession("session-one", time.Hour, "agent", "127.0.0.1", "alice")
+
+	InitSessionStore(dirTwo)
+	if GetSessionStore().GetSession("session-one") != nil {
+		t.Fatal("reconfigured session store should not retain sessions from the previous data path")
+	}
+
+	GetSessionStore().CreateSession("session-two", time.Hour, "agent", "127.0.0.1", "bob")
+	if _, err := os.Stat(filepath.Join(dirOne, "sessions.json")); err != nil {
+		t.Fatalf("expected original sessions file to remain readable: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dirTwo, "sessions.json")); err != nil {
+		t.Fatalf("expected reconfigured sessions file to exist: %v", err)
+	}
+}
+
+func TestSessionStore_SaveUnsafe_DropsRefreshTokenWithoutCrypto(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		dataPath: tmpDir,
+		stopChan: make(chan bool),
+		crypto:   nil,
+	}
+
+	store.sessions[sessionHash("oidc-token")] = &SessionData{
+		Username:         "alice",
+		ExpiresAt:        time.Now().Add(time.Hour),
+		CreatedAt:        time.Now(),
+		OIDCRefreshToken: "plain-refresh-token",
+	}
+
+	store.saveUnsafe()
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "sessions.json"))
+	if err != nil {
+		t.Fatalf("ReadFile sessions.json: %v", err)
+	}
+	if bytes.Contains(data, []byte("plain-refresh-token")) {
+		t.Fatalf("sessions.json leaked plaintext refresh token: %s", string(data))
+	}
+
+	var persisted []sessionPersisted
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("Unmarshal persisted sessions: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("expected 1 persisted session, got %d", len(persisted))
+	}
+	if persisted[0].OIDCRefreshToken != "" {
+		t.Fatalf("expected refresh token to be dropped without crypto, got %q", persisted[0].OIDCRefreshToken)
+	}
+}
+
+func TestSessionStore_LoadHashedSessions_DropsRefreshTokenWithoutCrypto(t *testing.T) {
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+		crypto:   nil,
+	}
+
+	loaded := store.loadHashedSessions([]sessionPersisted{
+		{
+			Key:              sessionHash("oidc-token"),
+			Username:         "alice",
+			ExpiresAt:        time.Now().Add(time.Hour),
+			CreatedAt:        time.Now(),
+			OIDCRefreshToken: "plaintext-refresh-token",
+		},
+	}, time.Now())
+	if loaded != 1 {
+		t.Fatalf("expected 1 session loaded, got %d", loaded)
+	}
+
+	session := store.sessions[sessionHash("oidc-token")]
+	if session == nil {
+		t.Fatal("expected loaded session")
+	}
+	if session.OIDCRefreshToken != "" {
+		t.Fatalf("expected refresh token to be dropped without crypto, got %q", session.OIDCRefreshToken)
 	}
 }

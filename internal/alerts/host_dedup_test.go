@@ -8,7 +8,7 @@ import (
 
 func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	// Test 1: Without a host agent registered, node metrics ARE checked
-	t.Run("node_metrics_checked_without_host_agent", func(t *testing.T) {
+	t.Run("node_metrics_checked_without_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -29,8 +29,9 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should have an entry because metrics WERE checked
+		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts["node/pi-cpu"]
+		_, hasPending := m.pendingAlerts[trackingKey]
 		m.mu.RUnlock()
 
 		if !hasPending {
@@ -39,7 +40,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	})
 
 	// Test 2: With host agent registered, node metrics are NOT checked
-	t.Run("node_metrics_skipped_with_host_agent", func(t *testing.T) {
+	t.Run("node_metrics_skipped_with_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -62,8 +63,9 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should NOT have an entry because metrics were SKIPPED
+		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts["node/pi-cpu"]
+		_, hasPending := m.pendingAlerts[trackingKey]
 		m.mu.RUnlock()
 
 		if hasPending {
@@ -72,7 +74,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	})
 
 	// Test 3: After unregistering host agent, node metrics ARE checked again
-	t.Run("node_metrics_resume_after_host_agent_unregistered", func(t *testing.T) {
+	t.Run("node_metrics_resume_after_agent_unregistered", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
@@ -96,8 +98,9 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.CheckNode(node)
 
 		// The key test: pendingAlerts should have an entry because metrics WERE checked
+		trackingKey := canonicalMetricStateID(node.ID, "cpu")
 		m.mu.RLock()
-		_, hasPending := m.pendingAlerts["node/pi-cpu"]
+		_, hasPending := m.pendingAlerts[trackingKey]
 		m.mu.RUnlock()
 
 		if !hasPending {

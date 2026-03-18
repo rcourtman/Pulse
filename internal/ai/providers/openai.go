@@ -18,6 +18,8 @@ const (
 	openaiAPIURL         = "https://api.openai.com/v1/chat/completions"
 	openaiMaxRetries     = 3
 	openaiInitialBackoff = 2 * time.Second
+	openrouterRefererURL = "https://pulse.app"
+	openrouterAppTitle   = "Pulse"
 )
 
 // OpenAIClient implements the Provider interface for OpenAI's API
@@ -55,6 +57,8 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 	// Strip provider prefix if present - the model should be just the model name
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -162,9 +166,21 @@ func (c *OpenAIClient) isDeepSeek() bool {
 	return strings.Contains(c.baseURL, "deepseek.com")
 }
 
+func (c *OpenAIClient) isOpenRouter() bool {
+	return strings.Contains(c.baseURL, "openrouter.ai")
+}
+
 // isDeepSeekReasoner returns true if using DeepSeek's reasoning model
 func (c *OpenAIClient) isDeepSeekReasoner() bool {
 	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
+}
+
+func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
+	if !c.isOpenRouter() {
+		return
+	}
+	req.Header.Set("HTTP-Referer", openrouterRefererURL)
+	req.Header.Set("X-Title", openrouterAppTitle)
 }
 
 // requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
@@ -230,7 +246,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
-				argsJSON, _ := json.Marshal(tc.Input)
+				argsJSON, err := json.Marshal(tc.Input)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal tool call input for %s: %w", tc.Name, err)
+				}
 				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
 					ID:   tc.ID,
 					Type: "function",
@@ -261,6 +280,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Strip provider prefix if present - callers may pass the full "provider:model" string
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -269,7 +290,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Debug log to trace model issues
-	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek Chat request")
+	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek chat request")
 
 	// Build request
 	openaiReq := openaiRequest{
@@ -293,7 +314,11 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Convert tools to OpenAI format
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		for _, t := range req.Tools {
 			// Skip non-function tools (like web_search)
 			if t.Type != "" && t.Type != "function" {
@@ -317,7 +342,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Log actual model being sent (INFO level for visibility)
-	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("Sending OpenAI/DeepSeek request")
+	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("sending OpenAI/DeepSeek request")
 
 	body, err := json.Marshal(openaiReq)
 	if err != nil {
@@ -338,10 +363,17 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				Str("last_error", lastErr.Error()).
 				Msg("Retrying OpenAI/DeepSeek API request after transient error")
 
+			backoffTimer := time.NewTimer(backoff)
 			select {
 			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
 				return nil, ctx.Err()
-			case <-time.After(backoff):
+			case <-backoffTimer.C:
 			}
 		}
 
@@ -352,6 +384,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		c.applyProviderHeaders(httpReq)
 
 		resp, err := c.client.Do(httpReq)
 		if err != nil {
@@ -456,8 +489,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 // TestConnection validates the API key by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *OpenAIClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("openai test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *OpenAIClient) modelsEndpoint() string {
@@ -488,24 +523,6 @@ func (c *OpenAIClient) modelsEndpoint() string {
 		path = "/v1/models"
 	}
 	return u.Scheme + "://" + u.Host + path
-}
-
-func (c *OpenAIClient) usesCustomModelsListing() bool {
-	if c.isDeepSeek() {
-		return true
-	}
-
-	u, err := url.Parse(c.baseURL)
-	if err != nil {
-		return false
-	}
-
-	host := strings.ToLower(strings.TrimSpace(u.Hostname()))
-	if host == "" {
-		return false
-	}
-
-	return host != "api.openai.com"
 }
 
 // SupportsThinking returns true if the model supports extended thinking
@@ -594,7 +611,10 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
-				argsJSON, _ := json.Marshal(tc.Input)
+				argsJSON, err := json.Marshal(tc.Input)
+				if err != nil {
+					return fmt.Errorf("failed to marshal tool call input for %s: %w", tc.Name, err)
+				}
 				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
 					ID:   tc.ID,
 					Type: "function",
@@ -621,6 +641,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	model := req.Model
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -649,7 +671,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		openaiReq.Temperature = req.Temperature
 	}
 
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		for _, t := range req.Tools {
 			if t.Type != "" && t.Type != "function" {
 				continue
@@ -683,6 +709,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Accept", "text/event-stream")
+	c.applyProviderHeaders(httpReq)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -775,7 +802,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 			var event openaiStreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				log.Debug().Err(err).Str("data", data).Msg("Failed to parse stream event")
+				log.Debug().Err(err).Str("data", data).Msg("failed to parse stream event")
 				continue
 			}
 
@@ -853,6 +880,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.applyProviderHeaders(req)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -868,10 +896,12 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	var result struct {
 		Data []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Object      string `json:"object"`
+			Created     int64  `json:"created"`
+			OwnedBy     string `json:"owned_by"`
 		} `json:"data"`
 	}
 
@@ -881,27 +911,56 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, 0, len(result.Data))
 	cache := GetNotableCache()
-	allowAllModels := c.usesCustomModelsListing()
 	for _, m := range result.Data {
-		chatCapable := strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
-			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "o4") ||
-			strings.Contains(m.ID, "deepseek")
-		if !allowAllModels && !chatCapable {
+		if strings.TrimSpace(m.ID) == "" {
 			continue
 		}
 
-		// Use correct provider for notable detection
-		provider := "openai"
-		if strings.Contains(m.ID, "deepseek") {
-			provider = "deepseek"
+		if c.isOpenRouter() {
+			modelName := strings.TrimSpace(m.Name)
+			if modelName == "" {
+				modelName = m.ID
+			}
+			models = append(models, ModelInfo{
+				ID:          m.ID,
+				Name:        modelName,
+				Description: strings.TrimSpace(m.Description),
+				CreatedAt:   m.Created,
+				Notable:     cache.IsNotable(notableProviderForOpenRouterModel(m.ID), m.ID, m.Created),
+			})
+			continue
 		}
-		models = append(models, ModelInfo{
-			ID:        m.ID,
-			Name:      m.ID, // OpenAI uses ID as name
-			CreatedAt: m.Created,
-			Notable:   cache.IsNotable(provider, m.ID, m.Created),
-		})
+
+		// Filter to only chat-capable models
+		if strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
+			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "o4") ||
+			strings.Contains(m.ID, "deepseek") {
+			// Use correct provider for notable detection
+			provider := "openai"
+			if strings.Contains(m.ID, "deepseek") {
+				provider = "deepseek"
+			}
+			models = append(models, ModelInfo{
+				ID:        m.ID,
+				Name:      m.ID, // OpenAI uses ID as name
+				CreatedAt: m.Created,
+				Notable:   cache.IsNotable(provider, m.ID, m.Created),
+			})
+		}
 	}
 
 	return models, nil
+}
+
+func notableProviderForOpenRouterModel(modelID string) string {
+	parts := strings.SplitN(strings.TrimSpace(modelID), "/", 2)
+	if len(parts) != 2 {
+		return "openai"
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(parts[0]))
+	if provider == "" {
+		return "openai"
+	}
+	return provider
 }

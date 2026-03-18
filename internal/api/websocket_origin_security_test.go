@@ -21,7 +21,7 @@ func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord confi
 	go hub.Run()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	server := httptest.NewServer(router.Handler())
+	server := newIPv4HTTPServer(t, router.Handler())
 
 	cleanup := func() {
 		server.Close()
@@ -38,7 +38,7 @@ func TestWebSocketOriginRejectedWhenNotAllowed(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://evil.example.com")
@@ -63,7 +63,7 @@ func TestWebSocketOriginAllowedWhenConfigured(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://allowed.example.com")
@@ -78,31 +78,6 @@ func TestWebSocketOriginAllowedWhenConfigured(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketIOWebSocketOriginRejected(t *testing.T) {
-	rawToken := "socket-origin-reject-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-
-	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
-	defer cleanup()
-
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/socket.io/?transport=websocket"
-	headers := http.Header{}
-	headers.Set("X-API-Token", rawToken)
-	headers.Set("Origin", "https://evil.example.com")
-
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
-	if err == nil {
-		conn.Close()
-		t.Fatalf("expected websocket origin rejection for socket.io")
-	}
-	if resp == nil {
-		t.Fatalf("expected HTTP response for rejected socket.io origin")
-	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, resp.StatusCode)
-	}
-}
-
 func TestWebSocketOriginRejectedWhenNoAllowedOriginsAndPublicOrigin(t *testing.T) {
 	rawToken := "ws-origin-default-reject-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
@@ -110,7 +85,7 @@ func TestWebSocketOriginRejectedWhenNoAllowedOriginsAndPublicOrigin(t *testing.T
 	server, cleanup := newWebSocketRouter(t, []string{}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://evil.example.com")
@@ -135,7 +110,7 @@ func TestWebSocketOriginAllowsPrivateWhenNoAllowedOrigins(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "http://localhost:3000")

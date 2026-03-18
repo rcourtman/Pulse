@@ -37,28 +37,28 @@ func TestDisableSystemdService(t *testing.T) {
 			_ = os.Setenv("PATH", prev)
 		})
 
-		if err := disableSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := disableSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
 		writeSystemctl(t, "exit 0")
-		if err := disableSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := disableSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("not found exit code", func(t *testing.T) {
 		writeSystemctl(t, "echo 'unit not-found' >&2\nexit 5")
-		if err := disableSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := disableSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("access denied", func(t *testing.T) {
 		writeSystemctl(t, "echo 'access denied' >&2\nexit 1")
-		err := disableSystemdService(context.Background(), "pulse-docker-agent")
+		err := disableSystemdService(context.Background(), "pulse-agent")
 		if err == nil || !strings.Contains(err.Error(), "access denied") {
 			t.Fatalf("expected access denied error, got %v", err)
 		}
@@ -66,7 +66,7 @@ func TestDisableSystemdService(t *testing.T) {
 
 	t.Run("other error", func(t *testing.T) {
 		writeSystemctl(t, "echo 'boom' >&2\nexit 2")
-		if err := disableSystemdService(context.Background(), "pulse-docker-agent"); err == nil {
+		if err := disableSystemdService(context.Background(), "pulse-agent"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -80,28 +80,28 @@ func TestStopSystemdService(t *testing.T) {
 			_ = os.Setenv("PATH", prev)
 		})
 
-		if err := stopSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := stopSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
 		writeSystemctl(t, "exit 0")
-		if err := stopSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := stopSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("not found exit code", func(t *testing.T) {
 		writeSystemctl(t, "echo 'could not be found' >&2\nexit 5")
-		if err := stopSystemdService(context.Background(), "pulse-docker-agent"); err != nil {
+		if err := stopSystemdService(context.Background(), "pulse-agent"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("permission denied", func(t *testing.T) {
 		writeSystemctl(t, "echo 'permission denied' >&2\nexit 1")
-		err := stopSystemdService(context.Background(), "pulse-docker-agent")
+		err := stopSystemdService(context.Background(), "pulse-agent")
 		if err == nil || !strings.Contains(err.Error(), "access denied") {
 			t.Fatalf("expected access denied error, got %v", err)
 		}
@@ -109,7 +109,7 @@ func TestStopSystemdService(t *testing.T) {
 
 	t.Run("other error", func(t *testing.T) {
 		writeSystemctl(t, "echo 'boom' >&2\nexit 2")
-		if err := stopSystemdService(context.Background(), "pulse-docker-agent"); err == nil {
+		if err := stopSystemdService(context.Background(), "pulse-agent"); err == nil {
 			t.Fatal("expected error")
 		}
 	})

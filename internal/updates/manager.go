@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -57,6 +58,7 @@ type UpdateInfo struct {
 	ReleaseDate    time.Time `json:"releaseDate"`
 	DownloadURL    string    `json:"downloadUrl"`
 	IsPrerelease   bool      `json:"isPrerelease"`
+	IsMajorUpgrade bool      `json:"isMajorUpgrade"`
 	Warning        string    `json:"warning,omitempty"`
 }
 
@@ -64,20 +66,62 @@ var (
 	errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
 	stageDelayOnce       sync.Once
 	stageDelayValue      time.Duration
+	updateHTTPAttempts   = 3
+	updateHTTPBackoff    = 300 * time.Millisecond
+	updateHTTPMaxBackoff = 2 * time.Second
 )
+
+const (
+	defaultUpdateReleaseRepo string = "rcourtman/Pulse"
+	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
+	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
+	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
+)
+
+func updateReleaseRepo() string {
+	repo := strings.TrimSpace(os.Getenv("PULSE_GITHUB_REPO"))
+	if repo == "" {
+		return defaultUpdateReleaseRepo
+	}
+	return repo
+}
+
+func updateReleaseDownloadPrefix() string {
+	return fmt.Sprintf("https://github.com/%s/releases/download/", updateReleaseRepo())
+}
+
+func updateReleaseAPIPath() string {
+	return fmt.Sprintf("/repos/%s/releases", updateReleaseRepo())
+}
+
+func updateReleaseFeedURL() string {
+	return fmt.Sprintf("https://github.com/%s/releases.atom", updateReleaseRepo())
+}
+
+func updateReleaseMigrationURL() string {
+	return fmt.Sprintf("https://github.com/%s/releases/v4.0.0", updateReleaseRepo())
+}
 
 // Manager handles update operations
 type Manager struct {
-	config        *config.Config
-	history       *UpdateHistory
-	status        UpdateStatus
-	statusMu      sync.RWMutex
-	checkCache    map[string]*UpdateInfo // keyed by channel
-	cacheTime     map[string]time.Time   // keyed by channel
-	cacheDuration time.Duration
-	progressChan  chan UpdateStatus
-	queue         *UpdateQueue
-	sseBroadcast  *SSEBroadcaster
+	config         *config.Config
+	history        *UpdateHistory
+	status         UpdateStatus
+	statusMu       sync.RWMutex
+	progressMu     sync.RWMutex
+	updateMu       sync.Mutex
+	updateInFlight bool
+	checkCache     map[string]*UpdateInfo // keyed by channel
+	cacheTime      map[string]time.Time   // keyed by channel
+	cacheDuration  time.Duration
+	progressChan   chan UpdateStatus
+	queue          *UpdateQueue
+	sseBroadcast   *SSEBroadcaster
+	lifecycleMu    sync.RWMutex
+	shutdownCh     chan struct{}
+	closeOnce      sync.Once
+	heartbeatWg    sync.WaitGroup
+	closed         bool
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -99,6 +143,7 @@ func NewManager(cfg *config.Config) *Manager {
 		progressChan:  make(chan UpdateStatus, 100),
 		queue:         NewUpdateQueue(),
 		sseBroadcast:  NewSSEBroadcaster(),
+		shutdownCh:    make(chan struct{}),
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -109,6 +154,7 @@ func NewManager(cfg *config.Config) *Manager {
 	go m.cleanupOldTempDirs()
 
 	// Start heartbeat for SSE connections (every 30 seconds)
+	m.heartbeatWg.Add(1)
 	go m.sseHeartbeatLoop()
 
 	return m
@@ -126,24 +172,33 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 
 // Close closes the progress channel and cleans up resources
 func (m *Manager) Close() {
-	close(m.progressChan)
-	if m.sseBroadcast != nil {
-		m.sseBroadcast.Close()
-	}
+	m.closeOnce.Do(func() {
+		m.progressMu.Lock()
+		m.closed = true
+		close(m.progressChan)
+		m.progressMu.Unlock()
+
+		close(m.shutdownCh)
+
+		if m.sseBroadcast != nil {
+			m.sseBroadcast.Close()
+		}
+
+		m.heartbeatWg.Wait()
+	})
 }
 
 // GetSSEBroadcaster returns the SSE broadcaster
 func (m *Manager) GetSSEBroadcaster() *SSEBroadcaster {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	return m.sseBroadcast
-}
-
-// GetQueue returns the update queue
-func (m *Manager) GetQueue() *UpdateQueue {
-	return m.queue
 }
 
 // AddSSEClient adds a new SSE client for update progress streaming
 func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClient {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast == nil {
 		return nil
 	}
@@ -152,6 +207,8 @@ func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClien
 
 // RemoveSSEClient removes an SSE client
 func (m *Manager) RemoveSSEClient(clientID string) {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast != nil {
 		m.sseBroadcast.RemoveClient(clientID)
 	}
@@ -159,6 +216,8 @@ func (m *Manager) RemoveSSEClient(clientID string) {
 
 // GetCachedStatus returns the last broadcasted status
 func (m *Manager) GetSSECachedStatus() (UpdateStatus, time.Time) {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast == nil {
 		return UpdateStatus{}, time.Time{}
 	}
@@ -179,20 +238,9 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
 
-	// Track whether an explicit channel override was provided
-	explicitChannelProvided := channel != ""
-
-	// Use provided channel, or fall back to config, or auto-detect from current version
-	if channel == "" {
-		channel = m.config.UpdateChannel
-	}
-	if channel == "" && currentInfo.Channel != "" {
-		// Auto-detect channel from current version (RC users get RC updates)
-		channel = currentInfo.Channel
-	}
-	if channel == "" {
-		channel = "stable"
-	}
+	// Track whether an explicit channel override was provided.
+	explicitChannelProvided := strings.TrimSpace(channel) != ""
+	channel = m.resolveChannel(channel, currentInfo)
 
 	// Don't use cache when channel is explicitly provided (UI might have changed it)
 	// But DO use cache for auto-detected or default channels
@@ -330,6 +378,11 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		}
 	}
 
+	isMajorUpgrade := latestVer.Major > currentVer.Major
+	// Derive prerelease from the parsed version tag (not GitHub metadata) so the
+	// warning is correct even if the release was published with prerelease=false.
+	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
+
 	info := &UpdateInfo{
 		Available:      latestVer.IsNewerThan(currentVer),
 		CurrentVersion: currentInfo.Version,
@@ -337,7 +390,25 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		ReleaseNotes:   release.Body,
 		ReleaseDate:    release.PublishedAt,
 		DownloadURL:    downloadURL,
-		IsPrerelease:   release.Prerelease,
+		IsPrerelease:   isPrerelease,
+		IsMajorUpgrade: isMajorUpgrade,
+	}
+
+	// Add warning for major version pre-release upgrades
+	if info.Available && isMajorUpgrade && isPrerelease {
+		info.Warning = fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d) and a pre-release build. "+
+				"We strongly recommend installing this as a separate instance rather than upgrading your production installation. "+
+				"Pre-release builds may contain bugs and are intended for testing.",
+			currentVer.Major, latestVer.Major,
+		)
+	} else if info.Available && isMajorUpgrade {
+		info.Warning = fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d). Please review the release notes carefully before updating.",
+			currentVer.Major, latestVer.Major,
+		)
+	} else if info.Available && isPrerelease {
+		info.Warning = "This is a pre-release build. Pre-release builds are tested but may have rough edges."
 	}
 
 	// Cache the result (only if using saved channel)
@@ -366,7 +437,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		return fmt.Errorf("download URL is required")
 	}
 	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
-		if !strings.HasPrefix(req.DownloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
+		if !strings.HasPrefix(req.DownloadURL, updateReleaseDownloadPrefix()) {
 			return fmt.Errorf("invalid download URL")
 		}
 	}
@@ -379,25 +450,30 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	// Check for pre-v4 installation
 	if isPreV4Installation() {
-		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
+		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See %s", updateReleaseMigrationURL())
 	}
 
-	// Enqueue the update job
-	job, accepted := m.queue.Enqueue(req.DownloadURL)
-	if !accepted {
+	// Ensure only one update runs at a time.
+	m.updateMu.Lock()
+	if m.updateInFlight {
+		m.updateMu.Unlock()
 		return fmt.Errorf("update already in progress")
 	}
-
-	// Mark job as running
-	m.queue.MarkRunning(job.ID)
-
-	// Use job context instead of passed context
-	ctx = job.Context
+	m.updateInFlight = true
+	m.updateMu.Unlock()
+	defer func() {
+		m.updateMu.Lock()
+		m.updateInFlight = false
+		m.updateMu.Unlock()
+	}()
 
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	channel := m.resolveChannel(req.Channel, currentInfo)
-	targetVersion := inferVersionFromDownloadURL(req.DownloadURL)
+	targetVersion, validationErr := validateApplyTargetVersion(channel, req.DownloadURL)
+	if validationErr != nil {
+		return validationErr
+	}
 	initiatedBy := req.InitiatedBy
 	if initiatedBy == "" {
 		initiatedBy = InitiatedByUser
@@ -409,7 +485,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	start := time.Now()
 	eventID := m.createHistoryEntry(ctx, UpdateHistoryEntry{
-		Action:         ActionUpdate,
+		Action:         "update",
 		Channel:        channel,
 		VersionFrom:    currentInfo.Version,
 		VersionTo:      targetVersion,
@@ -437,11 +513,8 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	var tempDir string
 	var err error
 
-	// Try data directory first
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
+	// Try the canonical runtime data directory first.
+	dataDir := resolveUpdateDataDir()
 
 	// Try to create temp dir in data directory
 	tempDir, err = os.MkdirTemp(dataDir, "pulse-update-*")
@@ -455,7 +528,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 				tempErr := fmt.Errorf("failed to create temp directory in any location: %w", err)
 				m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
 				runErr = tempErr
-				m.queue.MarkCompleted(job.ID, tempErr)
 				return tempErr
 			}
 		}
@@ -468,7 +540,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err != nil {
 		downloadErr := fmt.Errorf("failed to download update: %w", err)
 		m.updateStatus("error", 20, "Failed to download update", downloadErr)
-		m.queue.MarkCompleted(job.ID, downloadErr)
 		runErr = downloadErr
 		return runErr
 	}
@@ -483,7 +554,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.verifyChecksum(ctx, req.DownloadURL, tarballPath); err != nil {
 		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
 		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
-		m.queue.MarkCompleted(job.ID, checksumErr)
 		runErr = checksumErr
 		return runErr
 	}
@@ -496,7 +566,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		extractErr := fmt.Errorf("failed to extract update: %w", err)
 		m.updateStatus("error", 40, "Failed to extract update", extractErr)
-		m.queue.MarkCompleted(job.ID, extractErr)
 		runErr = extractErr
 		return runErr
 	}
@@ -508,7 +577,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err != nil {
 		backupErr := fmt.Errorf("failed to create backup: %w", err)
 		m.updateStatus("error", 60, "Failed to create backup", backupErr)
-		m.queue.MarkCompleted(job.ID, backupErr)
 		runErr = backupErr
 		return runErr
 	}
@@ -526,7 +594,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		applyErr := fmt.Errorf("failed to apply update: %w", err)
 		m.updateStatus("error", 80, "Failed to apply update", applyErr)
-		m.queue.MarkCompleted(job.ID, applyErr)
 		runErr = applyErr
 		// Attempt to restore backup
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
@@ -536,9 +603,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
-
-	// Mark job as completed
-	m.queue.MarkCompleted(job.ID, nil)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
 	if !dockerUpdatesAllowed() {
@@ -566,18 +630,8 @@ func (m *Manager) GetStatus() UpdateStatus {
 // Returns nil if no cached info is available
 // Uses the configured or auto-detected channel
 func (m *Manager) GetCachedUpdateInfo() *UpdateInfo {
-	// Determine which channel to use (same logic as CheckForUpdates)
-	channel := m.config.UpdateChannel
-	if channel == "" {
-		// Try to auto-detect from current version
-		currentInfo, err := GetCurrentVersion()
-		if err == nil && currentInfo.Channel != "" {
-			channel = currentInfo.Channel
-		}
-	}
-	if channel == "" {
-		channel = "stable"
-	}
+	currentInfo, _ := GetCurrentVersion()
+	channel := m.resolveChannel("", currentInfo)
 
 	m.statusMu.RLock()
 	defer m.statusMu.RUnlock()
@@ -602,11 +656,11 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	if baseURL == "" {
 		baseURL = "https://api.github.com"
 	}
-	url := baseURL + "/repos/rcourtman/Pulse/releases"
+	url := baseURL + updateReleaseAPIPath()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build releases request for channel %q: %w", channel, err)
 	}
 
 	// Add headers
@@ -614,7 +668,10 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	req.Header.Set("User-Agent", "Pulse-Update-Checker")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, url, map[string]string{
+		"Accept":     "application/vnd.github.v3+json",
+		"User-Agent": "Pulse-Update-Checker",
+	}, "fetch GitHub releases")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch releases: %w", err)
 	}
@@ -759,6 +816,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 				continue
 			}
 
+			// Also skip if the version tag itself indicates a prerelease
+			// (guards against GitHub metadata being set incorrectly)
+			if releaseVer.IsPrerelease() {
+				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping release with prerelease version tag on stable channel")
+				continue
+			}
+
 			// Found the latest stable release
 			isUpdate := releaseVer.IsNewerThan(currentVer)
 			if isUpdate {
@@ -776,14 +840,18 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 }
 
 func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) string {
-	if requested != "" {
-		return requested
+	if canonical, ok := config.CanonicalUpdateChannel(requested); ok {
+		return canonical
 	}
-	if m.config != nil && m.config.UpdateChannel != "" {
-		return m.config.UpdateChannel
+	if m.config != nil {
+		if canonical, ok := config.CanonicalUpdateChannel(m.config.UpdateChannel); ok {
+			return canonical
+		}
 	}
-	if currentInfo != nil && currentInfo.Channel != "" {
-		return currentInfo.Channel
+	if currentInfo != nil {
+		if canonical, ok := config.CanonicalUpdateChannel(currentInfo.Channel); ok {
+			return canonical
+		}
 	}
 	return "stable"
 }
@@ -792,17 +860,12 @@ func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) str
 // This is used as a fallback when the API is rate-limited, as the Atom feed
 // doesn't count against API rate limits.
 func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) (*ReleaseInfo, error) {
-	feedURL := "https://github.com/rcourtman/Pulse/releases.atom"
-
-	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create feed request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "Pulse-Update-Checker")
+	feedURL := updateReleaseFeedURL()
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, feedURL, map[string]string{
+		"User-Agent": "Pulse-Update-Checker",
+	}, "fetch GitHub release feed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch feed: %w", err)
 	}
@@ -812,9 +875,16 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 		return nil, fmt.Errorf("feed returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	if resp.ContentLength > maxReleaseFeedBytes {
+		return nil, fmt.Errorf("feed response exceeds %d bytes", maxReleaseFeedBytes)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReleaseFeedBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read feed: %w", err)
+	}
+	if int64(len(body)) > maxReleaseFeedBytes {
+		return nil, fmt.Errorf("feed response exceeds %d bytes", maxReleaseFeedBytes)
 	}
 
 	// Parse the Atom feed to extract version tags
@@ -930,37 +1000,202 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 	return ""
 }
 
+func validateApplyTargetVersion(channel string, downloadURL string) (string, error) {
+	targetVersion := inferVersionFromDownloadURL(downloadURL)
+	if targetVersion == "" {
+		return "", fmt.Errorf("invalid download URL")
+	}
+
+	targetVer, err := ParseVersion(targetVersion)
+	if err != nil {
+		return "", fmt.Errorf("invalid download URL")
+	}
+	if channel == "stable" && targetVer.IsPrerelease() {
+		return "", fmt.Errorf("stable channel cannot install prerelease builds")
+	}
+
+	return targetVersion, nil
+}
+
+func isRetryableUpdateStatusCode(statusCode int) bool {
+	return statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusTooManyRequests ||
+		statusCode >= http.StatusInternalServerError
+}
+
+func isRetryableUpdateRequestError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	retryableFragments := []string{
+		"connection reset",
+		"connection refused",
+		"connection aborted",
+		"broken pipe",
+		"temporary failure",
+		"timeout",
+		"tls handshake timeout",
+		"http2: server sent goaway",
+	}
+	for _, fragment := range retryableFragments {
+		if strings.Contains(msg, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func retryDelayForAttempt(attempt int) time.Duration {
+	if attempt <= 0 {
+		return updateHTTPBackoff
+	}
+
+	delay := updateHTTPBackoff
+	for i := 1; i < attempt; i++ {
+		delay *= 2
+		if delay >= updateHTTPMaxBackoff {
+			return updateHTTPMaxBackoff
+		}
+	}
+	if delay > updateHTTPMaxBackoff {
+		return updateHTTPMaxBackoff
+	}
+	return delay
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url string, headers map[string]string, operation string) (*http.Response, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	if updateHTTPAttempts < 1 {
+		updateHTTPAttempts = 1
+	}
+
+	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			if !isRetryableUpdateRequestError(err) || attempt == updateHTTPAttempts {
+				return nil, err
+			}
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateHTTPAttempts).
+				Dur("retryIn", delay).
+				Str("operation", operation).
+				Str("url", url).
+				Msg("Transient update request error; retrying")
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if isRetryableUpdateStatusCode(resp.StatusCode) && attempt < updateHTTPAttempts {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Int("statusCode", resp.StatusCode).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateHTTPAttempts).
+				Dur("retryIn", delay).
+				Str("operation", operation).
+				Str("url", url).
+				Msg("Transient update HTTP status; retrying")
+
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf("%s failed after retries", operation)
+}
+
 // downloadFile downloads a file from URL to dest
 func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
 	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, url, nil, "download file")
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("download %q: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("url", url).Msg("Failed to close download response body")
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return 0, fmt.Errorf("download %q: status %d", url, resp.StatusCode)
+	}
+	if updateHTTPAttempts < 1 {
+		updateHTTPAttempts = 1
+	}
+	if resp.ContentLength > maxUpdateDownloadBytes {
+		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
 	}
 
 	out, err := os.Create(dest)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("create download destination %q: %w", dest, err)
 	}
-	defer out.Close()
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", dest).Msg("Failed to close downloaded file")
+		}
+	}()
 
 	// Copy with progress updates
-	written, err := io.Copy(out, resp.Body)
+	written, err := io.Copy(out, io.LimitReader(resp.Body, maxUpdateDownloadBytes+1))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("copy download response to %q: %w", dest, err)
+	}
+	if written > maxUpdateDownloadBytes {
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
 	}
 
-	log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
 	return written, nil
 }
 
@@ -976,33 +1211,48 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 	var checksumContent string
 	var checksumErr error
 
+	client := &http.Client{Timeout: 30 * time.Second}
+
 	// Try each checksum filename
 	for _, name := range checksumNames {
 		checksumURL := baseURL + name
 
-		req, err := http.NewRequestWithContext(ctx, "GET", checksumURL, nil)
+		resp, err := m.getWithRetry(ctx, client, checksumURL, nil, "download checksum manifest")
 		if err != nil {
-			continue
-		}
-
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
+			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to create checksum request")
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			if err == nil {
-				checksumContent = string(body)
-				log.Info().Str("file", name).Msg("Found checksum file")
-				break
+			if resp.ContentLength > maxChecksumFileBytes {
+				checksumErr = fmt.Errorf("checksum file %s exceeds %d bytes", name, maxChecksumFileBytes)
+				continue
 			}
+
+			body, err := io.ReadAll(io.LimitReader(resp.Body, maxChecksumFileBytes+1))
+			if err != nil {
+				checksumErr = fmt.Errorf("failed to read checksum file %s: %w", name, err)
+				continue
+			}
+			if int64(len(body)) > maxChecksumFileBytes {
+				checksumErr = fmt.Errorf("checksum file %s exceeds %d bytes", name, maxChecksumFileBytes)
+				continue
+			}
+
+			checksumContent = string(body)
+			log.Info().Str("file", name).Msg("Found checksum file")
+			break
 		}
+
+		log.Debug().Int("status", resp.StatusCode).Str("url", checksumURL).Msg("Non-OK checksum response, trying next")
+		resp.Body.Close()
 	}
 
 	if checksumContent == "" {
+		if checksumErr != nil {
+			return checksumErr
+		}
 		return fmt.Errorf("no checksum file found")
 	}
 
@@ -1040,7 +1290,11 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 	if err != nil {
 		return fmt.Errorf("failed to open tarball for checksum: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", tarballPath).Msg("Failed to close tarball after checksum verification")
+		}
+	}()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -1070,15 +1324,23 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 func (m *Manager) extractTarball(src, dest string) error {
 	file, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open tarball %q: %w", src, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close tarball file")
+		}
+	}()
 
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("open gzip reader for %q: %w", src, err)
 	}
-	defer gzr.Close()
+	defer func() {
+		if closeErr := gzr.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close gzip reader")
+		}
+	}()
 
 	tr := tar.NewReader(gzr)
 
@@ -1088,7 +1350,7 @@ func (m *Manager) extractTarball(src, dest string) error {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("read tarball entry from %q: %w", src, err)
 		}
 
 		// Sanitize the path to prevent directory traversal attacks
@@ -1108,23 +1370,30 @@ func (m *Manager) extractTarball(src, dest string) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
+				return fmt.Errorf("create archive directory %q: %w", target, err)
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
+				return fmt.Errorf("create parent directory for archive file %q: %w", target, err)
 			}
 
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				return err
+				return fmt.Errorf("open archive target file %q: %w", target, err)
 			}
 
 			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
-				return err
+				if closeErr := out.Close(); closeErr != nil {
+					return errors.Join(
+						fmt.Errorf("write archive file %q: %w", target, err),
+						fmt.Errorf("close archive file %q after write failure: %w", target, closeErr),
+					)
+				}
+				return fmt.Errorf("write archive file %q: %w", target, err)
 			}
-			out.Close()
+			if closeErr := out.Close(); closeErr != nil {
+				return fmt.Errorf("close archive file %q: %w", target, closeErr)
+			}
 		}
 	}
 
@@ -1135,11 +1404,8 @@ func (m *Manager) extractTarball(src, dest string) error {
 func (m *Manager) createBackup() (string, error) {
 	timestamp := time.Now().Format("20060102-150405")
 
-	// Try to create backup in a writable location
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
+	// Try to create backup in a writable location.
+	dataDir := resolveUpdateDataDir()
 
 	backupDir := filepath.Join(dataDir, fmt.Sprintf("backup-%s", timestamp))
 
@@ -1334,11 +1600,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		} else {
 			// List of agent scripts to deploy
 			agentScripts := []string{
-				"install-docker-agent.sh",
 				"install-container-agent.sh",
-				"install-host-agent.ps1",
-				"uninstall-host-agent.sh",
-				"uninstall-host-agent.ps1",
 				"install-docker.sh",
 				"install.sh",
 				"install.ps1",
@@ -1373,7 +1635,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		if err := os.MkdirAll(destBinDir, 0755); err != nil {
 			log.Warn().Err(err).Msg("Failed to create bin directory")
 		} else {
-			// Copy agent binaries (pulse-agent-*, pulse-docker-agent-*, pulse-host-agent-*)
+			// Copy agent binaries (pulse-agent-* artifacts)
 			entries, err := os.ReadDir(binDir)
 			if err == nil {
 				agentBinariesDeployed := 0
@@ -1384,9 +1646,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 						continue
 					}
 					// Copy agent binaries
-					if strings.HasPrefix(name, "pulse-agent-") ||
-						strings.HasPrefix(name, "pulse-docker-agent") ||
-						strings.HasPrefix(name, "pulse-host-agent") {
+					if strings.HasPrefix(name, "pulse-agent-") {
 						srcPath := filepath.Join(binDir, name)
 						destPath := filepath.Join(destBinDir, name)
 						cmd = exec.Command("cp", "-a", srcPath, destPath)
@@ -1437,16 +1697,29 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	statusCopy := m.status
 	m.statusMu.Unlock()
 
-	// Send to progress channel (non-blocking) for WebSocket compatibility
-	select {
-	case m.progressChan <- statusCopy:
-	default:
+	m.lifecycleMu.RLock()
+	if m.closed {
+		m.lifecycleMu.RUnlock()
+		if delay := statusDelayForStage(status); delay > 0 {
+			time.Sleep(delay)
+		}
+		return
 	}
+	// Send to progress channel (non-blocking) for WebSocket compatibility
+	m.progressMu.RLock()
+	if !m.closed {
+		select {
+		case m.progressChan <- statusCopy:
+		default:
+		}
+	}
+	m.progressMu.RUnlock()
 
 	// Broadcast to SSE clients
 	if m.sseBroadcast != nil {
 		m.sseBroadcast.Broadcast(statusCopy)
 	}
+	m.lifecycleMu.RUnlock()
 
 	if delay := statusDelayForStage(status); delay > 0 {
 		time.Sleep(delay)
@@ -1455,12 +1728,22 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 
 // sseHeartbeatLoop sends periodic heartbeats to SSE clients
 func (m *Manager) sseHeartbeatLoop() {
+	defer m.heartbeatWg.Done()
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if m.sseBroadcast != nil {
-			m.sseBroadcast.SendHeartbeat()
+	for {
+		select {
+		case <-m.shutdownCh:
+			return
+		case <-ticker.C:
+			m.lifecycleMu.RLock()
+			broadcaster := m.sseBroadcast
+			m.lifecycleMu.RUnlock()
+			if broadcaster != nil {
+				broadcaster.SendHeartbeat()
+			}
 		}
 	}
 }
@@ -1513,15 +1796,14 @@ func configuredStageDelay() time.Duration {
 	return stageDelayValue
 }
 
+func resolveUpdateDataDir() string {
+	return config.ResolveRuntimeDataDir("")
+}
+
 // cleanupOldTempDirs removes old pulse-update-* temp directories from previous runs
 func (m *Manager) cleanupOldTempDirs() {
 	// Check multiple locations where temp dirs might exist
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
-
-	dirsToCheck := []string{"/tmp", dataDir, "."}
+	dirsToCheck := []string{"/tmp", resolveUpdateDataDir(), "."}
 
 	for _, dir := range dirsToCheck {
 		entries, err := os.ReadDir(dir)
@@ -1562,7 +1844,7 @@ func (m *Manager) copyFileSafe(src, dest string) error {
 	// Get file info and check if it's a symlink
 	info, err := os.Lstat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("lstat source file %q: %w", src, err)
 	}
 
 	// Skip symlinks for security
@@ -1574,20 +1856,28 @@ func (m *Manager) copyFileSafe(src, dest string) error {
 	// Open source file
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open source file %q: %w", src, err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		if closeErr := srcFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close source file after copy")
+		}
+	}()
 
 	// Create destination file with same permissions
 	destFile, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("open destination file %q: %w", dest, err)
 	}
-	defer destFile.Close()
+	defer func() {
+		if closeErr := destFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", dest).Msg("Failed to close destination file after copy")
+		}
+	}()
 
 	// Copy contents
 	if _, err := io.Copy(destFile, srcFile); err != nil {
-		return err
+		return fmt.Errorf("copy %q to %q: %w", src, dest, err)
 	}
 
 	return nil
@@ -1598,18 +1888,18 @@ func (m *Manager) copyDirSafe(src, dest string) error {
 	// Get source directory info
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat source directory %q: %w", src, err)
 	}
 
 	// Create destination directory
 	if err := os.MkdirAll(dest, srcInfo.Mode()); err != nil {
-		return err
+		return fmt.Errorf("create destination directory %q: %w", dest, err)
 	}
 
 	// Read source directory entries
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("read source directory %q: %w", src, err)
 	}
 
 	for _, entry := range entries {
@@ -1632,7 +1922,7 @@ func (m *Manager) copyDirSafe(src, dest string) error {
 		if entry.IsDir() {
 			// Recursively copy subdirectory
 			if err := m.copyDirSafe(srcPath, destPath); err != nil {
-				return err
+				return fmt.Errorf("copy subdirectory %q: %w", srcPath, err)
 			}
 		} else {
 			// Copy file

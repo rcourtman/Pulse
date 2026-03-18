@@ -18,9 +18,22 @@ func TestAdminEndpointsRequireAuthWhenOIDCEnabled(t *testing.T) {
 	cfg := &config.Config{
 		DataPath:   dataDir,
 		ConfigPath: dataDir,
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
+	}
+	ssoCfg := config.NewSSOConfig()
+	if err := ssoCfg.AddProvider(config.SSOProvider{
+		ID:      "test-oidc",
+		Name:    "Test OIDC",
+		Type:    config.SSOProviderTypeOIDC,
+		Enabled: true,
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL: "https://issuer.example.com",
+			ClientID:  "client-id",
 		},
+	}); err != nil {
+		t.Fatalf("failed to add SSO provider: %v", err)
+	}
+	if err := config.NewConfigPersistence(dataDir).SaveSSOConfig(ssoCfg); err != nil {
+		t.Fatalf("failed to persist SSO config: %v", err)
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")

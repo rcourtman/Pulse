@@ -12,11 +12,18 @@ import (
 	"time"
 )
 
+func setupTempPulseBin(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("PULSE_BIN_DIR", dir)
+	return dir
+}
+
 func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing.T) {
 	binDir := setupTempPulseBin(t)
 	filePath := filepath.Join(binDir, "pulse-agent-linux-amd64")
 
-	payload1 := []byte("agent-binary-v1")
+	payload1 := validTestUnifiedAgentBinary("checksum-v1")
 	if err := os.WriteFile(filePath, payload1, 0o755); err != nil {
 		t.Fatalf("failed to write test binary: %v", err)
 	}
@@ -38,7 +45,7 @@ func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing
 
 	// Ensure modtime changes for invalidation.
 	time.Sleep(10 * time.Millisecond)
-	payload2 := []byte("agent-binary-v2")
+	payload2 := validTestUnifiedAgentBinary("checksum-v2")
 	if err := os.WriteFile(filePath, payload2, 0o755); err != nil {
 		t.Fatalf("failed to rewrite test binary: %v", err)
 	}

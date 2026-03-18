@@ -2,9 +2,11 @@ package dockeragent
 
 import (
 	"context"
-	"github.com/rs/zerolog"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 func TestRegistryChecker_ResolveManifestList(t *testing.T) {
@@ -45,6 +47,21 @@ func TestRegistryChecker_ResolveManifestList(t *testing.T) {
 		result = checker.CheckImageUpdate(context.Background(), "image:tag", "sha256:current", "arm", "linux", "v7")
 		if result.LatestDigest != "sha256:armv7" {
 			t.Errorf("Expected sha256:armv7, got %s", result.LatestDigest)
+		}
+	})
+
+	t.Run("manifest list body too large", func(t *testing.T) {
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+					return newStringResponse(http.StatusOK, nil, strings.Repeat("x", maxRegistryManifestBodyBytes+1)), nil
+				}),
+			},
+		}
+
+		_, err := checker.resolveManifestList(context.Background(), "example.test", "repo", "latest", "amd64", "linux", "", "")
+		if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+			t.Fatalf("expected oversized manifest list error, got %v", err)
 		}
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -15,7 +16,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_read",
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to Proxmox host, LXC, or VM by name.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to host, system container, or VM by name.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -26,7 +27,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "Hostname to read from (Proxmox host, LXC name, or VM name)",
+						Description: "Hostname to read from (host, system container name, or VM name)",
 					},
 					"command": {
 						Type:        "string",
@@ -51,7 +52,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"container": {
 						Type:        "string",
-						Description: "For logs with source=docker: container name",
+						Description: "Container name. For logs with source=docker, or for exec/file/tail to run inside a Docker container on target_host.",
 					},
 					"unit": {
 						Type:        "string",
@@ -64,10 +65,6 @@ func (e *PulseToolExecutor) registerReadTools() {
 					"grep": {
 						Type:        "string",
 						Description: "For logs/tail: filter output by pattern",
-					},
-					"docker_container": {
-						Type:        "string",
-						Description: "Read from inside a Docker container (target_host is where Docker runs)",
 					},
 				},
 				Required: []string{"action", "target_host"},
@@ -105,13 +102,28 @@ func (e *PulseToolExecutor) executeRead(ctx context.Context, args map[string]int
 func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["docker_container"].(string)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
+	}
+
+	// High-confidence secret exfiltration blocks.
+	if blocked, reason := safety.CommandTouchesSensitivePath(command); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_COMMAND",
+			fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
+			map[string]interface{}{
+				"reason":        reason,
+				"recovery_hint": "Avoid reading credential files or process env via AI tools. Scope the request to non-sensitive logs/status output instead.",
+			},
+		)), nil
 	}
 
 	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
@@ -187,7 +199,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	if dockerContainer != "" {
 		// Validate container name
 		if !isValidContainerName(dockerContainer) {
-			return NewErrorResult(fmt.Errorf("invalid docker_container name")), nil
+			return NewErrorResult(fmt.Errorf("invalid container name")), nil
 		}
 		execCommand = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(command))
 	}
@@ -220,6 +232,10 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		output += result.Stderr
 	}
 
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
+	}
+
 	if result.ExitCode != 0 {
 		return NewTextResult(fmt.Sprintf("Command exited with code %d:\n%s", result.ExitCode, output)), nil
 	}
@@ -234,13 +250,16 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["docker_container"].(string)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
 	// Validate path is absolute
@@ -299,13 +318,16 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	targetHost, _ := args["target_host"].(string)
 	lines := intArg(args, "lines", 100)
 	grepPattern, _ := args["grep"].(string)
-	dockerContainer, _ := args["docker_container"].(string)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
 	// Validate path is absolute
@@ -328,16 +350,17 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	}
 
 	return e.executeReadExec(ctx, map[string]interface{}{
-		"action":           "exec",
-		"command":          command,
-		"target_host":      targetHost,
-		"docker_container": dockerContainer,
+		"action":      "exec",
+		"command":     command,
+		"target_host": targetHost,
+		"container":   dockerContainer,
 	})
 }
 
 // executeReadLogs reads logs from docker or journalctl
 func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	source, _ := args["source"].(string)
+	source = strings.ToLower(strings.TrimSpace(source))
 	targetHost, _ := args["target_host"].(string)
 	container, _ := args["container"].(string)
 	unit, _ := args["unit"].(string)
@@ -359,10 +382,32 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 
 	var command string
 
+	// If source is omitted, infer from provided identifiers:
+	// - container -> docker logs
+	// - otherwise -> journal logs
+	if source == "" {
+		if container != "" {
+			source = "docker"
+		} else {
+			source = "journal"
+		}
+	}
+
 	switch source {
 	case "docker":
 		if container == "" {
-			return NewErrorResult(fmt.Errorf("container is required for docker logs")), nil
+			// Graceful fallback: list active docker containers/status when no specific
+			// container was provided. This keeps read-only workflows moving instead of
+			// trapping the model in repeated argument errors.
+			command = "docker ps --format '{{.Names}}\t{{.Status}}' | head -20"
+			if grepPattern != "" {
+				command += fmt.Sprintf(" | grep -i %s", shellEscape(grepPattern))
+			}
+			return e.executeReadExec(ctx, map[string]interface{}{
+				"action":      "exec",
+				"command":     command,
+				"target_host": targetHost,
+			})
 		}
 		if !isValidContainerName(container) {
 			return NewErrorResult(fmt.Errorf("invalid container name")), nil
@@ -374,7 +419,11 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 
 	case "journal":
 		if unit == "" {
-			return NewErrorResult(fmt.Errorf("unit is required for journal logs (e.g. unit=\"pvestatd\"). To search across all journal entries, use action=\"exec\" with a journalctl command instead")), nil
+			command = fmt.Sprintf("journalctl -n %d --no-pager", lines)
+			if since != "" {
+				command = fmt.Sprintf("journalctl --since %s -n %d --no-pager", shellEscape(since), lines)
+			}
+			break
 		}
 		command = fmt.Sprintf("journalctl -u %s -n %d --no-pager", shellEscape(unit), lines)
 		if since != "" {
@@ -382,7 +431,10 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 		}
 
 	default:
-		return NewErrorResult(fmt.Errorf("source must be 'docker' or 'journal'")), nil
+		// Unknown source - prefer a safe fallback over hard failure to avoid
+		// repeated tool loops caused by minor argument mistakes.
+		log.Warn().Str("source", source).Msg("pulse_read logs: unknown source, using journal fallback")
+		command = fmt.Sprintf("journalctl -n %d --no-pager", lines)
 	}
 
 	// Add grep filter if provided

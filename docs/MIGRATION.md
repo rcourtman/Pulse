@@ -10,13 +10,13 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 ### ✅ DO: Use Export/Import
 
 #### 1. Export (Old Server)
-1.  Go to **Settings → System → Backups**.
+1.  Go to **Settings → System → Recovery**.
 2.  Click **Create Backup**.
 3.  Enter a strong passphrase and download the encrypted backup.
 
 #### 2. Import (New Server)
 1.  Install a fresh Pulse instance.
-2.  Go to **Settings → System → Backups**.
+2.  Go to **Settings → System → Recovery**.
 3.  Click **Restore Configuration** and upload your file.
 4.  Enter the passphrase.
 
@@ -30,12 +30,16 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 | System settings (`system.json`) | Update history/backup folders |
 | API token records | — |
 | OIDC config | — |
+| SSO / SAML config | — |
+| TrueNAS connections (`truenas.enc`) | — |
 | Guest metadata/notes | — |
+| — | Relay config (`relay.enc`) — re-enable in Settings |
 | — | Host metadata (notes/tags/AI command overrides) |
 | — | Docker metadata cache |
 | — | Agent profiles and assignments |
 | — | AI settings and findings (`ai.enc`, `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`) |
-| — | Pulse Pro license (`license.enc`) |
+| — | RBAC roles (`rbac_roles.json`) — re-create after import |
+| — | Relay/Pro/Pro+/Cloud license (`license.enc`) |
 | — | Server sessions (`sessions.json`) |
 | — | Update history (`update-history.jsonl`) |
 
@@ -59,12 +63,11 @@ Because local login credentials are stored in `.env` (not part of exports), you 
 1.  **Re-create Admin User**: If not using `.env` overrides, create your admin account on the new instance.
 2.  **Confirm API access**:
     *   If you created API tokens in the UI, those token records are included in the export and should continue working.
-    *   If you used `.env`-based `API_TOKENS`/`API_TOKEN` (legacy), reconfigure them on the new host or re-create tokens in the UI.
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
-    *   *Tip: Use **Settings → Agents → Installation commands** to generate updated install commands.*
-4.  **Pulse Pro**: Re-activate your license key after migration (license files are not included in exports).
+    *   *Tip: Use **Settings → Unified Agents → Installation commands** to generate updated install commands.*
+4.  **Relay/Pro/Pro+/Cloud**: Re-activate your license key after migration (license files are not included in exports).
 
 ## 🔒 Security
 

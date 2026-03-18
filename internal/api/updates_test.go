@@ -86,7 +86,7 @@ func TestHandleCheckUpdates_Success(t *testing.T) {
 	}
 
 	var info updates.UpdateInfo
-	json.NewDecoder(w.Body).Decode(&info)
+	_ = json.NewDecoder(w.Body).Decode(&info)
 	if !info.Available || info.LatestVersion != "v1.2.3" {
 		t.Errorf("Unexpected response: %+v", info)
 	}
@@ -107,6 +107,25 @@ func TestHandleCheckUpdates_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("Expected status 500, got %d", w.Code)
+	}
+}
+
+func TestHandleCheckUpdates_InvalidChannel(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		CheckForUpdatesFunc: func(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+			t.Fatalf("CheckForUpdatesWithChannel should not be called for invalid channels")
+			return nil, nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/updates/check?channel=beta", nil)
+
+	h.HandleCheckUpdates(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }
 
@@ -132,6 +151,117 @@ func TestHandleApplyUpdate_Success(t *testing.T) {
 	}
 
 	// Note: ApplyUpdate runs in background, so we just check it was accepted
+}
+
+func TestHandleApplyUpdate_AlreadyInProgress(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			return errors.New("update already in progress")
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl": "https://example.com/update.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("Expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+	if !strings.Contains(strings.ToLower(w.Body.String()), "already in progress") {
+		t.Fatalf("expected conflict message, got %q", w.Body.String())
+	}
+}
+
+func TestHandleApplyUpdate_InvalidRequestBody(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			t.Fatalf("ApplyUpdate should not be called for invalid request bodies")
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+
+	t.Run("rejects unknown fields", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"https://example.com/update.tar.gz","unexpected":"x"}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("rejects trailing json", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"https://example.com/update.tar.gz"} {"extra":true}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("rejects whitespace download url", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"   "}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+		if !strings.Contains(strings.ToLower(w.Body.String()), "download url is required") {
+			t.Fatalf("expected missing URL error, got %q", w.Body.String())
+		}
+	})
+}
+
+func TestHandleApplyUpdate_InvalidChannel(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			t.Fatalf("ApplyUpdate should not be called for invalid channels")
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl":"https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply?channel=beta", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestHandleApplyUpdate_StableRejectsPrereleaseTarget(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			return errors.New("stable channel cannot install prerelease builds")
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl":"https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply?channel=stable", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("Expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+	if !strings.Contains(strings.ToLower(w.Body.String()), "prerelease") {
+		t.Fatalf("expected prerelease conflict message, got %q", w.Body.String())
+	}
 }
 
 func TestHandleUpdateStatus_Fresh(t *testing.T) {
@@ -188,7 +318,7 @@ func TestHandleUpdateStatus_Cached(t *testing.T) {
 	}
 
 	var status updates.UpdateStatus
-	json.NewDecoder(w2.Body).Decode(&status)
+	_ = json.NewDecoder(w2.Body).Decode(&status)
 	if status.Status != "cached" {
 		t.Errorf("Expected cached status, got %s", status.Status)
 	}
@@ -239,16 +369,36 @@ func TestHandleUpdateStream(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateStream_StreamingNotSupported(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		AddSSEClientFunc: func(w http.ResponseWriter, clientID string) *updates.SSEClient {
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/updates/stream", nil)
+
+	h.HandleUpdateStream(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected status 500, got %d", w.Code)
+	}
+}
+
 func TestHandleListUpdateHistory(t *testing.T) {
 	tmp := t.TempDir()
 	history, _ := updates.NewUpdateHistory(tmp)
 
 	// Pre-populate history
-	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+	if _, err := history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
 		EventID:   "test-entry",
 		Status:    updates.StatusSuccess,
 		VersionTo: "v1.2.3",
-	})
+	}); err != nil {
+		t.Fatalf("Failed to create history entry: %v", err)
+	}
 
 	h := NewUpdateHandlers(&MockUpdateManager{}, history)
 	w := httptest.NewRecorder()
@@ -261,10 +411,32 @@ func TestHandleListUpdateHistory(t *testing.T) {
 	}
 
 	var entries []updates.UpdateHistoryEntry
-	json.NewDecoder(w.Body).Decode(&entries)
+	_ = json.NewDecoder(w.Body).Decode(&entries)
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
+}
+
+func TestHandleListUpdateHistory_ErrorPaths(t *testing.T) {
+	h := NewUpdateHandlers(&MockUpdateManager{}, nil)
+
+	t.Run("method not allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/history", nil)
+		h.HandleListUpdateHistory(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("history unavailable", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history", nil)
+		h.HandleListUpdateHistory(w, r)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("Expected status 503, got %d", w.Code)
+		}
+	})
 }
 
 func TestHandleGetUpdateHistoryEntry(t *testing.T) {
@@ -272,11 +444,13 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	history, _ := updates.NewUpdateHistory(tmp)
 
 	// Pre-populate history
-	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+	if _, err := history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
 		EventID:   "test-entry-1",
 		Status:    updates.StatusSuccess,
 		VersionTo: "v1.2.3",
-	})
+	}); err != nil {
+		t.Fatalf("Failed to create history entry: %v", err)
+	}
 
 	h := NewUpdateHandlers(&MockUpdateManager{}, history)
 	w := httptest.NewRecorder()
@@ -289,10 +463,56 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	}
 
 	var entry updates.UpdateHistoryEntry
-	json.NewDecoder(w.Body).Decode(&entry)
+	_ = json.NewDecoder(w.Body).Decode(&entry)
 	if entry.EventID != "test-entry-1" {
 		t.Errorf("Expected EventID test-entry-1, got %s", entry.EventID)
 	}
+}
+
+func TestHandleGetUpdateHistoryEntry_ErrorPaths(t *testing.T) {
+	tmp := t.TempDir()
+	history, err := updates.NewUpdateHistory(tmp)
+	if err != nil {
+		t.Fatalf("failed to create update history: %v", err)
+	}
+
+	h := NewUpdateHandlers(&MockUpdateManager{}, history)
+
+	t.Run("method not allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/history/entry?id=test-entry", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("missing id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("entry not found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry?id=does-not-exist", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("history unavailable", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry?id=test-entry", nil)
+		NewUpdateHandlers(&MockUpdateManager{}, nil).HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("Expected status 503, got %d", w.Code)
+		}
+	})
 }
 
 func TestDoCleanupRateLimits(t *testing.T) {
@@ -353,8 +573,77 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	}
 
 	var plan updates.UpdatePlan
-	json.NewDecoder(w.Body).Decode(&plan)
+	_ = json.NewDecoder(w.Body).Decode(&plan)
 	if len(plan.Instructions) != 1 {
 		t.Errorf("Expected 1 instruction, got %d", len(plan.Instructions))
+	}
+	if plan.Prerequisites == nil {
+		t.Fatal("expected prerequisites to normalize to an empty slice")
+	}
+}
+
+func TestHandleGetUpdatePlan_InvalidChannel(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	h := NewUpdateHandlers(nil, nil)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			t.Fatalf("PrepareUpdate should not be called for invalid channels")
+			return nil, nil
+		},
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v1.2.3&channel=beta", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestHandleGetUpdatePlan_PrepareError(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	h := NewUpdateHandlers(nil, nil)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			return nil, errors.New("prepare failed")
+		},
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v1.2.3", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected status 500, got %d", w.Code)
+	}
+}
+
+func TestHandleGetUpdatePlan_ManualFallback(t *testing.T) {
+	h := NewUpdateHandlers(nil, nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v6.0.0-rc.1", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var plan updates.UpdatePlan
+	if err := json.NewDecoder(w.Body).Decode(&plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+
+	if plan.CanAutoUpdate {
+		t.Fatalf("Expected manual fallback plan to disable auto updates")
+	}
+	if len(plan.Instructions) == 0 {
+		t.Fatalf("Expected manual fallback plan to include instructions")
+	}
+	if len(plan.Prerequisites) == 0 {
+		t.Fatalf("Expected manual fallback plan to include prerequisites")
 	}
 }

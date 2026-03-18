@@ -219,7 +219,7 @@ func (v *ProfileValidator) validateValue(def ConfigKeyDefinition, value interfac
 		if def.Pattern != "" {
 			re, err := regexp.Compile(def.Pattern)
 			if err != nil {
-				return fmt.Errorf("invalid pattern in definition: %v", err)
+				return fmt.Errorf("invalid pattern in definition: %w", err)
 			}
 			if !re.MatchString(s) {
 				return fmt.Errorf("value does not match pattern %s", def.Pattern)
@@ -277,8 +277,16 @@ func (v *ProfileValidator) validateValue(def ConfigKeyDefinition, value interfac
 		if !ok {
 			return fmt.Errorf("expected duration string, got %T", value)
 		}
-		if _, err := time.ParseDuration(s); err != nil {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return fmt.Errorf("duration cannot be empty")
+		}
+		dur, err := time.ParseDuration(s)
+		if err != nil {
 			return fmt.Errorf("invalid duration format: %v", err)
+		}
+		if dur <= 0 {
+			return fmt.Errorf("duration must be greater than 0")
 		}
 
 	case ConfigTypeEnum:

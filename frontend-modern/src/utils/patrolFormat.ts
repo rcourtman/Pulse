@@ -9,27 +9,19 @@ interface ModelInfo {
 
 interface PartialRunRecord {
   scope_resource_ids?: string[];
+  effective_scope_resource_ids?: string[];
   scope_resource_types?: string[];
   type?: string;
 }
 
-export function formatRelativeTime(dateStr: string | undefined): string {
-  if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(Math.abs(diffMs) / 60000);
-  const diffHours = Math.floor(Math.abs(diffMs) / 3600000);
-
-  if (diffMs < 0) {
-    if (diffMins < 60) return `in ${diffMins}m`;
-    return `in ${diffHours}h`;
-  } else {
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
+export function getCanonicalScopeResourceIds(
+  run?: PartialRunRecord | null,
+): string[] | undefined {
+  if (!run) return undefined;
+  if (run.effective_scope_resource_ids !== undefined) {
+    return run.effective_scope_resource_ids;
   }
+  return run.scope_resource_ids;
 }
 
 export function formatDurationMs(ms?: number): string {
@@ -66,7 +58,7 @@ export function formatTriggerReason(reason?: string): string {
 
 export function formatScope(run?: PartialRunRecord | null): string {
   if (!run) return '';
-  const idCount = run.scope_resource_ids?.length ?? 0;
+  const idCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
   if (idCount > 0) return `Scoped to ${idCount} resource${idCount === 1 ? '' : 's'}`;
   const types = run.scope_resource_types ?? [];
   if (types.length > 0) return `Scoped to ${types.join(', ')}`;
@@ -76,7 +68,8 @@ export function formatScope(run?: PartialRunRecord | null): string {
 
 export function sanitizeAnalysis(text: string | undefined): string {
   if (!text) return '';
-  return text.replace(/<｜DSML｜[^>]*>[\s\S]*?<\/｜DSML｜[^>]*>/g, '')
+  return text
+    .replace(/<｜DSML｜[^>]*>[\s\S]*?<\/｜DSML｜[^>]*>/g, '')
     .replace(/<｜DSML｜[^>]*>/g, '')
     .trim();
 }

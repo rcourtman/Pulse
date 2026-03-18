@@ -91,7 +91,7 @@ func TestSignalHelpersAndFindingsFromSignals(t *testing.T) {
 	}
 
 	ps := NewPatrolService(nil, nil)
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	signals := []DetectedSignal{
 		{

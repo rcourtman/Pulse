@@ -1491,39 +1491,7 @@ func TestGetGuestThresholds(t *testing.T) {
 		}
 	})
 
-	t.Run("applies legacy CPU threshold", func(t *testing.T) {
-		legacyThreshold := float64(85)
-		m := &Manager{
-			config: AlertConfig{
-				GuestDefaults: ThresholdConfig{},
-				Overrides: map[string]ThresholdConfig{
-					"pve1-100": {
-						CPULegacy: &legacyThreshold,
-					},
-				},
-				CustomRules: []CustomAlertRule{},
-			},
-		}
-
-		vm := models.VM{
-			Name:     "test-vm",
-			Node:     "pve1",
-			Instance: "pve1",
-			VMID:     100,
-		}
-
-		result := m.getGuestThresholds(vm, "pve1-100")
-
-		if result.CPU == nil {
-			t.Fatal("CPU threshold should not be nil")
-		}
-		// Legacy threshold becomes trigger with calculated clear
-		if result.CPU.Trigger != 85 {
-			t.Errorf("expected CPU trigger 85 from legacy threshold, got %v", result.CPU.Trigger)
-		}
-	})
-
-	t.Run("legacy ID migration for clustered VM", func(t *testing.T) {
+	t.Run("legacy ID override is ignored for clustered VM", func(t *testing.T) {
 		m := &Manager{
 			config: AlertConfig{
 				GuestDefaults: ThresholdConfig{},
@@ -1544,22 +1512,15 @@ func TestGetGuestThresholds(t *testing.T) {
 			VMID:     100,
 		}
 
-		// Query with new format
 		result := m.getGuestThresholds(vm, "pve1-100")
 
-		if result.CPU == nil {
-			t.Fatal("CPU threshold should not be nil after legacy migration")
-		}
-		if result.CPU.Trigger != 60 {
-			t.Errorf("expected CPU trigger 60 from migrated legacy override, got %v", result.CPU.Trigger)
+		if result.CPU != nil {
+			t.Fatalf("expected legacy ID override to be ignored, got %+v", result.CPU)
 		}
 
-		// Verify the override was migrated to new ID
-		if _, exists := m.config.Overrides["pve1-100"]; !exists {
-			t.Error("override should be migrated to new ID format")
-		}
-		if _, exists := m.config.Overrides["pve1-node1-100"]; exists {
-			t.Error("old legacy override should be removed after migration")
+		// Verify no migration side-effect occurs.
+		if _, exists := m.config.Overrides["pve1-100"]; exists {
+			t.Error("override should not be migrated into new ID format")
 		}
 	})
 
@@ -1766,63 +1727,6 @@ func TestGetGuestThresholds_AllFields(t *testing.T) {
 	}
 }
 
-func TestGetGuestThresholds_LegacyFields(t *testing.T) {
-	// t.Parallel()
-	m := NewManager()
-
-	legacyValue := 95.0
-
-	ruleLegacy := CustomAlertRule{
-		ID:       "rule-legacy",
-		Name:     "Legacy Fields Rule",
-		Enabled:  true,
-		Priority: 200,
-		FilterConditions: FilterStack{
-			LogicalOperator: "AND",
-			Filters: []FilterCondition{
-				{Type: "text", Field: "name", Value: "test-guest"},
-			},
-		},
-		Thresholds: ThresholdConfig{
-			CPULegacy:        &legacyValue,
-			MemoryLegacy:     &legacyValue,
-			DiskLegacy:       &legacyValue,
-			DiskReadLegacy:   &legacyValue,
-			DiskWriteLegacy:  &legacyValue,
-			NetworkInLegacy:  &legacyValue,
-			NetworkOutLegacy: &legacyValue,
-		},
-	}
-
-	m.config.CustomRules = []CustomAlertRule{ruleLegacy}
-
-	guest := models.VM{ID: "guest-1", Name: "test-guest"}
-
-	thresholds := m.getGuestThresholds(guest, "guest-1")
-
-	if thresholds.CPU == nil || thresholds.CPU.Trigger != legacyValue {
-		t.Errorf("Legacy CPU threshold not applied")
-	}
-	if thresholds.Memory == nil || thresholds.Memory.Trigger != legacyValue {
-		t.Errorf("Legacy Memory threshold not applied")
-	}
-	if thresholds.Disk == nil || thresholds.Disk.Trigger != legacyValue {
-		t.Errorf("Legacy Disk threshold not applied")
-	}
-	if thresholds.DiskRead == nil || thresholds.DiskRead.Trigger != legacyValue {
-		t.Errorf("Legacy DiskRead threshold not applied")
-	}
-	if thresholds.DiskWrite == nil || thresholds.DiskWrite.Trigger != legacyValue {
-		t.Errorf("Legacy DiskWrite threshold not applied")
-	}
-	if thresholds.NetworkIn == nil || thresholds.NetworkIn.Trigger != legacyValue {
-		t.Errorf("Legacy NetworkIn threshold not applied")
-	}
-	if thresholds.NetworkOut == nil || thresholds.NetworkOut.Trigger != legacyValue {
-		t.Errorf("Legacy NetworkOut threshold not applied")
-	}
-}
-
 func TestGetGuestThresholds_Override(t *testing.T) {
 	// t.Parallel()
 	m := NewManager()
@@ -1863,37 +1767,11 @@ func TestGetGuestThresholds_Override(t *testing.T) {
 	}
 }
 
-func TestGetGuestThresholds_OverrideLegacy(t *testing.T) {
-	// t.Parallel()
-	m := NewManager()
-
-	legacyValue := 77.0
-
-	m.config.Overrides = map[string]ThresholdConfig{
-		"guest-1": {
-			CPULegacy:        &legacyValue,
-			MemoryLegacy:     &legacyValue,
-			DiskLegacy:       &legacyValue,
-			DiskReadLegacy:   &legacyValue,
-			DiskWriteLegacy:  &legacyValue,
-			NetworkInLegacy:  &legacyValue,
-			NetworkOutLegacy: &legacyValue,
-		},
-	}
-
-	guest := models.VM{ID: "guest-1", Name: "test-guest"}
-	thresholds := m.getGuestThresholds(guest, "guest-1")
-
-	if thresholds.CPU == nil || thresholds.CPU.Trigger != legacyValue {
-		t.Error("Override Legacy CPU not applied")
-	}
-}
-
 func TestGetGuestThresholds_InvalidGuest(t *testing.T) {
 	// t.Parallel()
 	m := NewManager()
 
-	// Should return defaults (and hit default case in tryLegacyOverrideMigration)
+	// Should return defaults for non-guest inputs.
 	thresholds := m.getGuestThresholds("invalid-guest-struct", "guest-1")
 	if thresholds.CPU == nil {
 		// Just check it returns something valid (defaults)

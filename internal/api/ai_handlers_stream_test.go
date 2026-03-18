@@ -49,16 +49,16 @@ func newTestAISettingsHandlerWithService(t *testing.T) *AISettingsHandler {
 	persistence := config.NewConfigPersistence(tmp)
 
 	handler := NewAISettingsHandler(nil, nil, nil)
-	handler.legacyConfig = cfg
-	handler.legacyPersistence = persistence
-	handler.legacyAIService = ai.NewService(persistence, nil)
+	handler.defaultConfig = cfg
+	handler.defaultPersistence = persistence
+	handler.defaultAIService = ai.NewService(persistence, nil)
 	return handler
 }
 
 func TestHandleExecuteStream_LicenseRequired(t *testing.T) {
 	withEnv(t, "PULSE_MOCK_MODE", "true", func() {
 		handler := newTestAISettingsHandlerWithService(t)
-		handler.legacyAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+		handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
 		body := `{"prompt":"hi","use_case":"autofix"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -104,12 +104,25 @@ func TestHandleExecuteStream_Success(t *testing.T) {
 		if !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") {
 			t.Fatalf("expected SSE content type")
 		}
+		if !strings.Contains(rec.Body.String(), `"tool_calls":[]`) {
+			t.Fatalf("expected stream completion event to retain tool_calls array, got %s", rec.Body.String())
+		}
 	})
+}
+
+func TestAIExecuteStreamCompleteEvent_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(emptyAIExecuteStreamCompleteEvent())
+	if err != nil {
+		t.Fatalf("marshal empty AI stream completion event: %v", err)
+	}
+	if !strings.Contains(string(payload), `"tool_calls":[]`) {
+		t.Fatalf("expected empty AI stream completion event to retain tool_calls array, got %s", payload)
+	}
 }
 
 func TestHandleExportGuestKnowledge(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
-	if err := handler.legacyAIService.SaveGuestNote("guest-1", "VM 1", "vm", "ops", "Note", "Content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("guest-1", "VM 1", "vm", "ops", "Note", "Content"); err != nil {
 		t.Fatalf("save note error: %v", err)
 	}
 
@@ -142,7 +155,7 @@ func TestHandleExportGuestKnowledge(t *testing.T) {
 
 func TestHandleImportGuestKnowledge(t *testing.T) {
 	handler := newTestAISettingsHandlerWithService(t)
-	if err := handler.legacyAIService.SaveGuestNote("guest-1", "VM 1", "vm", "ops", "Old", "Old content"); err != nil {
+	if err := handler.defaultAIService.SaveGuestNote("guest-1", "VM 1", "vm", "ops", "Old", "Old content"); err != nil {
 		t.Fatalf("save note error: %v", err)
 	}
 
@@ -196,7 +209,7 @@ func TestHandleImportGuestKnowledge(t *testing.T) {
 		t.Fatalf("expected import count")
 	}
 
-	knowledge, err := handler.legacyAIService.GetGuestKnowledge("guest-1")
+	knowledge, err := handler.defaultAIService.GetGuestKnowledge("guest-1")
 	if err != nil {
 		t.Fatalf("get knowledge error: %v", err)
 	}

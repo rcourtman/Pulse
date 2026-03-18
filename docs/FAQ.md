@@ -9,7 +9,7 @@ If you run Proxmox VE, use the official LXC installer (recommended):
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
 
 If you prefer Docker:
 
@@ -20,35 +20,12 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, systemd).
 
 ### How do I add a node?
-Go to **Settings → Proxmox**.
+Go to **Settings → Unified Agents**.
 
 - **Recommended (Agent setup)**: select **Agent Install** and run the generated install command on the Proxmox host.
-- **Manual**: use **Username & Password**, or select the **Manual** tab and enter API token credentials.
+- **Manual/API-only**: open **Advanced** in the add-node modal and use **API Only** or **Manual**.
 
-If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then return to **Settings → Proxmox** to review discovered servers.
-
-### How do I access the LXC console to run commands?
-If you installed Pulse using the LXC installer, the container is created *without a root password*.  The LXC container uses Proxmox host-level authentication via **pct enter** rather than traditional password login. This is the recommended approach for Proxmox-managed containers.
-
-To access the console and run commands (like `update` or `journalctl -u pulse` or `pulse bootstrap-token`), use the Proxmox host shell:
-
-**From Proxmox Host Shell** (SSH into your Proxmox host first):
-```bash
-pct enter <VMID>  # e.g., pct enter 100
-```
-
-This gives you direct root access without requiring a password.
-
-**Find your container ID**:
-```bash
-pct list | grep -i pulse
-```
-
-**Note**: The Proxmox web console will show a `login:` prompt, but you cannot log in without first setting a password. To set a password for web console or SSH access:
-```bash
-pct enter <VMID>
-passwd  # Set root password
-```
+If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
 
 ### How do I change the port?
 - **Systemd**: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart.
@@ -61,11 +38,11 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 
 ## 🔍 Monitoring & Metrics
 
-### What is Pulse Pro, and what does it actually do?
-Pulse Pro unlocks **Auto-Fix and advanced AI analysis**. Pulse Patrol is available to everyone with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+### What do Relay, Pro, and Cloud unlock?
+Relay adds remote access, mobile access, push notifications, and a little more monitored-system headroom. Pro, Pro+, and Cloud unlock **Auto-Fix and advanced AI analysis**. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes AI cluster analysis, and correlated container failures that simple threshold alerts miss.
-See [AI Patrol](AI.md), [Pulse Pro technical overview](PULSE_PRO.md), and <https://pulserelay.pro>.
+See [Pulse AI](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.
 
 ### Why do VMs show "-" for disk usage?
 Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
@@ -73,6 +50,18 @@ See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
 
 ### Does Pulse monitor Ceph?
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
+
+### Does Pulse monitor TrueNAS?
+Yes! Pulse v6 includes first-class TrueNAS SCALE/CORE integration. Add your TrueNAS server in **Settings → TrueNAS** with the URL and API key. Pulse monitors pools, datasets, disks, ZFS snapshots, replication tasks, and alerts. TrueNAS resources appear in the unified Infrastructure, Storage, and Recovery views.
+
+### Where did my pages go? (Unified Navigation)
+Pulse v6 organises the UI by **task** instead of **platform**:
+- **Infrastructure** → all hosts (Proxmox, Docker, K8s, TrueNAS)
+- **Workloads** → VMs, LXCs, containers, pods
+- **Storage** → all storage pools
+- **Recovery** → backups, snapshots, replication
+
+Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the full mapping.
 
 ### Can I disable alerts for specific metrics?
 Yes. Go to **Alerts → Thresholds** and set any value to `-1` to disable it. You can do this globally or per-resource (VM/Node).
@@ -109,7 +98,7 @@ sudo pulse bootstrap-token
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#https--tls).
 
 ### Can I use Single Sign-On (SSO)?
-Yes. Pulse supports OIDC in **Settings → Security → Single Sign-On** and Proxy Auth (Authentik, Authelia). See [Proxy Auth Guide](PROXY_AUTH.md) and [OIDC](OIDC.md).
+Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → SSO Providers**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
 
 ---
 
@@ -117,7 +106,7 @@ Yes. Pulse supports OIDC in **Settings → Security → Single Sign-On** and Pro
 
 ### No data showing?
 - Check Proxmox API is reachable (port 8006).
-- Verify credentials in **Settings → Proxmox**.
+- Verify credentials in **Settings → Infrastructure**.
 - Check logs: `journalctl -u pulse -f` or `docker logs -f pulse`.
 
 ### Connection refused?

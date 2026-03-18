@@ -16,7 +16,7 @@ import (
 func newReleaseServer(t *testing.T, releases []ReleaseInfo, hitCount *int32) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/rcourtman/Pulse/releases" {
+		if r.URL.Path != updateReleaseAPIPath() {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -26,6 +26,32 @@ func newReleaseServer(t *testing.T, releases []ReleaseInfo, hitCount *int32) *ht
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(releases)
 	}))
+}
+
+func TestCheckForUpdatesWithChannel_UsesConfiguredRepoPath(t *testing.T) {
+	var hits int32
+	releases := []ReleaseInfo{
+		{
+			TagName:     "v99.0.0",
+			Name:        "v99.0.0",
+			Prerelease:  false,
+			PublishedAt: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		},
+	}
+
+	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
+	server := newReleaseServer(t, releases, &hits)
+	defer server.Close()
+
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	if _, err := manager.CheckForUpdatesWithChannel(context.Background(), ""); err != nil {
+		t.Fatalf("CheckForUpdatesWithChannel returned error: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("expected 1 request, got %d", got)
+	}
 }
 
 func TestCheckForUpdatesWithChannel_SourceBuild(t *testing.T) {

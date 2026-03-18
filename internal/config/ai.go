@@ -19,23 +19,20 @@ const (
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Provider       string `json:"provider"`                  // DEPRECATED: legacy single provider field, kept for migration
-	APIKey         string `json:"api_key"`                   // DEPRECATED: legacy single API key, kept for migration
 	Model          string `json:"model"`                     // Currently selected default model (format: "provider:model-name")
 	ChatModel      string `json:"chat_model,omitempty"`      // Model for interactive chat (defaults to Model)
 	PatrolModel    string `json:"patrol_model,omitempty"`    // Model for background patrol (defaults to Model, can be cheaper)
 	DiscoveryModel string `json:"discovery_model,omitempty"` // Model for infrastructure discovery (defaults to cheapest available, e.g., haiku)
-	BaseURL        string `json:"base_url"`                  // DEPRECATED: legacy base URL, kept for migration
-	AutonomousMode bool   `json:"autonomous_mode"`           // when true, AI executes commands without approval
 	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
-	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
-	OpenAIAPIKey    string `json:"openai_api_key,omitempty"`    // OpenAI API key
-	DeepSeekAPIKey  string `json:"deepseek_api_key,omitempty"`  // DeepSeek API key
-	GeminiAPIKey    string `json:"gemini_api_key,omitempty"`    // Google Gemini API key
-	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
-	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
+	AnthropicAPIKey  string `json:"anthropic_api_key,omitempty"`  // Anthropic API key
+	OpenAIAPIKey     string `json:"openai_api_key,omitempty"`     // OpenAI API key
+	OpenRouterAPIKey string `json:"openrouter_api_key,omitempty"` // OpenRouter API key
+	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
+	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
+	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
+	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
@@ -46,7 +43,6 @@ type AIConfig struct {
 	// Patrol settings for background AI monitoring
 	PatrolEnabled          bool   `json:"patrol_enabled"`                     // Enable background AI health patrol
 	PatrolIntervalMinutes  int    `json:"patrol_interval_minutes"`            // How often to run quick patrols (default: 360 = 6 hours)
-	PatrolSchedulePreset   string `json:"patrol_schedule_preset"`             // User-friendly preset: "15min", "1hr", "6hr", "12hr", "daily", "disabled"
 	PatrolAnalyzeNodes     bool   `json:"patrol_analyze_nodes"`               // Include Proxmox nodes in patrol
 	PatrolAnalyzeGuests    bool   `json:"patrol_analyze_guests"`              // Include VMs/containers in patrol
 	PatrolAnalyzeDocker    bool   `json:"patrol_analyze_docker"`              // Include Docker hosts in patrol
@@ -57,6 +53,9 @@ type AIConfig struct {
 
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
+
+	// Event-triggered patrols - run extra patrols when alerts fire or anomalies are detected
+	PatrolEventTriggersEnabled bool `json:"patrol_event_triggers_enabled"` // Enable event-driven patrol triggers (alerts, anomalies)
 
 	// Request timeout - how long to wait for AI responses (default: 300s / 5 min)
 	// Increase this for slow hardware running local models (e.g., Ollama on low-power devices)
@@ -84,11 +83,13 @@ type AIConfig struct {
 
 // AIProvider constants
 const (
-	AIProviderAnthropic = "anthropic"
-	AIProviderOpenAI    = "openai"
-	AIProviderOllama    = "ollama"
-	AIProviderDeepSeek  = "deepseek"
-	AIProviderGemini    = "gemini"
+	AIProviderAnthropic  = "anthropic"
+	AIProviderOpenAI     = "openai"
+	AIProviderOpenRouter = "openrouter"
+	AIProviderOllama     = "ollama"
+	AIProviderDeepSeek   = "deepseek"
+	AIProviderGemini     = "gemini"
+	AIProviderQuickstart = "quickstart" // Pulse-hosted proxy for free quickstart credits
 )
 
 // AI Control Level constants
@@ -124,34 +125,36 @@ const (
 
 // Default models per provider
 const (
-	DefaultAIModelAnthropic = "claude-haiku-4-5"
-	DefaultAIModelOpenAI    = "gpt-4o"
-	DefaultAIModelOllama    = "llama3"
-	DefaultAIModelDeepSeek  = "deepseek-chat"    // V3.2 with tool-use support
-	DefaultAIModelGemini    = "gemini-2.5-flash" // Latest stable Gemini model
-	DefaultOllamaBaseURL    = "http://localhost:11434"
-	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
-	DefaultGeminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
+	DefaultAIModelAnthropic  = "claude-haiku-4-5"
+	DefaultAIModelOpenAI     = "gpt-4o"
+	DefaultAIModelOpenRouter = "openai/gpt-4o-mini"
+	DefaultAIModelOllama     = "llama3"
+	DefaultAIModelDeepSeek   = "deepseek-chat"    // V3.2 with tool-use support
+	DefaultAIModelGemini     = "gemini-2.5-flash" // Latest stable Gemini model
+	DefaultOllamaBaseURL     = "http://localhost:11434"
+	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
+	DefaultDeepSeekBaseURL   = "https://api.deepseek.com/chat/completions"
+	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
 )
 
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
 		Enabled:    false,
-		Provider:   AIProviderAnthropic,
 		Model:      DefaultAIModelAnthropic,
 		AuthMethod: AuthMethodAPIKey,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
 		PatrolEnabled:         true,
 		PatrolIntervalMinutes: 360, // 6 hours - balance between coverage and token efficiency
-		PatrolSchedulePreset:  "6hr",
 		PatrolAnalyzeNodes:    true,
 		PatrolAnalyzeGuests:   true,
 		PatrolAnalyzeDocker:   true,
 		PatrolAnalyzeStorage:  true,
 		// Alert-triggered analysis is highly token-efficient - enabled by default
 		AlertTriggeredAnalysis: true,
+		// Event-triggered patrols enabled by default (alerts, anomalies trigger extra patrols)
+		PatrolEventTriggersEnabled: true,
 	}
 }
 
@@ -162,27 +165,13 @@ func (c *AIConfig) IsConfigured() bool {
 		return false
 	}
 
-	// Check multi-provider credentials first (new format)
 	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
-		c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
+		c.HasProvider(AIProviderOpenRouter) || c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
 		c.HasProvider(AIProviderGemini) {
 		return true
 	}
 
-	// Fall back to legacy single-provider check for backward compatibility
-	switch c.Provider {
-	case AIProviderAnthropic:
-		if c.AuthMethod == AuthMethodOAuth {
-			return c.OAuthAccessToken != ""
-		}
-		return c.APIKey != ""
-	case AIProviderOpenAI, AIProviderDeepSeek:
-		return c.APIKey != ""
-	case AIProviderOllama:
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 // HasProvider returns true if the specified provider has credentials configured
@@ -196,6 +185,8 @@ func (c *AIConfig) HasProvider(provider string) bool {
 		return c.AnthropicAPIKey != ""
 	case AIProviderOpenAI:
 		return c.OpenAIAPIKey != ""
+	case AIProviderOpenRouter:
+		return c.OpenRouterAPIKey != ""
 	case AIProviderDeepSeek:
 		return c.DeepSeekAPIKey != ""
 	case AIProviderGemini:
@@ -217,6 +208,9 @@ func (c *AIConfig) GetConfiguredProviders() []string {
 	if c.HasProvider(AIProviderOpenAI) {
 		providers = append(providers, AIProviderOpenAI)
 	}
+	if c.HasProvider(AIProviderOpenRouter) {
+		providers = append(providers, AIProviderOpenRouter)
+	}
 	if c.HasProvider(AIProviderDeepSeek) {
 		providers = append(providers, AIProviderDeepSeek)
 	}
@@ -236,30 +230,21 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 		if c.AnthropicAPIKey != "" {
 			return c.AnthropicAPIKey
 		}
-		// Fall back to legacy API key if provider matches
-		if c.Provider == AIProviderAnthropic {
-			return c.APIKey
-		}
 	case AIProviderOpenAI:
 		if c.OpenAIAPIKey != "" {
 			return c.OpenAIAPIKey
 		}
-		if c.Provider == AIProviderOpenAI {
-			return c.APIKey
+	case AIProviderOpenRouter:
+		if c.OpenRouterAPIKey != "" {
+			return c.OpenRouterAPIKey
 		}
 	case AIProviderDeepSeek:
 		if c.DeepSeekAPIKey != "" {
 			return c.DeepSeekAPIKey
 		}
-		if c.Provider == AIProviderDeepSeek {
-			return c.APIKey
-		}
 	case AIProviderGemini:
 		if c.GeminiAPIKey != "" {
 			return c.GeminiAPIKey
-		}
-		if c.Provider == AIProviderGemini {
-			return c.APIKey
 		}
 	}
 	return ""
@@ -272,16 +257,14 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 		if c.OllamaBaseURL != "" {
 			return c.OllamaBaseURL
 		}
-		// Fall back to legacy BaseURL if provider matches
-		if c.Provider == AIProviderOllama && c.BaseURL != "" {
-			return c.BaseURL
-		}
 		return DefaultOllamaBaseURL
 	case AIProviderOpenAI:
 		if c.OpenAIBaseURL != "" {
 			return c.OpenAIBaseURL
 		}
 		return "" // Uses default OpenAI URL
+	case AIProviderOpenRouter:
+		return DefaultOpenRouterBaseURL
 	case AIProviderDeepSeek:
 		return DefaultDeepSeekBaseURL
 	case AIProviderGemini:
@@ -299,7 +282,7 @@ func (c *AIConfig) IsUsingOAuth() bool {
 // Returns the provider and model name. If no provider prefix, attempts to detect.
 func ParseModelString(model string) (provider, modelName string) {
 	// Check for explicit provider prefix
-	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama} {
+	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama, AIProviderQuickstart} {
 		prefix := p + ":"
 		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
 			return p, model[len(prefix):]
@@ -307,14 +290,6 @@ func ParseModelString(model string) (provider, modelName string) {
 	}
 
 	// No prefix - try to detect from model name patterns
-	//
-	// Vendor-prefixed names containing "/" (e.g. "google/gemini-*",
-	// "meta-llama/llama-*") are OpenRouter model IDs routed through the
-	// OpenAI-compatible provider.
-	if strings.Contains(model, "/") {
-		return AIProviderOpenAI, model
-	}
-
 	switch {
 	case len(model) >= 6 && model[:6] == "claude":
 		return AIProviderAnthropic, model
@@ -324,6 +299,11 @@ func ParseModelString(model string) (provider, modelName string) {
 		return AIProviderDeepSeek, model
 	case len(model) >= 6 && model[:6] == "gemini":
 		return AIProviderGemini, model
+	case strings.HasPrefix(model, "openai/"), strings.HasPrefix(model, "anthropic/"), strings.HasPrefix(model, "google/"),
+		strings.HasPrefix(model, "deepseek/"), strings.HasPrefix(model, "meta-llama/"), strings.HasPrefix(model, "mistralai/"),
+		strings.HasPrefix(model, "x-ai/"), strings.HasPrefix(model, "xai/"), strings.HasPrefix(model, "cohere/"),
+		strings.HasPrefix(model, "qwen/"):
+		return AIProviderOpenRouter, model
 	default:
 		// Assume Ollama for unrecognized models (local models have varied names)
 		return AIProviderOllama, model
@@ -343,6 +323,8 @@ func DefaultModelForProvider(provider string) string {
 		return FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic)
 	case AIProviderOpenAI:
 		return FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI)
+	case AIProviderOpenRouter:
+		return FormatModelString(AIProviderOpenRouter, DefaultAIModelOpenRouter)
 	case AIProviderDeepSeek:
 		return FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek)
 	case AIProviderGemini:
@@ -352,23 +334,6 @@ func DefaultModelForProvider(provider string) string {
 	default:
 		return ""
 	}
-}
-
-// GetBaseURL returns the base URL, using defaults where appropriate
-// DEPRECATED: Use GetBaseURLForProvider instead
-func (c *AIConfig) GetBaseURL() string {
-	if c.BaseURL != "" {
-		return c.BaseURL
-	}
-	switch c.Provider {
-	case AIProviderOllama:
-		return DefaultOllamaBaseURL
-	case AIProviderDeepSeek:
-		return DefaultDeepSeekBaseURL
-	case AIProviderGemini:
-		return DefaultGeminiBaseURL
-	}
-	return ""
 }
 
 // GetModel returns the model, using defaults where appropriate
@@ -386,6 +351,8 @@ func (c *AIConfig) GetModel() string {
 			return DefaultAIModelAnthropic
 		case AIProviderOpenAI:
 			return DefaultAIModelOpenAI
+		case AIProviderOpenRouter:
+			return DefaultAIModelOpenRouter
 		case AIProviderOllama:
 			return DefaultAIModelOllama
 		case AIProviderDeepSeek:
@@ -395,21 +362,7 @@ func (c *AIConfig) GetModel() string {
 		}
 	}
 
-	// Fall back to legacy Provider field for backwards compatibility
-	switch c.Provider {
-	case AIProviderAnthropic:
-		return DefaultAIModelAnthropic
-	case AIProviderOpenAI:
-		return DefaultAIModelOpenAI
-	case AIProviderOllama:
-		return DefaultAIModelOllama
-	case AIProviderDeepSeek:
-		return DefaultAIModelDeepSeek
-	case AIProviderGemini:
-		return DefaultAIModelGemini
-	default:
-		return ""
-	}
+	return ""
 }
 
 // GetChatModel returns the model for interactive chat conversations
@@ -457,62 +410,19 @@ func (c *AIConfig) ClearOAuthTokens() {
 	c.OAuthExpiresAt = time.Time{}
 }
 
-// ClearAPIKey clears the API key (used when switching to OAuth auth)
+// ClearAPIKey clears the Anthropic API key (used when switching to OAuth auth)
 func (c *AIConfig) ClearAPIKey() {
-	c.APIKey = ""
+	c.AnthropicAPIKey = ""
 }
 
-// GetPatrolInterval returns the patrol interval as a duration
-// Uses the preset if set, otherwise falls back to custom minutes
+// GetPatrolInterval returns the patrol interval as a duration.
 func (c *AIConfig) GetPatrolInterval() time.Duration {
-	// If preset is set, use it
-	if c.PatrolSchedulePreset != "" {
-		switch c.PatrolSchedulePreset {
-		case "15min":
-			return 15 * time.Minute
-		case "1hr":
-			return 1 * time.Hour
-		case "6hr":
-			return 6 * time.Hour
-		case "12hr":
-			return 12 * time.Hour
-		case "daily":
-			return 24 * time.Hour
-		case "disabled":
-			return 0 // Signal that scheduled patrol is disabled
-		}
-	}
-
-	// Fall back to custom minutes if set
-	// BUT: If PatrolIntervalMinutes is the old default (15), migrate to new default (360 = 6hr)
-	// This provides better token efficiency for existing installations
+	// Use configured custom minutes when set.
 	if c.PatrolIntervalMinutes > 0 {
-		// Migrate old 15-minute default to new 6-hour default
-
 		return time.Duration(c.PatrolIntervalMinutes) * time.Minute
 	}
 
 	return 6 * time.Hour // default to 6 hours
-}
-
-// PresetToMinutes converts a patrol schedule preset to minutes
-func PresetToMinutes(preset string) int {
-	switch preset {
-	case "15min":
-		return 15
-	case "1hr":
-		return 60
-	case "6hr":
-		return 360
-	case "12hr":
-		return 720
-	case "daily":
-		return 1440
-	case "disabled":
-		return 0
-	default:
-		return 360 // default 6hr
-	}
 }
 
 // IsPatrolEnabled returns true if patrol should run
@@ -521,10 +431,6 @@ func PresetToMinutes(preset string) int {
 func (c *AIConfig) IsPatrolEnabled() bool {
 	// If AI is disabled globally, patrol is disabled
 	if !c.Enabled {
-		return false
-	}
-	// If preset is "disabled", patrol is disabled
-	if c.PatrolSchedulePreset == "disabled" {
 		return false
 	}
 	return c.PatrolEnabled
@@ -539,6 +445,14 @@ func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
 	return c.AlertTriggeredAnalysis
 }
 
+// IsPatrolEventTriggersEnabled returns true if event-driven patrol triggers (alerts, anomalies) are enabled
+func (c *AIConfig) IsPatrolEventTriggersEnabled() bool {
+	if !c.Enabled {
+		return false
+	}
+	return c.PatrolEventTriggersEnabled
+}
+
 // GetRequestTimeout returns the timeout duration for AI requests
 // Default is 5 minutes (300 seconds) if not configured
 func (c *AIConfig) GetRequestTimeout() time.Duration {
@@ -549,21 +463,13 @@ func (c *AIConfig) GetRequestTimeout() time.Duration {
 }
 
 // GetControlLevel returns the AI control level, defaulting to read_only if not set.
-// For backwards compatibility, if ControlLevel is empty but legacy AutonomousMode is true,
-// returns autonomous to preserve existing behavior.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
-		// Legacy migration: honor old autonomous_mode field if set
-		if c.AutonomousMode {
-			return ControlLevelAutonomous
-		}
 		return ControlLevelReadOnly
 	}
 	switch c.ControlLevel {
 	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
 		return c.ControlLevel
-	case "suggest":
-		return ControlLevelControlled
 	default:
 		return ControlLevelReadOnly
 	}

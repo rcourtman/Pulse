@@ -41,12 +41,21 @@ func NewSigner(dataDir string, cryptoMgr CryptoEncryptor) (*Signer, error) {
 
 	// Try to load existing key
 	if encryptedKey, err := os.ReadFile(keyPath); err == nil {
-		key, err := cryptoMgr.Decrypt(encryptedKey)
+		key, migratedPlaintext, err := loadAuditSigningKey(cryptoMgr, encryptedKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt audit signing key: %w", err)
+			return nil, err
 		}
 		if len(key) != 32 {
 			return nil, fmt.Errorf("invalid audit signing key length: got %d, want 32", len(key))
+		}
+		if migratedPlaintext {
+			rewritten, err := cryptoMgr.Encrypt(key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encrypt migrated audit signing key: %w", err)
+			}
+			if err := os.WriteFile(keyPath, rewritten, 0600); err != nil {
+				return nil, fmt.Errorf("failed to rewrite audit signing key: %w", err)
+			}
 		}
 		log.Debug().Msg("Loaded existing audit signing key")
 		return &Signer{key: key}, nil
@@ -74,6 +83,17 @@ func NewSigner(dataDir string, cryptoMgr CryptoEncryptor) (*Signer, error) {
 
 	log.Info().Msg("Generated new audit signing key")
 	return &Signer{key: key}, nil
+}
+
+func loadAuditSigningKey(cryptoMgr CryptoEncryptor, data []byte) ([]byte, bool, error) {
+	key, err := cryptoMgr.Decrypt(data)
+	if err == nil {
+		return key, false, nil
+	}
+	if len(data) == 32 {
+		return append([]byte(nil), data...), true, nil
+	}
+	return nil, false, fmt.Errorf("failed to decrypt audit signing key: %w", err)
 }
 
 // Sign computes an HMAC-SHA256 signature over the event's canonical form.

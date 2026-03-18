@@ -17,11 +17,9 @@ Add these secrets to your GitHub repository settings (`Settings` → `Secrets an
 
 2. **DEMO_SERVER_HOST**
    - The hostname or IP of the demo server
-   - Value: `174.138.72.137` (or hostname if using DNS)
 
 3. **DEMO_SERVER_USER**
-   - The SSH username for the demo server
-   - Value: `root` (or the appropriate user with sudo access)
+   - The SSH username for the demo server (e.g. `root` or a deploy user with sudo access)
 
 ### How It Works
 

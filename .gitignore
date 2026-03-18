@@ -1,14 +1,13 @@
 # Binaries
 /bin/
 /pulse
-/pulse-docker-agent
 /pulse-sensor-proxy
 /pulse-server
 /pulse-test
-/pulse-host-agent
-/pulse-host-agent-*
 /pulse-agent
 /pulse-agent-*
+/pulse-linux-amd64
+/pulse-control-plane-linux-amd64
 
 # Logs
 *.log
@@ -67,7 +66,6 @@ dist/
 build/
 *.tar.gz
 pulse-fixes*.tar.gz
-release/pulse-host-agent-*.tar.gz
 scripts/macos/dist/
 
 # Frontend copy for embedding (generated during build)
@@ -87,7 +85,6 @@ AI_DEVELOPMENT.md
 scripts/pulse-watchdog.sh
 pulse-watchdog.log
 .mcp-servers/
-.mcp.json
 .codex/
 
 # Release process files
@@ -104,10 +101,15 @@ DOCKER_PUSH_INSTRUCTIONS.md
 
 # Testing and temporary files
 testing-tools/*
-!testing-tools/run_adaptive_soak.sh
 manual-test*.md
 verify-*.md
 test-*.md
+test-results/
+frontend-modern/test-results/
+playwright-report/
+frontend-modern/playwright-report/
+tests/integration/eval-results/
+tests/integration/debug-stripe.png
 
 *.test.js
 *.test.md
@@ -115,7 +117,8 @@ screenshots/
 .devdata/
 test-*.js
 test-*.sh
-!scripts/tests/test-sensor-proxy-http.sh
+!scripts/tests/test-*.sh
+!scripts/tests/integration/test-*.sh
 test-*.html
 *.backup.*
 .env.dev
@@ -127,10 +130,13 @@ tmp/
 
 # Master plan documents (local only)
 PULSE_V4_ISSUES_MASTER_PLAN.md
+MONETIZATION.md
 FIX_SUMMARY_*.md
 docs/*_PLAN.md
 docs/*_ROADMAP.md
 docs/*IMPLEMENTATION*.md
+docs/settings-audit-*.md
+docs/settings-content-audit-*.md
 
 # Development documentation
 TYPING_*.md
@@ -149,11 +155,15 @@ mock.env.backup
 # Claude Code Safety Hooks (local only)
 .claudecode-settings.json
 .claudecode-hooks/
+.validation_marker
+.session_dirty_*
+.session_validated_*
 
 # Sensitive files - DO NOT COMMIT
 secrets.env
 *secret*.env
 docs/PULSE_PRO_IMPLEMENTATION.md
+.encryption.key
 
 # Browser/session artifacts
 **/cookies.txt
@@ -173,9 +183,57 @@ docs/development/
 tmp_*.py
 tmp_*.sh
 
-# Local agent directories
+# Local agent directories and internal governance (not for public release)
 scripts/agent/
 docs/internal/
+docs/architecture/
+docs/release-control/
+!docs/release-control/
+docs/release-control/*
+!docs/release-control/control_plane.json
+!docs/release-control/control_plane.schema.json
+!docs/release-control/v6/
+docs/release-control/v6/*
+!docs/release-control/v6/README.md
+!docs/release-control/v6/status.schema.json
+# Release control scripts — keep public tooling; internal/ subdir is excluded by the wildcard above
+scripts/release_control/
+!scripts/release_control/
+scripts/release_control/*
+!scripts/release_control/canonical_completion_guard.py
+!scripts/release_control/canonical_completion_guard_test.py
+!scripts/release_control/contract_audit.py
+!scripts/release_control/contract_audit_test.py
+!scripts/release_control/control_plane.py
+!scripts/release_control/control_plane_audit.py
+!scripts/release_control/control_plane_audit_test.py
+!scripts/release_control/documentation_currentness_test.py
+!scripts/release_control/format_staged_go.py
+!scripts/release_control/format_staged_go_test.py
+!scripts/release_control/governance_stage_guard.py
+!scripts/release_control/governance_stage_guard_test.py
+!scripts/release_control/readiness_assertion_guard.py
+!scripts/release_control/readiness_assertion_guard_test.py
+!scripts/release_control/record_rc_to_ga_blocked.py
+!scripts/release_control/registry_audit.py
+!scripts/release_control/registry_audit_test.py
+!scripts/release_control/release_promotion_policy_support.py
+!scripts/release_control/release_promotion_policy_support_test.py
+!scripts/release_control/release_promotion_policy_test.py
+!scripts/release_control/resolve_release_promotion.py
+!scripts/release_control/resolve_release_promotion_test.py
+!scripts/release_control/repo_file_io.py
+!scripts/release_control/repo_file_io_test.py
+!scripts/release_control/staged_commit_shape_guard.py
+!scripts/release_control/staged_commit_shape_guard_test.py
+!scripts/release_control/status_audit.py
+!scripts/release_control/status_audit_test.py
+!scripts/release_control/status_lookup.py
+!scripts/release_control/status_lookup_test.py
+!scripts/release_control/subsystem_contracts.py
+!scripts/release_control/subsystem_contracts_test.py
+!scripts/release_control/subsystem_lookup.py
+!scripts/release_control/subsystem_lookup_test.py
 .agent/
 
 # Pulse Pro landing page (private)
@@ -184,6 +242,9 @@ landing-page/
 # Local Gemini config
 .gemini/
 deployment/
+
+# Hosted/cloud infrastructure (Pulse SaaS internals — not for public release)
+deploy/cloud/
 start-pulse-agent.sh
 
 # Dev container extension auth
@@ -205,9 +266,15 @@ scripts/watch-snapshot.sh
 scripts/auto-backup.sh
 scripts/safe-checkout.sh
 BACKUP_SYSTEM.md
+scripts/com.pulse.hot-dev.plist
+
+# Overnight refactor scripts and artifacts (local only)
+scripts/overnight-refactor/
+scripts/lint-fixer/
 
 # Generated artifacts
 /eval
 test_output.txt
 coverage_summary.txt
 CHANGELOG-DRAFT.md
+.aider*

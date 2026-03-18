@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // Manager exposes operations for ensuring SSH host keys exist locally.
@@ -41,31 +42,39 @@ type manager struct {
 type keyscanFunc func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error)
 
 const (
-	defaultKeyscanTimeout = 5 * time.Second
+	defaultKeyscanTimeout         = 5 * time.Second
+	maxKeyscanOutputSizeBytes     = 1 << 20 // 1 MiB per stream
+	maxKeyscanErrorPreviewBytes   = 2 << 10 // 2 KiB
+	maxKnownHostsManagedHostBytes = 255
+	maxSSHPort                    = 65535
 )
 
 var (
 	mkdirAllFn       = os.MkdirAll
 	statFn           = os.Stat
+	lstatFn          = os.Lstat
+	chmodFn          = os.Chmod
 	openFileFn       = os.OpenFile
 	openFn           = os.Open
 	appendOpenFileFn = func(path string) (io.WriteCloser, error) {
 		return openFileFn(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	}
 	keyscanCmdRunner = func(ctx context.Context, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "ssh-keyscan", args...)
-		return cmd.CombinedOutput()
+		return runCommandCombinedOutputLimited(ctx, maxKeyscanOutputSizeBytes, "ssh-keyscan", args...)
 	}
 
 	// ErrNoHostKeys is returned when ssh-keyscan yields no usable entries.
 	ErrNoHostKeys = errors.New("knownhosts: no host keys discovered")
 	// ErrHostKeyChanged signals that a host key already exists with a different fingerprint.
-	ErrHostKeyChanged = errors.New("knownhosts: host key changed")
+	ErrHostKeyChanged        = errors.New("knownhosts: host key changed")
+	errCommandOutputTooLarge = errors.New("knownhosts: command output exceeds size limit")
 )
 
 var (
 	defaultMkdirAllFn       = mkdirAllFn
 	defaultStatFn           = statFn
+	defaultLstatFn          = lstatFn
+	defaultChmodFn          = chmodFn
 	defaultOpenFileFn       = openFileFn
 	defaultOpenFn           = openFn
 	defaultAppendOpenFileFn = appendOpenFileFn
@@ -135,11 +144,16 @@ func (m *manager) Ensure(ctx context.Context, host string) error {
 
 // EnsureWithPort implements Manager.EnsureWithPort.
 func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) error {
-	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("knownhosts: missing host")
+	var err error
+	host, err = validateManagedHost(host)
+	if err != nil {
+		return err
 	}
 	if port <= 0 {
 		port = 22 // Default to standard SSH port
+	}
+	if port > maxSSHPort {
+		return fmt.Errorf("knownhosts: invalid port %d", port)
 	}
 
 	hostSpec := host
@@ -149,11 +163,20 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 
 	cacheKey := fmt.Sprintf("%s:%d", host, port)
 	m.mu.Lock()
-	_, cached := m.cache[cacheKey]
-	m.mu.Unlock()
-	if cached {
-		return nil
+	if _, cached := m.cache[cacheKey]; cached {
+		existing, err := findHostKeyLine(m.path, hostSpec, "")
+		if err != nil {
+			m.mu.Unlock()
+			return err
+		}
+		if existing != "" {
+			m.mu.Unlock()
+			return nil
+		}
+
+		delete(m.cache, cacheKey)
 	}
+	m.mu.Unlock()
 
 	keyData, err := m.keyscanFn(ctx, host, port, m.keyscanTimeout)
 	if err != nil {
@@ -170,11 +193,16 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 
 // EnsureWithEntries installs the provided host key entries for host:port.
 func (m *manager) EnsureWithEntries(ctx context.Context, host string, port int, entries [][]byte) error {
-	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("knownhosts: missing host")
+	var err error
+	host, err = validateManagedHost(host)
+	if err != nil {
+		return err
 	}
 	if port <= 0 {
 		port = 22
+	}
+	if port > maxSSHPort {
+		return fmt.Errorf("knownhosts: invalid port %d", port)
 	}
 	if len(entries) == 0 {
 		return fmt.Errorf("knownhosts: no host key entries provided for %s", host)
@@ -239,33 +267,47 @@ func (m *manager) ensureKnownHostsFile() error {
 	if err := mkdirAllFn(dir, 0o700); err != nil {
 		return fmt.Errorf("knownhosts: mkdir %s: %w", dir, err)
 	}
+	if err := chmodFn(dir, 0o700); err != nil {
+		return fmt.Errorf("knownhosts: chmod %s: %w", dir, err)
+	}
 
-	if _, err := statFn(m.path); err == nil {
+	if info, err := lstatFn(m.path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("knownhosts: %s: not a regular file", m.path)
+		}
+		if err := chmodFn(m.path, 0o600); err != nil {
+			return fmt.Errorf("knownhosts: chmod %s: %w", m.path, err)
+		}
 		return nil
 	} else if !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("knownhosts: stat %s: %w", m.path, err)
 	}
 
 	f, err := openFileFn(m.path, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("knownhosts: create %s: %w", m.path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("knownhosts: close %s: %w", m.path, err)
+	}
+	return nil
 }
 
-func appendHostKey(path string, entries [][]byte) error {
+func appendHostKey(path string, entries [][]byte) (retErr error) {
 	f, err := appendOpenFileFn(path)
 	if err != nil {
 		return fmt.Errorf("knownhosts: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		retErr = joinCloseError(retErr, fmt.Sprintf("knownhosts: close %s", path), f.Close())
+	}()
 
 	for _, entry := range entries {
 		if len(entry) == 0 {
 			continue
 		}
 		if _, err := f.Write(append(entry, '\n')); err != nil {
-			return fmt.Errorf("knownhosts: write entry: %w", err)
+			return fmt.Errorf("knownhosts: write entry to %s: %w", path, err)
 		}
 	}
 	return nil
@@ -308,15 +350,17 @@ func normalizeHostEntry(host string, entry []byte) ([]byte, string, error) {
 	return []byte(fmt.Sprintf("%s %s %s", host, keyType, keyData)), keyType, nil
 }
 
-func findHostKeyLine(path, host, keyType string) (string, error) {
+func findHostKeyLine(path, host, keyType string) (line string, retErr error) {
 	f, err := openFn(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
-		return "", err
+		return "", fmt.Errorf("knownhosts: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		retErr = joinCloseError(retErr, fmt.Sprintf("knownhosts: close %s", path), f.Close())
+	}()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -335,9 +379,22 @@ func findHostKeyLine(path, host, keyType string) (string, error) {
 		return strings.TrimSpace(line), nil
 	}
 	if err := scanner.Err(); err != nil {
-		return "", err
+		return "", fmt.Errorf("knownhosts: scan %s: %w", path, err)
 	}
 	return "", nil
+}
+
+func joinCloseError(err error, op string, closeErr error) error {
+	if closeErr == nil {
+		return err
+	}
+
+	wrappedCloseErr := fmt.Errorf("%s: %w", op, closeErr)
+	if err == nil {
+		return wrappedCloseErr
+	}
+
+	return errors.Join(err, wrappedCloseErr)
 }
 
 func hostLineMatches(host, line string) bool {
@@ -362,11 +419,6 @@ func hostFieldMatches(host, field string) bool {
 		}
 	}
 	return false
-}
-
-// HostFieldMatches reports whether a known_hosts host field matches the provided host.
-func HostFieldMatches(host, field string) bool {
-	return hostFieldMatches(host, field)
 }
 
 func hostCandidates(part string) []string {
@@ -397,12 +449,19 @@ func hostCandidates(part string) []string {
 }
 
 func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
+	if timeout <= 0 {
+		timeout = defaultKeyscanTimeout
+	}
+
 	seconds := int(timeout.Round(time.Second) / time.Second)
 	if seconds <= 0 {
 		seconds = int(defaultKeyscanTimeout / time.Second)
 	}
 	if port <= 0 {
 		port = 22
+	}
+	if port > maxSSHPort {
+		return nil, fmt.Errorf("invalid ssh port %d", port)
 	}
 
 	scanCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -416,7 +475,83 @@ func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Dur
 
 	output, err := keyscanCmdRunner(scanCtx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("%w (output: %s)", err, previewCommandOutput(output, maxKeyscanErrorPreviewBytes))
 	}
+	return output, nil
+}
+
+func validateManagedHost(host string) (string, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", fmt.Errorf("knownhosts: missing host")
+	}
+	if len(host) > maxKnownHostsManagedHostBytes {
+		return "", fmt.Errorf("knownhosts: host exceeds %d characters", maxKnownHostsManagedHostBytes)
+	}
+	if strings.HasPrefix(host, "-") {
+		return "", fmt.Errorf("knownhosts: invalid host %q", host)
+	}
+	for _, r := range host {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return "", fmt.Errorf("knownhosts: invalid host %q", host)
+		}
+	}
+	return host, nil
+}
+
+func previewCommandOutput(output []byte, maxBytes int) string {
+	trimmed := strings.TrimSpace(string(output))
+	if maxBytes <= 0 || len(trimmed) <= maxBytes {
+		return trimmed
+	}
+	return trimmed[:maxBytes] + "...(truncated)"
+}
+
+type limitedOutputBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedOutputBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errCommandOutputTooLarge
+	}
+
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errCommandOutputTooLarge
+	}
+
+	return b.buf.Write(p)
+}
+
+func (b *limitedOutputBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
+func runCommandCombinedOutputLimited(ctx context.Context, maxBytes int, name string, args ...string) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	stdout := &limitedOutputBuffer{maxBytes: maxBytes}
+	stderr := &limitedOutputBuffer{maxBytes: maxBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	runErr := cmd.Run()
+	output := append(append([]byte(nil), stdout.Bytes()...), stderr.Bytes()...)
+	if stdout.exceeded || stderr.exceeded {
+		return output, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxBytes)
+	}
+	if runErr != nil {
+		return output, runErr
+	}
+
 	return output, nil
 }

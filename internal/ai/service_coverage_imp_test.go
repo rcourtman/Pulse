@@ -113,6 +113,30 @@ func TestService_AnalyzeForDiscovery(t *testing.T) {
 	} else if pm.InputTokens != 10 || pm.OutputTokens != 20 {
 		t.Errorf("Cost tracking failed, got %d/%d tokens", pm.InputTokens, pm.OutputTokens)
 	}
+
+	// Case 4: Budget exceeded should block request before provider call
+	calls := 0
+	mockProv.chatFunc = func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+		calls++
+		return &providers.ChatResponse{Content: "should-not-run"}, nil
+	}
+
+	svc.cfg.CostBudgetUSD30d = 1.0
+	svc.costStore.Record(cost.UsageEvent{
+		Provider:      "anthropic",
+		RequestModel:  "claude-opus-20240229",
+		ResponseModel: "claude-opus-20240229",
+		InputTokens:   1000000,
+		OutputTokens:  1000000,
+	})
+
+	_, err = svc.AnalyzeForDiscovery(context.Background(), "blocked discovery")
+	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
+		t.Fatalf("expected budget exceeded error, got %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("expected provider not to be called when budget exceeded, got %d calls", calls)
+	}
 }
 
 func TestService_RecordIncidentRunbook(t *testing.T) {
@@ -127,8 +151,28 @@ func TestService_RecordIncidentRunbook(t *testing.T) {
 	svc.RecordIncidentRunbook("alert1", "", "title", memory.OutcomeResolved, true, "msg")
 
 	// Case 3: Valid
-	// We verify it doesn't panic. IncidentStore has its own tests.
 	svc.RecordIncidentRunbook("alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
+
+	timeline := svc.incidentStore.GetTimelineByAlertIdentifier("alert1")
+	if timeline == nil {
+		t.Fatal("expected incident timeline to be created")
+	}
+	found := false
+	for _, ev := range timeline.Events {
+		if ev.Type != memory.IncidentEventRunbook {
+			continue
+		}
+		if ev.Details == nil {
+			continue
+		}
+		if ev.Details["runbook_id"] == "rb1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected runbook event to be recorded, got %d events", len(timeline.Events))
+	}
 }
 
 func TestAbsFloat(t *testing.T) {

@@ -1,6 +1,6 @@
 // AI feature types
 
-export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek' | 'gemini';
+export type AIProvider = 'anthropic' | 'openai' | 'openrouter' | 'ollama' | 'deepseek' | 'gemini';
 export type AuthMethod = 'api_key' | 'oauth';
 
 export interface ModelInfo {
@@ -13,28 +13,23 @@ export interface ModelInfo {
 
 export interface AISettings {
   enabled: boolean;
-  provider: AIProvider; // DEPRECATED: legacy single provider
-  api_key_set: boolean; // DEPRECATED: whether legacy API key is set
   model: string;
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
   auto_fix_model?: string; // Model for auto-fix remediation (empty = use patrol model)
-  base_url?: string; // DEPRECATED: legacy base URL
   configured: boolean; // true if AI is ready to use
-  autonomous_mode: boolean; // true if AI can execute commands without approval
   custom_context: string; // user-provided infrastructure context
   // OAuth fields for Claude Pro/Max subscription authentication
   auth_method: AuthMethod; // "api_key" or "oauth"
   oauth_connected: boolean; // true if OAuth tokens are configured
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval
-  available_models?: ModelInfo[]; // DEPRECATED: use /api/ai/models endpoint
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
   openai_configured: boolean; // true if OpenAI API key is set
+  openrouter_configured: boolean; // true if OpenRouter API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
   ollama_configured: boolean; // true (always available for attempt)
@@ -55,15 +50,18 @@ export interface AISettings {
   // AI Discovery settings
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
+
+  // Quickstart credits
+  quickstart_credits_total?: number;
+  quickstart_credits_used?: number;
+  quickstart_credits_remaining?: number;
+  quickstart_credits_available?: boolean;
+  using_quickstart?: boolean;
 }
 
 export interface AISettingsUpdateRequest {
   enabled?: boolean;
-  provider?: AIProvider; // DEPRECATED: use model selection instead
-  api_key?: string; // DEPRECATED: use per-provider keys
   model?: string;
-  base_url?: string; // DEPRECATED: use per-provider URLs
-  autonomous_mode?: boolean;
   custom_context?: string; // user-provided infrastructure context
   auth_method?: AuthMethod; // "api_key" or "oauth"
   // Model overrides for different use cases
@@ -71,13 +69,13 @@ export interface AISettingsUpdateRequest {
   patrol_model?: string; // Model for background patrol
   auto_fix_model?: string; // Model for auto-fix remediation
   // Patrol settings for token efficiency
-  patrol_schedule_preset?: string; // DEPRECATED: use patrol_interval_minutes
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_auto_fix?: boolean; // true if Patrol can auto-fix without approval
   // Multi-provider credentials
   anthropic_api_key?: string; // Set Anthropic API key
   openai_api_key?: string; // Set OpenAI API key
+  openrouter_api_key?: string; // Set OpenRouter API key
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
   ollama_base_url?: string; // Set Ollama server URL
@@ -85,6 +83,7 @@ export interface AISettingsUpdateRequest {
   // Clear flags for removing credentials
   clear_anthropic_key?: boolean; // Clear Anthropic API key
   clear_openai_key?: boolean; // Clear OpenAI API key
+  clear_openrouter_key?: boolean; // Clear OpenRouter API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
   clear_gemini_key?: boolean; // Clear Gemini API key
   clear_ollama_url?: boolean; // Clear Ollama URL
@@ -104,7 +103,6 @@ export interface AISettingsUpdateRequest {
   discovery_interval_hours?: number;
 }
 
-
 export interface AITestResult {
   success: boolean;
   message: string;
@@ -115,24 +113,17 @@ export interface AITestResult {
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-4o',
+  openrouter: 'openai/gpt-4o-mini',
   ollama: 'llama3',
   deepseek: 'deepseek-chat',
   gemini: 'gemini-2.5-flash',
-};
-
-// Provider display names
-export const PROVIDER_NAMES: Record<AIProvider, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  ollama: 'Ollama',
-  deepseek: 'DeepSeek',
-  gemini: 'Google Gemini',
 };
 
 // Provider descriptions
 export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',
   openai: 'GPT models from OpenAI',
+  openrouter: 'Unified gateway for OpenAI-compatible models',
   ollama: 'Local models via Ollama',
   deepseek: 'DeepSeek reasoning models',
   gemini: 'Gemini models from Google',
@@ -147,7 +138,7 @@ export interface AIConversationMessage {
 // AI Execute request/response types
 export interface AIExecuteRequest {
   prompt: string;
-  target_type?: string; // "host", "container", "vm", "node"
+  target_type?: string; // "agent", "system-container", "vm", etc.
   target_id?: string;
   context?: Record<string, unknown>;
   history?: AIConversationMessage[]; // Previous conversation messages
@@ -158,9 +149,9 @@ export interface AIExecuteRequest {
 
 // Tool execution info
 export interface AIToolExecution {
-  name: string;      // "run_command", "read_file"
-  input: string;     // The command or file path
-  output: string;    // Result of execution
+  name: string; // "run_command", "read_file"
+  input: string; // The command or file path
+  output: string; // Result of execution
   success: boolean;
 }
 
@@ -174,7 +165,16 @@ export interface AIExecuteResponse {
 }
 
 // Streaming event types
-export type AIStreamEventType = 'tool_start' | 'tool_end' | 'content' | 'thinking' | 'done' | 'error' | 'complete' | 'approval_needed' | 'processing';
+export type AIStreamEventType =
+  | 'tool_start'
+  | 'tool_end'
+  | 'content'
+  | 'thinking'
+  | 'done'
+  | 'error'
+  | 'complete'
+  | 'approval_needed'
+  | 'processing';
 
 export interface AIStreamToolStartData {
   name: string;
@@ -196,10 +196,14 @@ export interface AIStreamApprovalNeededData {
   target_host?: string; // Explicit host to route the command to
 }
 
-
 export interface AIStreamEvent {
   type: AIStreamEventType;
-  data?: string | AIStreamToolStartData | AIStreamToolEndData | AIStreamCompleteData | AIStreamApprovalNeededData;
+  data?:
+    | string
+    | AIStreamToolStartData
+    | AIStreamToolEndData
+    | AIStreamCompleteData
+    | AIStreamApprovalNeededData;
 }
 
 export interface AIStreamCompleteData {

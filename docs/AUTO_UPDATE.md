@@ -1,6 +1,6 @@
 # Automatic Updates
 
-Pulse 5.0 introduces one-click updates for supported deployment types, making it easy to keep your monitoring system up to date.
+Pulse supports one-click updates for supported deployment types, making it easy to keep your monitoring system up to date.
 
 ## Supported Deployment Types
 
@@ -48,7 +48,7 @@ In **Settings → System → Updates**:
 
 | Setting | Description |
 |---------|-------------|
-| **Update Channel** | Stable (recommended) or Release Candidate |
+| **Update Channel** | Stable (recommended for production) or Release Candidate (opt-in preview) |
 | **Auto-Check** | Background update check interval (hours); `0` disables |
 
 ### Stored Settings (system.json)
@@ -65,6 +65,8 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 ```
 
 **Note:** `autoUpdateTime` is stored for UI reference. The systemd timer still runs on its own schedule (02:00 + jitter). Background update checks follow `autoUpdateCheckInterval`.
+
+**Channel policy note:** `stable` is the default and only recommended channel for paid or production environments. `rc` is an explicit preview channel. In v6, unattended systemd auto-updates remain `stable`-only even if `updateChannel` is set to `rc`.
 
 ## Manual Update Methods
 
@@ -86,7 +88,7 @@ If you use the legacy `docker-compose` binary, replace `docker compose` with `do
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
 
 ### Systemd Service (Manual)
 
@@ -94,7 +96,7 @@ This script installs/updates the **Pulse server**. Agent updates use the `/insta
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
 
 ### Source Build
 
@@ -116,7 +118,7 @@ Pulse creates a backup before updating. If the update fails:
 3. Error details are logged
 
 ### Manual Rollback
-Backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
+Update backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
 There is no rollback UI. To revert, stop Pulse, restore the backup contents to `/opt/pulse`, then restart.
 
 Example (systemd/LXC):

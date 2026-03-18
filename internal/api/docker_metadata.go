@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	dockerRuntimeMetadataCollectionPath = "/api/docker/runtimes/metadata"
+	dockerRuntimeMetadataPathPrefix     = "/api/docker/runtimes/metadata/"
+)
+
 // DockerMetadataHandler handles Docker resource metadata operations
 type DockerMetadataHandler struct {
-	mtPersistence     *config.MultiTenantPersistence
-	legacyPersistence *config.ConfigPersistence
+	mtPersistence *config.MultiTenantPersistence
 }
 
 // NewDockerMetadataHandler creates a new Docker metadata handler
@@ -24,26 +27,15 @@ func NewDockerMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Doc
 	}
 }
 
-func (h *DockerMetadataHandler) SetLegacyPersistence(persistence *config.ConfigPersistence) {
-	h.legacyPersistence = persistence
-}
-
 func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMetadataStore {
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
-	if h.mtPersistence != nil {
-		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil && p != nil {
-			return p.GetDockerMetadataStore()
-		}
-	}
-	if h.legacyPersistence != nil {
-		return h.legacyPersistence.GetDockerMetadataStore()
-	}
-	return nil
+	p, _ := h.mtPersistence.GetPersistence(orgID)
+	return p.GetDockerMetadataStore()
 }
 
 // Store returns the underlying metadata store for default tenant
@@ -119,44 +111,15 @@ func (h *DockerMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *h
 	}
 
 	// Validate URL if provided
-	if meta.CustomURL != "" {
-		// Parse and validate the URL
-		parsedURL, err := url.Parse(meta.CustomURL)
-		if err != nil {
-			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Check scheme
-		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
-			return
-		}
-
-		// Check host is present and valid
-		if parsedURL.Host == "" {
-			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:8006 or https://emby.local)", http.StatusBadRequest)
-			return
-		}
-
-		// Check for incomplete URLs like "https://emby."
-		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
-			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
-			return
-		}
+	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
 	}
 
 	store := h.getStore(r.Context())
 	if err := store.Set(resourceID, &meta); err != nil {
 		log.Error().Err(err).Str("resourceID", resourceID).Msg("Failed to save Docker metadata")
-		// Provide more specific error message
-		errMsg := "Failed to save metadata"
-		if strings.Contains(err.Error(), "permission") {
-			errMsg = "Permission denied - check file permissions"
-		} else if strings.Contains(err.Error(), "no space") {
-			errMsg = "Disk full - cannot save metadata"
-		}
-		http.Error(w, errMsg, http.StatusInternalServerError)
+		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 
@@ -191,23 +154,22 @@ func (h *DockerMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// HandleGetHostMetadata retrieves metadata for a Docker host or all hosts
-func (h *DockerMetadataHandler) HandleGetHostMetadata(w http.ResponseWriter, r *http.Request) {
+// HandleGetRuntimeMetadata retrieves metadata for a Docker runtime or all runtimes.
+func (h *DockerMetadataHandler) HandleGetRuntimeMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Check if requesting specific host
+	// Check if requesting a specific runtime.
 	path := r.URL.Path
-	// Handle both /api/docker/hosts/metadata and /api/docker/hosts/metadata/
-	if path == "/api/docker/hosts/metadata" || path == "/api/docker/hosts/metadata/" {
-		// Get all host metadata
+	if path == dockerRuntimeMetadataCollectionPath || path == dockerRuntimeMetadataCollectionPath+"/" {
+		// Get all runtime metadata.
 		w.Header().Set("Content-Type", "application/json")
 		store := h.getStore(r.Context())
 		allMeta := store.GetAllHostMetadata()
 		if allMeta == nil {
-			// Return empty object instead of null
+			// Return empty object instead of null.
 			json.NewEncoder(w).Encode(make(map[string]*config.DockerHostMetadata))
 		} else {
 			json.NewEncoder(w).Encode(allMeta)
@@ -215,37 +177,37 @@ func (h *DockerMetadataHandler) HandleGetHostMetadata(w http.ResponseWriter, r *
 		return
 	}
 
-	// Get specific host ID from path
-	hostID := strings.TrimPrefix(path, "/api/docker/hosts/metadata/")
+	// Get specific runtime ID from path.
+	runtimeID := strings.TrimPrefix(path, dockerRuntimeMetadataPathPrefix)
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if hostID != "" {
-		// Get specific Docker host metadata
+	if runtimeID != "" {
+		// Get specific runtime metadata.
 		store := h.getStore(r.Context())
-		meta := store.GetHostMetadata(hostID)
+		meta := store.GetHostMetadata(runtimeID)
 		if meta == nil {
-			// Return empty metadata instead of 404
+			// Return empty metadata instead of 404.
 			json.NewEncoder(w).Encode(&config.DockerHostMetadata{})
 		} else {
 			json.NewEncoder(w).Encode(meta)
 		}
 	} else {
-		// This shouldn't happen with current routing, but handle it anyway
+		// This shouldn't happen with current routing, but handle it anyway.
 		http.Error(w, "Invalid request path", http.StatusBadRequest)
 	}
 }
 
-// HandleUpdateHostMetadata updates metadata for a Docker host
-func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, r *http.Request) {
+// HandleUpdateRuntimeMetadata updates metadata for a container runtime.
+func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/docker/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+	runtimeID := strings.TrimPrefix(r.URL.Path, dockerRuntimeMetadataPathPrefix)
+	if runtimeID == "" || runtimeID == "metadata" {
+		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -259,36 +221,14 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 	}
 
 	// Validate URL if provided
-	if meta.CustomURL != "" {
-		// Parse and validate the URL
-		parsedURL, err := url.Parse(meta.CustomURL)
-		if err != nil {
-			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Check scheme
-		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
-			return
-		}
-
-		// Check host is present and valid
-		if parsedURL.Host == "" {
-			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:9000 or https://portainer.local)", http.StatusBadRequest)
-			return
-		}
-
-		// Check for incomplete URLs like "https://portainer."
-		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
-			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
-			return
-		}
+	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
 	}
 
 	// Get existing metadata to merge with new data
 	store := h.getStore(r.Context())
-	existing := store.GetHostMetadata(hostID)
+	existing := store.GetHostMetadata(runtimeID)
 	if existing != nil {
 		// Merge: only update fields that are provided
 		if meta.CustomDisplayName != "" || existing.CustomDisplayName != "" {
@@ -302,44 +242,38 @@ func (h *DockerMetadataHandler) HandleUpdateHostMetadata(w http.ResponseWriter, 
 		}
 	}
 
-	if err := store.SetHostMetadata(hostID, &meta); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save Docker host metadata")
-		// Provide more specific error message
-		errMsg := "Failed to save metadata"
-		if strings.Contains(err.Error(), "permission") {
-			errMsg = "Permission denied - check file permissions"
-		} else if strings.Contains(err.Error(), "no space") {
-			errMsg = "Disk full - cannot save metadata"
-		}
-		http.Error(w, errMsg, http.StatusInternalServerError)
+	if err := store.SetHostMetadata(runtimeID, &meta); err != nil {
+		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to save container runtime metadata")
+		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("hostID", hostID).Str("url", meta.CustomURL).Msg("Updated Docker host metadata")
+	log.Info().Str("runtimeID", runtimeID).Str("url", meta.CustomURL).Msg("Updated container runtime metadata")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&meta)
 }
 
-// HandleDeleteHostMetadata removes metadata for a Docker host
-func (h *DockerMetadataHandler) HandleDeleteHostMetadata(w http.ResponseWriter, r *http.Request) {
+// HandleDeleteRuntimeMetadata removes metadata for a container runtime.
+func (h *DockerMetadataHandler) HandleDeleteRuntimeMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/docker/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+	runtimeID := strings.TrimPrefix(r.URL.Path, dockerRuntimeMetadataPathPrefix)
+	if runtimeID == "" || runtimeID == "metadata" {
+		http.Error(w, "Container runtime ID required", http.StatusBadRequest)
+		return
 	}
 	store := h.getStore(r.Context())
-	if err := store.SetHostMetadata(hostID, nil); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete Docker host metadata")
+	if err := store.SetHostMetadata(runtimeID, nil); err != nil {
+		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to delete container runtime metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return
 	}
 
-	log.Info().Str("hostID", hostID).Msg("Deleted Docker host metadata")
+	log.Info().Str("runtimeID", runtimeID).Msg("Deleted container runtime metadata")
 
 	w.WriteHeader(http.StatusNoContent)
 }

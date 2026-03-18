@@ -297,6 +297,37 @@ func TestCircuitBreaker_SuccessInClosedState(t *testing.T) {
 	if state != "closed" {
 		t.Errorf("state = %s, want closed", state)
 	}
+	if cb.failureCount != 0 {
+		t.Errorf("failureCount = %d, want 0 after success", cb.failureCount)
+	}
+}
+
+func TestCircuitBreaker_NonConsecutiveFailuresDoNotTrip(t *testing.T) {
+	cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+	now := time.Now()
+
+	cb.recordFailure(now)
+	cb.recordSuccess()
+	cb.recordFailure(now.Add(time.Second))
+	cb.recordFailure(now.Add(2 * time.Second))
+
+	// Breaker should remain closed because failures were not consecutive across the success.
+	if !cb.allow(now.Add(2 * time.Second)) {
+		t.Fatal("breaker should remain closed after non-consecutive failures")
+	}
+	state, failures, _ := cb.State()
+	if state != "closed" {
+		t.Fatalf("state = %s, want closed", state)
+	}
+	if failures != 2 {
+		t.Fatalf("failures = %d, want 2 consecutive failures since last success", failures)
+	}
+
+	// Third consecutive failure should now trip the breaker.
+	cb.recordFailure(now.Add(3 * time.Second))
+	if cb.allow(now.Add(3 * time.Second)) {
+		t.Fatal("breaker should open on third consecutive failure")
+	}
 }
 
 func TestCircuitBreaker_State(t *testing.T) {

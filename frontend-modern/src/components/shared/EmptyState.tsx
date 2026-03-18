@@ -1,7 +1,5 @@
 import { JSX, Show, mergeProps, splitProps } from 'solid-js';
-import { SectionHeader } from '@/components/shared/SectionHeader';
-
-type EmptyStateTone = 'default' | 'info' | 'success' | 'warning' | 'danger';
+import { getEmptyStatePresentation, type EmptyStateTone } from '@/utils/emptyStatePresentation';
 
 type EmptyStateProps = {
   icon?: JSX.Element;
@@ -11,22 +9,6 @@ type EmptyStateProps = {
   tone?: EmptyStateTone;
   align?: 'center' | 'left';
 } & JSX.HTMLAttributes<HTMLDivElement>;
-
-const titleToneClass: Record<EmptyStateTone, string> = {
-  default: '',
-  info: 'text-blue-700 dark:text-blue-300',
-  success: 'text-green-700 dark:text-green-300',
-  warning: 'text-amber-700 dark:text-amber-300',
-  danger: 'text-red-700 dark:text-red-300',
-};
-
-const descriptionToneClass: Record<EmptyStateTone, string> = {
-  default: '',
-  info: 'text-blue-600 dark:text-blue-300',
-  success: 'text-green-600 dark:text-green-300',
-  warning: 'text-amber-600 dark:text-amber-300',
-  danger: 'text-red-600 dark:text-red-300',
-};
 
 export function EmptyState(props: EmptyStateProps) {
   const merged = mergeProps({ tone: 'default' as EmptyStateTone, align: 'center' as const }, props);
@@ -42,8 +24,10 @@ export function EmptyState(props: EmptyStateProps) {
 
   const alignment = local.align;
   const tone = local.tone;
+  const presentation = getEmptyStatePresentation(tone);
   const containerClass = [
-    'flex flex-col gap-3',
+    'flex flex-col py-10 px-6 sm:py-16 sm:px-8 w-full animate-fade-in',
+    'bg-base border border-dashed border-border rounded-md',
     alignment === 'center' ? 'items-center text-center' : 'items-start text-left',
     local.class ?? '',
   ]
@@ -53,23 +37,31 @@ export function EmptyState(props: EmptyStateProps) {
   return (
     <div class={containerClass} {...others}>
       <Show when={local.icon}>
-        <div class={alignment === 'center' ? 'flex justify-center' : ''}>{local.icon}</div>
+        <div
+          class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-md flex items-center justify-center ${presentation.iconClass}`}
+        >
+          <div class="scale-125">{local.icon}</div>
+        </div>
       </Show>
-      <SectionHeader
-        align={alignment}
-        title={local.title}
-        description={local.description}
-        size={alignment === 'center' ? 'sm' : 'md'}
-        class={alignment === 'center' ? 'items-center' : 'items-start'}
-        titleClass={titleToneClass[tone]}
-        descriptionClass={`text-xs ${descriptionToneClass[tone]}`.trim()}
-      />
+
+      <h3 class={`text-lg sm:text-xl font-bold tracking-tight mb-2 ${presentation.titleClass}`}>
+        {local.title}
+      </h3>
+
+      <Show when={local.description}>
+        <p
+          class={`text-sm max-w-sm sm:max-w-md ${presentation.descriptionClass} mb-6 leading-relaxed`}
+        >
+          {local.description}
+        </p>
+      </Show>
+
       <Show when={local.actions}>
         <div
           class={
             alignment === 'center'
-              ? 'mt-2 flex flex-col items-center gap-2'
-              : 'mt-2 flex flex-col gap-2'
+              ? 'flex flex-col items-center justify-center w-full gap-3'
+              : 'flex flex-col items-start w-full gap-3'
           }
         >
           {local.actions}

@@ -2,7 +2,9 @@ package discovery
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +130,40 @@ func TestParseCIDRs_NilWarnings(t *testing.T) {
 	}
 }
 
+func TestParseCIDRs_EnforcesEntryLimit(t *testing.T) {
+	values := make([]string, 0, maxDiscoveryCIDREntries+8)
+	for i := 0; i < maxDiscoveryCIDREntries+8; i++ {
+		values = append(values, fmt.Sprintf("10.%d.%d.0/24", i/256, i%256))
+	}
+
+	var warnings []string
+	result := parseCIDRs(values, &warnings)
+
+	if len(result) != maxDiscoveryCIDREntries {
+		t.Fatalf("expected %d CIDRs after limit enforcement, got %d", maxDiscoveryCIDREntries, len(result))
+	}
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "exceeds max entries") {
+		t.Fatalf("expected entry-limit warning, got %#v", warnings)
+	}
+}
+
+func TestParseCIDRs_RejectsOverlongEntries(t *testing.T) {
+	values := []string{
+		strings.Repeat("1", maxDiscoveryCIDRLength+1),
+		"192.168.1.0/24",
+	}
+
+	var warnings []string
+	result := parseCIDRs(values, &warnings)
+
+	if len(result) != 1 {
+		t.Fatalf("expected only valid CIDR to be parsed, got %d entries", len(result))
+	}
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "max length") {
+		t.Fatalf("expected max-length warning, got %#v", warnings)
+	}
+}
+
 func TestParseCIDRMap(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -231,28 +267,52 @@ func TestEnvironmentFromOverride(t *testing.T) {
 			wantOK:  true,
 		},
 		{
-			name:    "docker_host",
-			value:   "docker_host",
+			name:    "docker-host",
+			value:   "docker-host",
 			wantEnv: envdetect.DockerHost,
 			wantOK:  true,
 		},
 		{
-			name:    "docker_bridge",
-			value:   "docker_bridge",
+			name:    "docker-bridge",
+			value:   "docker-bridge",
 			wantEnv: envdetect.DockerBridge,
 			wantOK:  true,
 		},
 		{
-			name:    "lxc_privileged",
-			value:   "lxc_privileged",
+			name:    "lxc-privileged",
+			value:   "lxc-privileged",
 			wantEnv: envdetect.LXCPrivileged,
 			wantOK:  true,
 		},
 		{
-			name:    "lxc_unprivileged",
-			value:   "lxc_unprivileged",
+			name:    "lxc-unprivileged",
+			value:   "lxc-unprivileged",
 			wantEnv: envdetect.LXCUnprivileged,
 			wantOK:  true,
+		},
+		{
+			name:    "docker_host alias rejected",
+			value:   "docker_host",
+			wantEnv: envdetect.Unknown,
+			wantOK:  false,
+		},
+		{
+			name:    "docker_bridge alias rejected",
+			value:   "docker_bridge",
+			wantEnv: envdetect.Unknown,
+			wantOK:  false,
+		},
+		{
+			name:    "lxc_privileged alias rejected",
+			value:   "lxc_privileged",
+			wantEnv: envdetect.Unknown,
+			wantOK:  false,
+		},
+		{
+			name:    "lxc_unprivileged alias rejected",
+			value:   "lxc_unprivileged",
+			wantEnv: envdetect.Unknown,
+			wantOK:  false,
 		},
 		{
 			name:    "value with whitespace",
@@ -311,17 +371,21 @@ func TestBuildScanner(t *testing.T) {
 func TestBuildScannerError(t *testing.T) {
 	t.Cleanup(resetDetectEnvironment)
 
+	detectErr := errors.New("detect failed")
 	detectEnvironmentFn = func() (*envdetect.EnvironmentProfile, error) {
-		return nil, errors.New("detect failed")
+		return nil, detectErr
 	}
 
-	if _, err := BuildScanner(config.DefaultDiscoveryConfig()); err == nil {
+	_, err := BuildScanner(config.DefaultDiscoveryConfig())
+	if err == nil {
 		t.Fatalf("expected error")
 	}
-}
-
-func TestApplyConfigToProfileNil(t *testing.T) {
-	ApplyConfigToProfile(nil, config.DefaultDiscoveryConfig())
+	if !errors.Is(err, detectErr) {
+		t.Fatalf("expected wrapped detect error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "discovery.BuildScanner: detect environment") {
+		t.Fatalf("expected BuildScanner context in error, got: %v", err)
+	}
 }
 
 func TestApplyConfigToProfileOverridesAndPolicies(t *testing.T) {
@@ -335,7 +399,7 @@ func TestApplyConfigToProfileOverridesAndPolicies(t *testing.T) {
 	}
 
 	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "docker_bridge",
+		EnvironmentOverride: "docker-bridge",
 		SubnetBlocklist:     []string{"192.168.0.0/24"},
 		SubnetAllowlist:     []string{"10.0.0.0/24", "192.168.0.0/24", "invalid"},
 		MaxHostsPerScan:     10,
@@ -386,6 +450,55 @@ func TestApplyConfigToProfileSkipsEmptyIPBlocklistEntries(t *testing.T) {
 
 	if len(profile.IPBlocklist) != 1 {
 		t.Fatalf("expected 1 IP in blocklist, got %d", len(profile.IPBlocklist))
+	}
+}
+
+func TestApplyConfigToProfileIPBlocklistEntryLimit(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	blocklist := make([]string, 0, maxDiscoveryIPBlocklistEntries+12)
+	for i := 0; i < maxDiscoveryIPBlocklistEntries+12; i++ {
+		blocklist = append(blocklist, fmt.Sprintf("10.%d.%d.1", i/256, i%256))
+	}
+
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: blocklist,
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if len(profile.IPBlocklist) != maxDiscoveryIPBlocklistEntries {
+		t.Fatalf("expected %d IPs after limit enforcement, got %d", maxDiscoveryIPBlocklistEntries, len(profile.IPBlocklist))
+	}
+	if len(profile.Warnings) == 0 || !strings.Contains(profile.Warnings[0], "exceeds max entries") {
+		t.Fatalf("expected IP entry-limit warning, got %#v", profile.Warnings)
+	}
+}
+
+func TestApplyConfigToProfileRejectsOverlongAndDuplicateIPBlocklistEntries(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: []string{
+			strings.Repeat("1", maxDiscoveryIPLength+1),
+			"192.168.1.10",
+			"192.168.1.10",
+		},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if len(profile.IPBlocklist) != 1 {
+		t.Fatalf("expected deduplicated valid IP blocklist entry, got %d", len(profile.IPBlocklist))
+	}
+	if len(profile.Warnings) == 0 || !strings.Contains(profile.Warnings[0], "max length") {
+		t.Fatalf("expected max-length warning, got %#v", profile.Warnings)
 	}
 }
 
@@ -469,6 +582,17 @@ func TestApplyConfigToProfileNoProfileWarnings(t *testing.T) {
 	if len(profile.Warnings) == 0 {
 		t.Fatalf("expected warnings for invalid IP")
 	}
+}
+
+func TestApplyConfigToProfileNilProfile(t *testing.T) {
+	cfg := config.DiscoveryConfig{
+		EnvironmentOverride: "native",
+		SubnetAllowlist:     []string{"10.0.0.0/24"},
+		SubnetBlocklist:     []string{"10.0.1.0/24"},
+		IPBlocklist:         []string{"10.0.0.8"},
+	}
+
+	ApplyConfigToProfile(nil, cfg)
 }
 
 func TestApplyConfigToProfileBlocksSubnets(t *testing.T) {
@@ -756,65 +880,5 @@ func TestFilterPhasesForEnvironment(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestApplyConfigToProfile_NilProfile(t *testing.T) {
-	// Ensure ApplyConfigToProfile handles nil profile without panic
-	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "native",
-	}
-	ApplyConfigToProfile(nil, cfg) // Should not panic
-}
-
-func TestApplyConfigToProfile_InvalidEnvironmentOverride(t *testing.T) {
-	profile := &envdetect.EnvironmentProfile{
-		Type: envdetect.Native,
-	}
-	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "invalid_environment",
-	}
-
-	ApplyConfigToProfile(profile, cfg)
-
-	// Should add warning for unknown environment
-	if len(profile.Warnings) != 1 {
-		t.Errorf("Expected 1 warning for invalid environment override, got %d", len(profile.Warnings))
-	}
-}
-
-func TestApplyConfigToProfile_PolicyOverrides(t *testing.T) {
-	profile := &envdetect.EnvironmentProfile{
-		Type: envdetect.Native,
-		Policy: envdetect.ScanPolicy{
-			MaxHostsPerScan: 100,
-			MaxConcurrent:   10,
-			DialTimeout:     1000,
-			HTTPTimeout:     2000,
-		},
-	}
-
-	cfg := config.DiscoveryConfig{
-		MaxHostsPerScan:  500,
-		MaxConcurrent:    50,
-		EnableReverseDNS: true,
-		ScanGateways:     true,
-		DialTimeout:      5000,
-		HTTPTimeout:      10000,
-	}
-
-	ApplyConfigToProfile(profile, cfg)
-
-	if profile.Policy.MaxHostsPerScan != 500 {
-		t.Errorf("MaxHostsPerScan = %d, want 500", profile.Policy.MaxHostsPerScan)
-	}
-	if profile.Policy.MaxConcurrent != 50 {
-		t.Errorf("MaxConcurrent = %d, want 50", profile.Policy.MaxConcurrent)
-	}
-	if !profile.Policy.EnableReverseDNS {
-		t.Error("EnableReverseDNS should be true")
-	}
-	if !profile.Policy.ScanGateways {
-		t.Error("ScanGateways should be true")
 	}
 }

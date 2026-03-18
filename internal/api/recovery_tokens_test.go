@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,9 +14,10 @@ func TestRecoveryToken_Fields(t *testing.T) {
 	now := time.Now()
 	expiry := now.Add(time.Hour)
 	usedAt := now.Add(30 * time.Minute)
+	tokenHash := recoveryTokenHash("abc123token")
 
 	token := RecoveryToken{
-		Token:     "abc123token",
+		TokenHash: tokenHash,
 		CreatedAt: now,
 		ExpiresAt: expiry,
 		Used:      true,
@@ -23,8 +25,8 @@ func TestRecoveryToken_Fields(t *testing.T) {
 		IP:        "192.168.1.100",
 	}
 
-	if token.Token != "abc123token" {
-		t.Errorf("Token = %q, want abc123token", token.Token)
+	if token.TokenHash != tokenHash {
+		t.Errorf("TokenHash = %q, want %q", token.TokenHash, tokenHash)
 	}
 	if !token.CreatedAt.Equal(now) {
 		t.Errorf("CreatedAt = %v, want %v", token.CreatedAt, now)
@@ -72,7 +74,7 @@ func TestRecoveryTokenStore_GenerateRecoveryToken(t *testing.T) {
 
 	// Should be stored
 	store.mu.RLock()
-	stored, exists := store.tokens[token]
+	stored, exists := store.tokens[recoveryTokenHash(token)]
 	store.mu.RUnlock()
 
 	if !exists {
@@ -127,7 +129,7 @@ func TestRecoveryTokenStore_GenerateRecoveryToken_ExpiryDurations(t *testing.T) 
 			afterGen := time.Now()
 
 			store.mu.RLock()
-			stored := store.tokens[token]
+			stored := store.tokens[recoveryTokenHash(token)]
 			store.mu.RUnlock()
 
 			// ExpiresAt should be approximately beforeGen + duration to afterGen + duration
@@ -156,7 +158,7 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ValidToken(t *test
 
 	// Check it's marked as used
 	store.mu.RLock()
-	stored := store.tokens[token]
+	stored := store.tokens[recoveryTokenHash(token)]
 	store.mu.RUnlock()
 
 	if !stored.Used {
@@ -167,6 +169,49 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ValidToken(t *test
 	}
 	if stored.UsedAt.IsZero() {
 		t.Error("UsedAt should be set")
+	}
+}
+
+func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *testing.T) {
+	store := newTestRecoveryStore(t)
+
+	token, err := store.GenerateRecoveryToken(time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateRecoveryToken failed: %v", err)
+	}
+
+	if !store.IsRecoveryTokenValidConstantTime(token) {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned false for valid token")
+	}
+
+	store.mu.RLock()
+	stored := store.tokens[recoveryTokenHash(token)]
+	store.mu.RUnlock()
+	if stored.Used {
+		t.Fatal("IsRecoveryTokenValidConstantTime must not mark token as used")
+	}
+
+	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+		t.Fatal("ValidateRecoveryTokenConstantTime should still succeed after non-consuming check")
+	}
+}
+
+func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_InvalidOrUsed(t *testing.T) {
+	store := newTestRecoveryStore(t)
+
+	if store.IsRecoveryTokenValidConstantTime("missing-token") {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned true for missing token")
+	}
+
+	token, err := store.GenerateRecoveryToken(time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateRecoveryToken failed: %v", err)
+	}
+	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+		t.Fatal("ValidateRecoveryTokenConstantTime should succeed")
+	}
+	if store.IsRecoveryTokenValidConstantTime(token) {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned true for used token")
 	}
 }
 
@@ -189,9 +234,10 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ExpiredToken(t *te
 
 	// Create an already-expired token directly
 	expiredToken := "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+	expiredHash := recoveryTokenHash(expiredToken)
 	store.mu.Lock()
-	store.tokens[expiredToken] = &RecoveryToken{
-		Token:     expiredToken,
+	store.tokens[expiredHash] = &RecoveryToken{
+		TokenHash: expiredHash,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour), // Expired
 		Used:      false,
@@ -275,22 +321,25 @@ func TestRecoveryTokenStore_Cleanup(t *testing.T) {
 	validToken := "valid123valid123valid123valid123valid123valid123valid123valid123"
 	expiredToken := "expired1expired1expired1expired1expired1expired1expired1expired1"
 	usedOldToken := "usedold1usedold1usedold1usedold1usedold1usedold1usedold1usedold1"
+	validHash := recoveryTokenHash(validToken)
+	expiredHash := recoveryTokenHash(expiredToken)
+	usedOldHash := recoveryTokenHash(usedOldToken)
 
 	store.mu.Lock()
-	store.tokens[validToken] = &RecoveryToken{
-		Token:     validToken,
+	store.tokens[validHash] = &RecoveryToken{
+		TokenHash: validHash,
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		Used:      false,
 	}
-	store.tokens[expiredToken] = &RecoveryToken{
-		Token:     expiredToken,
+	store.tokens[expiredHash] = &RecoveryToken{
+		TokenHash: expiredHash,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour),
 		Used:      false,
 	}
-	store.tokens[usedOldToken] = &RecoveryToken{
-		Token:     usedOldToken,
+	store.tokens[usedOldHash] = &RecoveryToken{
+		TokenHash: usedOldHash,
 		CreatedAt: time.Now().Add(-48 * time.Hour),
 		ExpiresAt: time.Now().Add(-47 * time.Hour),
 		Used:      true,
@@ -302,9 +351,9 @@ func TestRecoveryTokenStore_Cleanup(t *testing.T) {
 	store.cleanup()
 
 	store.mu.RLock()
-	_, validExists := store.tokens[validToken]
-	_, expiredExists := store.tokens[expiredToken]
-	_, usedOldExists := store.tokens[usedOldToken]
+	_, validExists := store.tokens[validHash]
+	_, expiredExists := store.tokens[expiredHash]
+	_, usedOldExists := store.tokens[usedOldHash]
 	store.mu.RUnlock()
 
 	if !validExists {
@@ -325,10 +374,11 @@ func TestRecoveryTokenStore_Cleanup_RemovesExpiredEvenIfRecentlyUsed(t *testing.
 	// Per the cleanup logic: removes if expired OR used more than 24 hours ago
 	// So an expired token will be removed even if recently used
 	recentlyUsedToken := "recent1recent1recent1recent1recent1recent1recent1recent1recent1r"
+	recentlyUsedHash := recoveryTokenHash(recentlyUsedToken)
 
 	store.mu.Lock()
-	store.tokens[recentlyUsedToken] = &RecoveryToken{
-		Token:     recentlyUsedToken,
+	store.tokens[recentlyUsedHash] = &RecoveryToken{
+		TokenHash: recentlyUsedHash,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour), // Expired
 		Used:      true,
@@ -339,7 +389,7 @@ func TestRecoveryTokenStore_Cleanup_RemovesExpiredEvenIfRecentlyUsed(t *testing.
 	store.cleanup()
 
 	store.mu.RLock()
-	_, exists := store.tokens[recentlyUsedToken]
+	_, exists := store.tokens[recentlyUsedHash]
 	store.mu.RUnlock()
 
 	// Cleanup removes expired tokens regardless of when they were used
@@ -353,10 +403,11 @@ func TestRecoveryTokenStore_Cleanup_KeepsUnexpiredUsedTokens(t *testing.T) {
 
 	// A used token that hasn't expired yet and was used recently should be kept
 	usedNotExpiredToken := "usednot1usednot1usednot1usednot1usednot1usednot1usednot1usednot1"
+	usedNotExpiredHash := recoveryTokenHash(usedNotExpiredToken)
 
 	store.mu.Lock()
-	store.tokens[usedNotExpiredToken] = &RecoveryToken{
-		Token:     usedNotExpiredToken,
+	store.tokens[usedNotExpiredHash] = &RecoveryToken{
+		TokenHash: usedNotExpiredHash,
 		CreatedAt: time.Now().Add(-time.Hour),
 		ExpiresAt: time.Now().Add(time.Hour), // Not expired
 		Used:      true,
@@ -367,7 +418,7 @@ func TestRecoveryTokenStore_Cleanup_KeepsUnexpiredUsedTokens(t *testing.T) {
 	store.cleanup()
 
 	store.mu.RLock()
-	_, exists := store.tokens[usedNotExpiredToken]
+	_, exists := store.tokens[usedNotExpiredHash]
 	store.mu.RUnlock()
 
 	if !exists {
@@ -396,7 +447,7 @@ func TestRecoveryTokenStore_Persistence_Save(t *testing.T) {
 		t.Fatal("recovery_tokens.json was not created")
 	}
 
-	// Read the file and verify content includes the token
+	// Read the file and verify content is persisted without the raw token
 	data, err := os.ReadFile(tokensFile)
 	if err != nil {
 		t.Fatalf("failed to read recovery_tokens.json: %v", err)
@@ -407,9 +458,11 @@ func TestRecoveryTokenStore_Persistence_Save(t *testing.T) {
 		t.Error("recovery_tokens.json is empty")
 	}
 
-	// The token string should appear in the file content
-	if !containsTokenSubstring(string(data), token[:16]) {
-		t.Error("token not found in persisted file")
+	if containsTokenSubstring(string(data), token[:16]) {
+		t.Error("raw recovery token must not appear in persisted file")
+	}
+	if !containsTokenSubstring(string(data), recoveryTokenHash(token)[:16]) {
+		t.Error("hashed recovery token not found in persisted file")
 	}
 }
 
@@ -438,7 +491,7 @@ func TestRecoveryTokenStore_Persistence_Load(t *testing.T) {
 
 	// Token should be loaded and valid
 	store2.mu.RLock()
-	loaded, exists := store2.tokens[token]
+	loaded, exists := store2.tokens[recoveryTokenHash(token)]
 	store2.mu.RUnlock()
 
 	if !exists {
@@ -446,6 +499,53 @@ func TestRecoveryTokenStore_Persistence_Load(t *testing.T) {
 	}
 	if loaded.Used {
 		t.Error("loaded token should not be marked as used")
+	}
+}
+
+func TestRecoveryTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	rawToken := "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+	legacyJSON := `{
+		"` + rawToken + `": {
+			"token": "` + rawToken + `",
+			"created_at": "2026-03-15T12:00:00Z",
+			"expires_at": "2099-03-15T13:00:00Z",
+			"used": false
+		}
+	}`
+	tokensFile := filepath.Join(tmpDir, "recovery_tokens.json")
+	if err := os.WriteFile(tokensFile, []byte(legacyJSON), 0600); err != nil {
+		t.Fatalf("failed to write legacy recovery_tokens.json: %v", err)
+	}
+
+	store := &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    tmpDir,
+		stopCleanup: make(chan struct{}),
+	}
+	store.load()
+
+	if !store.IsRecoveryTokenValidConstantTime(rawToken) {
+		t.Fatal("legacy recovery token should validate after migration load")
+	}
+
+	savedData, err := os.ReadFile(tokensFile)
+	if err != nil {
+		t.Fatalf("failed to read migrated recovery_tokens.json: %v", err)
+	}
+	if containsTokenSubstring(string(savedData), rawToken[:16]) {
+		t.Fatal("migrated recovery_tokens.json must not contain the raw recovery token")
+	}
+
+	var persisted []*RecoveryToken
+	if err := json.Unmarshal(savedData, &persisted); err != nil {
+		t.Fatalf("migrated recovery_tokens.json must be canonical hashed format: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("migrated recovery_tokens.json entries = %d, want 1", len(persisted))
+	}
+	if persisted[0].TokenHash != recoveryTokenHash(rawToken) {
+		t.Fatalf("migrated token hash = %q, want %q", persisted[0].TokenHash, recoveryTokenHash(rawToken))
 	}
 }
 
@@ -460,9 +560,10 @@ func TestRecoveryTokenStore_Persistence_FilterExpiredOnLoad(t *testing.T) {
 	}
 
 	expiredToken := "expired1expired1expired1expired1expired1expired1expired1expired1"
+	expiredHash := recoveryTokenHash(expiredToken)
 	store1.mu.Lock()
-	store1.tokens[expiredToken] = &RecoveryToken{
-		Token:     expiredToken,
+	store1.tokens[expiredHash] = &RecoveryToken{
+		TokenHash: expiredHash,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour), // Expired
 		Used:      false,
@@ -480,7 +581,7 @@ func TestRecoveryTokenStore_Persistence_FilterExpiredOnLoad(t *testing.T) {
 
 	// Expired token should not be loaded
 	store2.mu.RLock()
-	_, exists := store2.tokens[expiredToken]
+	_, exists := store2.tokens[expiredHash]
 	store2.mu.RUnlock()
 
 	if exists {
@@ -499,9 +600,10 @@ func TestRecoveryTokenStore_Persistence_KeepRecentlyUsedOnLoad(t *testing.T) {
 	}
 
 	recentToken := "recent1recent1recent1recent1recent1recent1recent1recent1recent1r"
+	recentHash := recoveryTokenHash(recentToken)
 	store1.mu.Lock()
-	store1.tokens[recentToken] = &RecoveryToken{
-		Token:     recentToken,
+	store1.tokens[recentHash] = &RecoveryToken{
+		TokenHash: recentHash,
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour), // Expired
 		Used:      true,
@@ -520,7 +622,7 @@ func TestRecoveryTokenStore_Persistence_KeepRecentlyUsedOnLoad(t *testing.T) {
 
 	// Recently used token should be loaded for audit trail
 	store2.mu.RLock()
-	_, exists := store2.tokens[recentToken]
+	_, exists := store2.tokens[recentHash]
 	store2.mu.RUnlock()
 
 	if !exists {
@@ -640,8 +742,8 @@ func TestRecoveryTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 	}
 
 	// Add a token to save
-	store.tokens["testtoken"] = &RecoveryToken{
-		Token:     "testtoken",
+	store.tokens[recoveryTokenHash("testtoken")] = &RecoveryToken{
+		TokenHash: recoveryTokenHash("testtoken"),
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		Used:      false,
@@ -679,8 +781,8 @@ func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 	}
 
 	// Add a token
-	store.tokens["testtoken"] = &RecoveryToken{
-		Token:     "testtoken",
+	store.tokens[recoveryTokenHash("testtoken")] = &RecoveryToken{
+		TokenHash: recoveryTokenHash("testtoken"),
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		Used:      false,
@@ -691,7 +793,7 @@ func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		t.Fatalf("failed to make dir readonly: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
 	// saveUnsafe should handle error gracefully (logs but doesn't panic)
@@ -722,8 +824,8 @@ func TestRecoveryTokenStore_SaveUnsafe_RenameError(t *testing.T) {
 	}
 
 	// Add a token
-	store.tokens["testtoken"] = &RecoveryToken{
-		Token:     "testtoken",
+	store.tokens[recoveryTokenHash("testtoken")] = &RecoveryToken{
+		TokenHash: recoveryTokenHash("testtoken"),
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		Used:      false,

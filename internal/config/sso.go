@@ -65,7 +65,7 @@ type SAMLProviderConfig struct {
 	IDPMetadataURL string `json:"idpMetadataUrl,omitempty"` // URL to fetch IdP metadata (preferred)
 	IDPMetadataXML string `json:"idpMetadataXml,omitempty"` // Raw XML metadata (alternative to URL)
 	IDPSSOURL      string `json:"idpSsoUrl,omitempty"`      // SSO URL (extracted from metadata or manual)
-	IDPSLOUrl      string `json:"idpSloUrl,omitempty"`      // Single Logout URL (optional)
+	IDPSLOURL      string `json:"idpSloUrl,omitempty"`      // Single Logout URL (optional)
 	IDPCertificate string `json:"idpCertificate,omitempty"` // IdP signing certificate (PEM format)
 	IDPCertFile    string `json:"idpCertFile,omitempty"`    // Path to IdP certificate file (alternative)
 	IDPEntityID    string `json:"idpEntityId,omitempty"`    // IdP Entity ID (extracted from metadata or manual)
@@ -382,80 +382,4 @@ func cloneProvider(p SSOProvider) SSOProvider {
 	}
 
 	return clone
-}
-
-// MigrateFromOIDCConfig converts legacy OIDCConfig to new SSOConfig format
-func MigrateFromOIDCConfig(oidc *OIDCConfig) *SSOConfig {
-	if oidc == nil {
-		return NewSSOConfig()
-	}
-
-	sso := NewSSOConfig()
-
-	// Only migrate if OIDC was actually configured
-	if oidc.IssuerURL == "" || oidc.ClientID == "" {
-		return sso
-	}
-
-	provider := SSOProvider{
-		ID:                "legacy-oidc",
-		Name:              "Single Sign-On",
-		Type:              SSOProviderTypeOIDC,
-		Enabled:           oidc.Enabled,
-		AllowedGroups:     oidc.AllowedGroups,
-		AllowedDomains:    oidc.AllowedDomains,
-		AllowedEmails:     oidc.AllowedEmails,
-		GroupsClaim:       oidc.GroupsClaim,
-		GroupRoleMappings: oidc.GroupRoleMappings,
-		OIDC: &OIDCProviderConfig{
-			IssuerURL:       oidc.IssuerURL,
-			ClientID:        oidc.ClientID,
-			ClientSecret:    oidc.ClientSecret,
-			RedirectURL:     oidc.RedirectURL,
-			LogoutURL:       oidc.LogoutURL,
-			Scopes:          oidc.Scopes,
-			UsernameClaim:   oidc.UsernameClaim,
-			EmailClaim:      oidc.EmailClaim,
-			CABundle:        oidc.CABundle,
-			ClientSecretSet: oidc.ClientSecret != "",
-			EnvOverrides:    oidc.EnvOverrides,
-		},
-	}
-
-	sso.Providers = append(sso.Providers, provider)
-	sso.DefaultProviderID = provider.ID
-
-	return sso
-}
-
-// ToLegacyOIDCConfig converts the first OIDC provider back to legacy format for backwards compatibility
-func (c *SSOConfig) ToLegacyOIDCConfig() *OIDCConfig {
-	if c == nil {
-		return NewOIDCConfig()
-	}
-
-	for _, p := range c.Providers {
-		if p.Type == SSOProviderTypeOIDC && p.OIDC != nil {
-			return &OIDCConfig{
-				Enabled:           p.Enabled,
-				IssuerURL:         p.OIDC.IssuerURL,
-				ClientID:          p.OIDC.ClientID,
-				ClientSecret:      p.OIDC.ClientSecret,
-				RedirectURL:       p.OIDC.RedirectURL,
-				LogoutURL:         p.OIDC.LogoutURL,
-				Scopes:            p.OIDC.Scopes,
-				UsernameClaim:     p.OIDC.UsernameClaim,
-				EmailClaim:        p.OIDC.EmailClaim,
-				GroupsClaim:       p.GroupsClaim,
-				AllowedGroups:     p.AllowedGroups,
-				AllowedDomains:    p.AllowedDomains,
-				AllowedEmails:     p.AllowedEmails,
-				GroupRoleMappings: p.GroupRoleMappings,
-				CABundle:          p.OIDC.CABundle,
-				EnvOverrides:      p.OIDC.EnvOverrides,
-			}
-		}
-	}
-
-	return NewOIDCConfig()
 }

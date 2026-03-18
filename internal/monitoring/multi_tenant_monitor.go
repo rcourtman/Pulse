@@ -3,9 +3,12 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -14,9 +17,13 @@ import (
 type MultiTenantMonitor struct {
 	mu           sync.RWMutex
 	monitors     map[string]*Monitor
+	tenantCancel map[string]context.CancelFunc
+	tenantDone   map[string]chan struct{}
 	persistence  *config.MultiTenantPersistence
 	baseConfig   *config.Config
 	wsHub        *websocket.Hub
+	recoveryMgr  *recoverymanager.Manager
+	initializer  func(*Monitor)
 	globalCtx    context.Context
 	globalCancel context.CancelFunc
 }
@@ -26,6 +33,8 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MultiTenantMonitor{
 		monitors:     make(map[string]*Monitor),
+		tenantCancel: make(map[string]context.CancelFunc),
+		tenantDone:   make(map[string]chan struct{}),
 		persistence:  persistence,
 		baseConfig:   baseCfg, // Used as a template or for global settings
 		wsHub:        wsHub,
@@ -34,11 +43,53 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 	}
 }
 
+const tenantMonitorShutdownTimeout = 2 * time.Second
+
+// SetRecoveryManager wires a recovery store manager into all existing and future tenant monitors.
+func (mtm *MultiTenantMonitor) SetRecoveryManager(manager *recoverymanager.Manager) {
+	mtm.mu.Lock()
+	defer mtm.mu.Unlock()
+	mtm.recoveryMgr = manager
+	for _, monitor := range mtm.monitors {
+		if monitor == nil {
+			continue
+		}
+		monitor.SetRecoveryManager(manager)
+	}
+}
+
+// SetMonitorInitializer configures a callback that is applied to all existing
+// and future tenant monitors after creation.
+func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor)) {
+	if mtm == nil {
+		return
+	}
+
+	mtm.mu.Lock()
+	mtm.initializer = initializer
+	monitors := make([]*Monitor, 0, len(mtm.monitors))
+	for _, monitor := range mtm.monitors {
+		if monitor == nil {
+			continue
+		}
+		monitors = append(monitors, monitor)
+	}
+	mtm.mu.Unlock()
+
+	if initializer == nil {
+		return
+	}
+	for _, monitor := range monitors {
+		initializer(monitor)
+	}
+}
+
 // GetMonitor returns the monitor instance for a specific organization.
 // It lazily initializes the monitor if it doesn't exist.
 func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
+	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
-		orgID = "default"
+		return nil, fmt.Errorf("organization ID is required")
 	}
 
 	mtm.mu.RLock()
@@ -52,31 +103,30 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	mtm.mu.Lock()
 	defer mtm.mu.Unlock()
 
+	if mtm.monitors == nil {
+		mtm.monitors = make(map[string]*Monitor)
+	}
+	if mtm.tenantCancel == nil {
+		mtm.tenantCancel = make(map[string]context.CancelFunc)
+	}
+	if mtm.tenantDone == nil {
+		mtm.tenantDone = make(map[string]chan struct{})
+	}
+
 	// Double-check locking pattern
 	if monitor, exists = mtm.monitors[orgID]; exists {
 		return monitor, nil
 	}
 
-	// Initialize new monitor for this tenant
-	log.Info().Str("org_id", orgID).Msg("Initializing tenant monitor")
-
-	// Single-tenant runtime path: no tenant persistence is available, so only
-	// the default monitor can be created from the base config directly.
 	if mtm.persistence == nil {
-		if orgID != "default" {
-			return nil, fmt.Errorf("tenant monitor unavailable in single-tenant mode: %s", orgID)
-		}
-
-		var err error
-		monitor, err = New(mtm.baseConfig.DeepCopy())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create default monitor: %w", err)
-		}
-		monitor.SetOrgID("default")
-		go monitor.Start(mtm.globalCtx, mtm.wsHub)
-		mtm.monitors[orgID] = monitor
-		return monitor, nil
+		return nil, fmt.Errorf("tenant persistence is not configured")
 	}
+	if orgID != "default" && !mtm.persistence.OrgExists(orgID) {
+		return nil, fmt.Errorf("organization %q is not provisioned", orgID)
+	}
+
+	// Initialize new monitor for this tenant
+	log.Info().Str("org_id", orgID).Msg("initializing tenant monitor")
 
 	// 1. Load Tenant Config
 	// Deep copy the base config to ensure tenant isolation.
@@ -100,7 +150,7 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Load tenant-specific nodes from <orgDir>/nodes.enc
 	nodesConfig, err := tenantPersistence.LoadNodesConfig()
 	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load tenant nodes config, starting with empty config")
+		log.Warn().Err(err).Str("org_id", orgID).Msg("failed to load tenant nodes config, starting with empty config")
 		// Not a fatal error - tenant may not have configured any nodes yet
 	} else if nodesConfig != nil {
 		tenantConfig.PVEInstances = nodesConfig.PVEInstances
@@ -114,22 +164,6 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 			Msg("Loaded tenant nodes config")
 	}
 
-	// Load tenant-scoped API tokens in addition to any global tokens inherited
-	// from the base config so org-specific agents continue working after
-	// the tenant monitor is recreated.
-	tenantTokens, err := tenantPersistence.LoadAPITokens()
-	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load tenant API tokens")
-	} else if len(tenantTokens) > 0 {
-		tenantConfig.APITokens = mergeAPITokens(tenantConfig.APITokens, tenantTokens)
-		tenantConfig.SortAPITokens()
-		log.Info().
-			Str("org_id", orgID).
-			Int("tenant_tokens", len(tenantTokens)).
-			Int("total_tokens", len(tenantConfig.APITokens)).
-			Msg("Loaded tenant API tokens")
-	}
-
 	// 2. Create Monitor
 	// Usage of internal New constructor
 	monitor, err = New(tenantConfig)
@@ -140,80 +174,133 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Set org ID for tenant isolation
 	// This enables tenant-scoped WebSocket broadcasts
 	monitor.SetOrgID(orgID)
+	if mtm.recoveryMgr != nil {
+		monitor.SetRecoveryManager(mtm.recoveryMgr)
+	}
+	if mtm.initializer != nil {
+		mtm.initializer(monitor)
+	}
 
-	// 3. Start Monitor
-	// We pass the global context, but maybe we should give it a derived one?
-	// Using globalCtx ensures all monitors stop when MultiTenantMonitor stops.
-	// NOTE: Monitor.Start is async
-	go monitor.Start(mtm.globalCtx, mtm.wsHub)
+	// 3. Start Monitor with a tenant-scoped runtime so RemoveTenant can stop it cleanly.
+	tenantCtx, tenantCancel := context.WithCancel(mtm.globalCtx)
+	tenantDone := make(chan struct{})
+	go func() {
+		defer close(tenantDone)
+		monitor.Start(tenantCtx, mtm.wsHub)
+	}()
 
 	mtm.monitors[orgID] = monitor
+	mtm.tenantCancel[orgID] = tenantCancel
+	mtm.tenantDone[orgID] = tenantDone
 	return monitor, nil
+}
+
+// PeekMonitor returns the tenant monitor instance if it is already initialized.
+// It does not create a new monitor.
+func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, false
+	}
+
+	mtm.mu.RLock()
+	defer mtm.mu.RUnlock()
+	monitor, exists := mtm.monitors[orgID]
+	return monitor, exists
 }
 
 // Stop stops all tenant monitors.
 func (mtm *MultiTenantMonitor) Stop() {
-	mtm.mu.Lock()
-	defer mtm.mu.Unlock()
+	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
 
-	log.Info().Msg("Stopping MultiTenantMonitor and all tenant instances")
+	mtm.mu.Lock()
 	mtm.globalCancel()
 
-	for _, monitor := range mtm.monitors {
+	monitors := make([]*Monitor, 0, len(mtm.monitors))
+	cancels := make([]context.CancelFunc, 0, len(mtm.tenantCancel))
+	doneSignals := make([]chan struct{}, 0, len(mtm.tenantDone))
+	for orgID, monitor := range mtm.monitors {
+		if cancel := mtm.tenantCancel[orgID]; cancel != nil {
+			cancels = append(cancels, cancel)
+		}
+		if done := mtm.tenantDone[orgID]; done != nil {
+			doneSignals = append(doneSignals, done)
+		}
+		monitors = append(monitors, monitor)
+	}
+	mtm.tenantCancel = make(map[string]context.CancelFunc)
+	mtm.tenantDone = make(map[string]chan struct{})
+	mtm.monitors = make(map[string]*Monitor)
+	mtm.mu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+	for _, done := range doneSignals {
+		waitForTenantMonitorShutdown("", done)
+	}
+	for _, monitor := range monitors {
 		monitor.Stop()
 	}
-	// Clear map
-	mtm.monitors = make(map[string]*Monitor)
 }
 
 // RemoveTenant stops and removes a specific tenant's monitor.
 // Useful for offboarding or manual reloading.
 func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
-	mtm.mu.Lock()
-	defer mtm.mu.Unlock()
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return
+	}
 
-	if monitor, exists := mtm.monitors[orgID]; exists {
-		log.Info().Str("org_id", orgID).Msg("Stopping and removing tenant monitor")
-		monitor.Stop()
-		delete(mtm.monitors, orgID)
+	mtm.mu.Lock()
+	monitor, exists := mtm.monitors[orgID]
+	cancel := mtm.tenantCancel[orgID]
+	done := mtm.tenantDone[orgID]
+	delete(mtm.monitors, orgID)
+	delete(mtm.tenantCancel, orgID)
+	delete(mtm.tenantDone, orgID)
+	mtm.mu.Unlock()
+
+	if !exists {
+		return
+	}
+
+	log.Info().Str("org_id", orgID).Msg("stopping and removing tenant monitor")
+	if cancel != nil {
+		cancel()
+	}
+	waitForTenantMonitorShutdown(orgID, done)
+	monitor.Stop()
+}
+
+func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) {
+	if done == nil {
+		return
+	}
+
+	timer := time.NewTimer(tenantMonitorShutdownTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+	case <-timer.C:
+		logger := log.Warn().Dur("timeout", tenantMonitorShutdownTimeout)
+		if orgID != "" {
+			logger = logger.Str("org_id", orgID)
+		}
+		logger.Msg("timed out waiting for tenant monitor loop to exit")
 	}
 }
 
 // OrgExists checks if an organization exists (directory exists) without creating it.
 func (mtm *MultiTenantMonitor) OrgExists(orgID string) bool {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return false
+	}
+
 	if mtm.persistence == nil {
 		return false
 	}
 	return mtm.persistence.OrgExists(orgID)
-}
-
-func mergeAPITokens(baseTokens, tenantTokens []config.APITokenRecord) []config.APITokenRecord {
-	if len(baseTokens) == 0 && len(tenantTokens) == 0 {
-		return nil
-	}
-
-	merged := make([]config.APITokenRecord, 0, len(baseTokens)+len(tenantTokens))
-	seen := make(map[string]struct{}, len(baseTokens)+len(tenantTokens))
-
-	appendUnique := func(tokens []config.APITokenRecord) {
-		for _, token := range tokens {
-			key := token.Hash
-			if key == "" {
-				key = token.ID
-			}
-			if key == "" {
-				continue
-			}
-			if _, exists := seen[key]; exists {
-				continue
-			}
-			seen[key] = struct{}{}
-			merged = append(merged, token.Clone())
-		}
-	}
-
-	appendUnique(baseTokens)
-	appendUnique(tenantTokens)
-
-	return merged
 }

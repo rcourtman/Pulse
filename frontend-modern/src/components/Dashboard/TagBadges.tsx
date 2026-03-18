@@ -2,7 +2,6 @@ import { Component, For, Show } from 'solid-js';
 import { getTagColorWithSpecial } from '@/utils/tagColors';
 import { useDarkMode } from '@/App';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 
 interface TagBadgesProps {
   tags?: string[];
@@ -14,17 +13,15 @@ interface TagBadgesProps {
 
 export const TagBadges: Component<TagBadgesProps> = (props) => {
   // maxVisible: 0 means show all, undefined defaults to 3
-  const maxVisible = () => props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3);
+  const maxVisible = () => (props.maxVisible === 0 ? Infinity : (props.maxVisible ?? 3));
   const darkModeSignal = useDarkMode();
   const isDark = () => props.isDarkMode ?? darkModeSignal();
-  const ws = getGlobalWebSocketStore();
-  const pveTagColors = () => ws.state.pveTagColors;
 
   const visibleTags = () => props.tags?.slice(0, maxVisible()) || [];
   const hiddenTags = () => props.tags?.slice(maxVisible()) || [];
 
   const TagDot: Component<{ tag: string }> = (dotProps) => {
-    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark(), pveTagColors());
+    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark());
     const isActive = () => props.activeSearch?.includes(`tags:${dotProps.tag}`) || false;
 
     return (
@@ -63,9 +60,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
   return (
     <Show when={props.tags && props.tags.length > 0}>
       <div class="inline-flex items-center gap-1 ml-2">
-        <For each={visibleTags()}>
-          {(tag) => <TagDot tag={tag} />}
-        </For>
+        <For each={visibleTags()}>{(tag) => <TagDot tag={tag} />}</For>
 
         {/* Show the final dot if only one hidden tag remains */}
         <Show when={hiddenTags().length === 1}>
@@ -91,7 +86,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               hideTooltip();
             }}
           >
-            <div class="inline-flex items-center text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap leading-none cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 hover:scale-125 transition-transform duration-200 ease-out">
+            <div class="inline-flex items-center text-[10px] text-muted whitespace-nowrap leading-none cursor-pointer hover:text-base-content hover:scale-125 transition-transform duration-200 ease-out">
               +{hiddenTags().length}
             </div>
           </div>

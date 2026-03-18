@@ -20,6 +20,8 @@ func TestAuditEndpointsRequireSettingsReadScope(t *testing.T) {
 	paths := []string{
 		"/api/audit",
 		"/api/audit/event-1/verify",
+		"/api/audit/export",
+		"/api/audit/summary",
 	}
 
 	for _, path := range paths {

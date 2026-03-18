@@ -1,0 +1,276 @@
+package licensing
+
+import (
+	"reflect"
+	"testing"
+	"time"
+)
+
+func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 50,
+	}
+
+	payload := BuildEntitlementPayload(status, "")
+
+	if payload.SubscriptionState != string(SubStateActive) {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, payload.SubscriptionState)
+	}
+	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
+		t.Fatalf("expected capabilities to match status features")
+	}
+
+	var agentLimit *LimitStatus
+	for i := range payload.Limits {
+		if payload.Limits[i].Key == MaxMonitoredSystemsLicenseGateKey {
+			agentLimit = &payload.Limits[i]
+			break
+		}
+	}
+	if agentLimit == nil {
+		t.Fatalf("expected max_monitored_systems limit in payload")
+	}
+	if agentLimit.Limit != 50 {
+		t.Fatalf("expected max_monitored_systems limit 50, got %d", agentLimit.Limit)
+	}
+	if len(payload.UpgradeReasons) != 0 {
+		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
+	}
+}
+
+func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:    true,
+		Tier:     TierFree,
+		Features: append([]string(nil), TierFeatures[TierFree]...),
+	}
+
+	payload := BuildEntitlementPayload(status, "")
+	if len(payload.UpgradeReasons) == 0 {
+		t.Fatalf("expected upgrade reasons for free tier")
+	}
+	for _, reason := range payload.UpgradeReasons {
+		if reason.ActionURL == "" {
+			t.Fatalf("expected action_url for reason %q", reason.Key)
+		}
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 50,
+		MaxGuests:           100,
+	}
+
+	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystems: 12,
+		Guests:           44,
+		LegacyConnections: LegacyConnectionCounts{
+			ProxmoxNodes:       2,
+			DockerHosts:        1,
+			KubernetesClusters: 3,
+		},
+	}, nil)
+
+	var agentLimit *LimitStatus
+	var guestLimit *LimitStatus
+	for i := range payload.Limits {
+		if payload.Limits[i].Key == MaxMonitoredSystemsLicenseGateKey {
+			agentLimit = &payload.Limits[i]
+		}
+		if payload.Limits[i].Key == "max_guests" {
+			guestLimit = &payload.Limits[i]
+		}
+	}
+
+	if agentLimit == nil {
+		t.Fatalf("expected max_monitored_systems limit")
+	}
+	if guestLimit == nil {
+		t.Fatalf("expected max_guests limit")
+	}
+	if agentLimit.Current != 12 {
+		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
+	}
+	if guestLimit.Current != 44 {
+		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
+	}
+	if payload.LegacyConnections.ProxmoxNodes != 2 {
+		t.Fatalf("expected proxmox_nodes 2, got %d", payload.LegacyConnections.ProxmoxNodes)
+	}
+	if payload.LegacyConnections.DockerHosts != 1 {
+		t.Fatalf("expected docker_hosts 1, got %d", payload.LegacyConnections.DockerHosts)
+	}
+	if payload.LegacyConnections.KubernetesClusters != 3 {
+		t.Fatalf(
+			"expected kubernetes_clusters 3, got %d",
+			payload.LegacyConnections.KubernetesClusters,
+		)
+	}
+	if payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=false under monitored-system counting")
+	}
+}
+
+func TestBuildEntitlementPayload_TrialState(t *testing.T) {
+	expiresAt := time.Now().Add(36 * time.Hour).UTC().Format(time.RFC3339)
+	status := &LicenseStatus{
+		Valid:     true,
+		Tier:      TierPro,
+		Features:  append([]string(nil), TierFeatures[TierPro]...),
+		ExpiresAt: &expiresAt,
+	}
+
+	payload := BuildEntitlementPayload(status, string(SubStateTrial))
+
+	if payload.SubscriptionState != string(SubStateTrial) {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateTrial, payload.SubscriptionState)
+	}
+	if payload.TrialExpiresAt == nil {
+		t.Fatalf("expected trial_expires_at to be populated for trial state")
+	}
+	if payload.TrialDaysRemaining == nil {
+		t.Fatalf("expected trial_days_remaining to be populated for trial state")
+	}
+	if *payload.TrialDaysRemaining != 2 {
+		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
+	}
+}
+
+func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
+	tests := []struct {
+		name        string
+		planVersion string
+	}{
+		{name: "lifetime grandfathered", planVersion: "v5_lifetime_grandfathered"},
+		{name: "monthly grandfathered", planVersion: "v5_pro_monthly_grandfathered"},
+		{name: "annual grandfathered", planVersion: "v5_pro_annual_grandfathered"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			expiresAt := time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339)
+			graceEnd := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+			status := &LicenseStatus{
+				Valid:          true,
+				Tier:           TierPro,
+				PlanVersion:    tc.planVersion,
+				Email:          "owner@example.com",
+				ExpiresAt:      &expiresAt,
+				IsLifetime:     false,
+				DaysRemaining:  3,
+				InGracePeriod:  true,
+				GracePeriodEnd: &graceEnd,
+				Features:       append([]string(nil), TierFeatures[TierPro]...),
+			}
+
+			payload := BuildEntitlementPayload(status, string(SubStateGrace))
+
+			if !payload.Valid {
+				t.Fatalf("expected valid=true, got %v", payload.Valid)
+			}
+			if payload.PlanVersion != tc.planVersion {
+				t.Fatalf("expected plan_version %q, got %q", tc.planVersion, payload.PlanVersion)
+			}
+			if payload.LicensedEmail != "owner@example.com" {
+				t.Fatalf("expected licensed_email %q, got %q", "owner@example.com", payload.LicensedEmail)
+			}
+			if payload.ExpiresAt == nil || *payload.ExpiresAt != expiresAt {
+				t.Fatalf("expected expires_at %q, got %v", expiresAt, payload.ExpiresAt)
+			}
+			if payload.DaysRemaining != 3 {
+				t.Fatalf("expected days_remaining 3, got %d", payload.DaysRemaining)
+			}
+			if !payload.InGracePeriod {
+				t.Fatalf("expected in_grace_period=true, got %v", payload.InGracePeriod)
+			}
+			if payload.GracePeriodEnd == nil || *payload.GracePeriodEnd != graceEnd {
+				t.Fatalf("expected grace_period_end %q, got %v", graceEnd, payload.GracePeriodEnd)
+			}
+		})
+	}
+}
+
+func TestBuildEntitlementPayload_MaxHistoryDays(t *testing.T) {
+	tests := []struct {
+		name     string
+		tier     Tier
+		wantDays int
+	}{
+		{"free tier gets 7 days", TierFree, 7},
+		{"relay tier gets 14 days", TierRelay, 14},
+		{"pro tier gets 90 days", TierPro, 90},
+		{"pro_plus tier gets 90 days", TierProPlus, 90},
+		{"pro_annual tier gets 90 days", TierProAnnual, 90},
+		{"lifetime tier gets 90 days", TierLifetime, 90},
+		{"cloud tier gets 90 days", TierCloud, 90},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &LicenseStatus{
+				Valid:    true,
+				Tier:     tc.tier,
+				Features: append([]string(nil), TierFeatures[tc.tier]...),
+			}
+			payload := BuildEntitlementPayload(status, "")
+			if payload.MaxHistoryDays != tc.wantDays {
+				t.Fatalf("expected MaxHistoryDays=%d for tier %q, got %d", tc.wantDays, tc.tier, payload.MaxHistoryDays)
+			}
+		})
+	}
+}
+
+func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
+	payload := BuildEntitlementPayloadWithUsage(nil, "", EntitlementUsageSnapshot{}, nil)
+	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
+		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
+	}
+	if payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=false for nil status payload")
+	}
+	if payload.LegacyConnections.Total() != 0 {
+		t.Fatalf("expected zero legacy connections for nil status payload, got %+v", payload.LegacyConnections)
+	}
+}
+
+func TestLimitState(t *testing.T) {
+	tests := []struct {
+		name    string
+		current int64
+		limit   int64
+		want    string
+	}{
+		{name: "ok_below_threshold", current: 50, limit: 100, want: "ok"},
+		{name: "warning_at_90_percent", current: 90, limit: 100, want: "warning"},
+		{name: "enforced_at_limit", current: 100, limit: 100, want: "enforced"},
+		{name: "enforced_above_limit", current: 110, limit: 100, want: "enforced"},
+		{name: "ok_unlimited", current: 50, limit: 0, want: "ok"},
+		// Small-limit behavior: warn at N-1
+		{name: "small_limit_ok", current: 3, limit: 5, want: "ok"},
+		{name: "small_limit_warning_at_n_minus_1", current: 4, limit: 5, want: "warning"},
+		{name: "small_limit_enforced_at_limit", current: 5, limit: 5, want: "enforced"},
+		{name: "small_limit_8_warning", current: 7, limit: 8, want: "warning"},
+		{name: "small_limit_8_ok", current: 6, limit: 8, want: "ok"},
+		{name: "small_limit_10_warning", current: 9, limit: 10, want: "warning"},
+		{name: "small_limit_10_ok", current: 8, limit: 10, want: "ok"},
+		{name: "limit_1_zero_usage_ok", current: 0, limit: 1, want: "ok"},
+		{name: "limit_1_at_limit_enforced", current: 1, limit: 1, want: "enforced"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := LimitState(tc.current, tc.limit)
+			if got != tc.want {
+				t.Fatalf("LimitState(%d, %d) = %q, want %q", tc.current, tc.limit, got, tc.want)
+			}
+		})
+	}
+}

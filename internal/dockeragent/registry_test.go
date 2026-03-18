@@ -1,6 +1,7 @@
 package dockeragent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -73,6 +74,56 @@ func TestParseImageReference(t *testing.T) {
 			image:    "lscr.io/linuxserver/plex:latest",
 			wantReg:  "lscr.io",
 			wantRepo: "linuxserver/plex",
+			wantTag:  "latest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotReg, gotRepo, gotTag := parseImageReference(tt.image)
+			if gotReg != tt.wantReg {
+				t.Errorf("registry = %q, want %q", gotReg, tt.wantReg)
+			}
+			if gotRepo != tt.wantRepo {
+				t.Errorf("repository = %q, want %q", gotRepo, tt.wantRepo)
+			}
+			if gotTag != tt.wantTag {
+				t.Errorf("tag = %q, want %q", gotTag, tt.wantTag)
+			}
+		})
+	}
+}
+
+func TestParseImageReference_ImageIDForms(t *testing.T) {
+	hexImageID := strings.Repeat("a", 64)
+	nonHexImageID := strings.Repeat("a", 63) + "g"
+
+	tests := []struct {
+		name     string
+		image    string
+		wantReg  string
+		wantRepo string
+		wantTag  string
+	}{
+		{
+			name:     "sha256 digest string is skipped",
+			image:    "sha256:" + strings.Repeat("a", 64),
+			wantReg:  "",
+			wantRepo: "",
+			wantTag:  "",
+		},
+		{
+			name:     "64-char hex image id is skipped",
+			image:    hexImageID,
+			wantReg:  "",
+			wantRepo: "",
+			wantTag:  "",
+		},
+		{
+			name:     "64-char non-hex value is parsed as official image",
+			image:    nonHexImageID,
+			wantReg:  "registry-1.docker.io",
+			wantRepo: "library/" + nonHexImageID,
 			wantTag:  "latest",
 		},
 	}

@@ -1,0 +1,1295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulse.local/docs/release-control/v6/status.schema.json",
+  "title": "Pulse v6 Status Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "updated_at",
+    "scope",
+    "source_precedence",
+    "execution_model",
+    "readiness",
+    "readiness_assertions",
+    "evidence_reference_policy",
+    "priority_engine",
+    "lanes",
+    "release_gates",
+    "lane_followups",
+    "coverage_gaps",
+    "candidate_lanes",
+    "work_claims",
+    "open_decisions",
+    "source_of_truth_file",
+    "resolved_decisions"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "6.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_precedence": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/status.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/status.schema.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/subsystems/registry.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/subsystems/registry.schema.json"
+        }
+      ],
+      "items": false
+    },
+    "execution_model": {
+      "type": "string",
+      "const": "direct-repo-sessions"
+    },
+    "readiness": {
+      "$ref": "#/$defs/readiness"
+    },
+    "readiness_assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/readiness_assertion"
+      }
+    },
+    "evidence_reference_policy": {
+      "$ref": "#/$defs/evidence_reference_policy"
+    },
+    "priority_engine": {
+      "$ref": "#/$defs/priority_engine"
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/lane"
+      }
+    },
+    "release_gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/release_gate"
+      }
+    },
+    "lane_followups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lane_followup"
+      }
+    },
+    "coverage_gaps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverage_gap"
+      }
+    },
+    "candidate_lanes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate_lane"
+      }
+    },
+    "work_claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/work_claim"
+      }
+    },
+    "open_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/open_decision"
+      }
+    },
+    "source_of_truth_file": {
+      "type": "string",
+      "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+    },
+    "resolved_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resolved_decision"
+      }
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_repos",
+        "control_plane_repo",
+        "ignored_repos",
+        "repo_catalog"
+      ],
+      "properties": {
+        "active_repos": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "control_plane_repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ignored_repos": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "repo_catalog": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repo_catalog_entry"
+          }
+        }
+      }
+    },
+    "repo_catalog_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "purpose",
+        "visibility"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "private"
+          ]
+        }
+      }
+    },
+    "evidence_reference_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "allowed_kinds",
+        "absolute_paths_forbidden",
+        "local_repo"
+      ],
+      "properties": {
+        "format": {
+          "type": "string",
+          "const": "repo-qualified-relative-paths"
+        },
+        "allowed_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "file",
+              "dir"
+            ]
+          }
+        },
+        "absolute_paths_forbidden": {
+          "type": "boolean",
+          "const": true
+        },
+        "local_repo": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_ready_rule",
+        "rc_ready_rule",
+        "release_ready_rule"
+      ],
+      "properties": {
+        "repo_ready_rule": {
+          "type": "string",
+          "const": "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+        },
+        "rc_ready_rule": {
+          "type": "string",
+          "const": "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
+        },
+        "release_ready_rule": {
+          "type": "string",
+          "const": "rc_ready plus all release-ready assertions passed plus zero release-ready open_decisions plus all release-ready release_gates passed"
+        }
+      }
+    },
+    "priority_engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula",
+        "floor_rule",
+        "weights"
+      ],
+      "properties": {
+        "formula": {
+          "type": "string",
+          "minLength": 1
+        },
+        "floor_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "release_critical_lanes",
+            "minimum_score"
+          ],
+          "properties": {
+            "release_critical_lanes": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^L[0-9]+$"
+              }
+            },
+            "minimum_score": {
+              "type": "number"
+            }
+          }
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "gap_multiplier",
+            "blocker_bonus",
+            "criticality_range",
+            "staleness_range",
+            "dependency_range"
+          ],
+          "properties": {
+            "gap_multiplier": {
+              "type": "number"
+            },
+            "blocker_bonus": {
+              "type": "number"
+            },
+            "criticality_range": {
+              "type": "string",
+              "minLength": 1
+            },
+            "staleness_range": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dependency_range": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_score": {
+                "not": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not-started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_score": {
+                "const": 0
+              },
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "minItems": 1
+              },
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "not-started",
+                  "partial",
+                  "target-met"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "complete"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "target-met"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "bounded-residual"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "partial"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "state": {
+                    "const": "open"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "not": {
+                  "const": "target-met"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "id",
+        "name",
+        "target_score",
+        "current_score",
+        "status",
+        "completion",
+        "blockers",
+        "subsystems",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^L[0-9]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "current_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not-started",
+            "partial",
+            "target-met",
+            "blocked"
+          ]
+        },
+        "completion": {
+          "$ref": "#/$defs/lane_completion"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lane_blocker_ref"
+          }
+        },
+        "subsystems": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "lane_completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "bounded-residual"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tracking": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "open",
+                  "complete"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tracking": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "required": [
+        "state",
+        "summary",
+        "tracking"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "bounded-residual",
+            "complete"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tracking": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lane_completion_tracking_ref"
+          }
+        }
+      }
+    },
+    "lane_completion_tracking_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "lane-followup",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "lane_blocker_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "readiness-assertion",
+            "release-gate",
+            "open-decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo",
+        "path",
+        "kind"
+      ],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "file",
+            "dir"
+          ]
+        },
+        "evidence_tier": {
+          "type": "string",
+          "enum": [
+            "test-proof",
+            "local-rehearsal",
+            "managed-runtime-exercise",
+            "real-external-e2e",
+            "production-observed"
+          ]
+        }
+      }
+    },
+    "readiness_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "kind",
+        "blocking_level",
+        "proof_type",
+        "lane_ids",
+        "subsystem_ids",
+        "release_gate_ids",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^RA[0-9]+$"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "invariant",
+            "journey",
+            "trust-gate"
+          ]
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "repo-ready",
+            "rc-ready",
+            "release-ready"
+          ]
+        },
+        "proof_type": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "hybrid"
+          ]
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "release_gate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "proof_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/proof_command"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "proof_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "run"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "release_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "blocking_level",
+        "minimum_evidence_tier",
+        "status",
+        "verification_doc",
+        "lane_ids",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "rc-ready",
+            "release-ready"
+          ]
+        },
+        "minimum_evidence_tier": {
+          "type": "string",
+          "enum": [
+            "test-proof",
+            "local-rehearsal",
+            "managed-runtime-exercise",
+            "real-external-e2e",
+            "production-observed"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "blocked",
+            "passed"
+          ]
+        },
+        "verification_doc": {
+          "type": "string",
+          "const": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "open_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "blocking_level",
+        "status",
+        "opened_at",
+        "lane_ids",
+        "subsystem_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "rc-ready",
+            "release-ready"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "blocked",
+            "owner-action"
+          ]
+        },
+        "opened_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "lane_followup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "status",
+        "recorded_at",
+        "lane_ids",
+        "subsystem_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "active",
+            "parked"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "coverage_gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "status",
+        "recorded_at",
+        "lane_ids",
+        "subsystem_ids",
+        "proposed_resolution",
+        "coverage_impact",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "discovered",
+            "triaged",
+            "planned"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "proposed_resolution": {
+          "type": "string",
+          "enum": [
+            "new-lane",
+            "lane-split",
+            "lane-expansion",
+            "target-update"
+          ]
+        },
+        "coverage_impact": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "candidate_lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "summary",
+        "status",
+        "recorded_at",
+        "target_id",
+        "current_lane_ids",
+        "coverage_gap_ids",
+        "subsystem_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "proposed",
+            "planned",
+            "accepted"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "target_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "coverage_gap_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "work_claim_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "lane",
+            "lane-followup",
+            "coverage-gap",
+            "candidate-lane",
+            "readiness-assertion",
+            "release-gate",
+            "open-decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "work_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "agent_id",
+        "summary",
+        "target_id",
+        "claimed_at",
+        "heartbeat_at",
+        "expires_at",
+        "work_item"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claimed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "heartbeat_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "work_item": {
+          "$ref": "#/$defs/work_claim_ref"
+        }
+      }
+    },
+    "resolved_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "kind",
+        "decided_at",
+        "lane_ids",
+        "subsystem_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "architecture",
+            "contract",
+            "governance",
+            "migration",
+            "pricing",
+            "release-policy"
+          ]
+        },
+        "decided_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

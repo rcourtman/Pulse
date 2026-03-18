@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
-	anthropicAPIVersion = "2023-06-01"
-	maxRetries          = 3
-	initialBackoff      = 2 * time.Second
+	anthropicAPIURL      = "https://api.anthropic.com/v1/messages"
+	anthropicAPIVersion  = "2023-06-01"
+	maxRetries           = 3
+	initialBackoff       = 2 * time.Second
+	defaultClientTimeout = 5 * time.Minute
 )
 
 // AnthropicClient implements the Provider interface for Anthropic's Claude API
@@ -43,7 +44,7 @@ func NewAnthropicClientWithBaseURL(apiKey, model, baseURL string, timeout time.D
 		baseURL = anthropicAPIURL
 	}
 	if timeout <= 0 {
-		timeout = 300 * time.Second // Default 5 minutes
+		timeout = defaultClientTimeout
 	}
 	return &AnthropicClient{
 		apiKey:  apiKey,
@@ -152,7 +153,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		// Handle tool results specially
 		if m.ToolResult != nil {
 			// Tool result message - Content needs to be JSON-encoded string
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
@@ -226,7 +230,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	}
 
 	// Add tools if provided
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
 			if t.Type == "web_search_20250305" {
@@ -251,7 +259,8 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	// Add tool_choice if specified
 	// This controls whether Claude MUST use tools vs just being able to
 	// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use#forcing-tool-use
-	if req.ToolChoice != nil {
+	// Anthropic may reject tool_choice if tools are not provided.
+	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
 			Name: req.ToolChoice.Name,
@@ -277,10 +286,17 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 				Str("last_error", lastErr.Error()).
 				Msg("Retrying Anthropic API request after transient error")
 
+			backoffTimer := time.NewTimer(backoff)
 			select {
 			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
 				return nil, ctx.Err()
-			case <-time.After(backoff):
+			case <-backoffTimer.C:
 			}
 		}
 
@@ -365,7 +381,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 				Msg("Server tool use detected (handled by Anthropic)")
 		case "web_search_tool_result":
 			// Results from web search - already incorporated into Claude's response
-			log.Debug().Msg("Web search results received")
+			log.Debug().Msg("web search results received")
 		}
 	}
 
@@ -380,7 +396,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			Int("cache_creation_tokens", anthropicResp.Usage.CacheCreationInputTokens).
 			Int("cache_read_tokens", anthropicResp.Usage.CacheReadInputTokens)
 	}
-	logEvent.Msg("Anthropic response parsed")
+	logEvent.Msg("anthropic response parsed")
 
 	return &ChatResponse{
 		Content:      textContent,
@@ -395,8 +411,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 // TestConnection validates the API key by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("anthropic test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *AnthropicClient) modelsEndpoint() string {
@@ -458,14 +476,14 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		})
 	}
 
-	log.Info().Int("total", len(models)).Int("notable", notableCount).Msg("Anthropic ListModels returned")
+	log.Info().Int("total", len(models)).Int("notable", notableCount).Msg("anthropic ListModels returned")
 
 	// Log model IDs for debugging
 	var modelIDs []string
 	for _, m := range models {
 		modelIDs = append(modelIDs, m.ID)
 	}
-	log.Debug().Strs("models", modelIDs).Msg("Anthropic models")
+	log.Debug().Strs("models", modelIDs).Msg("anthropic models")
 
 	return models, nil
 }
@@ -530,7 +548,10 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		}
 
 		if m.ToolResult != nil {
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
@@ -599,7 +620,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		anthropicReq.Temperature = req.Temperature
 	}
 
-	if len(req.Tools) > 0 {
+	shouldAddTools := len(req.Tools) > 0
+	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if shouldAddTools {
 		anthropicReq.Tools = make([]anthropicTool, len(req.Tools))
 		for i, t := range req.Tools {
 			if t.Type == "web_search_20250305" {
@@ -621,7 +646,8 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 	}
 
 	// Add tool_choice if specified (same as non-streaming)
-	if req.ToolChoice != nil {
+	// Anthropic may reject tool_choice if tools are not provided.
+	if shouldAddTools && req.ToolChoice != nil {
 		anthropicReq.ToolChoice = &anthropicToolChoice{
 			Type: string(req.ToolChoice.Type),
 			Name: req.ToolChoice.Name,
@@ -696,7 +722,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 
 				var event anthropicStreamEvent
 				if err := json.Unmarshal([]byte(eventData), &event); err != nil {
-					log.Debug().Err(err).Str("data", eventData).Msg("Failed to parse stream event")
+					log.Debug().Err(err).Str("data", eventData).Msg("failed to parse stream event")
 					continue
 				}
 

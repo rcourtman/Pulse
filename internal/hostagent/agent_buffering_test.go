@@ -1,8 +1,10 @@
 package hostagent
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -30,7 +32,7 @@ func TestAgentBuffering(t *testing.T) {
 		fail := shouldFail
 		mu.Unlock()
 
-		if r.URL.Path != "/api/agents/host/report" {
+		if r.URL.Path != "/api/agents/agent/report" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -43,8 +45,19 @@ func TestAgentBuffering(t *testing.T) {
 			return
 		}
 
+		var bodyReader io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gz, gzErr := gzip.NewReader(r.Body)
+			if gzErr != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			defer gz.Close()
+			bodyReader = gz
+		}
+
 		var report host.Report
-		if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+		if err := json.NewDecoder(bodyReader).Decode(&report); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

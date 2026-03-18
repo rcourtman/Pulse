@@ -1,5 +1,8 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
+import { assertAPIResponseOK } from './responseUtils';
 import { logger } from '@/utils/logger';
+import type { AIChatStreamEvent } from './generated/aiChatEvents';
+import { consumeJSONEventStream } from './streaming';
 
 // AI Chat API - Simplified AI interface
 
@@ -9,6 +12,15 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   message_count: number;
+}
+
+export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent';
+
+export interface ChatMention {
+  id: string;
+  name: string;
+  type: ChatMentionType;
+  node?: string;
 }
 
 export interface ChatMessage {
@@ -27,10 +39,7 @@ export interface ToolCall {
   success: boolean;
 }
 
-export interface StreamEvent {
-  type: 'content' | 'thinking' | 'tool_start' | 'tool_end' | 'tool' | 'approval_needed' | 'question' | 'done' | 'error';
-  data?: any;
-}
+export type StreamEvent = AIChatStreamEvent;
 
 export interface AIStatus {
   running: boolean;
@@ -87,41 +96,49 @@ export class AIChatAPI {
 
   // Delete a session
   static async deleteSession(sessionId: string): Promise<void> {
-    await apiFetch(`${this.baseUrl}/sessions/${sessionId}`, {
+    await apiFetch(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
     });
   }
 
   // Get messages for a session
   static async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/messages`) as Promise<ChatMessage[]>;
+    return apiFetchJSON(
+      `${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    ) as Promise<ChatMessage[]>;
   }
 
   // Abort a session
   static async abortSession(sessionId: string): Promise<void> {
-    await apiFetch(`${this.baseUrl}/sessions/${sessionId}/abort`, {
+    await apiFetch(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/abort`, {
       method: 'POST',
     });
   }
 
   // Approve a pending command
   static async approveCommand(approvalId: string): Promise<{ approved: boolean; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/approve`, {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${encodeURIComponent(approvalId)}/approve`, {
       method: 'POST',
     }) as Promise<{ approved: boolean; message: string }>;
   }
 
   // Deny a pending command
-  static async denyCommand(approvalId: string, reason?: string): Promise<{ denied: boolean; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/deny`, {
+  static async denyCommand(
+    approvalId: string,
+    reason?: string,
+  ): Promise<{ denied: boolean; message: string }> {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${encodeURIComponent(approvalId)}/deny`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || 'User skipped' }),
     }) as Promise<{ denied: boolean; message: string }>;
   }
 
   // Answer a pending question from the AI chat
-  static async answerQuestion(questionId: string, answers: Array<{ id: string; value: string }>): Promise<void> {
-    await apiFetch(`${this.baseUrl}/question/${questionId}/answer`, {
+  static async answerQuestion(
+    questionId: string,
+    answers: Array<{ id: string; value: string }>,
+  ): Promise<void> {
+    await apiFetch(`${this.baseUrl}/question/${encodeURIComponent(questionId)}/answer`, {
       method: 'POST',
       body: JSON.stringify({ answers }),
     });
@@ -137,34 +154,38 @@ export class AIChatAPI {
   }
 
   // Summarize a session (compress context when nearing limits)
-  static async summarizeSession(sessionId: string): Promise<{ success: boolean; message?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/summarize`, {
+  static async summarizeSession(
+    sessionId: string,
+  ): Promise<{ success: boolean; message?: string }> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/summarize`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message?: string }>;
   }
 
   // Get file changes/diff for a session
   static async getSessionDiff(sessionId: string): Promise<SessionDiff> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/diff`) as Promise<SessionDiff>;
+    return apiFetchJSON(
+      `${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/diff`,
+    ) as Promise<SessionDiff>;
   }
 
   // Fork a session (create a branch point)
   static async forkSession(sessionId: string): Promise<ChatSession> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/fork`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/fork`, {
       method: 'POST',
     }) as Promise<ChatSession>;
   }
 
   // Revert session changes
   static async revertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/revert`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/revert`, {
       method: 'POST',
     }) as Promise<{ success: boolean }>;
   }
 
   // Unrevert session changes (redo)
   static async unrevertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/unrevert`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/unrevert`, {
       method: 'POST',
     }) as Promise<{ success: boolean }>;
   }
@@ -176,8 +197,8 @@ export class AIChatAPI {
     model: string | undefined,
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
-    mentions?: Array<{ id: string; name: string; type: string; node?: string }>,
-    findingId?: string
+    mentions?: ChatMention[],
+    findingId?: string,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -198,98 +219,31 @@ export class AIChatAPI {
       body: JSON.stringify(body),
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
+        Accept: 'text/event-stream',
       },
       signal,
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed with status ${response.status}`);
-    }
+    await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let lastEventTime = Date.now();
-    const STREAM_TIMEOUT_MS = 300000; // 5 minutes
-
-    try {
-      for (; ;) {
-        if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          logger.warn('[AI Chat] Stream timeout');
-          break;
-        }
-
-        const readPromise = reader.read();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
-        });
-
-        let result: ReadableStreamReadResult<Uint8Array>;
-        try {
-          result = await Promise.race([readPromise, timeoutPromise]);
-        } catch (e) {
-          if ((e as Error).message === 'Read timeout') break;
-          throw e;
-        }
-
-        const { done, value } = result;
-        if (done) break;
-
-        lastEventTime = Date.now();
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-
-        // Process SSE messages
-        const normalizedBuffer = buffer.replace(/\r\n/g, '\n');
-        const messages = normalizedBuffer.split('\n\n');
-        buffer = messages.pop() || '';
-
-        for (const message of messages) {
-          if (!message.trim() || message.trim().startsWith(':')) continue;
-
-          const dataLines = message.split('\n').filter(line => line.startsWith('data: '));
-          for (const line of dataLines) {
-            try {
-              const jsonStr = line.slice(6);
-              if (!jsonStr.trim()) continue;
-
-              const event = JSON.parse(jsonStr) as StreamEvent;
-              logger.debug('[AI Chat] Event', { type: event.type });
-              onEvent(event);
-
-              if (event.type === 'done' || event.type === 'error') {
-                return;
-              }
-            } catch (e) {
-              logger.error('[AI Chat] Failed to parse event', { error: e, line });
-            }
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-        try {
-          const jsonStr = buffer.slice(6);
-          if (jsonStr.trim()) {
-            const event = JSON.parse(jsonStr) as StreamEvent;
-            onEvent(event);
-          }
-        } catch {
-          logger.warn('[AI Chat] Could not parse remaining buffer');
-        }
-      }
-
-      // Ensure done event
-      onEvent({ type: 'done' });
-    } finally {
-      reader.releaseLock();
-    }
+    await consumeJSONEventStream<StreamEvent>(response, {
+      onEvent: (event) => {
+        logger.debug('[AI Chat] Event', { type: event.type });
+        onEvent(event);
+        return event.type === 'done' || event.type === 'error';
+      },
+      onParseError: (line) => {
+        logger.error('[AI Chat] Failed to parse event', { line });
+      },
+      onTrailingParseError: () => {
+        logger.warn('[AI Chat] Could not parse remaining buffer');
+      },
+      onTimeout: () => {
+        logger.warn('[AI Chat] Stream timeout');
+      },
+      onComplete: () => {
+        onEvent({ type: 'done' });
+      },
+    });
   }
 }

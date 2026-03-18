@@ -54,7 +54,7 @@ const testOIDCDiscovery = `{
 
 func TestHandleTestSSOProvider_SAMLSuccess(t *testing.T) {
 	// Create mock SAML metadata server
-	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write([]byte(testSAMLMetadata))
 	}))
@@ -139,7 +139,7 @@ func TestHandleTestSSOProvider_SAMLMetadataXML(t *testing.T) {
 
 func TestHandleTestSSOProvider_SAMLFetchError(t *testing.T) {
 	// Server that returns 500
-	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	errorServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer errorServer.Close()
@@ -196,7 +196,7 @@ func TestHandleTestSSOProvider_SAMLInvalidXML(t *testing.T) {
 	}
 
 	var resp SSOTestResponse
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 	if resp.Success {
 		t.Error("expected success=false for invalid XML")
@@ -205,7 +205,7 @@ func TestHandleTestSSOProvider_SAMLInvalidXML(t *testing.T) {
 
 func TestHandleTestSSOProvider_OIDCSuccess(t *testing.T) {
 	// Create mock OIDC discovery server
-	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(testOIDCDiscovery))
@@ -275,7 +275,7 @@ func TestHandleTestSSOProvider_OIDCFetchError(t *testing.T) {
 	}
 
 	var resp SSOTestResponse
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 	if resp.Success {
 		t.Error("expected success=false for unreachable server")
@@ -350,7 +350,7 @@ func TestHandleTestSSOProvider_MissingConfig(t *testing.T) {
 			}
 
 			var resp SSOTestResponse
-			json.Unmarshal(rec.Body.Bytes(), &resp)
+			_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 			if resp.Success {
 				t.Error("expected success=false for missing config")
@@ -361,7 +361,7 @@ func TestHandleTestSSOProvider_MissingConfig(t *testing.T) {
 
 func TestHandleMetadataPreview_Success(t *testing.T) {
 	// Create mock metadata server
-	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write([]byte(testSAMLMetadata))
 	}))
@@ -433,6 +433,55 @@ func TestHandleMetadataPreview_FromXML(t *testing.T) {
 
 	if resp.Parsed.EntityID != "https://idp.example.com" {
 		t.Errorf("expected entityId='https://idp.example.com', got '%s'", resp.Parsed.EntityID)
+	}
+}
+
+func TestSSOTestAndMetadataResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptySSOTestResponse())
+	if err != nil {
+		t.Fatalf("marshal empty sso test response: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode empty sso test response: %v", err)
+	}
+	if _, ok := decoded["details"]; ok {
+		t.Fatalf("expected details to remain absent when nil")
+	}
+
+	payload, err = json.Marshal(SSOTestResponse{
+		Details: &SSOTestDetails{Type: "saml"},
+	}.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal normalized sso test response: %v", err)
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode normalized sso test response: %v", err)
+	}
+	details := decoded["details"].(map[string]any)
+	for _, key := range []string{"certificates", "supportedScopes"} {
+		values, ok := details[key].([]any)
+		if !ok || len(values) != 0 {
+			t.Fatalf("expected details.%s to be an empty array, got %T (%v)", key, details[key], details[key])
+		}
+	}
+
+	payload, err = json.Marshal(MetadataPreviewResponse{
+		Parsed: &ParsedMetadataInfo{EntityID: "entity"},
+	}.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal normalized metadata preview response: %v", err)
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode normalized metadata preview response: %v", err)
+	}
+	parsed := decoded["parsed"].(map[string]any)
+	for _, key := range []string{"certificates", "nameIdFormats"} {
+		values, ok := parsed[key].([]any)
+		if !ok || len(values) != 0 {
+			t.Fatalf("expected parsed.%s to be an empty array, got %T (%v)", key, parsed[key], parsed[key])
+		}
 	}
 }
 

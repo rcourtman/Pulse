@@ -81,6 +81,26 @@ func TestIsRetryableWebhookError(t *testing.T) {
 		},
 		// HTTP 429 rate limiting - should be retryable
 		{
+			name:     "status 408 request timeout",
+			err:      errors.New("webhook returned status 408: Request Timeout"),
+			expected: true,
+		},
+		{
+			name:     "status 421 misdirected request",
+			err:      errors.New("webhook returned status 421: Misdirected Request"),
+			expected: true,
+		},
+		{
+			name:     "status 423 locked",
+			err:      errors.New("webhook returned status 423: Locked"),
+			expected: true,
+		},
+		{
+			name:     "status 425 too early",
+			err:      errors.New("webhook returned status 425: Too Early"),
+			expected: true,
+		},
+		{
 			name:     "status 429 too many requests",
 			err:      errors.New("webhook returned status 429: Too Many Requests"),
 			expected: true,
@@ -230,8 +250,8 @@ func TestIsRetryableWebhookError_AllStatusCodes(t *testing.T) {
 		err := fmt.Errorf("webhook returned status %d", code)
 		result := isRetryableWebhookError(err)
 
-		if code == 429 {
-			// 429 is special - should be retryable
+		if code == 408 || code == 421 || code == 423 || code == 425 || code == 429 {
+			// 408, 421, 423, 425, and 429 are special - should be retryable
 			if !result {
 				t.Errorf("status %d should be retryable (rate limited)", code)
 			}

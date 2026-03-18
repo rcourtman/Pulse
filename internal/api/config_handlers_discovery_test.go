@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -53,6 +55,51 @@ func TestHandleDiscoverServers_Manual(t *testing.T) {
 	}
 	if cached, ok := resp["cached"].(bool); !ok || cached {
 		t.Error("expected cached=false")
+	}
+}
+
+func TestWriteCachedDiscoveryResponse_UsesStructuredOwnerAndLegacyCompatibility(t *testing.T) {
+	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()})
+	rec := httptest.NewRecorder()
+
+	result := &pkgdiscovery.DiscoveryResult{
+		Servers: []pkgdiscovery.DiscoveredServer{
+			{IP: "10.0.0.1", Port: 8006, Type: "pve"},
+		},
+		StructuredErrors: []pkgdiscovery.DiscoveryError{
+			{
+				Phase:     "docker_bridge_network",
+				ErrorType: "timeout",
+				Message:   "request timed out",
+				IP:        "10.0.0.2",
+				Port:      8007,
+				Timestamp: time.Unix(1700000000, 0).UTC(),
+			},
+		},
+	}
+
+	handler.writeCachedDiscoveryResponse(rec, result, time.Unix(1700000010, 0).UTC())
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Errors           []string                      `json:"errors"`
+		StructuredErrors []pkgdiscovery.DiscoveryError `json:"structured_errors"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.StructuredErrors) != 1 {
+		t.Fatalf("structured_errors len = %d, want 1", len(resp.StructuredErrors))
+	}
+	if len(resp.Errors) != 1 {
+		t.Fatalf("errors len = %d, want 1", len(resp.Errors))
+	}
+	if resp.Errors[0] != "Docker bridge network [10.0.0.2:8007]: request timed out" {
+		t.Fatalf("legacy errors[0] = %q", resp.Errors[0])
 	}
 }
 

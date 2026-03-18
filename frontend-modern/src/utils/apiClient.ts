@@ -5,6 +5,56 @@ import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
+const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
+const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
+const ORG_COOKIE_NAME = 'pulse_org_id';
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/; // eslint-disable-line no-control-regex -- intentional sanitization
+const MAX_ORG_ID_LENGTH = 128;
+const MAX_API_TOKEN_LENGTH = 8 * 1024;
+const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
+
+const sanitizeBoundedText = (value: unknown, maxLength: number): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength || CONTROL_CHAR_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+};
+
+const sanitizeOrgID = (value: unknown): string | null => {
+  return sanitizeBoundedText(value, MAX_ORG_ID_LENGTH);
+};
+
+const sanitizeApiToken = (value: unknown): string | null => {
+  return sanitizeBoundedText(value, MAX_API_TOKEN_LENGTH);
+};
+
+const readOrgCookie = (): string | null => {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.trim().split('=');
+    if (name !== ORG_COOKIE_NAME) {
+      continue;
+    }
+    try {
+      return sanitizeOrgID(decodeURIComponent(rest.join('=') || ''));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
 
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
@@ -20,21 +70,83 @@ const getSessionStorage = (): Storage | undefined => {
 interface FetchOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
   skipAuth?: boolean;
+  skipOrgContext?: boolean;
+}
+
+type APIErrorShape = Error & {
+  detail?: string;
+  feature?: string;
+  requiredScope?: string;
+  upgrade_url?: string;
+  status?: number;
+};
+
+function createAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('The operation was aborted.', 'AbortError');
+  }
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function waitWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError());
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 class ApiClient {
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
+  private orgID: string | null = null;
 
   constructor() {
     // Check session storage for existing auth on page load
     this.loadStoredAuth();
+    this.loadStoredOrgContext();
     // Load CSRF token from cookie
     this.loadCSRFToken();
   }
 
   private persistToken(token: string) {
+    const sanitizedToken = sanitizeApiToken(token);
+    if (!sanitizedToken) {
+      this.apiToken = null;
+      this.removeStoredToken();
+      return;
+    }
+
     const storage = getSessionStorage();
+    this.apiToken = sanitizedToken;
     if (!storage) return;
 
     try {
@@ -42,7 +154,7 @@ class ApiClient {
         STORAGE_KEYS.AUTH,
         JSON.stringify({
           type: 'token',
-          value: token,
+          value: sanitizedToken,
         }),
       );
     } catch {
@@ -56,7 +168,6 @@ class ApiClient {
 
     try {
       storage.removeItem(AUTH_STORAGE_KEY);
-      storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
     } catch {
       // Ignore storage quota errors
     }
@@ -69,7 +180,11 @@ class ApiClient {
       const [name, ...rest] = cookie.trim().split('=');
       if (name !== 'pulse_csrf') continue;
       const value = rest.join('=');
-      this.csrfToken = decodeURIComponent(value || '');
+      try {
+        this.csrfToken = decodeURIComponent(value || '');
+      } catch {
+        this.csrfToken = null;
+      }
       return this.csrfToken;
     }
     this.csrfToken = null;
@@ -77,53 +192,191 @@ class ApiClient {
   }
 
   private loadStoredAuth() {
+    // First, check for token in URL query parameter (for kiosk/dashboard mode)
+    // This allows visiting ?token=xxx to auto-authenticate without cookies
     try {
-      // First, check for token in URL query parameter (for kiosk/dashboard mode)
-      // This allows visiting ?token=xxx to auto-authenticate without cookies
       if (typeof window !== 'undefined' && window.location?.search) {
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get('token');
-        if (urlToken) {
-          this.apiToken = urlToken;
-          this.persistToken(urlToken);
-          // Clean the token from URL for security (don't expose in browser history)
+        if (urlToken !== null) {
+          const sanitizedToken = sanitizeApiToken(urlToken);
+          // Clean the token from URL for security (don't expose in browser history),
+          // regardless of whether the provided token is valid.
           params.delete('token');
           const newQuery = params.toString();
           const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
           window.history.replaceState({}, document.title, newUrl);
+          if (sanitizedToken) {
+            this.apiToken = sanitizedToken;
+            this.persistToken(sanitizedToken);
+          }
           return;
         }
       }
+    } catch {
+      // Ignore URL parsing/history errors.
+    }
 
-      const storage = getSessionStorage();
-      if (!storage) return;
+    const storage = getSessionStorage();
+    if (!storage) return;
 
+    try {
       const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        const { type, value } = JSON.parse(stored);
-        if (type === 'token') {
-          this.apiToken = value;
+        if (stored.length > MAX_AUTH_STORAGE_CHARS) {
+          storage.removeItem(AUTH_STORAGE_KEY);
+          return;
         }
-        return;
-      }
 
-      // Legacy storage key used before apiClient refactor
-      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      if (legacyToken) {
-        this.apiToken = legacyToken;
-        this.persistToken(legacyToken);
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+        const parsed = JSON.parse(stored);
+        const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+        if (token) {
+          this.apiToken = token;
+          return;
+        } else {
+          storage.removeItem(AUTH_STORAGE_KEY);
+        }
       }
-    } catch (_err) {
-      // Invalid stored auth, ignore
+    } catch {
+      // Ignore parse failures.
     }
+  }
+
+  private loadStoredOrgContext() {
+    const storage = getSessionStorage();
+    let storageOrgID: string | null = null;
+
+    if (storage) {
+      try {
+        const stored = storage.getItem(ORG_STORAGE_KEY);
+        storageOrgID = sanitizeOrgID(stored);
+        if (stored && !storageOrgID) {
+          storage.removeItem(ORG_STORAGE_KEY);
+        } else if (storageOrgID && stored !== storageOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, storageOrgID);
+        }
+      } catch {
+        storageOrgID = null;
+      }
+    }
+
+    const cookieOrgID = readOrgCookie();
+    const resolvedOrgID = storageOrgID || cookieOrgID;
+    this.orgID = resolvedOrgID;
+
+    if (storage) {
+      try {
+        if (resolvedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, resolvedOrgID);
+        } else {
+          storage.removeItem(ORG_STORAGE_KEY);
+        }
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    if (resolvedOrgID) {
+      this.syncOrgCookie(resolvedOrgID);
+    }
+  }
+
+  private syncOrgCookie(orgID: string | null) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const normalizedOrgID = sanitizeOrgID(orgID);
+    if (!normalizedOrgID) {
+      document.cookie = `${ORG_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+      return;
+    }
+
+    const secureSuffix =
+      typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${ORG_COOKIE_NAME}=${encodeURIComponent(normalizedOrgID)}; Path=/; SameSite=Lax${secureSuffix}`;
+  }
+
+  private persistOrgContext(orgID: string | null) {
+    const normalizedOrgID = sanitizeOrgID(orgID);
+    const storage = getSessionStorage();
+
+    if (storage) {
+      try {
+        if (normalizedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
+        } else {
+          storage.removeItem(ORG_STORAGE_KEY);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+
+    this.syncOrgCookie(normalizedOrgID);
+  }
+
+  setOrgID(orgID: string | null) {
+    const normalized = sanitizeOrgID(orgID);
+    this.orgID = normalized;
+    this.persistOrgContext(normalized);
+  }
+
+  getOrgID(): string | null {
+    const inMemoryOrgID = sanitizeOrgID(this.orgID);
+    if (inMemoryOrgID) {
+      this.orgID = inMemoryOrgID;
+      return inMemoryOrgID;
+    }
+    this.orgID = null;
+
+    const storage = getSessionStorage();
+    if (!storage) {
+      return null;
+    }
+    try {
+      const stored = storage.getItem(ORG_STORAGE_KEY);
+      const normalizedOrgID = sanitizeOrgID(stored);
+      if (normalizedOrgID) {
+        this.orgID = normalizedOrgID;
+        if (stored !== normalizedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
+        }
+        return this.orgID;
+      }
+      if (stored) {
+        storage.removeItem(ORG_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    const cookieOrgID = readOrgCookie();
+    if (cookieOrgID) {
+      this.orgID = cookieOrgID;
+      if (storage) {
+        try {
+          storage.setItem(ORG_STORAGE_KEY, cookieOrgID);
+        } catch {
+          // Ignore storage errors.
+        }
+      }
+      return cookieOrgID;
+    }
+
+    return null;
   }
 
   // Set API token
   setApiToken(token: string) {
-    this.apiToken = token;
+    const sanitizedToken = sanitizeApiToken(token);
+    if (!sanitizedToken) {
+      this.clearApiToken();
+      return;
+    }
 
-    this.persistToken(token);
+    this.apiToken = sanitizedToken;
+    this.persistToken(sanitizedToken);
   }
 
   getApiToken(): string | null {
@@ -136,25 +389,26 @@ class ApiClient {
       return null;
     }
 
-    try {
-      const stored = storage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.type === 'token' && typeof parsed.value === 'string') {
-          this.apiToken = parsed.value;
-          return parsed.value;
+    const stored = storage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      try {
+        if (stored.length <= MAX_AUTH_STORAGE_CHARS) {
+          const parsed = JSON.parse(stored);
+          const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+          if (token) {
+            this.apiToken = token;
+            return token;
+          }
         }
+      } catch {
+        // Ignore parse failures and continue to fallback.
       }
 
-      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      if (legacyToken) {
-        this.apiToken = legacyToken;
-        this.persistToken(legacyToken);
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-        return legacyToken;
+      try {
+        storage.removeItem(AUTH_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors.
       }
-    } catch {
-      // Ignore parsing/storage errors
     }
 
     return null;
@@ -163,7 +417,9 @@ class ApiClient {
   // Clear all authentication
   clearAuth() {
     this.apiToken = null;
+    this.orgID = null;
     this.removeStoredToken();
+    this.persistOrgContext(null);
 
     const storage = getSessionStorage();
     if (!storage) return;
@@ -189,7 +445,8 @@ class ApiClient {
       const cookies = document.cookie.split(';');
       for (const cookie of cookies) {
         const [name] = cookie.trim().split('=');
-        if (name === 'pulse_session') {
+        // Check both the plain and __Host- prefixed session cookie names.
+        if (name === 'pulse_session' || name === '__Host-pulse_session') {
           return true;
         }
       }
@@ -201,6 +458,12 @@ class ApiClient {
   // Ensure CSRF token is available by making a GET request if needed
   // The backend issues CSRF cookies on GET requests to /api/* endpoints
   private async ensureCSRFToken(): Promise<string | null> {
+    // Unit tests run without a real backend and should not attempt network calls.
+    // This avoids noisy warnings like "Failed to parse URL from /api/health" from Node's fetch.
+    if (import.meta.env.MODE === 'test') {
+      return null;
+    }
+
     try {
       // Make a simple GET request to trigger CSRF cookie issuance
       const response = await fetch('/api/health', {
@@ -211,7 +474,7 @@ class ApiClient {
       // The response should have set the pulse_csrf cookie
       if (response.ok) {
         // Small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await waitWithSignal(10);
         return this.loadCSRFToken();
       }
     } catch (err) {
@@ -222,7 +485,7 @@ class ApiClient {
 
   // Main fetch wrapper that adds authentication
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
-    const { skipAuth = false, headers = {}, ...fetchOptions } = options;
+    const { skipAuth = false, skipOrgContext = false, headers = {}, ...fetchOptions } = options;
 
     // Build headers object
     const finalHeaders: Record<string, string> = { ...headers };
@@ -232,6 +495,17 @@ class ApiClient {
       finalHeaders['X-Requested-With'] = 'XMLHttpRequest';
       if (!finalHeaders['Accept']) {
         finalHeaders['Accept'] = 'application/json';
+      }
+
+      if (skipOrgContext) {
+        if (!finalHeaders[ORG_HEADER_NAME]) {
+          finalHeaders[ORG_HEADER_NAME] = 'default';
+        }
+      } else if (!finalHeaders[ORG_HEADER_NAME]) {
+        const orgID = this.getOrgID();
+        if (orgID) {
+          finalHeaders[ORG_HEADER_NAME] = orgID;
+        }
       }
     }
 
@@ -265,10 +539,45 @@ class ApiClient {
 
     const response = await fetch(url, finalOptions);
 
+    // Handle stale/invalid org context by clearing it and retrying once against default org.
+    if (
+      response.status === 400 &&
+      !skipOrgContext &&
+      url.startsWith('/api/') &&
+      finalHeaders[ORG_HEADER_NAME] &&
+      finalHeaders[ORG_HEADER_NAME] !== 'default'
+    ) {
+      const text = await response.clone().text();
+      let isInvalidOrg = false;
+      try {
+        const parsed = JSON.parse(text);
+        isInvalidOrg = parsed?.error === 'invalid_org';
+      } catch {
+        isInvalidOrg = false;
+      }
+
+      if (isInvalidOrg) {
+        this.setOrgID(null);
+        const retryHeaders: Record<string, string> = { ...finalHeaders };
+        delete retryHeaders[ORG_HEADER_NAME];
+        return fetch(url, {
+          ...fetchOptions,
+          headers: retryHeaders,
+          credentials: 'include',
+        });
+      }
+    }
+
     // If we get a 401 on an API call (not during initial auth check), redirect to login
     // Skip redirect for specific auth-check endpoints and background data fetching to avoid loops
-    const skipRedirectUrls = ['/api/security/status', '/api/state', '/api/settings/ai', '/api/charts', '/api/resources'];
-    const shouldSkipRedirect = skipRedirectUrls.some(path => url.includes(path));
+    const skipRedirectUrls = [
+      '/api/security/status',
+      '/api/state',
+      '/api/settings/ai',
+      '/api/charts',
+      '/api/charts/infrastructure',
+    ];
+    const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
     if (response.status === 401 && !shouldSkipRedirect) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
@@ -305,23 +614,48 @@ class ApiClient {
       }
     }
 
-    // Handle rate limiting with automatic retry
+    // Handle rate limiting with automatic retry for idempotent requests only.
     if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
+      if (!IDEMPOTENT_METHODS.has(method)) {
+        return response;
+      }
 
-      logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
+      const retryAfterHeader = response.headers.get('Retry-After');
+      let waitTime = 1000; // Default: 1 second
+      if (retryAfterHeader) {
+        const normalized = retryAfterHeader.trim();
+        if (normalized) {
+          const parsed = Number(normalized);
+          if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 120) {
+            waitTime = parsed * 1000;
+          } else {
+            const retryAt = Date.parse(normalized);
+            if (!Number.isNaN(retryAt)) {
+              const waitMs = retryAt - Date.now();
+              if (waitMs > 0 && waitMs <= 120_000) {
+                waitTime = waitMs;
+              }
+            }
+          }
+        }
+      }
+      logger.warn(`Rate limit hit, retrying ${method} after ${waitTime}ms`);
 
-      // Wait and retry once
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      try {
+        await waitWithSignal(waitTime, fetchOptions.signal);
+      } catch (err) {
+        // If the caller aborts during the Retry-After delay, reject with AbortError and do not retry.
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw err;
+        }
+        throw err;
+      }
 
-      const retryResponse = await fetch(url, {
+      return fetch(url, {
         ...fetchOptions,
         headers: finalHeaders,
         credentials: 'include',
       });
-
-      return retryResponse;
     }
 
     return response;
@@ -343,6 +677,10 @@ class ApiClient {
       let errorMessage = text;
 
       // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
+      let errorDetail: string | undefined;
+      let errorFeature: string | undefined;
+      let errorRequiredScope: string | undefined;
+      let errorUpgradeUrl: string | undefined;
       try {
         const jsonError = JSON.parse(text);
         if (jsonError.message) {
@@ -351,6 +689,12 @@ class ApiClient {
           // Some APIs return {error: "message"} format
           errorMessage = jsonError.error;
         }
+        if (typeof jsonError.detail === 'string') {
+          errorDetail = jsonError.detail;
+        }
+        errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
+        errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
+        errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
       } catch {
         // Not JSON, try other formats
 
@@ -369,7 +713,21 @@ class ApiClient {
         }
       }
 
-      throw new Error(errorMessage || `Request failed with status ${response.status}`);
+      const err = new Error(errorMessage || `Request failed with status ${response.status}`) as APIErrorShape;
+      err.status = response.status;
+      if (errorDetail) {
+        err.detail = errorDetail;
+      }
+      if (errorRequiredScope) {
+        err.requiredScope = errorRequiredScope;
+      }
+      if (errorFeature) {
+        err.feature = errorFeature;
+      }
+      if (errorUpgradeUrl) {
+        err.upgrade_url = errorUpgradeUrl;
+      }
+      throw err;
     }
 
     const text = await response.text();
@@ -382,7 +740,6 @@ class ApiClient {
       throw new Error('Invalid JSON response from server');
     }
   }
-
 }
 
 // Create singleton instance
@@ -397,3 +754,5 @@ export const getApiToken = () => apiClient.getApiToken();
 export const clearAuth = () => apiClient.clearAuth();
 export const clearApiToken = () => apiClient.clearApiToken();
 export const hasAuth = () => apiClient.hasAuth();
+export const setOrgID = (orgID: string | null) => apiClient.setOrgID(orgID);
+export const getOrgID = () => apiClient.getOrgID();

@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -39,11 +40,11 @@ func TestNewStore_CryptoInitFailure(t *testing.T) {
 	}()
 
 	store, err := NewStore(tmpDir)
-	if err != nil {
-		t.Fatalf("expected store creation to succeed: %v", err)
+	if err == nil {
+		t.Fatal("expected crypto init failure")
 	}
-	if store.crypto != nil {
-		t.Error("expected crypto manager to be nil after init failure")
+	if store != nil {
+		t.Fatal("expected nil store on crypto init failure")
 	}
 }
 
@@ -111,6 +112,16 @@ func TestGetKnowledge_LegacyFallback(t *testing.T) {
 	if loaded.GuestName != "Legacy" {
 		t.Errorf("expected legacy guest name, got %q", loaded.GuestName)
 	}
+	rewritten, err := os.ReadFile(store.guestFilePath(guestID))
+	if err != nil {
+		t.Fatalf("read rewritten encrypted file: %v", err)
+	}
+	if bytes.Equal(rewritten, data) {
+		t.Fatal("expected legacy plaintext knowledge to be rewritten encrypted")
+	}
+	if _, err := os.Stat(legacyPath); err == nil {
+		t.Fatal("expected legacy plaintext knowledge file to be removed after migration")
+	}
 }
 
 func TestGetKnowledge_DecryptFallback(t *testing.T) {
@@ -148,6 +159,13 @@ func TestGetKnowledge_DecryptFallback(t *testing.T) {
 	}
 	if len(loaded.Notes) != 1 {
 		t.Errorf("expected 1 note, got %d", len(loaded.Notes))
+	}
+	rewritten, err := os.ReadFile(store.guestFilePath(guestID))
+	if err != nil {
+		t.Fatalf("read rewritten plaintext .enc file: %v", err)
+	}
+	if bytes.Equal(rewritten, data) {
+		t.Fatal("expected plaintext .enc knowledge file to be rewritten encrypted")
 	}
 }
 
@@ -420,8 +438,8 @@ func TestGetNotesByCategory_All(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest", "Guest", "vm", "service", "Web", "nginx")
-	store.SaveNote("guest", "Guest", "vm", "config", "DB", "postgres")
+	_ = store.SaveNote("guest", "Guest", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("guest", "Guest", "vm", "config", "DB", "postgres")
 
 	notes, err := store.GetNotesByCategory("guest", "")
 	if err != nil {
@@ -636,8 +654,8 @@ func TestFormatAllForContext_NoTruncate(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest-1", "", "vm", "service", "Web", "nginx")
-	store.SaveNote("guest-2", "GuestTwo", "vm", "config", "DB", "postgres")
+	_ = store.SaveNote("guest-1", "", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("guest-2", "GuestTwo", "vm", "config", "DB", "postgres")
 
 	result := store.FormatAllForContext()
 	if !strings.Contains(result, "notes across") {
@@ -656,7 +674,7 @@ func TestFormatAllForContext_CredentialMasking(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest-1", "Guest", "vm", "credential", "Root", "password1234")
+	_ = store.SaveNote("guest-1", "Guest", "vm", "credential", "Root", "password1234")
 	result := store.FormatAllForContext()
 	if !strings.Contains(result, "pa****34") {
 		t.Errorf("expected masked credential, got %q", result)
@@ -688,7 +706,7 @@ func TestFormatAllForContext_TooLargeFirstNote(t *testing.T) {
 	for i := range largeContent {
 		largeContent[i] = 'x'
 	}
-	store.SaveNote("guest-1", "Guest", "vm", "service", "Big", string(largeContent))
+	_ = store.SaveNote("guest-1", "Guest", "vm", "service", "Big", string(largeContent))
 
 	if result := store.FormatAllForContext(); result != "" {
 		t.Errorf("expected empty result for oversized first note, got %q", result)

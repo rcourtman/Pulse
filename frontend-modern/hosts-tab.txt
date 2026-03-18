@@ -1,0 +1,89 @@
+        <Show when={activeTab() === 'hosts'}>
+          <Show when={hasSection('hostAgents')}>
+            <div ref={registerSection('hostAgents')} class="scroll-mt-24">
+              <ResourceTable
+                title="Host Agents"
+                resources={hostAgentsWithOverrides()}
+                columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No host agents match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={props.hostDefaults}
+                setGlobalDefaults={props.setHostDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllHosts}
+                onToggleGlobalDisable={() => props.setDisableAllHosts(!props.disableAllHosts())}
+                globalDisableOfflineFlag={props.disableAllHostsOffline}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
+                }
+                showDelayColumn={true}
+                globalDelaySeconds={props.timeThresholds().host}
+                metricDelaySeconds={props.metricTimeThresholds().host ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('host', metric, value)}
+                factoryDefaults={props.factoryHostDefaults}
+                onResetDefaults={props.resetHostDefaults}
+              />
+            </div>
+          </Show>
+
+          <Show when={hasSection('hostDisks')}>
+            <CollapsibleSection
+              id="hostDisks"
+              title="Host Disks"
+              resourceCount={hostDisksWithOverrides().length}
+              collapsed={isCollapsed('hostDisks')}
+              onToggle={() => toggleSection('hostDisks')}
+              icon={<HardDrive class="w-5 h-5" />}
+              isGloballyDisabled={props.disableAllHosts()}
+              emptyMessage="No host disks found. Host agents with mounted filesystems will appear here."
+            >
+              <div ref={registerSection('hostDisks')} class="scroll-mt-24">
+                <ResourceTable
+                  title=""
+                  groupedResources={hostDisksGroupedByHost()}
+                  groupHeaderMeta={guestGroupHeaderMeta()}
+                  columns={['Disk %']}
+                  activeAlerts={props.activeAlerts}
+                  emptyMessage="No host disks match the current filters."
+                  onEdit={startEditing}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onRemoveOverride={removeOverride}
+                  onToggleDisabled={toggleDisabled}
+                  showOfflineAlertsColumn={false}
+                  editingId={editingId}
+                  editingThresholds={editingThresholds}
+                  setEditingThresholds={setEditingThresholds}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  formatMetricValue={formatMetricValue}
+                  hasActiveAlert={hasActiveAlert}
+                  globalDefaults={{ disk: props.hostDefaults.disk }}
+                  setGlobalDefaults={(value) => {
+                    if (typeof value === 'function') {
+                      const newValue = value({ disk: props.hostDefaults.disk });
+                      props.setHostDefaults((prev) => ({ ...prev, disk: newValue.disk }));
+                    } else {
+                      props.setHostDefaults((prev) => ({ ...prev, disk: value.disk }));
+                    }
+                  }}
+                  setHasUnsavedChanges={props.setHasUnsavedChanges}
+                />
+              </div>
+            </CollapsibleSection>
+          </Show>
+        </Show>

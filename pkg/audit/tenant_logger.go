@@ -2,18 +2,33 @@ package audit
 
 import (
 	"path/filepath"
+	"regexp"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
+var tenantAuditOrgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
 // TenantLoggerManager manages per-tenant audit loggers.
-// Each tenant gets their own isolated audit database at <orgDir>/audit.db
+// Each tenant gets their own isolated audit database at <orgDir>/audit/audit.db
 type TenantLoggerManager struct {
 	mu       sync.RWMutex
 	loggers  map[string]Logger
 	dataPath string        // Base data path
 	factory  LoggerFactory // Factory for creating tenant loggers
+}
+
+func isValidOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if filepath.Base(orgID) != orgID {
+		return false
+	}
+	return tenantAuditOrgIDPattern.MatchString(orgID)
 }
 
 // LoggerFactory creates audit loggers for specific paths.
@@ -49,6 +64,10 @@ func (m *TenantLoggerManager) GetLogger(orgID string) Logger {
 	// Default org uses the global logger
 	if orgID == "" || orgID == "default" {
 		return GetLogger()
+	}
+	if !isValidOrgID(orgID) {
+		log.Warn().Str("org_id", orgID).Msg("Invalid organization ID for tenant audit logger; using console logger")
+		return NewConsoleLogger()
 	}
 
 	m.mu.RLock()
@@ -93,6 +112,8 @@ func (m *TenantLoggerManager) GetLogger(orgID string) Logger {
 func (m *TenantLoggerManager) Log(orgID, eventType, user, ip, path string, success bool, details string) error {
 	logger := m.GetLogger(orgID)
 	event := Event{
+		ID:        uuid.NewString(),
+		Timestamp: time.Now(),
 		EventType: eventType,
 		User:      user,
 		IP:        ip,

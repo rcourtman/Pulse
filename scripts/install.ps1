@@ -13,16 +13,22 @@ param (
     [bool]$EnableHost = $true,
     [bool]$EnableDocker = $false,
     [bool]$EnableKubernetes = $false,
+    [bool]$EnableProxmox = $false,
+    [string]$ProxmoxType = "",
+    [bool]$EnableCommands = $false,
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
-    [string]$AgentId = "",
-    [string]$Hostname = ""
+    [string]$CACertPath = $env:PULSE_CACERT,
+    [string]$AgentId = $env:PULSE_AGENT_ID,
+    [string]$Hostname = $env:PULSE_HOSTNAME
 )
 
 $ErrorActionPreference = "Stop"
 $AgentName = "PulseAgent"
 $BinaryName = "pulse-agent.exe"
 $InstallDir = "C:\Program Files\Pulse"
+$StateDir = "$env:ProgramData\Pulse"
+$ConnectionStatePath = "$StateDir\connection.env"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
 $DownloadTimeoutSec = 300
 
@@ -59,11 +65,26 @@ if (-not $PSBoundParameters.ContainsKey('EnableDocker') -and -not [string]::IsNu
 if (-not $PSBoundParameters.ContainsKey('EnableKubernetes') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_KUBERNETES)) {
     $EnableKubernetes = Parse-Bool $env:PULSE_ENABLE_KUBERNETES $EnableKubernetes
 }
+if (-not $PSBoundParameters.ContainsKey('EnableProxmox') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_PROXMOX)) {
+    $EnableProxmox = Parse-Bool $env:PULSE_ENABLE_PROXMOX $EnableProxmox
+}
+if (-not $PSBoundParameters.ContainsKey('ProxmoxType') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_PROXMOX_TYPE)) {
+    $ProxmoxType = $env:PULSE_PROXMOX_TYPE
+}
+if (-not $PSBoundParameters.ContainsKey('EnableCommands') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_COMMANDS)) {
+    $EnableCommands = Parse-Bool $env:PULSE_ENABLE_COMMANDS $EnableCommands
+}
 if (-not $PSBoundParameters.ContainsKey('Insecure') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_INSECURE_SKIP_VERIFY)) {
     $Insecure = Parse-Bool $env:PULSE_INSECURE_SKIP_VERIFY $Insecure
 }
 if (-not $PSBoundParameters.ContainsKey('Uninstall') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_UNINSTALL)) {
     $Uninstall = Parse-Bool $env:PULSE_UNINSTALL $Uninstall
+}
+
+# Docker-only installs should not silently fall back to host metrics unless the
+# caller explicitly opts back in.
+if ($EnableDocker -and -not $PSBoundParameters.ContainsKey('EnableHost') -and [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_HOST)) {
+    $EnableHost = $false
 }
 
 # --- Administrator Check ---
@@ -130,6 +151,60 @@ function Test-ValidInterval {
     return $TestInterval -match '^\d+[smh]$'
 }
 
+function Load-CustomCaCertificate {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $null
+    }
+
+    $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    $raw = Get-Content -Path $resolvedPath -Raw -ErrorAction Stop
+    if ($raw -match '-----BEGIN CERTIFICATE-----(?<body>[\s\S]+?)-----END CERTIFICATE-----') {
+        $base64 = ($matches.body -replace '\s+', '')
+        $bytes = [Convert]::FromBase64String($base64)
+        return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($bytes)
+    }
+
+    return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($resolvedPath)
+}
+
+function Test-CertificateTrustedByCustomCa {
+    param(
+        [System.Security.Cryptography.X509Certificates.X509Certificate]$Certificate,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$CustomCaCertificate
+    )
+
+    if ($null -eq $Certificate -or $null -eq $CustomCaCertificate) {
+        return $false
+    }
+
+    $leaf = if ($Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
+        $Certificate
+    } else {
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($Certificate)
+    }
+
+    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+        $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::AllowUnknownCertificateAuthority
+        $null = $chain.ChainPolicy.ExtraStore.Add($CustomCaCertificate)
+        if (-not $chain.Build($leaf)) {
+            return $false
+        }
+
+        foreach ($element in $chain.ChainElements) {
+            if ($element.Certificate.Thumbprint -eq $CustomCaCertificate.Thumbprint) {
+                return $true
+            }
+        }
+        return $false
+    } finally {
+        $chain.Dispose()
+    }
+}
+
 function Test-PEBinary {
     param([string]$FilePath)
     if (-not (Test-Path $FilePath)) { return $false }
@@ -159,33 +234,170 @@ function Get-FileChecksum {
     }
 }
 
+function Invoke-WithOptionalInsecureTls {
+    param(
+        [bool]$AllowInsecure,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$CustomCaCertificate,
+        [scriptblock]$Action
+    )
+
+    $previousCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    if ($AllowInsecure -or $null -ne $CustomCaCertificate) {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {
+            param($sender, $certificate, $chain, $sslPolicyErrors)
+
+            if ($AllowInsecure) {
+                return $true
+            }
+
+            if ($sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None) {
+                return $true
+            }
+
+            return Test-CertificateTrustedByCustomCa -Certificate $certificate -CustomCaCertificate $CustomCaCertificate
+        }
+    }
+
+    try {
+        & $Action
+    } finally {
+        if ($AllowInsecure -or $null -ne $CustomCaCertificate) {
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $previousCallback
+        }
+    }
+}
+
+function Save-ConnectionState {
+    $lines = @("PULSE_URL='$Url'")
+    if (-not [string]::IsNullOrWhiteSpace($Token)) {
+        $lines += "PULSE_TOKEN='$Token'"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($AgentId)) {
+        $lines += "PULSE_AGENT_ID='$AgentId'"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Hostname)) {
+        $lines += "PULSE_HOSTNAME='$Hostname'"
+    }
+    if ($Insecure) {
+        $lines += "PULSE_INSECURE_SKIP_VERIFY='true'"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
+        $lines += "PULSE_CACERT='$CACertPath'"
+    }
+
+    New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+    Set-Content -Path $ConnectionStatePath -Value ($lines -join "`n") -Encoding UTF8
+}
+
+function Get-ConnectionStateValue {
+    param(
+        [string]$Key
+    )
+
+    if (-not (Test-Path $ConnectionStatePath)) {
+        return ""
+    }
+
+    $line = Get-Content $ConnectionStatePath | Where-Object { $_ -match "^${Key}=" } | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        return ""
+    }
+
+    $value = $line -replace "^${Key}=", ""
+    return $value.Trim("'")
+}
+
 # --- Uninstall Logic ---
 if ($Uninstall) {
     Write-Host "Uninstalling $AgentName..." -ForegroundColor Cyan
 
     # Try to notify the Pulse server about uninstallation if we have connection details
-    if (-not [string]::IsNullOrWhiteSpace($Url) -and -not [string]::IsNullOrWhiteSpace($Token)) {
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        $Url = Get-ConnectionStateValue "PULSE_URL"
+    }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        $Token = Get-ConnectionStateValue "PULSE_TOKEN"
+    }
+    if ([string]::IsNullOrWhiteSpace($AgentId)) {
+        $AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"
+    }
+    if ([string]::IsNullOrWhiteSpace($Hostname)) {
+        $Hostname = Get-ConnectionStateValue "PULSE_HOSTNAME"
+    }
+    if (-not $Insecure) {
+        $Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure
+    }
+    if ([string]::IsNullOrWhiteSpace($CACertPath)) {
+        $CACertPath = Get-ConnectionStateValue "PULSE_CACERT"
+    }
+
+    $customCaCertificate = $null
+    if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
+        try {
+            $customCaCertificate = Load-CustomCaCertificate $CACertPath
+        } catch {
+            Write-Host "Warning: Failed to load custom CA certificate from $CACertPath during uninstall: $_" -ForegroundColor Yellow
+            $customCaCertificate = $null
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Url)) {
         # Try to recover agent ID if not provided
         $detectedAgentId = $AgentId
-        $stateFile = "$env:ProgramData\Pulse\agent-id"
+        $stateFile = "$StateDir\agent-id"
         if ([string]::IsNullOrWhiteSpace($detectedAgentId) -and (Test-Path $stateFile)) {
             $detectedAgentId = Get-Content $stateFile -Raw
             if ($detectedAgentId) { $detectedAgentId = $detectedAgentId.Trim() }
+        }
+        if ([string]::IsNullOrWhiteSpace($detectedAgentId)) {
+            $lookupHostname = $Hostname
+            if ([string]::IsNullOrWhiteSpace($lookupHostname)) {
+                $lookupHostname = $env:COMPUTERNAME
+            }
+            if (-not [string]::IsNullOrWhiteSpace($lookupHostname)) {
+                try {
+                    $lookupArgs = @{
+                        Uri         = "$Url/api/agents/agent/lookup?hostname=$([System.Uri]::EscapeDataString($lookupHostname))"
+                        Method      = "Get"
+                        TimeoutSec  = 5
+                        ErrorAction = "SilentlyContinue"
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($Token)) {
+                        $lookupArgs.Headers = @{ "X-API-Token" = $Token }
+                    }
+
+                    $lookupResult = $null
+                    Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
+                        $lookupResult = Invoke-RestMethod @lookupArgs
+                    }
+                    if ($lookupResult -and -not [string]::IsNullOrWhiteSpace($lookupResult.id)) {
+                        $detectedAgentId = $lookupResult.id.Trim()
+                    }
+                } catch {
+                    # Ignore lookup errors during uninstall
+                }
+            }
         }
 
         if (-not [string]::IsNullOrWhiteSpace($detectedAgentId)) {
             Write-Host "Notifying Pulse server to unregister agent ID: $detectedAgentId..." -ForegroundColor Gray
             try {
-                $body = @{ hostId = $detectedAgentId } | ConvertTo-Json
-                $headers = @{ "X-API-Token" = $Token }
+                $body = @{ agentId = $detectedAgentId } | ConvertTo-Json
+                $invokeArgs = @{
+                    Uri         = "$Url/api/agents/agent/uninstall"
+                    Method      = "Post"
+                    Body        = $body
+                    ContentType = "application/json"
+                    TimeoutSec  = 5
+                    ErrorAction = "SilentlyContinue"
+                }
+                if (-not [string]::IsNullOrWhiteSpace($Token)) {
+                    $invokeArgs.Headers = @{ "X-API-Token" = $Token }
+                }
 
-                Invoke-RestMethod -Uri "$Url/api/agents/host/uninstall" `
-                                 -Method Post `
-                                 -Body $body `
-                                 -ContentType "application/json" `
-                                 -Headers $headers `
-                                 -TimeoutSec 5 `
-                                 -ErrorAction SilentlyContinue | Out-Null
+                Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
+                    Invoke-RestMethod @invokeArgs | Out-Null
+                }
             } catch {
                 # Ignore errors during uninstall
             }
@@ -204,6 +416,10 @@ if ($Uninstall) {
         Write-Host "Service '$AgentName' not found (already removed)" -ForegroundColor Yellow
     }
 
+    if (Test-Path $StateDir) {
+        Remove-Item $StateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     Remove-Item "$InstallDir\$BinaryName" -Force -ErrorAction SilentlyContinue
     Write-Host "Uninstallation complete." -ForegroundColor Green
     Exit 0
@@ -217,13 +433,37 @@ if (-not (Test-ValidUrl $Url)) {
     Exit 1
 }
 
-if (-not (Test-ValidToken $Token)) {
-    Show-Error "Invalid or missing Token. Must be 16-256 alphanumeric characters.`nSet PULSE_URL and PULSE_TOKEN environment variables or pass as arguments."
+if (-not [string]::IsNullOrWhiteSpace($Token) -and -not (Test-ValidToken $Token)) {
+    Show-Error "Invalid Token. Must be 16-256 alphanumeric characters when provided.`nSet PULSE_URL and PULSE_TOKEN environment variables or pass as arguments."
     Exit 1
 }
 
 if (-not (Test-ValidInterval $Interval)) {
     Show-Error "Invalid Interval format. Must be like '30s', '1m', '5m'.`nProvided: $Interval"
+    Exit 1
+}
+
+if (-not [string]::IsNullOrWhiteSpace($CACertPath) -and -not (Test-Path $CACertPath)) {
+    Show-Error "Invalid CA certificate path. File does not exist.`nProvided: $CACertPath"
+    Exit 1
+}
+
+$CustomCaCertificate = $null
+if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
+    try {
+        $CustomCaCertificate = Load-CustomCaCertificate $CACertPath
+    } catch {
+        Show-Error "Invalid CA certificate file. Provide a PEM, CRT, or CER certificate.`nPath: $CACertPath`nError: $_"
+        Exit 1
+    }
+}
+
+$NormalizedProxmoxType = $ProxmoxType.Trim().ToLowerInvariant()
+if ($NormalizedProxmoxType -eq 'auto') {
+    $NormalizedProxmoxType = ''
+}
+if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType) -and $NormalizedProxmoxType -notin @('pve', 'pbs')) {
+    Show-Error "Invalid Proxmox type. Must be 'pve', 'pbs', or 'auto'.`nProvided: $ProxmoxType"
     Exit 1
 }
 
@@ -250,22 +490,24 @@ try {
     # Configure TLS 1.2 minimum
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
-    # Download with timeout
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "PulseInstaller/1.0")
+    Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+        # Download with timeout
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "PulseInstaller/1.0")
 
-    # Set up async download with timeout
-    $downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)
-    if (-not $downloadTask.Wait($DownloadTimeoutSec * 1000)) {
-        $webClient.CancelAsync()
-        throw "Download timed out after $DownloadTimeoutSec seconds"
-    }
-    if ($downloadTask.IsFaulted) {
-        throw $downloadTask.Exception.InnerException
-    }
+        # Set up async download with timeout
+        $downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)
+        if (-not $downloadTask.Wait($DownloadTimeoutSec * 1000)) {
+            $webClient.CancelAsync()
+            throw "Download timed out after $DownloadTimeoutSec seconds"
+        }
+        if ($downloadTask.IsFaulted) {
+            throw $downloadTask.Exception.InnerException
+        }
 
-    # Get checksum from server response headers if available
-    $serverChecksum = $webClient.ResponseHeaders["X-Checksum-Sha256"]
+        # Get checksum from server response headers if available
+        $serverChecksum = $webClient.ResponseHeaders["X-Checksum-Sha256"]
+    }
 
 } catch {
     Cleanup
@@ -310,32 +552,6 @@ if (-not [string]::IsNullOrWhiteSpace($serverChecksum)) {
     Write-Host "Warning: Server did not provide checksum header" -ForegroundColor Yellow
 }
 
-# --- Legacy Cleanup ---
-# Remove old agents if they exist to prevent conflicts
-Write-Host "Checking for legacy agents..." -ForegroundColor Cyan
-
-if (Get-Service "PulseHostAgent" -ErrorAction SilentlyContinue) {
-    Write-Host "Removing legacy PulseHostAgent..." -ForegroundColor Yellow
-    Stop-Service "PulseHostAgent" -Force -ErrorAction SilentlyContinue
-    $scOutput = sc.exe delete "PulseHostAgent" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to delete PulseHostAgent service: $scOutput" -ForegroundColor Yellow
-    }
-    Remove-Item "C:\Program Files\Pulse\pulse-host-agent.exe" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-}
-
-if (Get-Service "PulseDockerAgent" -ErrorAction SilentlyContinue) {
-    Write-Host "Removing legacy PulseDockerAgent..." -ForegroundColor Yellow
-    Stop-Service "PulseDockerAgent" -Force -ErrorAction SilentlyContinue
-    $scOutput = sc.exe delete "PulseDockerAgent" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to delete PulseDockerAgent service: $scOutput" -ForegroundColor Yellow
-    }
-    Remove-Item "C:\Program Files\Pulse\pulse-docker-agent.exe" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-}
-
 # --- Install Binary ---
 Write-Host "Installing binary..." -ForegroundColor Cyan
 
@@ -374,17 +590,22 @@ Remove-Item "$DestPath.backup" -Force -ErrorAction SilentlyContinue
 
 # --- Service Installation ---
 Write-Host "Configuring Windows Service..." -ForegroundColor Cyan
+Save-ConnectionState
 
 # Build command line args (properly escaped)
 $ServiceArgs = @(
     "--url", "`"$Url`"",
-    "--token", "`"$Token`"",
     "--interval", "`"$Interval`""
 )
-if ($EnableHost) { $ServiceArgs += "--enable-host" }
+if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token", "`"$Token`"") }
+if ($EnableHost) { $ServiceArgs += "--enable-host" } else { $ServiceArgs += "--enable-host=false" }
 if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
 if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }
+if ($EnableProxmox) { $ServiceArgs += "--enable-proxmox" }
+if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType)) { $ServiceArgs += @("--proxmox-type", "`"$NormalizedProxmoxType`"") }
+if ($EnableCommands) { $ServiceArgs += "--enable-commands" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
+if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacert", "`"$CACertPath`"") }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 if (-not [string]::IsNullOrWhiteSpace($Hostname)) { $ServiceArgs += @("--hostname", "`"$Hostname`"") }
 
@@ -395,7 +616,7 @@ try {
     New-Service -Name $AgentName `
                 -BinaryPathName $BinPath `
                 -DisplayName "Pulse Unified Agent" `
-                -Description "Pulse Unified Agent for Host, Docker, and Kubernetes monitoring" `
+                -Description "Pulse Unified Agent for Host, Docker, Kubernetes, and Proxmox monitoring" `
                 -StartupType Automatic | Out-Null
     Write-Host "Service created successfully" -ForegroundColor Green
 } catch {
@@ -423,8 +644,50 @@ try {
     Exit 1
 }
 
+# Verify agent is running and healthy
+Write-Host "Verifying agent started successfully..." -ForegroundColor Cyan
+$healthUrl = "http://127.0.0.1:9191/readyz"
+$maxIterations = 8
+$interval = 2
+$healthy = $false
+
+Start-Sleep -Seconds 2
+
+for ($i = 0; $i -lt $maxIterations; $i++) {
+    try {
+        $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            $healthy = $true
+            break
+        }
+    } catch {
+        # Health endpoint not ready yet
+    }
+
+    # Check if the service process is still alive after a grace period
+    if ($i -ge 3) {
+        $svc = Get-Service -Name $AgentName -ErrorAction SilentlyContinue
+        if (-not $svc -or ($svc.Status -ne 'Running' -and $svc.Status -ne 'StartPending')) {
+            $statusMsg = if ($svc) { $svc.Status } else { "not found" }
+            Write-Host "WARNING: Agent service is not running (status: $statusMsg)!" -ForegroundColor Yellow
+            if (Test-Path $LogFile) {
+                Write-Host "Last log lines:" -ForegroundColor Yellow
+                Get-Content $LogFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+            }
+            break
+        }
+    }
+
+    Start-Sleep -Seconds $interval
+}
+
 Write-Host ""
-Write-Host "Installation complete." -ForegroundColor Green
+if ($healthy) {
+    Write-Host "Installation complete! Agent is running." -ForegroundColor Green
+} else {
+    Write-Host "Installation complete, but the agent may not be running correctly." -ForegroundColor Yellow
+    Write-Host "Check logs: Get-Content '$LogFile' -Tail 50" -ForegroundColor Yellow
+}
 Write-Host "Service: $AgentName"
 Write-Host "Binary:  $DestPath"
 Write-Host "Logs:    $LogFile"

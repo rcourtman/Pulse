@@ -5,11 +5,24 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func newConfiguredKubernetesExecutor(snapshot models.StateSnapshot, mutate func(*ExecutorConfig)) *PulseToolExecutor {
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(snapshot)
+
+	cfg := ExecutorConfig{UnifiedResourceProvider: adapter}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	return NewPulseToolExecutor(cfg)
+}
 
 func TestValidateKubernetesResourceID(t *testing.T) {
 	tests := []struct {
@@ -49,7 +62,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
 		assert.Nil(t, cluster)
-		assert.Contains(t, err.Error(), "state provider not available")
+		assert.Contains(t, err.Error(), "state not available")
 	})
 
 	t.Run("ClusterNotFound", func(t *testing.T) {
@@ -58,7 +71,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("nonexistent")
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
@@ -72,7 +85,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: ""},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("cluster-1")
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
@@ -86,7 +99,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("c1")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -100,7 +113,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", DisplayName: "Production", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, _, err := exec.findAgentForKubernetesCluster("Production")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -112,10 +125,28 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", CustomDisplayName: "My Cluster", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, _, err := exec.findAgentForKubernetesCluster("My Cluster")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
+	})
+
+	t.Run("FoundWithUnifiedReadStateOnly", func(t *testing.T) {
+		snapshot := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", CustomDisplayName: "My Cluster", AgentID: "agent-1", Server: "https://k8s.example", Context: "prod"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(snapshot, nil)
+		agentID, cluster, err := exec.findAgentForKubernetesCluster("My Cluster")
+		assert.NoError(t, err)
+		assert.Equal(t, "agent-1", agentID)
+		require.NotNil(t, cluster)
+		assert.NotEmpty(t, cluster.ID)
+		assert.Equal(t, "cluster-1", cluster.Name)
+		assert.Equal(t, "My Cluster", cluster.DisplayName)
+		assert.Equal(t, "https://k8s.example", cluster.Server)
+		assert.Equal(t, "prod", cluster.Context)
 	})
 }
 
@@ -170,9 +201,8 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			ControlLevel:  ControlLevelReadOnly,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.ControlLevel = ControlLevelReadOnly
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -189,9 +219,8 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1", DisplayName: "Cluster One"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			ControlLevel:  ControlLevelControlled,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.ControlLevel = ControlLevelControlled
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -208,8 +237,8 @@ func TestExecuteKubernetesScale(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default scale deployment nginx --replicas=3" &&
-				cmd.TargetType == "host"
+			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3" &&
+				cmd.TargetType == "agent"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "deployment.apps/nginx scaled",
@@ -220,10 +249,9 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -255,7 +283,7 @@ func TestExecuteKubernetesRestart(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default rollout restart deployment/nginx"
+			return cmd.Command == "kubectl -n 'default' rollout restart deployment/'nginx'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "deployment.apps/nginx restarted",
@@ -266,10 +294,9 @@ func TestExecuteKubernetesRestart(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesRestart(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -299,7 +326,7 @@ func TestExecuteKubernetesDeletePod(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default delete pod nginx-abc123"
+			return cmd.Command == "kubectl -n 'default' delete pod 'nginx-abc123'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "pod \"nginx-abc123\" deleted",
@@ -310,10 +337,9 @@ func TestExecuteKubernetesDeletePod(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesDeletePod(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -344,7 +370,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default exec nginx-pod -- cat /etc/nginx/nginx.conf"
+			return cmd.Command == "kubectl -n 'default' exec 'nginx-pod' -- sh -c 'cat /etc/nginx/nginx.conf'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "server { listen 80; }",
@@ -355,10 +381,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -376,7 +401,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n kube-system exec coredns-pod -c coredns -- cat /etc/coredns/Corefile"
+			return cmd.Command == "kubectl -n 'kube-system' exec 'coredns-pod' -c 'coredns' -- sh -c 'cat /etc/coredns/Corefile'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   ".:53 { forward . /etc/resolv.conf }",
@@ -387,10 +412,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
 			"cluster":   "cluster-1",
@@ -402,6 +426,141 @@ func TestExecuteKubernetesExec(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "Command executed")
 		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("ExecEscapesMetacharacters", func(t *testing.T) {
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' exec 'nginx-pod' -- sh -c 'cat /etc/nginx/nginx.conf; id'"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "ok",
+		}, nil)
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
+		})
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster": "cluster-1",
+			"pod":     "nginx-pod",
+			"command": "cat /etc/nginx/nginx.conf; id",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "Command executed")
+		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("MismatchedApprovedIDDoesNotBypass", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		req := &approval.ApprovalRequest{
+			ID:         "approval-1",
+			Command:    "kubectl -n default exec nginx-pod -- whoami",
+			TargetType: "kubernetes",
+			TargetID:   "nginx-pod",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-1", "tester")
+		require.NoError(t, err)
+
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
+		})
+
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-1",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+		mockAgent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("MatchingApprovedIDBypassesAndConsumes", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		kubeCmd := buildKubectlExecCommand("default", "nginx-pod", "", "cat /etc/nginx/nginx.conf")
+		req := &approval.ApprovalRequest{
+			ID:         "approval-2",
+			Command:    kubeCmd,
+			TargetType: "kubernetes",
+			TargetID:   "c1:default:pod:nginx-pod",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-2", "tester")
+		require.NoError(t, err)
+
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == kubeCmd
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "ok",
+		}, nil)
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
+		})
+
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-2",
+		})
+		require.NoError(t, err)
+		assert.NotContains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+		mockAgent.AssertExpectations(t)
+
+		// Approval is single-use; second attempt should not bypass.
+		result, err = exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-2",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 	})
 }
 
@@ -424,7 +583,7 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default logs nginx-pod --tail=50"
+			return cmd.Command == "kubectl -n 'default' logs 'nginx-pod' --tail=50"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "2024-01-01 10:00:00 Request received\n2024-01-01 10:00:01 Response sent",
@@ -435,10 +594,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelControlled, // Even in controlled mode
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -457,7 +615,7 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default logs nginx-pod -c sidecar --tail=100"
+			return cmd.Command == "kubectl -n 'default' logs 'nginx-pod' -c 'sidecar' --tail=100"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "Sidecar logs here",
@@ -468,10 +626,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster":   "cluster-1",
@@ -497,10 +654,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster": "cluster-1",

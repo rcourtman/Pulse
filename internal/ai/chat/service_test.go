@@ -19,7 +19,7 @@ type mockStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	return m.state
 }
 
@@ -152,6 +152,14 @@ func TestService_CreateProvider(t *testing.T) {
 			expectErr: false,
 		},
 		{
+			name: "OpenRouter",
+			config: &config.AIConfig{
+				OpenRouterAPIKey: "sk-or-test",
+				ChatModel:        "openrouter:openai/gpt-4o-mini",
+			},
+			expectErr: false,
+		},
+		{
 			name: "Anthropic",
 			config: &config.AIConfig{
 				AnthropicAPIKey: "chk-test",
@@ -175,18 +183,18 @@ func TestService_CreateProvider(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name: "Auto-detected Provider Missing Key",
+			name: "Invalid Model Format",
 			config: &config.AIConfig{
-				ChatModel: "gpt-4", // auto-detects as openai, but no API key
+				ChatModel: "gpt-4",
 			},
 			expectErr: true,
 		},
 		{
-			name: "Unknown Prefix Defaults to Ollama",
+			name: "Unsupported Provider",
 			config: &config.AIConfig{
-				ChatModel: "unknown:model", // no known provider prefix, defaults to ollama
+				ChatModel: "unknown:model",
 			},
-			expectErr: false,
+			expectErr: true,
 		},
 		{
 			name: "Missing API Key",
@@ -227,10 +235,10 @@ func TestService_Start_Failures(t *testing.T) {
 		assert.Contains(t, err.Error(), "Pulse Assistant config is nil")
 	})
 
-	t.Run("MissingAPIKey", func(t *testing.T) {
+	t.Run("InvalidProvider", func(t *testing.T) {
 		cfg := Config{
 			AIConfig: &config.AIConfig{
-				ChatModel: "openai:gpt-4", // explicit provider but no API key
+				ChatModel: "unknown:model",
 			},
 		}
 		s := NewService(cfg)
@@ -293,17 +301,6 @@ func TestService_SessionWrappers(t *testing.T) {
 }
 
 func TestService_Adapters(t *testing.T) {
-	// Test StateProviderAdapter
-	mockState := &mockStateProvider{
-		state: models.StateSnapshot{
-			Hosts: []models.Host{{Hostname: "host1"}},
-		},
-	}
-	spAdapter := &stateProviderAdapter{sp: mockState}
-	state := spAdapter.GetState()
-	assert.Len(t, state.Hosts, 1)
-	assert.Equal(t, "host1", state.Hosts[0].Hostname)
-
 	// Test CommandPolicyAdapter
 	mockPolicy := &mockCommandPolicy{}
 	cpAdapter := &commandPolicyAdapter{p: mockPolicy}
@@ -365,6 +362,45 @@ func TestService_ExtendedMethods(t *testing.T) {
 	err = service.AbortSession(ctx, "s1")
 	assert.Error(t, err) // Service not started
 }
+
+func TestService_AnswerQuestion_UsesRegisteredActiveLoop(t *testing.T) {
+	service := &Service{
+		started:            true,
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
+	}
+	answersCh := make(chan []QuestionAnswer, 1)
+	loop := &AgenticLoop{
+		pendingQs: map[string]chan []QuestionAnswer{
+			"q-live": answersCh,
+		},
+		aborted: make(map[string]bool),
+	}
+	service.registerQuestionLoop("q-live", loop)
+
+	answers := []QuestionAnswer{{ID: "target", Value: "node-a"}}
+	err := service.AnswerQuestion(context.Background(), "q-live", answers)
+	require.NoError(t, err)
+	assert.Equal(t, answers, <-answersCh)
+}
+
+func TestService_AbortSession_UsesRegisteredActiveLoops(t *testing.T) {
+	service := &Service{
+		started:            true,
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
+	}
+	loop := &AgenticLoop{
+		aborted:   make(map[string]bool),
+		pendingQs: make(map[string]chan []QuestionAnswer),
+	}
+	service.registerActiveLoop("session-live", loop)
+
+	err := service.AbortSession(context.Background(), "session-live")
+	require.NoError(t, err)
+	assert.True(t, loop.aborted["session-live"])
+}
+
 func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
@@ -383,7 +419,6 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service.SetPatternProvider(nil)
 	service.SetMetricsHistory(nil)
 	service.SetBackupProvider(nil)
-	service.SetStorageProvider(nil)
 	service.SetDiskHealthProvider(nil)
 	service.SetUpdatesProvider(nil)
 	service.SetAgentProfileManager(nil)
@@ -413,8 +448,8 @@ func TestService_FilterToolsForPrompt_ReadOnlyFiltersWriteTools(t *testing.T) {
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	// Read-only prompts should exclude write tools
-	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
+	// Read-only prompts in autonomous mode should exclude write tools
+	filtered := service.filterToolsForPrompt(context.Background(), "run uptime", true, false)
 	assert.False(t, hasProviderTool(filtered, "pulse_control"))
 	assert.False(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
@@ -430,7 +465,7 @@ func TestService_FilterToolsForPrompt_WriteIntentIncludesWriteTools(t *testing.T
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101")
+	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101", false, false)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))

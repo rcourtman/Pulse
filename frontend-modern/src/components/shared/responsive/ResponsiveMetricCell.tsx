@@ -1,6 +1,9 @@
 import { Component, Show, createMemo, JSX } from 'solid-js';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatPercent } from '@/utils/format';
+import { getMetricSeverity } from '@/utils/metricThresholds';
+import type { MetricSeverity } from '@/utils/metricThresholds';
 
 export interface ResponsiveMetricCellProps {
   /** Metric value (0-100 percentage) */
@@ -31,30 +34,43 @@ export interface ResponsiveMetricCellProps {
   class?: string;
 }
 
-/**
- * Get the appropriate text color class based on metric value and type
- */
-function getMetricColorClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
-  // Thresholds match MetricBar component
-  if (type === 'cpu') {
-    if (value >= 90) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 80) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
+/** Map metric severity to text color + weight for compact metric display */
+const METRIC_TEXT_STYLES: Record<MetricSeverity, string> = {
+  critical: 'text-red-600 dark:text-red-400 font-bold',
+  warning: 'text-orange-600 dark:text-orange-400 font-medium',
+  normal: 'text-muted',
+};
+
+function metricTextClass(value: number, type: 'cpu' | 'memory' | 'disk'): string {
+  return METRIC_TEXT_STYLES[getMetricSeverity(value, type)];
+}
+
+function compactCapacityLabel(sublabel?: string): string | undefined {
+  if (!sublabel) return undefined;
+
+  const raw = sublabel.trim();
+  const parts = raw.split('/');
+  if (parts.length < 2) return raw;
+
+  const leftRaw = parts[0]?.trim();
+  const rightRaw = parts.slice(1).join('/').trim();
+  if (!leftRaw || !rightRaw) return raw;
+
+  const rightUnitMatch = rightRaw.match(/[A-Za-z]+$/);
+  const leftUnitMatch = leftRaw.match(/[A-Za-z]+$/);
+  const rightUnit = rightUnitMatch?.[0];
+  const leftUnit = leftUnitMatch?.[0];
+
+  let normalizedLeft = leftRaw;
+  if (rightUnit && leftUnit && rightUnit === leftUnit) {
+    normalizedLeft = leftRaw.slice(0, Math.max(0, leftRaw.length - rightUnit.length)).trim();
   }
 
-  if (type === 'memory') {
-    if (value >= 85) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 75) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
-  }
+  const compactLeft = normalizedLeft.replace(/\s+/g, '');
+  const compactRight = rightRaw.replace(/\s+/g, '');
 
-  if (type === 'disk') {
-    if (value >= 90) return 'text-red-600 dark:text-red-400 font-bold';
-    if (value >= 80) return 'text-orange-600 dark:text-orange-400 font-medium';
-    return 'text-gray-600 dark:text-gray-400';
-  }
-
-  return 'text-gray-600 dark:text-gray-400';
+  if (!compactLeft || !compactRight) return raw;
+  return `${compactLeft}/${compactRight}`;
 }
 
 /**
@@ -73,13 +89,28 @@ function getMetricColorClass(value: number, type: 'cpu' | 'memory' | 'disk'): st
  * ```
  */
 export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props) => {
+  const { isAtLeast, isBelow } = useBreakpoint();
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
   const isRunning = () => props.isRunning !== false; // Default to true if not specified
+
+  const isVeryNarrow = createMemo(() => isBelow('xs'));
+  const isMedium = createMemo(() => isAtLeast('md') && isBelow('lg'));
+  const isWide = createMemo(() => isAtLeast('lg'));
+
+  const compactSublabel = createMemo(() => compactCapacityLabel(props.sublabel));
+  const resolvedSublabel = createMemo(() => {
+    if (isWide()) return props.sublabel;
+    if (isMedium()) return compactSublabel();
+    return undefined;
+  });
+  const showLabel = createMemo(() => true);
+  const showMobileText = createMemo(() => Boolean(props.showMobile) && !isVeryNarrow());
+  const showMetricBar = createMemo(() => !props.showMobile || isVeryNarrow());
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+      <span class="text-xs text-muted">—</span>
     </div>
   );
 
@@ -87,18 +118,21 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
     <Show when={isRunning()} fallback={props.fallback ?? defaultFallback}>
       <div class={props.class}>
         {/* Mobile: Colored percentage text */}
-        <Show when={props.showMobile}>
-          <div class={`md:hidden text-xs text-center ${colorClass()}`}>
+        <Show when={showMobileText()}>
+          <div
+            class={`md:hidden text-xs text-center ${colorClass()} whitespace-nowrap overflow-hidden text-ellipsis`}
+          >
             {displayLabel()}
           </div>
         </Show>
 
         {/* Desktop: Full MetricBar with sparkline support */}
-        <div class={props.showMobile ? 'hidden md:block' : ''}>
+        <div class={showMetricBar() ? '' : 'hidden md:block'}>
           <MetricBar
             value={props.value}
             label={displayLabel()}
-            sublabel={props.sublabel}
+            sublabel={resolvedSublabel()}
+            showLabel={showLabel()}
             type={props.type}
             resourceId={props.resourceId}
           />
@@ -119,12 +153,10 @@ export const MetricText: Component<{
   class?: string;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
 
   return (
-    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>
-      {displayLabel()}
-    </span>
+    <span class={`text-xs text-center ${colorClass()} ${props.class || ''}`}>{displayLabel()}</span>
   );
 };
 
@@ -146,19 +178,17 @@ export const DualMetricCell: Component<{
   class?: string;
 }> = (props) => {
   const displayLabel = createMemo(() => props.label ?? formatPercent(props.value));
-  const colorClass = createMemo(() => getMetricColorClass(props.value, props.type));
+  const colorClass = createMemo(() => metricTextClass(props.value, props.type));
   const isRunning = () => props.isRunning !== false;
 
   const defaultFallback = (
     <div class="h-4 flex items-center justify-center">
-      <span class="text-xs text-gray-400 dark:text-gray-500">—</span>
+      <span class="text-xs text-muted">—</span>
     </div>
   );
 
   const defaultMobileContent = (
-    <div class={`text-xs text-center ${colorClass()}`}>
-      {displayLabel()}
-    </div>
+    <div class={`text-xs text-center ${colorClass()}`}>{displayLabel()}</div>
   );
 
   const defaultDesktopContent = (

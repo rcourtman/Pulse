@@ -410,6 +410,34 @@ func TestDockerUpdater(t *testing.T) {
 		}
 	})
 
+	t.Run("PrepareUpdate uses default image repo", func(t *testing.T) {
+		plan, err := updater.PrepareUpdate(context.Background(), UpdateRequest{Version: "v4.25.0"})
+		if err != nil {
+			t.Fatalf("PrepareUpdate() error = %v", err)
+		}
+		if got := plan.Instructions[0]; got != "docker pull rcourtman/pulse:4.25.0" {
+			t.Fatalf("pull instruction = %q", got)
+		}
+		if got := plan.Instructions[2]; got != "docker run -d --name pulse rcourtman/pulse:4.25.0" {
+			t.Fatalf("run instruction = %q", got)
+		}
+	})
+
+	t.Run("PrepareUpdate uses configured image repo", func(t *testing.T) {
+		t.Setenv("PULSE_DOCKER_IMAGE_REPO", "example/pulse-enterprise")
+
+		plan, err := updater.PrepareUpdate(context.Background(), UpdateRequest{Version: "v4.25.0"})
+		if err != nil {
+			t.Fatalf("PrepareUpdate() error = %v", err)
+		}
+		if got := plan.Instructions[0]; got != "docker pull example/pulse-enterprise:4.25.0" {
+			t.Fatalf("pull instruction = %q", got)
+		}
+		if got := plan.Instructions[2]; got != "docker run -d --name pulse example/pulse-enterprise:4.25.0" {
+			t.Fatalf("run instruction = %q", got)
+		}
+	})
+
 	t.Run("Execute returns error", func(t *testing.T) {
 		err := updater.Execute(context.Background(), UpdateRequest{}, nil)
 		if err == nil {
@@ -486,7 +514,7 @@ func TestNewInstallShAdapter(t *testing.T) {
 		t.Error("logDir should not be empty")
 	}
 
-	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
+	expectedURL := defaultInstallScriptLatestURL()
 	if adapter.installScriptURL != expectedURL {
 		t.Errorf("installScriptURL = %q, want %q", adapter.installScriptURL, expectedURL)
 	}

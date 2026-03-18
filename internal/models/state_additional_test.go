@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,9 @@ func TestStateClearAllDockerHosts(t *testing.T) {
 	}
 	if len(state.DockerHosts) != 0 {
 		t.Fatalf("DockerHosts = %#v, want empty", state.DockerHosts)
+	}
+	if state.DockerHosts == nil {
+		t.Fatal("DockerHosts should remain an initialized empty slice")
 	}
 }
 
@@ -115,6 +119,72 @@ func TestStateClearAllHosts(t *testing.T) {
 	if len(state.Hosts) != 0 {
 		t.Fatalf("Hosts = %#v, want empty", state.Hosts)
 	}
+	if state.Hosts == nil {
+		t.Fatal("Hosts should remain an initialized empty slice")
+	}
+}
+
+func TestStateWholeSliceUpdatesPreserveInitializedEmptySlices(t *testing.T) {
+	state := NewState()
+
+	state.UpdateRecentlyResolved([]ResolvedAlert{{Alert: Alert{ID: "resolved-1"}}})
+	state.UpdateNodes([]Node{{ID: "node-1"}})
+	state.UpdateVMs([]VM{{ID: "vm-1"}})
+	state.UpdateContainers([]Container{{ID: "ct-1"}})
+	state.UpdateStorage([]Storage{{ID: "storage-1"}})
+	state.UpdatePBSInstances([]PBSInstance{{ID: "pbs-1"}})
+	state.UpdatePMGInstances([]PMGInstance{{ID: "pmg-1"}})
+
+	state.UpdateRecentlyResolved(nil)
+	state.UpdateNodes(nil)
+	state.UpdateVMs(nil)
+	state.UpdateContainers(nil)
+	state.UpdateStorage(nil)
+	state.UpdatePBSInstances(nil)
+	state.UpdatePMGInstances(nil)
+
+	if state.RecentlyResolved == nil {
+		t.Fatal("RecentlyResolved should remain an initialized empty slice")
+	}
+	if len(state.RecentlyResolved) != 0 {
+		t.Fatalf("RecentlyResolved = %#v, want empty", state.RecentlyResolved)
+	}
+	if state.Nodes == nil {
+		t.Fatal("Nodes should remain an initialized empty slice")
+	}
+	if len(state.Nodes) != 0 {
+		t.Fatalf("Nodes = %#v, want empty", state.Nodes)
+	}
+	if state.VMs == nil {
+		t.Fatal("VMs should remain an initialized empty slice")
+	}
+	if len(state.VMs) != 0 {
+		t.Fatalf("VMs = %#v, want empty", state.VMs)
+	}
+	if state.Containers == nil {
+		t.Fatal("Containers should remain an initialized empty slice")
+	}
+	if len(state.Containers) != 0 {
+		t.Fatalf("Containers = %#v, want empty", state.Containers)
+	}
+	if state.Storage == nil {
+		t.Fatal("Storage should remain an initialized empty slice")
+	}
+	if len(state.Storage) != 0 {
+		t.Fatalf("Storage = %#v, want empty", state.Storage)
+	}
+	if state.PBSInstances == nil {
+		t.Fatal("PBSInstances should remain an initialized empty slice")
+	}
+	if len(state.PBSInstances) != 0 {
+		t.Fatalf("PBSInstances = %#v, want empty", state.PBSInstances)
+	}
+	if state.PMGInstances == nil {
+		t.Fatal("PMGInstances should remain an initialized empty slice")
+	}
+	if len(state.PMGInstances) != 0 {
+		t.Fatalf("PMGInstances = %#v, want empty", state.PMGInstances)
+	}
 }
 
 func TestStateLinkNodeToHostAgent(t *testing.T) {
@@ -125,8 +195,8 @@ func TestStateLinkNodeToHostAgent(t *testing.T) {
 	if ok := state.LinkNodeToHostAgent("n1", "h1"); !ok {
 		t.Fatalf("LinkNodeToHostAgent returned false")
 	}
-	if state.Nodes[0].LinkedHostAgentID != "h1" {
-		t.Fatalf("LinkedHostAgentID = %q, want h1", state.Nodes[0].LinkedHostAgentID)
+	if state.Nodes[0].LinkedAgentID != "h1" {
+		t.Fatalf("LinkedAgentID = %q, want h1", state.Nodes[0].LinkedAgentID)
 	}
 	if ok := state.LinkNodeToHostAgent("missing", "h1"); ok {
 		t.Fatalf("expected false for missing node")
@@ -136,9 +206,9 @@ func TestStateLinkNodeToHostAgent(t *testing.T) {
 func TestStateUnlinkNodesFromHostAgent(t *testing.T) {
 	state := &State{
 		Nodes: []Node{
-			{ID: "n1", LinkedHostAgentID: "h1"},
-			{ID: "n2", LinkedHostAgentID: "h1"},
-			{ID: "n3", LinkedHostAgentID: "h2"},
+			{ID: "n1", LinkedAgentID: "h1"},
+			{ID: "n2", LinkedAgentID: "h1"},
+			{ID: "n3", LinkedAgentID: "h2"},
 		},
 	}
 
@@ -147,68 +217,84 @@ func TestStateUnlinkNodesFromHostAgent(t *testing.T) {
 		t.Fatalf("count = %d, want 2", count)
 	}
 	for _, node := range state.Nodes[:2] {
-		if node.LinkedHostAgentID != "" {
-			t.Fatalf("expected LinkedHostAgentID cleared, got %q", node.LinkedHostAgentID)
+		if node.LinkedAgentID != "" {
+			t.Fatalf("expected LinkedAgentID cleared, got %q", node.LinkedAgentID)
 		}
 	}
 }
 
-func TestStateLinkHostAgentToNode(t *testing.T) {
+func TestStateUpdateNodesForInstanceSkipsAmbiguousHostAgentHostnameMatch(t *testing.T) {
 	state := &State{
 		Hosts: []Host{
-			{ID: "h1", LinkedNodeID: "n1"},
-			{ID: "h2", LinkedVMID: "vm1", LinkedContainerID: "ct1"},
-		},
-		Nodes: []Node{
-			{ID: "n1", LinkedHostAgentID: "h1"},
-			{ID: "n2"},
+			{ID: "host-a", Hostname: "pve1"},
+			{ID: "host-b", Hostname: "pve1.local"},
 		},
 	}
 
-	if err := state.LinkHostAgentToNode("h2", "n2"); err != nil {
-		t.Fatalf("LinkHostAgentToNode error: %v", err)
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{ID: "node-1", Name: "pve1", Instance: "cluster-a"},
+	})
+
+	nodes := state.Nodes
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", nodes)
 	}
-	if state.Hosts[1].LinkedNodeID != "n2" {
-		t.Fatalf("LinkedNodeID = %q, want n2", state.Hosts[1].LinkedNodeID)
+	if nodes[0].LinkedAgentID != "" {
+		t.Fatalf("expected no auto-link for ambiguous hostname, got %q", nodes[0].LinkedAgentID)
 	}
-	if state.Nodes[1].LinkedHostAgentID != "h2" {
-		t.Fatalf("LinkedHostAgentID = %q, want h2", state.Nodes[1].LinkedHostAgentID)
-	}
-	if state.Hosts[1].LinkedVMID != "" || state.Hosts[1].LinkedContainerID != "" {
-		t.Fatalf("expected VM/container links cleared")
+}
+
+func TestStateUpdateNodesForInstanceLinksUniqueHostname(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{ID: "host-a", Hostname: "pve1.local"},
+		},
 	}
 
-	if err := state.LinkHostAgentToNode("missing", "n2"); err == nil || !strings.Contains(err.Error(), "host agent not found") {
-		t.Fatalf("expected host not found error, got %v", err)
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{ID: "node-1", Name: "pve1", Instance: "cluster-a"},
+	})
+
+	nodes := state.Nodes
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", nodes)
 	}
-	if err := state.LinkHostAgentToNode("h2", "missing"); err == nil || !strings.Contains(err.Error(), "node not found") {
-		t.Fatalf("expected node not found error, got %v", err)
+	if nodes[0].LinkedAgentID != "host-a" {
+		t.Fatalf("LinkedAgentID = %q, want host-a", nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "node-1" {
+		t.Fatalf("LinkedNodeID = %q, want node-1", state.Hosts[0].LinkedNodeID)
+	}
+	if state.Hosts[0].LinkedVMID != "" || state.Hosts[0].LinkedContainerID != "" {
+		t.Fatalf("expected guest links cleared when host links to node")
 	}
 }
 
 func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	state := &State{
 		Hosts: []Host{
-			{ID: "host-1", Hostname: "pve01"},
+			{ID: "host-1", Hostname: "pve01", LinkedNodeID: "cluster-a-pve01-old"},
 		},
 		Nodes: []Node{
 			{
-				ID:                "cluster-a-pve01-old",
-				Name:              "pve01",
-				Instance:          "cluster-entry-a",
-				ClusterName:       "cluster-a",
-				LinkedHostAgentID: "host-1",
+				ID:              "cluster-a-pve01-old",
+				Name:            "pve01",
+				Instance:        "cluster-entry-a",
+				ClusterName:     "cluster-a",
+				IsClusterMember: true,
+				LinkedAgentID:   "host-1",
 			},
 		},
 	}
 
 	state.UpdateNodesForInstance("cluster-entry-a", []Node{
 		{
-			ID:          "cluster-a-pve01-new",
-			Name:        "pve01",
-			Instance:    "cluster-entry-a",
-			ClusterName: "cluster-a",
-			Status:      "online",
+			ID:              "cluster-a-pve01-new",
+			Name:            "pve01",
+			Instance:        "cluster-entry-a",
+			ClusterName:     "cluster-a",
+			IsClusterMember: true,
+			Status:          "online",
 		},
 	})
 
@@ -218,12 +304,152 @@ func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	if state.Nodes[0].ID != "cluster-a-pve01-new" {
 		t.Fatalf("node id = %q, want cluster-a-pve01-new", state.Nodes[0].ID)
 	}
-	if state.Nodes[0].LinkedHostAgentID != "host-1" {
-		t.Fatalf("linkedHostAgentID = %q, want host-1", state.Nodes[0].LinkedHostAgentID)
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("linkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "cluster-a-pve01-new" {
+		t.Fatalf("host LinkedNodeID = %q, want cluster-a-pve01-new", state.Hosts[0].LinkedNodeID)
 	}
 }
 
-func TestUpdateNodesForInstanceDeduplicatesLogicalNode(t *testing.T) {
+func TestUpdateNodesForInstanceMergesStandaloneNodeIntoClusterNodeByEndpoint(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:                "host-1",
+				Hostname:          "minipc.local",
+				ReportIP:          "10.0.0.5",
+				LinkedNodeID:      "cluster-homelab-minipc",
+				NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "cluster-homelab-minipc",
+				Name:            "minipc",
+				Instance:        "homelab-entry",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.5:8006",
+				LinkedAgentID:   "host-1",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("minipc-standalone", []Node{
+		{
+			ID:       "minipc-standalone-minipc",
+			Name:     "minipc",
+			Instance: "minipc-standalone",
+			Host:     "https://10.0.0.5:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly 1 node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "cluster-homelab-minipc" {
+		t.Fatalf("node ID = %q, want cluster-homelab-minipc", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "cluster-homelab-minipc" {
+		t.Fatalf("host LinkedNodeID = %q, want cluster-homelab-minipc", state.Hosts[0].LinkedNodeID)
+	}
+}
+
+func TestStateUpdateNodesForInstancePrefersUniqueEndpointIPOverAmbiguousHostname(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-a",
+				Hostname: "minipc.local",
+				ReportIP: "10.0.0.5",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.5/24"}},
+				},
+			},
+			{
+				ID:       "host-b",
+				Hostname: "minipc.lab",
+				ReportIP: "10.0.0.6",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.6/24"}},
+				},
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{
+			ID:       "node-1",
+			Name:     "minipc",
+			Instance: "cluster-a",
+			Host:     "https://10.0.0.5:8006",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", state.Nodes)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-a" {
+		t.Fatalf("LinkedAgentID = %q, want host-a", state.Nodes[0].LinkedAgentID)
+	}
+}
+
+func TestUpdateNodesForInstanceMergesNodeViewsAcrossEndpointFormsWhenLinkedHostMatches(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:           "host-1",
+				Hostname:     "minipc.local",
+				ReportIP:     "10.0.0.5",
+				LinkedNodeID: "minipc-ip-view",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.5/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:            "minipc-ip-view",
+				Name:          "minipc",
+				Instance:      "standalone-ip",
+				Host:          "https://10.0.0.5:8006",
+				LinkedAgentID: "host-1",
+				Status:        "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("standalone-hostname", []Node{
+		{
+			ID:       "minipc-hostname-view",
+			Name:     "minipc",
+			Instance: "standalone-hostname",
+			Host:     "https://minipc.local:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly 1 node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "minipc-ip-view" {
+		t.Fatalf("node ID = %q, want minipc-ip-view", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "minipc-ip-view" {
+		t.Fatalf("host LinkedNodeID = %q, want minipc-ip-view", state.Hosts[0].LinkedNodeID)
+	}
+}
+
+func TestUpdateNodesForInstanceDeduplicatesLogicalNodeByClusterName(t *testing.T) {
 	state := NewState()
 	older := time.Now().Add(-2 * time.Minute)
 	newer := time.Now()
@@ -233,14 +459,18 @@ func TestUpdateNodesForInstanceDeduplicatesLogicalNode(t *testing.T) {
 			ID:               "node-old",
 			Name:             "pve01",
 			Instance:         "instance-a",
-			Status:           "offline",
-			ConnectionHealth: "error",
+			ClusterName:      "cluster-a",
+			IsClusterMember:  true,
+			Status:           "unknown",
+			ConnectionHealth: "unknown",
 			LastSeen:         older,
 		},
 		{
 			ID:               "node-new",
 			Name:             "pve01",
 			Instance:         "instance-a",
+			ClusterName:      "cluster-a",
+			IsClusterMember:  true,
 			Status:           "online",
 			ConnectionHealth: "healthy",
 			LastSeen:         newer,
@@ -258,14 +488,16 @@ func TestUpdateNodesForInstanceDeduplicatesLogicalNode(t *testing.T) {
 	}
 }
 
-func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceCollision(t *testing.T) {
+func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceClusterCollisionDifferentIDs(t *testing.T) {
 	now := time.Now()
 	state := &State{
 		Nodes: []Node{
 			{
-				ID:               "shared-node-id",
+				ID:               "node-from-b",
 				Name:             "pve01",
 				Instance:         "instance-b",
+				ClusterName:      "cluster-a",
+				IsClusterMember:  true,
 				Status:           "online",
 				ConnectionHealth: "healthy",
 				LastSeen:         now,
@@ -275,17 +507,22 @@ func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceCollision(t *testing
 
 	state.UpdateNodesForInstance("instance-a", []Node{
 		{
-			ID:               "shared-node-id",
+			ID:               "node-from-a",
 			Name:             "pve01",
 			Instance:         "instance-a",
-			Status:           "offline",
-			ConnectionHealth: "error",
+			ClusterName:      "cluster-a",
+			IsClusterMember:  true,
+			Status:           "unknown",
+			ConnectionHealth: "unknown",
 			LastSeen:         now.Add(-time.Minute),
 		},
 	})
 
 	if len(state.Nodes) != 1 {
 		t.Fatalf("nodes = %#v, want exactly one merged node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "node-from-b" {
+		t.Fatalf("node id = %q, want node-from-b", state.Nodes[0].ID)
 	}
 	if state.Nodes[0].Instance != "instance-b" {
 		t.Fatalf("instance = %q, want instance-b", state.Nodes[0].Instance)
@@ -295,10 +532,43 @@ func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceCollision(t *testing
 	}
 }
 
+func TestStateLinkHostAgentToNode(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{ID: "h1", LinkedNodeID: "n1"},
+			{ID: "h2", LinkedVMID: "vm1", LinkedContainerID: "ct1"},
+		},
+		Nodes: []Node{
+			{ID: "n1", LinkedAgentID: "h1"},
+			{ID: "n2"},
+		},
+	}
+
+	if err := state.LinkHostAgentToNode("h2", "n2"); err != nil {
+		t.Fatalf("LinkHostAgentToNode error: %v", err)
+	}
+	if state.Hosts[1].LinkedNodeID != "n2" {
+		t.Fatalf("LinkedNodeID = %q, want n2", state.Hosts[1].LinkedNodeID)
+	}
+	if state.Nodes[1].LinkedAgentID != "h2" {
+		t.Fatalf("LinkedAgentID = %q, want h2", state.Nodes[1].LinkedAgentID)
+	}
+	if state.Hosts[1].LinkedVMID != "" || state.Hosts[1].LinkedContainerID != "" {
+		t.Fatalf("expected VM/container links cleared")
+	}
+
+	if err := state.LinkHostAgentToNode("missing", "n2"); err == nil || !errors.Is(err, ErrHostAgentNotFound) || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("expected host not found error, got %v", err)
+	}
+	if err := state.LinkHostAgentToNode("h2", "missing"); err == nil || !errors.Is(err, ErrNodeNotFound) || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("expected node not found error, got %v", err)
+	}
+}
+
 func TestStateUnlinkHostAgent(t *testing.T) {
 	state := &State{
 		Hosts: []Host{{ID: "h1", LinkedNodeID: "n1", LinkedVMID: "vm", LinkedContainerID: "ct"}},
-		Nodes: []Node{{ID: "n1", LinkedHostAgentID: "h1"}},
+		Nodes: []Node{{ID: "n1", LinkedAgentID: "h1"}},
 	}
 
 	if ok := state.UnlinkHostAgent("h1"); !ok {
@@ -307,7 +577,7 @@ func TestStateUnlinkHostAgent(t *testing.T) {
 	if state.Hosts[0].LinkedNodeID != "" || state.Hosts[0].LinkedVMID != "" || state.Hosts[0].LinkedContainerID != "" {
 		t.Fatalf("expected host links cleared")
 	}
-	if state.Nodes[0].LinkedHostAgentID != "" {
+	if state.Nodes[0].LinkedAgentID != "" {
 		t.Fatalf("expected node link cleared")
 	}
 	if ok := state.UnlinkHostAgent("missing"); ok {

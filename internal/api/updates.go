@@ -4,15 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
+
+const applyUpdateStartAckTimeout = 250 * time.Millisecond
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
@@ -35,6 +40,15 @@ type UpdateManager interface {
 
 // NewUpdateHandlers creates new update handlers
 func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *UpdateHandlers {
+	return NewUpdateHandlersWithContext(manager, history, context.Background())
+}
+
+// NewUpdateHandlersWithContext creates update handlers with a stoppable cleanup loop.
+func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.UpdateHistory, cleanupCtx context.Context) *UpdateHandlers {
+	if cleanupCtx == nil {
+		cleanupCtx = context.Background()
+	}
+
 	// Initialize updater registry
 	registry := updates.NewUpdaterRegistry()
 
@@ -43,7 +57,7 @@ func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *U
 	registry.Register("proxmoxve", updates.NewInstallShAdapter(history))
 	registry.Register("docker", updates.NewDockerUpdater())
 	registry.Register("aur", updates.NewAURUpdater())
-	if strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true") || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {
+	if mockmode.IsEnabled() || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {
 		registry.Register("mock", updates.NewMockUpdater())
 	}
 
@@ -55,7 +69,7 @@ func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *U
 	}
 
 	// Start periodic cleanup of rate limit map
-	go h.cleanupRateLimits()
+	go h.cleanupRateLimits(cleanupCtx)
 
 	return h
 }
@@ -70,7 +84,11 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	// Get channel from query parameter if provided
-	channel := r.URL.Query().Get("channel")
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	info, err := h.manager.CheckForUpdatesWithChannel(ctx, channel)
 	if err != nil {
@@ -94,41 +112,108 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 
 	// Limit request body to 8KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	defer r.Body.Close()
 
 	var req struct {
 		DownloadURL string `json:"downloadUrl"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeStrictJSONBody(r.Body, &req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.DownloadURL = strings.TrimSpace(req.DownloadURL)
 
 	if req.DownloadURL == "" {
 		http.Error(w, "Download URL is required", http.StatusBadRequest)
 		return
 	}
 
-	// Start update in background with a new context (not request context which gets cancelled)
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	applyReq := updates.ApplyUpdateRequest{
+		DownloadURL:  req.DownloadURL,
+		Channel:      channel,
+		InitiatedBy:  updates.InitiatedByUser,
+		InitiatedVia: updates.InitiatedViaUI,
+	}
+	result := make(chan error, 1)
+
+	// Start update in background with a new context (not request context which gets canceled)
 	go func() {
-		ctx := context.Background()
-		applyReq := updates.ApplyUpdateRequest{
-			DownloadURL:  req.DownloadURL,
-			Channel:      r.URL.Query().Get("channel"),
-			InitiatedBy:  updates.InitiatedByUser,
-			InitiatedVia: updates.InitiatedViaUI,
-		}
-		if err := h.manager.ApplyUpdate(ctx, applyReq); err != nil {
-			log.Error().Err(err).Msg("Failed to apply update")
-		}
+		result <- h.manager.ApplyUpdate(context.Background(), applyReq)
 	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			statusCode, msg := classifyApplyUpdateStartError(err)
+			if statusCode >= http.StatusInternalServerError {
+				log.Error().Err(err).Str("download_url", req.DownloadURL).Str("channel", channel).Msg("Failed to start update")
+			} else {
+				log.Warn().Err(err).Str("download_url", req.DownloadURL).Str("channel", channel).Msg("Update request rejected")
+			}
+			http.Error(w, msg, statusCode)
+			return
+		}
+	case <-time.After(applyUpdateStartAckTimeout):
+	}
 
 	// Return success immediately
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "started",
 		"message": "Update process started",
-	})
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode update start response")
+	}
+}
+
+func decodeStrictJSONBody(body io.Reader, dst any) error {
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("request body must contain a single JSON object")
+	}
+
+	return nil
+}
+
+func normalizeRequestedUpdateChannel(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	canonical, ok := config.CanonicalUpdateChannel(trimmed)
+	if !ok {
+		return "", fmt.Errorf("update channel must be 'stable' or 'rc'")
+	}
+	return canonical, nil
+}
+
+func classifyApplyUpdateStartError(err error) (int, string) {
+	errMsg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(errMsg, "already in progress"):
+		return http.StatusConflict, "Update already in progress"
+	case strings.Contains(errMsg, "download url is required"), strings.Contains(errMsg, "invalid download url"):
+		return http.StatusBadRequest, "Invalid download URL"
+	case strings.Contains(errMsg, "stable channel cannot install prerelease builds"):
+		return http.StatusConflict, err.Error()
+	case strings.Contains(errMsg, "cannot be applied in docker environment"),
+		strings.Contains(errMsg, "manual migration required"):
+		return http.StatusConflict, err.Error()
+	default:
+		return http.StatusInternalServerError, "Failed to start update"
+	}
 }
 
 // HandleUpdateStatus handles update status requests with rate limiting
@@ -234,12 +319,17 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 }
 
 // cleanupRateLimits periodically cleans up old entries from the rate limit map
-func (h *UpdateHandlers) cleanupRateLimits() {
+func (h *UpdateHandlers) cleanupRateLimits(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		h.doCleanupRateLimits(time.Now())
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.doCleanupRateLimits(time.Now())
+		}
 	}
 }
 
@@ -269,24 +359,38 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get updater for deployment type
-	updater, err := h.registry.Get(versionInfo.DeploymentType)
-	if err != nil {
-		http.Error(w, "No updater for deployment type", http.StatusNotFound)
-		return
-	}
-
 	// Get version from query
 	version := r.URL.Query().Get("version")
 	if version == "" {
 		http.Error(w, "version parameter required", http.StatusBadRequest)
 		return
 	}
+	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get updater for deployment type. Some valid deployments intentionally do
+	// not support unattended updates; return a manual plan instead of surfacing
+	// a transport error to the UI.
+	updater, err := h.registry.Get(versionInfo.DeploymentType)
+	if err != nil {
+		if plan, ok := fallbackManualUpdatePlan(versionInfo.DeploymentType, version); ok {
+			w.Header().Set("Content-Type", "application/json")
+			normalizedPlan := plan.NormalizeCollections()
+			json.NewEncoder(w).Encode(normalizedPlan)
+			return
+		}
+
+		http.Error(w, "No updater for deployment type", http.StatusNotFound)
+		return
+	}
 
 	// Prepare update plan
 	plan, err := updater.PrepareUpdate(r.Context(), updates.UpdateRequest{
 		Version: version,
-		Channel: r.URL.Query().Get("channel"),
+		Channel: channel,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to prepare update plan")
@@ -295,7 +399,69 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(plan)
+	normalizedPlan := plan.NormalizeCollections()
+	json.NewEncoder(w).Encode(normalizedPlan)
+}
+
+func fallbackManualUpdatePlan(deploymentType string, version string) (*updates.UpdatePlan, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(deploymentType))
+
+	switch normalized {
+	case "manual":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    true,
+			RollbackSupport: true,
+			EstimatedTime:   "5-10 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Download Pulse %s from the release assets for your platform.", version),
+				"Stop the running Pulse service or process.",
+				"Back up the current Pulse binary and data directory before replacing the binary.",
+				"Install the new binary, then start Pulse again.",
+			},
+			Prerequisites: []string{
+				"Shell access to the host running Pulse",
+				"Permission to replace the current Pulse binary",
+				"A backup path for rollback if the upgrade must be reverted",
+			},
+		}, true
+	case "development":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    false,
+			RollbackSupport: true,
+			EstimatedTime:   "5-10 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Check out or build Pulse %s in your development workspace.", version),
+				"Stop the current development instance.",
+				"Restart Pulse with the rebuilt binary or release artifact against the existing data directory.",
+			},
+			Prerequisites: []string{
+				"A local development workspace for Pulse",
+				"Build tooling for the target version",
+				"A backup of the active data directory before replacing the binary",
+			},
+		}, true
+	case "source":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    false,
+			RollbackSupport: true,
+			EstimatedTime:   "5-15 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Pull or check out the source for Pulse %s.", version),
+				"Build a new Pulse binary from source.",
+				"Stop the current instance, replace the binary, and restart Pulse against the existing data directory.",
+			},
+			Prerequisites: []string{
+				"A clean source checkout of Pulse",
+				"Go and frontend build tooling required for your environment",
+				"A backup of the current binary and data directory for rollback",
+			},
+		}, true
+	default:
+		return nil, false
+	}
 }
 
 // HandleListUpdateHistory returns update history

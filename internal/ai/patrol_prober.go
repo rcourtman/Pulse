@@ -53,7 +53,7 @@ func (p *agentExecProber) PingGuests(ctx context.Context, agentID string, ips []
 	result, err := p.server.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		RequestID:  uuid.New().String(),
 		Command:    sb.String(),
-		TargetType: "host",
+		TargetType: "agent",
 		Timeout:    5, // seconds — generous for parallel pings
 	})
 	if err != nil {

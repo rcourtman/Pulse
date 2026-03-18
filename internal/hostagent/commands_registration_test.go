@@ -30,7 +30,7 @@ func TestCommandClient_sendRegistration_WritesExpectedPayload(t *testing.T) {
 		}
 		defer conn.Close()
 
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		var msg wsMessage
 		if err := conn.ReadJSON(&msg); err != nil {
 			t.Errorf("ReadJSON: %v", err)
@@ -104,7 +104,7 @@ func TestCommandClient_waitForRegistration_AcceptsSuccess(t *testing.T) {
 		}
 		defer conn.Close()
 
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		payload, _ := json.Marshal(registeredPayload{Success: true, Message: "Registered"})
 		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: payload})
 	}))
@@ -133,7 +133,7 @@ func TestCommandClient_waitForRegistration_RejectsFailure(t *testing.T) {
 		}
 		defer conn.Close()
 
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		payload, _ := json.Marshal(registeredPayload{Success: false, Message: "Invalid token"})
 		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: payload})
 	}))
@@ -162,7 +162,7 @@ func TestCommandClient_waitForRegistration_UnexpectedMessageType(t *testing.T) {
 		}
 		defer conn.Close()
 
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		_ = conn.WriteJSON(wsMessage{Type: msgTypePong, Timestamp: time.Now()})
 	}))
 	defer server.Close()

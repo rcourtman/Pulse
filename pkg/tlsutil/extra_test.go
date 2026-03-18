@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -63,5 +64,19 @@ func TestFetchFingerprint(t *testing.T) {
 	}
 	if fingerprint != expected {
 		t.Fatalf("unexpected fingerprint: %s", fingerprint)
+	}
+}
+
+func TestFetchFingerprintInvalidURL(t *testing.T) {
+	_, err := FetchFingerprint("http://[::1")
+	if err == nil || !strings.Contains(err.Error(), "failed to parse host URL") {
+		t.Fatalf("expected parse error, got %v", err)
+	}
+}
+
+func TestFetchFingerprintConnectionError(t *testing.T) {
+	_, err := FetchFingerprint("https://127.0.0.1:1")
+	if err == nil || !strings.Contains(err.Error(), "failed to connect") {
+		t.Fatalf("expected connection error, got %v", err)
 	}
 }

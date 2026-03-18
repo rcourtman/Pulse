@@ -69,14 +69,18 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 		{"Auto mixed", "Auto", true},
 		{"native", "native", true},
 		{"NATIVE", "NATIVE", true},
-		{"docker_host", "docker_host", true},
-		{"DOCKER_HOST", "DOCKER_HOST", true},
-		{"docker_bridge", "docker_bridge", true},
-		{"DOCKER_BRIDGE", "DOCKER_BRIDGE", true},
-		{"lxc_privileged", "lxc_privileged", true},
-		{"LXC_PRIVILEGED", "LXC_PRIVILEGED", true},
-		{"lxc_unprivileged", "lxc_unprivileged", true},
-		{"LXC_UNPRIVILEGED", "LXC_UNPRIVILEGED", true},
+		{"docker-host", "docker-host", true},
+		{"DOCKER-HOST", "DOCKER-HOST", true},
+		{"docker-bridge", "docker-bridge", true},
+		{"DOCKER-BRIDGE", "DOCKER-BRIDGE", true},
+		{"lxc-privileged", "lxc-privileged", true},
+		{"LXC-PRIVILEGED", "LXC-PRIVILEGED", true},
+		{"lxc-unprivileged", "lxc-unprivileged", true},
+		{"LXC-UNPRIVILEGED", "LXC-UNPRIVILEGED", true},
+		{"docker_host alias rejected", "docker_host", false},
+		{"docker_bridge alias rejected", "docker_bridge", false},
+		{"lxc_privileged alias rejected", "lxc_privileged", false},
+		{"lxc_unprivileged alias rejected", "lxc_unprivileged", false},
 
 		// Valid with whitespace trimming
 		{"auto with leading space", " auto", true},
@@ -87,7 +91,7 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 		// Invalid values
 		{"unknown value", "unknown", false},
 		{"typo dockerhost", "dockerhost", false},
-		{"typo docker-host", "docker-host", false},
+		{"typo docker-hosted", "docker-hosted", false},
 		{"kubernetes", "kubernetes", false},
 		{"vm", "vm", false},
 		{"baremetal", "baremetal", false},
@@ -105,6 +109,36 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 			result := IsValidDiscoveryEnvironment(tt.value)
 			if result != tt.expected {
 				t.Errorf("IsValidDiscoveryEnvironment(%q) = %v, want %v", tt.value, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCanonicalDiscoveryEnvironment(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+		ok       bool
+	}{
+		{name: "empty becomes auto", value: "", expected: "auto", ok: true},
+		{name: "auto preserved", value: "auto", expected: "auto", ok: true},
+		{name: "native preserved", value: "native", expected: "native", ok: true},
+		{name: "hyphenated canonical", value: "docker-host", expected: "docker-host", ok: true},
+		{name: "underscore alias rejected", value: "docker_host", expected: "", ok: false},
+		{name: "uppercase underscore alias rejected", value: "DOCKER_HOST", expected: "", ok: false},
+		{name: "lxc privileged alias rejected", value: "lxc_privileged", expected: "", ok: false},
+		{name: "invalid value rejected", value: "dockerhost", expected: "", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := CanonicalDiscoveryEnvironment(tt.value)
+			if ok != tt.ok {
+				t.Fatalf("CanonicalDiscoveryEnvironment(%q) ok = %v, want %v", tt.value, ok, tt.ok)
+			}
+			if got != tt.expected {
+				t.Fatalf("CanonicalDiscoveryEnvironment(%q) = %q, want %q", tt.value, got, tt.expected)
 			}
 		})
 	}
@@ -178,7 +212,7 @@ func TestCloneDiscoveryConfig(t *testing.T) {
 		{
 			name: "full config with all fields",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 				SubnetAllowlist:     []string{"10.0.0.0/8", "192.168.0.0/16"},
 				SubnetBlocklist:     []string{"172.16.0.0/12"},
 				MaxHostsPerScan:     512,
@@ -337,10 +371,10 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 		{
 			name: "valid environment preserved",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 			},
 			expected: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 				SubnetAllowlist:     []string{},
 				SubnetBlocklist:     defaults.SubnetBlocklist,
 				MaxHostsPerScan:     defaults.MaxHostsPerScan,
@@ -514,10 +548,10 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 		{
 			name: "all valid environments",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "lxc_privileged",
+				EnvironmentOverride: "lxc-privileged",
 			},
 			expected: DiscoveryConfig{
-				EnvironmentOverride: "lxc_privileged",
+				EnvironmentOverride: "lxc-privileged",
 				SubnetAllowlist:     []string{},
 				SubnetBlocklist:     defaults.SubnetBlocklist,
 				MaxHostsPerScan:     defaults.MaxHostsPerScan,
@@ -581,7 +615,7 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 // TestNormalizeDiscoveryConfig_DoesNotModifyInput verifies the original config is not mutated.
 func TestNormalizeDiscoveryConfig_DoesNotModifyInput(t *testing.T) {
 	original := DiscoveryConfig{
-		EnvironmentOverride: "  docker_host  ",
+		EnvironmentOverride: "  docker-host  ",
 		SubnetAllowlist:     []string{" 10.0.0.0/8 ", "192.168.0.0/16"},
 		SubnetBlocklist:     []string{" 172.16.0.0/12 "},
 		MaxHostsPerScan:     -1,
@@ -719,7 +753,7 @@ func TestDiscoveryConfigUnmarshalJSON_InvalidJSON(t *testing.T) {
 func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 	var cfg DiscoveryConfig
 	data := `{
-		"environment_override": "docker_host",
+		"environment_override": "docker-host",
 		"subnet_allowlist": ["192.168.1.0/24"],
 		"subnet_blocklist": ["10.0.0.0/8"],
 		"max_hosts_per_scan": 100,
@@ -735,8 +769,8 @@ func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.EnvironmentOverride != "docker_host" {
-		t.Errorf("EnvironmentOverride = %q, want 'docker_host'", cfg.EnvironmentOverride)
+	if cfg.EnvironmentOverride != "docker-host" {
+		t.Errorf("EnvironmentOverride = %q, want 'docker-host'", cfg.EnvironmentOverride)
 	}
 	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "192.168.1.0/24" {
 		t.Errorf("SubnetAllowlist = %v, want ['192.168.1.0/24']", cfg.SubnetAllowlist)
@@ -746,10 +780,10 @@ func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 	}
 }
 
-func TestDiscoveryConfigUnmarshalJSON_LegacyFields(t *testing.T) {
+func TestDiscoveryConfigUnmarshalJSON_LegacyFieldsIgnored(t *testing.T) {
 	var cfg DiscoveryConfig
 	data := `{
-		"environmentOverride": "lxc_privileged",
+		"environmentOverride": "lxc-privileged",
 		"subnetAllowlist": ["172.16.0.0/12"],
 		"maxHostsPerScan": 50,
 		"enableReverseDns": false
@@ -760,14 +794,18 @@ func TestDiscoveryConfigUnmarshalJSON_LegacyFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.EnvironmentOverride != "lxc_privileged" {
-		t.Errorf("EnvironmentOverride = %q, want 'lxc_privileged'", cfg.EnvironmentOverride)
+	defaults := DefaultDiscoveryConfig()
+	if cfg.EnvironmentOverride != defaults.EnvironmentOverride {
+		t.Errorf("EnvironmentOverride = %q, want %q", cfg.EnvironmentOverride, defaults.EnvironmentOverride)
 	}
-	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "172.16.0.0/12" {
-		t.Errorf("SubnetAllowlist = %v, want ['172.16.0.0/12']", cfg.SubnetAllowlist)
+	if len(cfg.SubnetAllowlist) != 0 {
+		t.Errorf("SubnetAllowlist = %v, want empty default", cfg.SubnetAllowlist)
 	}
-	if cfg.MaxHostsPerScan != 50 {
-		t.Errorf("MaxHostsPerScan = %d, want 50", cfg.MaxHostsPerScan)
+	if cfg.MaxHostsPerScan != defaults.MaxHostsPerScan {
+		t.Errorf("MaxHostsPerScan = %d, want default %d", cfg.MaxHostsPerScan, defaults.MaxHostsPerScan)
+	}
+	if cfg.EnableReverseDNS != defaults.EnableReverseDNS {
+		t.Errorf("EnableReverseDNS = %v, want default %v", cfg.EnableReverseDNS, defaults.EnableReverseDNS)
 	}
 }
 
@@ -782,5 +820,122 @@ func TestDiscoveryConfigUnmarshalJSON_EmptyObject(t *testing.T) {
 	defaults := DefaultDiscoveryConfig()
 	if cfg.MaxHostsPerScan != defaults.MaxHostsPerScan {
 		t.Errorf("MaxHostsPerScan = %d, want default %d", cfg.MaxHostsPerScan, defaults.MaxHostsPerScan)
+	}
+}
+
+func TestConfigDeepCopy_Nil(t *testing.T) {
+	var cfg *Config
+	if clone := cfg.DeepCopy(); clone != nil {
+		t.Fatalf("DeepCopy() = %#v, want nil", clone)
+	}
+}
+
+func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
+	original := &Config{
+		PVEInstances: []PVEInstance{
+			{Name: "pve-a", Host: "https://pve-a.local"},
+		},
+		PBSInstances: []PBSInstance{
+			{Name: "pbs-a", Host: "https://pbs-a.local"},
+		},
+		PMGInstances: []PMGInstance{
+			{Name: "pmg-a", Host: "https://pmg-a.local"},
+		},
+		APITokens: []APITokenRecord{
+			{
+				ID:     "token-1",
+				Scopes: []string{ScopeSettingsRead},
+				OrgIDs: []string{"org-a"},
+			},
+		},
+		EnvOverrides: map[string]bool{
+			"PULSE_AUTH_USER": true,
+		},
+		Discovery: DiscoveryConfig{
+			EnvironmentOverride: "docker-host",
+			SubnetAllowlist:     []string{"10.0.0.0/8"},
+			SubnetBlocklist:     []string{"169.254.0.0/16"},
+			IPBlocklist:         []string{"10.0.0.99"},
+		},
+	}
+
+	clone := original.DeepCopy()
+	if clone == nil {
+		t.Fatalf("DeepCopy() returned nil")
+	}
+
+	clone.PVEInstances[0].Host = "https://changed.local"
+	clone.PBSInstances[0].Host = "https://changed-pbs.local"
+	clone.PMGInstances[0].Host = "https://changed-pmg.local"
+	clone.APITokens[0].Scopes[0] = ScopeSettingsWrite
+	clone.APITokens[0].OrgIDs[0] = "org-b"
+	clone.EnvOverrides["PULSE_AUTH_USER"] = false
+	clone.Discovery.SubnetAllowlist[0] = "172.16.0.0/12"
+	clone.Discovery.SubnetBlocklist[0] = "10.0.0.0/8"
+	clone.Discovery.IPBlocklist[0] = "10.0.0.100"
+
+	if got := original.PVEInstances[0].Host; got != "https://pve-a.local" {
+		t.Fatalf("original PVEInstances mutated: %q", got)
+	}
+	if got := original.PBSInstances[0].Host; got != "https://pbs-a.local" {
+		t.Fatalf("original PBSInstances mutated: %q", got)
+	}
+	if got := original.PMGInstances[0].Host; got != "https://pmg-a.local" {
+		t.Fatalf("original PMGInstances mutated: %q", got)
+	}
+	if got := original.APITokens[0].Scopes[0]; got != ScopeSettingsRead {
+		t.Fatalf("original APIToken scopes mutated: %q", got)
+	}
+	if got := original.APITokens[0].OrgIDs[0]; got != "org-a" {
+		t.Fatalf("original APIToken org IDs mutated: %q", got)
+	}
+	if got := original.EnvOverrides["PULSE_AUTH_USER"]; got != true {
+		t.Fatalf("original env override mutated: %v", got)
+	}
+	if got := original.Discovery.SubnetAllowlist[0]; got != "10.0.0.0/8" {
+		t.Fatalf("original subnet allowlist mutated: %q", got)
+	}
+	if got := original.Discovery.SubnetBlocklist[0]; got != "169.254.0.0/16" {
+		t.Fatalf("original subnet blocklist mutated: %q", got)
+	}
+	if got := original.Discovery.IPBlocklist[0]; got != "10.0.0.99" {
+		t.Fatalf("original IP blocklist mutated: %q", got)
+	}
+}
+
+func TestClusterEndpoint_EffectiveIP(t *testing.T) {
+	tests := []struct {
+		name string
+		e    ClusterEndpoint
+		want string
+	}{
+		{
+			name: "uses override when set",
+			e: ClusterEndpoint{
+				IP:         "10.0.0.11",
+				IPOverride: "192.168.1.11",
+			},
+			want: "192.168.1.11",
+		},
+		{
+			name: "falls back to discovered IP when override missing",
+			e: ClusterEndpoint{
+				IP: "10.0.0.12",
+			},
+			want: "10.0.0.12",
+		},
+		{
+			name: "returns empty when both are empty",
+			e:    ClusterEndpoint{},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.e.EffectiveIP(); got != tt.want {
+				t.Fatalf("EffectiveIP() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

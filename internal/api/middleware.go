@@ -21,7 +21,18 @@ type APIError struct {
 	StatusCode   int               `json:"status_code"`
 	Timestamp    int64             `json:"timestamp"`
 	RequestID    string            `json:"request_id,omitempty"`
-	Details      map[string]string `json:"details,omitempty"`
+	Details      map[string]string `json:"details"`
+}
+
+func EmptyAPIError() APIError {
+	return APIError{}.NormalizeCollections()
+}
+
+func (e APIError) NormalizeCollections() APIError {
+	if e.Details == nil {
+		e.Details = map[string]string{}
+	}
+	return e
 }
 
 // Error implements the error interface
@@ -98,17 +109,27 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	resp := APIError{
-		ErrorMessage: message,
-		Code:         code,
-		StatusCode:   statusCode,
-		Timestamp:    time.Now().Unix(),
-		Details:      details,
-	}
+	resp := EmptyAPIError()
+	resp.ErrorMessage = message
+	resp.Code = code
+	resp.StatusCode = statusCode
+	resp.Timestamp = time.Now().Unix()
+	resp.Details = details
+	resp = resp.NormalizeCollections()
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Error().Err(err).Msg("Failed to encode error response")
 	}
+}
+
+// sanitizeErrorForClient returns a generic, safe message for an internal error.
+// The raw error is logged server-side; the client only sees the generic message.
+// Use this instead of passing err.Error() to http.Error or writeErrorResponse.
+func sanitizeErrorForClient(err error, genericMsg string) string {
+	if err != nil {
+		log.Error().Err(err).Msg(genericMsg)
+	}
+	return genericMsg
 }
 
 // responseWriter wraps http.ResponseWriter to capture status codes

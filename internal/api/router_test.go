@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -784,70 +785,6 @@ func TestCanCapturePublicURL_NilInputs(t *testing.T) {
 	}
 }
 
-func TestCapturePublicURLFromRequest_NilInputs(t *testing.T) {
-	t.Parallel()
-
-	t.Run("nil router", func(t *testing.T) {
-		var r *Router
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		// Should not panic
-		r.capturePublicURLFromRequest(req)
-	})
-
-	t.Run("nil request", func(t *testing.T) {
-		r := &Router{config: &config.Config{}}
-		// Should not panic
-		r.capturePublicURLFromRequest(nil)
-	})
-
-	t.Run("nil config", func(t *testing.T) {
-		r := &Router{config: nil}
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		// Should not panic
-		r.capturePublicURLFromRequest(req)
-	})
-}
-
-func TestHostAgentSearchCandidates(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		platform string
-		arch     string
-		wantLen  int // expected number of search paths
-	}{
-		{
-			name:     "strict mode with both params",
-			platform: "linux",
-			arch:     "amd64",
-			wantLen:  3, // 3 paths with platform-arch suffix
-		},
-		{
-			name:     "platform only, no arch",
-			platform: "linux",
-			arch:     "",
-			wantLen:  3, // 3 paths with platform suffix only
-		},
-		{
-			name:     "no params returns generic paths",
-			platform: "",
-			arch:     "",
-			wantLen:  3, // 3 generic paths
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			paths := hostAgentSearchCandidates(tt.platform, tt.arch)
-			if len(paths) != tt.wantLen {
-				t.Errorf("hostAgentSearchCandidates(%q, %q) returned %d paths, want %d",
-					tt.platform, tt.arch, len(paths), tt.wantLen)
-			}
-		})
-	}
-}
-
 func TestResolvePublicURL_ConfiguredPublicURL(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1150,6 +1087,45 @@ func TestCanCapturePublicURL_Security(t *testing.T) {
 			req.Header.Set("Authorization", "Basic "+creds)
 			if !canCapturePublicURL(cfg, req) {
 				t.Error("expected true for valid basic auth")
+			}
+		})
+	})
+
+	// Session Tests
+	t.Run("Session", func(t *testing.T) {
+		InitSessionStore(t.TempDir())
+
+		cfg := &config.Config{
+			AuthUser: "admin",
+		}
+
+		adminToken := "session-admin"
+		GetSessionStore().CreateSession(adminToken, time.Hour, "agent", "127.0.0.1", "admin")
+
+		memberToken := "session-member"
+		GetSessionStore().CreateSession(memberToken, time.Hour, "agent", "127.0.0.1", "member")
+
+		t.Run("configured admin session allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminToken})
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for configured admin session")
+			}
+		})
+
+		t.Run("non-admin session denied", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: memberToken})
+			if canCapturePublicURL(cfg, req) {
+				t.Error("expected false for non-admin session")
+			}
+		})
+
+		t.Run("session denied when no configured admin user", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminToken})
+			if canCapturePublicURL(&config.Config{}, req) {
+				t.Error("expected false when auth user is not configured")
 			}
 		})
 	})

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerDiscoveryTools registers the pulse_discovery tool
@@ -12,7 +14,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_discovery",
-			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, host_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
+			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -23,25 +25,21 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "For get: resource type (vm, lxc, docker, host)",
-						Enum:        []string{"vm", "lxc", "docker", "host"},
+						Description: "For get: canonical v6 resource type (vm, system-container, app-container, agent)",
+						Enum:        []string{"vm", "system-container", "app-container", "agent"},
 					},
 					"resource_id": {
 						Type:        "string",
 						Description: "For get: resource identifier (VMID, container name, hostname)",
 					},
-					"host_id": {
+					"target_id": {
 						Type:        "string",
-						Description: "For get: node/host where resource runs",
+						Description: "For get/list: canonical target identifier (agent ID, node ID, or cluster ID)",
 					},
 					"type": {
 						Type:        "string",
 						Description: "For list: filter by resource type",
-						Enum:        []string{"vm", "lxc", "docker", "host"},
-					},
-					"host": {
-						Type:        "string",
-						Description: "For list: filter by host/node ID",
+						Enum:        []string{"vm", "system-container", "app-container", "agent"},
 					},
 					"service_type": {
 						Type:        "string",
@@ -89,16 +87,16 @@ type CommandContext struct {
 
 // getCLIAccessPattern returns context about the resource type.
 // Does NOT prescribe how to access - the AI should determine that based on available agents.
-func getCLIAccessPattern(resourceType, hostID, resourceID string) string {
+func getCLIAccessPattern(resourceType, targetID, resourceID string) string {
 	switch resourceType {
-	case "lxc":
-		return fmt.Sprintf("LXC container on Proxmox node '%s' (VMID %s)", hostID, resourceID)
+	case "system-container":
+		return fmt.Sprintf("System container on node '%s' (VMID %s)", targetID, resourceID)
 	case "vm":
-		return fmt.Sprintf("VM on Proxmox node '%s' (VMID %s)", hostID, resourceID)
-	case "docker":
-		return fmt.Sprintf("Docker container '%s' on host '%s'", resourceID, hostID)
-	case "host":
-		return fmt.Sprintf("Host '%s'", hostID)
+		return fmt.Sprintf("VM on node '%s' (VMID %s)", targetID, resourceID)
+	case "app-container":
+		return fmt.Sprintf("Docker container '%s' on target '%s'", resourceID, targetID)
+	case "agent":
+		return fmt.Sprintf("Agent '%s'", targetID)
 	default:
 		return ""
 	}
@@ -211,69 +209,91 @@ func getCommonServicePaths(serviceType string) (logPaths, configPaths, dataPaths
 	return nil, nil, nil
 }
 
+func canonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string {
+	if discovery == nil {
+		return strings.TrimSpace(fallbackTargetID)
+	}
+	targetID := strings.TrimSpace(discovery.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(fallbackTargetID)
+	}
+	return targetID
+}
+
 func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.discoveryProvider == nil {
 		return NewTextResult("Discovery service not available."), nil
 	}
 
-	resourceType, _ := args["resource_type"].(string)
+	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
-	hostID, _ := args["host_id"].(string)
+	targetID, _ := args["target_id"].(string)
+	if isUnsupportedDiscoveryLegacyResourceTypeToken(resourceTypeRaw) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
+	}
+	resourceType := canonicalDiscoveryResourceType(resourceTypeRaw)
+	providerResourceType := discoveryProviderResourceType(resourceType)
+	targetID = strings.TrimSpace(targetID)
 
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
 	}
+	if !isSupportedDiscoveryResourceType(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
+	}
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
-	if hostID == "" {
-		return NewErrorResult(fmt.Errorf("host_id is required - use the 'node' field from search or get_resource results")), nil
+	if targetID == "" {
+		return NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), nil
 	}
 
-	// For LXC and VM types, resourceID should be a numeric VMID.
-	// If a name was passed, try to resolve it to a VMID.
-	if (resourceType == "lxc" || resourceType == "vm") && e.stateProvider != nil {
+	// For system-container and VM types, resourceID should be a numeric VMID.
+	// If a name was passed, try to resolve it to a VMID from typed ReadState.
+	if resourceType == "system-container" || resourceType == "vm" {
 		if _, err := strconv.Atoi(resourceID); err != nil {
 			// Not a number - try to resolve the name to a VMID
-			state := e.stateProvider.GetState()
 			resolved := false
 
-			if resourceType == "lxc" {
-				for _, c := range state.Containers {
-					if strings.EqualFold(c.Name, resourceID) && nodeMatchesHostID(c.Node, hostID) {
-						resourceID = fmt.Sprintf("%d", c.VMID)
-						resolved = true
-						break
+			rs, err := e.readStateForControl()
+			if err == nil {
+				if resourceType == "system-container" {
+					for _, c := range rs.Containers() {
+						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesTargetID(c.Node(), targetID) {
+							resourceID = fmt.Sprintf("%d", c.VMID())
+							resolved = true
+							break
+						}
 					}
-				}
-			} else if resourceType == "vm" {
-				for _, vm := range state.VMs {
-					if strings.EqualFold(vm.Name, resourceID) && nodeMatchesHostID(vm.Node, hostID) {
-						resourceID = fmt.Sprintf("%d", vm.VMID)
-						resolved = true
-						break
+				} else if resourceType == "vm" {
+					for _, vm := range rs.VMs() {
+						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesTargetID(vm.Node(), targetID) {
+							resourceID = fmt.Sprintf("%d", vm.VMID())
+							resolved = true
+							break
+						}
 					}
 				}
 			}
 
 			if !resolved {
-				return NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on host '%s'", resourceID, hostID)), nil
+				return NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on target '%s'", resourceID, targetID)), nil
 			}
 		}
 	}
 
 	// First try to get existing discovery
-	discovery, err := e.discoveryProvider.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	discovery, err := e.discoveryProvider.GetDiscoveryByResource(providerResourceType, targetID, resourceID)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to get discovery: %w", err)), nil
 	}
 
 	// Compute CLI access pattern (always useful, even if discovery fails)
-	cliAccess := getCLIAccessPattern(resourceType, hostID, resourceID)
+	cliAccess := getCLIAccessPattern(resourceType, targetID, resourceID)
 
 	// If no discovery exists, trigger one
 	if discovery == nil {
-		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, resourceType, hostID, resourceID)
+		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, providerResourceType, targetID, resourceID)
 		if err != nil {
 			// Distinguish transient errors (rate limits, timeouts) from genuine not-found.
 			// Transient errors must surface as IsError so the model stops retrying.
@@ -292,7 +312,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				"found":         false,
 				"resource_type": resourceType,
 				"resource_id":   resourceID,
-				"host_id":       hostID,
+				"target_id":     targetID,
 				"cli_access":    cliAccess,
 				"message":       fmt.Sprintf("Discovery failed: %v", err),
 				"hint":          "Use pulse_control with type='command' to investigate. Try checking /var/log/ for logs.",
@@ -306,7 +326,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			"found":         false,
 			"resource_type": resourceType,
 			"resource_id":   resourceID,
-			"host_id":       hostID,
+			"target_id":     targetID,
 			"cli_access":    cliAccess,
 			"message":       "Discovery returned no data. The resource may not be accessible.",
 			"hint":          "Use pulse_control with type='command' to investigate. Try listing /var/log/ or checking running processes.",
@@ -337,13 +357,20 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
+	discoveryTargetID := canonicalDiscoveryTargetID(discovery, targetID)
+
 	// Return the discovery information
+	responseResourceType := canonicalDiscoveryResourceType(discovery.ResourceType)
+	if responseResourceType == "" {
+		responseResourceType = resourceType
+	}
 	response := map[string]interface{}{
 		"found":           true,
 		"id":              discovery.ID,
-		"resource_type":   discovery.ResourceType,
+		"resource_type":   responseResourceType,
 		"resource_id":     discovery.ResourceID,
-		"host_id":         discovery.HostID,
+		"target_id":       discoveryTargetID,
+		"agent_id":        discovery.AgentID,
 		"hostname":        discovery.Hostname,
 		"service_type":    discovery.ServiceType,
 		"service_name":    discovery.ServiceName,
@@ -444,17 +471,63 @@ func isTransientError(err error) bool {
 	return false
 }
 
-// nodeMatchesHostID checks if a node name matches a host_id which may be
-// a plain node name ("delly") or a composite instance-node ID ("homelab-delly").
-func nodeMatchesHostID(nodeName, hostID string) bool {
-	if strings.EqualFold(nodeName, hostID) {
+// nodeMatchesTargetID checks if a node name matches a target ID which may be
+// a plain node name ("pve-node") or a composite instance-node ID ("homelab-pve-node").
+func nodeMatchesTargetID(nodeName, targetID string) bool {
+	if strings.EqualFold(nodeName, targetID) {
 		return true
 	}
-	// Check if hostID is a composite "instance-node" format ending with the node name
-	if strings.HasSuffix(strings.ToLower(hostID), "-"+strings.ToLower(nodeName)) {
+	// Check if target ID is a composite "instance-node" format ending with the node name.
+	if strings.HasSuffix(strings.ToLower(targetID), "-"+strings.ToLower(nodeName)) {
 		return true
 	}
 	return false
+}
+
+func isSupportedDiscoveryResourceType(value string) bool {
+	switch value {
+	case "vm", "system-container", "app-container", "agent":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnsupportedLegacyResourceTypeToken(value string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(value)
+}
+
+func isUnsupportedDiscoveryLegacyResourceTypeToken(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if isUnsupportedLegacyResourceTypeToken(normalized) {
+		return true
+	}
+	switch normalized {
+	case "docker", "docker-container":
+		return true
+	default:
+		return false
+	}
+}
+
+func canonicalDiscoveryResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker", "app-container":
+		return "app-container"
+	default:
+		return resourceType
+	}
+}
+
+func discoveryProviderResourceType(canonical string) string {
+	switch canonicalDiscoveryResourceType(canonical) {
+	case "app-container":
+		// Discovery storage still keys Docker/container runtime discoveries as "docker".
+		return "docker"
+	default:
+		return canonicalDiscoveryResourceType(canonical)
+	}
 }
 
 func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -463,18 +536,28 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	}
 
 	filterType, _ := args["type"].(string)
-	filterHost, _ := args["host"].(string)
+	filterTargetID, _ := args["target_id"].(string)
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
+	if isUnsupportedDiscoveryLegacyResourceTypeToken(filterType) {
+		return NewErrorResult(fmt.Errorf("unsupported type %q", strings.TrimSpace(filterType))), nil
+	}
+	filterType = canonicalDiscoveryResourceType(filterType)
+	providerFilterType := discoveryProviderResourceType(filterType)
+	filterTargetID = strings.TrimSpace(filterTargetID)
+
+	if filterType != "" && !isSupportedDiscoveryResourceType(filterType) {
+		return NewErrorResult(fmt.Errorf("unsupported type %q", filterType)), nil
+	}
 
 	var discoveries []*ResourceDiscoveryInfo
 	var err error
 
 	// Get discoveries based on filters
 	if filterType != "" {
-		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(filterType)
-	} else if filterHost != "" {
-		discoveries, err = e.discoveryProvider.ListDiscoveriesByHost(filterHost)
+		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(providerFilterType)
+	} else if filterTargetID != "" {
+		discoveries, err = e.discoveryProvider.ListDiscoveriesByTarget(filterTargetID)
 	} else {
 		discoveries, err = e.discoveryProvider.ListDiscoveries()
 	}
@@ -504,11 +587,13 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	// Build response
 	results := make([]map[string]interface{}, 0, len(discoveries))
 	for _, d := range discoveries {
+		discoveryTargetID := canonicalDiscoveryTargetID(d, "")
 		result := map[string]interface{}{
 			"id":              d.ID,
-			"resource_type":   d.ResourceType,
+			"resource_type":   canonicalDiscoveryResourceType(d.ResourceType),
 			"resource_id":     d.ResourceID,
-			"host_id":         d.HostID,
+			"target_id":       discoveryTargetID,
+			"agent_id":        d.AgentID,
 			"hostname":        d.Hostname,
 			"service_type":    d.ServiceType,
 			"service_name":    d.ServiceName,
@@ -540,8 +625,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	if filterType != "" {
 		response["filter_type"] = filterType
 	}
-	if filterHost != "" {
-		response["filter_host"] = filterHost
+	if filterTargetID != "" {
+		response["filter_target_id"] = filterTargetID
 	}
 	if filterServiceType != "" {
 		response["filter_service_type"] = filterServiceType

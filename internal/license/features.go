@@ -1,205 +1,77 @@
 // Package license handles Pulse Pro license validation and feature gating.
 package license
 
-// Feature constants represent gated features in Pulse Pro.
+import "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+
+// Feature constants represent gated features in Pulse.
 // These are embedded in license JWTs and checked at runtime.
 const (
-	// Pro tier features - AI
-	FeatureAIPatrol     = "ai_patrol"     // Background AI health monitoring
-	FeatureAIAlerts     = "ai_alerts"     // AI analysis when alerts fire
-	FeatureAIAutoFix    = "ai_autofix"    // Automatic remediation
-	FeatureKubernetesAI = "kubernetes_ai" // AI analysis of K8s (NOT basic monitoring)
-
-	// Pro tier features - Fleet Management
-	FeatureAgentProfiles = "agent_profiles" // Centralized agent configuration profiles
-
-	// Free tier features - Monitoring
-	FeatureUpdateAlerts = "update_alerts" // Alerts for pending container/package updates (free feature)
-
-	// Pro tier features - Team & Compliance
-	FeatureRBAC              = "rbac"               // Role-Based Access Control
-	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
-	FeatureSSO               = "sso"                // OIDC/SSO authentication (Basic)
-	FeatureAdvancedSSO       = "advanced_sso"       // SAML, Multi-provider, Role Mapping
-	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
-	FeatureLongTermMetrics   = "long_term_metrics"  // 90-day historical metrics (SQLite)
-
-	// MSP/Enterprise tier features (for volume deals)
-	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
-	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
-	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
-	FeatureUnlimited   = "unlimited"    // Unlimited instances (for MSP/volume deals)
+	FeatureAIPatrol          = licensing.FeatureAIPatrol
+	FeatureAIAlerts          = licensing.FeatureAIAlerts
+	FeatureAIAutoFix         = licensing.FeatureAIAutoFix
+	FeatureKubernetesAI      = licensing.FeatureKubernetesAI
+	FeatureAgentProfiles     = licensing.FeatureAgentProfiles
+	FeatureUpdateAlerts      = licensing.FeatureUpdateAlerts
+	FeatureRBAC              = licensing.FeatureRBAC
+	FeatureAuditLogging      = licensing.FeatureAuditLogging
+	FeatureSSO               = licensing.FeatureSSO
+	FeatureAdvancedSSO       = licensing.FeatureAdvancedSSO
+	FeatureAdvancedReporting = licensing.FeatureAdvancedReporting
+	FeatureLongTermMetrics   = licensing.FeatureLongTermMetrics
+	FeatureRelay             = licensing.FeatureRelay
+	FeatureMobileApp         = licensing.FeatureMobileApp
+	FeaturePushNotifications = licensing.FeaturePushNotifications
+	FeatureMultiUser         = licensing.FeatureMultiUser
+	FeatureWhiteLabel        = licensing.FeatureWhiteLabel
+	FeatureMultiTenant       = licensing.FeatureMultiTenant
+	FeatureUnlimited         = licensing.FeatureUnlimited
 )
 
 // Tier represents a license tier.
-type Tier string
+type Tier = licensing.Tier
 
 const (
-	TierFree       Tier = "free"
-	TierPro        Tier = "pro"
-	TierProAnnual  Tier = "pro_annual"
-	TierLifetime   Tier = "lifetime"
-	TierMSP        Tier = "msp"
-	TierEnterprise Tier = "enterprise"
+	TierFree       = licensing.TierFree
+	TierRelay      = licensing.TierRelay
+	TierPro        = licensing.TierPro
+	TierProPlus    = licensing.TierProPlus
+	TierProAnnual  = licensing.TierProAnnual
+	TierLifetime   = licensing.TierLifetime
+	TierCloud      = licensing.TierCloud
+	TierMSP        = licensing.TierMSP
+	TierEnterprise = licensing.TierEnterprise
 )
 
 // TierFeatures maps each tier to its included features.
-var TierFeatures = map[Tier][]string{
-	TierFree: {
-		// Free tier includes update alerts (container image updates) - basic monitoring feature
-		FeatureUpdateAlerts,
-		FeatureSSO,
-		FeatureAIPatrol, // Patrol is free with BYOK - auto-fix requires Pro
-	},
-	TierPro: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierProAnnual: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierLifetime: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
-	TierMSP: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureUnlimited,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAuditLogging,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
-		// are on the roadmap but NOT included until implemented
-	},
-	TierEnterprise: {
-		FeatureAIPatrol,
-		FeatureAIAlerts,
-		FeatureAIAutoFix,
-		FeatureKubernetesAI,
-		FeatureAgentProfiles,
-		FeatureUpdateAlerts,
-		FeatureUnlimited,
-		FeatureMultiUser,
-		FeatureWhiteLabel,
-		FeatureMultiTenant,
-		FeatureAuditLogging,
-		FeatureSSO,
-		FeatureAdvancedSSO,
-		FeatureRBAC,
-		FeatureAdvancedReporting,
-		FeatureLongTermMetrics,
-	},
+var TierFeatures = licensing.TierFeatures
+
+// TierMonitoredSystemLimits defines the maximum agent count per tier.
+var TierMonitoredSystemLimits = licensing.TierMonitoredSystemLimits
+
+// TierHistoryDays defines the maximum metrics history retention per tier.
+var TierHistoryDays = licensing.TierHistoryDays
+
+// DeriveCapabilitiesFromTier derives effective capabilities from tier and explicit features.
+func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
+	return licensing.DeriveCapabilitiesFromTier(tier, explicitFeatures)
+}
+
+// DeriveEntitlements derives capabilities and limits from tier and canonical monitored-system fields.
+func DeriveEntitlements(tier Tier, features []string, maxMonitoredSystems int, maxGuests int) (capabilities []string, limits map[string]int64) {
+	return licensing.DeriveEntitlements(tier, features, maxMonitoredSystems, maxGuests)
 }
 
 // TierHasFeature checks if a tier includes a specific feature.
 func TierHasFeature(tier Tier, feature string) bool {
-	features, ok := TierFeatures[tier]
-	if !ok {
-		return false
-	}
-	for _, f := range features {
-		if f == feature {
-			return true
-		}
-	}
-	return false
+	return licensing.TierHasFeature(tier, feature)
 }
 
 // GetTierDisplayName returns a human-readable name for the tier.
 func GetTierDisplayName(tier Tier) string {
-	switch tier {
-	case TierFree:
-		return "Free"
-	case TierPro:
-		return "Pro Intelligence (Monthly)"
-	case TierProAnnual:
-		return "Pro Intelligence (Annual)"
-	case TierLifetime:
-		return "Pro Intelligence (Lifetime)"
-	case TierMSP:
-		return "MSP"
-	case TierEnterprise:
-		return "Enterprise"
-	default:
-		return "Unknown"
-	}
+	return licensing.GetTierDisplayName(tier)
 }
 
 // GetFeatureDisplayName returns a human-readable name for a feature.
 func GetFeatureDisplayName(feature string) string {
-	switch feature {
-	case FeatureAIPatrol:
-		return "Pulse Patrol (Background Health Checks)"
-	case FeatureAIAlerts:
-		return "Alert Analysis"
-	case FeatureAIAutoFix:
-		return "Pulse Patrol Auto-Fix"
-	case FeatureKubernetesAI:
-		return "Kubernetes Analysis"
-	case FeatureUpdateAlerts:
-		return "Update Alerts (Container/Package Updates)"
-	case FeatureRBAC:
-		return "Role-Based Access Control (RBAC)"
-	case FeatureMultiUser:
-		return "Multi-User Mode"
-	case FeatureWhiteLabel:
-		return "White-Label Branding"
-	case FeatureMultiTenant:
-		return "Multi-Tenant Mode"
-	case FeatureUnlimited:
-		return "Unlimited Instances"
-	case FeatureAgentProfiles:
-		return "Centralized Agent Profiles"
-	case FeatureAuditLogging:
-		return "Enterprise Audit Logging"
-	case FeatureSSO:
-		return "Basic SSO (OIDC)"
-	case FeatureAdvancedSSO:
-		return "Advanced SSO (SAML/Multi-Provider)"
-	case FeatureAdvancedReporting:
-		return "Advanced Infrastructure Reporting (PDF/CSV)"
-	case FeatureLongTermMetrics:
-		return "90-Day Metric History"
-	default:
-		return feature
-	}
+	return licensing.GetFeatureDisplayName(feature)
 }

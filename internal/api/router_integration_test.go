@@ -56,11 +56,11 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	}
 
 	var monitor *monitoring.Monitor
-	hub := internalws.NewHub(func() interface{} {
+	hub := internalws.NewHub(func(orgID string) interface{} {
 		if monitor == nil {
 			return models.StateSnapshot{}
 		}
-		return monitor.GetState().ToFrontend()
+		return monitor.BuildFrontendState()
 	})
 
 	go hub.Run()
@@ -72,8 +72,8 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	}
 	monitor.SetMockMode(true)
 
-	hub.SetStateGetter(func() interface{} {
-		return monitor.GetState().ToFrontend()
+	hub.SetStateGetter(func(orgID string) interface{} {
+		return monitor.BuildFrontendState()
 	})
 
 	version := readRuntimeVersion(t)
@@ -84,9 +84,9 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	router := api.NewRouter(cfg, monitor, nil, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
-	}, version)
+	}, version, nil)
 
-	srv := httptest.NewServer(router.Handler())
+	srv := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(func() {
 		srv.Close()
 		if monitor != nil {
@@ -127,6 +127,20 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if payload["status"] != "healthy" {
 		t.Fatalf("expected status=healthy, got %v", payload["status"])
+	}
+
+	dependencies, ok := payload["dependencies"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected dependencies map in health response, got %#v", payload["dependencies"])
+	}
+	if dependencies["monitor"] != true {
+		t.Fatalf("expected monitor dependency to be true, got %#v", dependencies["monitor"])
+	}
+	if dependencies["scheduler"] != true {
+		t.Fatalf("expected scheduler dependency to be true, got %#v", dependencies["scheduler"])
+	}
+	if dependencies["websocket"] != true {
+		t.Fatalf("expected websocket dependency to be true, got %#v", dependencies["websocket"])
 	}
 }
 
@@ -180,12 +194,12 @@ func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
 	// validation. The request should make it to the alert manager, which returns 404 because
 	// the alert does not exist in this test environment.
 	alertID := "docker(host)-container-unhealthy"
-	escaped := url.PathEscape(alertID)
-
-	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/"+escaped+"/acknowledge", nil)
+	body := bytes.NewBufferString(`{"alertIdentifier":"` + alertID + `"}`)
+	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/acknowledge", body)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -222,13 +236,75 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 		t.Fatalf("unmarshal state response: %v", err)
 	}
 
-	nodes, ok := snapshot["nodes"].([]any)
-	if !ok {
-		t.Fatalf("state response missing nodes array: %s", string(body))
+	if _, ok := snapshot["nodes"]; ok {
+		t.Fatalf("state response should not include legacy nodes key: %s", string(body))
 	}
 
-	if len(nodes) == 0 {
-		t.Fatalf("expected nodes in state response, got none")
+	hasNonLegacyData := false
+	for _, key := range []string{"resources", "connectedInfrastructure"} {
+		if values, ok := snapshot[key].([]any); ok && len(values) > 0 {
+			hasNonLegacyData = true
+			break
+		}
+	}
+	if !hasNonLegacyData {
+		t.Fatalf("expected non-legacy state data (resources/kubernetesClusters/pbs/pmg), got: %s", string(body))
+	}
+}
+
+func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/rollups?limit=500")
+	if err != nil {
+		t.Fatalf("rollups request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []map[string]any `json:"data"`
+		Meta map[string]any   `json:"meta"`
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read rollups response: %v", err)
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal rollups response: %v", err)
+	}
+
+	if len(payload.Data) == 0 {
+		t.Fatalf("expected rollups data, got none: %s", string(body))
+	}
+
+	hasK8s := false
+	hasTrueNAS := false
+	for _, item := range payload.Data {
+		raw, ok := item["providers"]
+		if !ok {
+			continue
+		}
+		arr, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		for _, v := range arr {
+			s, _ := v.(string)
+			if s == "kubernetes" {
+				hasK8s = true
+			}
+			if s == "truenas" {
+				hasTrueNAS = true
+			}
+		}
+	}
+	if !hasK8s || !hasTrueNAS {
+		t.Fatalf("expected rollups to include kubernetes and truenas providers, got k8s=%v truenas=%v", hasK8s, hasTrueNAS)
 	}
 }
 
@@ -251,7 +327,6 @@ func TestProtectedEndpointsRequireAuthentication(t *testing.T) {
 	}{
 		{"GET", "/api/state"},
 		{"GET", "/api/storage/test-storage"},
-		{"GET", "/api/backups"},
 		{"GET", "/api/updates/status"},
 		{"POST", "/api/updates/apply"},
 		{"GET", "/api/alerts/active"},
@@ -357,6 +432,53 @@ func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 	}
 	if version == "" {
 		t.Fatalf("expected non-empty version string")
+	}
+}
+
+func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/points?limit=500")
+	if err != nil {
+		t.Fatalf("recovery points request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d; body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			Provider string `json:"provider"`
+		} `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode recovery points response: %v", err)
+	}
+
+	if payload.Meta.Total <= 0 {
+		t.Fatalf("expected meta.total > 0, got %d", payload.Meta.Total)
+	}
+
+	var hasK8s, hasTrueNAS bool
+	for _, p := range payload.Data {
+		switch p.Provider {
+		case "kubernetes":
+			hasK8s = true
+		case "truenas":
+			hasTrueNAS = true
+		}
+	}
+	if !hasK8s {
+		t.Fatalf("expected at least one kubernetes recovery point in response")
+	}
+	if !hasTrueNAS {
+		t.Fatalf("expected at least one truenas recovery point in response")
 	}
 }
 
@@ -685,7 +807,7 @@ func TestRecoveryEndpointRequiresDirectLoopback(t *testing.T) {
 func TestWebSocketSendsInitialState(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
 	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -724,39 +846,249 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 		t.Fatalf("expected initialState message, got %q", msgType)
 	}
 
-	nodesVal, ok := payload["nodes"].([]any)
-	if !ok || len(nodesVal) == 0 {
-		t.Fatalf("initial state missing nodes: %v", payload["nodes"])
+	legacyKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"hosts",
+		"storage",
+	}
+	for _, key := range legacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("initial state should not include legacy key %q", key)
+		}
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
-	state := srv.monitor.GetState().ToFrontend()
+	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
 	msgType, payload = readMsg()
 	if msgType != "rawData" {
 		t.Fatalf("expected rawData broadcast, got %q", msgType)
 	}
-	if _, ok := payload["nodes"].([]any); !ok {
-		t.Fatalf("broadcast payload missing nodes: %v", payload)
+	for _, key := range legacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("broadcast payload should not include legacy key %q", key)
+		}
+	}
+}
+
+func TestWebsocketPayloadContractShape(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
+
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	readMsg := func() (string, map[string]any) {
+		t.Helper()
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("set deadline: %v", err)
+		}
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read message: %v", err)
+		}
+		var msg map[string]any
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("decode message: %v", err)
+		}
+		typeVal, _ := msg["type"].(string)
+		payload := map[string]any{}
+		if raw, ok := msg["data"].(map[string]any); ok {
+			payload = raw
+		}
+		return typeVal, payload
 	}
 
-	nodes := payload["nodes"].([]any)
-	firstNode := nodes[0].(map[string]any)
-	requiredNodeKeys := []string{"id", "displayName", "cpu", "memory", "status"}
-	for _, key := range requiredNodeKeys {
-		if _, ok := firstNode[key]; !ok {
-			t.Fatalf("node payload missing key %q: %v", key, firstNode)
+	readType := func(expected string) map[string]any {
+		t.Helper()
+		for i := 0; i < 6; i++ {
+			msgType, payload := readMsg()
+			if msgType == expected {
+				return payload
+			}
+		}
+		t.Fatalf("timed out waiting for %q websocket message", expected)
+		return nil
+	}
+
+	readType("welcome")
+	readType("initialState")
+
+	contractState := models.StateFrontend{
+		Resources: []models.ResourceFrontend{
+			{
+				ID:           "resource-1",
+				Type:         "node",
+				Name:         "node-1",
+				DisplayName:  "Node 1",
+				PlatformID:   "platform-1",
+				PlatformType: "proxmox",
+				SourceType:   "pve",
+				Status:       "online",
+				LastSeen:     1,
+			},
+		},
+		ConnectedInfrastructure: []models.ConnectedInfrastructureItemFrontend{
+			{
+				ID:     "resource-1",
+				Name:   "Node 1",
+				Status: "active",
+				Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{
+					{ID: "agent:host-1", Kind: "agent", Label: "Host telemetry"},
+				},
+			},
+		},
+	}
+
+	srv.hub.BroadcastState(contractState)
+	payload := readType("rawData")
+
+	requiredArrayKeys := []string{"resources", "connectedInfrastructure"}
+	for _, key := range requiredArrayKeys {
+		val, ok := payload[key]
+		if !ok {
+			t.Fatalf("websocket payload missing required %q key", key)
+		}
+		if values, ok := val.([]any); !ok || len(values) == 0 {
+			t.Fatalf("websocket payload key %q must be a non-empty array, got %T (%v)", key, val, val)
 		}
 	}
 
-	dockerHosts, ok := payload["dockerHosts"].([]any)
-	if !ok || len(dockerHosts) == 0 {
-		t.Fatalf("expected dockerHosts slice in payload: %v", payload["dockerHosts"])
+	legacyKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"hosts",
+		"storage",
+		"removedDockerHosts",
+		"removedHostAgents",
+		"removedKubernetesClusters",
 	}
-	firstHost := dockerHosts[0].(map[string]any)
-	if _, ok := firstHost["containers"].([]any); !ok {
-		t.Fatalf("docker host missing containers array: %v", firstHost)
+	for _, key := range legacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("expected websocket payload to exclude legacy key %q", key)
+		}
+	}
+
+	if _, ok := payload["backups"]; ok {
+		t.Fatalf("websocket payload must not include legacy backups map")
+	}
+}
+
+func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
+
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	readMsg := func() (string, map[string]any) {
+		t.Helper()
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("set deadline: %v", err)
+		}
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read message: %v", err)
+		}
+		var msg map[string]any
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("decode message: %v", err)
+		}
+		typeVal, _ := msg["type"].(string)
+		payload := map[string]any{}
+		if raw, ok := msg["data"].(map[string]any); ok {
+			payload = raw
+		}
+		return typeVal, payload
+	}
+
+	readType := func(expected string) map[string]any {
+		t.Helper()
+		for i := 0; i < 6; i++ {
+			msgType, payload := readMsg()
+			if msgType == expected {
+				return payload
+			}
+		}
+		t.Fatalf("timed out waiting for %q websocket message", expected)
+		return nil
+	}
+
+	readType("welcome")
+	readType("initialState")
+
+	testState := models.StateFrontend{
+		Resources: []models.ResourceFrontend{
+			{
+				ID:           "resource-1",
+				Type:         "node",
+				Name:         "node-1",
+				DisplayName:  "Node 1",
+				PlatformID:   "platform-1",
+				PlatformType: "proxmox",
+				SourceType:   "pve",
+				Status:       "online",
+				LastSeen:     1,
+			},
+		},
+		ConnectedInfrastructure: []models.ConnectedInfrastructureItemFrontend{
+			{
+				ID:     "resource-1",
+				Name:   "Node 1",
+				Status: "active",
+				Surfaces: []models.ConnectedInfrastructureSurfaceFrontend{
+					{ID: "agent:host-1", Kind: "agent", Label: "Host telemetry"},
+				},
+			},
+		},
+	}
+
+	srv.hub.BroadcastState(testState)
+	canonicalPayload := readType("rawData")
+
+	legacyKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"hosts",
+		"storage",
+		"removedDockerHosts",
+		"removedHostAgents",
+		"removedKubernetesClusters",
+	}
+	for _, key := range legacyKeys {
+		if _, ok := canonicalPayload[key]; ok {
+			t.Fatalf("expected canonical websocket payload to exclude %s", key)
+		}
+	}
+
+	resources, ok := canonicalPayload["resources"].([]any)
+	if !ok || len(resources) == 0 {
+		t.Fatalf("expected resources in canonical websocket payload: %v", canonicalPayload["resources"])
+	}
+	if connectedInfra, ok := canonicalPayload["connectedInfrastructure"].([]any); !ok || len(connectedInfra) == 0 {
+		t.Fatalf(
+			"expected connectedInfrastructure in canonical websocket payload: %v",
+			canonicalPayload["connectedInfrastructure"],
+		)
+	}
+	if _, ok := canonicalPayload["backups"]; ok {
+		t.Fatalf("expected canonical websocket payload to omit backups")
 	}
 }
 
@@ -827,6 +1159,292 @@ func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 	defer authedResp.Body.Close()
 	if authedResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 with session cookie, got %d", authedResp.StatusCode)
+	}
+}
+
+func TestRevokedAPITokenImmediatelyLosesAccess(t *testing.T) {
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		hashedPass, err := internalauth.HashPassword("super-secure-pass")
+		if err != nil {
+			t.Fatalf("hash password: %v", err)
+		}
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = hashedPass
+	})
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar: %v", err)
+	}
+	sessionClient := &http.Client{Jar: jar}
+	tokenClient := &http.Client{}
+
+	loginBody, err := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "super-secure-pass",
+	})
+	if err != nil {
+		t.Fatalf("marshal login payload: %v", err)
+	}
+
+	loginReq, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := sessionClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d", loginResp.StatusCode)
+	}
+
+	sessionURL, err := url.Parse(srv.server.URL)
+	if err != nil {
+		t.Fatalf("parse session URL: %v", err)
+	}
+	var csrfToken string
+	for _, cookie := range jar.Cookies(sessionURL) {
+		if cookie.Name == "pulse_csrf" {
+			csrfToken = cookie.Value
+			break
+		}
+	}
+	if csrfToken == "" {
+		t.Fatalf("expected pulse_csrf cookie after login")
+	}
+
+	createReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.server.URL+"/api/security/tokens",
+		bytes.NewBufferString(`{"name":"revocation-proof","scopes":["monitoring:read"]}`),
+	)
+	if err != nil {
+		t.Fatalf("create token request: %v", err)
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-CSRF-Token", csrfToken)
+	createResp, err := sessionClient.Do(createReq)
+	if err != nil {
+		t.Fatalf("create token request failed: %v", err)
+	}
+	defer createResp.Body.Close()
+	if createResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createResp.Body)
+		t.Fatalf("expected 200 creating token, got %d: %s", createResp.StatusCode, string(body))
+	}
+
+	var tokenPayload struct {
+		Token  string `json:"token"`
+		Record struct {
+			ID string `json:"id"`
+		} `json:"record"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&tokenPayload); err != nil {
+		t.Fatalf("decode token create response: %v", err)
+	}
+	if tokenPayload.Token == "" || tokenPayload.Record.ID == "" {
+		t.Fatalf("expected token and record ID, got %+v", tokenPayload)
+	}
+
+	assertStateAuth := func(headerName, headerValue string, wantStatus int) {
+		t.Helper()
+
+		req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state", nil)
+		if err != nil {
+			t.Fatalf("create state request: %v", err)
+		}
+		req.Header.Set(headerName, headerValue)
+
+		res, err := tokenClient.Do(req)
+		if err != nil {
+			t.Fatalf("state request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != wantStatus {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("expected %d for %s auth, got %d: %s", wantStatus, headerName, res.StatusCode, string(body))
+		}
+	}
+
+	assertStateAuth("X-API-Token", tokenPayload.Token, http.StatusOK)
+	assertStateAuth("Authorization", "Bearer "+tokenPayload.Token, http.StatusOK)
+
+	deleteReq, err := http.NewRequest(
+		http.MethodDelete,
+		srv.server.URL+"/api/security/tokens/"+tokenPayload.Record.ID,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create delete request: %v", err)
+	}
+	deleteReq.Header.Set("X-CSRF-Token", csrfToken)
+	deleteResp, err := sessionClient.Do(deleteReq)
+	if err != nil {
+		t.Fatalf("delete token request failed: %v", err)
+	}
+	deleteResp.Body.Close()
+	if deleteResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 deleting token, got %d", deleteResp.StatusCode)
+	}
+
+	assertStateAuth("X-API-Token", tokenPayload.Token, http.StatusUnauthorized)
+	assertStateAuth("Authorization", "Bearer "+tokenPayload.Token, http.StatusUnauthorized)
+}
+
+func TestLimitedAPITokenCannotCreateBroaderToken(t *testing.T) {
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		hashedPass, err := internalauth.HashPassword("super-secure-pass")
+		if err != nil {
+			t.Fatalf("hash password: %v", err)
+		}
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = hashedPass
+	})
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar: %v", err)
+	}
+	sessionClient := &http.Client{Jar: jar}
+	tokenClient := &http.Client{}
+
+	loginBody, err := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "super-secure-pass",
+	})
+	if err != nil {
+		t.Fatalf("marshal login payload: %v", err)
+	}
+
+	loginReq, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := sessionClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d", loginResp.StatusCode)
+	}
+
+	sessionURL, err := url.Parse(srv.server.URL)
+	if err != nil {
+		t.Fatalf("parse session URL: %v", err)
+	}
+	var csrfToken string
+	for _, cookie := range jar.Cookies(sessionURL) {
+		if cookie.Name == "pulse_csrf" {
+			csrfToken = cookie.Value
+			break
+		}
+	}
+	if csrfToken == "" {
+		t.Fatalf("expected pulse_csrf cookie after login")
+	}
+
+	createLimitedReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.server.URL+"/api/security/tokens",
+		bytes.NewBufferString(`{"name":"limited-token","scopes":["settings:write"]}`),
+	)
+	if err != nil {
+		t.Fatalf("create limited token request: %v", err)
+	}
+	createLimitedReq.Header.Set("Content-Type", "application/json")
+	createLimitedReq.Header.Set("X-CSRF-Token", csrfToken)
+	createLimitedResp, err := sessionClient.Do(createLimitedReq)
+	if err != nil {
+		t.Fatalf("limited token creation request failed: %v", err)
+	}
+	defer createLimitedResp.Body.Close()
+	if createLimitedResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createLimitedResp.Body)
+		t.Fatalf("expected 200 creating limited token, got %d: %s", createLimitedResp.StatusCode, string(body))
+	}
+
+	var limitedTokenPayload struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(createLimitedResp.Body).Decode(&limitedTokenPayload); err != nil {
+		t.Fatalf("decode limited token create response: %v", err)
+	}
+	if limitedTokenPayload.Token == "" {
+		t.Fatalf("expected limited token value in response")
+	}
+
+	assertScopeEscalationDenied := func(name, body, wantFragment string) {
+		t.Helper()
+
+		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/security/tokens", bytes.NewBufferString(body))
+		if err != nil {
+			t.Fatalf("create denied token request %s: %v", name, err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+limitedTokenPayload.Token)
+
+		res, err := tokenClient.Do(req)
+		if err != nil {
+			t.Fatalf("denied token request %s failed: %v", name, err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusForbidden {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("expected 403 for %s, got %d: %s", name, res.StatusCode, string(body))
+		}
+
+		payload, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("read denied response for %s: %v", name, err)
+		}
+		if !strings.Contains(string(payload), wantFragment) {
+			t.Fatalf("expected %s response to contain %q, got %q", name, wantFragment, string(payload))
+		}
+	}
+
+	assertScopeEscalationDenied(
+		"explicit broader scope",
+		`{"name":"broader-token","scopes":["settings:write","monitoring:read"]}`,
+		`Cannot grant scope "monitoring:read"`,
+	)
+	assertScopeEscalationDenied(
+		"implicit wildcard scope",
+		`{"name":"wildcard-token"}`,
+		`Cannot grant scope "*"`,
+	)
+
+	listReq, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/security/tokens", nil)
+	if err != nil {
+		t.Fatalf("create list tokens request: %v", err)
+	}
+	listReq.Header.Set("X-CSRF-Token", csrfToken)
+	listResp, err := sessionClient.Do(listReq)
+	if err != nil {
+		t.Fatalf("list tokens request failed: %v", err)
+	}
+	defer listResp.Body.Close()
+	if listResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(listResp.Body)
+		t.Fatalf("expected 200 listing tokens, got %d: %s", listResp.StatusCode, string(body))
+	}
+
+	var listPayload struct {
+		Tokens []struct {
+			Name string `json:"name"`
+		} `json:"tokens"`
+	}
+	if err := json.NewDecoder(listResp.Body).Decode(&listPayload); err != nil {
+		t.Fatalf("decode list tokens response: %v", err)
+	}
+	if len(listPayload.Tokens) != 1 || listPayload.Tokens[0].Name != "limited-token" {
+		t.Fatalf("expected only limited token to remain after denied requests, got %+v", listPayload.Tokens)
 	}
 }
 

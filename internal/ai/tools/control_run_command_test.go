@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -11,6 +13,19 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func mustParseJSONMap(t *testing.T, text string) map[string]interface{} {
+	t.Helper()
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(text), &out))
+	return out
+}
+
+func mustParseApprovalPayload(t *testing.T, text string) map[string]interface{} {
+	t.Helper()
+	require.True(t, strings.HasPrefix(text, "APPROVAL_REQUIRED: "))
+	return mustParseJSONMap(t, strings.TrimPrefix(text, "APPROVAL_REQUIRED: "))
+}
 
 func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 	ctx := context.Background()
@@ -53,12 +68,110 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 
 	t.Run("ControlledRequiresApproval", func(t *testing.T) {
 		approval.SetStore(nil)
-		exec := NewPulseToolExecutor(ExecutorConfig{ControlLevel: ControlLevelControlled})
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
-			"command": "ls",
+			"command":     "ls",
+			"target_host": "tower",
 		})
 		assert.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+	})
+
+	t.Run("ControlledApprovalUsesResolvedRoutingTarget", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
+		// Session context target must not influence command approval binding.
+		exec.SetContext("host", "session-target", false)
+
+		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
+			"command":     "uptime",
+			"target_host": "tower",
+		})
+		require.NoError(t, err)
+
+		payload := mustParseApprovalPayload(t, result.Content[0].Text)
+		approvalID, _ := payload["approval_id"].(string)
+		require.NotEmpty(t, approvalID)
+
+		req, found := store.GetApproval(approvalID)
+		require.True(t, found)
+		assert.Equal(t, "agent", req.TargetType)
+		assert.Equal(t, "agent-1", req.TargetID)
+		assert.Equal(t, "tower", req.TargetName)
+	})
+
+	t.Run("ControlledConsumesApprovedCommandWithResolvedRoutingTarget", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		req := &approval.ApprovalRequest{
+			ID:         "approval-1",
+			Command:    "uptime",
+			TargetType: "agent",
+			TargetID:   "agent-1",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-1", "tester")
+		require.NoError(t, err)
+
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}).Maybe()
+		agentSrv.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+			return payload.Command == "uptime" && payload.TargetType == "agent" && payload.TargetID == ""
+		})).Return(&agentexec.CommandResultPayload{
+			Stdout:   "ok",
+			ExitCode: 0,
+		}, nil).Once()
+
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
+		exec.SetContext("host", "different-session-target", false)
+
+		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
+			"command":      "uptime",
+			"target_host":  "tower",
+			"_approval_id": "approval-1",
+		})
+		require.NoError(t, err)
+
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, float64(0), resp["exit_code"])
+		agentSrv.AssertExpectations(t)
+
+		consumed, found := store.GetApproval("approval-1")
+		require.True(t, found)
+		assert.True(t, consumed.Consumed)
 	})
 
 	t.Run("ExecuteSuccess", func(t *testing.T) {
@@ -67,8 +180,8 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			{AgentID: "agent1", Hostname: "node1"},
 		}).Twice()
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			// For direct host targets, TargetID is empty - resolveTargetForCommand returns "" for host type
-			return payload.Command == "uptime" && payload.TargetType == "host" && payload.TargetID == ""
+			// For direct agent targets, TargetID is empty - resolveTargetForCommand returns "" for agent type
+			return payload.Command == "uptime" && payload.TargetType == "agent" && payload.TargetID == ""
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "ok",
 			ExitCode: 0,
@@ -82,8 +195,13 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			"run_on_host": true,
 		})
 		assert.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
-		assert.Contains(t, result.Content[0].Text, "ok")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, float64(0), resp["exit_code"])
+		assert.Contains(t, resp["output"].(string), "ok")
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.Equal(t, true, v["ok"])
+		}
 		agentSrv.AssertExpectations(t)
 	})
 }
@@ -94,7 +212,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 	t.Run("LXCCommandRoutedCorrectly", func(t *testing.T) {
 		// Test that commands targeting LXCs are routed with correct target type/ID
 		// The agent handles sh -c wrapping, so tool just sends raw command
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -109,7 +227,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 		state := models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 108, Name: "jellyfin", Node: "delly"},
+				{VMID: 108, Name: "jellyfin", Node: "pve-node"},
 			},
 		}
 
@@ -123,13 +241,15 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "jellyfin",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "jellyfin", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 
 	t.Run("VMCommandRoutedCorrectly", func(t *testing.T) {
 		// Test that commands targeting VMs are routed with correct target type/ID
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -143,7 +263,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 		state := models.StateSnapshot{
 			VMs: []models.VM{
-				{VMID: 100, Name: "test-vm", Node: "delly"},
+				{VMID: 100, Name: "test-vm", Node: "pve-node"},
 			},
 		}
 
@@ -157,17 +277,19 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "test-vm",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "test-vm", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 
 	t.Run("DirectHostRoutedCorrectly", func(t *testing.T) {
-		// Direct host commands have target type "host"
-		agents := []agentexec.ConnectedAgent{{AgentID: "host-agent", Hostname: "tower"}}
+		// Direct host commands are canonicalized to target type "agent"
+		agents := []agentexec.ConnectedAgent{{AgentID: "agent", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
-		mockAgent.On("ExecuteCommand", mock.Anything, "host-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.TargetType == "host" &&
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.TargetType == "agent" &&
 				cmd.Command == "ls /tmp/*.txt"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
@@ -184,7 +306,9 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "tower",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "tower", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 }

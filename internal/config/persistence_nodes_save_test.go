@@ -34,7 +34,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 		// Create a non-empty config first
 		initialNodes := []PVEInstance{{Host: "existing"}}
 		validData, _ := json.Marshal(NodesConfig{PVEInstances: initialNodes})
-		os.WriteFile(nodesFile, validData, 0600)
+		_ = os.WriteFile(nodesFile, validData, 0600)
 
 		// Attempt to save empty config with allowEmpty=false (default for SaveNodesConfig wrapper)
 		err := cp.SaveNodesConfig([]PVEInstance{}, nil, nil)
@@ -44,7 +44,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 		// Verify file still has original content
 		data, _ := os.ReadFile(nodesFile)
 		var cfg NodesConfig
-		json.Unmarshal(data, &cfg)
+		_ = json.Unmarshal(data, &cfg)
 		assert.Equal(t, "existing", cfg.PVEInstances[0].Host)
 	})
 
@@ -54,7 +54,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 		cp.crypto = cm
 
 		// Write invalid encrypted data
-		os.WriteFile(nodesFile, []byte("invalid-encrypted-data-too-short"), 0600)
+		_ = os.WriteFile(nodesFile, []byte("invalid-encrypted-data-too-short"), 0600)
 
 		err := cp.SaveNodesConfig([]PVEInstance{}, nil, nil)
 		assert.Error(t, err)
@@ -64,7 +64,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 	// 4. Blocked Wipe with JSON Parse Failure
 	t.Run("BlockedWipe_ParseFailure", func(t *testing.T) {
 		cp.crypto = nil
-		os.WriteFile(nodesFile, []byte("not json"), 0600)
+		_ = os.WriteFile(nodesFile, []byte("not json"), 0600)
 
 		err := cp.SaveNodesConfig([]PVEInstance{}, nil, nil)
 		assert.Error(t, err)
@@ -73,7 +73,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 
 	// 5. Success with Backups
 	t.Run("SuccessWithBackups", func(t *testing.T) {
-		os.WriteFile(nodesFile, []byte("{}"), 0600) // Initial file
+		_ = os.WriteFile(nodesFile, []byte("{}"), 0600) // Initial file
 
 		err := cp.SaveNodesConfig([]PVEInstance{{Host: "new"}}, nil, nil)
 		assert.NoError(t, err)
@@ -89,7 +89,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 
 	// 6. Backup Rename Error
 	t.Run("BackupRenameError", func(t *testing.T) {
-		os.WriteFile(nodesFile, []byte("{}"), 0600)
+		_ = os.WriteFile(nodesFile, []byte("{}"), 0600)
 
 		mfs := &mockFSRenameSpecific{FileSystem: defaultFileSystem{}, failPattern: ".backup"}
 		cp.SetFileSystem(mfs)
@@ -100,7 +100,7 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 
 	// 7. Backup Write Error
 	t.Run("BackupWriteError", func(t *testing.T) {
-		os.WriteFile(nodesFile, []byte("{}"), 0600)
+		_ = os.WriteFile(nodesFile, []byte("{}"), 0600)
 
 		mfs := &mockFSWriteSpecific{FileSystem: defaultFileSystem{}, failPattern: ".backup"}
 		cp.SetFileSystem(mfs)

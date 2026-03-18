@@ -42,6 +42,28 @@ func newRouterWithSession(t *testing.T) (*Router, string) {
 	return router, token
 }
 
+func newRouterWithProxyAuth(t *testing.T) *Router {
+	t.Helper()
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	dir := t.TempDir()
+	InitSessionStore(dir)
+	InitCSRFStore(dir)
+
+	cfg := &config.Config{
+		ProxyAuthSecret:     "proxy-secret",
+		ProxyAuthUserHeader: "X-Proxy-User",
+		DataPath:            dir,
+		ConfigPath:          dir,
+	}
+
+	return &Router{
+		mux:    http.NewServeMux(),
+		config: cfg,
+	}
+}
+
 func TestRouterCSRFEnforcedForSessionRequests(t *testing.T) {
 	router, sessionToken := newRouterWithSession(t)
 
@@ -80,13 +102,53 @@ func TestRouterCSRFAllowsValidToken(t *testing.T) {
 	}
 }
 
+func TestRouterCSRFBlocksCrossSiteProxyAuthMutation(t *testing.T) {
+	router := newRouterWithProxyAuth(t)
+
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+	req.Host = "pulse.example.com"
+	req.Header.Set("X-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-Proxy-User", "alice")
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+	}
+}
+
+func TestRouterCSRFAcceptsSameOriginProxyAuthMutation(t *testing.T) {
+	router := newRouterWithProxyAuth(t)
+
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+	req.Host = "pulse.example.com"
+	req.Header.Set("X-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-Proxy-User", "alice")
+	req.Header.Set("Origin", "http://pulse.example.com")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
+	}
+}
+
 func TestRouterCSRFSpecialCaseSkips(t *testing.T) {
 	router, sessionToken := newRouterWithSession(t)
 
 	skipPaths := []string{
 		"/api/login",
-		"/api/security/apply-restart",
-		"/api/security/quick-setup",
 		"/api/security/validate-bootstrap-token",
 		"/api/setup-script-url",
 	}
@@ -105,6 +167,74 @@ func TestRouterCSRFSpecialCaseSkips(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path %s: expected status %d, got %d (%s)", path, http.StatusOK, rec.Code, rec.Body.String())
 		}
+	}
+}
+
+func TestRouterCSRFEnforcedForSecurityMutationRoutesWhenAuthConfigured(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	protectedPaths := []string{
+		"/api/security/apply-restart",
+		"/api/security/quick-setup",
+	}
+
+	for _, path := range protectedPaths {
+		router.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("path %s: expected status %d, got %d (%s)", path, http.StatusForbidden, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterCSRFNotBypassedForQuickSetupWithInvalidRecoveryToken(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/security/quick-setup", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req.Header.Set("X-Recovery-Token", "invalid-token")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+	}
+}
+
+func TestRouterCSRFBypassedForQuickSetupWithValidRecoveryToken(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/security/quick-setup", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
+	if err != nil {
+		t.Fatalf("generate recovery token: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req.Header.Set("X-Recovery-Token", token)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
 	}
 }
 

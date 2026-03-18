@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -70,14 +71,38 @@ func TestForecastDataAdapter_GetMetricHistory(t *testing.T) {
 
 func TestMetricsAdapter_GetMonitoredResourceIDs(t *testing.T) {
 	state := models.StateSnapshot{
-		VMs:        []models.VM{{ID: "vm-1"}},
-		Containers: []models.Container{{ID: "ct-1"}},
-		Nodes:      []models.Node{{ID: "node-1"}},
+		Nodes:      []models.Node{{ID: "node/pve1", Name: "pve1", Instance: "inst1"}},
+		VMs:        []models.VM{{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Instance: "inst1"}},
+		Containers: []models.Container{{ID: "lxc/200", VMID: 200, Name: "ct-1", Node: "pve1", Instance: "inst1"}},
 	}
-	adapter := NewMetricsAdapter(&mockStateProvider{state: state})
+	adapter := NewMetricsAdapter(readStateFromSnapshot(state))
 	ids := adapter.GetMonitoredResourceIDs()
-	if len(ids) != 3 {
-		t.Fatalf("expected 3 IDs, got %d", len(ids))
+
+	// Should include both unified IDs and source IDs (3 resources × 2 IDs each = 6)
+	if len(ids) < 3 {
+		t.Fatalf("expected at least 3 IDs, got %d: %v", len(ids), ids)
+	}
+
+	// Verify no empty IDs
+	for _, id := range ids {
+		if id == "" {
+			t.Fatalf("unexpected empty ID in %v", ids)
+		}
+	}
+
+	// Verify source IDs are present (for pre-incident buffer compatibility)
+	idSet := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	if !idSet["qemu/100"] {
+		t.Errorf("expected source ID 'qemu/100' in monitored IDs, got %v", ids)
+	}
+	if !idSet["lxc/200"] {
+		t.Errorf("expected source ID 'lxc/200' in monitored IDs, got %v", ids)
+	}
+	if !idSet["node/pve1"] {
+		t.Errorf("expected source ID 'node/pve1' in monitored IDs, got %v", ids)
 	}
 }
 
@@ -122,18 +147,31 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	store := NewKnowledgeStore(dir)
 
-	if err := store.SaveNote("res-1", "note", "general"); err != nil {
+	if err := store.SaveNote("agent:res-1", "note", "general"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if err := store.SaveNote("host:res-legacy", "note", "general"); err == nil {
+		t.Fatalf("expected unsupported host resource ID to be rejected")
+	}
 	store.saveToDisk()
+	info, err := os.Stat(filepath.Join(dir, "knowledge_store.json"))
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("expected mode 0600, got %o", got)
+	}
 
 	loaded := NewKnowledgeStore(dir)
 	if err := loaded.loadFromDisk(); err != nil {
 		t.Fatalf("unexpected load error: %v", err)
 	}
-	entries := loaded.GetKnowledge("res-1", "general")
+	entries := loaded.GetKnowledge("agent:res-1", "general")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if len(loaded.GetKnowledge("host:res-1", "general")) != 0 {
+		t.Fatalf("expected unsupported host query alias to be rejected")
 	}
 }
 
@@ -143,5 +181,23 @@ func TestKnowledgeStore_LoadMissingFile(t *testing.T) {
 	path := filepath.Join(dir, "knowledge_store.json")
 	if err := store.loadFromDisk(); err == nil {
 		t.Fatalf("expected error for missing file %s", path)
+	}
+}
+
+func TestKnowledgeStore_LoadFromDisk_DoesNotCanonicalizeLegacyHostKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "knowledge_store.json")
+	payload := `{"host:alpha":[{"ID":"n1","ResourceID":"host:alpha","Note":"legacy","Category":"general","CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+		t.Fatalf("write payload: %v", err)
+	}
+
+	store := NewKnowledgeStore(dir)
+	entries := store.GetKnowledge("agent:alpha", "general")
+	if len(entries) != 0 {
+		t.Fatalf("expected no canonicalized entries, got %d", len(entries))
+	}
+	if len(store.GetKnowledge("host:alpha", "general")) != 0 {
+		t.Fatalf("expected unsupported host query alias to be rejected")
 	}
 }

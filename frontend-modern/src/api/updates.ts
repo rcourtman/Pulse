@@ -1,5 +1,5 @@
-// Remove apiRequest import - use fetch directly
 import { apiFetchJSON } from '@/utils/apiClient';
+import type { UpdateChannel } from '@/types/config';
 
 export interface UpdateInfo {
   available: boolean;
@@ -9,6 +9,7 @@ export interface UpdateInfo {
   releaseDate: string;
   downloadUrl: string;
   isPrerelease: boolean;
+  isMajorUpgrade: boolean;
   warning?: string;
 }
 
@@ -24,7 +25,7 @@ export interface VersionInfo {
   version: string;
   build: string;
   runtime: string;
-  channel?: string;
+  channel?: UpdateChannel;
   isDocker: boolean;
   isSourceBuild: boolean;
   isDevelopment: boolean;
@@ -41,16 +42,31 @@ export interface UpdatePlan {
   downloadUrl?: string;
 }
 
+const requireNonEmpty = (value: string, fieldName: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} is required`);
+  }
+  return trimmed;
+};
+
 export class UpdatesAPI {
-  static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
-    const url = channel ? `/api/updates/check?channel=${channel}` : '/api/updates/check';
+  static async checkForUpdates(channel?: UpdateChannel): Promise<UpdateInfo> {
+    const search = new URLSearchParams();
+    const trimmedChannel = channel?.trim();
+    if (trimmedChannel) {
+      search.set('channel', trimmedChannel);
+    }
+    const query = search.toString();
+    const url = query ? `/api/updates/check?${query}` : '/api/updates/check';
     return apiFetchJSON(url);
   }
 
   static async applyUpdate(downloadUrl: string): Promise<{ status: string; message: string }> {
+    const normalizedDownloadUrl = requireNonEmpty(downloadUrl, 'Download URL');
     return apiFetchJSON('/api/updates/apply', {
       method: 'POST',
-      body: JSON.stringify({ downloadUrl }),
+      body: JSON.stringify({ downloadUrl: normalizedDownloadUrl }),
     });
   }
 
@@ -62,10 +78,13 @@ export class UpdatesAPI {
     return apiFetchJSON('/api/version');
   }
 
-  static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
-    const url = channel
-      ? `/api/updates/plan?version=${version}&channel=${channel}`
-      : `/api/updates/plan?version=${version}`;
+  static async getUpdatePlan(version: string, channel?: UpdateChannel): Promise<UpdatePlan> {
+    const validatedVersion = requireNonEmpty(version, 'Version');
+    const search = new URLSearchParams({ version: validatedVersion });
+    if (channel) {
+      search.set('channel', channel);
+    }
+    const url = `/api/updates/plan?${search.toString()}`;
     return apiFetchJSON(url);
   }
 }

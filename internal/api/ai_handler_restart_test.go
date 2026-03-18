@@ -22,9 +22,9 @@ func TestRestart_StartIfStopped(t *testing.T) {
 
 	mockPersist := new(MockAIPersistence)
 	h := newTestAIHandler(nil, mockPersist, nil)
-	// We need h.legacyService to be non-nil for the Restart check to proceed past first nil check
+	// We need h.defaultService to be non-nil for the Restart check to proceed past first nil check
 	// But it must return IsRunning() = false
-	h.legacyService = mockSvc
+	h.defaultService = mockSvc
 
 	// Config allows enabling
 	aiCfg := &config.AIConfig{Enabled: true}

@@ -4,7 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerStorageTools registers the pulse_storage tool
@@ -68,7 +74,7 @@ func (e *PulseToolExecutor) registerStorageTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by type: vm or lxc (for resource_disks)",
+						Description: "Filter by type: vm or system-container (for resource_disks)",
 					},
 					"min_usage": {
 						Type:        "number",
@@ -136,7 +142,7 @@ func (e *PulseToolExecutor) executeListBackups(_ context.Context, args map[strin
 	backups := e.backupProvider.GetBackups()
 	pbsInstances := e.backupProvider.GetPBSInstances()
 
-	response := BackupsResponse{}
+	response := EmptyBackupsResponse()
 
 	// PBS Backups
 	count := 0
@@ -216,21 +222,7 @@ func (e *PulseToolExecutor) executeListBackups(_ context.Context, args map[strin
 		})
 	}
 
-	// Ensure non-nil slices
-	if response.PBS == nil {
-		response.PBS = []PBSBackupSummary{}
-	}
-	if response.PVE == nil {
-		response.PVE = []PVEBackupSummary{}
-	}
-	if response.PBSServers == nil {
-		response.PBSServers = []PBSServerSummary{}
-	}
-	if response.RecentTasks == nil {
-		response.RecentTasks = []BackupTaskSummary{}
-	}
-
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -238,19 +230,19 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	if e.storageProvider == nil {
-		return NewTextResult("Storage information not available."), nil
-	}
-
-	storage := e.storageProvider.GetStorage()
-	cephClusters := e.storageProvider.GetCephClusters()
-
-	response := StorageResponse{}
+	response := EmptyStorageResponse()
 
 	// Storage pools
 	count := 0
-	for _, s := range storage {
-		if storageID != "" && s.ID != storageID && s.Name != storageID {
+	var storageResources []unifiedresources.Resource
+	if e.unifiedResourceProvider != nil {
+		storageResources = e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage)
+	}
+	for _, r := range storageResources {
+		if r.Storage == nil {
+			continue
+		}
+		if storageID != "" && r.ID != storageID && r.Name != storageID {
 			continue
 		}
 		if count < offset {
@@ -261,97 +253,159 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 			break
 		}
 
-		pool := StoragePoolSummary{
-			ID:           s.ID,
-			Name:         s.Name,
-			Node:         s.Node,
-			Instance:     s.Instance,
-			Nodes:        s.Nodes,
-			Type:         s.Type,
-			Status:       s.Status,
-			Enabled:      s.Enabled,
-			Active:       s.Active,
-			Path:         s.Path,
-			UsagePercent: s.Usage,
-			UsedGB:       float64(s.Used) / (1024 * 1024 * 1024),
-			TotalGB:      float64(s.Total) / (1024 * 1024 * 1024),
-			FreeGB:       float64(s.Free) / (1024 * 1024 * 1024),
-			Content:      s.Content,
-			Shared:       s.Shared,
-		}
-
-		if s.ZFSPool != nil {
-			pool.ZFS = &ZFSPoolSummary{
-				Name:           s.ZFSPool.Name,
-				State:          s.ZFSPool.State,
-				ReadErrors:     s.ZFSPool.ReadErrors,
-				WriteErrors:    s.ZFSPool.WriteErrors,
-				ChecksumErrors: s.ZFSPool.ChecksumErrors,
-				Scan:           s.ZFSPool.Scan,
-			}
-		}
-
+		pool := storagePoolSummaryFromResource(r)
 		response.Pools = append(response.Pools, pool)
 		count++
 	}
 
-	// Ceph clusters
-	for _, c := range cephClusters {
-		response.CephClusters = append(response.CephClusters, CephClusterSummary{
-			Name:          c.Name,
-			Health:        c.Health,
-			HealthMessage: c.HealthMessage,
-			UsagePercent:  c.UsagePercent,
-			UsedTB:        float64(c.UsedBytes) / (1024 * 1024 * 1024 * 1024),
-			TotalTB:       float64(c.TotalBytes) / (1024 * 1024 * 1024 * 1024),
-			NumOSDs:       c.NumOSDs,
-			NumOSDsUp:     c.NumOSDsUp,
-			NumOSDsIn:     c.NumOSDsIn,
-			NumMons:       c.NumMons,
-			NumMgrs:       c.NumMgrs,
-		})
+	// Ceph clusters from unified resources
+	if e.unifiedResourceProvider != nil {
+		for _, r := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeCeph) {
+			if r.Ceph == nil {
+				continue
+			}
+			c := r.Ceph
+			usedBytes, totalBytes := cephBytesFromResource(r)
+			usagePercent := 0.0
+			if totalBytes > 0 {
+				usagePercent = float64(usedBytes) / float64(totalBytes) * 100
+			}
+			response.CephClusters = append(response.CephClusters, CephClusterSummary{
+				Name:          r.Name,
+				Health:        c.HealthStatus,
+				HealthMessage: c.HealthMessage,
+				UsagePercent:  usagePercent,
+				UsedTB:        float64(usedBytes) / (1024 * 1024 * 1024 * 1024),
+				TotalTB:       float64(totalBytes) / (1024 * 1024 * 1024 * 1024),
+				NumOSDs:       c.NumOSDs,
+				NumOSDsUp:     c.NumOSDsUp,
+				NumOSDsIn:     c.NumOSDsIn,
+				NumMons:       c.NumMons,
+				NumMgrs:       c.NumMgrs,
+			})
+		}
 	}
 
-	// Ensure non-nil slices
-	if response.Pools == nil {
-		response.Pools = []StoragePoolSummary{}
+	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+func storagePoolSummaryFromResource(r unifiedresources.Resource) StoragePoolSummary {
+	var (
+		poolType     string
+		content      string
+		shared       bool
+		node         string
+		instance     string
+		usedBytes    int64
+		totalBytes   int64
+		usagePercent float64
+	)
+
+	if r.Storage != nil {
+		poolType = r.Storage.Type
+		content = r.Storage.Content
+		shared = r.Storage.Shared
+		if content == "" && len(r.Storage.ContentTypes) > 0 {
+			content = strings.Join(r.Storage.ContentTypes, ",")
+		}
 	}
-	if response.CephClusters == nil {
-		response.CephClusters = []CephClusterSummary{}
+	if r.Proxmox != nil {
+		node = r.Proxmox.NodeName
+		instance = r.Proxmox.Instance
+	}
+	if r.Metrics != nil && r.Metrics.Disk != nil {
+		if r.Metrics.Disk.Used != nil {
+			usedBytes = *r.Metrics.Disk.Used
+		}
+		if r.Metrics.Disk.Total != nil {
+			totalBytes = *r.Metrics.Disk.Total
+		}
+		usagePercent = r.Metrics.Disk.Percent
+	}
+	if usagePercent == 0 && totalBytes > 0 {
+		usagePercent = float64(usedBytes) / float64(totalBytes) * 100
 	}
 
-	return NewJSONResult(response), nil
+	freeBytes := int64(0)
+	if totalBytes > usedBytes {
+		freeBytes = totalBytes - usedBytes
+	}
+
+	active := r.Status != unifiedresources.StatusOffline
+	enabled := r.Status != unifiedresources.StatusOffline
+
+	id := r.ID
+	if id == "" {
+		id = r.Name
+	}
+	name := r.Name
+	if name == "" {
+		name = id
+	}
+
+	return StoragePoolSummary{
+		ID:           id,
+		Name:         name,
+		Node:         node,
+		Instance:     instance,
+		Type:         poolType,
+		Status:       string(r.Status),
+		Enabled:      enabled,
+		Active:       active,
+		UsagePercent: usagePercent,
+		UsedGB:       float64(usedBytes) / (1024 * 1024 * 1024),
+		TotalGB:      float64(totalBytes) / (1024 * 1024 * 1024),
+		FreeGB:       float64(freeBytes) / (1024 * 1024 * 1024),
+		Content:      content,
+		Shared:       shared,
+	}
+}
+
+// cephBytesFromResource extracts used/total bytes from a unified Ceph resource.
+// It prefers the Metrics.Disk values (which carry absolute bytes), falling back
+// to summing pool-level data from CephMeta.
+func cephBytesFromResource(r unifiedresources.Resource) (usedBytes, totalBytes int64) {
+	if r.Metrics != nil && r.Metrics.Disk != nil && r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
+		return *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
+	}
+	if r.Ceph != nil {
+		for _, p := range r.Ceph.Pools {
+			usedBytes += p.StoredBytes
+			totalBytes += p.StoredBytes + p.AvailableBytes
+		}
+	}
+	return
 }
 
 func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
-	if e.diskHealthProvider == nil && e.storageProvider == nil {
+	if e.diskHealthProvider == nil {
 		return NewTextResult("Disk health information not available."), nil
 	}
 
-	response := DiskHealthResponse{
-		Hosts: []HostDiskHealth{},
-	}
+	response := EmptyDiskHealthResponse()
 
 	// SMART and RAID data from host agents
 	if e.diskHealthProvider != nil {
 		hosts := e.diskHealthProvider.GetHosts()
 		for _, host := range hosts {
 			hostHealth := HostDiskHealth{
-				Hostname: host.Hostname,
+				Hostname: toolHostLabel(host),
 			}
 
 			// SMART data
-			for _, disk := range host.Sensors.SMART {
-				hostHealth.SMART = append(hostHealth.SMART, SMARTDiskSummary{
-					Device:      disk.Device,
-					Model:       disk.Model,
-					Health:      disk.Health,
-					Temperature: disk.Temperature,
-				})
+			if sensors := host.Sensors(); sensors != nil {
+				for _, disk := range sensors.SMART {
+					hostHealth.SMART = append(hostHealth.SMART, SMARTDiskSummary{
+						Device:      disk.Device,
+						Model:       disk.Model,
+						Health:      disk.Health,
+						Temperature: disk.Temperature,
+					})
+				}
 			}
 
 			// RAID arrays
-			for _, raid := range host.RAID {
+			for _, raid := range host.RAID() {
 				hostHealth.RAID = append(hostHealth.RAID, RAIDArraySummary{
 					Device:         raid.Device,
 					Level:          raid.Level,
@@ -365,43 +419,30 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 			}
 
 			// Ceph from agent
-			if host.Ceph != nil {
+			if ceph := host.Ceph(); ceph != nil {
 				hostHealth.Ceph = &CephStatusSummary{
-					Health:       host.Ceph.Health.Status,
-					NumOSDs:      host.Ceph.OSDMap.NumOSDs,
-					NumOSDsUp:    host.Ceph.OSDMap.NumUp,
-					NumOSDsIn:    host.Ceph.OSDMap.NumIn,
-					NumPGs:       host.Ceph.PGMap.NumPGs,
-					UsagePercent: host.Ceph.PGMap.UsagePercent,
+					Health:       ceph.Health.Status,
+					NumOSDs:      ceph.OSDMap.NumOSDs,
+					NumOSDsUp:    ceph.OSDMap.NumUp,
+					NumOSDsIn:    ceph.OSDMap.NumIn,
+					NumPGs:       ceph.PGMap.NumPGs,
+					UsagePercent: ceph.PGMap.UsagePercent,
 				}
 			}
 
 			// Only add if there's data
 			if len(hostHealth.SMART) > 0 || len(hostHealth.RAID) > 0 || hostHealth.Ceph != nil {
-				// Ensure non-nil slices
-				if hostHealth.SMART == nil {
-					hostHealth.SMART = []SMARTDiskSummary{}
-				}
-				if hostHealth.RAID == nil {
-					hostHealth.RAID = []RAIDArraySummary{}
-				}
 				response.Hosts = append(response.Hosts, hostHealth)
 			}
 		}
 	}
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 // executeGetCephStatus returns Ceph cluster status
 func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	clusterFilter, _ := args["cluster"].(string)
-
-	state := e.stateProvider.GetState()
-
-	if len(state.CephClusters) == 0 {
-		return NewTextResult("No Ceph clusters found. Ceph may not be configured or data is not yet available."), nil
-	}
 
 	type CephSummary struct {
 		Name    string                 `json:"name"`
@@ -411,45 +452,53 @@ func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[str
 
 	var results []CephSummary
 
-	for _, cluster := range state.CephClusters {
-		if clusterFilter != "" && cluster.Name != clusterFilter {
-			continue
+	if e.unifiedResourceProvider != nil {
+		resources := e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeCeph)
+		for _, r := range resources {
+			if r.Ceph == nil {
+				continue
+			}
+			if clusterFilter != "" && r.Name != clusterFilter {
+				continue
+			}
+			c := r.Ceph
+			summary := CephSummary{
+				Name:    r.Name,
+				Health:  c.HealthStatus,
+				Details: make(map[string]interface{}),
+			}
+			if c.HealthMessage != "" {
+				summary.Details["health_message"] = c.HealthMessage
+			}
+			if c.NumOSDs > 0 {
+				summary.Details["osd_count"] = c.NumOSDs
+				summary.Details["osds_up"] = c.NumOSDsUp
+				summary.Details["osds_in"] = c.NumOSDsIn
+				summary.Details["osds_down"] = c.NumOSDs - c.NumOSDsUp
+			}
+			if c.NumMons > 0 {
+				summary.Details["monitors"] = c.NumMons
+			}
+			usedBytes, totalBytes := cephBytesFromResource(r)
+			if totalBytes > 0 {
+				summary.Details["total_bytes"] = totalBytes
+				summary.Details["used_bytes"] = usedBytes
+				summary.Details["available_bytes"] = totalBytes - usedBytes
+				usagePercent := float64(usedBytes) / float64(totalBytes) * 100
+				summary.Details["usage_percent"] = usagePercent
+			}
+			if len(c.Pools) > 0 {
+				summary.Details["pools"] = c.Pools
+			}
+			results = append(results, summary)
 		}
-
-		summary := CephSummary{
-			Name:    cluster.Name,
-			Health:  cluster.Health,
-			Details: make(map[string]interface{}),
-		}
-
-		// Add relevant details
-		if cluster.HealthMessage != "" {
-			summary.Details["health_message"] = cluster.HealthMessage
-		}
-		if cluster.NumOSDs > 0 {
-			summary.Details["osd_count"] = cluster.NumOSDs
-			summary.Details["osds_up"] = cluster.NumOSDsUp
-			summary.Details["osds_in"] = cluster.NumOSDsIn
-			summary.Details["osds_down"] = cluster.NumOSDs - cluster.NumOSDsUp
-		}
-		if cluster.NumMons > 0 {
-			summary.Details["monitors"] = cluster.NumMons
-		}
-		if cluster.TotalBytes > 0 {
-			summary.Details["total_bytes"] = cluster.TotalBytes
-			summary.Details["used_bytes"] = cluster.UsedBytes
-			summary.Details["available_bytes"] = cluster.AvailableBytes
-			summary.Details["usage_percent"] = cluster.UsagePercent
-		}
-		if len(cluster.Pools) > 0 {
-			summary.Details["pools"] = cluster.Pools
-		}
-
-		results = append(results, summary)
 	}
 
-	if len(results) == 0 && clusterFilter != "" {
-		return NewTextResult(fmt.Sprintf("Ceph cluster '%s' not found.", clusterFilter)), nil
+	if len(results) == 0 {
+		if clusterFilter != "" {
+			return NewTextResult(fmt.Sprintf("Ceph cluster '%s' not found.", clusterFilter)), nil
+		}
+		return NewTextResult("No Ceph clusters found. Ceph may not be configured or data is not yet available."), nil
 	}
 
 	output, _ := json.MarshalIndent(results, "", "  ")
@@ -460,9 +509,13 @@ func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[str
 func (e *PulseToolExecutor) executeGetReplication(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	vmFilter, _ := args["vm_id"].(string)
 
-	state := e.stateProvider.GetState()
+	if e.replicationProvider == nil {
+		return NewTextResult("No replication jobs found. Replication may not be configured."), nil
+	}
 
-	if len(state.ReplicationJobs) == 0 {
+	jobs := e.replicationProvider.GetReplicationJobs()
+
+	if len(jobs) == 0 {
 		return NewTextResult("No replication jobs found. Replication may not be configured."), nil
 	}
 
@@ -483,7 +536,7 @@ func (e *PulseToolExecutor) executeGetReplication(_ context.Context, args map[st
 
 	var results []ReplicationSummary
 
-	for _, job := range state.ReplicationJobs {
+	for _, job := range jobs {
 		if vmFilter != "" && fmt.Sprintf("%d", job.GuestID) != vmFilter {
 			continue
 		}
@@ -534,8 +587,24 @@ func containsAny(s string, substrs ...string) bool {
 	return false
 }
 
-func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+func (e *PulseToolExecutor) legacyPVESnapshotPoints() ([]recovery.RecoveryPoint, int) {
+	if e.backupProvider != nil {
+		backups := e.backupProvider.GetBackups()
+		return proxmoxrecoverymapper.FromPVEGuestSnapshots(backups.PVE.GuestSnapshots, nil), len(backups.PVE.GuestSnapshots)
+	}
+	return nil, 0
+}
+
+func (e *PulseToolExecutor) legacyPVEBackupTaskPoints() ([]recovery.RecoveryPoint, int) {
+	if e.backupProvider != nil {
+		backups := e.backupProvider.GetBackups()
+		return proxmoxrecoverymapper.FromPVEBackupTasks(backups.PVE.BackupTasks, nil), len(backups.PVE.BackupTasks)
+	}
+	return nil, 0
+}
+
+func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -544,69 +613,246 @@ func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[str
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
-
 	// Build VM name map for enrichment
 	vmNames := make(map[int]string)
-	for _, vm := range state.VMs {
-		vmNames[vm.VMID] = vm.Name
-	}
-	for _, ct := range state.Containers {
-		vmNames[ct.VMID] = ct.Name
+	if rs, err := e.readStateForControl(); err == nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				// Best-effort: VMID collisions across instances are possible; this matches legacy behavior.
+				if _, exists := vmNames[w.VMID()]; !exists {
+					vmNames[w.VMID()] = w.Name()
+				}
+			}
+		}
 	}
 
 	var snapshots []SnapshotSummary
 	filteredCount := 0
-	count := 0
+	totalCount := 0
 
-	for _, snap := range state.PVEBackups.GuestSnapshots {
-		// Apply filters
-		if guestIDFilter != "" && fmt.Sprintf("%d", snap.VMID) != guestIDFilter {
-			continue
+	trimPrefix := func(id string) string {
+		id = strings.TrimSpace(id)
+		if strings.HasPrefix(id, "pve-snapshot:") {
+			return strings.TrimPrefix(id, "pve-snapshot:")
 		}
-		if instanceFilter != "" && snap.Instance != instanceFilter {
-			continue
-		}
+		return id
+	}
 
-		filteredCount++
-
-		// Apply pagination
-		if count < offset {
-			count++
-			continue
+	getDetailString := func(p recovery.RecoveryPoint, key string) string {
+		if p.Details == nil {
+			return ""
 		}
-		if len(snapshots) >= limit {
-			count++
-			continue
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return ""
 		}
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+		return ""
+	}
+	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
+		if p.Details == nil {
+			return 0
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return 0
+		}
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		case json.Number:
+			i, _ := n.Int64()
+			return int(i)
+		default:
+			return 0
+		}
+	}
+	getDetailBool := func(p recovery.RecoveryPoint, key string) bool {
+		if p.Details == nil {
+			return false
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return false
+		}
+		b, ok := v.(bool)
+		return ok && b
+	}
 
-		snapshots = append(snapshots, SnapshotSummary{
-			ID:           snap.ID,
-			VMID:         snap.VMID,
-			VMName:       vmNames[snap.VMID],
-			Type:         snap.Type,
-			Node:         snap.Node,
-			Instance:     snap.Instance,
-			SnapshotName: snap.Name,
-			Description:  snap.Description,
-			Time:         snap.Time,
-			VMState:      snap.VMState,
-			SizeBytes:    snap.SizeBytes,
-		})
-		count++
+	if e.recoveryPointsProvider != nil {
+		const pageLimit = 200
+		const maxPages = 20
+
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		matchedIndex := 0
+		for page := 1; page <= maxPages; page++ {
+			points, total, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
+				Provider: recovery.ProviderProxmoxPVE,
+				Kind:     recovery.KindSnapshot,
+				Page:     page,
+				Limit:    pageLimit,
+			})
+			if err != nil {
+				return NewErrorResult(err), nil
+			}
+			if page == 1 {
+				totalCount = total
+			}
+			if len(points) == 0 {
+				break
+			}
+
+			for _, p := range points {
+				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-snapshot:") {
+					continue
+				}
+
+				vmid := getDetailInt(p, "vmid")
+				instance := getDetailString(p, "instance")
+				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+					continue
+				}
+				if instanceFilter != "" && instance != instanceFilter {
+					continue
+				}
+
+				filteredCount++
+
+				if matchedIndex < offset {
+					matchedIndex++
+					continue
+				}
+				if len(snapshots) >= limit {
+					matchedIndex++
+					continue
+				}
+
+				node := getDetailString(p, "node")
+				guestType := getDetailString(p, "type")
+				snapshotName := getDetailString(p, "snapshotName")
+				description := getDetailString(p, "description")
+
+				var ts time.Time
+				if p.CompletedAt != nil {
+					ts = p.CompletedAt.UTC()
+				} else if p.StartedAt != nil {
+					ts = p.StartedAt.UTC()
+				} else {
+					ts = time.Time{}
+				}
+
+				size := int64(0)
+				if p.SizeBytes != nil {
+					size = *p.SizeBytes
+				}
+
+				snapshots = append(snapshots, SnapshotSummary{
+					ID:           trimPrefix(p.ID),
+					VMID:         vmid,
+					VMName:       vmNames[vmid],
+					Type:         guestType,
+					Node:         node,
+					Instance:     instance,
+					SnapshotName: snapshotName,
+					Description:  description,
+					Time:         ts,
+					VMState:      getDetailBool(p, "vmState"),
+					SizeBytes:    size,
+				})
+				matchedIndex++
+			}
+
+			if len(snapshots) >= limit && matchedIndex >= offset+limit {
+				break
+			}
+		}
+	} else {
+		// Legacy fallback: normalize snapshot data into recovery points so
+		// both paths share the same extraction behavior.
+		points, total := e.legacyPVESnapshotPoints()
+		totalCount = total
+
+		matchedIndex := 0
+		for _, p := range points {
+			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-snapshot:") {
+				continue
+			}
+
+			vmid := getDetailInt(p, "vmid")
+			instance := getDetailString(p, "instance")
+
+			// Apply filters
+			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+				continue
+			}
+			if instanceFilter != "" && instance != instanceFilter {
+				continue
+			}
+
+			filteredCount++
+
+			// Apply pagination
+			if matchedIndex < offset {
+				matchedIndex++
+				continue
+			}
+			if len(snapshots) >= limit {
+				matchedIndex++
+				continue
+			}
+
+			node := getDetailString(p, "node")
+			guestType := getDetailString(p, "type")
+			snapshotName := getDetailString(p, "snapshotName")
+			description := getDetailString(p, "description")
+
+			var ts time.Time
+			if p.CompletedAt != nil {
+				ts = p.CompletedAt.UTC()
+			} else if p.StartedAt != nil {
+				ts = p.StartedAt.UTC()
+			}
+
+			size := int64(0)
+			if p.SizeBytes != nil {
+				size = *p.SizeBytes
+			}
+
+			snapshots = append(snapshots, SnapshotSummary{
+				ID:           trimPrefix(p.ID),
+				VMID:         vmid,
+				VMName:       vmNames[vmid],
+				Type:         guestType,
+				Node:         node,
+				Instance:     instance,
+				SnapshotName: snapshotName,
+				Description:  description,
+				Time:         ts,
+				VMState:      getDetailBool(p, "vmState"),
+				SizeBytes:    size,
+			})
+			matchedIndex++
+		}
 	}
 
 	if snapshots == nil {
 		snapshots = []SnapshotSummary{}
 	}
 
-	response := SnapshotsResponse{
-		Snapshots: snapshots,
-		Total:     len(state.PVEBackups.GuestSnapshots),
-		Filtered:  filteredCount,
-	}
+	response := EmptySnapshotsResponse()
+	response.Snapshots = snapshots
+	response.Total = totalCount
+	response.Filtered = filteredCount
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeListPBSJobs(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -713,17 +959,16 @@ func (e *PulseToolExecutor) executeListPBSJobs(_ context.Context, args map[strin
 		jobs = []PBSJobSummary{}
 	}
 
-	response := PBSJobsResponse{
-		Instance: instanceFilter,
-		Jobs:     jobs,
-		Total:    len(jobs),
-	}
+	response := EmptyPBSJobsResponse()
+	response.Instance = instanceFilter
+	response.Jobs = jobs
+	response.Total = len(jobs)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
-func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -732,64 +977,223 @@ func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[s
 	statusFilter, _ := args["status"].(string)
 	limit := intArg(args, "limit", 50)
 
-	state := e.stateProvider.GetState()
-
 	// Build VM name map
 	vmNames := make(map[int]string)
-	for _, vm := range state.VMs {
-		vmNames[vm.VMID] = vm.Name
-	}
-	for _, ct := range state.Containers {
-		vmNames[ct.VMID] = ct.Name
+	if rs, err := e.readStateForControl(); err == nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				if _, exists := vmNames[w.VMID()]; !exists {
+					vmNames[w.VMID()] = w.Name()
+				}
+			}
+		}
 	}
 
 	var tasks []BackupTaskDetail
 	filteredCount := 0
+	totalCount := 0
 
-	for _, task := range state.PVEBackups.BackupTasks {
-		// Apply filters
-		if instanceFilter != "" && task.Instance != instanceFilter {
-			continue
+	trimPrefix := func(id string) string {
+		id = strings.TrimSpace(id)
+		if strings.HasPrefix(id, "pve-task:") {
+			return strings.TrimPrefix(id, "pve-task:")
 		}
-		if guestIDFilter != "" && fmt.Sprintf("%d", task.VMID) != guestIDFilter {
-			continue
+		return id
+	}
+	getDetailString := func(p recovery.RecoveryPoint, key string) string {
+		if p.Details == nil {
+			return ""
 		}
-		if statusFilter != "" && !strings.EqualFold(task.Status, statusFilter) {
-			continue
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return ""
 		}
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+		return ""
+	}
+	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
+		if p.Details == nil {
+			return 0
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return 0
+		}
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		case json.Number:
+			i, _ := n.Int64()
+			return int(i)
+		default:
+			return 0
+		}
+	}
 
-		filteredCount++
+	if e.recoveryPointsProvider != nil {
+		const pageLimit = 200
+		const maxPages = 20
 
-		if len(tasks) >= limit {
-			continue
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		for page := 1; page <= maxPages; page++ {
+			points, _, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
+				Provider: recovery.ProviderProxmoxPVE,
+				Kind:     recovery.KindBackup,
+				Page:     page,
+				Limit:    pageLimit,
+			})
+			if err != nil {
+				return NewErrorResult(err), nil
+			}
+			if len(points) == 0 {
+				break
+			}
+
+			for _, p := range points {
+				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+					continue
+				}
+				totalCount++
+
+				instance := getDetailString(p, "instance")
+				node := getDetailString(p, "node")
+				vmid := getDetailInt(p, "vmid")
+				status := getDetailString(p, "status")
+				taskType := getDetailString(p, "type")
+				errText := getDetailString(p, "error")
+
+				// Apply filters
+				if instanceFilter != "" && instance != instanceFilter {
+					continue
+				}
+				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+					continue
+				}
+				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+					continue
+				}
+
+				filteredCount++
+				if len(tasks) >= limit {
+					continue
+				}
+
+				started := time.Time{}
+				if p.StartedAt != nil {
+					started = p.StartedAt.UTC()
+				}
+				ended := time.Time{}
+				if p.CompletedAt != nil {
+					ended = p.CompletedAt.UTC()
+				}
+
+				size := int64(0)
+				if p.SizeBytes != nil {
+					size = *p.SizeBytes
+				}
+
+				tasks = append(tasks, BackupTaskDetail{
+					ID:        trimPrefix(p.ID),
+					VMID:      vmid,
+					VMName:    vmNames[vmid],
+					Node:      node,
+					Instance:  instance,
+					Type:      taskType,
+					Status:    status,
+					StartTime: started,
+					EndTime:   ended,
+					SizeBytes: size,
+					Error:     errText,
+				})
+			}
+
+			if len(tasks) >= limit {
+				break
+			}
 		}
+	} else {
+		// Legacy fallback: normalize backup-task data into recovery points so
+		// both paths share the same extraction behavior.
+		points, total := e.legacyPVEBackupTaskPoints()
+		totalCount = total
 
-		tasks = append(tasks, BackupTaskDetail{
-			ID:        task.ID,
-			VMID:      task.VMID,
-			VMName:    vmNames[task.VMID],
-			Node:      task.Node,
-			Instance:  task.Instance,
-			Type:      task.Type,
-			Status:    task.Status,
-			StartTime: task.StartTime,
-			EndTime:   task.EndTime,
-			SizeBytes: task.Size,
-			Error:     task.Error,
-		})
+		for _, p := range points {
+			if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+				continue
+			}
+
+			instance := getDetailString(p, "instance")
+			node := getDetailString(p, "node")
+			vmid := getDetailInt(p, "vmid")
+			status := getDetailString(p, "status")
+			taskType := getDetailString(p, "type")
+			errText := getDetailString(p, "error")
+
+			// Apply filters
+			if instanceFilter != "" && instance != instanceFilter {
+				continue
+			}
+			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+				continue
+			}
+			if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+				continue
+			}
+
+			filteredCount++
+
+			if len(tasks) >= limit {
+				continue
+			}
+
+			started := time.Time{}
+			if p.StartedAt != nil {
+				started = p.StartedAt.UTC()
+			}
+			ended := time.Time{}
+			if p.CompletedAt != nil {
+				ended = p.CompletedAt.UTC()
+			}
+
+			size := int64(0)
+			if p.SizeBytes != nil {
+				size = *p.SizeBytes
+			}
+
+			tasks = append(tasks, BackupTaskDetail{
+				ID:        trimPrefix(p.ID),
+				VMID:      vmid,
+				VMName:    vmNames[vmid],
+				Node:      node,
+				Instance:  instance,
+				Type:      taskType,
+				Status:    status,
+				StartTime: started,
+				EndTime:   ended,
+				SizeBytes: size,
+				Error:     errText,
+			})
+		}
 	}
 
 	if tasks == nil {
 		tasks = []BackupTaskDetail{}
 	}
 
-	response := BackupTasksListResponse{
-		Tasks:    tasks,
-		Total:    len(state.PVEBackups.BackupTasks),
-		Filtered: filteredCount,
-	}
+	response := EmptyBackupTasksListResponse()
+	response.Tasks = tasks
+	response.Total = totalCount
+	response.Filtered = filteredCount
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -805,19 +1209,23 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 	var hostSummaries []HostRAIDSummary
 
 	for _, host := range hosts {
+		targetID := toolHostTargetID(host)
+		hostLabel := toolHostLabel(host)
+
 		// Apply host filter
-		if hostFilter != "" && host.ID != hostFilter && host.Hostname != hostFilter && host.DisplayName != hostFilter {
+		if hostFilter != "" && targetID != hostFilter && host.ID() != hostFilter && toolHostName(host) != hostFilter && hostLabel != hostFilter {
 			continue
 		}
 
 		// Skip hosts without RAID arrays
-		if len(host.RAID) == 0 {
+		raidArrays := host.RAID()
+		if len(raidArrays) == 0 {
 			continue
 		}
 
 		var arrays []HostRAIDArraySummary
 
-		for _, raid := range host.RAID {
+		for _, raid := range raidArrays {
 			// Apply state filter
 			if stateFilter != "" && !strings.EqualFold(raid.State, stateFilter) {
 				continue
@@ -858,8 +1266,8 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 				arrays = []HostRAIDArraySummary{}
 			}
 			hostSummaries = append(hostSummaries, HostRAIDSummary{
-				Hostname: host.Hostname,
-				HostID:   host.ID,
+				Hostname: hostLabel,
+				TargetID: targetID,
 				Arrays:   arrays,
 			})
 		}
@@ -876,12 +1284,11 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 		return NewTextResult("No RAID arrays found across any hosts. RAID monitoring requires host agents to be configured."), nil
 	}
 
-	response := HostRAIDStatusResponse{
-		Hosts: hostSummaries,
-		Total: len(hostSummaries),
-	}
+	response := EmptyHostRAIDStatusResponse()
+	response.Hosts = hostSummaries
+	response.Total = len(hostSummaries)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
 func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -896,17 +1303,19 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 	var hostSummaries []HostCephSummary
 
 	for _, host := range hosts {
+		targetID := toolHostTargetID(host)
+		hostLabel := toolHostLabel(host)
+
 		// Apply host filter
-		if hostFilter != "" && host.ID != hostFilter && host.Hostname != hostFilter && host.DisplayName != hostFilter {
+		if hostFilter != "" && targetID != hostFilter && host.ID() != hostFilter && toolHostName(host) != hostFilter && hostLabel != hostFilter {
 			continue
 		}
 
 		// Skip hosts without Ceph data
-		if host.Ceph == nil {
+		ceph := host.Ceph()
+		if ceph == nil {
 			continue
 		}
-
-		ceph := host.Ceph
 
 		// Build health messages from checks and summary
 		var healthMessages []HostCephHealthMessage
@@ -977,8 +1386,8 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 		}
 
 		hostSummaries = append(hostSummaries, HostCephSummary{
-			Hostname: host.Hostname,
-			HostID:   host.ID,
+			Hostname: hostLabel,
+			TargetID: targetID,
 			FSID:     ceph.FSID,
 			Health: HostCephHealthSummary{
 				Status:   ceph.Health.Status,
@@ -1022,16 +1431,43 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 		return NewTextResult("No Ceph data found from host agents. Ceph monitoring requires host agents to be configured on Ceph nodes."), nil
 	}
 
-	response := HostCephDetailsResponse{
-		Hosts: hostSummaries,
-		Total: len(hostSummaries),
-	}
+	response := EmptyHostCephDetailsResponse()
+	response.Hosts = hostSummaries
+	response.Total = len(hostSummaries)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+func toolHostTargetID(host *unifiedresources.HostView) string {
+	if host == nil {
+		return ""
+	}
+	if agentID := strings.TrimSpace(host.AgentID()); agentID != "" {
+		return agentID
+	}
+	return strings.TrimSpace(host.ID())
+}
+
+func toolHostName(host *unifiedresources.HostView) string {
+	if host == nil {
+		return ""
+	}
+	if hostname := strings.TrimSpace(host.Hostname()); hostname != "" {
+		return hostname
+	}
+	return strings.TrimSpace(host.Name())
+}
+
+func toolHostLabel(host *unifiedresources.HostView) string {
+	if name := toolHostName(host); name != "" {
+		return name
+	}
+	return toolHostTargetID(host)
 }
 
 func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -1039,42 +1475,66 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 	typeFilter, _ := args["type"].(string)
 	instanceFilter, _ := args["instance"].(string)
 	minUsage, _ := args["min_usage"].(float64)
+	typeFilter = strings.ToLower(strings.TrimSpace(typeFilter))
 
-	state := e.stateProvider.GetState()
+	if typeFilter != "" && typeFilter != "vm" && typeFilter != "system-container" {
+		return NewErrorResult(fmt.Errorf("unsupported type %q (allowed: vm, system-container)", typeFilter)), nil
+	}
 
 	var resources []ResourceDisksSummary
 
 	// Process VMs
-	if typeFilter == "" || strings.EqualFold(typeFilter, "vm") {
-		for _, vm := range state.VMs {
+	if typeFilter == "" || typeFilter == "vm" {
+		for _, vm := range rs.VMs() {
+			if vm == nil {
+				continue
+			}
+
+			vmID := vm.VMID()
+			vmIDStr := strconv.Itoa(vmID)
+			vmSourceID := strings.TrimSpace(vm.SourceID())
+			if vmSourceID == "" {
+				vmSourceID = vm.ID()
+			}
+
 			// Apply filters
-			if resourceFilter != "" && vm.ID != resourceFilter && fmt.Sprintf("%d", vm.VMID) != resourceFilter {
+			if resourceFilter != "" && vmSourceID != resourceFilter && vmIDStr != resourceFilter {
 				continue
 			}
-			if instanceFilter != "" && vm.Instance != instanceFilter {
+			if instanceFilter != "" && vm.Instance() != instanceFilter {
 				continue
 			}
+
+			vmDisks := vm.Disks()
 			// Skip VMs without disk data
-			if len(vm.Disks) == 0 {
+			if len(vmDisks) == 0 {
 				continue
 			}
 
 			var disks []ResourceDiskInfo
 			maxUsage := 0.0
 
-			for _, disk := range vm.Disks {
-				if disk.Usage > maxUsage {
-					maxUsage = disk.Usage
+			for _, disk := range vmDisks {
+				usage := disk.Usage
+				if usage <= 0 && disk.Total > 0 {
+					usage = (float64(disk.Used) / float64(disk.Total)) * 100
+				}
+				if usage <= 0 && disk.Used > 0 {
+					usage = 100
+				}
+
+				if usage > maxUsage {
+					maxUsage = usage
 				}
 
 				disks = append(disks, ResourceDiskInfo{
 					Device:     disk.Device,
 					Mountpoint: disk.Mountpoint,
-					Type:       disk.Type,
+					Type:       disk.Filesystem,
 					TotalBytes: disk.Total,
 					UsedBytes:  disk.Used,
 					FreeBytes:  disk.Free,
-					Usage:      disk.Usage,
+					Usage:      usage,
 				})
 			}
 
@@ -1088,48 +1548,69 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 			}
 
 			resources = append(resources, ResourceDisksSummary{
-				ID:       vm.ID,
-				VMID:     vm.VMID,
-				Name:     vm.Name,
+				ID:       vmSourceID,
+				VMID:     vmID,
+				Name:     vm.Name(),
 				Type:     "vm",
-				Node:     vm.Node,
-				Instance: vm.Instance,
+				Node:     vm.Node(),
+				Instance: vm.Instance(),
 				Disks:    disks,
 			})
 		}
 	}
 
 	// Process containers
-	if typeFilter == "" || strings.EqualFold(typeFilter, "lxc") {
-		for _, ct := range state.Containers {
+	if typeFilter == "" || typeFilter == "system-container" {
+		for _, ct := range rs.Containers() {
+			if ct == nil {
+				continue
+			}
+
+			ctID := ct.VMID()
+			ctIDStr := strconv.Itoa(ctID)
+			ctSourceID := strings.TrimSpace(ct.SourceID())
+			if ctSourceID == "" {
+				ctSourceID = ct.ID()
+			}
+
 			// Apply filters
-			if resourceFilter != "" && ct.ID != resourceFilter && fmt.Sprintf("%d", ct.VMID) != resourceFilter {
+			if resourceFilter != "" && ctSourceID != resourceFilter && ctIDStr != resourceFilter {
 				continue
 			}
-			if instanceFilter != "" && ct.Instance != instanceFilter {
+			if instanceFilter != "" && ct.Instance() != instanceFilter {
 				continue
 			}
+
+			ctDisks := ct.Disks()
 			// Skip containers without disk data
-			if len(ct.Disks) == 0 {
+			if len(ctDisks) == 0 {
 				continue
 			}
 
 			var disks []ResourceDiskInfo
 			maxUsage := 0.0
 
-			for _, disk := range ct.Disks {
-				if disk.Usage > maxUsage {
-					maxUsage = disk.Usage
+			for _, disk := range ctDisks {
+				usage := disk.Usage
+				if usage <= 0 && disk.Total > 0 {
+					usage = (float64(disk.Used) / float64(disk.Total)) * 100
+				}
+				if usage <= 0 && disk.Used > 0 {
+					usage = 100
+				}
+
+				if usage > maxUsage {
+					maxUsage = usage
 				}
 
 				disks = append(disks, ResourceDiskInfo{
 					Device:     disk.Device,
 					Mountpoint: disk.Mountpoint,
-					Type:       disk.Type,
+					Type:       disk.Filesystem,
 					TotalBytes: disk.Total,
 					UsedBytes:  disk.Used,
 					FreeBytes:  disk.Free,
-					Usage:      disk.Usage,
+					Usage:      usage,
 				})
 			}
 
@@ -1143,12 +1624,12 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 			}
 
 			resources = append(resources, ResourceDisksSummary{
-				ID:       ct.ID,
-				VMID:     ct.VMID,
-				Name:     ct.Name,
-				Type:     "lxc",
-				Node:     ct.Node,
-				Instance: ct.Instance,
+				ID:       ctSourceID,
+				VMID:     ctID,
+				Name:     ct.Name(),
+				Type:     "system-container",
+				Node:     ct.Node(),
+				Instance: ct.Instance(),
 				Disks:    disks,
 			})
 		}
@@ -1165,10 +1646,9 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 		return NewTextResult("No disk data available for any VMs or containers. Disk details require guest agents to be installed and running."), nil
 	}
 
-	response := ResourceDisksResponse{
-		Resources: resources,
-		Total:     len(resources),
-	}
+	response := EmptyResourceDisksResponse()
+	response.Resources = resources
+	response.Total = len(resources)
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }

@@ -1,11 +1,15 @@
 package servicediscovery
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type stubExecutor struct {
@@ -96,7 +100,7 @@ func TestDeepScanner_Scan_NestedDockerCommands(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -142,32 +146,32 @@ func TestDeepScanner_FindAgentAndTargetType(t *testing.T) {
 	}
 	scanner := NewDeepScanner(exec)
 
-	if got := scanner.findAgentForHost("a2", ""); got != "a2" {
+	if got := scanner.findAgentForTarget("a2", ""); got != "a2" {
 		t.Fatalf("expected direct agent match, got %s", got)
 	}
-	if got := scanner.findAgentForHost("node1", "node1"); got != "a1" {
+	if got := scanner.findAgentForTarget("node1", "node1"); got != "a1" {
 		t.Fatalf("expected hostname match, got %s", got)
 	}
 
 	exec.agents = []ConnectedAgent{{AgentID: "solo", Hostname: "only"}}
-	if got := scanner.findAgentForHost("missing", "missing"); got != "solo" {
+	if got := scanner.findAgentForTarget("missing", "missing"); got != "solo" {
 		t.Fatalf("expected single agent fallback, got %s", got)
 	}
 	exec.agents = nil
-	if got := scanner.findAgentForHost("missing", "missing"); got != "" {
+	if got := scanner.findAgentForTarget("missing", "missing"); got != "" {
 		t.Fatalf("expected no agent, got %s", got)
 	}
 
-	if scanner.getTargetType(ResourceTypeLXC) != "container" {
+	if scanner.getTargetType(ResourceTypeSystemContainer) != "container" {
 		t.Fatalf("unexpected target type for lxc")
 	}
 	if scanner.getTargetType(ResourceTypeVM) != "vm" {
 		t.Fatalf("unexpected target type for vm")
 	}
-	if scanner.getTargetType(ResourceTypeDocker) != "host" {
+	if scanner.getTargetType(ResourceTypeDocker) != "agent" {
 		t.Fatalf("unexpected target type for docker")
 	}
-	if scanner.getTargetType(ResourceTypeHost) != "host" {
+	if scanner.getTargetType(ResourceTypeAgent) != "agent" {
 		t.Fatalf("unexpected target type for host")
 	}
 }
@@ -187,13 +191,13 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 		resourceType ResourceType
 		wantType     string
 	}{
-		{ResourceTypeLXC, "container"},
+		{ResourceTypeSystemContainer, "container"},
 		{ResourceTypeVM, "vm"},
-		{ResourceTypeDocker, "host"},
-		{ResourceTypeDockerLXC, "container"}, // Docker inside LXC runs via pct exec
-		{ResourceTypeDockerVM, "vm"},         // Docker inside VM runs via qm guest exec
-		{ResourceTypeHost, "host"},
-		{ResourceType("unknown"), "host"},
+		{ResourceTypeDocker, "agent"},
+		{ResourceTypeDockerSystemContainer, "container"}, // Docker inside LXC runs via pct exec
+		{ResourceTypeDockerVM, "vm"},                     // Docker inside VM runs via qm guest exec
+		{ResourceTypeAgent, "agent"},
+		{ResourceType("unknown"), "agent"},
 	}
 	for _, tt := range tests {
 		if got := scanner.getTargetType(tt.resourceType); got != tt.wantType {
@@ -207,12 +211,12 @@ func TestDeepScanner_GetTargetTypeAndID(t *testing.T) {
 		resourceID   string
 		wantID       string
 	}{
-		{ResourceTypeLXC, "101", "101"},
+		{ResourceTypeSystemContainer, "101", "101"},
 		{ResourceTypeVM, "102", "102"},
 		{ResourceTypeDocker, "web", "web"},
-		{ResourceTypeDockerLXC, "201:nginx", "201"},   // Extract vmid for nested docker
-		{ResourceTypeDockerVM, "301:postgres", "301"}, // Extract vmid for nested docker
-		{ResourceTypeHost, "myhost", "myhost"},
+		{ResourceTypeDockerSystemContainer, "201:nginx", "201"}, // Extract vmid for nested docker
+		{ResourceTypeDockerVM, "301:postgres", "301"},           // Extract vmid for nested docker
+		{ResourceTypeAgent, "myhost", "myhost"},
 	}
 	for _, tt := range idTests {
 		if got := scanner.getTargetID(tt.resourceType, tt.resourceID); got != tt.wantID {
@@ -225,7 +229,7 @@ func TestDeepScanner_BuildCommandAndProgress(t *testing.T) {
 	scanner := NewDeepScanner(&stubExecutor{})
 
 	// LXC: buildCommand returns raw command, agent handles pct exec wrapping
-	if cmd := scanner.buildCommand(ResourceTypeLXC, "101", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeSystemContainer, "101", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("LXC should return raw command (agent wraps), got: %s", cmd)
 	}
 	// VM: buildCommand returns raw command, agent handles qm guest exec wrapping
@@ -237,20 +241,20 @@ func TestDeepScanner_BuildCommandAndProgress(t *testing.T) {
 		t.Fatalf("Docker should include docker exec, got: %s", cmd)
 	}
 	// Host: buildCommand returns raw command
-	if cmd := scanner.buildCommand(ResourceTypeHost, "host", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeAgent, "host", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("Host should return raw command, got: %s", cmd)
 	}
 
 	// DockerLXC: buildCommand adds docker exec, agent adds pct exec
 	// So we should only see docker exec in the command (agent adds pct exec at runtime)
-	dockerLXC := scanner.buildCommand(ResourceTypeDockerLXC, "201:web", "echo hi")
+	dockerLXC := scanner.buildCommand(ResourceTypeDockerSystemContainer, "201:web", "echo hi")
 	if !strings.Contains(dockerLXC, "docker exec") {
 		t.Fatalf("DockerLXC should include docker exec, got: %s", dockerLXC)
 	}
 	if strings.Contains(dockerLXC, "pct exec") {
 		t.Fatalf("DockerLXC should NOT include pct exec (agent adds it), got: %s", dockerLXC)
 	}
-	if cmd := scanner.buildCommand(ResourceTypeDockerLXC, "bad", "echo hi"); cmd != "echo hi" {
+	if cmd := scanner.buildCommand(ResourceTypeDockerSystemContainer, "bad", "echo hi"); cmd != "echo hi" {
 		t.Fatalf("DockerLXC with bad ID should fallback, got: %s", cmd)
 	}
 
@@ -301,8 +305,8 @@ func TestDeepScanner_ScanWrappers(t *testing.T) {
 	if _, err := scanner.ScanDocker(context.Background(), "host1", "host1", "web"); err != nil {
 		t.Fatalf("ScanDocker error: %v", err)
 	}
-	if _, err := scanner.ScanLXC(context.Background(), "host1", "host1", "101"); err != nil {
-		t.Fatalf("ScanLXC error: %v", err)
+	if _, err := scanner.ScanSystemContainer(context.Background(), "host1", "host1", "101"); err != nil {
+		t.Fatalf("ScanSystemContainer error: %v", err)
 	}
 	if _, err := scanner.ScanVM(context.Background(), "host1", "host1", "102"); err != nil {
 		t.Fatalf("ScanVM error: %v", err)
@@ -317,7 +321,7 @@ func TestDeepScanner_ScanErrors(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceType("unknown"),
 		ResourceID:   "id",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err == nil {
 		t.Fatalf("expected error for unknown resource type")
@@ -327,7 +331,7 @@ func TestDeepScanner_ScanErrors(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err == nil {
 		t.Fatalf("expected error for missing agent")
@@ -342,7 +346,7 @@ func TestDeepScanner_OutputHandling(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -363,7 +367,7 @@ func TestDeepScanner_CommandErrorHandling(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -387,9 +391,83 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 	if _, err := scanner.Scan(ctx, DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err != nil {
 		t.Fatalf("Scan error: %v", err)
 	}
+}
+
+func TestDeepScanner_ScanLogsStructuredContextWhenExecutorMissing(t *testing.T) {
+	logOutput := captureDeepScannerLogs(t)
+
+	scanner := NewDeepScanner(nil)
+	if _, err := scanner.ScanHost(context.Background(), "host1", "host1"); err == nil {
+		t.Fatalf("expected error without executor")
+	}
+
+	for _, expected := range []string{
+		`"component":"service_discovery_scanner"`,
+		`"action":"scan_precondition_failed"`,
+		`"reason":"executor_missing"`,
+		`"resource_id":"agent:host1:host1"`,
+		`"resource_type":"agent"`,
+		`"target_id":"host1"`,
+		`"message":"Deep scan unavailable"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
+func TestDeepScanner_ScanLogsStructuredContextOnCommandResultFailure(t *testing.T) {
+	exec := &stubExecutor{
+		agents: []ConnectedAgent{{AgentID: "host1", Hostname: "host1"}},
+	}
+	scanner := NewDeepScanner(exec)
+	scanner.maxParallel = 1
+
+	logOutput := captureDeepScannerLogs(t)
+	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDockerVM,
+		ResourceID:   "101:web",
+		TargetID:     "host1",
+		Hostname:     "host1",
+	})
+	if err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if _, ok := result.Errors["docker_containers"]; !ok {
+		t.Fatalf("expected docker_containers error, got %#v", result.Errors)
+	}
+
+	for _, expected := range []string{
+		`"component":"service_discovery_scanner"`,
+		`"action":"command_result_failed"`,
+		`"command":"docker_containers"`,
+		`"optional":false`,
+		`"command_error":"boom"`,
+		`"resource_id":"docker_vm:host1:101:web"`,
+		`"resource_type":"docker_vm"`,
+		`"target_id":"host1"`,
+		`"message":"Deep scan command reported failure"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
+func captureDeepScannerLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	return &buf
 }

@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,11 +74,12 @@ func TestSessionStore(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, messages, 1)
 		assert.Equal(t, "What is the status of node-1?", messages[0].Content)
+		assert.NotNil(t, messages[0].ToolCalls)
 	})
 
 	t.Run("UpdateLastMessage", func(t *testing.T) {
 		session, _ := store.Create()
-		store.AddMessage(session.ID, Message{Role: "assistant", Content: "Thinking..."})
+		_ = store.AddMessage(session.ID, Message{Role: "assistant", Content: "Thinking..."})
 
 		updatedMsg := Message{Role: "assistant", Content: "Resolved."}
 		err := store.UpdateLastMessage(session.ID, updatedMsg)
@@ -100,6 +102,25 @@ func TestSessionStore(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, sessionFixed.ID, retrieved.ID)
 	})
+}
+
+func TestMessage_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyMessage())
+	require.NoError(t, err)
+	assert.Contains(t, string(payload), `"tool_calls":[]`)
+
+	payload, err = json.Marshal(EmptyToolCall())
+	require.NoError(t, err)
+	assert.Contains(t, string(payload), `"input":{}`)
+
+	payload, err = json.Marshal(Message{
+		ToolCalls: []ToolCall{{
+			ID:   "call-1",
+			Name: "diagnose",
+		}},
+	}.NormalizeCollections())
+	require.NoError(t, err)
+	assert.Contains(t, string(payload), `"input":{}`)
 }
 
 func TestGenerateTitle(t *testing.T) {

@@ -52,6 +52,7 @@ services:
       - PULSE_LOG_LEVEL=debug
       # Mock mode for faster testing
       - PULSE_MOCK_MODE=true
+      - PULSE_MULTI_TENANT_ENABLED=${PULSE_MULTI_TENANT_ENABLED:-false}
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250
     volumes:

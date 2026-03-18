@@ -11,41 +11,44 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func TestForecastStateProviderWrapper_GetState(t *testing.T) {
-	state := models.NewState()
-	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-one"}}
-	state.Containers = []models.Container{{ID: "ct-1", Name: "ct-one"}}
-	state.Nodes = []models.Node{{ID: "node-1", Name: "node-one"}}
-	state.Storage = []models.Storage{{ID: "store-1", Name: "store-one"}}
+func TestForecastResourceIterator(t *testing.T) {
+	// Build a ResourceRegistry with known resources and use it as ReadState.
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		VMs:        []models.VM{{ID: "vm-1", Name: "vm-one", Node: "n", Instance: "i"}},
+		Containers: []models.Container{{ID: "ct-1", Name: "ct-one", Node: "n", Instance: "i"}},
+		Nodes:      []models.Node{{ID: "node-1", Name: "node-one", Instance: "i"}},
+		Storage:    []models.Storage{{ID: "store-1", Name: "store-one", Node: "n", Instance: "i"}},
+	})
 
-	monitor := &monitoring.Monitor{}
-	setUnexportedField(t, monitor, "state", state)
+	iter := &forecastResourceIterator{readState: rr}
 
-	wrapper := &forecastStateProviderWrapper{monitor: monitor}
-	snapshot := wrapper.GetState()
-
-	if len(snapshot.VMs) != 1 || snapshot.VMs[0].ID != "vm-1" || snapshot.VMs[0].Name != "vm-one" {
-		t.Fatalf("unexpected VM snapshot: %#v", snapshot.VMs)
+	vms := iter.ForecastVMs()
+	if len(vms) != 1 || vms[0].ID != "vm-1" || vms[0].Name != "vm-one" {
+		t.Fatalf("unexpected VMs: %#v", vms)
 	}
-	if len(snapshot.Containers) != 1 || snapshot.Containers[0].ID != "ct-1" || snapshot.Containers[0].Name != "ct-one" {
-		t.Fatalf("unexpected container snapshot: %#v", snapshot.Containers)
+	cts := iter.ForecastContainers()
+	if len(cts) != 1 || cts[0].ID != "ct-1" || cts[0].Name != "ct-one" {
+		t.Fatalf("unexpected containers: %#v", cts)
 	}
-	if len(snapshot.Nodes) != 1 || snapshot.Nodes[0].ID != "node-1" || snapshot.Nodes[0].Name != "node-one" {
-		t.Fatalf("unexpected node snapshot: %#v", snapshot.Nodes)
+	nodes := iter.ForecastNodes()
+	if len(nodes) != 1 || nodes[0].ID != "node-1" || nodes[0].Name != "node-one" {
+		t.Fatalf("unexpected nodes: %#v", nodes)
 	}
-	if len(snapshot.Storage) != 1 || snapshot.Storage[0].ID != "store-1" || snapshot.Storage[0].Name != "store-one" {
-		t.Fatalf("unexpected storage snapshot: %#v", snapshot.Storage)
+	pools := iter.ForecastStoragePools()
+	if len(pools) != 1 || pools[0].ID != "store-1" || pools[0].Name != "store-one" {
+		t.Fatalf("unexpected storage pools: %#v", pools)
 	}
 }
 
-func TestForecastStateProviderWrapper_NilMonitor(t *testing.T) {
-	wrapper := &forecastStateProviderWrapper{}
-	snapshot := wrapper.GetState()
+func TestForecastResourceIterator_NilReadState(t *testing.T) {
+	iter := &forecastResourceIterator{}
 
-	if len(snapshot.VMs) != 0 || len(snapshot.Containers) != 0 || len(snapshot.Nodes) != 0 || len(snapshot.Storage) != 0 {
-		t.Fatalf("expected empty snapshot, got %#v", snapshot)
+	if len(iter.ForecastVMs()) != 0 || len(iter.ForecastContainers()) != 0 || len(iter.ForecastNodes()) != 0 || len(iter.ForecastStoragePools()) != 0 {
+		t.Fatalf("expected empty slices for nil readState")
 	}
 }
 

@@ -16,13 +16,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to infrastructure state
-type StateProvider interface {
-	GetState() models.StateSnapshot
-}
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
 
 // CommandPolicy evaluates command security
 type CommandPolicy interface {
@@ -37,33 +37,38 @@ type AgentServer interface {
 
 // MCP provider type aliases for external use
 type (
-	MCPAlertProvider          = tools.AlertProvider
-	MCPFindingsProvider       = tools.FindingsProvider
-	MCPBaselineProvider       = tools.BaselineProvider
-	MCPPatternProvider        = tools.PatternProvider
-	MCPMetricsHistoryProvider = tools.MetricsHistoryProvider
-	MCPBackupProvider         = tools.BackupProvider
-	MCPStorageProvider        = tools.StorageProvider
-	MCPGuestConfigProvider    = tools.GuestConfigProvider
-	MCPDiskHealthProvider     = tools.DiskHealthProvider
-	MCPUpdatesProvider        = tools.UpdatesProvider
-	AgentProfileManager       = tools.AgentProfileManager
-	FindingsManager           = tools.FindingsManager
-	MetadataUpdater           = tools.MetadataUpdater
-	IncidentRecorderProvider  = tools.IncidentRecorderProvider
-	EventCorrelatorProvider   = tools.EventCorrelatorProvider
-	TopologyProvider          = tools.TopologyProvider
-	KnowledgeStoreProvider    = tools.KnowledgeStoreProvider
-	MCPDiscoveryProvider      = tools.DiscoveryProvider
+	MCPAlertProvider           = tools.AlertProvider
+	MCPFindingsProvider        = tools.FindingsProvider
+	MCPBaselineProvider        = tools.BaselineProvider
+	MCPPatternProvider         = tools.PatternProvider
+	MCPMetricsHistoryProvider  = tools.MetricsHistoryProvider
+	MCPBackupProvider          = tools.BackupProvider
+	MCPGuestConfigProvider     = tools.GuestConfigProvider
+	MCPDiskHealthProvider      = tools.DiskHealthProvider
+	MCPUpdatesProvider         = tools.UpdatesProvider
+	AgentProfileManager        = tools.AgentProfileManager
+	FindingsManager            = tools.FindingsManager
+	MetadataUpdater            = tools.MetadataUpdater
+	IncidentRecorderProvider   = tools.IncidentRecorderProvider
+	EventCorrelatorProvider    = tools.EventCorrelatorProvider
+	TopologyProvider           = tools.TopologyProvider
+	KnowledgeStoreProvider     = tools.KnowledgeStoreProvider
+	MCPDiscoveryProvider       = tools.DiscoveryProvider
+	MCPUnifiedResourceProvider = tools.UnifiedResourceProvider
 )
 
 // Config holds service configuration
 type Config struct {
 	AIConfig      *config.AIConfig
 	StateProvider StateProvider
+	ReadState     unifiedresources.ReadState
 	Policy        CommandPolicy
 	AgentServer   AgentServer
 	DataDir       string
+	OrgID         string
+
+	// Optional: provides access to persisted recovery points (backups/snapshots).
+	RecoveryPointsProvider tools.RecoveryPointsProvider
 }
 
 // Service provides direct AI chat without external sidecar
@@ -73,6 +78,7 @@ type Service struct {
 	cfg               *config.AIConfig
 	dataDir           string
 	stateProvider     StateProvider
+	readState         unifiedresources.ReadState
 	agentServer       AgentServer
 	executor          *tools.PulseToolExecutor
 	sessions          *SessionStore
@@ -83,18 +89,19 @@ type Service struct {
 	autonomousMode    bool
 	contextPrefetcher *ContextPrefetcher
 	budgetChecker     func() error // Optional mid-run budget enforcement
+	orgID             string
+
+	activeMu           sync.RWMutex
+	activeExecutions   map[string]map[*AgenticLoop]struct{}
+	questionExecutions map[string]*AgenticLoop
 }
 
 // NewService creates a new chat service
 func NewService(cfg Config) *Service {
 	// Create tool executor
-	var stateProvider tools.StateProvider
 	var policy tools.CommandPolicy
 	var agentServer tools.AgentServer
 
-	if cfg.StateProvider != nil {
-		stateProvider = &stateProviderAdapter{cfg.StateProvider}
-	}
 	if cfg.Policy != nil {
 		policy = &commandPolicyAdapter{cfg.Policy}
 	}
@@ -103,9 +110,12 @@ func NewService(cfg Config) *Service {
 	}
 
 	execCfg := tools.ExecutorConfig{
-		StateProvider: stateProvider,
-		Policy:        policy,
-		AgentServer:   agentServer,
+		StateProvider:          cfg.StateProvider,
+		ReadState:              cfg.ReadState,
+		Policy:                 policy,
+		AgentServer:            agentServer,
+		RecoveryPointsProvider: cfg.RecoveryPointsProvider,
+		OrgID:                  cfg.OrgID,
 	}
 
 	if cfg.AIConfig != nil {
@@ -119,23 +129,103 @@ func NewService(cfg Config) *Service {
 	executor.SetTelemetryCallback(NewAIMetricsTelemetryCallback())
 
 	return &Service{
-		cfg:           cfg.AIConfig,
-		dataDir:       cfg.DataDir,
-		stateProvider: cfg.StateProvider,
-		agentServer:   cfg.AgentServer,
-		executor:      executor,
+		cfg:                cfg.AIConfig,
+		dataDir:            cfg.DataDir,
+		stateProvider:      cfg.StateProvider,
+		readState:          cfg.ReadState,
+		agentServer:        cfg.AgentServer,
+		executor:           executor,
+		orgID:              strings.TrimSpace(cfg.OrgID),
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
 	}
 }
 
+func (s *Service) registerActiveLoop(sessionID string, loop *AgenticLoop) {
+	if s == nil || sessionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if s.activeExecutions == nil {
+		s.activeExecutions = make(map[string]map[*AgenticLoop]struct{})
+	}
+	loops := s.activeExecutions[sessionID]
+	if loops == nil {
+		loops = make(map[*AgenticLoop]struct{})
+		s.activeExecutions[sessionID] = loops
+	}
+	loops[loop] = struct{}{}
+}
+
+func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
+	if s == nil || sessionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if loops := s.activeExecutions[sessionID]; loops != nil {
+		delete(loops, loop)
+		if len(loops) == 0 {
+			delete(s.activeExecutions, sessionID)
+		}
+	}
+	for questionID, registeredLoop := range s.questionExecutions {
+		if registeredLoop == loop {
+			delete(s.questionExecutions, questionID)
+		}
+	}
+}
+
+func (s *Service) registerQuestionLoop(questionID string, loop *AgenticLoop) {
+	if s == nil || questionID == "" || loop == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	if s.questionExecutions == nil {
+		s.questionExecutions = make(map[string]*AgenticLoop)
+	}
+	s.questionExecutions[questionID] = loop
+}
+
+func (s *Service) findQuestionLoop(questionID string) *AgenticLoop {
+	if s == nil || questionID == "" {
+		return nil
+	}
+
+	s.activeMu.RLock()
+	defer s.activeMu.RUnlock()
+	return s.questionExecutions[questionID]
+}
+
+func (s *Service) getActiveLoops(sessionID string) []*AgenticLoop {
+	if s == nil || sessionID == "" {
+		return nil
+	}
+
+	s.activeMu.RLock()
+	defer s.activeMu.RUnlock()
+
+	loops := s.activeExecutions[sessionID]
+	if len(loops) == 0 {
+		return nil
+	}
+
+	active := make([]*AgenticLoop, 0, len(loops))
+	for loop := range loops {
+		active = append(active, loop)
+	}
+	return active
+}
+
 // Adapter types
-type stateProviderAdapter struct {
-	sp StateProvider
-}
-
-func (a *stateProviderAdapter) GetState() models.StateSnapshot {
-	return a.sp.GetState()
-}
-
 type commandPolicyAdapter struct {
 	p CommandPolicy
 }
@@ -193,6 +283,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// Create agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.agenticLoop.SetOrgID(s.orgID)
 	s.provider = provider
 
 	s.started = true
@@ -211,7 +302,7 @@ func (s *Service) Stop(ctx context.Context) error {
 
 	s.started = false
 	s.provider = nil
-	log.Info().Msg("Pulse AI (direct) stopped")
+	log.Info().Msg("pulse AI (direct) stopped")
 	return nil
 }
 
@@ -245,6 +336,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	// Update agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.agenticLoop.SetOrgID(s.orgID)
 	s.provider = provider
 
 	log.Info().
@@ -301,7 +393,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Timestamp: time.Now(),
 	}
 	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
-		log.Warn().Err(err).Msg("Failed to save user message")
+		log.Warn().Err(err).Msg("failed to save user message")
 	}
 
 	// Get existing messages for context
@@ -351,6 +443,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		systemPrompt := s.buildSystemPrompt()
 		loop = NewAgenticLoop(provider, executor, systemPrompt)
+		loop.SetOrgID(s.orgID)
 	} else {
 		// Create a fresh loop with the configured provider for this request
 		s.mu.RLock()
@@ -361,8 +454,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		systemPrompt := s.buildSystemPrompt()
 		loop = NewAgenticLoop(provider, executor, systemPrompt)
+		loop.SetOrgID(s.orgID)
 	}
 	loop.SetAutonomousMode(autonomousMode)
+	s.registerActiveLoop(session.ID, loop)
+	defer s.unregisterActiveLoop(session.ID, loop)
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
@@ -391,20 +487,20 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			// the routing validation will catch it.
 			resolvedCtx := sessions.GetResolvedContext(session.ID)
 			for _, mention := range prefetchCtx.Mentions {
-				// Build canonical resource ID: kind:host:id
+				// Build canonical resource ID: kind:scope:id
 				var resourceID string
 				switch mention.ResourceType {
-				case "lxc":
-					if mention.HostID != "" {
-						resourceID = "lxc:" + mention.HostID + ":" + mention.ResourceID
+				case "system-container":
+					if mention.TargetID != "" {
+						resourceID = "system-container:" + mention.TargetID + ":" + mention.ResourceID
 					}
 				case "vm":
-					if mention.HostID != "" {
-						resourceID = "vm:" + mention.HostID + ":" + mention.ResourceID
+					if mention.TargetID != "" {
+						resourceID = "vm:" + mention.TargetID + ":" + mention.ResourceID
 					}
-				case "docker":
+				case "app-container":
 					if mention.TargetHost != "" {
-						resourceID = "docker_container:" + mention.TargetHost + ":" + mention.ResourceID
+						resourceID = "app-container:" + mention.TargetHost + ":" + mention.ResourceID
 					}
 				}
 				if resourceID != "" {
@@ -434,15 +530,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
 	}
 
-	// Run agentic loop
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
-	log.Debug().
-		Str("session_id", session.ID).
-		Int("tools_count", len(filteredTools)).
-		Msg("[ChatService] Filtered tools, starting agentic loop")
-
-	// Set session-scoped resolved context on executor for resource validation
-	// This ensures tools can only operate on resources discovered in this session
+	// Set session-scoped resolved context on executor for resource validation.
+	// This ensures tools can only operate on resources discovered in this session.
 	if executor != nil {
 		resolvedCtx := sessions.GetResolvedContext(session.ID)
 		executor.SetResolvedContext(resolvedCtx)
@@ -452,15 +541,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Msg("[ChatService] Set resolved context on executor")
 	}
 
-	// Set session-scoped FSM on agentic loop for workflow enforcement
-	// This ensures structural guarantees: discover before write, verify after write
+	// Shared session state for pre-pass + main loop.
 	sessionFSM := sessions.GetSessionFSM(session.ID)
-	loop.SetSessionFSM(sessionFSM)
-
-	// Set session-scoped knowledge accumulator for fact extraction across turns.
-	// For user chat, this persists across messages so facts accumulate during a conversation.
 	ka := sessions.GetKnowledgeAccumulator(session.ID)
-	loop.SetKnowledgeAccumulator(ka)
 
 	// If the prefetcher resolved mentions, advance FSM past RESOLVING.
 	// The prefetched context already contains the resource details (type, VMID, node, host)
@@ -471,6 +554,56 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Str("session_id", session.ID).
 			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
 	}
+
+	// Explore pre-pass (interactive chat only): run a short read-only scout step
+	// and inject its findings into the main loop context.
+	if s.shouldRunExplore(autonomousMode, req.Prompt) {
+		exploreResult := s.runExplorePrepass(
+			ctx,
+			session.ID,
+			req.Prompt,
+			overrideModel,
+			selectedModel,
+			messages,
+			executor,
+			loop.provider,
+			callback,
+		)
+		if exploreResult.Summary != "" {
+			injectExploreSummaryIntoLatestUserMessage(messages, exploreResult.Summary, exploreResult.Model)
+			log.Info().
+				Str("session_id", session.ID).
+				Str("outcome", exploreResult.Outcome).
+				Str("model", exploreResult.Model).
+				Int("summary_len", len(exploreResult.Summary)).
+				Int("input_tokens", exploreResult.InputTokens).
+				Int("output_tokens", exploreResult.OutputTokens).
+				Dur("duration", exploreResult.Duration).
+				Msg("[ChatService] Explore pre-pass completed")
+		} else {
+			log.Debug().
+				Str("session_id", session.ID).
+				Str("outcome", exploreResult.Outcome).
+				Str("model", exploreResult.Model).
+				Dur("duration", exploreResult.Duration).
+				Msg("[ChatService] Explore pre-pass skipped or produced no summary")
+		}
+	}
+
+	// Run agentic loop
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode, false)
+	log.Debug().
+		Str("session_id", session.ID).
+		Int("tools_count", len(filteredTools)).
+		Msg("[ChatService] Filtered tools, starting agentic loop")
+
+	// Set session-scoped FSM on agentic loop for workflow enforcement
+	// This ensures structural guarantees: discover before write, verify after write
+	loop.SetSessionFSM(sessionFSM)
+
+	// Set session-scoped knowledge accumulator for fact extraction across turns.
+	// For user chat, this persists across messages so facts accumulate during a conversation.
+	loop.SetKnowledgeAccumulator(ka)
 
 	log.Debug().
 		Str("session_id", session.ID).
@@ -503,7 +636,21 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// mutating shared service state from concurrent goroutines.
 	loop.SetAutonomousMode(autonomousMode)
 
-	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
+	streamCallback := callback
+	if streamCallback == nil {
+		streamCallback = func(StreamEvent) {}
+	}
+	wrappedCallback := func(event StreamEvent) {
+		if event.Type == "question" {
+			var data QuestionData
+			if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
+				s.registerQuestionLoop(data.QuestionID, loop)
+			}
+		}
+		streamCallback(event)
+	}
+
+	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)
 
 	log.Debug().
 		Str("session_id", session.ID).
@@ -515,7 +662,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
-				log.Warn().Err(saveErr).Msg("Failed to save message after error")
+				log.Warn().Err(saveErr).Msg("failed to save message after error")
 			}
 		}
 		return err
@@ -528,7 +675,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			continue
 		}
 		if err := sessions.AddMessage(session.ID, msg); err != nil {
-			log.Warn().Err(err).Msg("Failed to save message")
+			log.Warn().Err(err).Msg("failed to save message")
 		}
 	}
 
@@ -538,19 +685,18 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		InputTokens:  loop.GetTotalInputTokens(),
 		OutputTokens: loop.GetTotalOutputTokens(),
 	})
-	callback(StreamEvent{Type: "done", Data: doneData})
+	streamCallback(StreamEvent{Type: "done", Data: doneData})
 
 	return nil
 }
 
 // PatrolRequest represents a patrol execution request within the chat service
 type PatrolRequest struct {
-	Prompt         string `json:"prompt"`
-	SystemPrompt   string `json:"system_prompt"`
-	SessionID      string `json:"session_id,omitempty"`
-	UseCase        string `json:"use_case"`
-	MaxTurns       int    `json:"max_turns,omitempty"`
-	MaxTotalTokens int    `json:"max_total_tokens,omitempty"`
+	Prompt       string `json:"prompt"`
+	SystemPrompt string `json:"system_prompt"`
+	SessionID    string `json:"session_id,omitempty"`
+	UseCase      string `json:"use_case"`
+	MaxTurns     int    `json:"max_turns,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -558,7 +704,6 @@ type PatrolResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
-	StopReason   string `json:"stop_reason,omitempty"`
 }
 
 // ExecutePatrolStream creates a temporary agentic loop for patrol execution.
@@ -604,12 +749,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		systemPrompt = s.buildSystemPrompt()
 	}
 	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
+	tempLoop.SetOrgID(s.orgID)
 	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
-	}
-	if req.MaxTotalTokens > 0 {
-		tempLoop.SetMaxTotalTokens(req.MaxTotalTokens)
 	}
 
 	// Set provider info for telemetry
@@ -618,20 +761,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		tempLoop.SetProviderInfo(parts[0], parts[1])
 	}
 
-	// Reset patrol session history before each run.
-	// Patrol prompts already include full seed context, so reusing prior run
-	// messages only bloats input tokens and can cause severe cost spikes.
+	// Ensure patrol session exists
 	sessionID := req.SessionID
 	if sessionID == "" {
 		sessionID = "patrol-main"
-	}
-	if _, getErr := sessions.Get(sessionID); getErr == nil {
-		if delErr := sessions.Delete(sessionID); delErr != nil {
-			log.Warn().
-				Err(delErr).
-				Str("session_id", sessionID).
-				Msg("Failed to reset patrol session history; continuing with existing session")
-		}
 	}
 	session, err := sessions.EnsureSession(sessionID)
 	if err != nil {
@@ -668,7 +801,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		Timestamp: time.Now(),
 	}
 	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
-		log.Warn().Err(err).Msg("Failed to save patrol user message")
+		log.Warn().Err(err).Msg("failed to save patrol user message")
 	}
 
 	// Get messages for context
@@ -677,8 +810,8 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		return nil, fmt.Errorf("failed to get patrol messages: %w", err)
 	}
 
-	// Get all tools
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
+	// Get all tools (patrol runs in autonomous mode)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true, true)
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -686,15 +819,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
-				log.Warn().Err(saveErr).Msg("Failed to save patrol message after error")
+				log.Warn().Err(saveErr).Msg("failed to save patrol message after error")
 			}
 		}
-		// Return a partial response with accumulated token counts so callers
-		// can still record usage for budget tracking even on failure.
-		return &PatrolResponse{
-			InputTokens:  tempLoop.GetTotalInputTokens(),
-			OutputTokens: tempLoop.GetTotalOutputTokens(),
-		}, err
+		return nil, err
 	}
 
 	// Save result messages
@@ -703,7 +831,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 			continue
 		}
 		if err := sessions.AddMessage(session.ID, msg); err != nil {
-			log.Warn().Err(err).Msg("Failed to save patrol message")
+			log.Warn().Err(err).Msg("failed to save patrol message")
 		}
 	}
 
@@ -727,7 +855,6 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		Content:      contentBuilder.String(),
 		InputTokens:  tempLoop.GetTotalInputTokens(),
 		OutputTokens: tempLoop.GetTotalOutputTokens(),
-		StopReason:   tempLoop.GetStopReason(),
 	}, nil
 }
 
@@ -740,12 +867,12 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		return nil, fmt.Errorf("no Pulse Assistant config")
 	}
 
-	// Use ParseModelString for all model string formats. It handles:
-	// - Explicit "provider:model" (e.g. "openai:gpt-4o")
-	// - Slash-delimited OpenRouter models (e.g. "google/gemini-2.5-flash")
-	// - OpenRouter models with suffixes (e.g. "google/gemini-2.0-flash:free")
-	// - Bare model names (e.g. "claude-3-opus")
-	providerName, modelName := config.ParseModelString(modelStr)
+	parts := strings.SplitN(modelStr, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid model format: %s (expected provider:model)", modelStr)
+	}
+	providerName := parts[0]
+	modelName := parts[1]
 
 	timeout := 5 * time.Minute
 
@@ -760,6 +887,11 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 			return nil, fmt.Errorf("OpenAI API key not configured")
 		}
 		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, timeout), nil
+	case "openrouter":
+		if s.cfg.OpenRouterAPIKey == "" {
+			return nil, fmt.Errorf("OpenRouter API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.OpenRouterAPIKey, modelName, s.cfg.GetBaseURLForProvider(config.AIProviderOpenRouter), timeout), nil
 	case "deepseek":
 		if s.cfg.DeepSeekAPIKey == "" {
 			return nil, fmt.Errorf("DeepSeek API key not configured")
@@ -773,14 +905,13 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	case "ollama":
 		baseURL := s.cfg.OllamaBaseURL
 		if baseURL == "" {
-			// Only fall back for bare/unrecognized model names (no explicit "ollama:" prefix).
-			// An explicit "ollama:llama3" must not be silently rerouted to a different provider.
-			if !strings.HasPrefix(modelStr, "ollama:") && s.cfg.OpenAIAPIKey != "" && s.cfg.OpenAIBaseURL != "" {
-				return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, timeout), nil
-			}
 			baseURL = "http://localhost:11434"
 		}
 		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
+	case config.AIProviderQuickstart:
+		// Quickstart uses the hosted proxy — no API key needed.
+		// The licenseID is embedded in the client via orgID.
+		return providers.NewQuickstartClient(s.orgID), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}
@@ -796,7 +927,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 		return nil
 	}
 
-	tools := s.filterToolsForPrompt(ctx, prompt)
+	tools := s.filterToolsForPrompt(ctx, prompt, s.isAutonomousModeEnabled(), false)
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Name == "" {
@@ -864,8 +995,21 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 // AbortSession aborts an ongoing session
 func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 	s.mu.RLock()
+	started := s.started
 	agenticLoop := s.agenticLoop
 	s.mu.RUnlock()
+
+	if !started {
+		return fmt.Errorf("service not started")
+	}
+
+	activeLoops := s.getActiveLoops(sessionID)
+	if len(activeLoops) > 0 {
+		for _, loop := range activeLoops {
+			loop.Abort(sessionID)
+		}
+		return nil
+	}
 
 	if agenticLoop == nil {
 		return fmt.Errorf("service not started")
@@ -878,8 +1022,17 @@ func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 // AnswerQuestion provides answers to a pending question
 func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers []QuestionAnswer) error {
 	s.mu.RLock()
+	started := s.started
 	agenticLoop := s.agenticLoop
 	s.mu.RUnlock()
+
+	if !started {
+		return fmt.Errorf("service not started")
+	}
+
+	if loop := s.findQuestionLoop(questionID); loop != nil {
+		return loop.AnswerQuestion(questionID, answers)
+	}
 
 	if agenticLoop == nil {
 		return fmt.Errorf("service not started")
@@ -978,14 +1131,6 @@ func (s *Service) SetBackupProvider(provider MCPBackupProvider) {
 	}
 }
 
-func (s *Service) SetStorageProvider(provider MCPStorageProvider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.executor != nil {
-		s.executor.SetStorageProvider(provider)
-	}
-}
-
 func (s *Service) SetGuestConfigProvider(provider MCPGuestConfigProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1066,6 +1211,14 @@ func (s *Service) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 	}
 }
 
+func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetUnifiedResourceProvider(provider)
+	}
+}
+
 func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1073,12 +1226,12 @@ func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
 		s.executor.SetDiscoveryProvider(provider)
 	}
 	// Create/update context prefetcher with the discovery provider
-	if s.stateProvider != nil && provider != nil {
-		s.contextPrefetcher = NewContextPrefetcher(s.stateProvider, provider)
+	if s.readState != nil && provider != nil {
+		s.contextPrefetcher = NewContextPrefetcher(s.readState, provider)
 		log.Info().Msg("[ChatService] Context prefetcher created with discovery provider")
 	} else {
 		log.Warn().
-			Bool("hasStateProvider", s.stateProvider != nil).
+			Bool("hasReadState", s.readState != nil).
 			Bool("hasDiscoveryProvider", provider != nil).
 			Msg("[ChatService] Cannot create context prefetcher - missing provider")
 	}
@@ -1169,7 +1322,13 @@ func (s *Service) ExecuteCommand(ctx context.Context, command, targetHost string
 	if strings.Contains(resultText, "Command failed (exit code") {
 		// Parse exit code from message like "Command failed (exit code 1):"
 		var code int
-		fmt.Sscanf(resultText, "Command failed (exit code %d)", &code)
+		if n, err := fmt.Sscanf(resultText, "Command failed (exit code %d):", &code); n != 1 || err != nil {
+			// Some providers omit the trailing colon in this message shape.
+			if n, err := fmt.Sscanf(resultText, "Command failed (exit code %d)", &code); n != 1 || err != nil {
+				log.Debug().Str("result_text", resultText).Msg("failed to parse command exit code, defaulting to 1")
+				code = 1
+			}
+		}
 		return resultText, code, nil
 	}
 
@@ -1207,15 +1366,16 @@ func (s *Service) buildSystemPrompt() string {
 ## CAPABILITIES
 - pulse_query: Find resources (VMs, containers, hosts) and their locations
 - pulse_discovery: Get service details, config paths, ports, bind mounts
-- pulse_control: Run commands on hosts/LXCs/VMs
+- pulse_control: Run commands on hosts, containers, and VMs
 - pulse_docker: Manage Docker containers
 - pulse_file_edit: Read and edit configuration files
+- pulse_question: Ask the user for missing information using a structured prompt (interactive only)
 
 ## INFRASTRUCTURE TOPOLOGY
-- Resources are organized hierarchically: Proxmox nodes → VMs/LXCs → Docker containers
-- target_host specifies where commands run (host name, LXC name, or VM name)
-- Commands execute inside the target: target_host="homepage-docker" runs inside that LXC
-- For Docker containers inside LXCs: target the LXC, then use docker commands
+- Resources are organized hierarchically: nodes → VMs/containers → Docker containers
+- target_host specifies where commands run (host name, container name, or VM name)
+- Commands execute inside the target: target_host="homepage-docker" runs inside that container
+- For Docker containers inside system containers: target the container, then use docker commands
 
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts
@@ -1226,6 +1386,8 @@ func (s *Service) buildSystemPrompt() string {
 - pulse_control and pulse_docker are WRITE tools — they change infrastructure state.
 - ONLY use write tools when the user explicitly asks you to perform an action.
 - For status checks or monitoring, use pulse_query or pulse_read instead.
+- If you are missing critical information (target, risky choice, preference), use pulse_question to ask structured questions.
+- Do not use pulse_question in autonomous mode; proceed with safe defaults and clearly state assumptions instead.
 
 ## HOW TO RESPOND
 You are like a colleague doing pair programming on infrastructure tasks. Tool calls are your internal investigation — the user sees your final synthesized response.
@@ -1241,12 +1403,13 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 5. BE DIRECT: Acknowledge mistakes or complications honestly. If something won't work as the user expects, say so clearly.
 
 ## TASK COMPLETION
-- After control actions succeed, the system auto-verifies — no need to run additional verification commands.
-- After receiving "The action is complete" or "Verification complete", stop making tool calls and respond to the user.`
+- After successful control actions, the system auto-verifies. Once verified, stop making tool calls and respond.
+- If a tool call is BLOCKED, read the error message carefully and follow its instructions exactly.
+- If told to call pulse_query or pulse_read first, you MUST do that before retrying the blocked action.`
 }
 
 var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
-var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|lxc|node|host|docker|instance|one))\b`)
+var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|node|host|docker|instance|one))\b`)
 
 func shouldInjectRecentContext(prompt string) bool {
 	return recentContextPronounPattern.MatchString(prompt) || recentContextNounPattern.MatchString(prompt)
@@ -1349,9 +1512,33 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
 }
 
-func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []providers.Tool {
+func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, autonomousMode bool, patrolMode bool) []providers.Tool {
 	mcpTools := s.executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
+
+	// For patrol (autonomous mode), use config flags instead of keyword detection.
+	// Patrol seed context can mention all resource types, which defeats keyword filtering.
+	if patrolMode {
+		filtered := s.filterToolsForPatrol(providerTools)
+
+		// Keep write-intent gating for autonomous runs.
+		if !hasWriteIntent(convertPromptToMessages(prompt)) {
+			nonWrite := make([]providers.Tool, 0, len(filtered))
+			for _, tool := range filtered {
+				if !isWriteTool(tool.Name) {
+					nonWrite = append(nonWrite, tool)
+				}
+			}
+			filtered = nonWrite
+		}
+
+		log.Debug().
+			Int("total_tools", len(providerTools)).
+			Int("filtered_tools", len(filtered)).
+			Bool("autonomous_patrol_filter", true).
+			Msg("[filterToolsForPrompt] Filtered tools for patrol using config flags")
+		return filtered
+	}
 
 	// Filter out write/control tools when the user's request is read-only.
 	// This prevents models from calling pulse_control (restart, stop, etc.) when
@@ -1360,7 +1547,11 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []pro
 	// The tool set is determined once per user message and stays consistent for
 	// the entire agentic loop. This avoids the old problem of tools appearing/
 	// disappearing mid-conversation (which caused hallucinated tool names).
-	readOnly := !hasWriteIntent(convertPromptToMessages(prompt))
+	//
+	// Keep write-intent gating only for autonomous runs where commands execute
+	// without approval. In interactive chat, always include write tools; safety
+	// is enforced by approval flow, FSM gates, and tool-level policy checks.
+	readOnly := autonomousMode && !hasWriteIntent(convertPromptToMessages(prompt))
 
 	// Determine which specialty tools are relevant based on prompt keywords.
 	// Core tools are always included; specialty tools only when topic-relevant.
@@ -1412,6 +1603,52 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []pro
 		Bool("specialty_filter_active", !noSpecialtyDetected).
 		Str("prompt_prefix", truncateForLog(prompt, 80)).
 		Msg("[filterToolsForPrompt] Filtered tools for prompt")
+
+	// pulse_question is interactive; exclude it for autonomous runs (Pulse Patrol).
+	if !autonomousMode {
+		filtered = append(filtered, userQuestionTool())
+	}
+
+	return filtered
+}
+
+// filterToolsForPatrol filters tools for patrol runs using AI config flags
+// instead of keyword-based detection. This prevents the seed context
+// (which mentions all resource types) from causing all tools to be included.
+func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []providers.Tool {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	// Determine which subsystems are enabled for patrol.
+	includeDocker := cfg != nil && cfg.PatrolAnalyzeDocker
+	includeStorage := cfg != nil && cfg.PatrolAnalyzeStorage
+	// K8s and PMG don't have dedicated top-level patrol flags.
+	includeK8s := true
+	includePMG := true
+
+	filtered := make([]providers.Tool, 0, len(providerTools))
+	for _, tool := range providerTools {
+		switch tool.Name {
+		case "pulse_docker":
+			if !includeDocker {
+				continue
+			}
+		case "pulse_storage":
+			if !includeStorage {
+				continue
+			}
+		case "pulse_kubernetes":
+			if !includeK8s {
+				continue
+			}
+		case "pulse_pmg":
+			if !includePMG {
+				continue
+			}
+		}
+		filtered = append(filtered, tool)
+	}
 
 	return filtered
 }

@@ -6,13 +6,16 @@ package servicediscovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -69,13 +72,9 @@ func filterSensitiveLabels(labels map[string]string) map[string]string {
 	return filtered
 }
 
-// StateProvider provides access to the current infrastructure state.
-type StateProvider interface {
-	GetState() StateSnapshot
-}
-
-// StateSnapshot represents the infrastructure state. This mirrors models.StateSnapshot
-// to avoid circular dependencies.
+// StateSnapshot holds an infrastructure snapshot used internally by the
+// discovery service. Previously a shadow StateProvider interface provided
+// this; now it is built exclusively from ReadState typed views.
 type StateSnapshot struct {
 	VMs                []VM
 	Containers         []Container
@@ -85,14 +84,44 @@ type StateSnapshot struct {
 	Nodes              []Node
 }
 
-// Node represents a Proxmox VE node.
-type Node struct {
-	ID                string
-	Name              string
-	LinkedHostAgentID string
+// EmptyStateSnapshot returns a canonical empty servicediscovery snapshot with
+// stable collection semantics across miss/fallback paths.
+func EmptyStateSnapshot() StateSnapshot {
+	return StateSnapshot{}.NormalizeCollections()
 }
 
-// Host represents a host system (via host-agent).
+// NormalizeCollections ensures StateSnapshot never leaks nil slices through
+// service-discovery owner boundaries.
+func (s StateSnapshot) NormalizeCollections() StateSnapshot {
+	if s.VMs == nil {
+		s.VMs = []VM{}
+	}
+	if s.Containers == nil {
+		s.Containers = []Container{}
+	}
+	if s.DockerHosts == nil {
+		s.DockerHosts = []DockerHost{}
+	}
+	if s.KubernetesClusters == nil {
+		s.KubernetesClusters = []KubernetesCluster{}
+	}
+	if s.Hosts == nil {
+		s.Hosts = []Host{}
+	}
+	if s.Nodes == nil {
+		s.Nodes = []Node{}
+	}
+	return s
+}
+
+// Node represents a Proxmox VE node.
+type Node struct {
+	ID            string
+	Name          string
+	LinkedAgentID string
+}
+
+// Host represents a host system (via pulse-agent host telemetry).
 type Host struct {
 	ID            string
 	Hostname      string
@@ -211,12 +240,6 @@ type AIAnalyzer interface {
 	AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error)
 }
 
-// WSMessage represents a WebSocket message for broadcasting.
-type WSMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
 // WSBroadcaster provides WebSocket broadcasting capabilities.
 type WSBroadcaster interface {
 	BroadcastDiscoveryProgress(progress *DiscoveryProgress)
@@ -224,21 +247,25 @@ type WSBroadcaster interface {
 
 // Service manages infrastructure discovery.
 type Service struct {
-	store         *Store
-	scanner       *DeepScanner
-	stateProvider StateProvider
-	aiAnalyzer    AIAnalyzer
-	wsHub         WSBroadcaster // WebSocket hub for broadcasting progress
+	store      *Store
+	scanner    *DeepScanner
+	readState  unifiedresources.ReadState // Typed state access (sole source since SRC-03l)
+	aiAnalyzer AIAnalyzer
+	wsHub      WSBroadcaster // WebSocket hub for broadcasting progress
 
-	mu              sync.RWMutex
-	running         bool
-	stopCh          chan struct{}
-	intervalCh      chan time.Duration // Channel for live interval updates
-	interval        time.Duration
-	initialDelay    time.Duration
-	lastRun         time.Time
-	deepScanTimeout time.Duration // Timeout for individual deep scans
-	maxDiscoveryAge time.Duration // Max age before rediscovery (default 30 days)
+	mu                sync.RWMutex
+	running           bool
+	stopping          bool
+	stopCh            chan struct{}
+	loopDone          chan struct{}
+	runCancel         context.CancelFunc
+	intervalCh        chan time.Duration // Channel for live interval updates
+	interval          time.Duration
+	initialDelay      time.Duration
+	lastRun           time.Time
+	deepScanTimeout   time.Duration // Timeout for individual deep scans
+	aiAnalysisTimeout time.Duration // Timeout for individual AI analysis calls
+	maxDiscoveryAge   time.Duration // Max age before rediscovery (default 30 days)
 
 	// Cache for AI analysis results (by image name)
 	analysisCache map[string]*analysisCacheEntry
@@ -266,29 +293,79 @@ type analysisCacheEntry struct {
 
 // Config holds discovery service configuration.
 type Config struct {
-	DataDir         string
-	Interval        time.Duration // How often to run fingerprint collection (default 5 min)
-	CacheExpiry     time.Duration // How long to cache AI analysis results
-	DeepScanTimeout time.Duration // Timeout for individual deep scans (default 60s)
+	DataDir           string
+	Interval          time.Duration // How often to run fingerprint collection (default 5 min)
+	CacheExpiry       time.Duration // How long to cache AI analysis results
+	DeepScanTimeout   time.Duration // Timeout for individual deep scans (default 60s)
+	AIAnalysisTimeout time.Duration // Timeout for individual AI analysis calls (default 45s)
 
 	// Fingerprint-based discovery settings
 	MaxDiscoveryAge     time.Duration // Rediscover after this duration (default 30 days)
 	FingerprintInterval time.Duration // How often to collect fingerprints (default 5 min)
 }
 
+const (
+	defaultDiscoveryInterval     = 5 * time.Minute
+	defaultDiscoveryCacheExpiry  = 1 * time.Hour
+	defaultDiscoveryScanTimeout  = 60 * time.Second
+	defaultDiscoveryMaxAge       = 30 * 24 * time.Hour
+	minDiscoveryMaxAge           = 24 * time.Hour
+	defaultDiscoveryInitialDelay = 30 * time.Second
+)
+
 // DefaultConfig returns the default discovery configuration.
 func DefaultConfig() Config {
 	return Config{
-		Interval:            5 * time.Minute, // Fingerprint collection interval
-		CacheExpiry:         1 * time.Hour,
-		DeepScanTimeout:     60 * time.Second,
-		MaxDiscoveryAge:     30 * 24 * time.Hour, // 30 days
-		FingerprintInterval: 5 * time.Minute,
+		Interval:            defaultDiscoveryInterval, // Fingerprint collection interval
+		CacheExpiry:         defaultDiscoveryCacheExpiry,
+		DeepScanTimeout:     defaultDiscoveryScanTimeout,
+		MaxDiscoveryAge:     defaultDiscoveryMaxAge,
+		FingerprintInterval: defaultDiscoveryInterval,
 	}
 }
 
+func normalizeServiceConfig(cfg Config) Config {
+	if cfg.Interval <= 0 {
+		log.Warn().Dur("interval", cfg.Interval).Dur("default", defaultDiscoveryInterval).Msg("Invalid discovery interval; using default")
+		cfg.Interval = defaultDiscoveryInterval
+	}
+	if cfg.CacheExpiry <= 0 {
+		log.Warn().Dur("cache_expiry", cfg.CacheExpiry).Dur("default", defaultDiscoveryCacheExpiry).Msg("Invalid discovery cache expiry; using default")
+		cfg.CacheExpiry = defaultDiscoveryCacheExpiry
+	}
+	if cfg.DeepScanTimeout <= 0 {
+		log.Warn().Dur("deep_scan_timeout", cfg.DeepScanTimeout).Dur("default", defaultDiscoveryScanTimeout).Msg("Invalid deep scan timeout; using default")
+		cfg.DeepScanTimeout = defaultDiscoveryScanTimeout
+	}
+	switch {
+	case cfg.MaxDiscoveryAge <= 0:
+		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("default", defaultDiscoveryMaxAge).Msg("Invalid max discovery age; using default")
+		cfg.MaxDiscoveryAge = defaultDiscoveryMaxAge
+	case cfg.MaxDiscoveryAge < minDiscoveryMaxAge:
+		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("minimum", minDiscoveryMaxAge).Msg("Max discovery age below minimum; clamping")
+		cfg.MaxDiscoveryAge = minDiscoveryMaxAge
+	}
+	return cfg
+}
+
+func normalizeDiscoveryInterval(interval time.Duration) time.Duration {
+	if interval > 0 {
+		return interval
+	}
+	log.Warn().Dur("interval", interval).Dur("default", defaultDiscoveryInterval).Msg("Invalid discovery interval; using default")
+	return defaultDiscoveryInterval
+}
+
+func normalizeDeepScanTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 {
+		return timeout
+	}
+	log.Warn().Dur("deep_scan_timeout", timeout).Dur("default", defaultDiscoveryScanTimeout).Msg("Invalid deep scan timeout; using default")
+	return defaultDiscoveryScanTimeout
+}
+
 // NewService creates a new discovery service.
-func NewService(store *Store, scanner *DeepScanner, stateProvider StateProvider, cfg Config) *Service {
+func NewService(store *Store, scanner *DeepScanner, cfg Config) *Service {
 	if cfg.Interval == 0 {
 		cfg.Interval = 5 * time.Minute
 	}
@@ -298,23 +375,26 @@ func NewService(store *Store, scanner *DeepScanner, stateProvider StateProvider,
 	if cfg.DeepScanTimeout == 0 {
 		cfg.DeepScanTimeout = 60 * time.Second
 	}
+	if cfg.AIAnalysisTimeout <= 0 {
+		cfg.AIAnalysisTimeout = 45 * time.Second
+	}
 	if cfg.MaxDiscoveryAge == 0 {
 		cfg.MaxDiscoveryAge = 30 * 24 * time.Hour // 30 days
 	}
 
 	return &Service{
-		store:           store,
-		scanner:         scanner,
-		stateProvider:   stateProvider,
-		interval:        cfg.Interval,
-		initialDelay:    30 * time.Second,
-		cacheExpiry:     cfg.CacheExpiry,
-		deepScanTimeout: cfg.DeepScanTimeout,
-		maxDiscoveryAge: cfg.MaxDiscoveryAge,
-		stopCh:          make(chan struct{}),
-		intervalCh:      make(chan time.Duration, 1), // Buffered to prevent blocking
-		analysisCache:   make(map[string]*analysisCacheEntry),
-		inProgress:      make(map[string]*discoveryInProgress),
+		store:             store,
+		scanner:           scanner,
+		interval:          cfg.Interval,
+		initialDelay:      30 * time.Second,
+		cacheExpiry:       cfg.CacheExpiry,
+		deepScanTimeout:   cfg.DeepScanTimeout,
+		aiAnalysisTimeout: cfg.AIAnalysisTimeout,
+		maxDiscoveryAge:   cfg.MaxDiscoveryAge,
+		stopCh:            make(chan struct{}),
+		intervalCh:        make(chan time.Duration, 1), // Buffered to prevent blocking
+		analysisCache:     make(map[string]*analysisCacheEntry),
+		inProgress:        make(map[string]*discoveryInProgress),
 	}
 }
 
@@ -325,49 +405,81 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 	s.aiAnalyzer = analyzer
 }
 
+// SetReadState sets the typed ReadState provider for the discovery service.
+// When set, getSnapshot() uses ReadState to build infrastructure snapshots.
+func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = rs
+}
+
 // Start begins the background discovery service.
 func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
-	if s.running {
+	if s.running || s.stopping {
 		s.mu.Unlock()
 		return
 	}
+	runCtx, cancel := context.WithCancel(ctx)
 	s.running = true
-	s.stopCh = make(chan struct{})
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
+	s.stopCh = stopCh
+	s.loopDone = loopDone
+	s.runCancel = cancel
 	s.mu.Unlock()
 
 	log.Info().
 		Dur("interval", s.interval).
 		Msg("Starting infrastructure discovery service")
 
-	go s.discoveryLoop(ctx)
+	go s.runDiscoveryLoop(runCtx, stopCh, loopDone)
 }
 
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		close(s.stopCh)
-		s.running = false
+	if !s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = false
+	stopCh := s.stopCh
+	loopDone := s.loopDone
+	runCancel := s.runCancel
+	s.stopCh = nil
+	s.loopDone = nil
+	s.runCancel = nil
+	s.mu.Unlock()
+
+	if runCancel != nil {
+		runCancel()
+	}
+	if stopCh != nil {
+		close(stopCh)
+	}
+	if loopDone != nil {
+		<-loopDone
 	}
 }
 
 // SetInterval updates the scan interval. Takes effect immediately if running.
 func (s *Service) SetInterval(interval time.Duration) {
+	normalizedInterval := normalizeDiscoveryInterval(interval)
+
 	s.mu.Lock()
-	s.interval = interval
+	s.interval = normalizedInterval
 	running := s.running
 	s.mu.Unlock()
 
 	// If running, send the new interval to the loop (non-blocking)
 	if running {
 		select {
-		case s.intervalCh <- interval:
-			log.Info().Dur("interval", interval).Msg("Discovery interval updated (live)")
+		case s.intervalCh <- normalizedInterval:
+			log.Info().Dur("interval", normalizedInterval).Msg("Discovery interval updated (live)")
 		default:
 			// Channel full, interval will be picked up eventually
-			log.Debug().Dur("interval", interval).Msg("Discovery interval updated (pending)")
+			log.Debug().Dur("interval", normalizedInterval).Msg("Discovery interval updated (pending)")
 		}
 	}
 }
@@ -413,7 +525,7 @@ func (s *Service) SetWSHub(hub WSBroadcaster) {
 		s.scanner.SetProgressCallback(s.broadcastProgress)
 	}
 
-	log.Info().Msg("WebSocket hub connected to discovery service")
+	log.Info().Msg("webSocket hub connected to discovery service")
 }
 
 // broadcastProgress broadcasts discovery progress to all WebSocket clients.
@@ -439,15 +551,29 @@ func (s *Service) IsRunning() bool {
 // discoveryLoop runs periodic fingerprint collection and automatic refreshes.
 // Fingerprints detect changes cheaply; changed/stale/new resources are then refreshed.
 func (s *Service) discoveryLoop(ctx context.Context) {
+	s.mu.RLock()
+	stopCh := s.stopCh
+	s.mu.RUnlock()
+	s.runDiscoveryLoop(ctx, stopCh, nil)
+}
+
+func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, done chan<- struct{}) {
+	if done != nil {
+		defer close(done)
+	}
+
 	delay := s.initialDelay
 	if delay <= 0 {
-		delay = 30 * time.Second
+		delay = defaultDiscoveryInitialDelay
 	}
+
+	startupTimer := time.NewTimer(delay)
+	defer startupTimer.Stop()
 
 	// Run initial fingerprint collection after a short delay
 	select {
-	case <-time.After(delay):
-	case <-s.stopCh:
+	case <-startupTimer.C:
+	case <-stopCh:
 		return
 	case <-ctx.Done():
 		return
@@ -459,6 +585,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 	s.mu.RLock()
 	currentInterval := s.interval
 	s.mu.RUnlock()
+	currentInterval = normalizeDiscoveryInterval(currentInterval)
 
 	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
@@ -470,17 +597,31 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			s.runAutomaticDiscoveryRefresh(ctx)
 		case newInterval := <-s.intervalCh:
 			// Interval changed - reset the ticker
+			newInterval = normalizeDiscoveryInterval(newInterval)
 			ticker.Stop()
 			ticker = time.NewTicker(newInterval)
 			log.Info().Dur("interval", newInterval).Msg("Fingerprint collection interval reset")
-		case <-s.stopCh:
+		case <-stopCh:
 			log.Info().Msg("Stopping discovery service")
 			return
 		case <-ctx.Done():
-			log.Info().Msg("Discovery context cancelled")
+			log.Info().Msg("discovery context cancelled")
 			return
 		}
 	}
+}
+
+func (s *Service) finishDiscoveryLoop(stopCh <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Only clear lifecycle state if this is still the active run.
+	if s.stopCh != nil && s.stopCh != stopCh {
+		return
+	}
+	s.running = false
+	s.stopping = false
+	s.stopCh = nil
+	s.loopDone = nil
 }
 
 func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
@@ -493,18 +634,18 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 	maxDiscoveryAge := s.maxDiscoveryAge
 	s.mu.RUnlock()
 	if !analyzerConfigured {
-		log.Debug().Msg("Skipping automatic discovery refresh - AI analyzer not configured")
+		log.Debug().Msg("skipping automatic discovery refresh - AI analyzer not configured")
 		return
 	}
 
 	changedResources, err := s.store.GetChangedResources()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch changed resources for automatic discovery refresh")
+		log.Warn().Err(err).Msg("failed to fetch changed resources for automatic discovery refresh")
 		return
 	}
 	staleResources, err := s.store.GetStaleResources(maxDiscoveryAge)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch stale resources for automatic discovery refresh")
+		log.Warn().Err(err).Msg("failed to fetch stale resources for automatic discovery refresh")
 		return
 	}
 
@@ -543,7 +684,7 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 			break
 		}
 
-		resourceType, hostID, resourceID, err := ParseResourceID(id)
+		resourceType, targetID, resourceID, err := ParseResourceID(id)
 		if err != nil {
 			failedCount++
 			log.Warn().
@@ -556,8 +697,8 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		_, err = s.DiscoverResource(ctx, DiscoveryRequest{
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
-			HostID:       hostID,
-			Hostname:     hostID,
+			TargetID:     targetID,
+			Hostname:     targetID,
 		})
 		if err != nil {
 			failedCount++
@@ -577,12 +718,196 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		Msg("Automatic discovery refresh completed")
 }
 
+// getSnapshot returns the current infrastructure state from ReadState.
+// Returns an empty snapshot and false if ReadState is not yet configured.
+func (s *Service) getSnapshot() (StateSnapshot, bool) {
+	rs := s.getReadState()
+	if rs != nil {
+		return s.snapshotFromReadState(rs), true
+	}
+	return EmptyStateSnapshot(), false
+}
+
+// getReadState returns the ReadState provider, safely reading it under the
+// service lock to avoid races with concurrent SetReadState calls.
+func (s *Service) getReadState() unifiedresources.ReadState {
+	s.mu.RLock()
+	rs := s.readState
+	s.mu.RUnlock()
+	return rs
+}
+
+// hasStateAccess returns true when ReadState is configured. Safe for
+// concurrent use.
+func (s *Service) hasStateAccess() bool {
+	return s.getReadState() != nil
+}
+
+// snapshotFromReadState converts ReadState typed views into the local
+// StateSnapshot type used by servicediscovery functions.
+func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnapshot {
+	// VMs
+	vmViews := rs.VMs()
+	vms := make([]VM, 0, len(vmViews))
+	for _, v := range vmViews {
+		vms = append(vms, VM{
+			VMID:        v.VMID(),
+			Name:        v.Name(),
+			Node:        v.Node(),
+			Status:      string(v.Status()),
+			Instance:    v.Instance(),
+			IPAddresses: v.IPAddresses(),
+		})
+	}
+
+	// LXC containers
+	ctViews := rs.Containers()
+	containers := make([]Container, 0, len(ctViews))
+	for _, v := range ctViews {
+		containers = append(containers, Container{
+			VMID:        v.VMID(),
+			Name:        v.Name(),
+			Node:        v.Node(),
+			Status:      string(v.Status()),
+			Instance:    v.Instance(),
+			IPAddresses: v.IPAddresses(),
+		})
+	}
+
+	// Docker hosts — build host → children map from flat DockerContainers list
+	dcViews := rs.DockerContainers()
+	childrenByParent := make(map[string][]DockerContainer, len(dcViews))
+	for _, dc := range dcViews {
+		parentID := dc.ParentID()
+		ports := dc.Ports()
+		sdPorts := make([]DockerPort, 0, len(ports))
+		for _, p := range ports {
+			sdPorts = append(sdPorts, DockerPort{
+				PublicPort:  p.PublicPort,
+				PrivatePort: p.PrivatePort,
+				Protocol:    p.Protocol,
+			})
+		}
+		mounts := dc.Mounts()
+		sdMounts := make([]DockerMount, 0, len(mounts))
+		for _, m := range mounts {
+			sdMounts = append(sdMounts, DockerMount{
+				Source:      m.Source,
+				Destination: m.Destination,
+			})
+		}
+		childrenByParent[parentID] = append(childrenByParent[parentID], DockerContainer{
+			ID:     dc.ContainerID(),
+			Name:   dc.Name(),
+			Image:  dc.Image(),
+			Status: string(dc.Status()),
+			Ports:  sdPorts,
+			Labels: dc.Labels(),
+			Mounts: sdMounts,
+		})
+	}
+
+	dhViews := rs.DockerHosts()
+	dockerHosts := make([]DockerHost, 0, len(dhViews))
+	for _, dh := range dhViews {
+		dockerHosts = append(dockerHosts, DockerHost{
+			AgentID:    dh.AgentID(),
+			Hostname:   dh.Hostname(),
+			Containers: childrenByParent[dh.ID()],
+		})
+	}
+
+	// Hosts
+	// Note: CPUCount is not available via HostView (not mapped in unifiedresources
+	// AgentData). This is a known data gap tracked as SRC-01c; it only affects the
+	// "cpu_count" metadata field in AI analysis prompts.
+	hViews := rs.Hosts()
+	hosts := make([]Host, 0, len(hViews))
+	for _, h := range hViews {
+		// Use AgentID (original agent ID) rather than the registry hash
+		// ID, because discovery lookup code matches against request IDs which
+		// use the source-level host agent ID.
+		hostID := h.AgentID()
+		if hostID == "" {
+			hostID = h.ID()
+		}
+		hosts = append(hosts, Host{
+			ID:            hostID,
+			Hostname:      h.Hostname(),
+			DisplayName:   h.Name(),
+			Platform:      h.Platform(),
+			OSName:        h.OSName(),
+			OSVersion:     h.OSVersion(),
+			KernelVersion: h.KernelVersion(),
+			Architecture:  h.Architecture(),
+			Status:        string(h.Status()),
+			Tags:          h.Tags(),
+		})
+	}
+
+	// Nodes
+	nViews := rs.Nodes()
+	nodes := make([]Node, 0, len(nViews))
+	for _, n := range nViews {
+		// Use SourceID (original Proxmox node ID) rather than the registry
+		// hash ID, because discovery lookup code matches against request IDs
+		// which use the source-level node ID.
+		nodeID := n.SourceID()
+		if nodeID == "" {
+			nodeID = n.ID()
+		}
+		nodes = append(nodes, Node{
+			ID:            nodeID,
+			Name:          n.Name(),
+			LinkedAgentID: n.LinkedAgentID(),
+		})
+	}
+
+	// Kubernetes clusters (ReadState provides K8sClusters + Pods separately).
+	// Note: PodView does not expose NodeName or sub-container details; these
+	// fields are zero-valued.
+	clusterViews := rs.K8sClusters()
+	podViews := rs.Pods()
+	podsByCluster := make(map[string][]KubernetesPod, len(podViews))
+	for _, pv := range podViews {
+		parentID := pv.ParentID()
+		podsByCluster[parentID] = append(podsByCluster[parentID], KubernetesPod{
+			UID:       pv.PodUID(),
+			Name:      pv.Name(),
+			Namespace: pv.Namespace(),
+			Phase:     pv.PodPhase(),
+			Labels:    pv.Labels(),
+			OwnerKind: pv.OwnerKind(),
+			OwnerName: pv.OwnerName(),
+		})
+	}
+	clusters := make([]KubernetesCluster, 0, len(clusterViews))
+	for _, cv := range clusterViews {
+		clusters = append(clusters, KubernetesCluster{
+			ID:      cv.ID(),
+			Name:    cv.Name(),
+			AgentID: cv.AgentID(),
+			Status:  string(cv.Status()),
+			Pods:    podsByCluster[cv.ID()],
+		})
+	}
+
+	return StateSnapshot{
+		VMs:                vms,
+		Containers:         containers,
+		DockerHosts:        dockerHosts,
+		Hosts:              hosts,
+		Nodes:              nodes,
+		KubernetesClusters: clusters,
+	}.NormalizeCollections()
+}
+
 // collectFingerprints collects fingerprints from all resources (Docker, LXC, VM).
 // This is metadata-only and does not invoke the AI analyzer.
 func (s *Service) collectFingerprints(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error().Interface("panic", r).Stack().Msg("Recovered from panic in fingerprint collection")
+			log.Error().Interface("panic", r).Stack().Msg("recovered from panic in fingerprint collection")
 		}
 	}()
 
@@ -590,16 +915,15 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	s.lastRun = time.Now()
 	s.mu.Unlock()
 
-	if s.stateProvider == nil {
+	snap, ok := s.getSnapshot()
+	if !ok {
 		return
 	}
-
-	state := s.stateProvider.GetState()
 	changedCount := 0
 	newCount := 0
 
 	// Process Docker containers
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		for _, container := range host.Containers {
 			select {
 			case <-ctx.Done():
@@ -612,14 +936,21 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 			fpKey := "docker:" + host.AgentID + ":" + newFP.ResourceID
 
 			// Get previous fingerprint
-			oldFP, _ := s.store.GetFingerprint(fpKey)
+			oldFP, err := s.store.GetFingerprint(fpKey)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resource_id", fpKey).
+					Str("container", container.Name).
+					Msg("Failed to load previous Docker fingerprint")
+			}
 
 			// Update the fingerprint's ResourceID to include prefix for storage
 			newFP.ResourceID = fpKey
 
 			// Save new fingerprint
 			if err := s.store.SaveFingerprint(newFP); err != nil {
-				log.Warn().Err(err).Str("container", container.Name).Msg("Failed to save Docker fingerprint")
+				log.Warn().Err(err).Str("container", container.Name).Msg("failed to save Docker fingerprint")
 				continue
 			}
 
@@ -651,114 +982,18 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 		}
 	}
 
-	// Process LXC containers
-	for _, lxc := range state.Containers {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		// Generate new fingerprint
-		newFP := GenerateLXCFingerprint(lxc.Node, &lxc)
-		fpKey := "lxc:" + lxc.Node + ":" + newFP.ResourceID
-
-		// Get previous fingerprint
-		oldFP, _ := s.store.GetFingerprint(fpKey)
-
-		// Update the fingerprint's ResourceID to include prefix for storage
-		newFP.ResourceID = fpKey
-
-		// Save new fingerprint
-		if err := s.store.SaveFingerprint(newFP); err != nil {
-			log.Warn().Err(err).Str("lxc", lxc.Name).Msg("Failed to save LXC fingerprint")
-			continue
-		}
-
-		// Check if this is new or changed
-		if oldFP == nil {
-			newCount++
-			log.Debug().
-				Str("type", "lxc").
-				Str("name", lxc.Name).
-				Int("vmid", lxc.VMID).
-				Str("hash", newFP.Hash).
-				Msg("New fingerprint captured")
-		} else if newFP.HasSchemaChanged(oldFP) {
-			log.Debug().
-				Str("type", "lxc").
-				Str("name", lxc.Name).
-				Int("vmid", lxc.VMID).
-				Int("old_schema", oldFP.SchemaVersion).
-				Int("new_schema", newFP.SchemaVersion).
-				Msg("Fingerprint schema updated")
-		} else if oldFP.Hash != newFP.Hash {
-			changedCount++
-			log.Info().
-				Str("type", "lxc").
-				Str("name", lxc.Name).
-				Int("vmid", lxc.VMID).
-				Str("old_hash", oldFP.Hash).
-				Str("new_hash", newFP.Hash).
-				Msg("Fingerprint changed - discovery will run on next request")
-		}
-	}
+	// Process system containers (LXC)
+	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "system-container", "system-container:", snap.Containers)
+	newCount += lxcNew
+	changedCount += lxcChanged
 
 	// Process VMs
-	for _, vm := range state.VMs {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		// Generate new fingerprint
-		newFP := GenerateVMFingerprint(vm.Node, &vm)
-		fpKey := "vm:" + vm.Node + ":" + newFP.ResourceID
-
-		// Get previous fingerprint
-		oldFP, _ := s.store.GetFingerprint(fpKey)
-
-		// Update the fingerprint's ResourceID to include prefix for storage
-		newFP.ResourceID = fpKey
-
-		// Save new fingerprint
-		if err := s.store.SaveFingerprint(newFP); err != nil {
-			log.Warn().Err(err).Str("vm", vm.Name).Msg("Failed to save VM fingerprint")
-			continue
-		}
-
-		// Check if this is new or changed
-		if oldFP == nil {
-			newCount++
-			log.Debug().
-				Str("type", "vm").
-				Str("name", vm.Name).
-				Int("vmid", vm.VMID).
-				Str("hash", newFP.Hash).
-				Msg("New fingerprint captured")
-		} else if newFP.HasSchemaChanged(oldFP) {
-			log.Debug().
-				Str("type", "vm").
-				Str("name", vm.Name).
-				Int("vmid", vm.VMID).
-				Int("old_schema", oldFP.SchemaVersion).
-				Int("new_schema", newFP.SchemaVersion).
-				Msg("Fingerprint schema updated")
-		} else if oldFP.Hash != newFP.Hash {
-			changedCount++
-			log.Info().
-				Str("type", "vm").
-				Str("name", vm.Name).
-				Int("vmid", vm.VMID).
-				Str("old_hash", oldFP.Hash).
-				Str("new_hash", newFP.Hash).
-				Msg("Fingerprint changed - discovery will run on next request")
-		}
-	}
+	vmNew, vmChanged := s.processFingerprint(ctx, GenerateVMFingerprint, "vm", "vm:", snap.VMs)
+	newCount += vmNew
+	changedCount += vmChanged
 
 	// Process Kubernetes pods
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		for _, pod := range cluster.Pods {
 			select {
 			case <-ctx.Done():
@@ -771,14 +1006,22 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 			fpKey := "k8s:" + cluster.ID + ":" + pod.Namespace + "/" + pod.Name
 
 			// Get previous fingerprint
-			oldFP, _ := s.store.GetFingerprint(fpKey)
+			oldFP, err := s.store.GetFingerprint(fpKey)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resource_id", fpKey).
+					Str("pod", pod.Name).
+					Str("namespace", pod.Namespace).
+					Msg("Failed to load previous K8s pod fingerprint")
+			}
 
 			// Update the fingerprint's ResourceID to include prefix for storage
 			newFP.ResourceID = fpKey
 
 			// Save new fingerprint
 			if err := s.store.SaveFingerprint(newFP); err != nil {
-				log.Warn().Err(err).Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Failed to save K8s pod fingerprint")
+				log.Warn().Err(err).Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("failed to save K8s pod fingerprint")
 				continue
 			}
 
@@ -831,19 +1074,105 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	}
 
 	// Cleanup orphaned data (fingerprints/discoveries for removed resources)
-	s.cleanupOrphanedData(state)
+	s.cleanupOrphanedData(snap)
+}
+
+// processOrphanedDataFingerprint processes fingerprints for LXC containers and VMs.
+func (s *Service) processFingerprint(
+	ctx context.Context,
+	generateFP interface{},
+	resourceType string,
+	prefix string,
+	items interface{},
+) (int, int) {
+	var changedCount, newCount int
+
+	fpFuncVal := reflect.ValueOf(generateFP)
+	if fpFuncVal.Kind() != reflect.Func {
+		return 0, 0
+	}
+
+	v := reflect.ValueOf(items)
+	if v.Kind() != reflect.Slice {
+		return 0, 0
+	}
+
+	for i := 0; i < v.Len(); i++ {
+		select {
+		case <-ctx.Done():
+			return newCount, changedCount
+		default:
+		}
+
+		item := v.Index(i).Interface()
+		itemVal := reflect.ValueOf(item)
+
+		node := itemVal.FieldByName("Node").String()
+		name := itemVal.FieldByName("Name").String()
+		vmid := itemVal.FieldByName("VMID").Int()
+
+		args := []reflect.Value{reflect.ValueOf(node), reflect.ValueOf(item)}
+		newFP := fpFuncVal.Call(args)[0].Interface().(*ContainerFingerprint)
+		fpKey := prefix + node + ":" + newFP.ResourceID
+
+		oldFP, err := s.store.GetFingerprint(fpKey)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", fpKey).
+				Str(resourceType, name).
+				Int("vmid", int(vmid)).
+				Msg("Failed to load previous " + resourceType + " fingerprint")
+		}
+
+		newFP.ResourceID = fpKey
+
+		if err := s.store.SaveFingerprint(newFP); err != nil {
+			log.Warn().Err(err).Str(resourceType, name).Msg("failed to save " + resourceType + " fingerprint")
+			continue
+		}
+
+		if oldFP == nil {
+			newCount++
+			log.Debug().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Str("hash", newFP.Hash).
+				Msg("New fingerprint captured")
+		} else if newFP.HasSchemaChanged(oldFP) {
+			log.Debug().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Int("old_schema", oldFP.SchemaVersion).
+				Int("new_schema", newFP.SchemaVersion).
+				Msg("Fingerprint schema updated")
+		} else if oldFP.Hash != newFP.Hash {
+			changedCount++
+			log.Info().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Str("old_hash", oldFP.Hash).
+				Str("new_hash", newFP.Hash).
+				Msg("Fingerprint changed - discovery will run on next request")
+		}
+	}
+
+	return newCount, changedCount
 }
 
 // cleanupOrphanedData removes fingerprints and discoveries for resources that no longer exist.
-func (s *Service) cleanupOrphanedData(state StateSnapshot) {
+func (s *Service) cleanupOrphanedData(snap StateSnapshot) {
 	// Safety check: Don't cleanup if state appears empty
 	// This prevents catastrophic deletion if state provider has an error
-	totalResources := len(state.Containers) + len(state.VMs) + len(state.KubernetesClusters)
-	for _, host := range state.DockerHosts {
+	totalResources := len(snap.Containers) + len(snap.VMs) + len(snap.KubernetesClusters)
+	for _, host := range snap.DockerHosts {
 		totalResources += len(host.Containers)
 	}
 	if totalResources == 0 {
-		log.Debug().Msg("Skipping orphaned data cleanup - state is empty (may be an error)")
+		log.Debug().Msg("skipping orphaned data cleanup - state is empty (may be an error)")
 		return
 	}
 
@@ -851,27 +1180,27 @@ func (s *Service) cleanupOrphanedData(state StateSnapshot) {
 	currentIDs := make(map[string]bool)
 
 	// Docker containers
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		for _, container := range host.Containers {
 			fpKey := "docker:" + host.AgentID + ":" + container.Name
 			currentIDs[fpKey] = true
 		}
 	}
 
-	// LXC containers
-	for _, lxc := range state.Containers {
-		fpKey := "lxc:" + lxc.Node + ":" + strconv.Itoa(lxc.VMID)
+	// System containers
+	for _, ct := range snap.Containers {
+		fpKey := "system-container:" + ct.Node + ":" + strconv.Itoa(ct.VMID)
 		currentIDs[fpKey] = true
 	}
 
 	// VMs
-	for _, vm := range state.VMs {
+	for _, vm := range snap.VMs {
 		fpKey := "vm:" + vm.Node + ":" + strconv.Itoa(vm.VMID)
 		currentIDs[fpKey] = true
 	}
 
 	// Kubernetes pods
-	for _, cluster := range state.KubernetesClusters {
+	for _, cluster := range snap.KubernetesClusters {
 		for _, pod := range cluster.Pods {
 			fpKey := "k8s:" + cluster.ID + ":" + pod.Namespace + "/" + pod.Name
 			currentIDs[fpKey] = true
@@ -898,7 +1227,7 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 	s.mu.RUnlock()
 
 	if analyzer == nil {
-		log.Debug().Msg("AI analyzer not set, skipping Docker discovery")
+		log.Debug().Msg("aI analyzer not set, skipping Docker discovery")
 		return
 	}
 
@@ -919,7 +1248,10 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 			}
 
 			// Check existing discovery to see if it needs a deep scan
-			existing, _ := s.store.Get(id)
+			existing, err := s.store.Get(id)
+			if err != nil {
+				log.Warn().Err(err).Str("id", id).Msg("Failed to load existing discovery before shallow analysis")
+			}
 
 			// Analyze using metadata (shallow discovery)
 			discovery := s.analyzeDockerContainer(ctx, analyzer, container, host)
@@ -940,7 +1272,7 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 				discovery.SuggestedURL = SuggestWebURL(discovery, host.Hostname)
 
 				if err := s.store.Save(discovery); err != nil {
-					log.Warn().Err(err).Str("id", id).Msg("Failed to save discovery")
+					log.Warn().Err(err).Str("id", id).Msg("failed to save discovery")
 				}
 			}
 		}
@@ -953,6 +1285,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	timeout := s.deepScanTimeout
 	analyzer := s.aiAnalyzer
 	s.mu.RUnlock()
+	timeout = normalizeDeepScanTimeout(timeout)
 
 	if s.scanner == nil || analyzer == nil {
 		return discovery
@@ -965,13 +1298,13 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	req := DiscoveryRequest{
 		ResourceType: discovery.ResourceType,
 		ResourceID:   discovery.ResourceID,
-		HostID:       discovery.HostID,
+		TargetID:     discovery.TargetID,
 		Hostname:     discovery.Hostname,
 	}
 
 	scanResult, err := s.scanner.Scan(scanCtx, req)
 	if err != nil {
-		log.Debug().Err(err).Str("id", discovery.ID).Msg("Deep scan failed during background discovery")
+		log.Debug().Err(err).Str("id", discovery.ID).Msg("deep scan failed during background discovery")
 		return discovery
 	}
 
@@ -980,16 +1313,17 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	}
 
 	// Build analysis request with command outputs
+	targetID := canonicalDiscoveryTargetID(discovery)
 	analysisReq := AIAnalysisRequest{
 		ResourceType:   discovery.ResourceType,
 		ResourceID:     discovery.ResourceID,
-		HostID:         discovery.HostID,
+		TargetID:       targetID,
 		Hostname:       discovery.Hostname,
 		CommandOutputs: scanResult.CommandOutputs,
 	}
 
 	// Add metadata if available
-	if s.stateProvider != nil {
+	if s.hasStateAccess() {
 		analysisReq.Metadata = s.getResourceMetadata(req)
 	}
 
@@ -997,7 +1331,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	prompt := s.buildDeepAnalysisPrompt(analysisReq)
 	response, err := analyzer.AnalyzeForDiscovery(scanCtx, prompt)
 	if err != nil {
-		log.Debug().Err(err).Str("id", discovery.ID).Msg("Deep analysis failed during background discovery")
+		log.Debug().Err(err).Str("id", discovery.ID).Msg("deep analysis failed during background discovery")
 		return discovery
 	}
 
@@ -1072,6 +1406,10 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 
 // analyzeDockerContainer analyzes a Docker container using AI.
 func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyzer, c DockerContainer, host DockerHost) *ResourceDiscovery {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Check cache first (per-image timestamp)
 	s.cacheMu.RLock()
 	entry, found := s.analysisCache[c.Image]
@@ -1086,15 +1424,26 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 		// Build prompt for AI analysis
 		prompt := s.buildMetadataAnalysisPrompt(c, host)
 
-		response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
+		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		defer cancel()
+
+		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
 		if err != nil {
-			log.Warn().Err(err).Str("container", c.Name).Msg("AI analysis failed")
+			if errors.Is(err, context.DeadlineExceeded) {
+				log.Warn().
+					Err(err).
+					Str("container", c.Name).
+					Dur("timeout", s.aiAnalysisTimeout).
+					Msg("AI metadata analysis timed out")
+				return nil
+			}
+			log.Warn().Err(err).Str("container", c.Name).Msg("aI analysis failed")
 			return nil
 		}
 
 		result = s.parseAIResponse(response)
 		if result == nil {
-			log.Warn().Str("container", c.Name).Msg("Failed to parse AI response")
+			log.Warn().Str("container", c.Name).Msg("failed to parse AI response")
 			return nil
 		}
 
@@ -1132,7 +1481,7 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 		ID:             MakeResourceID(ResourceTypeDocker, host.AgentID, c.Name),
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     c.Name,
-		HostID:         host.AgentID,
+		TargetID:       host.AgentID,
 		Hostname:       host.Hostname,
 		ServiceType:    result.ServiceType,
 		ServiceName:    result.ServiceName,
@@ -1157,34 +1506,36 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 // - Runs discovery only when fingerprint changed or discovery is too old
 // - Prevents duplicate concurrent discoveries for the same resource
 func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*ResourceDiscovery, error) {
-	// Redirect PVE node requests to linked host agent if available
-	// This ensures we always scan and store data under the canonical Host Agent ID
-	if req.ResourceType == ResourceTypeHost && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		for _, node := range state.Nodes {
-			// Check if the requested ID matches the Node Name or ID
-			if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.ResourceID {
-				if node.LinkedHostAgentID != "" {
-					log.Info().
-						Str("from_host", req.HostID).
-						Str("to_agent", node.LinkedHostAgentID).
-						Msg("Redirecting discovery scan to linked host agent")
-					req.HostID = node.LinkedHostAgentID
-					req.ResourceID = node.LinkedHostAgentID
-				}
-				break
-			}
-		}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
+	req = normalizeDiscoveryRequestAliases(req)
+	if err := ValidateCanonicalDiscoveryResourceType(req.ResourceType); err != nil {
+		return nil, fmt.Errorf("discover resource %q: %w", req.ResourceType, err)
+	}
+
+	originalReq := req
+	aliasIDs := make([]string, 0, 2)
+	if req.TargetID != "" && req.ResourceID != "" {
+		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID))
+	}
+	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
+
+	resourceID := MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID)
 
 	// Get current fingerprint (if available)
-	// Fingerprint key matches the resource ID format: type:host:id
-	currentFP, _ := s.store.GetFingerprint(resourceID)
+	// Fingerprint key matches the resource ID format: type:scope:id
+	currentFP, err := s.store.GetFingerprint(resourceID)
+	if err != nil {
+		log.Warn().Err(err).Str("id", resourceID).Msg("Failed to load current fingerprint; continuing without fingerprint check")
+	}
 
 	// Get existing discovery
-	existing, _ := s.store.Get(resourceID)
+	existing, err := s.store.Get(resourceID)
+	if err != nil {
+		log.Warn().Err(err).Str("id", resourceID).Msg("Failed to load existing discovery; running fresh discovery")
+	}
 
 	// Determine if we need to run discovery
 	needsDiscovery := false
@@ -1218,7 +1569,8 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Return cached discovery if still valid
 	if !needsDiscovery && existing != nil {
-		log.Debug().Str("id", resourceID).Msg("Discovery still valid, returning cached")
+		s.upgradeCLIAccessIfNeeded(existing)
+		log.Debug().Str("id", resourceID).Msg("discovery still valid, returning cached")
 		return existing, nil
 	}
 
@@ -1227,7 +1579,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	if inProg, ok := s.inProgress[resourceID]; ok {
 		// Discovery already in progress - wait for it
 		s.inProgressMu.Unlock()
-		log.Debug().Str("id", resourceID).Msg("Discovery already in progress, waiting for result")
+		log.Debug().Str("id", resourceID).Msg("discovery already in progress, waiting for result")
 
 		select {
 		case <-inProg.done:
@@ -1252,7 +1604,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		s.inProgressMu.Unlock()
 	}()
 
-	log.Info().Str("id", resourceID).Str("reason", reason).Msg("Running discovery")
+	log.Info().Str("id", resourceID).Str("reason", reason).Msg("running discovery")
 
 	s.mu.RLock()
 	analyzer := s.aiAnalyzer
@@ -1281,7 +1633,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	analysisReq := AIAnalysisRequest{
 		ResourceType: req.ResourceType,
 		ResourceID:   req.ResourceID,
-		HostID:       req.HostID,
+		TargetID:     req.TargetID,
 		Hostname:     req.Hostname,
 	}
 
@@ -1290,7 +1642,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	}
 
 	// Add metadata if available
-	if s.stateProvider != nil {
+	if s.hasStateAccess() {
 		analysisReq.Metadata = s.getResourceMetadata(req)
 	}
 
@@ -1304,8 +1656,15 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		CurrentStep: "Analyzing with Pulse Assistant...",
 	})
 
-	response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
+	analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+	defer cancel()
+
+	response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			inProg.err = fmt.Errorf("AI analysis timed out after %s", s.aiAnalysisTimeout)
+			return nil, inProg.err
+		}
 		inProg.err = fmt.Errorf("AI analysis failed: %w", err)
 		return nil, inProg.err
 	}
@@ -1329,12 +1688,18 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
+	agentID := ""
+	if req.ResourceType == ResourceTypeAgent {
+		agentID = req.TargetID
+	}
+
 	// Build discovery result
 	discovery := &ResourceDiscovery{
 		ID:               resourceID,
 		ResourceType:     req.ResourceType,
 		ResourceID:       req.ResourceID,
-		HostID:           req.HostID,
+		TargetID:         req.TargetID,
+		AgentID:          agentID,
 		Hostname:         hostname,
 		ServiceType:      result.ServiceType,
 		ServiceName:      result.ServiceName,
@@ -1378,7 +1743,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		// Add note to reasoning when we couldn't run commands
 		metadataNote := "[Note: Discovery was limited to metadata-only analysis because command execution was unavailable. "
 		if strings.Contains(scanError.Error(), "no connected agent") {
-			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Unified Agents.]"
+			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Infrastructure.]"
 		} else {
 			metadataNote += "Error: " + scanError.Error() + "]"
 		}
@@ -1398,12 +1763,46 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
-	// Suggest web interface URL based on service type and external IP
-	if s.stateProvider != nil {
-		if externalIP := s.getResourceExternalIP(req); externalIP != "" {
-			discovery.SuggestedURL = SuggestWebURL(discovery, externalIP)
+	// Suggest web interface URL based on service type and external IP.
+	// If no URL can be inferred, capture diagnostics for logs and UI.
+	urlSuggestionDiagnostic := ""
+	urlSuggestionSourceCode := ""
+	urlSuggestionSourceDetail := ""
+	if !s.hasStateAccess() {
+		urlSuggestionDiagnostic = "ReadState unavailable"
+	} else {
+		externalIP := s.getResourceExternalIP(req)
+		if externalIP == "" {
+			urlSuggestionDiagnostic = "no host or IP candidate available"
+		} else {
+			primaryURL, primaryCode, primaryDetail := suggestWebURLWithReason(discovery, externalIP)
+			discovery.SuggestedURL = primaryURL
+			if discovery.SuggestedURL != "" {
+				urlSuggestionSourceCode = primaryCode
+				urlSuggestionSourceDetail = primaryDetail
+			} else {
+				fallbackURL, fallbackCode, fallbackDetail := s.suggestHostManagementURLWithReason(req, externalIP)
+				discovery.SuggestedURL = fallbackURL
+				if discovery.SuggestedURL != "" {
+					urlSuggestionSourceCode = fallbackCode
+					urlSuggestionSourceDetail = fallbackDetail
+				} else {
+					urlSuggestionDiagnostic = formatURLSuggestionDiagnostic(primaryCode, primaryDetail, fallbackCode, fallbackDetail)
+					log.Debug().
+						Str("id", discovery.ID).
+						Str("resource_type", string(req.ResourceType)).
+						Str("host", externalIP).
+						Str("primary_reason_code", primaryCode).
+						Str("fallback_reason_code", fallbackCode).
+						Str("diagnostic", urlSuggestionDiagnostic).
+						Msg("Unable to infer suggested URL")
+				}
+			}
 		}
 	}
+	discovery.SuggestedURLSourceCode = urlSuggestionSourceCode
+	discovery.SuggestedURLSourceDetail = urlSuggestionSourceDetail
+	discovery.SuggestedURLDiagnostic = urlSuggestionDiagnostic
 
 	// Broadcast progress: Discovery complete
 	s.broadcastProgress(&DiscoveryProgress{
@@ -1418,25 +1817,114 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		inProg.err = fmt.Errorf("failed to save discovery: %w", err)
 		return nil, inProg.err
 	}
+	s.cleanupAliasedDiscoveries(resourceID, aliasIDs)
 
 	// Store result for any waiting goroutines
 	inProg.result = discovery
+	if originalReq != req {
+		originalTargetID := canonicalRequestTargetID(originalReq)
+		log.Debug().
+			Str("original_id", MakeResourceID(originalReq.ResourceType, originalTargetID, originalReq.ResourceID)).
+			Str("canonical_id", resourceID).
+			Msg("Discovery request canonicalized")
+	}
 	return discovery, nil
+}
+
+// normalizeDiscoveryRequest resolves discovery aliases to a canonical target ID.
+// This prevents duplicate discoveries for the same physical host under different IDs.
+func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
+	req = normalizeDiscoveryRequestAliases(req)
+	requestTargetID := req.TargetID
+
+	if req.ResourceType != ResourceTypeAgent {
+		return req
+	}
+	snap, ok := s.getSnapshot()
+	if !ok {
+		return req
+	}
+	addAlias := func(hostID, resourceID string) {
+		if hostID == "" || resourceID == "" {
+			return
+		}
+		id := MakeResourceID(ResourceTypeAgent, hostID, resourceID)
+		for _, existing := range *aliasIDs {
+			if existing == id {
+				return
+			}
+		}
+		*aliasIDs = append(*aliasIDs, id)
+	}
+
+	for _, host := range snap.Hosts {
+		if host.ID == requestTargetID || host.ID == req.ResourceID || host.Hostname == requestTargetID || host.Hostname == req.ResourceID || (req.Hostname != "" && host.Hostname == req.Hostname) {
+			addAlias(host.ID, host.ID)
+			addAlias(host.Hostname, host.Hostname)
+			if req.Hostname == "" {
+				req.Hostname = host.Hostname
+			}
+			req.TargetID = host.ID
+			req.ResourceID = host.ID
+			return req
+		}
+	}
+
+	for _, node := range snap.Nodes {
+		if node.Name == requestTargetID || node.Name == req.ResourceID || node.ID == requestTargetID || node.ID == req.ResourceID || (req.Hostname != "" && node.Name == req.Hostname) {
+			addAlias(node.Name, node.Name)
+			addAlias(node.ID, node.ID)
+			if req.Hostname == "" {
+				req.Hostname = node.Name
+			}
+			if node.LinkedAgentID != "" {
+				log.Info().
+					Str("from_target", requestTargetID).
+					Str("to_agent", node.LinkedAgentID).
+					Msg("Redirecting discovery scan to linked host agent")
+				addAlias(node.LinkedAgentID, node.LinkedAgentID)
+				req.TargetID = node.LinkedAgentID
+				req.ResourceID = node.LinkedAgentID
+				return req
+			}
+			req.TargetID = node.Name
+			req.ResourceID = node.Name
+			return req
+		}
+	}
+
+	return req
+}
+
+func (s *Service) cleanupAliasedDiscoveries(canonicalID string, aliasIDs []string) {
+	seen := make(map[string]struct{}, len(aliasIDs))
+	for _, aliasID := range aliasIDs {
+		if aliasID == "" || aliasID == canonicalID {
+			continue
+		}
+		if _, ok := seen[aliasID]; ok {
+			continue
+		}
+		seen[aliasID] = struct{}{}
+		if err := s.store.Delete(aliasID); err != nil {
+			log.Debug().Err(err).Str("id", aliasID).Msg("failed to clean up aliased discovery")
+		}
+	}
 }
 
 // getResourceMetadata retrieves metadata for a resource from the state.
 func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
-	if s.stateProvider == nil {
+	snap, ok := s.getSnapshot()
+	if !ok {
 		return nil
 	}
-
-	state := s.stateProvider.GetState()
 	metadata := make(map[string]any)
+	requestTargetID := canonicalRequestTargetID(req)
 
 	switch req.ResourceType {
-	case ResourceTypeLXC:
-		for _, c := range state.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
+	case ResourceTypeSystemContainer:
+		for _, c := range snap.Containers {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == requestTargetID {
 				metadata["name"] = c.Name
 				metadata["status"] = c.Status
 				metadata["vmid"] = c.VMID
@@ -1444,8 +1932,8 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
+		for _, vm := range snap.VMs {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
 				metadata["name"] = vm.Name
 				metadata["status"] = vm.Status
 				metadata["vmid"] = vm.VMID
@@ -1453,8 +1941,8 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			}
 		}
 	case ResourceTypeDocker:
-		for _, host := range state.DockerHosts {
-			if host.AgentID == req.HostID || host.Hostname == req.HostID {
+		for _, host := range snap.DockerHosts {
+			if host.AgentID == requestTargetID || host.Hostname == requestTargetID {
 				for _, c := range host.Containers {
 					if c.Name == req.ResourceID {
 						metadata["image"] = c.Image
@@ -1467,9 +1955,9 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 				break
 			}
 		}
-	case ResourceTypeHost:
-		for _, host := range state.Hosts {
-			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID {
+	case ResourceTypeAgent:
+		for _, host := range snap.Hosts {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == requestTargetID {
 				metadata["hostname"] = host.Hostname
 				metadata["display_name"] = host.DisplayName
 				metadata["platform"] = host.Platform
@@ -1491,19 +1979,19 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 }
 
 // getResourceExternalIP retrieves the external IP address for a resource from the state.
-// For LXC/VM, this is the first IP from the Proxmox guest agent.
+// For system containers/VMs, this is the first IP from the Proxmox guest agent.
 // For Docker containers, this is the Docker host's IP/hostname.
 func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
-	if s.stateProvider == nil {
+	snap, ok := s.getSnapshot()
+	if !ok {
 		return ""
 	}
-
-	state := s.stateProvider.GetState()
+	requestTargetID := canonicalRequestTargetID(req)
 
 	switch req.ResourceType {
-	case ResourceTypeLXC:
-		for _, c := range state.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
+	case ResourceTypeSystemContainer:
+		for _, c := range snap.Containers {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == requestTargetID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
@@ -1511,8 +1999,8 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
+		for _, vm := range snap.VMs {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
@@ -1521,32 +2009,225 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 		}
 	case ResourceTypeDocker:
 		// For Docker containers, use the Docker host's hostname/IP
-		for _, host := range state.DockerHosts {
-			if host.AgentID == req.HostID || host.Hostname == req.HostID {
+		for _, host := range snap.DockerHosts {
+			if host.AgentID == requestTargetID || host.Hostname == requestTargetID {
 				// Use hostname if it looks like an IP, otherwise it's a hostname
 				return host.Hostname
 			}
 		}
-	case ResourceTypeDockerVM, ResourceTypeDockerLXC:
-		// For Docker containers inside VMs/LXCs, find the VM/LXC's IP
-		// The hostID contains the parent resource info
-		for _, vm := range state.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.HostID || vm.Name == req.HostID {
+	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
+		// For Docker containers inside VMs/system containers, find the parent's IP
+		// The target ID contains the parent resource info.
+		for _, vm := range snap.VMs {
+			if fmt.Sprintf("%d", vm.VMID) == requestTargetID || vm.Name == requestTargetID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
 			}
 		}
-		for _, c := range state.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.HostID || c.Name == req.HostID {
+		for _, c := range snap.Containers {
+			if fmt.Sprintf("%d", c.VMID) == requestTargetID || c.Name == requestTargetID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
 			}
 		}
+	case ResourceTypeAgent:
+		// Host-agent resources: prefer the reported hostname from state
+		for _, host := range snap.Hosts {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == requestTargetID || host.Hostname == requestTargetID {
+				if isURLHostCandidate(host.Hostname) {
+					return host.Hostname
+				}
+			}
+		}
+
+		// Proxmox node resources routed through host discovery: fall back to node name
+		for _, node := range snap.Nodes {
+			if node.ID == req.ResourceID || node.Name == req.ResourceID || node.ID == requestTargetID || node.Name == requestTargetID {
+				if isURLHostCandidate(node.Name) {
+					return node.Name
+				}
+			}
+		}
+
+		// Last-resort fallback from request values (when state snapshot doesn't have a direct match yet)
+		if isURLHostCandidate(req.Hostname) {
+			return req.Hostname
+		}
 	}
 
 	return ""
+}
+
+func isURLHostCandidate(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	// Reject obvious non-host labels (display names, paths, etc.)
+	if strings.ContainsAny(trimmed, " /\\") {
+		return false
+	}
+	return true
+}
+
+func formatURLSuggestionDiagnostic(primaryCode, primaryDetail, fallbackCode, fallbackDetail string) string {
+	parts := make([]string, 0, 2)
+	if primaryCode != "" {
+		if primaryDetail != "" {
+			parts = append(parts, fmt.Sprintf("primary=%s (%s)", primaryCode, primaryDetail))
+		} else {
+			parts = append(parts, "primary="+primaryCode)
+		}
+	}
+	if fallbackCode != "" {
+		if fallbackDetail != "" {
+			parts = append(parts, fmt.Sprintf("fallback=%s (%s)", fallbackCode, fallbackDetail))
+		} else {
+			parts = append(parts, "fallback="+fallbackCode)
+		}
+	}
+	if len(parts) == 0 {
+		return "no suggestion diagnostics available"
+	}
+	return strings.Join(parts, "; ")
+}
+
+const (
+	legacyURLSuggestionUnavailablePrefix = "[URL suggestion unavailable:"
+	legacyURLSuggestionSourcePrefix      = "[URL suggestion source:"
+)
+
+func parseLegacyURLSuggestionReasoning(reasoning string) (cleanedReasoning, sourceCode, sourceDetail, diagnostic string) {
+	cleaned := strings.TrimSpace(reasoning)
+	for {
+		changed := false
+		if note, next, ok := consumeLegacyURLSuggestionNote(cleaned, legacyURLSuggestionUnavailablePrefix); ok {
+			if diagnostic == "" {
+				diagnostic = note
+			}
+			cleaned = next
+			changed = true
+		}
+		if note, next, ok := consumeLegacyURLSuggestionNote(cleaned, legacyURLSuggestionSourcePrefix); ok {
+			if sourceCode == "" && sourceDetail == "" {
+				sourceCode, sourceDetail = parseLegacyURLSuggestionSource(note)
+			}
+			cleaned = next
+			changed = true
+		}
+		if !changed {
+			break
+		}
+	}
+	return cleaned, sourceCode, sourceDetail, diagnostic
+}
+
+func consumeLegacyURLSuggestionNote(text, prefix string) (note, remaining string, ok bool) {
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, prefix) {
+		return "", text, false
+	}
+
+	closingBracket := strings.Index(trimmed, "]")
+	if closingBracket <= len(prefix) {
+		return "", text, false
+	}
+
+	note = strings.TrimSpace(trimmed[len(prefix):closingBracket])
+	remaining = strings.TrimSpace(trimmed[closingBracket+1:])
+	return note, remaining, true
+}
+
+func parseLegacyURLSuggestionSource(note string) (sourceCode, sourceDetail string) {
+	trimmed := strings.TrimSpace(note)
+	if trimmed == "" {
+		return "", ""
+	}
+	if strings.HasSuffix(trimmed, ")") {
+		if idx := strings.Index(trimmed, " ("); idx > 0 {
+			sourceCode = strings.TrimSpace(trimmed[:idx])
+			sourceDetail = strings.TrimSpace(trimmed[idx+2 : len(trimmed)-1])
+			if sourceCode != "" {
+				return sourceCode, sourceDetail
+			}
+		}
+	}
+	return trimmed, ""
+}
+
+// suggestHostManagementURL provides host-level fallback URL suggestions when
+// AI discovery does not identify a known web service.
+func (s *Service) suggestHostManagementURL(req DiscoveryRequest, host string) string {
+	url, _, _ := s.suggestHostManagementURLWithReason(req, host)
+	return url
+}
+
+func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host string) (string, string, string) {
+	if req.ResourceType != ResourceTypeAgent {
+		return "", "host_fallback_not_applicable", "not a host resource"
+	}
+	if host == "" {
+		return "", "no_host", "no host or IP candidate available"
+	}
+	snap, ok := s.getSnapshot()
+	if !ok {
+		return "", "state_provider_unavailable", "state unavailable"
+	}
+	requestTargetID := canonicalRequestTargetID(req)
+
+	nodeMatchesReq := func(node Node) bool {
+		return node.ID == requestTargetID ||
+			node.Name == requestTargetID ||
+			node.ID == req.ResourceID ||
+			node.Name == req.ResourceID ||
+			(req.Hostname != "" && node.Name == req.Hostname)
+	}
+
+	var matchedHost *Host
+	for i := range snap.Hosts {
+		h := &snap.Hosts[i]
+		if h.ID == requestTargetID || h.Hostname == requestTargetID || h.ID == req.ResourceID || h.Hostname == req.ResourceID {
+			matchedHost = h
+			break
+		}
+	}
+
+	// Proxmox nodes (or host agents linked to nodes) should suggest the node UI.
+	for _, node := range snap.Nodes {
+		if nodeMatchesReq(node) {
+			return buildURL("https", host, 8006, ""), "host_management_profile_proxmox_node", "Proxmox node profile"
+		}
+		if matchedHost != nil && node.LinkedAgentID != "" && node.LinkedAgentID == matchedHost.ID {
+			return buildURL("https", host, 8006, ""), "host_management_profile_linked_proxmox_node", "Linked Proxmox node profile"
+		}
+	}
+
+	if matchedHost == nil {
+		return "", "host_not_found_in_state", "host not found in state"
+	}
+
+	descriptor := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+		matchedHost.OSName,
+		matchedHost.DisplayName,
+		matchedHost.Platform,
+	}, " ")))
+
+	switch {
+	case strings.Contains(descriptor, "proxmox backup"):
+		return buildURL("https", host, 8007, ""), "host_management_profile_pbs", "Proxmox Backup profile"
+	case strings.Contains(descriptor, "proxmox mail gateway"), strings.Contains(descriptor, "pmg"):
+		return buildURL("https", host, 8006, ""), "host_management_profile_pmg", "Proxmox Mail Gateway profile"
+	case strings.Contains(descriptor, "proxmox ve"), strings.Contains(descriptor, "proxmox"):
+		return buildURL("https", host, 8006, ""), "host_management_profile_pve", "Proxmox VE profile"
+	case strings.Contains(descriptor, "truenas"),
+		strings.Contains(descriptor, "unraid"),
+		strings.Contains(descriptor, "openmediavault"):
+		return buildURL("http", host, 80, ""), "host_management_profile_nas", "NAS management profile"
+	default:
+		return "", "host_platform_not_recognized", "unknown host management profile"
+	}
 }
 
 // formatCLIAccess formats the CLI access string with actual values.
@@ -1598,7 +2279,11 @@ func (s *Service) buildMetadataAnalysisPrompt(c DockerContainer, host DockerHost
 		info["mounts"] = mounts
 	}
 
-	infoJSON, _ := json.MarshalIndent(info, "", "  ")
+	infoJSON, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		log.Warn().Err(err).Str("container", c.Name).Msg("Failed to marshal Docker metadata for discovery prompt")
+		infoJSON = []byte("{}")
+	}
 
 	return fmt.Sprintf(`Analyze this Docker container and identify what service it's running.
 
@@ -1635,11 +2320,16 @@ func (s *Service) buildDeepAnalysisPrompt(req AIAnalysisRequest) string {
 
 	sections = append(sections, fmt.Sprintf(`Resource Type: %s
 Resource ID: %s
-Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
+Target: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.TargetID))
 
 	if len(req.Metadata) > 0 {
-		metaJSON, _ := json.MarshalIndent(req.Metadata, "", "  ")
-		sections = append(sections, fmt.Sprintf("Metadata:\n%s", string(metaJSON)))
+		metaJSON, err := json.MarshalIndent(req.Metadata, "", "  ")
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to marshal discovery metadata for analysis prompt")
+			sections = append(sections, fmt.Sprintf("Metadata:\n%v", req.Metadata))
+		} else {
+			sections = append(sections, fmt.Sprintf("Metadata:\n%s", string(metaJSON)))
+		}
 	}
 
 	if len(req.CommandOutputs) > 0 {
@@ -1654,7 +2344,7 @@ Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
 	}
 
 	// Use different prompts for HOST vs other resource types
-	if req.ResourceType == ResourceTypeHost {
+	if req.ResourceType == ResourceTypeAgent {
 		return fmt.Sprintf(`Analyze this HOST system and provide detailed discovery information.
 
 %s
@@ -1741,7 +2431,7 @@ Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 
 // parseAIResponse parses the AI's JSON response.
 func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
-	log.Debug().Str("raw_response", response).Msg("Discovery raw response")
+	log.Debug().Str("raw_response", response).Msg("discovery raw response")
 	response = strings.TrimSpace(response)
 
 	// Handle markdown code blocks
@@ -1770,7 +2460,7 @@ func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
 
 	var result AIAnalysisResponse
 	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		log.Debug().Err(err).Str("response", response).Msg("Failed to parse AI response")
+		log.Debug().Err(err).Str("response", response).Msg("failed to parse AI response")
 		return nil
 	}
 
@@ -1843,58 +2533,48 @@ func parseDockerMounts(output string) []DockerBindMount {
 // GetDiscovery retrieves a discovery by ID.
 func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 	d, err := s.store.Get(id)
-	if err != nil || d == nil {
-		return d, err
+	if err != nil {
+		return nil, fmt.Errorf("get discovery %q: %w", id, err)
+	}
+	if d == nil {
+		return nil, nil
 	}
 	s.upgradeCLIAccessIfNeeded(d)
 	return d, nil
 }
 
-func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
-	originalHostID := hostID
-	originalResourceID := resourceID
-	redirected := false
+func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
+	resourceType = NormalizeResourceType(resourceType)
+	if err := ValidateCanonicalDiscoveryResourceType(resourceType); err != nil {
+		return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, targetID, resourceID, err)
+	}
 
-	// Redirect PVE node lookups to linked host agent if available
-	// This ensures UI components looking up a PVE node by name (e.g. NodeDrawer) get the data associated with the Host Agent
-	if resourceType == ResourceTypeHost && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		for _, node := range state.Nodes {
-			if node.Name == hostID || node.Name == resourceID || node.ID == resourceID {
-				if node.LinkedHostAgentID != "" {
-					log.Debug().
-						Str("from_host", hostID).
-						Str("to_agent", node.LinkedHostAgentID).
-						Msg("Redirecting discovery lookup to linked host agent")
-					hostID = node.LinkedHostAgentID
-					resourceID = node.LinkedHostAgentID
-					redirected = true
-				}
-				break
+	req := DiscoveryRequest{
+		ResourceType: resourceType,
+		TargetID:     targetID,
+		ResourceID:   resourceID,
+	}
+	aliasIDs := []string{MakeResourceID(resourceType, targetID, resourceID)}
+	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
+
+	d, err := s.store.GetByResource(resourceType, req.TargetID, req.ResourceID)
+	if err != nil || d == nil {
+		for _, aliasID := range aliasIDs {
+			if aliasID == "" {
+				continue
+			}
+			dAlias, errAlias := s.store.Get(aliasID)
+			if errAlias == nil && dAlias != nil {
+				s.upgradeCLIAccessIfNeeded(dAlias)
+				return dAlias, nil
 			}
 		}
-	}
-
-	d, err := s.store.GetByResource(resourceType, hostID, resourceID)
-	// If redirected and not found, try the original ID (fallback for unmigrated data)
-	if (err != nil || d == nil) && redirected {
-		log.Debug().
-			Str("redirected_host", hostID).
-			Str("original_host", originalHostID).
-			Msg("Redirected lookup failed, trying fallback to original ID")
-		dOriginal, errOriginal := s.store.GetByResource(resourceType, originalHostID, originalResourceID)
-		if errOriginal == nil && dOriginal != nil {
-			log.Debug().
-				Str("original_host", originalHostID).
-				Msg("Fallback lookup succeeded - returning legacy discovery")
-			s.upgradeCLIAccessIfNeeded(dOriginal)
-			return dOriginal, nil
+		if err != nil {
+			return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, req.TargetID, req.ResourceID, err)
 		}
+		return nil, nil
 	}
 
-	if err != nil || d == nil {
-		return d, err
-	}
 	s.upgradeCLIAccessIfNeeded(d)
 	return d, nil
 }
@@ -1903,7 +2583,7 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, reso
 func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries: %w", err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -1914,9 +2594,14 @@ func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 
 // ListDiscoveriesByType returns discoveries for a specific resource type.
 func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
+	resourceType = NormalizeResourceType(resourceType)
+	if err := ValidateCanonicalDiscoveryResourceType(resourceType); err != nil {
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
+	}
+
 	discoveries, err := s.store.ListByType(resourceType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -1925,11 +2610,11 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 	return discoveries, nil
 }
 
-// ListDiscoveriesByHost returns discoveries for a specific host.
-func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, error) {
-	discoveries, err := s.store.ListByHost(hostID)
+// ListDiscoveriesByTarget returns discoveries for a specific target ID.
+func (s *Service) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscovery, error) {
+	discoveries, err := s.store.ListByTarget(targetID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by target %q: %w", targetID, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -1942,21 +2627,20 @@ func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, er
 // is represented by both its Node Name and its Linked Host Agent ID.
 // The Host Agent ID is preferred.
 func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*ResourceDiscovery {
-	if s.stateProvider == nil {
+	snap, ok := s.getSnapshot()
+	if !ok {
 		return discoveries
 	}
-
-	state := s.stateProvider.GetState()
-	if len(state.Nodes) == 0 {
+	if len(snap.Nodes) == 0 {
 		return discoveries
 	}
 
 	// Map linked agent IDs to their PVE node source(s)
 	// AgentID -> NodeName
 	linkedAgents := make(map[string]string)
-	for _, node := range state.Nodes {
-		if node.LinkedHostAgentID != "" {
-			linkedAgents[node.LinkedHostAgentID] = node.Name
+	for _, node := range snap.Nodes {
+		if node.LinkedAgentID != "" {
+			linkedAgents[node.LinkedAgentID] = node.Name
 		}
 	}
 
@@ -1967,10 +2651,11 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	// Check which agents actually have discovery data
 	hasAgentDiscovery := make(map[string]bool)
 	for _, d := range discoveries {
-		if d.ResourceType == ResourceTypeHost {
-			// d.HostID is usually the agent ID for host resources
-			if _, ok := linkedAgents[d.HostID]; ok {
-				hasAgentDiscovery[d.HostID] = true
+		if d.ResourceType == ResourceTypeAgent {
+			discoveryTargetID := canonicalDiscoveryTargetID(d)
+			// discoveryTargetID is usually the agent ID for host resources
+			if _, ok := linkedAgents[discoveryTargetID]; ok {
+				hasAgentDiscovery[discoveryTargetID] = true
 			}
 		}
 	}
@@ -1978,23 +2663,24 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	// Filter out PVE node discoveries if the corresponding agent discovery exists
 	filtered := make([]*ResourceDiscovery, 0, len(discoveries))
 	for _, d := range discoveries {
-		if d.ResourceType == ResourceTypeHost {
+		if d.ResourceType == ResourceTypeAgent {
 			// If this discovery is for a PVE node (by name/ID)
 			// check if it maps to an agent that ALREADY has a discovery in this list
 
 			// Is this discovery's ID satisfying a Node check?
 			isPVENode := false
 			var linkedAgentID string
+			discoveryTargetID := canonicalDiscoveryTargetID(d)
 
-			for _, node := range state.Nodes {
-				if d.HostID == node.Name || d.HostID == node.ID || d.ResourceID == node.Name {
+			for _, node := range snap.Nodes {
+				if discoveryTargetID == node.Name || discoveryTargetID == node.ID || d.ResourceID == node.Name {
 					isPVENode = true
-					linkedAgentID = node.LinkedHostAgentID
+					linkedAgentID = node.LinkedAgentID
 					break
 				}
 			}
 
-			if isPVENode && linkedAgentID != "" && hasAgentDiscovery[linkedAgentID] && d.HostID != linkedAgentID {
+			if isPVENode && linkedAgentID != "" && hasAgentDiscovery[linkedAgentID] && discoveryTargetID != linkedAgentID {
 				// We have the agent discovery, so skip this redundant PVE node discovery
 				continue
 			}
@@ -2005,7 +2691,7 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	return filtered
 }
 
-// upgradeDiscoveryIfNeeded upgrades cached discovery fields to current versions.
+// upgradeCLIAccessIfNeeded upgrades cached discovery fields to current versions.
 // This ensures cached discoveries get the new instructional CLI access format
 // and have hostname populated without requiring a full re-discovery.
 func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
@@ -2031,39 +2717,59 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 	}
 
 	// Fix empty hostname by looking up the resource name from state
-	if d.Hostname == "" && s.stateProvider != nil {
-		state := s.stateProvider.GetState()
-		hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, state)
-		if hostname != "" {
-			d.Hostname = hostname
-			upgraded = true
-			log.Debug().
-				Str("id", d.ID).
-				Str("hostname", hostname).
-				Msg("Populated missing hostname from state")
+	if d.Hostname == "" {
+		if snap, ok := s.getSnapshot(); ok {
+			hostname := s.lookupHostnameFromState(d.ResourceType, canonicalDiscoveryTargetID(d), d.ResourceID, snap)
+			if hostname != "" {
+				d.Hostname = hostname
+				upgraded = true
+				log.Debug().
+					Str("id", d.ID).
+					Str("hostname", hostname).
+					Msg("Populated missing hostname from state")
+			}
 		}
+	}
+
+	// Migrate legacy URL suggestion notes from AI reasoning into structured fields.
+	cleanedReasoning, sourceCode, sourceDetail, diagnostic := parseLegacyURLSuggestionReasoning(d.AIReasoning)
+	if d.SuggestedURLSourceCode == "" && sourceCode != "" {
+		d.SuggestedURLSourceCode = sourceCode
+		upgraded = true
+	}
+	if d.SuggestedURLSourceDetail == "" && sourceDetail != "" {
+		d.SuggestedURLSourceDetail = sourceDetail
+		upgraded = true
+	}
+	if d.SuggestedURLDiagnostic == "" && diagnostic != "" {
+		d.SuggestedURLDiagnostic = diagnostic
+		upgraded = true
+	}
+	if cleanedReasoning != d.AIReasoning {
+		d.AIReasoning = cleanedReasoning
+		upgraded = true
 	}
 
 	_ = upgraded // Suppress unused variable warning if logging is disabled
 }
 
 // lookupHostnameFromState finds the hostname/name for a resource from state
-func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, resourceID string, state StateSnapshot) string {
+func (s *Service) lookupHostnameFromState(resourceType ResourceType, hostID, resourceID string, snap StateSnapshot) string {
 	switch resourceType {
-	case ResourceTypeLXC:
-		for _, c := range state.Containers {
+	case ResourceTypeSystemContainer:
+		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == resourceID && c.Node == hostID {
 				return c.Name
 			}
 		}
 	case ResourceTypeVM:
-		for _, vm := range state.VMs {
+		for _, vm := range snap.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == resourceID && vm.Node == hostID {
 				return vm.Name
 			}
 		}
 	case ResourceTypeDocker:
-		for _, host := range state.DockerHosts {
+		for _, host := range snap.DockerHosts {
 			if host.AgentID == hostID || host.Hostname == hostID {
 				for _, c := range host.Containers {
 					if c.Name == resourceID {
@@ -2096,6 +2802,11 @@ func (s *Service) GetProgress(resourceID string) *DiscoveryProgress {
 
 // GetStatus returns the service status including fingerprint statistics.
 func (s *Service) GetStatus() map[string]any {
+	return s.GetStatusSnapshot().ToMap()
+}
+
+// GetStatusSnapshot returns the typed status snapshot including fingerprint statistics.
+func (s *Service) GetStatusSnapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -2111,19 +2822,39 @@ func (s *Service) GetStatus() map[string]any {
 		lastFingerprintScan = s.store.GetLastFingerprintScan()
 	}
 
-	return map[string]any{
-		"running":               s.running,
-		"last_run":              s.lastRun,
-		"interval":              s.interval.String(),
-		"cache_size":            cacheSize,
-		"ai_analyzer_set":       s.aiAnalyzer != nil,
-		"scanner_set":           s.scanner != nil,
-		"store_set":             s.store != nil,
-		"deep_scan_timeout":     s.deepScanTimeout.String(),
-		"max_discovery_age":     s.maxDiscoveryAge.String(),
-		"fingerprint_count":     fingerprintCount,
-		"last_fingerprint_scan": lastFingerprintScan,
+	return ServiceStatus{
+		Running:             s.running,
+		LastRun:             s.lastRun,
+		Interval:            s.interval.String(),
+		CacheSize:           cacheSize,
+		AIAnalyzerSet:       s.aiAnalyzer != nil,
+		ScannerSet:          s.scanner != nil,
+		StoreSet:            s.store != nil,
+		DeepScanTimeout:     s.deepScanTimeout.String(),
+		AIAnalysisTimeout:   s.aiAnalysisTimeout.String(),
+		MaxDiscoveryAge:     s.maxDiscoveryAge.String(),
+		FingerprintCount:    fingerprintCount,
+		LastFingerprintScan: lastFingerprintScan,
 	}
+}
+
+func canonicalDiscoveryTargetID(discovery *ResourceDiscovery) string {
+	if discovery == nil {
+		return ""
+	}
+	return strings.TrimSpace(discovery.TargetID)
+}
+
+func canonicalRequestTargetID(req DiscoveryRequest) string {
+	return strings.TrimSpace(req.TargetID)
+}
+
+func normalizeDiscoveryRequestAliases(req DiscoveryRequest) DiscoveryRequest {
+	req.ResourceType = NormalizeResourceType(req.ResourceType)
+	req.TargetID = canonicalRequestTargetID(req)
+	req.ResourceID = strings.TrimSpace(req.ResourceID)
+	req.Hostname = strings.TrimSpace(req.Hostname)
+	return req
 }
 
 // GetMaxDiscoveryAge returns the current max discovery age (staleness threshold).
@@ -2140,12 +2871,12 @@ func (s *Service) SetMaxDiscoveryAge(age time.Duration) {
 	defer s.mu.Unlock()
 
 	// Enforce minimum of 1 day
-	if age < 24*time.Hour {
-		age = 24 * time.Hour
+	if age < minDiscoveryMaxAge {
+		age = minDiscoveryMaxAge
 	}
 
 	s.maxDiscoveryAge = age
-	log.Info().Dur("max_discovery_age", age).Msg("Max discovery age updated")
+	log.Info().Dur("max_discovery_age", age).Msg("max discovery age updated")
 }
 
 // ClearCache clears the AI analysis cache.
@@ -2160,12 +2891,12 @@ func (s *Service) ClearCache() {
 // GetDiscoveryForAIChat returns discovery data for AI chat context.
 // It will run discovery if needed (fingerprint changed or no data exists).
 // This is the just-in-time discovery approach: only call AI when data is actually needed.
-func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
+func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
 	// This is the same as DiscoverResource but without Force
 	return s.DiscoverResource(ctx, DiscoveryRequest{
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Force:        false, // Let fingerprint logic decide
 	})
 }
@@ -2176,14 +2907,14 @@ func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType Resour
 func (s *Service) GetDiscoveriesForAIContext(ctx context.Context, resourceIDs []string) ([]*ResourceDiscovery, error) {
 	var results []*ResourceDiscovery
 	for _, id := range resourceIDs {
-		resourceType, hostID, resourceID, err := ParseResourceID(id)
+		resourceType, targetID, resourceID, err := ParseResourceID(id)
 		if err != nil {
-			log.Debug().Err(err).Str("id", id).Msg("Failed to parse resource ID for AI context")
+			log.Debug().Err(err).Str("id", id).Msg("failed to parse resource ID for AI context")
 			continue
 		}
-		discovery, err := s.GetDiscoveryForAIChat(ctx, resourceType, hostID, resourceID)
+		discovery, err := s.GetDiscoveryForAIChat(ctx, resourceType, targetID, resourceID)
 		if err != nil {
-			log.Debug().Err(err).Str("id", id).Msg("Failed to get discovery for AI context")
+			log.Debug().Err(err).Str("id", id).Msg("failed to get discovery for AI context")
 			continue
 		}
 		if discovery != nil {
@@ -2201,7 +2932,7 @@ func (s *Service) GetChangedResourceCount() (int, error) {
 	}
 	changed, err := s.store.GetChangedResources()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get changed discovery resources: %w", err)
 	}
 	return len(changed), nil
 }
@@ -2214,7 +2945,7 @@ func (s *Service) GetStaleResourceCount() (int, error) {
 	}
 	stale, err := s.store.GetStaleResources(s.maxDiscoveryAge)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get stale discovery resources: %w", err)
 	}
 	return len(stale), nil
 }

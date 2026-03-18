@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -79,18 +80,70 @@ func extractQueryFacts(input map[string]interface{}, resultText string) []FactEn
 	}
 }
 
+func queryFactUsesAISafeSummary(summary string, policy *unifiedresources.ResourcePolicy) bool {
+	if strings.TrimSpace(summary) == "" || policy == nil {
+		return false
+	}
+	if policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
+		return true
+	}
+	return queryFactRedacts(policy,
+		unifiedresources.ResourceRedactionAlias,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionPlatformID,
+	)
+}
+
+func queryFactRedacts(policy *unifiedresources.ResourcePolicy, hints ...unifiedresources.ResourceRedactionHint) bool {
+	if policy == nil {
+		return false
+	}
+	for _, candidate := range policy.Routing.Redact {
+		for _, hint := range hints {
+			if candidate == hint {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func governedQueryFactLabel(name, aiSafeSummary string, policy *unifiedresources.ResourcePolicy) string {
+	if queryFactUsesAISafeSummary(aiSafeSummary, policy) {
+		return strings.TrimSpace(aiSafeSummary)
+	}
+	return strings.TrimSpace(name)
+}
+
+func governedQueryFactNodeLabel(name string, policy *unifiedresources.ResourcePolicy) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	if queryFactRedacts(policy,
+		unifiedresources.ResourceRedactionAlias,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionPlatformID,
+	) {
+		return "redacted by policy"
+	}
+	return name
+}
+
 func extractQueryGetFacts(input map[string]interface{}, resultText string) []FactEntry {
 	// Tool results are direct JSON (NewJSONResult), no ToolResponse wrapper.
 	// ResourceResponse has nested CPU/Memory structs.
 	var resource struct {
-		Type   string `json:"type"`
-		Name   string `json:"name"`
-		Status string `json:"status"`
-		Node   string `json:"node"`
-		ID     string `json:"id"`
-		VMID   int    `json:"vmid"`
-		Host   string `json:"host"`
-		CPU    struct {
+		Type          string                           `json:"type"`
+		Name          string                           `json:"name"`
+		Status        string                           `json:"status"`
+		Node          string                           `json:"node"`
+		ID            string                           `json:"id"`
+		VMID          int                              `json:"vmid"`
+		Host          string                           `json:"host"`
+		Policy        *unifiedresources.ResourcePolicy `json:"policy"`
+		AISafeSummary string                           `json:"ai_safe_summary"`
+		CPU           struct {
 			Percent float64 `json:"percent"`
 		} `json:"cpu"`
 		Memory struct {
@@ -127,7 +180,7 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if node == "" {
 		node = resource.Host
 	}
-	// Prefer VMID (numeric) over composite ID (which may contain node prefix like "delly:minipc:100")
+	// Prefer VMID (numeric) over composite ID (which may contain node prefix like "homelab:pve-node:100")
 	id := ""
 	if resource.VMID > 0 {
 		id = fmt.Sprintf("%d", resource.VMID)
@@ -146,8 +199,8 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if resource.Status != "" {
 		parts = append(parts, resource.Status)
 	}
-	if resource.Name != "" {
-		parts = append(parts, resource.Name)
+	if label := governedQueryFactLabel(resource.Name, resource.AISafeSummary, resource.Policy); label != "" {
+		parts = append(parts, label)
 	}
 	if resource.CPU.Percent > 0 {
 		parts = append(parts, fmt.Sprintf("CPU=%.1f%%", resource.CPU.Percent))
@@ -190,9 +243,11 @@ func extractQuerySearchFacts(input map[string]interface{}, resultText string) []
 	// ResourceSearchResponse — direct JSON, no wrapper
 	var resp struct {
 		Matches []struct {
-			Name   string `json:"name"`
-			Status string `json:"status"`
-			Type   string `json:"type"`
+			Name          string                           `json:"name"`
+			Status        string                           `json:"status"`
+			Type          string                           `json:"type"`
+			Policy        *unifiedresources.ResourcePolicy `json:"policy"`
+			AISafeSummary string                           `json:"ai_safe_summary"`
 		} `json:"matches"`
 		Total int `json:"total"`
 	}
@@ -212,7 +267,10 @@ func extractQuerySearchFacts(input map[string]interface{}, resultText string) []
 		limit = len(resp.Matches)
 	}
 	for _, m := range resp.Matches[:limit] {
-		entry := m.Name
+		entry := governedQueryFactLabel(m.Name, m.AISafeSummary, m.Policy)
+		if entry == "" {
+			entry = m.Name
+		}
 		if m.Status != "" {
 			entry += " (" + m.Status + ")"
 		}
@@ -230,20 +288,21 @@ func extractQuerySearchFacts(input map[string]interface{}, resultText string) []
 
 func extractQueryTopologyFacts(resultText string) []FactEntry {
 	// TopologyResponse — direct JSON. Has summary + proxmox.nodes array.
-	// Real format: nodes are under "proxmox.nodes", LXC count is "total_lxc_containers".
 	var resp struct {
 		Summary struct {
-			TotalNodes         int `json:"total_nodes"`
-			TotalVMs           int `json:"total_vms"`
-			RunningVMs         int `json:"running_vms"`
-			TotalLXCContainers int `json:"total_lxc_containers"`
-			RunningLXC         int `json:"running_lxc"`
-			TotalDockerHost    int `json:"total_docker_hosts"`
+			TotalNodes            int `json:"total_nodes"`
+			TotalVMs              int `json:"total_vms"`
+			RunningVMs            int `json:"running_vms"`
+			TotalSystemContainers int `json:"total_system_containers"`
+			RunningContainers     int `json:"running_containers"`
+			TotalDockerHost       int `json:"total_docker_hosts"`
 		} `json:"summary"`
 		Proxmox struct {
 			Nodes []struct {
-				Name   string `json:"name"`
-				Status string `json:"status"`
+				Name          string                           `json:"name"`
+				Status        string                           `json:"status"`
+				Policy        *unifiedresources.ResourcePolicy `json:"policy"`
+				AISafeSummary string                           `json:"ai_safe_summary"`
 			} `json:"nodes"`
 		} `json:"proxmox"`
 	}
@@ -260,7 +319,11 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 		if status == "" {
 			status = "unknown"
 		}
-		nodeDescs = append(nodeDescs, fmt.Sprintf("%s=%s", n.Name, status))
+		label := governedQueryFactLabel(n.Name, n.AISafeSummary, n.Policy)
+		if label == "" {
+			label = governedQueryFactNodeLabel(n.Name, n.Policy)
+		}
+		nodeDescs = append(nodeDescs, fmt.Sprintf("%s=%s", label, status))
 	}
 
 	var parts []string
@@ -278,8 +341,8 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 	if s.TotalVMs > 0 {
 		parts = append(parts, fmt.Sprintf("%d VMs (%d running)", s.TotalVMs, s.RunningVMs))
 	}
-	if s.TotalLXCContainers > 0 {
-		parts = append(parts, fmt.Sprintf("%d LXC (%d running)", s.TotalLXCContainers, s.RunningLXC))
+	if s.TotalSystemContainers > 0 {
+		parts = append(parts, fmt.Sprintf("%d containers (%d running)", s.TotalSystemContainers, s.RunningContainers))
 	}
 	if s.TotalDockerHost > 0 {
 		parts = append(parts, fmt.Sprintf("%d docker host", s.TotalDockerHost))
@@ -384,10 +447,10 @@ func extractQueryListFacts(resultText string) []FactEntry {
 			runningVMs++
 		}
 	}
-	runningLXC := 0
+	runningContainers := 0
 	for _, ct := range resp.Containers {
 		if ct.Status == "running" {
-			runningLXC++
+			runningContainers++
 		}
 	}
 
@@ -412,7 +475,7 @@ func extractQueryListFacts(resultText string) []FactEntry {
 		parts = append(parts, fmt.Sprintf("%d VMs (%d running)", vmCount, runningVMs))
 	}
 	if ctCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d LXC (%d running)", ctCount, runningLXC))
+		parts = append(parts, fmt.Sprintf("%d containers (%d running)", ctCount, runningContainers))
 	}
 	dockerCount := resp.Total.DockerHosts
 	if dockerCount == 0 {
@@ -439,14 +502,16 @@ func extractQueryListFacts(resultText string) []FactEntry {
 
 func extractQueryConfigFacts(input map[string]interface{}, resultText string) []FactEntry {
 	var resp struct {
-		GuestType string `json:"guest_type"`
-		VMID      int    `json:"vmid"`
-		Name      string `json:"name"`
-		Node      string `json:"node"`
-		Hostname  string `json:"hostname"`
-		OSType    string `json:"os_type"`
-		Onboot    *bool  `json:"onboot"`
-		Mounts    []struct {
+		GuestType     string                           `json:"guest_type"`
+		VMID          int                              `json:"vmid"`
+		Name          string                           `json:"name"`
+		Node          string                           `json:"node"`
+		Hostname      string                           `json:"hostname"`
+		OSType        string                           `json:"os_type"`
+		Onboot        *bool                            `json:"onboot"`
+		Policy        *unifiedresources.ResourcePolicy `json:"policy"`
+		AISafeSummary string                           `json:"ai_safe_summary"`
+		Mounts        []struct {
 			Key        string `json:"key"`
 			Mountpoint string `json:"mountpoint"`
 		} `json:"mounts"`
@@ -458,7 +523,7 @@ func extractQueryConfigFacts(input map[string]interface{}, resultText string) []
 		return nil
 	}
 
-	if resp.VMID == 0 && resp.Name == "" {
+	if resp.VMID == 0 && resp.Name == "" && strings.TrimSpace(resp.AISafeSummary) == "" {
 		return nil
 	}
 
@@ -471,8 +536,19 @@ func extractQueryConfigFacts(input map[string]interface{}, resultText string) []
 	if resp.GuestType != "" {
 		parts = append(parts, resp.GuestType)
 	}
+	if queryFactUsesAISafeSummary(resp.AISafeSummary, resp.Policy) {
+		parts = append(parts, strings.TrimSpace(resp.AISafeSummary))
+	}
 	if resp.Hostname != "" {
-		parts = append(parts, "hostname="+resp.Hostname)
+		hostname := resp.Hostname
+		if queryFactRedacts(resp.Policy,
+			unifiedresources.ResourceRedactionHostname,
+			unifiedresources.ResourceRedactionAlias,
+			unifiedresources.ResourceRedactionPlatformID,
+		) {
+			hostname = "redacted by policy"
+		}
+		parts = append(parts, "hostname="+hostname)
 	}
 	if resp.OSType != "" {
 		parts = append(parts, "os="+resp.OSType)
@@ -538,7 +614,7 @@ func categoryForPredictedKey(key string) FactCategory {
 	case strings.HasPrefix(key, "topology:") || strings.HasPrefix(key, "health:") ||
 		strings.HasPrefix(key, "search:") || strings.HasPrefix(key, "query:") ||
 		strings.HasPrefix(key, "inventory:") || strings.HasPrefix(key, "config:") ||
-		strings.HasPrefix(key, "docker_") || strings.HasPrefix(key, "k8s_") ||
+		strings.HasPrefix(key, "docker_") || strings.HasPrefix(key, "k8s_") || strings.HasPrefix(key, "k8s-") ||
 		strings.HasPrefix(key, "pmg:") || strings.HasPrefix(key, "pmg_"):
 		return FactCategoryResource
 	case strings.HasPrefix(key, "finding:") || strings.HasPrefix(key, "findings:") ||
@@ -716,7 +792,7 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 	var disc struct {
 		ServiceType string `json:"service_type"`
 		Hostname    string `json:"hostname"`
-		HostID      string `json:"host_id"`
+		TargetID    string `json:"target_id"`
 		ResourceID  string `json:"resource_id"`
 		Ports       []struct {
 			Port int `json:"port"`
@@ -726,13 +802,16 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 		return nil
 	}
 
-	host := disc.HostID
-	if host == "" {
-		host = strFromMap(input, "host")
+	target := disc.TargetID
+	if target == "" {
+		target = strFromMap(input, "target_id")
 	}
 	id := disc.ResourceID
 	if id == "" {
 		id = strFromMap(input, "resource_id")
+	}
+	if target == "" || id == "" {
+		return nil
 	}
 
 	var parts []string
@@ -756,7 +835,7 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 
 	return []FactEntry{{
 		Category: FactCategoryDiscovery,
-		Key:      fmt.Sprintf("discovery:%s:%s", host, id),
+		Key:      fmt.Sprintf("discovery:%s:%s", target, id),
 		Value:    truncateValue(strings.Join(parts, ", ")),
 	}}
 }
@@ -963,7 +1042,7 @@ func extractMetricsPerformanceFacts(input map[string]interface{}, resultText str
 func extractMetricsBaselinesFacts(resultText string) []FactEntry {
 	// BaselinesResponse — real format is nested: baselines.{nodeName}.{resourceKey:metricType}
 	// where each metric entry has mean/std_dev/min/max.
-	// Example: baselines.delly."delly:101:cpu" = {mean: 0.9, std_dev: 0.5, min: -0.2, max: 2.1}
+	// Example: baselines.pve_node."pve-node:101:cpu" = {mean: 0.9, std_dev: 0.5, min: -0.2, max: 2.1}
 	// Node-level metrics use just "cpu"/"memory" as keys.
 	var resp struct {
 		Baselines map[string]map[string]struct {
@@ -1000,7 +1079,7 @@ func extractMetricsBaselinesFacts(resultText string) []FactEntry {
 		var cpuMeans, memMeans []float64
 		var cpuMax, memMax float64
 		for metricKey, stat := range metrics {
-			// Keys are like "delly:101:cpu", "delly:101:memory", or bare "cpu", "memory"
+			// Keys are like "pve-node:101:cpu", "pve-node:101:memory", or bare "cpu", "memory"
 			if strings.HasSuffix(metricKey, ":cpu") || metricKey == "cpu" {
 				cpuMeans = append(cpuMeans, stat.Mean)
 				if stat.Max > cpuMax {
@@ -1624,7 +1703,7 @@ func extractK8sClustersFacts(resultText string) []FactEntry {
 
 	markerFact := FactEntry{
 		Category: FactCategoryResource,
-		Key:      "k8s_clusters:queried",
+		Key:      "k8s-clusters:queried",
 		Value:    fmt.Sprintf("%d clusters", total),
 	}
 
@@ -1649,7 +1728,7 @@ func extractK8sClustersFacts(resultText string) []FactEntry {
 			c.Status, c.NodeCount, c.ReadyNodes, c.PodCount)
 		facts = append(facts, FactEntry{
 			Category: FactCategoryResource,
-			Key:      fmt.Sprintf("k8s_cluster:%s", name),
+			Key:      fmt.Sprintf("k8s-cluster:%s", name),
 			Value:    truncateValue(value),
 		})
 	}
@@ -1689,7 +1768,7 @@ func extractK8sNodesFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_nodes:queried",
+		Key:      "k8s-nodes:queried",
 		Value:    truncateValue(value),
 	}}
 }
@@ -1742,7 +1821,7 @@ func extractK8sPodsFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_pods:queried",
+		Key:      "k8s-pods:queried",
 		Value:    truncateValue(strings.Join(parts, ", ")),
 	}}
 }
@@ -1785,7 +1864,7 @@ func extractK8sDeploymentsFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_deployments:queried",
+		Key:      "k8s-deployments:queried",
 		Value:    truncateValue(value),
 	}}
 }
@@ -2064,13 +2143,10 @@ func PredictFactKeys(toolName string, toolInput map[string]interface{}) []string
 			}
 		}
 	case "pulse_discovery":
-		host := strFromMap(toolInput, "host_id")
-		if host == "" {
-			host = strFromMap(toolInput, "host")
-		}
+		target := strFromMap(toolInput, "target_id")
 		id := strFromMap(toolInput, "resource_id")
-		if host != "" && id != "" {
-			return []string{fmt.Sprintf("discovery:%s:%s", host, id)}
+		if target != "" && id != "" {
+			return []string{fmt.Sprintf("discovery:%s:%s", target, id)}
 		}
 	case "pulse_read", "pulse_run_command":
 		host := strFromMap(toolInput, "target_host")
@@ -2163,13 +2239,13 @@ func PredictFactKeys(toolName string, toolInput map[string]interface{}) []string
 		}
 		switch action {
 		case "clusters":
-			return []string{"k8s_clusters:queried"}
+			return []string{"k8s-clusters:queried"}
 		case "nodes":
-			return []string{"k8s_nodes:queried"}
+			return []string{"k8s-nodes:queried"}
 		case "pods":
-			return []string{"k8s_pods:queried"}
+			return []string{"k8s-pods:queried"}
 		case "deployments":
-			return []string{"k8s_deployments:queried"}
+			return []string{"k8s-deployments:queried"}
 		}
 	case "pulse_pmg":
 		action := strFromMap(toolInput, "action")
@@ -2719,7 +2795,7 @@ var MarkerExpansions = map[string]string{
 	// Docker markers
 	"docker_services:queried": "docker_services:",
 	// Kubernetes markers
-	"k8s_clusters:queried": "k8s_cluster:",
+	"k8s-clusters:queried": "k8s-cluster:",
 	// PMG markers
 	"pmg:queried": "pmg:",
 	// Alert & finding markers → expand to per-item facts

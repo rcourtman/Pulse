@@ -422,7 +422,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 					names[i] = f.Name
 				}
 				return names
-			}()).Msg("Gemini request includes tools")
+			}()).Msg("gemini request includes tools")
 		}
 	}
 
@@ -432,9 +432,9 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Build the URL with API key
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
+	generateContentURL := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
 
-	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("Gemini Chat request")
+	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("gemini Chat request")
 
 	// Retry loop for transient errors
 	var respBody []byte
@@ -450,14 +450,21 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				Str("last_error", lastErr.Error()).
 				Msg("Retrying Gemini API request after transient error")
 
+			backoffTimer := time.NewTimer(backoff)
 			select {
 			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
 				return nil, ctx.Err()
-			case <-time.After(backoff):
+			case <-backoffTimer.C:
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", generateContentURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -531,7 +538,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		log.Warn().Str("raw_response", string(respBody)).Msg("Gemini returned no candidates")
+		log.Warn().Str("raw_response", string(respBody)).Msg("gemini returned no candidates")
 		return nil, fmt.Errorf("no response candidates returned")
 	}
 
@@ -609,8 +616,10 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 // TestConnection validates the API key by listing models
 func (c *GeminiClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("gemini test connection failed: %w", err)
+	}
+	return nil
 }
 
 // SupportsThinking returns true if the model supports extended thinking
@@ -829,24 +838,89 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Msg("Gemini stream request body")
 
 	// Use streamGenerateContent endpoint for streaming
-	url := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
+	streamGenerateContentURL := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	// Retry loop for transient errors (matching non-streaming Chat behavior)
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt <= geminiMaxRetries; attempt++ {
+		// Bail out early if the parent context is already cancelled
+		if ctx.Err() != nil {
+			if lastErr != nil {
+				return fmt.Errorf("request failed (context cancelled after %d attempts): %w", attempt, lastErr)
+			}
+			return ctx.Err()
+		}
+
+		if attempt > 0 {
+			backoff := geminiInitialBackoff * time.Duration(1<<(attempt-1))
+			log.Warn().
+				Int("attempt", attempt).
+				Dur("backoff", backoff).
+				Str("last_error", lastErr.Error()).
+				Msg("Retrying Gemini stream request after transient error")
+
+			backoffTimer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
+				return ctx.Err()
+			case <-backoffTimer.C:
+			}
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", streamGenerateContentURL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Accept", "text/event-stream")
+
+		resp, err = c.client.Do(httpReq)
+		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "connection refused") ||
+				strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "timeout") ||
+				strings.Contains(errStr, "deadline exceeded") {
+				lastErr = fmt.Errorf("connection error: %w", err)
+				continue
+			}
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
+			respBody, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			var errResp geminiError
+			errMsg := string(respBody)
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				errMsg = errResp.Error.Message
+			}
+			errMsg = appendRateLimitInfo(errMsg, resp)
+			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+			continue
+		}
+
+		lastErr = nil
+		break
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-
-	resp, err := c.client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+	if lastErr != nil {
+		return fmt.Errorf("request failed after %d retries: %w", geminiMaxRetries, lastErr)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		var errResp geminiError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
@@ -855,6 +929,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		errMsg := appendRateLimitInfo(string(respBody), resp)
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
+	defer resp.Body.Close()
 
 	// Parse SSE stream
 	reader := resp.Body
@@ -890,7 +965,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 				var event geminiStreamEvent
 				if err := json.Unmarshal([]byte(data), &event); err != nil {
-					log.Debug().Err(err).Str("data", data).Msg("Failed to parse Gemini stream event")
+					log.Debug().Err(err).Str("data", data).Msg("failed to parse Gemini stream event")
 					continue
 				}
 
@@ -972,9 +1047,9 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 // ListModels fetches available models from the Gemini API
 func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	url := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
+	modelsURL := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

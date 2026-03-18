@@ -1,9 +1,11 @@
-import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
+import { createSignal, createMemo, Show, For, createEffect } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import Toggle from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
+import { TagInput } from '@/components/shared/TagInput';
 import Server from 'lucide-solid/icons/server';
 import Monitor from 'lucide-solid/icons/monitor';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -13,335 +15,154 @@ import Camera from 'lucide-solid/icons/camera';
 import Mail from 'lucide-solid/icons/mail';
 import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
+import { unwrap } from 'solid-js/store';
+import type { Resource } from '@/types/resource';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
 void __ensureForUsage;
-import type {
-  VM,
-  Container,
-  Node,
-  Host,
-  Alert,
-  Storage,
-  PBSInstance,
-  PMGInstance,
-  DockerHost,
-  DockerContainer,
-  PVEBackups,
-  PBSBackup,
-  PMGBackup,
-  Backups,
-} from '@/types/api';
+
 import type {
   RawOverrideConfig,
   PMGThresholdDefaults,
   SnapshotAlertConfig,
   BackupAlertConfig,
 } from '@/types/alerts';
-import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
+import { ResourceTable } from './ResourceTable';
+import { BulkEditDialog } from './BulkEditDialog';
+import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
-import { formatTemperature } from '@/utils/temperature';
-type OverrideType =
-  | 'guest'
-  | 'node'
-  | 'hostAgent'
-  | 'hostDisk'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'dockerHost'
-  | 'dockerContainer';
-
-type OfflineState = 'off' | 'warning' | 'critical';
-
-interface Override {
-  id: string;
-  name: string;
-  type: OverrideType;
-  resourceType?: string;
-  vmid?: number;
-  node?: string;
-  instance?: string;
-  disabled?: boolean;
-  disableConnectivity?: boolean; // For nodes only - disable offline alerts
-  poweredOffSeverity?: 'warning' | 'critical';
-  note?: string;
-  backup?: BackupAlertConfig;
-  snapshot?: SnapshotAlertConfig;
-  thresholds: {
-    cpu?: number;
-    memory?: number;
-    disk?: number;
-    diskRead?: number;
-    diskWrite?: number;
-    networkIn?: number;
-    networkOut?: number;
-    usage?: number; // For storage devices
-    temperature?: number; // For nodes only - CPU temperature in °C
-  };
-}
-
-const normalizeThresholdLabel = (label: string): string =>
-  label
-    .trim()
-    .toLowerCase()
-    .replace(' %', '')
-    .replace(' °c', '')
-    .replace(' mb/s', '')
-    .replace('disk r', 'diskRead')
-    .replace('disk w', 'diskWrite')
-    .replace('net in', 'networkIn')
-    .replace('net out', 'networkOut')
-    .replace('disk temp', 'diskTemperature');
-
-const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
-  key,
-  label,
-  normalized: normalizeThresholdLabel(label),
-});
-
-const PMG_THRESHOLD_COLUMNS = [
-  pmgColumn('queueTotalWarning', 'Queue Warn'),
-  pmgColumn('queueTotalCritical', 'Queue Crit'),
-  pmgColumn('deferredQueueWarn', 'Deferred Warn'),
-  pmgColumn('deferredQueueCritical', 'Deferred Crit'),
-  pmgColumn('holdQueueWarn', 'Hold Warn'),
-  pmgColumn('holdQueueCritical', 'Hold Crit'),
-  pmgColumn('oldestMessageWarnMins', 'Oldest Warn (min)'),
-  pmgColumn('oldestMessageCritMins', 'Oldest Crit (min)'),
-  pmgColumn('quarantineSpamWarn', 'Spam Warn'),
-  pmgColumn('quarantineSpamCritical', 'Spam Crit'),
-  pmgColumn('quarantineVirusWarn', 'Virus Warn'),
-  pmgColumn('quarantineVirusCritical', 'Virus Crit'),
-  pmgColumn('quarantineGrowthWarnPct', 'Growth Warn %'),
-  pmgColumn('quarantineGrowthWarnMin', 'Growth Warn Min'),
-  pmgColumn('quarantineGrowthCritPct', 'Growth Crit %'),
-  pmgColumn('quarantineGrowthCritMin', 'Growth Crit Min'),
-] as const;
-
-const PMG_NORMALIZED_TO_KEY = new Map(
-  PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
-);
-
-const PMG_KEY_TO_NORMALIZED = new Map(
-  PMG_THRESHOLD_COLUMNS.map((column) => [column.key, column.normalized]),
-);
-
-export const normalizeDockerIgnoredInput = (value: string): string[] =>
-  value
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-const DEFAULT_SNAPSHOT_WARNING = 30;
-const DEFAULT_SNAPSHOT_CRITICAL = 45;
-const DEFAULT_SNAPSHOT_WARNING_SIZE = 0;
-const DEFAULT_SNAPSHOT_CRITICAL_SIZE = 0;
-const DEFAULT_BACKUP_WARNING = 7;
-const DEFAULT_BACKUP_CRITICAL = 14;
-const DEFAULT_BACKUP_FRESH_HOURS = 24;
-const DEFAULT_BACKUP_STALE_HOURS = 72;
-
-// Simple threshold object for the UI
-interface SimpleThresholds {
-  cpu?: number;
-  memory?: number;
-  disk?: number;
-  diskRead?: number;
-  diskWrite?: number;
-  networkIn?: number;
-  networkOut?: number;
-  temperature?: number; // For nodes only
-  diskTemperature?: number; // For host agents
-  [key: string]: number | undefined; // Add index signature for compatibility
-}
-
-interface ThresholdsTableProps {
-  overrides: () => Override[];
-  setOverrides: (overrides: Override[]) => void;
-  rawOverridesConfig: () => Record<string, RawOverrideConfig>;
-  setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
-  allGuests: () => (VM | Container)[];
-  nodes: Node[];
-  hosts: Host[];
-  storage: Storage[];
-  dockerHosts: DockerHost[];
-  pbsInstances?: PBSInstance[]; // PBS instances from state
-  pmgInstances?: PMGInstance[]; // PMG instances from state
-  backups?: Backups;
-  pveBackups?: PVEBackups;
-  pbsBackups?: PBSBackup[];
-  pmgBackups?: PMGBackup[];
-  pmgThresholds: () => PMGThresholdDefaults;
-  setPMGThresholds: (
-    value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
-  ) => void;
-  guestDefaults: SimpleThresholds;
-  setGuestDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  guestDisableConnectivity: () => boolean;
-  setGuestDisableConnectivity: (value: boolean) => void;
-  guestPoweredOffSeverity: () => 'warning' | 'critical';
-  setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
-  nodeDefaults: SimpleThresholds;
-  pbsDefaults?: SimpleThresholds;
-  hostDefaults: SimpleThresholds;
-  setNodeDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  setPBSDefaults?: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  setHostDefaults: (
-    value:
-      | Record<string, number | undefined>
-      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
-  ) => void;
-  dockerDefaults: {
-    cpu: number;
-    memory: number;
-    disk: number;
-    restartCount: number;
-    restartWindow: number;
-    memoryWarnPct: number;
-    memoryCriticalPct: number;
-    serviceWarnGapPercent: number;
-    serviceCriticalGapPercent: number;
-  };
-  dockerDisableConnectivity: () => boolean;
-  setDockerDisableConnectivity: (value: boolean) => void;
-  dockerPoweredOffSeverity: () => 'warning' | 'critical';
-  setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
-  containerUpdateAlertsEnabled: () => boolean;
-  setContainerUpdateAlertsEnabled: (value: boolean) => void;
-  setDockerDefaults: (
-    value:
-      | {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }
-      | ((prev: {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }) => {
-        cpu: number;
-        memory: number;
-        disk: number;
-        restartCount: number;
-        restartWindow: number;
-        memoryWarnPct: number;
-        memoryCriticalPct: number;
-        serviceWarnGapPercent: number;
-        serviceCriticalGapPercent: number;
-      }),
-  ) => void;
-  dockerIgnoredPrefixes: () => string[];
-  setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
-  ignoredGuestPrefixes: () => string[];
-  setIgnoredGuestPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
-  guestTagWhitelist: () => string[];
-  setGuestTagWhitelist: (value: string[] | ((prev: string[]) => string[])) => void;
-  guestTagBlacklist: () => string[];
-  setGuestTagBlacklist: (value: string[] | ((prev: string[]) => string[])) => void;
-  storageDefault: () => number;
-  setStorageDefault: (value: number) => void;
-  resetGuestDefaults?: () => void;
-  resetNodeDefaults?: () => void;
-  resetPBSDefaults?: () => void;
-  resetHostDefaults?: () => void;
-  resetDockerDefaults?: () => void;
-  resetDockerIgnoredPrefixes?: () => void;
-  resetStorageDefault?: () => void;
-  factoryGuestDefaults?: Record<string, number | undefined>;
-  factoryNodeDefaults?: Record<string, number | undefined>;
-  factoryPBSDefaults?: Record<string, number | undefined>;
-  factoryHostDefaults?: Record<string, number | undefined>;
-  factoryDockerDefaults?: Record<string, number | undefined>;
-  factoryStorageDefault?: number;
-  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number; host: number };
-  metricTimeThresholds: () => Record<string, Record<string, number>>;
-  setMetricTimeThresholds: (
-    value:
-      | Record<string, Record<string, number>>
-      | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
-  ) => void;
-  snapshotDefaults: () => SnapshotAlertConfig;
-  setSnapshotDefaults: (
-    value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
-  ) => void;
-  snapshotFactoryDefaults?: SnapshotAlertConfig;
-  resetSnapshotDefaults?: () => void;
-  backupDefaults: () => BackupAlertConfig;
-  setBackupDefaults: (
-    value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
-  ) => void;
-  backupFactoryDefaults?: BackupAlertConfig;
-  resetBackupDefaults?: () => void;
-  setHasUnsavedChanges: (value: boolean) => void;
-  activeAlerts?: Record<string, Alert>;
-  removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
-  // Global disable flags
-  disableAllNodes: () => boolean;
-  setDisableAllNodes: (value: boolean) => void;
-  disableAllGuests: () => boolean;
-  setDisableAllGuests: (value: boolean) => void;
-  disableAllHosts: () => boolean;
-  setDisableAllHosts: (value: boolean) => void;
-  disableAllStorage: () => boolean;
-  setDisableAllStorage: (value: boolean) => void;
-  disableAllPBS: () => boolean;
-  setDisableAllPBS: (value: boolean) => void;
-  disableAllPMG: () => boolean;
-  setDisableAllPMG: (value: boolean) => void;
-  disableAllDockerHosts: () => boolean;
-  setDisableAllDockerHosts: (value: boolean) => void;
-  disableAllDockerServices: () => boolean;
-  setDisableAllDockerServices: (value: boolean) => void;
-  disableAllDockerContainers: () => boolean;
-  setDisableAllDockerContainers: (value: boolean) => void;
-  // Global disable offline alerts flags
-  disableAllNodesOffline: () => boolean;
-  setDisableAllNodesOffline: (value: boolean) => void;
-  disableAllGuestsOffline: () => boolean;
-  setDisableAllGuestsOffline: (value: boolean) => void;
-  disableAllHostsOffline: () => boolean;
-  setDisableAllHostsOffline: (value: boolean) => void;
-  disableAllPBSOffline: () => boolean;
-  setDisableAllPBSOffline: (value: boolean) => void;
-  disableAllPMGOffline: () => boolean;
-  setDisableAllPMGOffline: (value: boolean) => void;
-  disableAllDockerHostsOffline: () => boolean;
-  setDisableAllDockerHostsOffline: (value: boolean) => void;
-}
+import {
+  AGENT_DISKS_EMPTY_STATE,
+  AGENT_DISKS_FILTER_EMPTY_STATE,
+  AGENT_THRESHOLDS_FILTER_EMPTY_STATE,
+  getAlertThresholdsHelpBanner,
+  getAlertThresholdsGuestFilterPresentation,
+  getAlertThresholdsHelpDismissLabel,
+  getAlertThresholdsBackupOrphanedPresentation,
+  getAlertThresholdsDockerServicePresentation,
+  getAlertThresholdsDockerIgnoredPrefixesPresentation,
+  getAlertThresholdsSearchPlaceholder,
+  getAlertThresholdsSectionTitles,
+  BACKUP_THRESHOLDS_EMPTY_STATE,
+  CONTAINERS_FILTER_EMPTY_STATE,
+  CONTAINER_RUNTIMES_FILTER_EMPTY_STATE,
+  GUEST_THRESHOLDS_EMPTY_STATE,
+  GUEST_THRESHOLDS_FILTER_EMPTY_STATE,
+  GUEST_FILTERING_EMPTY_STATE,
+  NODE_THRESHOLDS_FILTER_EMPTY_STATE,
+  PBS_THRESHOLDS_EMPTY_STATE,
+  PBS_THRESHOLDS_FILTER_EMPTY_STATE,
+  PMG_THRESHOLDS_EMPTY_STATE,
+  PMG_THRESHOLDS_FILTER_EMPTY_STATE,
+  SNAPSHOT_THRESHOLDS_EMPTY_STATE,
+  STORAGE_THRESHOLDS_EMPTY_STATE,
+  STORAGE_THRESHOLDS_FILTER_EMPTY_STATE,
+} from '@/utils/alertThresholdsPresentation';
+import type {
+  OverrideType,
+  OfflineState,
+  Override,
+  ThresholdsTableProps,
+} from '@/features/alerts/thresholds/types';
+import { matchesAlertIdentifier } from '@/features/alerts/identity';
+import {
+  PMG_THRESHOLD_COLUMNS,
+  PMG_NORMALIZED_TO_KEY,
+  PMG_KEY_TO_NORMALIZED,
+  DEFAULT_SNAPSHOT_WARNING,
+  DEFAULT_SNAPSHOT_CRITICAL,
+  DEFAULT_SNAPSHOT_WARNING_SIZE,
+  DEFAULT_SNAPSHOT_CRITICAL_SIZE,
+  DEFAULT_BACKUP_WARNING,
+  DEFAULT_BACKUP_CRITICAL,
+  DEFAULT_BACKUP_FRESH_HOURS,
+  DEFAULT_BACKUP_STALE_HOURS,
+} from '@/features/alerts/thresholds/constants';
+import {
+  normalizeDockerIgnoredInput,
+  formatMetricValue,
+} from '@/features/alerts/thresholds/helpers';
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const sectionTitles = getAlertThresholdsSectionTitles();
+
+  const pd = (r: Resource): Record<string, unknown> | undefined =>
+    r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
+  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const uniqueIds = (...values: unknown[]): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((value) => {
+      const normalized = asString(value);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ids.push(normalized);
+    });
+    return ids;
+  };
+  const hostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const agent = asRecord(platformData?.agent);
+    const discoveryTarget = resource.discoveryTarget ?? null;
+    return uniqueIds(
+      getAgentDiscoveryResourceId(discoveryTarget),
+      discoveryTarget?.agentId,
+      resource.agent?.agentId,
+      agent?.agentId,
+      platformData?.agentId,
+      resource.id,
+    );
+  };
+  const hostActionId = (resource: Resource): string =>
+    hostOverrideIdCandidates(resource)[0] || resource.id;
+  const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const docker = asRecord(platformData?.docker);
+    const discoveryTarget = resource.discoveryTarget;
+    return uniqueIds(
+      isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+        ? discoveryTarget?.resourceId
+        : undefined,
+      docker?.hostSourceId,
+      platformData?.hostSourceId,
+      discoveryTarget?.agentId,
+      resource.id,
+    );
+  };
+  const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] => {
+    return uniqueIds(
+      ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
+    );
+  };
+  const findOverrideByCandidates = (
+    overridesMap: Map<string, Override>,
+    candidates: string[],
+  ): Override | undefined => {
+    for (const candidate of candidates) {
+      const override = overridesMap.get(candidate);
+      if (override) {
+        return override;
+      }
+    }
+    return undefined;
+  };
 
   // Collapsible section state management
   const { isCollapsed, toggleSection, expandAll, collapseAll } = useCollapsedSections();
@@ -349,7 +170,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   // Help banner dismiss state (persisted to localStorage)
   const HELP_BANNER_KEY = 'pulse-thresholds-help-dismissed';
   const [helpBannerDismissed, setHelpBannerDismissed] = createSignal(
-    typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true'
+    typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true',
   );
   const dismissHelpBanner = () => {
     setHelpBannerDismissed(true);
@@ -364,8 +185,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     Record<string, number | undefined>
   >({});
   const [editingNote, setEditingNote] = createSignal('');
-  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
-  let searchInputRef: HTMLInputElement | undefined;
+
+  const [bulkEditIds, setBulkEditIds] = createSignal<string[]>([]);
+  const [bulkEditColumns, setBulkEditColumns] = createSignal<string[]>([]);
+  const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = createSignal(false);
+
+  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'agents' | 'docker'>(
+    'proxmox',
+  );
+  const guestFilterPresentation = getAlertThresholdsGuestFilterPresentation();
+  const backupOrphanedPresentation = getAlertThresholdsBackupOrphanedPresentation();
+  const dockerServicePresentation = getAlertThresholdsDockerServicePresentation();
+  const dockerIgnoredPrefixesPresentation = getAlertThresholdsDockerIgnoredPrefixesPresentation();
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
@@ -390,17 +221,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const warn = Number(props.dockerDefaults.serviceWarnGapPercent ?? 0);
     const crit = Number(props.dockerDefaults.serviceCriticalGapPercent ?? 0);
     if (crit > 0 && warn > crit) {
-      return 'Critical gap must be greater than or equal to the warning gap when enabled.';
+      return dockerServicePresentation.gapValidationMessage;
     }
     return '';
   });
 
   // Determine active tab from URL
-  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'hosts' | 'docker' => {
+  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'agents' | 'docker' => {
     const path = location.pathname;
     if (path.includes('/thresholds/containers')) return 'docker';
-    if (path.includes('/thresholds/docker')) return 'docker'; // Legacy support
-    if (path.includes('/thresholds/hosts')) return 'hosts';
+    if (path.includes('/thresholds/agents')) return 'agents';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
     return 'proxmox'; // default
   };
@@ -420,20 +250,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
   });
 
-  createEffect(() => {
-    if (location.pathname.startsWith('/alerts/thresholds/docker')) {
-      navigate(
-        location.pathname.replace('/alerts/thresholds/docker', '/alerts/thresholds/containers'),
-        { replace: true, scroll: false },
-      );
-    }
-  });
-
-  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'hosts' | 'docker') => {
+  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'agents' | 'docker') => {
     const tabRoutes = {
       proxmox: '/alerts/thresholds/proxmox',
       pmg: '/alerts/thresholds/mail-gateway',
-      hosts: '/alerts/thresholds/hosts',
+      agents: '/alerts/thresholds/agents',
       docker: '/alerts/thresholds/containers',
     };
     navigate(tabRoutes[tab]);
@@ -454,195 +275,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
     setDockerIgnoredInput('');
     props.setHasUnsavedChanges(true);
-  };
-
-  const [ignoredGuestInput, setIgnoredGuestInput] = createSignal(
-    props.ignoredGuestPrefixes().join('\n'),
-  );
-  const [guestTagWhitelistInput, setGuestTagWhitelistInput] = createSignal(
-    props.guestTagWhitelist().join('\n'),
-  );
-  const [guestTagBlacklistInput, setGuestTagBlacklistInput] = createSignal(
-    props.guestTagBlacklist().join('\n'),
-  );
-  const [backupIgnoreInput, setBackupIgnoreInput] = createSignal(
-    (props.backupDefaults().ignoreVMIDs ?? []).join('\n'),
-  );
-
-  createEffect(() => {
-    const remote = props.ignoredGuestPrefixes();
-    const local = ignoredGuestInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setIgnoredGuestInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.guestTagWhitelist();
-    const local = guestTagWhitelistInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setGuestTagWhitelistInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.guestTagBlacklist();
-    const local = guestTagBlacklistInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setGuestTagBlacklistInput(remote.join('\n'));
-  });
-
-  createEffect(() => {
-    const remote = props.backupDefaults().ignoreVMIDs ?? [];
-    const local = backupIgnoreInput();
-    const normalizedLocal = normalizeDockerIgnoredInput(local);
-    const isSynced =
-      remote.length === normalizedLocal.length &&
-      remote.every((val, i) => val === normalizedLocal[i]);
-    if (!isSynced) setBackupIgnoreInput(remote.join('\n'));
-  });
-
-  const handleIgnoredGuestChange = (value: string) => {
-    setIgnoredGuestInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setIgnoredGuestPrefixes(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleGuestTagWhitelistChange = (value: string) => {
-    setGuestTagWhitelistInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setGuestTagWhitelist(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleGuestTagBlacklistChange = (value: string) => {
-    setGuestTagBlacklistInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    props.setGuestTagBlacklist(normalized);
-    props.setHasUnsavedChanges(true);
-  };
-
-  const handleBackupIgnoreChange = (value: string) => {
-    setBackupIgnoreInput(value);
-    const normalized = normalizeDockerIgnoredInput(value);
-    updateBackupDefaults((prev) => ({
-      ...prev,
-      ignoreVMIDs: normalized,
-    }));
-  };
-
-  // Set up keyboard shortcuts
-  onMount(() => {
-    const isEditableElement = (el: HTMLElement | null | undefined): boolean => {
-      if (!el) return false;
-      const tag = el.tagName;
-      return (
-        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.contentEditable === 'true'
-      );
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const activeElement = (document.activeElement as HTMLElement) ?? null;
-      const inEditable = isEditableElement(target);
-
-      // Ctrl/Cmd+F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        if (searchInputRef) {
-          searchInputRef.focus();
-          searchInputRef.select();
-        }
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (searchTerm()) {
-          e.preventDefault();
-          setSearchTerm('');
-        }
-        if (searchInputRef && document.activeElement === searchInputRef) {
-          searchInputRef.blur();
-        }
-        return;
-      }
-
-      if (e.defaultPrevented || inEditable || isEditableElement(activeElement) || editingId()) {
-        return;
-      }
-
-      if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
-        e.preventDefault();
-        if (searchInputRef) {
-          searchInputRef.focus();
-          setSearchTerm(e.key);
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown);
-    });
-  });
-
-  // Helper function to format values with units
-  const formatMetricValue = (metric: string, value: number | undefined): string => {
-    if (value === undefined || value === null) return '0';
-
-    // Show "Off" for disabled thresholds (0 or negative values)
-    if (value <= 0) return 'Off';
-
-    // Percentage-based metrics
-    if (
-      metric === 'cpu' ||
-      metric === 'memory' ||
-      metric === 'disk' ||
-      metric === 'usage' ||
-      metric === 'memoryWarnPct' ||
-      metric === 'memoryCriticalPct'
-    ) {
-      return `${value}%`;
-    }
-
-    // Temperature
-    if (metric === 'temperature' || metric === 'diskTemperature') {
-      return formatTemperature(value);
-    }
-
-    if (metric === 'restartWindow') {
-      return `${value}s`;
-    }
-
-    if (metric === 'restartCount') {
-      return String(value);
-    }
-
-    if (metric === 'warningSizeGiB' || metric === 'criticalSizeGiB') {
-      const rounded = Math.round(value * 10) / 10;
-      return `${rounded} GiB`;
-    }
-
-    // MB/s metrics
-    if (
-      metric === 'diskRead' ||
-      metric === 'diskWrite' ||
-      metric === 'networkIn' ||
-      metric === 'networkOut'
-    ) {
-      return `${value} MB/s`;
-    }
-
-    return String(value);
   };
 
   // Check if there's an active alert for a resource/metric
@@ -696,17 +328,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return base;
   };
 
-  const buildNodeHeaderMeta = (node: Node) => {
+  const buildNodeHeaderMeta = (node: Resource) => {
+    const data = pd(node);
+    const clusterName = (data?.clusterName as string | undefined) ?? undefined;
+    const isClusterMember =
+      (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
+
     const originalDisplayName = node.displayName?.trim() || node.name;
-    const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+    const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
+
     // Prioritize guestURL over host (same as NodeGroupHeader)
-    const guestUrlValue = node.guestURL?.trim();
-    const hostValue = node.host?.trim();
+    const guestUrlValue =
+      typeof data?.guestURL === 'string' ? (data.guestURL as string).trim() : '';
+    const hostValue = typeof data?.host === 'string' ? (data.host as string).trim() : '';
+
     let host: string | undefined;
     if (guestUrlValue && guestUrlValue !== '') {
-      host = guestUrlValue.startsWith('http')
-        ? guestUrlValue
-        : `https://${guestUrlValue}`;
+      host = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
     } else if (hostValue && hostValue !== '') {
       host = hostValue.startsWith('http')
         ? hostValue
@@ -721,8 +359,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       rawName: originalDisplayName,
       host,
       status: node.status,
-      clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
-      isClusterMember: node.isClusterMember ?? false,
+      clusterName: isClusterMember ? clusterName?.trim() || 'Cluster' : undefined,
+      isClusterMember,
     };
 
     const keys = new Set<string>();
@@ -735,7 +373,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return { headerMeta, keys };
   };
 
-  const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const nodesWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -746,6 +384,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const nodes = (props.nodes ?? []).map((node) => {
       const override = overridesMap.get(node.id);
+      const data = pd(node);
+      const clusterName = (data?.clusterName as string | undefined) ?? undefined;
+      const isClusterMember =
+        (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
 
       // Check if any threshold values actually differ from defaults
       const hasCustomThresholds =
@@ -762,16 +404,20 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const hasNote = Boolean(note && note.trim().length > 0);
 
       const originalDisplayName = node.displayName?.trim() || node.name;
-      const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+      const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
       // Prioritize guestURL over host (same as NodeGroupHeader)
-      const guestUrlValue = node.guestURL?.trim();
-      const hostValue = node.host?.trim() || rawName;
+      const guestUrlValue =
+        typeof data?.guestURL === 'string' ? (data.guestURL as string).trim() : '';
+      const hostValue =
+        (typeof data?.host === 'string' ? (data.host as string).trim() : '') || rawName;
       let normalizedHost: string;
       if (guestUrlValue && guestUrlValue !== '') {
-        normalizedHost = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
+        normalizedHost = guestUrlValue.startsWith('http')
+          ? guestUrlValue
+          : `https://${guestUrlValue}`;
       } else {
         normalizedHost =
           hostValue.startsWith('http://') || hostValue.startsWith('https://')
@@ -785,23 +431,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         displayName: sanitizedName,
         rawName: originalDisplayName,
         host: normalizedHost,
-        type: 'node' as const,
-        resourceType: 'Node',
+        type: 'agent' as const,
+        resourceType: 'Agent',
         status: node.status,
         uptime: node.uptime,
-        cpu: node.cpu,
-        memory: node.memory?.usage,
+        cpu: (node.cpu?.current ?? 0) / 100,
+        memory: node.memory?.current,
         hasOverride:
           hasCustomThresholds || hasNote || Boolean(override?.disableConnectivity) || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: props.nodeDefaults,
-        clusterName: node.isClusterMember ? node.clusterName?.trim() : undefined,
-        isClusterMember: node.isClusterMember ?? false,
-        instance: node.instance,
+        clusterName: isClusterMember ? clusterName?.trim() : undefined,
+        isClusterMember,
+        instance: node.platformId,
         note,
-      } satisfies Resource;
+      } satisfies TableResource;
     });
 
     if (search) {
@@ -810,7 +456,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return nodes;
   }, []);
 
-  const hostAgentsWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const agentsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -819,32 +465,45 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts = (props.hosts ?? []).map((host) => {
-      const override = overridesMap.get(host.id);
+    const agents: TableResource[] = (props.agents ?? []).map((agentResource) => {
+      const idCandidates = hostOverrideIdCandidates(agentResource);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || agentResource.id;
       const hasCustomThresholds =
         override?.thresholds &&
         Object.keys(override.thresholds).some((key) => {
           const k = key as keyof typeof override.thresholds;
           return (
             override.thresholds[k] !== undefined &&
-            override.thresholds[k] !== (props.hostDefaults as any)[k]
+            override.thresholds[k] !== (props.agentDefaults as any)[k]
           );
         });
 
-      const displayName = host.displayName?.trim() || host.hostname || host.id;
-      const status = host.status || (host.lastSeen ? 'online' : 'offline');
+      const displayName =
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
+      const status = agentResource.status;
+      const data = pd(agentResource);
+      const agentData = asRecord(data?.agent);
 
-      seen.add(host.id);
+      seen.add(resourceId);
 
       return {
-        id: host.id,
+        id: resourceId,
         name: displayName,
         displayName,
-        rawName: host.hostname || host.id,
-        type: 'hostAgent' as const,
-        resourceType: 'Host Agent',
-        node: host.hostname,
-        instance: host.platform || host.osName || '',
+        rawName: agentResource.identity?.hostname ?? agentResource.name,
+        type: 'agent' as const,
+        resourceType: 'Agent',
+        node: agentResource.identity?.hostname ?? agentResource.name,
+        instance:
+          asString(agentData?.platform) ||
+          asString(agentData?.osName) ||
+          asString(data?.platform) ||
+          asString(data?.osName) ||
+          '',
         status,
         hasOverride:
           hasCustomThresholds ||
@@ -853,21 +512,21 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         disabled: override?.disabled || false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
-        defaults: props.hostDefaults,
-      } satisfies Resource;
+        defaults: props.agentDefaults,
+      } satisfies TableResource;
     });
 
     (props.overrides() ?? [])
-      .filter((override) => override.type === 'hostAgent' && !seen.has(override.id))
+      .filter((override) => override.type === 'agent' && !seen.has(override.id))
       .forEach((override) => {
         const name = override.name?.trim() || override.id;
-        hosts.push({
+        agents.push({
           id: override.id,
           name,
           displayName: name,
           rawName: name,
-          type: 'hostAgent' as const,
-          resourceType: 'Host Agent',
+          type: 'agent' as const,
+          resourceType: 'Agent',
           node: '',
           instance: '',
           status: 'unknown',
@@ -875,29 +534,32 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           disabled: override.disabled || false,
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
-          defaults: props.hostDefaults,
-        } satisfies Resource);
+          defaults: props.agentDefaults,
+        } satisfies TableResource);
       });
 
     if (search) {
-      return hosts.filter((host) => host.name.toLowerCase().includes(search));
+      return agents.filter((agent) => agent.name.toLowerCase().includes(search));
     }
 
-    return hosts;
+    return agents;
   }, []);
 
-  // Helper function to create host disk resource ID (matches backend sanitizeHostComponent)
-  const hostDiskResourceID = (hostId: string, mountpoint: string, device?: string): string => {
+  // Helper function to create agent disk resource ID (matches backend sanitizeHostComponent)
+  const agentDiskResourceID = (agentId: string, mountpoint: string, device?: string): string => {
     // Use mountpoint if available, otherwise device
     let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
     // Replicate backend sanitizeHostComponent: keep a-z 0-9, replace everything else with '-', collapse consecutive hyphens
-    label = label.replace(/[^a-z0-9]/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+    label = label
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '');
     if (!label) label = 'unknown';
-    return `host:${hostId}/disk:${label}`;
+    return `agent:${agentId}/disk:${label}`;
   };
 
-  // Process host disks with their overrides
-  const hostDisksWithOverrides = createMemo<Resource[]>((prev = []) => {
+  // Process agent disks with their overrides
+  const agentDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -905,20 +567,52 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
-    const disks: Resource[] = [];
+    const disks: TableResource[] = [];
 
-    // Extract disks from all hosts
-    (props.hosts ?? []).forEach((host) => {
-      const hostDisplayName = host.displayName?.trim() || host.hostname || host.id;
+    // Extract disks from all agents
+    (props.agents ?? []).forEach((agentResource) => {
+      const agentDisplayName =
+        agentResource.displayName?.trim() ||
+        agentResource.identity?.hostname ||
+        agentResource.name ||
+        agentResource.id;
+      const agentIdCandidates = hostOverrideIdCandidates(agentResource);
+      const agentIdForActions = hostActionId(agentResource);
+      const platformData = pd(agentResource);
+      const platformAgent = asRecord(platformData?.agent);
+      const disksFromPlatformRoot = Array.isArray(platformData?.disks) ? platformData.disks : null;
+      const disksFromPlatformAgent = Array.isArray(platformAgent?.disks)
+        ? platformAgent.disks
+        : null;
+      const disksFromResourceAgent = Array.isArray(agentResource.agent?.disks)
+        ? agentResource.agent.disks
+        : null;
 
-      (host.disks ?? []).forEach((disk) => {
+      const disksForAgent = (disksFromPlatformRoot ||
+        disksFromPlatformAgent ||
+        disksFromResourceAgent ||
+        []) as Array<{
+        mountpoint?: string;
+        device?: string;
+        used?: number;
+        total?: number;
+        type?: string;
+      }>;
+
+      disksForAgent.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
-        const resourceId = hostDiskResourceID(host.id, disk.mountpoint || '', disk.device);
-        const override = overridesMap.get(resourceId);
+        const resourceIdCandidates = uniqueIds(
+          ...agentIdCandidates.map((agentId) =>
+            agentDiskResourceID(agentId, disk.mountpoint || '', disk.device),
+          ),
+        );
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId = override?.id || resourceIdCandidates[0];
+        if (!resourceId) return;
 
         const hasCustomThresholds =
           override?.thresholds?.disk !== undefined &&
-          override.thresholds.disk !== props.hostDefaults.disk;
+          override.thresholds.disk !== props.agentDefaults.disk;
 
         seen.add(resourceId);
 
@@ -927,24 +621,24 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           name: diskLabel,
           displayName: diskLabel,
           rawName: disk.device || diskLabel,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
-          host: host.id,
-          node: hostDisplayName,
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
+          host: agentIdForActions,
+          node: agentDisplayName,
           instance: disk.type || '',
-          status: host.status || 'online',
+          status: agentResource.status,
           hasOverride: hasCustomThresholds || Boolean(override?.disabled),
           disabled: override?.disabled || false,
           thresholds: override?.thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
           subtitle: `${((disk.used || 0) / 1024 / 1024 / 1024).toFixed(1)} / ${((disk.total || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
-        } satisfies Resource);
+        } satisfies TableResource);
       });
     });
 
-    // Include any hostDisk overrides for disks that are no longer present
+    // Include any agentDisk overrides for disks that are no longer present
     (props.overrides() ?? [])
-      .filter((override) => override.type === 'hostDisk' && !seen.has(override.id))
+      .filter((override) => override.type === 'agentDisk' && !seen.has(override.id))
       .forEach((override) => {
         const name = override.name || override.id;
         disks.push({
@@ -952,16 +646,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           name,
           displayName: name,
           rawName: name,
-          type: 'hostDisk' as const,
-          resourceType: 'Host Disk',
+          type: 'agentDisk' as const,
+          resourceType: 'Agent Disk',
           host: '',
-          node: 'Unknown Host',
+          node: 'Unknown Agent',
           instance: '',
           status: 'unknown',
           hasOverride: true,
           disabled: override.disabled || false,
           thresholds: override.thresholds || {},
-          defaults: { disk: props.hostDefaults.disk },
+          defaults: { disk: props.agentDefaults.disk },
         });
       });
 
@@ -975,10 +669,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   }, []);
 
   // Group host disks by their host
-  const hostDisksGroupedByHost = createMemo<Record<string, Resource[]>>(() => {
-    const grouped: Record<string, Resource[]> = {};
-    hostDisksWithOverrides().forEach((disk) => {
-      const key = disk.node?.trim() || 'Unknown Host';
+  const agentDisksGroupedByAgent = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
+    agentDisksWithOverrides().forEach((disk) => {
+      const key = disk.node?.trim() || 'Unknown Agent';
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -994,7 +688,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process Docker hosts with their overrides (primarily for connectivity toggles)
-  const dockerHostsWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const dockerHostsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
       return prev;
     }
@@ -1003,31 +697,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
     const seen = new Set<string>();
 
-    const hosts = (props.dockerHosts ?? []).map((host) => {
-      const originalName = host.displayName?.trim() || host.hostname || host.id;
+    const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
+      const idCandidates = dockerHostOverrideIdCandidates(host);
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
-      const override = overridesMap.get(host.id);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = override?.disableConnectivity || false;
-      const status = host.status || (host.lastSeen ? 'online' : 'offline');
+      const status = host.status;
 
-      seen.add(host.id);
+      seen.add(resourceId);
 
       return {
-        id: host.id,
+        id: resourceId,
         name: friendlyName,
         displayName: friendlyName,
         rawName: originalName,
         type: 'dockerHost' as const,
-        resourceType: 'Container Host',
-        node: host.hostname,
-        instance: host.displayName,
+        resourceType: 'Container Runtime',
+        node: getPreferredResourceHostname(host),
+        instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride: disableConnectivity,
         disableConnectivity,
         thresholds: override?.thresholds || {},
         defaults: {},
         editable: false,
-      } satisfies Resource;
+      } satisfies TableResource;
     });
 
     // Include any overrides referencing Docker hosts that are no longer reporting
@@ -1042,7 +738,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           displayName: friendlyName,
           rawName: originalName,
           type: 'dockerHost',
-          resourceType: 'Container Host',
+          resourceType: 'Container Runtime',
           node: override.node || '',
           instance: override.instance || '',
           status: 'unknown',
@@ -1060,38 +756,52 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return hosts;
   }, []);
 
+  const dockerContainersByHostId = createMemo(() => {
+    const map = new Map<string, Resource[]>();
+    (props.allResources ?? []).forEach((resource) => {
+      if (resource.type !== 'app-container') return;
+      const parentId = resource.parentId;
+      if (!parentId) return;
+      const existing = map.get(parentId);
+      if (existing) {
+        existing.push(resource);
+      } else {
+        map.set(parentId, [resource]);
+      }
+    });
+    return map;
+  });
+
   // Process Docker containers grouped by host
-  const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((prev = {}) => {
+  const dockerContainersGroupedByHost = createMemo<Record<string, TableResource[]>>((prev = {}) => {
     if (editingId()) {
       return prev;
     }
 
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
-    const groups: Record<string, Resource[]> = {};
+    const groups: Record<string, TableResource[]> = {};
     const seen = new Set<string>();
 
-    const normalizeContainerName = (container: DockerContainer): string => {
-      const name = container.name?.trim() || '';
-      if (name.startsWith('/')) {
-        return name.replace(/^\/+/, '') || (container.id?.slice(0, 12) ?? 'container');
-      }
-      if (!name) {
-        return container.id?.slice(0, 12) ?? 'container';
-      }
-      return name;
-    };
-
     (props.dockerHosts ?? []).forEach((host) => {
-      const hostLabel = host.displayName?.trim() || host.hostname || host.id;
+      const dockerHostIds = dockerHostOverrideIdCandidates(host);
+      const dockerHostIdForActions = dockerHostIds[0] || host.id;
+      const hostLabel = getPreferredResourceDisplayName(host);
       const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
-      (host.containers || []).forEach((container) => {
-        const containerId = container.id || normalizeContainerName(container);
-        const resourceId = `docker:${host.id}/${containerId}`;
-        const override = overridesMap.get(resourceId);
+      const hostHostname = getPreferredResourceHostname(host);
+      const containers = dockerContainersByHostId().get(host.id) ?? [];
+
+      containers.forEach((container) => {
+        const shortId = container.id.includes('/')
+          ? (container.id.split('/').pop() ?? container.id)
+          : container.id;
+        const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, shortId);
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId =
+          override?.id || resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
         const overrideSeverity = override?.poweredOffSeverity;
 
         const defaults = props.dockerDefaults as Record<string, number | undefined>;
@@ -1112,9 +822,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           overrideSeverity !== undefined ||
           false;
 
-        const containerName = normalizeContainerName(container);
+        const containerName = container.name?.replace(/^\/+/, '') || shortId;
         const containerNameLower = containerName.toLowerCase();
-        const imageLower = container.image?.toLowerCase() || '';
+        const image = (pd(container)?.image as string) ?? '';
+        const imageLower = image.toLowerCase();
 
         const matchesSearch =
           !search ||
@@ -1126,24 +837,24 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           return;
         }
 
-        const status = container.state || container.status || 'unknown';
+        const status = container.status;
         const groupKey = friendlyHostName || hostLabel;
 
-        const resource: Resource = {
+        const resource: TableResource = {
           id: resourceId,
           name: containerName,
           type: 'dockerContainer',
           resourceType: 'Container',
           node: groupKey,
-          instance: host.hostname,
+          instance: hostHostname,
           status,
           hasOverride,
           disabled: override?.disabled || false,
           disableConnectivity: override?.disableConnectivity || false,
           thresholds: override?.thresholds || {},
           defaults: props.dockerDefaults,
-          hostId: host.id,
-          image: container.image,
+          hostId: dockerHostIdForActions,
+          image,
           poweredOffSeverity: overrideSeverity,
         };
 
@@ -1188,7 +899,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
 
     // With search applied, remove empty groups (should already be filtered)
-    const filteredGroups: Record<string, Resource[]> = {};
+    const filteredGroups: Record<string, TableResource[]> = {};
     Object.entries(groups).forEach(([group, resources]) => {
       if (resources.length > 0) {
         filteredGroups[group] = resources;
@@ -1197,26 +908,30 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return filteredGroups;
   }, {});
 
-  const dockerContainersFlat = createMemo<Resource[]>(() =>
+  const dockerContainersFlat = createMemo<TableResource[]>(() =>
     Object.values(dockerContainersGroupedByHost() ?? {}).flat(),
   );
 
   const totalDockerContainers = createMemo(() =>
-    (props.dockerHosts ?? []).reduce((sum, host) => sum + (host.containers?.length ?? 0), 0),
+    (props.dockerHosts ?? []).reduce(
+      (sum, host) => sum + (dockerContainersByHostId().get(host.id)?.length ?? 0),
+      0,
+    ),
   );
 
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName = host.displayName?.trim() || host.hostname || host.id;
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
         rawName: originalName,
-        status: host.status || (host.lastSeen ? 'online' : 'offline'),
+        status: host.status,
       };
 
-      [friendlyName, originalName, host.hostname, host.id]
+      const hostname = getPreferredResourceHostname(host);
+      [friendlyName, originalName, hostname, host.id]
         .filter((key): key is string => Boolean(key && key.trim()))
         .forEach((key) => {
           meta[key.trim()] = headerMeta;
@@ -1231,7 +946,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return meta;
   });
 
-  const countOverrides = (resources: Resource[] | undefined) =>
+  const countOverrides = (resources: TableResource[] | undefined) =>
     resources?.filter(
       (resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity,
     ).length ?? 0;
@@ -1340,9 +1055,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const alertOrphaned = config.alertOrphaned ?? true;
     const ignoreVMIDs = Array.from(
       new Set(
-        (config.ignoreVMIDs ?? [])
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0),
+        (config.ignoreVMIDs ?? []).map((value) => value.trim()).filter((value) => value.length > 0),
       ),
     );
 
@@ -1408,13 +1121,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const differs =
       current.enabled !== factory.enabled ||
       (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
-      (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
       (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
-      (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
+        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
       (current.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) !==
-      (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
+        (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
       (current.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE) !==
-      (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
+        (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
     return differs ? 1 : 0;
   });
 
@@ -1428,13 +1141,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       currentIgnore.some((value, index) => value !== factoryIgnore[index]);
     return backupCurrent.enabled !== backupFactory.enabled ||
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
-      (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
+        (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
       (backupCurrent.criticalDays ?? DEFAULT_BACKUP_CRITICAL) !==
-      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
+        (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL) ||
       (backupCurrent.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) !==
-      (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
+        (backupFactory.freshHours ?? DEFAULT_BACKUP_FRESH_HOURS) ||
       (backupCurrent.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) !==
-      (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
+        (backupFactory.staleHours ?? DEFAULT_BACKUP_STALE_HOURS) ||
       (backupCurrent.alertOrphaned ?? true) !== (backupFactory.alertOrphaned ?? true) ||
       ignoreDiff
       ? 1
@@ -1442,7 +1155,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process guests with their overrides and group by node
-  const guestsGroupedByNode = createMemo<Record<string, Resource[]>>((prev = {}) => {
+  const guestsGroupedByNode = createMemo<Record<string, TableResource[]>>((prev = {}) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1452,8 +1165,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      // Use canonical format: instance:node:vmid
-      const guestId = guest.id || `${guest.instance}:${guest.node}:${guest.vmid}`;
+      const gpd = guest.platformData
+        ? (unwrap(guest.platformData) as Record<string, unknown>)
+        : undefined;
+      const vmid = (gpd?.vmid as number | undefined) ?? undefined;
+      const node = (gpd?.node as string | undefined) ?? '';
+      const instance = (gpd?.instance as string | undefined) ?? guest.platformId ?? '';
+      const guestId = guest.id;
       const override = overridesMap.get(guestId);
       const overrideSeverity = override?.poweredOffSeverity;
 
@@ -1480,10 +1198,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: guestId,
         name: guest.name,
         type: 'guest' as const,
-        resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-        vmid: guest.vmid,
-        node: guest.node,
-        instance: guest.instance,
+        resourceType: guest.type === 'vm' ? 'VM' : 'Container',
+        vmid,
+        node,
+        instance,
         status: guest.status,
         hasOverride: hasOverride,
         disabled: override?.disabled || false,
@@ -1498,16 +1216,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const filteredGuests = search
       ? guests.filter(
-        (g) =>
-          g.name.toLowerCase().includes(search) ||
-          g.vmid?.toString().includes(search) ||
-          g.node?.toLowerCase().includes(search),
-      )
+          (g) =>
+            g.name.toLowerCase().includes(search) ||
+            g.vmid?.toString().includes(search) ||
+            g.node?.toLowerCase().includes(search),
+        )
       : guests;
 
     // Group by instance (not node - node is just the hostname which may be duplicated)
-    // Instance is the disambiguated name like "px1" or "px1 (10.0.2.224)"
-    const grouped: Record<string, Resource[]> = {};
+    // Instance is the disambiguated name like "px1" or "px1 (198.51.100.224)"
+    const grouped: Record<string, TableResource[]> = {};
     filteredGuests.forEach((guest) => {
       const groupKey = guest.instance || guest.node || 'Unknown';
       if (!grouped[groupKey]) {
@@ -1527,7 +1245,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return grouped;
   }, {});
 
-  const guestsFlat = createMemo<Resource[]>(() =>
+  const guestsFlat = createMemo<TableResource[]>(() =>
     Object.values(guestsGroupedByNode() ?? {}).flat(),
   );
 
@@ -1543,7 +1261,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
 
   // Process PBS servers with their overrides
-  const pbsServersWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const pbsServersWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1569,7 +1287,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           // PBS uses pbsDefaults for CPU/Memory (not nodeDefaults)
           return (
             override.thresholds[k] !== undefined &&
-            override.thresholds[k] !== (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
+            override.thresholds[k] !==
+              (props.pbsDefaults?.[k as keyof typeof props.pbsDefaults] ?? (k === 'cpu' ? 80 : 85))
           );
         });
 
@@ -1648,7 +1367,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   // Process PMG servers with their overrides
-  const pmgServersWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const pmgServersWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1706,8 +1425,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return pmgServers;
   }, []);
 
+  const storageCoords = (r: Resource): { node: string; instance: string } => {
+    const data = pd(r);
+    if (r.type === 'datastore') {
+      const instance =
+        (data?.pbsInstanceId as string | undefined) || r.parentId || r.platformId || 'pbs';
+      const node = (data?.pbsInstanceName as string | undefined) || instance;
+      return { node, instance };
+    }
+    return {
+      node: (data?.node as string | undefined) || '',
+      instance: (data?.instance as string | undefined) || r.platformId || '',
+    };
+  };
+
+  const normalizeStorageStatus = (status: string | undefined): string => {
+    switch ((status ?? '').toLowerCase()) {
+      case 'online':
+      case 'running':
+      case 'available':
+        return 'available';
+      default:
+        return 'offline';
+    }
+  };
+
   // Process storage with their overrides
-  const storageWithOverrides = createMemo<Resource[]>((prev = []) => {
+  const storageWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
       return prev;
@@ -1718,6 +1462,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const storageDevices = (props.storage ?? []).map((storage) => {
       const override = overridesMap.get(storage.id);
+      const coords = storageCoords(storage);
 
       // Storage only has usage threshold
       const hasCustomThresholds =
@@ -1732,9 +1477,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         name: storage.name,
         type: 'storage' as const,
         resourceType: 'Storage',
-        node: storage.node,
-        instance: storage.instance,
-        status: storage.status,
+        node: coords.node,
+        instance: coords.instance,
+        status: normalizeStorageStatus(storage.status),
         hasOverride: hasOverride,
         disabled: override?.disabled || false,
         thresholds: override?.thresholds || {},
@@ -1750,8 +1495,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return storageDevices;
   }, []);
 
-  const storageGroupedByNode = createMemo<Record<string, Resource[]>>(() => {
-    const grouped: Record<string, Resource[]> = {};
+  const storageGroupedByNode = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
     storageWithOverrides().forEach((storage) => {
       const key = storage.node?.trim() || 'Unassigned';
       if (!grouped[key]) {
@@ -1779,24 +1524,24 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         },
         {
           key: 'dockerHosts' as const,
-          label: 'Container Hosts',
+          label: 'Container Runtimes',
           total: props.dockerHosts?.length ?? 0,
           overrides: countOverrides(dockerHostsWithOverrides()),
           tab: 'docker' as const,
         },
         {
-          key: 'hostAgents' as const,
-          label: 'Host Agents',
-          total: props.hosts?.length ?? 0,
-          overrides: countOverrides(hostAgentsWithOverrides()),
-          tab: 'hosts' as const,
+          key: 'agents' as const,
+          label: 'Agents',
+          total: props.agents?.length ?? 0,
+          overrides: countOverrides(agentsWithOverrides()),
+          tab: 'agents' as const,
         },
         {
-          key: 'hostDisks' as const,
-          label: 'Host Disks',
-          total: hostDisksWithOverrides().length,
-          overrides: countOverrides(hostDisksWithOverrides()),
-          tab: 'hosts' as const,
+          key: 'agentDisks' as const,
+          label: 'Agent Disks',
+          total: agentDisksWithOverrides().length,
+          overrides: countOverrides(agentDisksWithOverrides()),
+          tab: 'agents' as const,
         },
         {
           key: 'storage' as const,
@@ -1807,7 +1552,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         },
         {
           key: 'backups' as const,
-          label: 'Backups',
+          label: 'Recovery',
           total: 1,
           overrides: backupOverridesCount(),
           tab: 'proxmox' as const,
@@ -1878,8 +1623,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const allDockerContainers = dockerContainersFlat();
     const allResources = [
       ...nodesWithOverrides(),
-      ...hostAgentsWithOverrides(),
-      ...hostDisksWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
       ...dockerHostsWithOverrides(),
       ...allGuests,
       ...allDockerContainers,
@@ -2080,6 +1825,132 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     setEditingNote('');
   };
 
+  const handleBulkEdit = (ids: string[], columns: string[]) => {
+    setBulkEditIds(ids);
+    setBulkEditColumns(columns);
+    setIsBulkEditDialogOpen(true);
+  };
+
+  const handleSaveBulkEdit = (thresholds: Record<string, number | undefined>) => {
+    setIsBulkEditDialogOpen(false);
+
+    const newOverrides = [...props.overrides()];
+    const newRawConfig = { ...props.rawOverridesConfig() };
+    const allResources = [
+      ...nodesWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
+      ...dockerHostsWithOverrides(),
+      ...pbsServersWithOverrides(),
+      ...pmgServersWithOverrides(),
+      ...storageWithOverrides(),
+    ];
+
+    for (const id of bulkEditIds()) {
+      const resource = allResources.find((r) => r.id === id);
+      if (!resource) continue;
+
+      const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
+      const existingOverrideCheck = newOverrides.find((o) => o.id === id);
+      const previousRaw = newRawConfig[id];
+
+      // Merge current thresholds explicitly checking what differs from defaults
+      const currentOverrides = existingOverrideCheck?.thresholds ?? {};
+      const newThresholds: Record<string, number | undefined> = { ...currentOverrides };
+
+      // Update with new bulk thresholds
+      Object.keys(thresholds).forEach((key) => {
+        if (thresholds[key] !== undefined) {
+          const val = thresholds[key];
+          if (val === defaultThresholds[key as keyof typeof defaultThresholds]) {
+            delete newThresholds[key];
+          } else {
+            newThresholds[key] = val as number;
+          }
+        }
+      });
+
+      const hasStateOnlyOverride = Boolean(
+        resource.disabled ||
+        resource.disableConnectivity ||
+        resource.poweredOffSeverity !== undefined ||
+        existingOverrideCheck?.note !== undefined ||
+        existingOverrideCheck?.backup ||
+        existingOverrideCheck?.snapshot,
+      );
+
+      // If no override fields remain, remove entirely
+      if (Object.keys(newThresholds).length === 0 && !hasStateOnlyOverride) {
+        if (resource.hasOverride) {
+          const idx = newOverrides.findIndex((o) => o.id === id);
+          if (idx !== -1) newOverrides.splice(idx, 1);
+          delete newRawConfig[id];
+        }
+        continue;
+      }
+
+      // Create new override
+      const override: Override = {
+        id: id,
+        name: resource.name,
+        type: resource.type as OverrideType,
+        resourceType: resource.resourceType,
+        vmid: 'vmid' in resource ? resource.vmid : undefined,
+        node: 'node' in resource ? resource.node : undefined,
+        instance: 'instance' in resource ? resource.instance : undefined,
+        disabled: resource.disabled,
+        disableConnectivity: resource.disableConnectivity,
+        poweredOffSeverity: resource.poweredOffSeverity,
+        note: existingOverrideCheck?.note,
+        backup: existingOverrideCheck?.backup,
+        snapshot: existingOverrideCheck?.snapshot,
+        thresholds: newThresholds,
+      };
+
+      // Update overrides
+      const existingIndex = newOverrides.findIndex((o) => o.id === id);
+      if (existingIndex >= 0) {
+        newOverrides[existingIndex] = override;
+      } else {
+        newOverrides.push(override);
+      }
+
+      // Update raw config
+      const hysteresisThresholds: RawOverrideConfig = {};
+      if (previousRaw) {
+        if (previousRaw.disabled !== undefined)
+          hysteresisThresholds.disabled = previousRaw.disabled;
+        if (previousRaw.disableConnectivity !== undefined)
+          hysteresisThresholds.disableConnectivity = previousRaw.disableConnectivity;
+        if (previousRaw.poweredOffSeverity !== undefined)
+          hysteresisThresholds.poweredOffSeverity = previousRaw.poweredOffSeverity;
+        if (previousRaw.note !== undefined) hysteresisThresholds.note = previousRaw.note;
+        if (previousRaw.backup !== undefined) hysteresisThresholds.backup = previousRaw.backup;
+        if (previousRaw.snapshot !== undefined)
+          hysteresisThresholds.snapshot = previousRaw.snapshot;
+      }
+
+      Object.entries(newThresholds).forEach(([metric, value]) => {
+        if (value !== undefined && value !== null) {
+          hysteresisThresholds[metric] = {
+            trigger: value,
+            clear: Math.max(0, value - 5),
+          };
+        }
+      });
+
+      newRawConfig[id] = hysteresisThresholds;
+    }
+
+    props.setOverrides(newOverrides);
+    props.setRawOverridesConfig(newRawConfig);
+    props.setHasUnsavedChanges(true);
+
+    // Clear bulk edit state
+    setBulkEditIds([]);
+    setBulkEditColumns([]);
+  };
+
   const cancelEdit = () => {
     setEditingId(null);
     setEditingThresholds({});
@@ -2087,7 +1958,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   const updateMetricDelay = (
-    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'host',
+    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'agent',
     metricKey: string,
     value: number | null,
   ) => {
@@ -2236,8 +2107,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       ...allDockerContainers,
       ...storageWithOverrides(),
       ...pbsServersWithOverrides(),
-      ...hostAgentsWithOverrides(),
-      ...hostDisksWithOverrides(),
+      ...agentsWithOverrides(),
+      ...agentDisksWithOverrides(),
     ];
     const resource = allResources.find((r) => r.id === resourceId);
     if (
@@ -2246,8 +2117,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         resource.type !== 'storage' &&
         resource.type !== 'pbs' &&
         resource.type !== 'dockerContainer' &&
-        resource.type !== 'hostAgent' &&
-        resource.type !== 'hostDisk')
+        resource.type !== 'agent' &&
+        resource.type !== 'agentDisk')
     )
       return;
 
@@ -2347,7 +2218,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         const offlineId = `pbs-offline-${resourceId}`;
         props.removeAlerts(
           (alert) =>
-            alert.resourceId === resourceId && (alert.id === offlineId || alert.type === 'offline'),
+            alert.resourceId === resourceId &&
+            (matchesAlertIdentifier(alert, offlineId) || alert.type === 'offline'),
         );
       } else if (resource.type === 'dockerContainer') {
         props.removeAlerts(
@@ -2366,17 +2238,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const nodes = nodesWithOverrides();
     const pbsServers = pbsServersWithOverrides();
     const guests = guestsFlat();
-    const hostAgents = hostAgentsWithOverrides();
+    const agents = agentsWithOverrides();
     const dockerHosts = dockerHostsWithOverrides();
-    const resource = [...nodes, ...pbsServers, ...guests, ...hostAgents, ...dockerHosts].find(
+    const resource = [...nodes, ...pbsServers, ...guests, ...agents, ...dockerHosts].find(
       (r) => r.id === resourceId,
     );
     if (
       !resource ||
-      (resource.type !== 'node' &&
+      (resource.type !== 'agent' &&
         resource.type !== 'pbs' &&
         resource.type !== 'guest' &&
-        resource.type !== 'hostAgent' &&
+        resource.type !== 'agent' &&
         resource.type !== 'dockerHost')
     )
       return;
@@ -2474,7 +2346,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (props.removeAlerts && resource.type === 'dockerHost') {
       const offlineId = `docker-host-offline-${resourceId}`;
       const resourceKey = `docker:${resourceId}`;
-      props.removeAlerts((alert) => alert.id === offlineId || alert.resourceId === resourceKey);
+      props.removeAlerts(
+        (alert) => matchesAlertIdentifier(alert, offlineId) || alert.resourceId === resourceKey,
+      );
     }
   };
 
@@ -2613,35 +2487,27 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     <div class="space-y-4">
       {/* Search Bar */}
       <div class="relative">
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search resources... (Ctrl+F)"
-          value={searchTerm()}
-          onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-20 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder={getAlertThresholdsSearchPlaceholder()}
+          class="w-full"
+          onBeforeAutoFocus={() => Boolean(editingId())}
+          focusOnShortcut
+          clearOnEscape
+          shortcutHint="Ctrl+F"
         />
-        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
-          ⌘F
-        </kbd>
-        <svg
-          class="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        <Show when={searchTerm()}>
+      </div>
+
+      {/* Help Banner - Dismissible */}
+      <Show when={!helpBannerDismissed()}>
+        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900 p-3 relative group">
           <button
             type="button"
-            onClick={() => setSearchTerm('')}
-            class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            onClick={dismissHelpBanner}
+            class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 opacity-0 group-hover:opacity-100 transition-opacity"
+            title={getAlertThresholdsHelpDismissLabel()}
+            aria-label={getAlertThresholdsHelpDismissLabel()}
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -2650,23 +2516,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 stroke-width="2"
                 d="M6 18L18 6M6 6l12 12"
               />
-            </svg>
-          </button>
-        </Show>
-      </div>
-
-      {/* Help Banner - Dismissible */}
-      <Show when={!helpBannerDismissed()}>
-        <div class="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 relative group">
-          <button
-            type="button"
-            onClick={dismissHelpBanner}
-            class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Dismiss tips"
-            aria-label="Dismiss tips"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <div class="flex items-start gap-2 pr-6">
@@ -2684,31 +2533,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               />
             </svg>
             <div class="text-sm text-blue-900 dark:text-blue-100">
-              <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
-              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
-                0
+              <span class="font-medium">{getAlertThresholdsHelpBanner().title}</span> Set any
+              threshold to{' '}
+              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs font-mono">
+                {getAlertThresholdsHelpBanner().disableValue}
               </code>{' '}
               to disable alerts for that metric. Click on disabled thresholds showing{' '}
-              <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
-              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
-                Custom
+              <span class="italic">{getAlertThresholdsHelpBanner().reenableLabel}</span> to
+              re-enable them. Resources with custom settings show a{' '}
+              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
+                {getAlertThresholdsHelpBanner().customBadgeLabel}
               </span>{' '}
-              badge. <span class="text-blue-600/70 dark:text-blue-400/70">Click sections to collapse/expand.</span>
+              badge.{' '}
+              <span class="text-blue-600 dark:text-blue-400">
+                {getAlertThresholdsHelpBanner().collapseHint}
+              </span>
             </div>
           </div>
         </div>
       </Show>
 
       {/* Tab Navigation */}
-      <div class="border-b border-gray-200 dark:border-gray-700">
+      <div class="border-b border-border">
         <nav class="-mb-px flex gap-4 sm:gap-6" aria-label="Tabs">
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Server class="w-4 h-4" />
             <span class="hidden sm:inline">Proxmox / PBS</span>
@@ -2717,10 +2568,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Mail class="w-4 h-4" />
             <span class="hidden sm:inline">Mail Gateway</span>
@@ -2728,23 +2576,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </button>
           <button
             type="button"
-            onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'hosts'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+            onClick={() => handleTabClick('agents')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'agents' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Users class="w-4 h-4" />
-            <span class="hidden sm:inline">Host Agents</span>
-            <span class="sm:hidden">Hosts</span>
+            <span>Agents</span>
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Boxes class="w-4 h-4" />
             <span>Containers</span>
@@ -2758,15 +2599,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={expandAll}
-            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            class="text-xs px-2 py-1 hover:text-muted hover:bg-surface-hover rounded transition-colors"
           >
             Expand all
           </button>
-          <span class="text-gray-300 dark:text-gray-600">|</span>
+          <span class="text-muted">|</span>
           <button
             type="button"
             onClick={collapseAll}
-            class="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            class="text-xs px-2 py-1 hover:text-muted hover:bg-surface-hover rounded transition-colors"
           >
             Collapse all
           </button>
@@ -2778,13 +2619,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('nodes')}>
             <CollapsibleSection
               id="nodes"
-              title="Proxmox Nodes"
+              title={sectionTitles.nodes}
               resourceCount={nodesWithOverrides().length}
               collapsed={isCollapsed('nodes')}
               onToggle={() => toggleSection('nodes')}
               icon={<Server class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllNodes()}
-              emptyMessage="No nodes match the current filters."
+              emptyMessage={NODE_THRESHOLDS_FILTER_EMPTY_STATE}
             >
               <div ref={registerSection('nodes')} class="scroll-mt-24">
                 <ResourceTable
@@ -2792,7 +2633,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   resources={nodesWithOverrides()}
                   columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No nodes match the current filters."
+                  emptyMessage={NODE_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2805,6 +2646,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.nodeDefaults}
@@ -2830,13 +2674,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('pbs')}>
             <CollapsibleSection
               id="pbs"
-              title="PBS Servers"
+              title={sectionTitles.pbs}
               resourceCount={pbsServersWithOverrides().length}
               collapsed={isCollapsed('pbs')}
               onToggle={() => toggleSection('pbs')}
               icon={<Database class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllPBS()}
-              emptyMessage="No PBS servers configured."
+              emptyMessage={PBS_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('pbs')} class="scroll-mt-24">
                 <ResourceTable
@@ -2844,7 +2688,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   resources={pbsServersWithOverrides()}
                   columns={['CPU %', 'Memory %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No PBS servers match the current filters."
+                  emptyMessage={PBS_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2857,6 +2701,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.pbsDefaults ?? { cpu: 80, memory: 85 }}
@@ -2882,13 +2736,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('guests')}>
             <CollapsibleSection
               id="guests"
-              title="VMs & Containers"
+              title={sectionTitles.guests}
               resourceCount={props.allGuests().length}
               collapsed={isCollapsed('guests')}
               onToggle={() => toggleSection('guests')}
               icon={<Monitor class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllGuests()}
-              emptyMessage="No VMs or containers found."
+              emptyMessage={GUEST_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('guests')} class="scroll-mt-24">
                 <ResourceTable
@@ -2907,7 +2761,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     'Net Out MB/s',
                   ]}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No VMs or containers match the current filters."
+                  emptyMessage={GUEST_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2922,6 +2776,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={props.guestDefaults}
@@ -2939,7 +2804,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       props.setGuestDisableConnectivity(true);
                     } else {
                       props.setGuestDisableConnectivity(false);
-                      props.setGuestPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                      props.setGuestPoweredOffSeverity(
+                        state === 'critical' ? 'critical' : 'warning',
+                      );
                     }
                     props.setHasUnsavedChanges(true);
                   }}
@@ -2958,50 +2825,65 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={activeTab() === 'proxmox'}>
             <CollapsibleSection
               id="guest-filtering"
-              title="Guest Filtering"
+              title={sectionTitles.guestFiltering}
               collapsed={isCollapsed('guest-filtering')}
               onToggle={() => toggleSection('guest-filtering')}
               icon={<Monitor class="w-5 h-5" />}
-              emptyMessage="Configure guest filtering rules."
+              emptyMessage={GUEST_FILTERING_EMPTY_STATE}
             >
               <div class="grid grid-cols-1 gap-6 p-4 xl:grid-cols-3">
-                <Card padding="md" tone="glass">
+                <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Ignored Prefixes</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">Skip metrics for guests starting with:</p>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.ignoredPrefixes.title}
+                    </h3>
+                    <p class="text-xs text-muted">
+                      {guestFilterPresentation.ignoredPrefixes.description}
+                    </p>
                   </div>
-                  <textarea
-                    value={ignoredGuestInput()}
-                    onInput={(e) => handleIgnoredGuestChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                    placeholder="dev-"
+                  <TagInput
+                    tags={props.ignoredGuestPrefixes()}
+                    onChange={(tags) => {
+                      props.setIgnoredGuestPrefixes(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    placeholder={guestFilterPresentation.ignoredPrefixes.placeholder}
                   />
                 </Card>
-                <Card padding="md" tone="glass">
+                <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tag Whitelist</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">Only monitor guests with at least one of these tags (leave empty to disable whitelist):</p>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.tagWhitelist.title}
+                    </h3>
+                    <p class="text-xs text-muted">
+                      {guestFilterPresentation.tagWhitelist.description}
+                    </p>
                   </div>
-                  <textarea
-                    value={guestTagWhitelistInput()}
-                    onInput={(e) => handleGuestTagWhitelistChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                    placeholder="production"
+                  <TagInput
+                    tags={props.guestTagWhitelist()}
+                    onChange={(tags) => {
+                      props.setGuestTagWhitelist(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    placeholder={guestFilterPresentation.tagWhitelist.placeholder}
                   />
                 </Card>
-                <Card padding="md" tone="glass">
+                <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tag Blacklist</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">Ignore guests with any of these tags:</p>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.tagBlacklist.title}
+                    </h3>
+                    <p class="text-xs text-muted">
+                      {guestFilterPresentation.tagBlacklist.description}
+                    </p>
                   </div>
-                  <textarea
-                    value={guestTagBlacklistInput()}
-                    onInput={(e) => handleGuestTagBlacklistChange(e.currentTarget.value)}
-                    rows={6}
-                    class="w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                    placeholder="maintenance"
+                  <TagInput
+                    tags={props.guestTagBlacklist()}
+                    onChange={(tags) => {
+                      props.setGuestTagBlacklist(tags);
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    placeholder={guestFilterPresentation.tagBlacklist.placeholder}
                   />
                 </Card>
               </div>
@@ -3011,12 +2893,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('backups')}>
             <CollapsibleSection
               id="backups"
-              title="Backups"
+              title={sectionTitles.backups}
               collapsed={isCollapsed('backups')}
               onToggle={() => toggleSection('backups')}
               icon={<Archive class="w-5 h-5" />}
               isGloballyDisabled={!props.backupDefaults().enabled}
-              emptyMessage="Configure backup alert thresholds."
+              emptyMessage={BACKUP_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('backups')} class="scroll-mt-24">
                 <ResourceTable
@@ -3051,6 +2933,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={backupDefaultsRecord()}
@@ -3105,12 +2988,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }
                   }}
                 />
-                <Card padding="md" tone="glass" class="mt-6">
+                <Card padding="md" tone="card" class="mt-6">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Orphaned backups</h3>
-                      <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                        Alert when backups exist for VMIDs that are no longer in inventory.
+                      <h3 class="text-sm font-semibold text-base-content">
+                        {backupOrphanedPresentation.title}
+                      </h3>
+                      <p class="mt-1 text-xs text-muted">
+                        {backupOrphanedPresentation.description}
                       </p>
                     </div>
                     <Toggle
@@ -3121,33 +3006,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                           alertOrphaned: !(prev.alertOrphaned ?? true),
                         }))
                       }
-                      label={<span class="text-sm font-medium text-gray-900 dark:text-gray-100">Alerts</span>}
+                      label={
+                        <span class="text-sm font-medium text-base-content">
+                          {backupOrphanedPresentation.toggleLabel}
+                        </span>
+                      }
                       description={
-                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                          Toggle orphaned VM/CT backup alerts
+                        <span class="text-xs text-muted">
+                          {backupOrphanedPresentation.toggleDescription}
                         </span>
                       }
                       size="sm"
                     />
                   </div>
                   <div class="mt-4">
-                    <label class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                      Ignore VMIDs
+                    <label class="text-xs font-medium uppercase tracking-wide text-muted">
+                      {backupOrphanedPresentation.ignoreVmidsLabel}
                     </label>
-                    <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                      One per line. Use a trailing * to match a prefix (example: 10*).
+                    <p class="mt-1 text-xs text-muted">
+                      {backupOrphanedPresentation.ignoreVmidsDescription}
                     </p>
-                    <textarea
-                      value={backupIgnoreInput()}
-                      onInput={(event) => handleBackupIgnoreChange(event.currentTarget.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.stopPropagation();
-                        }
+                    <TagInput
+                      tags={props.backupDefaults().ignoreVMIDs ?? []}
+                      onChange={(tags) => {
+                        updateBackupDefaults((prev) => ({ ...prev, ignoreVMIDs: tags }));
+                        props.setHasUnsavedChanges(true);
                       }}
-                      rows={5}
-                      class="mt-3 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
-                      placeholder="100\n200\n10*"
+                      placeholder={backupOrphanedPresentation.ignoreVmidsPlaceholder}
                     />
                   </div>
                 </Card>
@@ -3158,12 +3043,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('snapshots')}>
             <CollapsibleSection
               id="snapshots"
-              title="Snapshot Age"
+              title={sectionTitles.snapshots}
               collapsed={isCollapsed('snapshots')}
               onToggle={() => toggleSection('snapshots')}
               icon={<Camera class="w-5 h-5" />}
               isGloballyDisabled={!props.snapshotDefaults().enabled}
-              emptyMessage="Configure snapshot age thresholds."
+              emptyMessage={SNAPSHOT_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('snapshots')} class="scroll-mt-24">
                 <ResourceTable
@@ -3191,6 +3076,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %', 'Temperature °C'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={snapshotDefaultsRecord()}
@@ -3252,13 +3138,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('storage')}>
             <CollapsibleSection
               id="storage"
-              title="Storage Devices"
+              title={sectionTitles.storage}
               resourceCount={props.storage.length}
               collapsed={isCollapsed('storage')}
               onToggle={() => toggleSection('storage')}
               icon={<HardDrive class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllStorage()}
-              emptyMessage="No storage devices found."
+              emptyMessage={STORAGE_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('storage')} class="scroll-mt-24">
                 <ResourceTable
@@ -3267,7 +3153,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   groupHeaderMeta={guestGroupHeaderMeta()}
                   columns={['Usage %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No storage devices match the current filters."
+                  emptyMessage={STORAGE_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -3279,6 +3165,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) => handleBulkEdit(ids, ['Usage %'])}
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
                   globalDefaults={{ usage: props.storageDefault() }}
@@ -3292,11 +3179,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   }}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}
                   globalDisableFlag={props.disableAllStorage}
-                  onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
+                  onToggleGlobalDisable={() =>
+                    props.setDisableAllStorage(!props.disableAllStorage())
+                  }
                   showDelayColumn={true}
                   globalDelaySeconds={props.timeThresholds().storage}
                   metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
-                  onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
+                  onMetricDelayChange={(metric, value) =>
+                    updateMetricDelay('storage', metric, value)
+                  }
                   factoryDefaults={
                     props.factoryStorageDefault !== undefined
                       ? { usage: props.factoryStorageDefault }
@@ -3313,15 +3204,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show
             when={pmgServersWithOverrides().length > 0}
             fallback={
-              <div class="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                No mail gateways configured yet. Add a PMG instance in Settings to manage
-                thresholds.
+              <div class="rounded-md border border-border bg-surface p-6 text-sm text-muted">
+                {PMG_THRESHOLDS_EMPTY_STATE}
               </div>
             }
           >
             <div ref={registerSection('pmg')} class="scroll-mt-24">
               <ResourceTable
-                title="Mail Gateway Thresholds"
+                title={sectionTitles.pmg}
                 resources={pmgServersWithOverrides()}
                 columns={[
                   'Queue Warn',
@@ -3342,7 +3232,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   'Growth Crit Min',
                 ]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No mail gateways match the current filters."
+                emptyMessage={PMG_THRESHOLDS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3355,6 +3245,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) => handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %'])}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={pmgGlobalDefaults()}
@@ -3371,15 +3262,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </Show>
         </Show>
 
-        <Show when={activeTab() === 'hosts'}>
-          <Show when={hasSection('hostAgents')}>
-            <div ref={registerSection('hostAgents')} class="scroll-mt-24">
+        <Show when={activeTab() === 'agents'}>
+          <Show when={hasSection('agents')}>
+            <div ref={registerSection('agents')} class="scroll-mt-24">
               <ResourceTable
-                title="Host Agents"
-                resources={hostAgentsWithOverrides()}
+                title={sectionTitles.agents}
+                resources={agentsWithOverrides()}
                 columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No host agents match the current filters."
+                emptyMessage={AGENT_THRESHOLDS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3392,46 +3283,49 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
-                globalDefaults={props.hostDefaults}
-                setGlobalDefaults={props.setHostDefaults}
+                globalDefaults={props.agentDefaults}
+                setGlobalDefaults={props.setAgentDefaults}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllHosts}
-                onToggleGlobalDisable={() => props.setDisableAllHosts(!props.disableAllHosts())}
-                globalDisableOfflineFlag={props.disableAllHostsOffline}
+                globalDisableFlag={props.disableAllAgents}
+                onToggleGlobalDisable={() => props.setDisableAllAgents(!props.disableAllAgents())}
+                globalDisableOfflineFlag={props.disableAllAgentsOffline}
                 onToggleGlobalDisableOffline={() =>
-                  props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
+                  props.setDisableAllAgentsOffline(!props.disableAllAgentsOffline())
                 }
                 showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().host}
-                metricDelaySeconds={props.metricTimeThresholds().host ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('host', metric, value)}
-                factoryDefaults={props.factoryHostDefaults}
-                onResetDefaults={props.resetHostDefaults}
+                globalDelaySeconds={props.timeThresholds().agent}
+                metricDelaySeconds={props.metricTimeThresholds().agent ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('agent', metric, value)}
+                factoryDefaults={props.factoryAgentDefaults}
+                onResetDefaults={props.resetAgentDefaults}
               />
             </div>
           </Show>
 
-          <Show when={hasSection('hostDisks')}>
+          <Show when={hasSection('agentDisks')}>
             <CollapsibleSection
-              id="hostDisks"
-              title="Host Disks"
-              resourceCount={hostDisksWithOverrides().length}
-              collapsed={isCollapsed('hostDisks')}
-              onToggle={() => toggleSection('hostDisks')}
+              id="agentDisks"
+              title={sectionTitles.agentDisks}
+              resourceCount={agentDisksWithOverrides().length}
+              collapsed={isCollapsed('agentDisks')}
+              onToggle={() => toggleSection('agentDisks')}
               icon={<HardDrive class="w-5 h-5" />}
-              isGloballyDisabled={props.disableAllHosts()}
-              emptyMessage="No host disks found. Host agents with mounted filesystems will appear here."
+              isGloballyDisabled={props.disableAllAgents()}
+              emptyMessage={AGENT_DISKS_EMPTY_STATE}
             >
-              <div ref={registerSection('hostDisks')} class="scroll-mt-24">
+              <div ref={registerSection('agentDisks')} class="scroll-mt-24">
                 <ResourceTable
                   title=""
-                  groupedResources={hostDisksGroupedByHost()}
+                  groupedResources={agentDisksGroupedByAgent()}
                   groupHeaderMeta={guestGroupHeaderMeta()}
                   columns={['Disk %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No host disks match the current filters."
+                  emptyMessage={AGENT_DISKS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -3443,15 +3337,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   setEditingThresholds={setEditingThresholds}
                   editingNote={editingNote}
                   setEditingNote={setEditingNote}
+                  onBulkEdit={(ids) =>
+                    handleBulkEdit(ids, [
+                      'CPU %',
+                      'Memory %',
+                      'Disk R MB/s',
+                      'Disk W MB/s',
+                      'Net In MB/s',
+                      'Net Out MB/s',
+                    ])
+                  }
                   formatMetricValue={formatMetricValue}
                   hasActiveAlert={hasActiveAlert}
-                  globalDefaults={{ disk: props.hostDefaults.disk }}
+                  globalDefaults={{ disk: props.agentDefaults.disk }}
                   setGlobalDefaults={(value) => {
                     if (typeof value === 'function') {
-                      const newValue = value({ disk: props.hostDefaults.disk });
-                      props.setHostDefaults((prev) => ({ ...prev, disk: newValue.disk }));
+                      const newValue = value({ disk: props.agentDefaults.disk });
+                      props.setAgentDefaults((prev) => ({ ...prev, disk: newValue.disk }));
                     } else {
-                      props.setHostDefaults((prev) => ({ ...prev, disk: value.disk }));
+                      props.setAgentDefaults((prev) => ({ ...prev, disk: value.disk }));
                     }
                   }}
                   setHasUnsavedChanges={props.setHasUnsavedChanges}
@@ -3462,24 +3366,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </Show>
 
         <Show when={activeTab() === 'docker'}>
-          <Card padding="md" tone="glass" class="mb-6">
+          <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Ignored container prefixes
+                <h3 class="text-sm font-semibold text-base-content">
+                  {dockerIgnoredPrefixesPresentation.title}
                 </h3>
-                <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  Containers whose name or ID starts with any prefix below are skipped for container
-                  alerts. Enter one prefix per line; matching is case-insensitive.
+                <p class="mt-1 text-xs text-muted">
+                  {dockerIgnoredPrefixesPresentation.description}
                 </p>
               </div>
               <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
                 <button
                   type="button"
-                  class="inline-flex items-center justify-center rounded-md border border-transparent bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt"
                   onClick={handleResetDockerIgnored}
                 >
-                  Reset
+                  {dockerIgnoredPrefixesPresentation.resetLabel}
                 </button>
               </Show>
             </div>
@@ -3493,32 +3396,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   event.stopPropagation();
                 }
               }}
-              placeholder="runner-"
+              placeholder={dockerIgnoredPrefixesPresentation.placeholder}
               rows={4}
-              class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+              class="mt-4 w-full rounded-md border border-border bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
           </Card>
 
-          <Card padding="md" tone="glass" class="mb-6">
-            <Toggle
-              checked={props.containerUpdateAlertsEnabled()}
-              onToggle={() => {
-                props.setContainerUpdateAlertsEnabled(!props.containerUpdateAlertsEnabled());
-                props.setHasUnsavedChanges(true);
-              }}
-              label={<span class="text-sm font-semibold text-gray-900 dark:text-gray-100">Container update alerts</span>}
-              description={<span class="text-xs text-gray-500 dark:text-gray-400">Alert when container images have updates available</span>}
-              size="sm"
-            />
-          </Card>
-
-          <Card padding="md" tone="glass" class="mb-6">
+          <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Swarm service alerts</h3>
-                <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  Pulse raises alerts when running replicas fall behind the desired count or a rollout gets stuck. Adjust the gap thresholds below or disable service alerts entirely.
-                </p>
+                <h3 class="text-sm font-semibold text-base-content">
+                  {dockerServicePresentation.title}
+                </h3>
+                <p class="mt-1 text-xs text-muted">{dockerServicePresentation.description}</p>
               </div>
               <Toggle
                 checked={!props.disableAllDockerServices()}
@@ -3526,8 +3416,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   props.setDisableAllDockerServices(!props.disableAllDockerServices());
                   props.setHasUnsavedChanges(true);
                 }}
-                label={<span class="text-sm font-medium text-gray-900 dark:text-gray-100">Alerts</span>}
-                description={<span class="text-xs text-gray-500 dark:text-gray-400">Toggle Swarm service replica monitoring</span>}
+                label={
+                  <span class="text-sm font-medium text-base-content">
+                    {dockerServicePresentation.toggleLabel}
+                  </span>
+                }
+                description={
+                  <span class="text-xs text-muted">
+                    {dockerServicePresentation.toggleDescription}
+                  </span>
+                }
                 size="sm"
               />
             </div>
@@ -3536,9 +3434,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <div>
                 <label
                   for={serviceWarnInputId}
-                  class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                  class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
-                  Warning gap %
+                  {dockerServicePresentation.warningGapLabel}
                 </label>
                 <input
                   type="number"
@@ -3548,25 +3446,27 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   value={props.dockerDefaults.serviceWarnGapPercent}
                   onInput={(event) => {
                     const value = Number(event.currentTarget.value);
-                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    const normalized = Number.isFinite(value)
+                      ? Math.max(0, Math.min(100, value))
+                      : 0;
                     props.setDockerDefaults((prev) => ({
                       ...prev,
                       serviceWarnGapPercent: normalized,
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                  class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Convert to warning when at least this percentage of replicas are missing.
+                <p class="mt-1 text-xs text-muted">
+                  {dockerServicePresentation.warningGapDescription}
                 </p>
               </div>
               <div>
                 <label
                   for={serviceCriticalInputId}
-                  class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                  class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
-                  Critical gap %
+                  {dockerServicePresentation.criticalGapLabel}
                 </label>
                 <input
                   type="number"
@@ -3576,17 +3476,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   value={props.dockerDefaults.serviceCriticalGapPercent}
                   onInput={(event) => {
                     const value = Number(event.currentTarget.value);
-                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    const normalized = Number.isFinite(value)
+                      ? Math.max(0, Math.min(100, value))
+                      : 0;
                     props.setDockerDefaults((prev) => ({
                       ...prev,
                       serviceCriticalGapPercent: normalized,
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                  class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Raise a critical alert when the missing replica gap meets or exceeds this value.
+                <p class="mt-1 text-xs text-muted">
+                  {dockerServicePresentation.criticalGapDescription}
                 </p>
               </div>
             </div>
@@ -3600,11 +3502,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
-                title="Container Hosts"
+                title={sectionTitles.dockerHosts}
                 resources={dockerHostsWithOverrides()}
                 columns={[]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No container hosts match the current filters."
+                emptyMessage={CONTAINER_RUNTIMES_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3617,6 +3519,19 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, [
+                    'CPU %',
+                    'Memory %',
+                    'Disk %',
+                    'Disk R MB/s',
+                    'Disk W MB/s',
+                    'Net In MB/s',
+                    'Net Out MB/s',
+                    'Restart Count',
+                    'Restart Window (s)',
+                  ])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDisableFlag={props.disableAllDockerHosts}
@@ -3634,7 +3549,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('dockerContainers')}>
             <div ref={registerSection('dockerContainers')} class="scroll-mt-24">
               <ResourceTable
-                title="Containers"
+                title={sectionTitles.dockerContainers}
                 groupedResources={dockerContainersGroupedByHost()}
                 groupHeaderMeta={dockerHostGroupMeta()}
                 columns={[
@@ -3647,7 +3562,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   'Memory Critical %',
                 ]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No containers match the current filters."
+                emptyMessage={CONTAINERS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3659,6 +3574,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setEditingThresholds={setEditingThresholds}
                 editingNote={editingNote}
                 setEditingNote={setEditingNote}
+                onBulkEdit={(ids) =>
+                  handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+                }
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{
@@ -3713,7 +3631,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     props.setDockerDisableConnectivity(true);
                   } else {
                     props.setDockerDisableConnectivity(false);
-                    props.setDockerPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                    props.setDockerPoweredOffSeverity(
+                      state === 'critical' ? 'critical' : 'warning',
+                    );
                   }
                   props.setHasUnsavedChanges(true);
                 }}
@@ -3725,6 +3645,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </Show>
         </Show>
       </div>
+
+      <BulkEditDialog
+        isOpen={isBulkEditDialogOpen()}
+        onClose={() => setIsBulkEditDialogOpen(false)}
+        selectedIds={bulkEditIds()}
+        columns={bulkEditColumns()}
+        onSave={handleSaveBulkEdit}
+      />
     </div>
   );
 }

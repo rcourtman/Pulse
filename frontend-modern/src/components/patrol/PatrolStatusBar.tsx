@@ -8,6 +8,8 @@
 import { Component, createResource, createMemo, Show } from 'solid-js';
 import { getPatrolRunHistory, type PatrolRunRecord } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { formatRelativeTime } from '@/utils/format';
+import { isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -18,30 +20,26 @@ interface PatrolStatusBarProps {
 }
 
 export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
-  const formatRelativeTime = (date: Date): string => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
   const formatTrigger = (reason?: string) => {
     switch (reason) {
-      case 'scheduled': return 'Scheduled';
-      case 'manual': return 'Manual';
-      case 'startup': return 'Startup';
-      case 'alert_fired': return 'Alert fired';
-      case 'alert_cleared': return 'Alert cleared';
-      case 'anomaly': return 'Anomaly';
-      case 'user_action': return 'User action';
-      case 'config_changed': return 'Config change';
-      default: return reason ? reason.replace(/_/g, ' ') : '';
+      case 'scheduled':
+        return 'Scheduled';
+      case 'manual':
+        return 'Manual';
+      case 'startup':
+        return 'Startup';
+      case 'alert_fired':
+        return 'Alert fired';
+      case 'alert_cleared':
+        return 'Alert cleared';
+      case 'anomaly':
+        return 'Anomaly';
+      case 'user_action':
+        return 'User action';
+      case 'config_changed':
+        return 'Config change';
+      default:
+        return reason ? reason.replace(/_/g, ' ') : '';
     }
   };
 
@@ -53,7 +51,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
       } catch {
         return [];
       }
-    }
+    },
   );
 
   const stats = createMemo(() => {
@@ -62,18 +60,16 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayRuns = allRuns.filter(r => new Date(r.started_at) >= todayStart);
+    const todayRuns = allRuns.filter((r) => new Date(r.started_at) >= todayStart);
 
     const lastRun = allRuns[0];
     const lastRunTime = lastRun ? new Date(lastRun.started_at) : null;
-    const lastRunHadErrors = lastRun?.error_count > 0;
-
     return {
       runsToday: todayRuns.length,
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
-      lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime) : null,
+      lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
       lastRunTrigger: formatTrigger(lastRun?.trigger_reason),
-      isHealthy: !lastRunHadErrors && lastRun?.status !== 'error',
+      isHealthy: isPatrolRunHealthy(lastRun?.status, lastRun?.error_count ?? 0),
     };
   });
 
@@ -82,13 +78,14 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
   return (
     <Show when={!runs.loading && stats()}>
       {(s) => (
-        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2">
+        <div class="bg-surface rounded-md border border-border px-4 py-2">
           {/* Circuit breaker warning */}
           <Show when={circuitBreaker()?.state === 'open'}>
             <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-red-200 dark:border-red-800">
               <AlertTriangleIcon class="w-3.5 h-3.5 text-red-500" />
               <span class="text-red-600 dark:text-red-400 font-medium text-xs">
-                AI circuit breaker tripped — Patrol paused after {circuitBreaker()!.consecutive_failures} consecutive failures
+                AI circuit breaker tripped — Patrol paused after{' '}
+                {circuitBreaker()!.consecutive_failures} consecutive failures
               </span>
             </div>
           </Show>
@@ -108,31 +105,35 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
                 fallback={
                   <>
                     <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
-                    <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">Issues detected</span>
+                    <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
+                      Issues detected
+                    </span>
                   </>
                 }
               >
                 <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
-                <span class="text-green-600 dark:text-green-400 font-medium text-xs">Running normally</span>
+                <span class="text-green-600 dark:text-green-400 font-medium text-xs">
+                  Running normally
+                </span>
               </Show>
             </div>
 
-            <span class="hidden sm:inline text-gray-300 dark:text-gray-600">|</span>
+            <span class="hidden sm:inline text-slate-300 ">|</span>
 
             {/* Last run */}
             <Show when={s().lastRunTime}>
-              <span class="text-xs text-gray-600 dark:text-gray-400">
+              <span class="text-xs text-muted">
                 Last run: {s().lastRunTime}
                 <Show when={s().lastRunTrigger}>
-                  <span class="text-gray-500 dark:text-gray-500"> ({s().lastRunTrigger})</span>
+                  <span class=" "> ({s().lastRunTrigger})</span>
                 </Show>
               </span>
             </Show>
 
-            <span class="hidden sm:inline text-gray-300 dark:text-gray-600">|</span>
+            <span class="hidden sm:inline text-slate-300 ">|</span>
 
             {/* Today */}
-            <span class="text-xs text-gray-600 dark:text-gray-400">
+            <span class="text-xs text-muted">
               Today: {s().runsToday} run{s().runsToday === 1 ? '' : 's'}
               <Show when={s().newFindingsToday > 0}>
                 <span class="text-amber-600 dark:text-amber-400">

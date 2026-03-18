@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +26,10 @@ func TestGuestMetadataStore_LoadErrors(t *testing.T) {
 
 	mfs := &mockFSError{FileSystem: defaultFileSystem{}}
 	store := NewGuestMetadataStore(tempDir, mfs)
+
+	filePath := filepath.Join(tempDir, "guest_metadata.json")
+	requireErr := os.WriteFile(filePath, []byte("{}"), 0o600)
+	assert.NoError(t, requireErr)
 
 	mfs.readError = errors.New("read error")
 	err := store.Load()

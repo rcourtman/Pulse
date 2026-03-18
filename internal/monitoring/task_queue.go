@@ -193,15 +193,22 @@ type QueueSnapshot struct {
 	PerType          map[string]int `json:"perType"`
 }
 
+func emptyQueueSnapshot() QueueSnapshot {
+	return QueueSnapshot{
+		PerType: map[string]int{},
+	}
+}
+
 // Snapshot returns a snapshot of the queue state for API exposure.
 func (q *TaskQueue) Snapshot() QueueSnapshot {
+	if q == nil {
+		return emptyQueueSnapshot()
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	snapshot := QueueSnapshot{
-		Depth:   len(q.heap),
-		PerType: make(map[string]int),
-	}
+	snapshot := emptyQueueSnapshot()
+	snapshot.Depth = len(q.heap)
 
 	now := time.Now()
 	for _, entry := range q.heap {

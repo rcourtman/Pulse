@@ -52,21 +52,55 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
-func ensureSettingsWriteScope(w http.ResponseWriter, req *http.Request) bool {
-	record := getAPITokenRecordFromRequest(req)
-	if record == nil {
-		return true
+func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	// Session users must match configured admin identity for privileged operations.
+	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+		configuredAdmin := ""
+		if cfg != nil {
+			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
+		}
+		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
+			log.Warn().
+				Str("path", req.URL.Path).
+				Str("user", sessionUser).
+				Msg("Session user missing admin privileges for privileged operation")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return false
+		}
 	}
-	if record.HasScope(config.ScopeSettingsWrite) {
-		return true
+	return true
+}
+
+func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
+	record := getAPITokenRecordFromRequest(req)
+	if record != nil {
+		if record.HasScope(scope) {
+			return true
+		}
+
+		log.Warn().
+			Str("token_id", record.ID).
+			Str("path", req.URL.Path).
+			Str("required_scope", scope).
+			Msg("API token missing required settings scope for privileged operation")
+		respondMissingScope(w, scope)
+		return false
 	}
 
-	log.Warn().
-		Str("token_id", record.ID).
-		Str("path", req.URL.Path).
-		Msg("API token missing settings:write scope for privileged operation")
-	respondMissingScope(w, config.ScopeSettingsWrite)
-	return false
+	if !ensureAdminSession(cfg, w, req) {
+		return false
+	}
+
+	return true
+}
+
+func ensureSettingsReadScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	return ensureSettingsScope(cfg, w, req, config.ScopeSettingsRead)
+}
+
+func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	return ensureSettingsScope(cfg, w, req, config.ScopeSettingsWrite)
 }
 
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup
@@ -126,9 +160,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 		}()
 		forceRequested := setupRequest.Force
-		if r.config.DisableAuthEnvDetected && !authConfigured {
-			forceRequested = true
-		}
 
 		clientIP = GetClientIP(req)
 		recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token"))
@@ -149,8 +180,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		authorized := recoveryAuthorized
 
 		// Only require authentication if credentials are already configured.
-		// When DISABLE_AUTH is detected but no auth exists (upgrade path from legacy),
-		// allow bootstrap token flow instead of demanding credentials that don't exist.
 		if !authorized && authConfigured {
 			wrapped := &responseCapture{ResponseWriter: w}
 			if CheckAuth(r.config, wrapped, req) {
@@ -187,11 +216,9 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 
 			if providedToken == "" {
-				errorMsg := fmt.Sprintf("Bootstrap setup token required. Retrieve it from the host:\n\n"+
-					"Docker: docker exec <container> cat /data/.bootstrap_token\n"+
-					"Docker: docker exec <container> /app/pulse bootstrap-token\n"+
-					"Bare metal: cat %s\n"+
-					"Bare metal: pulse bootstrap-token", r.bootstrapTokenPath)
+				errorMsg := "Bootstrap setup token required. Retrieve it from the host:\n\n" +
+					"Docker: docker exec <container> /app/pulse bootstrap-token\n" +
+					"Bare metal: pulse bootstrap-token"
 				http.Error(w, errorMsg, http.StatusUnauthorized)
 				return
 			}
@@ -200,11 +227,9 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				log.Warn().
 					Str("ip", clientIP).
 					Msg("Rejected quick setup with invalid bootstrap token")
-				errorMsg := fmt.Sprintf("Invalid bootstrap setup token. Retrieve the correct token from the host:\n\n"+
-					"Docker: docker exec <container> cat /data/.bootstrap_token\n"+
-					"Docker: docker exec <container> /app/pulse bootstrap-token\n"+
-					"Bare metal: cat %s\n"+
-					"Bare metal: pulse bootstrap-token", r.bootstrapTokenPath)
+				errorMsg := "Invalid bootstrap setup token. Retrieve the correct token from the host:\n\n" +
+					"Docker: docker exec <container> /app/pulse bootstrap-token\n" +
+					"Bare metal: pulse bootstrap-token"
 				http.Error(w, errorMsg, http.StatusUnauthorized)
 				return
 			}
@@ -220,7 +245,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
-		if authorized && !ensureSettingsWriteScope(w, req) {
+		if authorized && !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 
@@ -265,7 +290,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Validate the bcrypt hash is complete
 		if err := validateBcryptHash(hashedPassword); err != nil {
 			log.Error().Err(err).Msg("Generated invalid bcrypt hash")
-			http.Error(w, fmt.Sprintf("Password hashing error: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to process password", http.StatusInternalServerError)
 			return
 		}
 
@@ -278,7 +303,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			http.Error(w, "Failed to process API token", http.StatusInternalServerError)
 			return
 		}
-		primaryTokenHash := tokenRecord.Hash
 
 		if r.config.HasAPITokens() && r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// We had API-only access before, now replacing with full security
@@ -299,6 +323,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 		}
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
+
+		if err := r.establishSession(w, req, setupRequest.Username); err != nil {
+			log.Error().Err(err).Msg("Failed to establish session after quick security setup")
+			http.Error(w, "Failed to establish session after setup", http.StatusInternalServerError)
+			return
+		}
 
 		// Clear any agents that connected during the brief unauthenticated setup window.
 		// This prevents stale/unauthorized agent data from appearing in the wizard.
@@ -335,29 +365,18 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		// Choose appropriate method based on environment
 		if isDocker {
-			// Docker: Save to /data/.env with proper quoting
-			envPath := filepath.Join(r.config.ConfigPath, ".env")
-
 			// CRITICAL: Use single quotes to prevent shell expansion of $ in bcrypt hash
 			envContent := fmt.Sprintf(`# Auto-generated by Pulse Quick Security Setup
 # Generated on %s
 # IMPORTANT: Do not remove the single quotes around the password hash!
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
-			// Ensure directory exists
-			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
-				log.Error().Err(err).Str("path", r.config.ConfigPath).Msg("Failed to create config directory")
-				http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
-				return
-			}
-
-			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
-				log.Error().Err(err).Str("path", envPath).Msg("Failed to write .env file in Docker")
+			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, []byte(envContent))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to write .env file in Docker")
 				http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
 				return
 			}
@@ -381,36 +400,18 @@ PULSE_AUDIT_LOG=true
 			// Systemd but not root (ProxmoxVE script scenario)
 			// Don't attempt sudo, just save config and provide instructions
 
-			envPath := filepath.Join(r.config.ConfigPath, ".env")
 			envContent := fmt.Sprintf(`# Auto-generated by Pulse Quick Security Setup
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
-			// Save to config directory (usually /etc/pulse)
-			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
-				log.Error().Err(err).Str("path", r.config.ConfigPath).Msg("Failed to create config directory")
-				http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
+			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, []byte(envContent))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to write .env file")
+				http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
 				return
-			}
-
-			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
-				// Try data directory as fallback
-				envPath = filepath.Join(r.config.DataPath, ".env")
-				if err := os.MkdirAll(r.config.DataPath, 0755); err != nil {
-					log.Error().Err(err).Str("path", r.config.DataPath).Msg("Failed to create data directory")
-					http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
-					return
-				}
-				if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
-					log.Error().Err(err).Msg("Failed to write .env file")
-					http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
-					return
-				}
 			}
 
 			// Create response - security is active immediately
@@ -447,10 +448,8 @@ PULSE_AUDIT_LOG=true
 [Service]
 Environment="PULSE_AUTH_USER=%s"
 Environment="PULSE_AUTH_PASS=%s"
-Environment="API_TOKEN=%s"
-Environment="API_TOKENS=%s"
 Environment="PULSE_AUDIT_LOG=true"
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
 			if err := os.WriteFile(overridePath, []byte(overrideContent), 0644); err != nil {
 				log.Error().Err(err).Msg("Failed to write systemd override")
@@ -480,27 +479,15 @@ Environment="PULSE_AUDIT_LOG=true"
 
 		} else {
 			// Manual installation or development
-			envPath := filepath.Join(r.config.ConfigPath, ".env")
-			if r.config.ConfigPath == "" {
-				envPath = "/etc/pulse/.env"
-			}
-
 			envContent := fmt.Sprintf(`# Auto-generated by Pulse Quick Security Setup
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
-API_TOKENS='%s'
 PULSE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, primaryTokenHash, primaryTokenHash)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword)
 
-			// Try to create directory if needed
-			if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
-				log.Error().Err(err).Str("path", filepath.Dir(envPath)).Msg("Failed to create env directory")
-				// Continue to attempt writing; error will be caught below
-			}
-
-			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
+			envPath, err := writeAuthEnvFile(r.config.ConfigPath, r.config.DataPath, []byte(envContent))
+			if err != nil {
 				log.Error().Err(err).Msg("Failed to write .env file")
 				// Still return success with manual instructions
 			}
@@ -525,7 +512,7 @@ PULSE_AUDIT_LOG=true
 	}
 }
 
-// HandleRegenerateAPIToken generates a new API token and updates the .env file
+// HandleRegenerateAPIToken generates and persists a new API token.
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
 	if rq.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -548,7 +535,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		}
 	}
 
-	if !ensureSettingsWriteScope(w, rq) {
+	if !ensureSettingsWriteScope(r.config, w, rq) {
 		return
 	}
 
@@ -585,56 +572,6 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 			log.Warn().Err(err).Msg("Failed to persist regenerated API token")
 		}
-	}
-
-	// Determine env file path
-	envPath := filepath.Join(r.config.ConfigPath, ".env")
-	if r.config.ConfigPath == "" {
-		envPath = "/etc/pulse/.env"
-	}
-
-	// Docker uses /data/.env
-	if _, err := os.Stat("/data/.env"); err == nil {
-		envPath = "/data/.env"
-	}
-
-	// Read existing .env file
-	content, err := os.ReadFile(envPath)
-	if err != nil {
-		log.Error().Err(err).Str("path", envPath).Msg("Failed to read .env file")
-		http.Error(w, "Security configuration not found", http.StatusNotFound)
-		return
-	}
-
-	// Update the API_TOKEN / API_TOKENS lines with the hashed token
-	lines := strings.Split(string(content), "\n")
-	var updatedPrimary bool
-	var updatedList bool
-	for i, line := range lines {
-		if strings.HasPrefix(line, "API_TOKEN=") {
-			lines[i] = fmt.Sprintf("API_TOKEN=%s", tokenRecord.Hash)
-			updatedPrimary = true
-		}
-		if strings.HasPrefix(line, "API_TOKENS=") {
-			lines[i] = fmt.Sprintf("API_TOKENS=%s", tokenRecord.Hash)
-			updatedList = true
-		}
-	}
-
-	if !updatedPrimary {
-		// API_TOKEN line not found, add it
-		lines = append(lines, fmt.Sprintf("API_TOKEN=%s", tokenRecord.Hash))
-	}
-	if !updatedList {
-		lines = append(lines, fmt.Sprintf("API_TOKENS=%s", tokenRecord.Hash))
-	}
-
-	// Write updated content back
-	newContent := strings.Join(lines, "\n")
-	if err := os.WriteFile(envPath, []byte(newContent), 0600); err != nil {
-		log.Error().Err(err).Msg("Failed to update .env file")
-		http.Error(w, "Failed to save new token", http.StatusInternalServerError)
-		return
 	}
 
 	log.Info().Msg("API token regenerated successfully")
@@ -678,7 +615,7 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 		}
 	}
 
-	if !ensureSettingsWriteScope(w, rq) {
+	if !ensureSettingsWriteScope(r.config, w, rq) {
 		return
 	}
 

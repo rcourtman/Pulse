@@ -5,18 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	bootstrapTokenFilename = ".bootstrap_token"
+	bootstrapTokenFilename = bootstrap.TokenFilename
 	bootstrapTokenHeader   = "X-Setup-Token"
 )
 
@@ -29,39 +28,8 @@ func generateBootstrapToken() (string, error) {
 }
 
 func loadOrCreateBootstrapToken(dataPath string) (token string, created bool, fullPath string, err error) {
-	if strings.TrimSpace(dataPath) == "" {
-		return "", false, "", errors.New("data path required for bootstrap token")
-	}
-
-	if err := os.MkdirAll(dataPath, 0o700); err != nil {
-		return "", false, "", fmt.Errorf("ensure data path: %w", err)
-	}
-
-	fullPath = filepath.Join(dataPath, bootstrapTokenFilename)
-
-	data, readErr := os.ReadFile(fullPath)
-	if readErr == nil {
-		token = strings.TrimSpace(string(data))
-		if token == "" {
-			return "", false, fullPath, errors.New("bootstrap token file is empty")
-		}
-		return token, false, fullPath, nil
-	}
-
-	if !errors.Is(readErr, os.ErrNotExist) {
-		return "", false, fullPath, fmt.Errorf("read existing bootstrap token: %w", readErr)
-	}
-
-	token, err = generateBootstrapToken()
-	if err != nil {
-		return "", false, fullPath, fmt.Errorf("generate bootstrap token: %w", err)
-	}
-
-	if writeErr := os.WriteFile(fullPath, []byte(token+"\n"), 0o600); writeErr != nil {
-		return "", false, fullPath, fmt.Errorf("persist bootstrap token: %w", writeErr)
-	}
-
-	return token, true, fullPath, nil
+	token, created, fullPath, _, err = bootstrap.LoadOrCreate(dataPath, generateBootstrapToken)
+	return token, created, fullPath, err
 }
 
 func (r *Router) initializeBootstrapToken() {
@@ -70,11 +38,12 @@ func (r *Router) initializeBootstrapToken() {
 	}
 
 	// If any authentication mechanism is already configured, purge stale bootstrap tokens.
-	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" {
-		r.clearBootstrapToken()
-		return
+	// In hosted mode, auth is handled by the cloud handoff — no bootstrap needed.
+	hasEnabledSSO := false
+	if ssoCfg := r.ensureSSOConfig(); ssoCfg != nil {
+		hasEnabledSSO = ssoCfg.HasEnabledProviders()
 	}
-	if r.config.OIDC != nil && r.config.OIDC.Enabled {
+	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode || hasEnabledSSO {
 		r.clearBootstrapToken()
 		return
 	}

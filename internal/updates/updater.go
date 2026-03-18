@@ -16,12 +16,26 @@ type UpdateRequest struct {
 // UpdatePlan contains information about how an update will be performed
 type UpdatePlan struct {
 	CanAutoUpdate   bool     `json:"canAutoUpdate"`
-	Instructions    []string `json:"instructions,omitempty"`
-	Prerequisites   []string `json:"prerequisites,omitempty"`
+	Instructions    []string `json:"instructions"`
+	Prerequisites   []string `json:"prerequisites"`
 	EstimatedTime   string   `json:"estimatedTime,omitempty"`
 	RequiresRoot    bool     `json:"requiresRoot"`
 	RollbackSupport bool     `json:"rollbackSupport"`
 	DownloadURL     string   `json:"downloadUrl,omitempty"`
+}
+
+func EmptyUpdatePlan() UpdatePlan {
+	return UpdatePlan{}.NormalizeCollections()
+}
+
+func (p UpdatePlan) NormalizeCollections() UpdatePlan {
+	if p.Instructions == nil {
+		p.Instructions = []string{}
+	}
+	if p.Prerequisites == nil {
+		p.Prerequisites = []string{}
+	}
+	return p
 }
 
 // UpdateProgress represents progress updates during an update

@@ -11,28 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRouter_ConfigUpdates(t *testing.T) {
-	// Initialize Router with minimal dependencies
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		DataPath:   tmpDir,
-		ConfigPath: tmpDir,
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	// Test SetConfig
-	newCfg := &config.Config{
-		DataPath:   tmpDir,
-		ConfigPath: tmpDir,
-	}
-	router.SetConfig(newCfg)
-
-	// Check SetMonitor
-	mon := &monitoring.Monitor{}
-	router.SetMonitor(mon)
-}
-
 func TestRouter_HandlerWrapping(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
@@ -71,8 +49,56 @@ func TestRouter_GetTenantMonitor_Defaults(t *testing.T) {
 	m := router.getTenantMonitor(ctx)
 	assert.Equal(t, defaultMon, m)
 
-	// Even with tenant context
+	// Non-default tenant context should fail closed when tenant monitor is unavailable
 	ctx = context.WithValue(ctx, OrgIDContextKey, "some-tenant")
 	m = router.getTenantMonitor(ctx)
-	assert.Equal(t, defaultMon, m)
+	assert.Nil(t, m)
+}
+
+func TestTenantMonitorGuardMiddleware_DefaultOrgAllowed(t *testing.T) {
+	router := &Router{}
+	guarded := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	guarded.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestTenantMonitorGuardMiddleware_NonDefaultOrgRequiresTenantMonitor(t *testing.T) {
+	router := &Router{}
+	guarded := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not be called")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
+	rec := httptest.NewRecorder()
+	guarded.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestTenantMonitorGuardMiddleware_NonDefaultOrgAllowedWhenTenantMonitorAvailable(t *testing.T) {
+	tenantMonitor, _, _ := newTestMonitor(t)
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"tenant-a": tenantMonitor,
+	})
+
+	router := &Router{mtMonitor: mtm}
+	guarded := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
+	rec := httptest.NewRecorder()
+	guarded.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
 }

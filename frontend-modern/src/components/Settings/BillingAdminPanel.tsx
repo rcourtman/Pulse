@@ -1,0 +1,364 @@
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import SettingsPanel from '@/components/shared/SettingsPanel';
+import {
+  BillingAdminAPI,
+  type BillingState,
+  type HostedOrganizationSummary,
+} from '@/api/billingAdmin';
+import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
+import { notificationStore } from '@/stores/notifications';
+import { logger } from '@/utils/logger';
+import {
+  BILLING_ADMIN_EMPTY_STATE,
+  getBillingAdminOrganizationBadges,
+  getBillingAdminStateUpdateSuccessMessage,
+  getBillingAdminTrialStatus,
+  getLicenseSubscriptionStatusPresentation,
+} from '@/utils/licensePresentation';
+import {
+  getOrganizationSettingsLoadErrorMessage as getOrganizationSettingsPanelLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
+import CreditCard from 'lucide-solid/icons/credit-card';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+
+type BillingStateCache = Record<string, BillingState | undefined>;
+
+async function promisePool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
+  if (items.length === 0) return;
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  let idx = 0;
+  const workers = Array.from({ length: limit }).map(async () => {
+    for (;;) {
+      const current = idx;
+      idx += 1;
+      if (current >= items.length) return;
+      await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+}
+
+export const BillingAdminPanel: Component = () => {
+  const [orgs, setOrgs] = createSignal<HostedOrganizationSummary[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = createSignal(false);
+  const [orgsError, setOrgsError] = createSignal<string | null>(null);
+
+  const [billingByOrgID, setBillingByOrgID] = createSignal<BillingStateCache>({});
+  const [billingLoadingByOrgID, setBillingLoadingByOrgID] = createSignal<Record<string, boolean>>(
+    {},
+  );
+  const [savingByOrgID, setSavingByOrgID] = createSignal<Record<string, boolean>>({});
+
+  const [expandedOrgID, setExpandedOrgID] = createSignal<string | null>(null);
+
+  const loadOrganizations = async () => {
+    setLoadingOrgs(true);
+    setOrgsError(null);
+    try {
+      const next = await BillingAdminAPI.listOrganizations();
+      setOrgs(next ?? []);
+    } catch (err) {
+      logger.error('Failed to list hosted organizations', err);
+      const msg = err instanceof Error ? err.message : '';
+      const errorMessage = getOrganizationSettingsPanelLoadErrorMessage(msg, 'billing-admin');
+      setOrgsError(errorMessage);
+      notificationStore.error(errorMessage);
+    } finally {
+      setLoadingOrgs(false);
+    }
+  };
+
+  const setBillingLoading = (orgID: string, value: boolean) => {
+    setBillingLoadingByOrgID((prev) => ({ ...prev, [orgID]: value }));
+  };
+
+  const setSaving = (orgID: string, value: boolean) => {
+    setSavingByOrgID((prev) => ({ ...prev, [orgID]: value }));
+  };
+
+  const ensureBillingState = async (orgID: string): Promise<BillingState | null> => {
+    const cached = billingByOrgID()[orgID];
+    if (cached) return cached;
+
+    if (billingLoadingByOrgID()[orgID]) {
+      return null;
+    }
+
+    setBillingLoading(orgID, true);
+    try {
+      const state = await BillingAdminAPI.getBillingState(orgID);
+      setBillingByOrgID((prev) => ({ ...prev, [orgID]: state }));
+      return state;
+    } catch (err) {
+      logger.error('Failed to fetch billing state', { orgID, err });
+      return null;
+    } finally {
+      setBillingLoading(orgID, false);
+    }
+  };
+
+  const updateSubscriptionState = async (orgID: string, nextState: 'suspended' | 'active') => {
+    setSaving(orgID, true);
+    try {
+      const current =
+        (await ensureBillingState(orgID)) ?? (await BillingAdminAPI.getBillingState(orgID));
+      const planVersion = current.plan_version?.trim() || undefined;
+      const payload: BillingState = {
+        ...current,
+        subscription_state: nextState,
+        capabilities: Array.isArray(current.capabilities) ? current.capabilities : [],
+        limits: current.limits ?? {},
+        meters_enabled: Array.isArray(current.meters_enabled) ? current.meters_enabled : [],
+        ...(planVersion ? { plan_version: planVersion } : {}),
+      };
+
+      const saved = await BillingAdminAPI.putBillingState(orgID, payload);
+      setBillingByOrgID((prev) => ({ ...prev, [orgID]: saved }));
+      notificationStore.success(getBillingAdminStateUpdateSuccessMessage(nextState), 2500);
+    } catch (err) {
+      logger.error('Failed to update billing state', { orgID, err });
+      const msg = err instanceof Error ? err.message : 'Failed to update billing state';
+      notificationStore.error(msg);
+    } finally {
+      setSaving(orgID, false);
+    }
+  };
+
+  const hostedEnabled = createMemo(() => isMultiTenantEnabled() && isHostedModeEnabled());
+
+  createEffect(() => {
+    if (!hostedEnabled()) return;
+    void loadOrganizations();
+  });
+
+  // Preload billing state for the visible table so key columns can render without per-row clicks.
+  createEffect(() => {
+    const list = orgs();
+    if (!hostedEnabled() || loadingOrgs() || list.length === 0) return;
+
+    const missing = list.map((o) => o.org_id).filter((id) => id && !billingByOrgID()[id]);
+    if (missing.length === 0) return;
+
+    void promisePool(missing, 6, async (orgID) => {
+      await ensureBillingState(orgID);
+    });
+  });
+
+  const stripeCustomerCell = (state?: BillingState) => {
+    const value = (state?.stripe_customer_id || '').trim();
+    if (!value) return 'N/A';
+    return value;
+  };
+
+  return (
+    <Show
+      when={hostedEnabled()}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE}
+        </div>
+      }
+    >
+      <SettingsPanel
+        title="Billing Admin"
+        description="View and manage billing state across all tenants (hosted mode only)."
+        icon={<CreditCard class="w-5 h-5" />}
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              setBillingByOrgID({});
+              setExpandedOrgID(null);
+              void loadOrganizations();
+            }}
+            disabled={loadingOrgs()}
+            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
+          >
+            Refresh
+          </button>
+        }
+        bodyClass="space-y-4"
+      >
+        <Show when={orgsError()}>
+          <div class="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-800 dark:text-red-200">
+            {orgsError()}
+          </div>
+        </Show>
+
+        <div class="mt-4">
+          <PulseDataGrid
+            data={orgs()}
+            isLoading={loadingOrgs()}
+            emptyState={BILLING_ADMIN_EMPTY_STATE}
+            desktopMinWidth="920px"
+            columns={[
+              {
+                key: 'organization',
+                label: 'Organization',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  return (
+                    <button
+                      type="button"
+                      class="text-left w-full"
+                      onClick={() => {
+                        const id = orgID();
+                        if (!id) return;
+                        setExpandedOrgID((prev) => (prev === id ? null : id));
+                        void ensureBillingState(id);
+                      }}
+                    >
+                      <div class="font-medium text-base-content">
+                        {org.display_name || org.org_id}
+                      </div>
+                      <div class="text-xs text-muted">
+                        <span class="font-mono">{org.org_id}</span>
+                        {getBillingAdminOrganizationBadges(org).map((badge) => (
+                          <span class={`ml-2 rounded px-1.5 py-0.5 ${badge.badgeClass}`}>
+                            {badge.label}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                },
+              },
+              {
+                key: 'owner',
+                label: 'Owner',
+                render: (org) => (
+                  <span class="font-mono text-xs text-base-content">
+                    {org.owner_user_id || 'N/A'}
+                  </span>
+                ),
+              },
+              {
+                key: 'subscription',
+                label: 'Subscription',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  return (
+                    <span class="font-mono text-xs text-base-content">
+                      {getLicenseSubscriptionStatusPresentation(billing()?.subscription_state).label}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'trial',
+                label: 'Trial',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  return (
+                    <span class="text-xs text-base-content">
+                      {getBillingAdminTrialStatus(billing())}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'stripeCustomer',
+                label: 'Stripe Customer',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  return (
+                    <span
+                      class="font-mono text-xs text-base-content"
+                      title={stripeCustomerCell(billing())}
+                    >
+                      {stripeCustomerCell(billing())}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                align: 'right',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  const currentSubState = () =>
+                    (billing()?.subscription_state || '').toLowerCase() || 'unknown';
+                  return (
+                    <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          void updateSubscriptionState(id, 'suspended');
+                        }}
+                        disabled={
+                          savingByOrgID()[orgID()] ||
+                          billingLoadingByOrgID()[orgID()] ||
+                          currentSubState() === 'suspended'
+                        }
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        Suspend Org
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          void updateSubscriptionState(id, 'active');
+                        }}
+                        disabled={
+                          savingByOrgID()[orgID()] ||
+                          billingLoadingByOrgID()[orgID()] ||
+                          currentSubState() === 'active'
+                        }
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        Activate Org
+                      </button>
+                    </div>
+                  );
+                },
+              },
+            ]}
+            keyExtractor={(org) => org.org_id}
+            isRowExpanded={(org) => expandedOrgID() === (org.org_id || '').trim()}
+            expandedRender={(org) => {
+              const orgID = () => (org.org_id || '').trim();
+              const billing = () => billingByOrgID()[orgID()];
+              return (
+                <div class="px-3 pb-3 bg-surface-alt">
+                  <div class="rounded-md border border-border bg-surface-alt p-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                      <div class="text-xs font-semibold text-muted">Billing state JSON</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
+                          void ensureBillingState(id);
+                        }}
+                        class="px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover"
+                      >
+                        Reload
+                      </button>
+                    </div>
+                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-base-content">
+                      {JSON.stringify(billing() ?? { loading: true }, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              );
+            }}
+          />
+        </div>
+      </SettingsPanel>
+    </Show>
+  );
+};
+
+export default BillingAdminPanel;

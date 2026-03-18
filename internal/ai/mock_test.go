@@ -2,9 +2,10 @@ package ai
 
 import (
 	"context"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // mockProvider implements providers.Provider for testing
@@ -59,83 +60,75 @@ func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.gue
 func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
 func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
 
-type mockResourceProvider struct {
-	ResourceProvider
-	getAllFunc            func() []resources.Resource
-	getStatsFunc          func() resources.StoreStats
-	getSummaryFunc        func() resources.ResourceSummary
-	getInfrastructureFunc func() []resources.Resource
-	getWorkloadsFunc      func() []resources.Resource
-	getByTypeFunc         func(t resources.ResourceType) []resources.Resource
-	getTopCPUFunc         func(limit int, types []resources.ResourceType) []resources.Resource
-	getTopMemoryFunc      func(limit int, types []resources.ResourceType) []resources.Resource
-	getTopDiskFunc        func(limit int, types []resources.ResourceType) []resources.Resource
-	getRelatedFunc        func(resourceID string) map[string][]resources.Resource
+type mockUnifiedResourceProvider struct {
+	UnifiedResourceProvider
+	getAllFunc            func() []unifiedresources.Resource
+	getStatsFunc          func() unifiedresources.ResourceStats
+	getInfrastructureFunc func() []unifiedresources.Resource
+	getWorkloadsFunc      func() []unifiedresources.Resource
+	getByTypeFunc         func(t unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopCPUFunc         func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopMemoryFunc      func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getTopDiskFunc        func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource
+	getRelatedFunc        func(resourceID string) map[string][]unifiedresources.Resource
 	findContainerHostFunc func(containerNameOrID string) string
 }
 
-func (m *mockResourceProvider) GetAll() []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetAll() []unifiedresources.Resource {
 	if m.getAllFunc != nil {
 		return m.getAllFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetStats() resources.StoreStats {
+func (m *mockUnifiedResourceProvider) GetStats() unifiedresources.ResourceStats {
 	if m.getStatsFunc != nil {
 		return m.getStatsFunc()
 	}
-	return resources.StoreStats{}
+	return unifiedresources.ResourceStats{}
 }
-func (m *mockResourceProvider) GetResourceSummary() resources.ResourceSummary {
-	if m.getSummaryFunc != nil {
-		return m.getSummaryFunc()
-	}
-	return resources.ResourceSummary{}
-}
-func (m *mockResourceProvider) GetInfrastructure() []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetInfrastructure() []unifiedresources.Resource {
 	if m.getInfrastructureFunc != nil {
 		return m.getInfrastructureFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetWorkloads() []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetWorkloads() []unifiedresources.Resource {
 	if m.getWorkloadsFunc != nil {
 		return m.getWorkloadsFunc()
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetType(t resources.ResourceType) []resources.Resource { return nil }
-func (m *mockResourceProvider) GetByType(t resources.ResourceType) []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
 	if m.getByTypeFunc != nil {
 		return m.getByTypeFunc(t)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByCPU(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetTopByCPU(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
 	if m.getTopCPUFunc != nil {
 		return m.getTopCPUFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByMemory(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetTopByMemory(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
 	if m.getTopMemoryFunc != nil {
 		return m.getTopMemoryFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetTopByDisk(limit int, types []resources.ResourceType) []resources.Resource {
+func (m *mockUnifiedResourceProvider) GetTopByDisk(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
 	if m.getTopDiskFunc != nil {
 		return m.getTopDiskFunc(limit, types)
 	}
 	return nil
 }
-func (m *mockResourceProvider) GetRelated(resourceID string) map[string][]resources.Resource {
+func (m *mockUnifiedResourceProvider) GetRelated(resourceID string) map[string][]unifiedresources.Resource {
 	if m.getRelatedFunc != nil {
 		return m.getRelatedFunc(resourceID)
 	}
 	return nil
 }
-func (m *mockResourceProvider) FindContainerHost(containerNameOrID string) string {
+func (m *mockUnifiedResourceProvider) FindContainerHost(containerNameOrID string) string {
 	if m.findContainerHostFunc != nil {
 		return m.findContainerHostFunc(containerNameOrID)
 	}

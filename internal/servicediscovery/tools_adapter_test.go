@@ -20,7 +20,7 @@ func TestNewToolsAdapter(t *testing.T) {
 		store, err := NewStore(t.TempDir())
 		require.NoError(t, err)
 		store.crypto = nil // Disable crypto for testing
-		service := NewService(store, nil, nil, DefaultConfig())
+		service := NewService(store, nil, DefaultConfig())
 
 		adapter := NewToolsAdapter(service)
 		assert.NotNil(t, adapter)
@@ -32,7 +32,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	// Create a test discovery
@@ -40,7 +40,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		ID:             "test-id",
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     "container-1",
-		HostID:         "host-1",
+		TargetID:       "host-1",
 		Hostname:       "localhost",
 		ServiceType:    "nginx",
 		ServiceName:    "Nginx Web Server",
@@ -68,6 +68,8 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		assert.Equal(t, discovery.ID, result.ID)
 		assert.Equal(t, string(discovery.ResourceType), result.ResourceType)
 		assert.Equal(t, discovery.ResourceID, result.ResourceID)
+		assert.Equal(t, discovery.TargetID, result.TargetID)
+		assert.Empty(t, result.AgentID)
 		assert.Equal(t, discovery.ServiceName, result.ServiceName)
 
 		// Check facts conversion
@@ -92,11 +94,32 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 	})
 }
 
+func TestToolsAdapter_GetDiscovery_AgentIDFallback(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	require.NoError(t, err)
+	store.crypto = nil
+	service := NewService(store, nil, DefaultConfig())
+	adapter := NewToolsAdapter(service)
+
+	discovery := &ResourceDiscovery{
+		ID:           "agent:agent-1:agent-1",
+		ResourceType: ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		TargetID:     "agent-1",
+	}
+	require.NoError(t, store.Save(discovery))
+
+	result, err := adapter.GetDiscovery(discovery.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "agent-1", result.TargetID)
+	assert.Equal(t, "agent-1", result.AgentID)
+}
+
 func TestToolsAdapter_GetDiscoveryByResource(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	id := MakeResourceID(ResourceTypeVM, "node-1", "vm-1")
@@ -104,7 +127,7 @@ func TestToolsAdapter_GetDiscoveryByResource(t *testing.T) {
 		ID:           id,
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "vm-1",
-		HostID:       "node-1",
+		TargetID:     "node-1",
 	}
 	err = store.Save(discovery)
 	require.NoError(t, err)
@@ -126,11 +149,11 @@ func TestToolsAdapter_ListDiscoveries(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	require.NoError(t, err)
 	store.crypto = nil
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
-	d1 := &ResourceDiscovery{ID: "d1", ResourceType: ResourceTypeDocker, HostID: "h1", ResourceID: "r1"}
-	d2 := &ResourceDiscovery{ID: "d2", ResourceType: ResourceTypeVM, HostID: "h1", ResourceID: "r2"}
+	d1 := &ResourceDiscovery{ID: "d1", ResourceType: ResourceTypeDocker, TargetID: "h1", ResourceID: "r1"}
+	d2 := &ResourceDiscovery{ID: "d2", ResourceType: ResourceTypeVM, TargetID: "h1", ResourceID: "r2"}
 
 	require.NoError(t, store.Save(d1))
 	require.NoError(t, store.Save(d2))
@@ -148,12 +171,12 @@ func TestToolsAdapter_ListDiscoveries(t *testing.T) {
 		assert.Equal(t, "d1", list[0].ID)
 	})
 
-	t.Run("ListDiscoveriesByHost filters correctly", func(t *testing.T) {
+	t.Run("ListDiscoveriesByTarget filters correctly", func(t *testing.T) {
 		// Add one on another host
-		d3 := &ResourceDiscovery{ID: "d3", ResourceType: ResourceTypeDocker, HostID: "h2", ResourceID: "r3"}
+		d3 := &ResourceDiscovery{ID: "d3", ResourceType: ResourceTypeDocker, TargetID: "h2", ResourceID: "r3"}
 		require.NoError(t, store.Save(d3))
 
-		list, err := adapter.ListDiscoveriesByHost("h1")
+		list, err := adapter.ListDiscoveriesByTarget("h1")
 		require.NoError(t, err)
 		assert.Len(t, list, 2) // d1 and d2
 	})
@@ -191,7 +214,7 @@ func TestToolsAdapter_TriggerDiscovery(t *testing.T) {
 	store.crypto = nil
 
 	// Create a service WITHOUT a scanner. DiscoverResource should fail or return error
-	service := NewService(store, nil, nil, DefaultConfig())
+	service := NewService(store, nil, DefaultConfig())
 	adapter := NewToolsAdapter(service)
 
 	t.Run("returns error if scanner missing/fails", func(t *testing.T) {
@@ -200,7 +223,7 @@ func TestToolsAdapter_TriggerDiscovery(t *testing.T) {
 
 		// Pre-populate store to simulate existing discovery (happy path without scanner)
 		id := MakeResourceID("docker", "h1", "r1")
-		d1 := &ResourceDiscovery{ID: id, ResourceType: "docker", HostID: "h1", ResourceID: "r1", DiscoveredAt: time.Now()}
+		d1 := &ResourceDiscovery{ID: id, ResourceType: "docker", TargetID: "h1", ResourceID: "r1", DiscoveredAt: time.Now()}
 		require.NoError(t, store.Save(d1))
 
 		result, err := adapter.TriggerDiscovery(context.Background(), "docker", "h1", "r1")

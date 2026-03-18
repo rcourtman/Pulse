@@ -130,7 +130,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"elements": [
 							{
 								"type": "mrkdwn",
-								"text": "View in <{{.Instance}}|Proxmox> | Alert ID: {{.ID}}"
+								"text": "View in <{{.Instance}}|Proxmox> | Alert Identifier: {{.ID}}"
 							}
 						]
 					}
@@ -169,7 +169,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"elements": [
 							{
 								"type": "mrkdwn",
-								"text": "Alert ID: {{.ID}}"
+								"text": "Alert Identifier: {{.ID}}"
 							}
 						]
 					}
@@ -243,7 +243,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			},
 			PayloadTemplate: `{
 				"routing_key": "{{.CustomFields.routing_key}}",
-				"event_action": "{{if eq .Level "resolved"}}resolve{{else}}trigger{{end}}",
+				"event_action": "trigger",
 				"dedup_key": "{{.ID}}",
 				"payload": {
 					"summary": "{{.Message}}",
@@ -254,7 +254,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					"group": "{{.Type}}",
 					"class": "{{.Type}}",
 					"custom_details": {
-						"alert_id": "{{.ID}}",
+						"alert_identifier": "{{.ID}}",
 						"resource_type": "{{.Type}}",
 						"current_value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}",
 						"threshold": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}",
@@ -313,7 +313,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 									{"title": "Current Value", "value": "{{printf "%.1f" .Value}}%"},
 									{"title": "Threshold", "value": "{{printf "%.0f" .Threshold}}%"},
 									{"title": "Duration", "value": "{{.Duration}}"},
-									{"title": "Alert ID", "value": "{{.ID}}"}
+									{"title": "Alert Identifier", "value": "{{.ID}}"}
 								]
 							}
 						],
@@ -355,7 +355,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 									{"title": "Type", "value": "{{.Type | title}}"},
 									{"title": "Duration", "value": "{{.Duration}}"},
 									{"title": "Resolved At", "value": "{{.ResolvedAt}}"},
-									{"title": "Alert ID", "value": "{{.ID}}"}
+									{"title": "Alert Identifier", "value": "{{.ID}}"}
 								]
 							}
 						]
@@ -371,8 +371,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"token": "{{.CustomFields.app_token}}",
-				"user": "{{.CustomFields.user_token}}",
+				"token": "{{.CustomFields.token}}",
+				"user": "{{.CustomFields.user}}",
 				"title": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
 				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}",
 				"priority": {{if .CustomFields.priority}}{{.CustomFields.priority}}{{else}}{{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}}{{end}},
@@ -381,15 +381,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"timestamp": "{{.Timestamp}}"
 			}`,
 			ResolvedPayloadTemplate: `{
-				"token": "{{.CustomFields.app_token}}",
-				"user": "{{.CustomFields.user_token}}",
+				"token": "{{.CustomFields.token}}",
+				"user": "{{.CustomFields.user}}",
 				"title": "Resolved: {{.ResourceName}}",
 				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Duration: {{.Duration}}\n• Resolved At: {{.ResolvedAt}}",
 				"priority": -1,
 				"sound": "pushover",
 				"timestamp": "{{.Timestamp}}"
 			}`,
-			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • app_token: YOUR_APP_TOKEN (required)\n   • user_token: YOUR_USER_KEY (required)\n   • sound: notification sound (optional, e.g., spacealarm, siren, tugboat)\n   • priority: -2 to 2 (optional, overrides level-based default)\n   • device: specific device name (optional, overrides ResourceName)",
+			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • token: YOUR_APP_TOKEN (required)\n   • user: YOUR_USER_KEY (required)\n   • sound: notification sound (optional, e.g., spacealarm, siren, tugboat)\n   • priority: -2 to 2 (optional, overrides level-based default)\n   • device: specific device name (optional, overrides ResourceName)",
 		},
 		{
 			Service:    "gotify",
@@ -398,7 +398,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration}}\n- **Alert ID:** {{.ID}}\n\n[View in Pulse]({{.Instance}})",
+				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration}}\n- **Alert Identifier:** {{.ID}}\n\n[View in Pulse]({{.Instance}})",
 				"title": "{{.ResourceName}} - {{.Type | title}} {{.Level | upper}} Alert",
 				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
 				"extras": {
@@ -419,7 +419,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 				}
 			}`,
 			ResolvedPayloadTemplate: `{
-				"message": "**RESOLVED**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Duration:** {{.Duration}}\n- **Resolved At:** {{.ResolvedAt}}\n- **Alert ID:** {{.ID}}",
+				"message": "**RESOLVED**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Duration:** {{.Duration}}\n- **Resolved At:** {{.ResolvedAt}}\n- **Alert Identifier:** {{.ID}}",
 				"title": "Resolved: {{.ResourceName}} - {{.Type | title}}",
 				"priority": 2,
 				"extras": {
@@ -459,7 +459,7 @@ Alert Details:
 - Current: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}
 - Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}
 - Duration: {{.Duration}}
-- Alert ID: {{.ID}}
+- Alert Identifier: {{.ID}}
 
 View in Pulse: {{.Instance}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
@@ -473,12 +473,12 @@ View in Pulse: {{.Instance}}`,
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration}} |\n| Alert ID | {{.ID}} |\n\n[View in Pulse]({{.Instance}})"
+				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration}} |\n| Alert Identifier | {{.ID}} |\n\n[View in Pulse]({{.Instance}})"
 			}`,
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Duration | {{.Duration}} |\n| Resolved At | {{.ResolvedAt}} |\n| Alert ID | {{.ID}} |"
+				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Duration | {{.Duration}} |\n| Resolved At | {{.ResolvedAt}} |\n| Alert Identifier | {{.ID}} |"
 			}`,
 			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
 		},

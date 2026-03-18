@@ -12,7 +12,7 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 		{AgentID: "agent-3", Hostname: "pimox"},
 	}
@@ -28,8 +28,8 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "explicit node in context routes correctly",
 			req: ExecuteRequest{
-				TargetType: "host", // run_on_host=true sets this
-				TargetID:   "",     // run_on_host clears this
+				TargetType: "agent", // run_on_host=true sets this
+				TargetID:   "",      // run_on_host clears this
 				Context:    map[string]interface{}{"node": "minipc"},
 			},
 			command:      "pct exec 106 -- hostname",
@@ -40,7 +40,7 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "guest_node also routes correctly for host commands",
 			req: ExecuteRequest{
-				TargetType: "host",
+				TargetType: "agent",
 				TargetID:   "",
 				Context:    map[string]interface{}{"guest_node": "pimox"},
 			},
@@ -52,16 +52,16 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 		{
 			name: "node takes priority over guest_node",
 			req: ExecuteRequest{
-				TargetType: "host",
+				TargetType: "agent",
 				TargetID:   "",
 				Context: map[string]interface{}{
-					"node":       "delly",
+					"node":       "pve-node",
 					"guest_node": "minipc", // Should be ignored when node is set
 				},
 			},
 			command:      "uptime",
 			wantAgentID:  "agent-1",
-			wantHostname: "delly",
+			wantHostname: "pve-node",
 			wantMethod:   "context_node",
 		},
 	}
@@ -94,11 +94,11 @@ func TestRouteToAgent_SingleAgentFallback(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 	}
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    nil, // No context at all
 	}
@@ -128,12 +128,12 @@ func TestRouteToAgent_MultiAgentNoContext(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 	}
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    nil, // No context
 	}
@@ -165,13 +165,13 @@ func TestRouteToAgent_VMIDInCommandWithContext(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 	}
 
 	// Even with a VMID in the command, if we have node context, use it
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 		Context:    map[string]interface{}{"node": "minipc"},
 	}

@@ -23,6 +23,14 @@ func resetLoggingState() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	// Always use the real close function during test cleanup so active writers
+	// can be closed even when a test has stubbed closeFileFn.
+	closeFileFn = defaultCloseFileFn
+	if fileCloser != nil {
+		_ = fileCloser.Close()
+		fileCloser = nil
+	}
+
 	baseWriter = os.Stderr
 	baseComponent = ""
 	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
@@ -32,21 +40,55 @@ func resetLoggingState() {
 	nowFn = time.Now
 	isTerminalFn = term.IsTerminal
 	mkdirAllFn = os.MkdirAll
+	chmodFn = os.Chmod
 	openFileFn = os.OpenFile
 	openFn = os.Open
 	statFn = os.Stat
+	lstatFn = os.Lstat
 	readDirFn = os.ReadDir
 	renameFn = os.Rename
 	removeFn = os.Remove
 	copyFn = io.Copy
 	gzipNewWriterFn = gzip.NewWriter
 	statFileFn = defaultStatFileFn
+	chmodFileFn = func(file *os.File, mode os.FileMode) error { return file.Chmod(mode) }
 	closeFileFn = defaultCloseFileFn
 	compressFn = compressAndRemove
+
+	GetBroadcaster().Shutdown()
 }
 
 func baseWriterDebugString() string {
 	return fmt.Sprintf("%#v", baseWriter)
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
+
+	os.Stderr = writePipe
+	defer func() {
+		os.Stderr = originalStderr
+		_ = readPipe.Close()
+		_ = writePipe.Close()
+	}()
+
+	fn()
+
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("failed to close write pipe: %v", err)
+	}
+	output, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("failed to read stderr output: %v", err)
+	}
+
+	return string(output)
 }
 
 func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
@@ -261,21 +303,79 @@ func TestRollingFileWriter(t *testing.T) {
 	}
 }
 
+func TestInitClosesPreviousRollingFileWriter(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "app.log")
+	closeCalls := 0
+	closeFileFn = func(file *os.File) error {
+		closeCalls++
+		return file.Close()
+	}
+
+	Init(Config{Format: "json", FilePath: logFile})
+	Init(Config{Format: "json", FilePath: logFile})
+
+	if closeCalls != 1 {
+		t.Fatalf("expected previous file writer to be closed once, got %d", closeCalls)
+	}
+}
+
+func TestShutdownClosesActiveRollingFileWriterAndSubscribers(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "app.log")
+	closeCalls := 0
+	closeFileFn = func(file *os.File) error {
+		closeCalls++
+		return file.Close()
+	}
+
+	Init(Config{Format: "json", FilePath: logFile})
+	_, ch, _ := GetBroadcaster().Subscribe()
+
+	Shutdown()
+	Shutdown()
+
+	if closeCalls != 1 {
+		t.Fatalf("expected active file writer to be closed once, got %d", closeCalls)
+	}
+	if fileCloser != nil {
+		t.Fatal("expected fileCloser to be cleared after shutdown")
+	}
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("expected subscriber channel to be closed on shutdown")
+		}
+	default:
+		t.Fatal("expected subscriber channel to be closed immediately")
+	}
+}
+
 func TestParseLevelDefaults(t *testing.T) {
 	tests := []struct {
 		input string
 		want  zerolog.Level
 	}{
+		{"", zerolog.InfoLevel},
 		{"debug", zerolog.DebugLevel},
 		{"DEBUG", zerolog.DebugLevel},
+		{"trace", zerolog.TraceLevel},
 		{"info", zerolog.InfoLevel},
 		{"INFO", zerolog.InfoLevel},
 		{"warn", zerolog.WarnLevel},
+		{"warning", zerolog.WarnLevel},
 		{"WARN", zerolog.WarnLevel},
 		{"error", zerolog.ErrorLevel},
 		{"ERROR", zerolog.ErrorLevel},
+		{"fatal", zerolog.FatalLevel},
+		{"panic", zerolog.PanicLevel},
+		{"disabled", zerolog.Disabled},
 		{"unknown", zerolog.InfoLevel},
-		{"", zerolog.InfoLevel},
 	}
 
 	for _, tc := range tests {
@@ -283,6 +383,20 @@ func TestParseLevelDefaults(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("parseLevel(%q) = %v, want %v", tc.input, got, tc.want)
 		}
+	}
+}
+
+func TestParseLevelWarnsOnInvalidValue(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		if got := parseLevel(" VERBOSE "); got != zerolog.InfoLevel {
+			t.Fatalf("expected info fallback for invalid level, got %s", got)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid level "verbose"; using "info"`) {
+		t.Fatalf("expected invalid level warning, got %q", stderr)
 	}
 }
 
@@ -324,6 +438,21 @@ func TestSelectWriterDefault(t *testing.T) {
 	}
 }
 
+func TestSelectWriterWarnsOnInvalidFormat(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		w := selectWriter("pretty")
+		if w != os.Stderr {
+			t.Fatalf("expected invalid format fallback to os.Stderr, got %#v", w)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid format "pretty"; using "json"`) {
+		t.Fatalf("expected invalid format warning, got %q", stderr)
+	}
+}
+
 func TestIsTerminalNil(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -357,6 +486,66 @@ func TestNewRollingFileWriter_MkdirError(t *testing.T) {
 	}
 }
 
+func TestNewRollingFileWriter_HardensDirectoryPermissions(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	logDir := filepath.Join(root, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("failed to create log dir: %v", err)
+	}
+
+	writer, err := newRollingFileWriter(Config{FilePath: filepath.Join(logDir, "app.log")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	defer func() { _ = w.closeLocked() }()
+
+	info, err := os.Stat(logDir)
+	if err != nil {
+		t.Fatalf("failed to stat log dir: %v", err)
+	}
+	if got := info.Mode().Perm(); got != logDirPerm {
+		t.Fatalf("expected log dir mode %o, got %o", logDirPerm, got)
+	}
+}
+
+func TestNewRollingFileWriter_RejectsSymlinkFile(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	target := filepath.Join(root, "target.log")
+	if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+		t.Fatalf("failed to create target file: %v", err)
+	}
+	link := filepath.Join(root, "symlink.log")
+	requireSymlinkOrSkip(t, target, link)
+
+	if _, err := newRollingFileWriter(Config{FilePath: link}); err == nil {
+		t.Fatal("expected error for symlink log file path")
+	}
+}
+
+func TestNewRollingFileWriter_RejectsSymlinkDir(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real-logs")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("failed to create real log dir: %v", err)
+	}
+	linkDir := filepath.Join(root, "logs-link")
+	requireSymlinkOrSkip(t, realDir, linkDir)
+
+	if _, err := newRollingFileWriter(Config{FilePath: filepath.Join(linkDir, "app.log")}); err == nil {
+		t.Fatal("expected error for symlink log directory path")
+	}
+}
+
 func TestInitFileWriterError(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -385,8 +574,130 @@ func TestNewRollingFileWriter_DefaultMaxSize(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected rollingFileWriter, got %#v", writer)
 	}
-	if w.maxBytes != 100*1024*1024 {
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
 		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_SecureDirectoryPermissions(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	var (
+		called bool
+		mode   os.FileMode
+	)
+	origMkdirAll := mkdirAllFn
+	mkdirAllFn = func(path string, perm os.FileMode) error {
+		called = true
+		mode = perm
+		return origMkdirAll(path, perm)
+	}
+
+	logFile := filepath.Join(t.TempDir(), "logs", "app.log")
+	writer, err := newRollingFileWriter(Config{FilePath: logFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected mkdirAllFn to be called")
+	}
+	if mode != 0o700 {
+		t.Fatalf("expected log directory mode 0700, got %#o", mode)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxSizeOverflowUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:  filepath.Join(dir, "app.log"),
+		MaxSizeMB: int(maxSafeSizeMB + 1),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_NegativeMaxAgeUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: -1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(defaultMaxAgeDays)*24*time.Hour {
+		t.Fatalf("expected default max age, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_ZeroMaxAgeDisablesCleanup(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != 0 {
+		t.Fatalf("expected max age 0, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxAgeOverflowClamps(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: maxDurationDays + 1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(maxDurationDays)*24*time.Hour {
+		t.Fatalf("expected clamped max age, got %s", w.maxAge)
 	}
 	_ = w.closeLocked()
 }
@@ -433,6 +744,29 @@ func TestOpenOrCreateLocked_AlreadyOpen(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	_ = w.closeLocked()
+}
+
+func TestOpenOrCreateLocked_HardensFilePermissions(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	path := filepath.Join(t.TempDir(), "app.log")
+	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("failed to create log file: %v", err)
+	}
+
+	w := &rollingFileWriter{path: path}
+	if err := w.openOrCreateLocked(); err != nil {
+		t.Fatalf("openOrCreateLocked error: %v", err)
+	}
+	defer func() { _ = w.closeLocked() }()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat log file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != logFilePerm {
+		t.Fatalf("expected log file mode %o, got %o", logFilePerm, got)
+	}
 }
 
 func TestRollingFileWriter_WriteOpenError(t *testing.T) {
@@ -492,6 +826,51 @@ func TestRollingFileWriter_RotateCompress(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected compress to be triggered")
 	}
+	_ = w.closeLocked()
+}
+
+func TestRollingFileWriter_RotateRenameError(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(path, []byte("data"), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	w := &rollingFileWriter{path: path, maxBytes: 1, compress: true}
+	if err := w.openOrCreateLocked(); err != nil {
+		t.Fatalf("openOrCreateLocked error: %v", err)
+	}
+
+	renameCalled := false
+	renameFn = func(oldpath, newpath string) error {
+		renameCalled = true
+		return errors.New("rename failed")
+	}
+
+	compressCalled := make(chan struct{}, 1)
+	compressFn = func(string) {
+		compressCalled <- struct{}{}
+	}
+
+	if err := w.rotateLocked(); err != nil {
+		t.Fatalf("rotateLocked error: %v", err)
+	}
+	if !renameCalled {
+		t.Fatal("expected rename to be attempted")
+	}
+
+	select {
+	case <-compressCalled:
+		t.Fatal("expected compression to be skipped on rename error")
+	default:
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected log file to exist after rename failure: %v", err)
+	}
+
 	_ = w.closeLocked()
 }
 
@@ -690,16 +1069,56 @@ func TestCompressAndRemove(t *testing.T) {
 			t.Fatalf("expected gzip file to exist: %v", err)
 		}
 	})
+
+	t.Run("RejectsSymlinkSource", func(t *testing.T) {
+		t.Cleanup(resetLoggingState)
+		dir := t.TempDir()
+		target := filepath.Join(dir, "target.log")
+		if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+			t.Fatalf("failed to write target file: %v", err)
+		}
+		symlinkPath := filepath.Join(dir, "app.log")
+		requireSymlinkOrSkip(t, target, symlinkPath)
+
+		compressAndRemove(symlinkPath)
+
+		if _, err := os.Stat(symlinkPath + ".gz"); err == nil {
+			t.Fatal("expected no gzip output for symlink source path")
+		}
+	})
+
+	t.Run("RejectsSymlinkDestination", func(t *testing.T) {
+		t.Cleanup(resetLoggingState)
+		dir := t.TempDir()
+		path := filepath.Join(dir, "app.log")
+		if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
+			t.Fatalf("failed to write source file: %v", err)
+		}
+		target := filepath.Join(dir, "target.gz")
+		if err := os.WriteFile(target, []byte("target"), 0o600); err != nil {
+			t.Fatalf("failed to write destination target file: %v", err)
+		}
+		requireSymlinkOrSkip(t, target, path+".gz")
+
+		compressAndRemove(path)
+
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected source file to remain when destination path is unsafe: %v", err)
+		}
+		if _, err := os.Stat(path + ".gz"); err != nil {
+			t.Fatalf("expected symlink destination path to remain: %v", err)
+		}
+	})
 }
 
 // Test that the logging package doesn't panic under concurrent use
 func TestConcurrentLogging(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
-	var buf bytes.Buffer
+	buf := &lockedBuffer{}
 	mu.Lock()
-	baseWriter = &buf
-	baseLogger = zerolog.New(&buf).With().Timestamp().Logger()
+	baseWriter = buf
+	baseLogger = zerolog.New(buf).With().Timestamp().Logger()
 	log.Logger = baseLogger
 	mu.Unlock()
 
@@ -716,6 +1135,23 @@ func TestConcurrentLogging(t *testing.T) {
 	if buf.Len() == 0 {
 		t.Fatal("expected log output from concurrent logging")
 	}
+}
+
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Len()
 }
 
 type errDirEntry struct {
@@ -737,4 +1173,11 @@ type errWriteCloser struct {
 
 func (e errWriteCloser) Write(p []byte) (int, error) {
 	return 0, e.err
+}
+
+func requireSymlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported in this environment: %v", err)
+	}
 }

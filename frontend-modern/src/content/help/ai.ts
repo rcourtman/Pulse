@@ -10,13 +10,11 @@ export const aiHelpContent: HelpContent[] = [
     description:
       'Use alternative providers with OpenAI-compatible APIs instead of the official OpenAI API.\n\n' +
       'Supported services:\n' +
-      '- OpenRouter: Access Claude, Llama, Mistral, and 100+ models through one API key\n' +
       '- vLLM / llama.cpp: Self-hosted local inference servers\n' +
       '- Azure OpenAI: Enterprise Azure deployments\n' +
       '- Together, Anyscale, Fireworks: Alternative cloud providers\n\n' +
-      'Enter the provider\'s base URL and use their API key in the API Key field.',
+      'OpenRouter has a dedicated provider in Pulse; use this field for other OpenAI-compatible endpoints.',
     examples: [
-      'https://openrouter.ai/api/v1 (OpenRouter)',
       'http://localhost:8000/v1 (vLLM local)',
       'https://your-resource.openai.azure.com (Azure)',
       'https://api.together.xyz/v1 (Together)',

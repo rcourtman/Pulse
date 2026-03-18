@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,8 +49,8 @@ type PatrolScope struct {
 	Context string
 	// Priority indicates relative urgency (higher = more urgent)
 	Priority int
-	// AlertID is the ID of the alert that triggered this patrol (if applicable)
-	AlertID string
+	// AlertIdentifier is the canonical ID of the alert that triggered this patrol (if applicable)
+	AlertIdentifier string
 	// FindingID is the ID of the finding that triggered this patrol (if applicable)
 	FindingID string
 	// NoStream skips streaming updates (phase, content, subscriber notifications).
@@ -105,6 +106,9 @@ type TriggerManager struct {
 	busyThreshold   int // Number of alerts/anomalies to consider "busy"
 	recentEvents    []time.Time
 	eventWindow     time.Duration
+
+	// Event trigger gating - when false, event-driven triggers (alert_fired, alert_cleared, anomaly) are rejected
+	eventTriggersEnabled bool
 
 	// Callback to execute patrol
 	onTrigger func(ctx context.Context, scope PatrolScope)
@@ -168,6 +172,7 @@ func NewTriggerManager(cfg TriggerManagerConfig) *TriggerManager {
 		eventWindow:          cfg.EventWindow,
 		recentEvents:         make([]time.Time, 0),
 		pendingTriggers:      make([]PatrolScope, 0),
+		eventTriggersEnabled: true,
 		stopCh:               make(chan struct{}),
 	}
 }
@@ -191,7 +196,7 @@ func (tm *TriggerManager) Start(ctx context.Context) {
 	tm.mu.Unlock()
 
 	go tm.processLoop(ctx)
-	log.Info().Msg("Patrol trigger manager started")
+	log.Info().Msg("patrol trigger manager started")
 }
 
 // Stop stops the trigger manager
@@ -204,7 +209,7 @@ func (tm *TriggerManager) Stop() {
 	tm.running = false
 	close(tm.stopCh)
 	tm.mu.Unlock()
-	log.Info().Msg("Patrol trigger manager stopped")
+	log.Info().Msg("patrol trigger manager stopped")
 }
 
 // processLoop processes pending triggers and handles scheduled patrols
@@ -314,11 +319,39 @@ func (tm *TriggerManager) processPendingTriggers(ctx context.Context) {
 	callback(ctx, trigger)
 }
 
+// SetEventTriggersEnabled controls whether event-driven triggers (alert_fired, alert_cleared, anomaly)
+// are accepted. When disabled, only manual, scheduled, startup, user_action, and verification triggers pass through.
+func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.eventTriggersEnabled = enabled
+	log.Info().Bool("enabled", enabled).Msg("patrol event triggers updated")
+}
+
+// isEventDrivenTrigger returns true for trigger reasons that are event-driven
+// (alerts firing/clearing, anomaly detection) as opposed to user-initiated or scheduled triggers.
+func isEventDrivenTrigger(reason TriggerReason) bool {
+	switch reason {
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared, TriggerReasonAnomalyDetected:
+		return true
+	default:
+		return false
+	}
+}
+
 // TriggerPatrol queues a patrol run with the given scope
 // Returns true if the trigger was accepted, false if rate limited or queue full
 func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+
+	// Gate event-driven triggers when disabled
+	if !tm.eventTriggersEnabled && isEventDrivenTrigger(scope.Reason) {
+		log.Debug().
+			Str("reason", string(scope.Reason)).
+			Msg("event-driven patrol trigger rejected: event triggers disabled")
+		return false
+	}
 
 	// Check if queue is full
 	if len(tm.pendingTriggers) >= tm.maxPendingTriggers {
@@ -466,29 +499,65 @@ func slicesEqual(a, b []string) bool {
 	return true
 }
 
+func canonicalPatrolScopeResourceType(resourceType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	if normalized == "" {
+		return ""
+	}
+	if isUnsupportedLegacyAIResourceTypeToken(normalized) {
+		return ""
+	}
+	switch normalized {
+	case "vm":
+		return "vm"
+	case "system-container":
+		return "system-container"
+	case "app-container":
+		return "app-container"
+	case "docker-host":
+		return "docker-host"
+	case "k8s-cluster":
+		return "k8s-cluster"
+	case "agent":
+		return "agent"
+	case "node":
+		return "node"
+	default:
+		return normalized
+	}
+}
+
+func patrolScopeResourceTypes(resourceType string) []string {
+	normalized := canonicalPatrolScopeResourceType(resourceType)
+	if normalized == "" {
+		return nil
+	}
+	return []string{normalized}
+}
+
 // AlertTriggeredPatrolScope creates a patrol scope for an alert that fired
-func AlertTriggeredPatrolScope(alertID, resourceID, resourceType, alertType string) PatrolScope {
+func AlertTriggeredPatrolScope(alertIdentifier, resourceID, resourceType, alertType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonAlertFired,
-		Context:       "Alert: " + alertType,
-		Priority:      triggerPriorityAlertFired,
-		AlertID:       alertID,
+		ResourceIDs:     []string{resourceID},
+		ResourceTypes:   patrolScopeResourceTypes(resourceType),
+		Depth:           PatrolDepthQuick,
+		Reason:          TriggerReasonAlertFired,
+		Context:         "Alert: " + alertType,
+		Priority:        triggerPriorityAlertFired,
+		AlertIdentifier: alertIdentifier,
 	}
 }
 
 // AlertClearedPatrolScope creates a patrol scope for an alert that cleared
-func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolScope {
+func AlertClearedPatrolScope(alertIdentifier, resourceID, resourceType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonAlertCleared,
-		Context:       "Verify resolution",
-		Priority:      triggerPriorityAlertCleared,
-		AlertID:       alertID,
+		ResourceIDs:     []string{resourceID},
+		ResourceTypes:   patrolScopeResourceTypes(resourceType),
+		Depth:           PatrolDepthQuick,
+		Reason:          TriggerReasonAlertCleared,
+		Context:         "Verify resolution",
+		Priority:        triggerPriorityAlertCleared,
+		AlertIdentifier: alertIdentifier,
 	}
 }
 
@@ -496,7 +565,7 @@ func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolSco
 func AnomalyDetectedPatrolScope(resourceID, resourceType, metric string, value, baseline float64) PatrolScope {
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: patrolScopeResourceTypes(resourceType),
 		Depth:         PatrolDepthNormal,
 		Reason:        TriggerReasonAnomalyDetected,
 		Context:       "Anomaly: " + metric,
@@ -515,7 +584,7 @@ func AnomalyTriggeredPatrolScope(resourceID, resourceType, metric, severity stri
 	}
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: patrolScopeResourceTypes(resourceType),
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAnomalyDetected,
 		Context:       "Anomaly: " + metric + " (" + severity + ")",

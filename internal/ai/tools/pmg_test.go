@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +55,17 @@ func TestExecuteGetPMGStatus(t *testing.T) {
 	require.Len(t, resp.Instances, 1)
 	assert.Equal(t, "gateway-1", resp.Instances[0].Name)
 	assert.Equal(t, 1, resp.Total)
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(state)
+	exec = NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+
+	result, err = exec.executeGetPMGStatus(ctx, map[string]interface{}{})
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	require.Len(t, resp.Instances, 1)
+	assert.Equal(t, "gateway-1", resp.Instances[0].Name)
 }
 
 func TestExecuteGetMailStats(t *testing.T) {
@@ -239,6 +251,35 @@ func TestExecuteGetSpamStatsEmpty(t *testing.T) {
 	assert.Equal(t, "gateway-1", resp.Instance)
 	assert.Equal(t, 0, resp.Quarantine.Total)
 	assert.Len(t, resp.Distribution, 0)
+}
+
+func TestPMGResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  any
+		keys []string
+	}{
+		{name: "pmg_status", raw: EmptyPMGStatusResponse(), keys: []string{"instances"}},
+		{name: "mail_queues", raw: EmptyMailQueuesResponse(), keys: []string{"queues"}},
+		{name: "spam_stats", raw: EmptySpamStatsResponse(), keys: []string{"spam_distribution"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(tc.raw)
+			require.NoError(t, err)
+
+			var decoded map[string]any
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+
+			for _, key := range tc.keys {
+				values, ok := decoded[key].([]any)
+				if !ok || len(values) != 0 {
+					t.Fatalf("expected %s.%s to be an empty array, got %T (%v)", tc.name, key, decoded[key], decoded[key])
+				}
+			}
+		})
+	}
 }
 
 func TestExecuteGetMailStatsFallback(t *testing.T) {

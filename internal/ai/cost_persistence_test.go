@@ -124,3 +124,19 @@ func TestCostPersistenceAdapter_LoadError(t *testing.T) {
 		t.Fatal("expected error when usage history path is a directory")
 	}
 }
+
+func TestCostPersistenceAdapter_NilConfigFailsClosed(t *testing.T) {
+	adapter := NewCostPersistenceAdapter(nil)
+
+	if err := adapter.SaveUsageHistory([]cost.UsageEvent{}); err == nil {
+		t.Fatal("expected save to fail when config persistence is nil")
+	}
+
+	loaded, err := adapter.LoadUsageHistory()
+	if err == nil {
+		t.Fatal("expected load to fail when config persistence is nil")
+	}
+	if loaded == nil {
+		t.Fatal("expected load to return normalized empty slice on failure")
+	}
+}

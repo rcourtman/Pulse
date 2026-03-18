@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,8 +50,8 @@ func TestGetTenantMonitor_FallbackOnError(t *testing.T) {
 	router := &Router{monitor: defaultMonitor, mtMonitor: mtm}
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "../bad")
 
-	if got := router.getTenantMonitor(ctx); got != defaultMonitor {
-		t.Fatalf("expected fallback to default monitor")
+	if got := router.getTenantMonitor(ctx); got != nil {
+		t.Fatalf("expected nil monitor on tenant resolution error")
 	}
 }
 
@@ -119,7 +120,7 @@ func TestHandleMetricsHistory_LicenseRequired(t *testing.T) {
 
 	router := &Router{
 		monitor:         monitor,
-		licenseHandlers: NewLicenseHandlers(mtp),
+		licenseHandlers: NewLicenseHandlers(mtp, false),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=vm-1&range=30d", nil)
@@ -166,6 +167,216 @@ func TestHandleMetricsHistory_UsesStore(t *testing.T) {
 	}
 	if payload["source"] != "store" {
 		t.Fatalf("expected source store, got %#v", payload["source"])
+	}
+}
+
+func TestHandleMetricsHistory_AgentRequestReadsAgentWrites(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore error: %v", err)
+	}
+	defer store.Close()
+
+	store.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "agent",
+		ResourceID:   "agent-1",
+		MetricType:   "cpu",
+		Value:        37.5,
+		Timestamp:    time.Now(),
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["source"] != "store" {
+		t.Fatalf("expected source store, got %#v", payload["source"])
+	}
+	if payload["resourceType"] != "agent" {
+		t.Fatalf("expected canonical resourceType agent, got %#v", payload["resourceType"])
+	}
+	pointsRaw, ok := payload["points"].([]interface{})
+	if !ok || len(pointsRaw) == 0 {
+		t.Fatalf("expected non-empty points, got %#v", payload["points"])
+	}
+}
+
+func TestHandleMetricsHistory_AgentRequestFallsBackToNodeStoreKey(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore error: %v", err)
+	}
+	defer store.Close()
+
+	store.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "node",
+		ResourceID:   "pve-node-1",
+		MetricType:   "cpu",
+		Value:        51.2,
+		Timestamp:    time.Now(),
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=agent&resourceId=pve-node-1&metric=cpu&range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["source"] != "store" {
+		t.Fatalf("expected source store, got %#v", payload["source"])
+	}
+	if payload["resourceType"] != "agent" {
+		t.Fatalf("expected canonical resourceType agent, got %#v", payload["resourceType"])
+	}
+	pointsRaw, ok := payload["points"].([]interface{})
+	if !ok || len(pointsRaw) == 0 {
+		t.Fatalf("expected non-empty points, got %#v", payload["points"])
+	}
+}
+
+func TestHandleMetricsHistory_HostAliasReadsAgentStoreKeyAndReturnsAgentType(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore error: %v", err)
+	}
+	defer store.Close()
+
+	store.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "agent",
+		ResourceID:   "agent-1",
+		MetricType:   "cpu",
+		Value:        44.2,
+		Timestamp:    time.Now(),
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=host&resourceId=agent-1&metric=cpu&range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `unsupported resourceType "host"`) {
+		t.Fatalf("unexpected response body: %s", body)
+	}
+}
+
+func TestHandleMetricsHistory_TenantScopedStoreIsolation(t *testing.T) {
+	defaultMonitor, _, _ := newTestMonitor(t)
+	tenantMonitor, _, _ := newTestMonitor(t)
+
+	defaultStore, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("default metrics.NewStore error: %v", err)
+	}
+	defer defaultStore.Close()
+
+	tenantStore, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("tenant metrics.NewStore error: %v", err)
+	}
+	defer tenantStore.Close()
+
+	now := time.Now()
+	defaultStore.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "vm",
+		ResourceID:   "vm-1",
+		MetricType:   "cpu",
+		Value:        11.0,
+		Timestamp:    now,
+		Tier:         metrics.TierRaw,
+	}})
+	tenantStore.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "vm",
+		ResourceID:   "vm-1",
+		MetricType:   "cpu",
+		Value:        84.0,
+		Timestamp:    now,
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, defaultMonitor, "metricsStore", defaultStore)
+	setUnexportedField(t, tenantMonitor, "metricsStore", tenantStore)
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"org-a": tenantMonitor,
+	})
+
+	router := &Router{
+		monitor:   defaultMonitor,
+		mtMonitor: mtm,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=vm-1&metric=cpu&range=1h", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["source"] != "store" {
+		t.Fatalf("expected source store, got %#v", payload["source"])
+	}
+	if payload["metric"] != "cpu" {
+		t.Fatalf("expected metric cpu, got %#v", payload["metric"])
+	}
+
+	pointsRaw, ok := payload["points"]
+	if !ok {
+		t.Fatalf("expected points in response, got %#v", payload)
+	}
+	points, ok := pointsRaw.([]interface{})
+	if !ok || len(points) == 0 {
+		t.Fatalf("expected non-empty points series, got %#v", pointsRaw)
+	}
+	firstPoint, ok := points[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected point object, got %#v", points[0])
+	}
+	value, ok := firstPoint["value"].(float64)
+	if !ok {
+		t.Fatalf("expected numeric value in point, got %#v", firstPoint["value"])
+	}
+	if value != 84.0 {
+		t.Fatalf("expected tenant-specific value 84.0, got %v", value)
 	}
 }
 

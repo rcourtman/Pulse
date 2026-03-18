@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"net"
 	"net/http"
 	"strings"
@@ -11,6 +14,30 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
+
+// cspNonceKey is the context key for the per-request CSP nonce.
+type cspNonceKey struct{}
+
+// CSPNonceFromContext returns the CSP nonce stored in the request context, or ""
+// if none is present (e.g. dev mode).
+func CSPNonceFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(cspNonceKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// generateCSPNonce returns a 16-byte (128-bit) base64-encoded cryptographic nonce.
+func generateCSPNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand should never fail; if it does, fall back to empty which
+		// will leave the CSP without a nonce (equivalent to current behaviour).
+		log.Error().Err(err).Msg("CSP nonce generation failed — falling back to unsafe-inline")
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
 
 // Security improvements for Pulse
 
@@ -37,14 +64,21 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	// Skip CSRF for Basic Auth (doesn't use sessions, not vulnerable to CSRF)
-	if r.Header.Get("Authorization") != "" {
-		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic Auth header present")
-		return true
+	// Skip CSRF only for explicit non-session auth schemes.
+	if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
+		lower := strings.ToLower(authHeader)
+		if strings.HasPrefix(lower, "basic ") {
+			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic auth header present")
+			return true
+		}
+		if strings.HasPrefix(lower, "bearer ") {
+			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Bearer auth header present")
+			return true
+		}
 	}
 
 	// Get session from cookie
-	cookie, err := r.Cookie("pulse_session")
+	cookie, err := readSessionCookie(r)
 	if err != nil {
 		// No session cookie means no CSRF check needed
 		// (either no auth configured or using basic auth which doesn't use sessions)
@@ -72,7 +106,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("path", r.URL.Path).
 			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 			Msg("Missing CSRF token")
-		clearCSRFCookie(w)
+		clearCSRFCookie(w, r)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
 			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after missing")
@@ -87,7 +121,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("session", safePrefixForLog(cookie.Value, 8)+"...").
 			Str("provided_token", safePrefixForLog(csrfToken, 8)+"...").
 			Msg("Invalid CSRF token")
-		clearCSRFCookie(w)
+		clearCSRFCookie(w, r)
 		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
 			w.Header().Set("X-CSRF-Token", newToken)
 			log.Debug().Str("new_token", safePrefixForLog(newToken, 8)+"...").Msg("Issued new CSRF token after invalid")
@@ -102,16 +136,23 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func clearCSRFCookie(w http.ResponseWriter) {
+func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 	if w == nil {
 		return
 	}
+	var secure bool
+	var sameSite http.SameSite
+	if r != nil {
+		secure, sameSite = getCookieSettings(r)
+	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: false,
+		Secure:   secure,
+		SameSite: sameSite,
 	})
 }
 
@@ -127,7 +168,7 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 	secure, sameSite := getCookieSettings(r)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "pulse_csrf",
+		Name:     CookieNameCSRF,
 		Value:    newToken,
 		Path:     "/",
 		Secure:   secure,
@@ -253,6 +294,12 @@ func firstValidForwardedIP(header string) string {
 	return ""
 }
 
+// IsTrustedProxyIP reports whether ipStr belongs to a CIDR in PULSE_TRUSTED_PROXY_CIDRS.
+// Exported so the websocket hub can gate X-Forwarded-* trust on the same list.
+func IsTrustedProxyIP(ipStr string) bool {
+	return isTrustedProxyIP(ipStr)
+}
+
 func isTrustedProxyIP(ipStr string) bool {
 	ipStr = strings.TrimSpace(strings.Trim(ipStr, "[]"))
 	if ipStr == "" {
@@ -344,6 +391,31 @@ func isTrustedNetwork(ip string, trustedNetworks []string) bool {
 	return false
 }
 
+func init() {
+	// Periodically purge expired failedLogins entries to prevent unbounded
+	// memory growth from brute-force attempts with many distinct identifiers.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanupExpiredFailedLogins()
+		}
+	}()
+}
+
+func cleanupExpiredFailedLogins() {
+	now := time.Now()
+	failedMu.Lock()
+	defer failedMu.Unlock()
+	for id, f := range failedLogins {
+		// Remove entries whose lockout has expired (or were never locked) and
+		// haven't had a new attempt in 2x the lockout window.
+		if now.After(f.LockedUntil) && now.Sub(f.LastAttempt) > 2*lockoutDuration {
+			delete(failedLogins, id)
+		}
+	}
+}
+
 // RecordFailedLogin tracks failed login attempts
 func RecordFailedLogin(identifier string) {
 	failedMu.Lock()
@@ -406,13 +478,27 @@ func ResetLockout(identifier string) {
 		Msg("Lockout manually reset")
 }
 
-// SecurityHeadersWithConfig applies security headers with embedding configuration
-func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string) http.Handler {
+// SecurityHeadersWithConfig applies security headers with embedding configuration.
+// When devMode is false, a per-request cryptographic nonce is generated and used
+// in script-src / style-src instead of 'unsafe-inline'/'unsafe-eval'.
+// When devMode is true, 'unsafe-inline' and 'unsafe-eval' are kept so Vite HMR works.
+func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string, devMode bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Generate a per-request nonce in production mode and store it in context
+		// so downstream handlers (e.g. serveIndexWithNonce) can inject it into HTML.
+		var nonce string
+		if !devMode {
+			nonce = generateCSPNonce()
+			if nonce != "" {
+				ctx := context.WithValue(r.Context(), cspNonceKey{}, nonce)
+				r = r.WithContext(ctx)
+			}
+		}
+
 		// Configure clickjacking protection based on embedding settings
 		if allowEmbedding {
 			// When embedding is allowed, don't set X-Frame-Options header
-			// This allows embedding from any origin
+			// frame-ancestors CSP directive controls allowed embed origins below
 			// Security note: User explicitly enabled this for iframe embedding
 		} else {
 			// Deny all embedding when not explicitly allowed
@@ -422,14 +508,35 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Prevent MIME type sniffing
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 
-		// Enable XSS protection
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		// Disable legacy XSS auditor — it is removed from modern browsers and
+		// can introduce vulnerabilities in older ones.  CSP provides XSS protection.
+		w.Header().Set("X-XSS-Protection", "0")
 
-		// Build Content Security Policy
+		// Build Content Security Policy.
+		// In production, use nonce-based directives — browsers that support nonces
+		// (CSP Level 2+) automatically ignore 'unsafe-inline' when a nonce is present,
+		// so we omit 'unsafe-inline' entirely.
+		// In dev mode, keep 'unsafe-inline'/'unsafe-eval' for Vite HMR scripts.
+		var scriptSrc, styleSrc string
+		if devMode {
+			scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+			styleSrc = "style-src 'self' 'unsafe-inline'"
+		} else {
+			if nonce != "" {
+				scriptSrc = "script-src 'self' 'nonce-" + nonce + "'"
+				styleSrc = "style-src 'self' 'nonce-" + nonce + "'"
+			} else {
+				// Fallback if nonce generation failed — keep unsafe-inline so the
+				// app still works, though with weaker CSP protection.
+				scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+				styleSrc = "style-src 'self' 'unsafe-inline'"
+			}
+		}
+
 		cspDirectives := []string{
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Needed for React
-			"style-src 'self' 'unsafe-inline'",                // Needed for inline styles
+			scriptSrc,
+			styleSrc,
 			"img-src 'self' data: blob:",
 			"connect-src 'self' ws: wss:", // WebSocket support
 			"font-src 'self' data:",
@@ -449,12 +556,18 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 				}
 				cspDirectives = append(cspDirectives, frameAncestors)
 			} else {
-				// Allow embedding from any origin (user explicitly enabled this)
-				cspDirectives = append(cspDirectives, "frame-ancestors *")
+				// Default to self-only when embedding is enabled but no specific origins configured.
+				// This prevents clickjacking while still allowing same-origin iframes.
+				cspDirectives = append(cspDirectives, "frame-ancestors 'self'")
 			}
 		} else {
 			// Deny all embedding
 			cspDirectives = append(cspDirectives, "frame-ancestors 'none'")
+		}
+
+		// Upgrade HTTP sub-resource requests to HTTPS when the page is served over HTTPS
+		if shouldSetHSTS(r) {
+			cspDirectives = append(cspDirectives, "upgrade-insecure-requests")
 		}
 
 		w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
@@ -463,21 +576,36 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
 		// Permissions Policy (formerly Feature Policy)
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()")
+
+		// Enable HSTS only for requests known to be HTTPS.
+		// Forwarded proto is trusted only when the direct peer is a trusted proxy.
+		if shouldSetHSTS(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		}
 
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Audit Logging
-type AuditEvent struct {
-	Timestamp time.Time `json:"timestamp"`
-	Event     string    `json:"event"`
-	User      string    `json:"user,omitempty"`
-	IP        string    `json:"ip"`
-	Path      string    `json:"path,omitempty"`
-	Success   bool      `json:"success"`
-	Details   string    `json:"details,omitempty"`
+func shouldSetHSTS(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
+
+	proto := strings.ToLower(firstForwardedValue(r.Header.Get("X-Forwarded-Proto")))
+	if proto == "" {
+		proto = strings.ToLower(firstForwardedValue(r.Header.Get("X-Forwarded-Scheme")))
+	}
+	return proto == "https"
 }
 
 // LogAuditEvent logs security-relevant events using the audit package.
@@ -529,7 +657,11 @@ var (
 	sessionsMu  sync.RWMutex
 )
 
-// TrackUserSession tracks which sessions belong to which user
+// maxSessionsPerUser limits concurrent sessions to prevent session accumulation.
+const maxSessionsPerUser = 10
+
+// TrackUserSession tracks which sessions belong to which user.
+// When the limit is exceeded, the oldest sessions are evicted.
 func TrackUserSession(user, sessionID string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
@@ -537,7 +669,32 @@ func TrackUserSession(user, sessionID string) {
 	if allSessions[user] == nil {
 		allSessions[user] = []string{}
 	}
+
+	// Add the new session
 	allSessions[user] = append(allSessions[user], sessionID)
+
+	// If near the limit, prune stale session IDs (already deleted via logout/
+	// rotation/expiry) before evicting valid sessions.
+	if len(allSessions[user]) > maxSessionsPerUser {
+		store := GetSessionStore()
+		alive := make([]string, 0, len(allSessions[user]))
+		for _, sid := range allSessions[user] {
+			if store.ValidateSession(sid) {
+				alive = append(alive, sid)
+			}
+		}
+		allSessions[user] = alive
+
+		// After pruning stale entries, evict oldest if still over the limit
+		if len(allSessions[user]) > maxSessionsPerUser {
+			excess := allSessions[user][:len(allSessions[user])-maxSessionsPerUser]
+			for _, oldSID := range excess {
+				store.DeleteSession(oldSID)
+				GetCSRFStore().DeleteCSRFToken(oldSID)
+			}
+			allSessions[user] = allSessions[user][len(allSessions[user])-maxSessionsPerUser:]
+		}
+	}
 }
 
 // GetSessionUsername returns the username associated with a session ID
@@ -586,17 +743,40 @@ func InvalidateUserSessions(user string) {
 		Msg("Invalidated all user sessions")
 }
 
-// UntrackUserSession removes a single session from a user's session list
+// UntrackUserSession removes all occurrences of a session from a user's session list
 // (used for single session logout, not password change which clears all)
 func UntrackUserSession(user, sessionID string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 
 	sessions := allSessions[user]
-	for i, sid := range sessions {
-		if sid == sessionID {
-			allSessions[user] = append(sessions[:i], sessions[i+1:]...)
-			break
+	filtered := sessions[:0]
+	for _, sid := range sessions {
+		if sid != sessionID {
+			filtered = append(filtered, sid)
 		}
+	}
+	allSessions[user] = filtered
+}
+
+// InvalidateOldSessionFromRequest destroys any pre-existing session cookie to
+// prevent session fixation attacks. Call this before creating a new session.
+// It deletes the session from the persistent store, its CSRF token, and
+// removes it from the in-memory user session tracking map.
+func InvalidateOldSessionFromRequest(r *http.Request) {
+	cookie, err := readSessionCookie(r)
+	if err != nil || cookie.Value == "" {
+		return
+	}
+	oldToken := cookie.Value
+
+	// Remove from persistent store
+	GetSessionStore().DeleteSession(oldToken)
+	GetCSRFStore().DeleteCSRFToken(oldToken)
+
+	// Remove from in-memory tracking so GetSessionUsername won't resolve it
+	user := GetSessionUsername(oldToken)
+	if user != "" {
+		UntrackUserSession(user, oldToken)
 	}
 }

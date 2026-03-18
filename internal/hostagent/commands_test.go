@@ -45,7 +45,7 @@ func TestCommandClient_Run(t *testing.T) {
 
 		// 2. Send Registration Success
 		respPayload, _ := json.Marshal(registeredPayload{Success: true})
-		conn.WriteJSON(wsMessage{
+		_ = conn.WriteJSON(wsMessage{
 			Type:      msgTypeRegistered,
 			Timestamp: time.Now(),
 			Payload:   respPayload,
@@ -57,7 +57,7 @@ func TestCommandClient_Run(t *testing.T) {
 			Command:   "echo hello",
 			Timeout:   5,
 		})
-		conn.WriteJSON(wsMessage{
+		_ = conn.WriteJSON(wsMessage{
 			Type:      msgTypeExecuteCmd,
 			Timestamp: time.Now(),
 			Payload:   cmdPayload,
@@ -100,7 +100,7 @@ func TestCommandClient_Run(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		client.Run(ctx)
+		_ = client.Run(ctx)
 	}()
 
 	// Verify sequence
@@ -210,13 +210,26 @@ func TestWrapCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "EmptyTargetIDPassedThrough",
+			name: "EmptyTargetIDReturnsError",
 			payload: executeCommandPayload{
 				Command:    "ls",
 				TargetType: "container",
 				TargetID:   "",
 			},
-			wantCmd: "ls", // No wrapping when TargetID is empty
+			checkFn: func(cmd string) bool {
+				return strings.Contains(cmd, "missing target ID")
+			},
+		},
+		{
+			name: "OptionLikeTargetIDReturnsError",
+			payload: executeCommandPayload{
+				Command:    "ls",
+				TargetType: "vm",
+				TargetID:   "-1",
+			},
+			checkFn: func(cmd string) bool {
+				return strings.Contains(cmd, "invalid target ID")
+			},
 		},
 	}
 

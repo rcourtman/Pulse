@@ -1,5 +1,9 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import { resolveComposeInvocation } from './compose-command.mjs';
+import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
+import { startManagedLocalBackend } from './managed-local-backend.mjs';
+import { clearRuntimeState } from './runtime-state.mjs';
 
 // Add signal handlers to debug unexpected termination
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
@@ -27,6 +31,7 @@ const truthy = (value) => {
 
 const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
+const shouldUseManagedLocalBackend = truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND);
 
 const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
 if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
@@ -100,24 +105,24 @@ if (!shouldSkipPlaywrightInstall) {
   await run(npxCmd, ['playwright', 'install', 'chromium']);
 }
 
-if (shouldSkipDocker) {
-  console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose up');
+await clearRuntimeState();
+
+if (shouldUseManagedLocalBackend) {
+  await startManagedLocalBackend();
   process.exit(0);
 }
 
-const composeArgs = ['compose', '-f', 'docker-compose.test.yml', 'up', '-d'];
-const legacyComposeArgs = ['-f', 'docker-compose.test.yml', 'up', '-d'];
-const useDockerCompose = !(await canRun('docker', ['compose', 'version']));
+if (shouldSkipDocker) {
+  console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose up');
+  await applyRequestedEntitlementProfile();
+  process.exit(0);
+}
 
 console.log('[pretest] Starting docker compose...');
 try {
-  if (useDockerCompose) {
-    console.log('[pretest] Using legacy docker-compose command');
-    await run('docker-compose', legacyComposeArgs);
-  } else {
-    console.log('[pretest] Using modern docker compose command');
-    await run('docker', composeArgs);
-  }
+  const compose = await resolveComposeInvocation(canRun);
+  console.log(`[pretest] Using ${compose.label} command`);
+  await run(compose.command, compose.args);
   console.log('[pretest] Docker compose completed successfully');
 } catch (error) {
   console.error('[pretest] Docker compose failed:', error.message);
@@ -136,6 +141,7 @@ console.log(`[pretest] Waiting for health check at ${baseURL}/api/health...`);
 try {
   await waitForHealth(`${baseURL}/api/health`);
   console.log('[pretest] Health check passed!');
+  await applyRequestedEntitlementProfile();
 } catch (error) {
   console.error('[pretest] Health check failed:', error.message);
   // Try to get container logs for debugging

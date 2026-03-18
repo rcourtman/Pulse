@@ -18,24 +18,25 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/infradiscovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
-// StateProvider provides access to the current infrastructure state
-type StateProvider interface {
-	GetState() models.StateSnapshot
-}
+// StateProvider is a type alias for models.SnapshotProvider.
+// Kept for local convenience; all new code should use models.SnapshotProvider directly.
+type StateProvider = models.SnapshotProvider
 
 // CommandPolicy defines the interface for command security policy
 type CommandPolicy interface {
@@ -103,9 +104,23 @@ type ChatMessage struct {
 	Role             string          `json:"role"`
 	Content          string          `json:"content"`
 	ReasoningContent string          `json:"reasoning_content,omitempty"`
-	ToolCalls        []ChatToolCall  `json:"tool_calls,omitempty"`
+	ToolCalls        []ChatToolCall  `json:"tool_calls"`
 	ToolResult       *ChatToolResult `json:"tool_result,omitempty"`
 	Timestamp        time.Time       `json:"timestamp"`
+}
+
+func EmptyChatMessage() ChatMessage {
+	return ChatMessage{}.NormalizeCollections()
+}
+
+func (m ChatMessage) NormalizeCollections() ChatMessage {
+	if m.ToolCalls == nil {
+		m.ToolCalls = []ChatToolCall{}
+	}
+	for i := range m.ToolCalls {
+		m.ToolCalls[i] = m.ToolCalls[i].NormalizeCollections()
+	}
+	return m
 }
 
 // ChatToolCall represents a tool invocation in a chat message
@@ -113,6 +128,17 @@ type ChatToolCall struct {
 	ID    string                 `json:"id"`
 	Name  string                 `json:"name"`
 	Input map[string]interface{} `json:"input"`
+}
+
+func EmptyChatToolCall() ChatToolCall {
+	return ChatToolCall{}.NormalizeCollections()
+}
+
+func (t ChatToolCall) NormalizeCollections() ChatToolCall {
+	if t.Input == nil {
+		t.Input = map[string]interface{}{}
+	}
+	return t
 }
 
 // ChatToolResult represents the result of a tool invocation
@@ -124,12 +150,11 @@ type ChatToolResult struct {
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
 type PatrolExecuteRequest struct {
-	Prompt         string `json:"prompt"`
-	SystemPrompt   string `json:"system_prompt"`
-	SessionID      string `json:"session_id,omitempty"`
-	UseCase        string `json:"use_case"` // "patrol" — for model selection
-	MaxTurns       int    `json:"max_turns,omitempty"`
-	MaxTotalTokens int    `json:"max_total_tokens,omitempty"`
+	Prompt       string `json:"prompt"`
+	SystemPrompt string `json:"system_prompt"`
+	SessionID    string `json:"session_id,omitempty"`
+	UseCase      string `json:"use_case"` // "patrol" — for model selection
+	MaxTurns     int    `json:"max_turns,omitempty"`
 }
 
 // PatrolStreamResponse contains the results of a patrol execution via the chat service
@@ -137,26 +162,27 @@ type PatrolStreamResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
-	StopReason   string `json:"stop_reason,omitempty"`
 }
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu               sync.RWMutex
-	persistence      *config.ConfigPersistence
-	provider         providers.Provider
-	cfg              *config.AIConfig
-	agentServer      AgentServer
-	policy           CommandPolicy
-	stateProvider    StateProvider
-	alertProvider    AlertProvider
-	knowledgeStore   *knowledge.Store
-	costStore        *cost.Store
-	resourceProvider ResourceProvider      // Unified resource model provider (Phase 2)
-	patrolService    *PatrolService        // Background AI monitoring service
-	metadataProvider MetadataProvider      // Enables AI to update resource URLs
-	incidentStore    *memory.IncidentStore // Incident timelines for alert memory
-	chatService      ChatServiceProvider   // Chat service for investigation orchestrator
+	mu                      sync.RWMutex
+	orgID                   string
+	persistence             *config.ConfigPersistence
+	provider                providers.Provider
+	cfg                     *config.AIConfig
+	agentServer             AgentServer
+	policy                  CommandPolicy
+	stateProvider           StateProvider
+	readState               unifiedresources.ReadState
+	alertProvider           AlertProvider
+	knowledgeStore          *knowledge.Store
+	costStore               *cost.Store
+	unifiedResourceProvider UnifiedResourceProvider
+	patrolService           *PatrolService        // Background AI monitoring service
+	metadataProvider        MetadataProvider      // Enables AI to update resource URLs
+	incidentStore           *memory.IncidentStore // Incident timelines for alert memory
+	chatService             ChatServiceProvider   // Chat service for investigation orchestrator
 
 	// Infrastructure discovery service - detects apps running on hosts
 	infraDiscoveryService *infradiscovery.Service
@@ -169,7 +195,10 @@ type Service struct {
 	discoveryService *servicediscovery.Service
 
 	// Alert-triggered analysis - token-efficient real-time AI insights
-	alertTriggeredAnalyzer *AlertTriggeredAnalyzer
+	alertTriggeredAnalyzer aicontracts.AlertAnalyzer
+	// alertAnalyzerFactory gates construction of the AlertAnalyzer.
+	// When nil (OSS binary), the analyzer is never created regardless of config.
+	alertAnalyzerFactory func(aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer
 
 	limits executionLimits
 
@@ -177,6 +206,11 @@ type Service struct {
 
 	// License checker for Pro feature gating
 	licenseChecker LicenseChecker
+
+	// Quickstart credit manager for free hosted patrol runs
+	quickstartCredits QuickstartCreditManager
+	// usingQuickstart tracks whether the current provider was set via quickstart credits
+	usingQuickstart bool
 }
 
 type executionLimits struct {
@@ -196,6 +230,34 @@ type modelsCache struct {
 	ttl       time.Duration
 }
 
+// alertFindingRecorderAdapter adapts PatrolService.recordFinding for the
+// aicontracts.FindingRecorder interface used by the enterprise alert analyzer.
+type alertFindingRecorderAdapter struct {
+	ps *PatrolService
+}
+
+func (a *alertFindingRecorderAdapter) RecordAlertFinding(f *aicontracts.AlertAnalyzerFinding) {
+	if a.ps == nil || f == nil {
+		return
+	}
+	a.ps.recordFinding(&Finding{
+		ID:              f.ID,
+		Key:             f.Key,
+		Severity:        FindingSeverity(f.Severity),
+		Category:        FindingCategory(f.Category),
+		ResourceID:      f.ResourceID,
+		ResourceName:    f.ResourceName,
+		ResourceType:    f.ResourceType,
+		Title:           f.Title,
+		Description:     f.Description,
+		Recommendation:  f.Recommendation,
+		Evidence:        f.Evidence,
+		AlertIdentifier: f.AlertIdentifier,
+		DetectedAt:      f.DetectedAt,
+		LastSeenAt:      f.LastSeenAt,
+	})
+}
+
 // NewService creates a new AI service
 func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) *Service {
 	// Initialize knowledge store
@@ -206,19 +268,20 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		var err error
 		knowledgeStore, err = knowledge.NewStore(persistence.DataDir())
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize knowledge store")
+			log.Warn().Err(err).Msg("failed to initialize knowledge store")
 		}
 		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize AI usage cost store")
+			log.Warn().Err(err).Msg("failed to initialize AI usage cost store")
 		}
 		// Initialize discovery store for deep infrastructure discovery
 		discoveryStore, err = servicediscovery.NewStore(persistence.DataDir())
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize discovery store")
+			log.Warn().Err(err).Msg("failed to initialize discovery store")
 		}
 	}
 
 	return &Service{
+		orgID:          "default",
 		persistence:    persistence,
 		agentServer:    agentServer,
 		policy:         agentexec.DefaultPolicy(),
@@ -236,6 +299,28 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 	}
 }
 
+// SetOrgID sets the org scope used when creating approval records.
+func (s *Service) SetOrgID(orgID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		normalized = "default"
+	}
+	s.orgID = normalized
+}
+
+// GetOrgID returns the org scope associated with this service instance.
+func (s *Service) GetOrgID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	orgID := strings.TrimSpace(s.orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
 func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (func(), error) {
 	normalized := strings.TrimSpace(strings.ToLower(useCase))
 	if normalized == "" {
@@ -249,12 +334,22 @@ func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (fun
 		slots = s.limits.chatSlots
 	}
 
+	timer := time.NewTimer(5 * time.Second)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
 	select {
 	case slots <- struct{}{}:
 		return func() { <-slots }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		return nil, fmt.Errorf("Pulse Assistant is busy - too many concurrent requests")
 	}
 }
@@ -293,14 +388,100 @@ func (s *Service) CheckBudget(useCase string) error {
 	return s.enforceBudget(useCase)
 }
 
-// RecordUsage records a token usage event in the cost store for budget tracking.
-// This should be called by any code path that consumes LLM tokens (patrol, investigations, etc.).
-func (s *Service) RecordUsage(event cost.UsageEvent) {
-	s.mu.RLock()
-	store := s.costStore
-	s.mu.RUnlock()
-	if store != nil {
-		store.Record(event)
+// SetReadState injects a unified read-state provider for context enrichment.
+// This is forwarded to PatrolService and DiscoveryService when available.
+func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = rs
+
+	s.initPatrolServiceLocked()
+
+	if s.patrolService != nil {
+		s.patrolService.SetReadState(rs)
+	}
+	if s.discoveryService != nil {
+		s.discoveryService.SetReadState(rs)
+	}
+	if s.infraDiscoveryService != nil {
+		s.infraDiscoveryService.SetReadState(rs)
+	}
+
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
+	// and SetReadState may be called after SetStateProvider (which sets up
+	// the discoveryStore). Try to create the service if both are now available.
+	s.initDiscoveryServiceLocked()
+}
+
+// initPatrolServiceLocked creates the patrol service once any canonical patrol
+// runtime input exists. Must be called while holding s.mu.
+func (s *Service) initPatrolServiceLocked() {
+	if s.patrolService != nil {
+		return
+	}
+	if s.stateProvider == nil && s.readState == nil && s.unifiedResourceProvider == nil {
+		return
+	}
+
+	s.patrolService = NewPatrolService(s, s.stateProvider)
+	if s.knowledgeStore != nil {
+		s.patrolService.SetKnowledgeStore(s.knowledgeStore)
+	}
+	if s.incidentStore != nil {
+		s.patrolService.SetIncidentStore(s.incidentStore)
+	}
+	if s.discoveryStore != nil {
+		s.patrolService.SetDiscoveryStore(s.discoveryStore)
+	}
+	if s.quickstartCredits != nil {
+		s.patrolService.SetQuickstartCredits(s.quickstartCredits)
+	}
+	if s.readState != nil {
+		s.patrolService.SetReadState(s.readState)
+	}
+	if s.unifiedResourceProvider != nil {
+		s.patrolService.SetUnifiedResourceProvider(s.unifiedResourceProvider)
+	}
+}
+
+// initDiscoveryServiceLocked creates the deep discovery service if all
+// dependencies are available. Must be called while holding s.mu.
+func (s *Service) initDiscoveryServiceLocked() {
+	if s.discoveryService != nil || s.readState == nil || s.discoveryStore == nil {
+		return
+	}
+
+	// Create command executor adapter (wraps agentexec.Server)
+	var cmdExecutor servicediscovery.CommandExecutor
+	if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
+		cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
+	}
+
+	// Create deep scanner
+	scanner := servicediscovery.NewDeepScanner(cmdExecutor)
+
+	// Create the discovery service with config-driven settings
+	discoveryCfg := servicediscovery.DefaultConfig()
+	if s.cfg != nil {
+		discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
+	}
+
+	s.discoveryService = servicediscovery.NewService(
+		s.discoveryStore,
+		scanner,
+		discoveryCfg,
+	)
+	s.discoveryService.SetAIAnalyzer(s)
+	s.discoveryService.SetReadState(s.readState)
+
+	// Start background discovery if enabled and interval is set
+	if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
+		s.discoveryService.Start(context.Background())
+		log.Info().
+			Dur("interval", s.cfg.GetDiscoveryInterval()).
+			Msg("AI-powered deep discovery service started with automatic scanning")
+	} else {
+		log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
 	}
 }
 
@@ -310,33 +491,25 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 	defer s.mu.Unlock()
 	s.stateProvider = sp
 
-	// Initialize patrol service if not already done
-	if s.patrolService == nil && sp != nil {
-		s.patrolService = NewPatrolService(s, sp)
-		// Connect knowledge store to patrol for per-resource notes in context
-		if s.knowledgeStore != nil {
-			s.patrolService.SetKnowledgeStore(s.knowledgeStore)
-		}
-		if s.incidentStore != nil {
-			s.patrolService.SetIncidentStore(s.incidentStore)
-		}
-		// Connect discovery store for deep infrastructure context
-		if s.discoveryStore != nil {
-			s.patrolService.SetDiscoveryStore(s.discoveryStore)
-		}
+	s.initPatrolServiceLocked()
+	if s.patrolService != nil {
+		s.patrolService.SetStateProvider(sp)
 	}
 
 	// Initialize infrastructure discovery service if not already done
 	// This uses AI to detect applications running in Docker containers
 	// and saves discoveries to the knowledge store for Patrol to use when proposing commands
-	if s.infraDiscoveryService == nil && sp != nil && s.knowledgeStore != nil {
+	if s.infraDiscoveryService == nil && s.knowledgeStore != nil {
 		s.infraDiscoveryService = infradiscovery.NewService(
-			sp,
 			s.knowledgeStore,
 			infradiscovery.DefaultConfig(),
 		)
 		// Wire the AI service as the analyzer (implements infradiscovery.AIAnalyzer)
 		s.infraDiscoveryService.SetAIAnalyzer(s)
+		// Forward unified ReadState if already configured.
+		if s.readState != nil {
+			s.infraDiscoveryService.SetReadState(s.readState)
+		}
 
 		// Only start if AI is enabled
 		if s.cfg != nil && s.cfg.Enabled {
@@ -349,49 +522,16 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 	}
 
-	// Initialize AI-powered deep discovery service if not already done
-	// This runs read-only commands on resources and uses AI to understand services
-	if s.discoveryService == nil && sp != nil && s.discoveryStore != nil {
-		// Create command executor adapter (wraps agentexec.Server)
-		var cmdExecutor servicediscovery.CommandExecutor
-		if agentSrv, ok := s.agentServer.(*agentexec.Server); ok {
-			cmdExecutor = newDiscoveryCommandAdapter(agentSrv)
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore.
+	s.initDiscoveryServiceLocked()
+
+	// Initialize alert-triggered analyzer if not already done (requires enterprise factory)
+	if s.alertTriggeredAnalyzer == nil && s.alertAnalyzerFactory != nil && s.patrolService != nil {
+		deps := aicontracts.AlertAnalyzerDeps{
+			FindingRecorder:  &alertFindingRecorderAdapter{ps: s.patrolService},
+			IncidentRecorder: s,
 		}
-
-		// Create state adapter
-		stateAdapter := newDiscoveryStateAdapter(sp)
-
-		// Create deep scanner
-		scanner := servicediscovery.NewDeepScanner(cmdExecutor)
-
-		// Create the discovery service with config-driven settings
-		discoveryCfg := servicediscovery.DefaultConfig()
-		if s.cfg != nil {
-			discoveryCfg.Interval = s.cfg.GetDiscoveryInterval()
-		}
-
-		s.discoveryService = servicediscovery.NewService(
-			s.discoveryStore,
-			scanner,
-			stateAdapter,
-			discoveryCfg,
-		)
-		s.discoveryService.SetAIAnalyzer(s)
-
-		// Start background discovery if enabled and interval is set
-		if s.cfg != nil && s.cfg.IsDiscoveryEnabled() && s.cfg.GetDiscoveryInterval() > 0 {
-			s.discoveryService.Start(context.Background())
-			log.Info().
-				Dur("interval", s.cfg.GetDiscoveryInterval()).
-				Msg("AI-powered deep discovery service started with automatic scanning")
-		} else {
-			log.Info().Msg("AI-powered deep discovery service initialized (manual mode)")
-		}
-	}
-
-	// Initialize alert-triggered analyzer if not already done
-	if s.alertTriggeredAnalyzer == nil && sp != nil && s.patrolService != nil {
-		s.alertTriggeredAnalyzer = NewAlertTriggeredAnalyzer(s.patrolService, sp)
+		s.alertTriggeredAnalyzer = s.alertAnalyzerFactory(deps)
 	}
 }
 
@@ -435,7 +575,7 @@ func (s *Service) GetRemediationLog() *RemediationLog {
 }
 
 // GetAlertTriggeredAnalyzer returns the alert-triggered analyzer for token-efficient real-time analysis
-func (s *Service) GetAlertTriggeredAnalyzer() *AlertTriggeredAnalyzer {
+func (s *Service) GetAlertTriggeredAnalyzer() aicontracts.AlertAnalyzer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.alertTriggeredAnalyzer
@@ -464,19 +604,7 @@ func (s *Service) GetCostSummary(days int) cost.Summary {
 			effectiveDays = cost.DefaultMaxDays
 			truncated = true
 		}
-		return cost.Summary{
-			Days:           days,
-			RetentionDays:  cost.DefaultMaxDays,
-			EffectiveDays:  effectiveDays,
-			Truncated:      truncated,
-			PricingAsOf:    cost.PricingAsOf(),
-			ProviderModels: []cost.ProviderModelSummary{},
-			UseCases:       []cost.UseCaseSummary{},
-			DailyTotals:    []cost.DailySummary{},
-			Totals: cost.ProviderModelSummary{
-				Provider: "all",
-			},
-		}
+		return cost.EmptySummary(days, cost.DefaultMaxDays, effectiveDays, truncated)
 	}
 	return store.GetSummary(days)
 }
@@ -525,7 +653,7 @@ type MetricsHistoryProvider interface {
 }
 
 // MetricPoint is an alias for the shared metric point type
-type MetricPoint = types.MetricPoint
+type MetricPoint = models.MetricPoint
 
 // SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
 // This enables the AI to see trends, anomalies, and predictions based on historical data
@@ -593,6 +721,10 @@ func (s *Service) SetDiscoveryStore(store *servicediscovery.Store) {
 		s.patrolService.SetDiscoveryStore(store)
 	}
 	log.Info().Msg("AI Service: Discovery store set for infrastructure context")
+
+	// Attempt lazy init — discovery service requires ReadState + discoveryStore,
+	// and SetDiscoveryStore may be called after SetReadState.
+	s.initDiscoveryServiceLocked()
 }
 
 // GetDiscoveryStore returns the discovery store
@@ -665,6 +797,14 @@ func (s *Service) SetLicenseChecker(checker LicenseChecker) {
 	s.licenseChecker = checker
 }
 
+// SetAlertAnalyzerFactory registers the factory that creates the enterprise
+// AlertTriggeredAnalyzer. When nil (OSS binary), no analyzer is created.
+func (s *Service) SetAlertAnalyzerFactory(fn func(aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.alertAnalyzerFactory = fn
+}
+
 // HasLicenseFeature checks if a Pro feature is licensed (returns true if no license checker is set)
 func (s *Service) HasLicenseFeature(feature string) bool {
 	s.mu.RLock()
@@ -676,6 +816,38 @@ func (s *Service) HasLicenseFeature(feature string) bool {
 		return true
 	}
 	return checker.HasFeature(feature)
+}
+
+const minCommunityPatrolInterval = 1 * time.Hour
+
+// GetEffectivePatrolAutonomyLevel returns the autonomy level that should be enforced at runtime
+// for the current license state.
+//
+// Community tier is locked to "monitor" (findings-only). Higher levels imply investigation and
+// are gated behind ai_autofix (Pro/Cloud).
+func (s *Service) GetEffectivePatrolAutonomyLevel() string {
+	cfg := s.GetConfig()
+	if cfg == nil {
+		return config.PatrolAutonomyMonitor
+	}
+	if !s.HasLicenseFeature(FeatureAIAutoFix) {
+		return config.PatrolAutonomyMonitor
+	}
+	return cfg.GetPatrolAutonomyLevel()
+}
+
+func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration {
+	if cfg == nil {
+		return 0
+	}
+	interval := cfg.GetPatrolInterval()
+	if interval <= 0 {
+		return interval
+	}
+	if !s.HasLicenseFeature(FeatureAIAutoFix) && interval < minCommunityPatrolInterval {
+		return minCommunityPatrolInterval
+	}
+	return interval
 }
 
 // GetLicenseState returns the current license state and whether features are available
@@ -694,9 +866,9 @@ func (s *Service) GetLicenseState() (string, bool) {
 // Feature constants are imported from the license package for compile-time consistency.
 // This ensures the ai package always uses the same feature strings as the license system.
 const (
-	FeatureAIPatrol  = license.FeatureAIPatrol
-	FeatureAIAlerts  = license.FeatureAIAlerts
-	FeatureAIAutoFix = license.FeatureAIAutoFix
+	FeatureAIPatrol  = pkglicensing.FeatureAIPatrol
+	FeatureAIAlerts  = pkglicensing.FeatureAIAlerts
+	FeatureAIAutoFix = pkglicensing.FeatureAIAutoFix
 )
 
 // StartPatrol starts the background patrol service
@@ -709,7 +881,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RUnlock()
 
 	if patrol == nil {
-		log.Debug().Msg("Patrol service not initialized, cannot start")
+		log.Debug().Msg("patrol service not initialized, cannot start")
 		return
 	}
 
@@ -726,13 +898,14 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	// Configure patrol from AI config (preserve defaults for resource types not in AI config)
 	patrolCfg := DefaultPatrolConfig()
 	patrolCfg.Enabled = true
-	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
 	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
 	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
 	patrol.Start(ctx)
 
 	// Configure alert-triggered analyzer (also Pro-only)
@@ -804,7 +977,7 @@ func (s *Service) ReconfigurePatrol() {
 	// Update patrol configuration (preserve defaults for resource types not in AI config)
 	patrolCfg := DefaultPatrolConfig()
 	patrolCfg.Enabled = cfg.IsPatrolEnabled()
-	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
 	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
@@ -813,6 +986,9 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update proactive threshold mode
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+
+	// Update event-driven patrol trigger gate
+	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
 
 	log.Info().
 		Bool("enabled", patrolCfg.Enabled).
@@ -825,7 +1001,7 @@ func (s *Service) ReconfigurePatrol() {
 		enabled := cfg.IsAlertTriggeredAnalysisEnabled()
 		// Re-check license - don't allow re-enabling without valid license
 		if enabled && licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAlerts) {
-			log.Debug().Msg("Alert-triggered analysis requires Pulse Pro license - staying disabled")
+			log.Debug().Msg("alert-triggered analysis requires Pulse Pro license - staying disabled")
 			enabled = false
 		}
 		alertAnalyzer.SetEnabled(enabled)
@@ -846,19 +1022,19 @@ func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
 	s.mu.RUnlock()
 
 	if patrol == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - patrol service not available")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - patrol service not available")
 		return
 	}
 
 	findings := patrol.GetFindings()
 	if findings == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - findings store not available")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - findings store not available")
 		return
 	}
 
 	finding := findings.Get(req.FindingID)
 	if finding == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - finding not found")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - finding not found")
 		return
 	}
 
@@ -900,17 +1076,18 @@ func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
 
 // GuestInfo contains information about a guest (VM or container) found by VMID lookup
 type GuestInfo struct {
-	Node     string
-	Name     string
-	Type     string // "lxc" or "qemu"
-	Instance string // PVE instance ID (for multi-cluster disambiguation)
+	Node       string
+	Name       string
+	Type       string // semantic type: "system-container" or "vm"
+	Technology string // implementation: "lxc", "qemu", etc.
+	Instance   string // PVE instance ID (for multi-cluster disambiguation)
 }
 
 // lookupNodeForVMID looks up which node owns a given VMID using the state provider
 // Returns the node name and guest name if found, empty strings otherwise
 // If targetInstance is provided, only matches guests from that instance (for multi-cluster setups)
-func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, guestType string) {
-	guests := s.lookupGuestsByVMID(vmid, "")
+func (s *Service) lookupNodeForVMID(vmID int) (node string, guestName string, guestType string) {
+	guests := s.lookupGuestsByVMID(vmID, "")
 	if len(guests) == 1 {
 		return guests[0].Node, guests[0].Name, guests[0].Type
 	}
@@ -918,7 +1095,7 @@ func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, gu
 		// Multiple matches - VMID collision across instances
 		// Log warning and return first match (caller should use lookupGuestsByVMID with instance filter)
 		log.Warn().
-			Int("vmid", vmid).
+			Int("vmid", vmID).
 			Int("matches", len(guests)).
 			Msg("VMID collision detected - multiple guests with same VMID across instances")
 		return guests[0].Node, guests[0].Name, guests[0].Type
@@ -928,41 +1105,42 @@ func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, gu
 
 // lookupGuestsByVMID finds all guests with the given VMID
 // If targetInstance is non-empty, only returns guests from that instance
-func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInfo {
+func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInfo {
 	s.mu.RLock()
-	sp := s.stateProvider
+	rs := s.readState
 	s.mu.RUnlock()
 
-	if sp == nil {
+	if rs == nil {
 		return nil
 	}
 
-	state := sp.GetState()
 	var results []GuestInfo
 
-	// Check containers
-	for _, ct := range state.Containers {
-		if ct.VMID == vmid {
-			if targetInstance == "" || ct.Instance == targetInstance {
+	// Check containers via ReadState
+	for _, ct := range rs.Containers() {
+		if ct.VMID() == vmID {
+			if targetInstance == "" || ct.Instance() == targetInstance {
 				results = append(results, GuestInfo{
-					Node:     ct.Node,
-					Name:     ct.Name,
-					Type:     "lxc",
-					Instance: ct.Instance,
+					Node:       ct.Node(),
+					Name:       ct.Name(),
+					Type:       "system-container",
+					Technology: "lxc",
+					Instance:   ct.Instance(),
 				})
 			}
 		}
 	}
 
-	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.VMID == vmid {
-			if targetInstance == "" || vm.Instance == targetInstance {
+	// Check VMs via ReadState
+	for _, vm := range rs.VMs() {
+		if vm.VMID() == vmID {
+			if targetInstance == "" || vm.Instance() == targetInstance {
 				results = append(results, GuestInfo{
-					Node:     vm.Node,
-					Name:     vm.Name,
-					Type:     "qemu",
-					Instance: vm.Instance,
+					Node:       vm.Node(),
+					Name:       vm.Name(),
+					Type:       "vm",
+					Technology: "qemu",
+					Instance:   vm.Instance(),
 				})
 			}
 		}
@@ -974,7 +1152,7 @@ func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInf
 // extractVMIDFromCommand parses pct/qm/vzdump commands to extract the VMID being targeted
 // Returns the VMID, whether it requires node-specific routing, and whether found
 // Some commands (like vzdump) can run from any cluster node, others (like pct exec) must run on the owning node
-func extractVMIDFromCommand(command string) (vmid int, requiresOwnerNode bool, found bool) {
+func extractVMIDFromCommand(command string) (vmID int, requiresOwnerNode bool, found bool) {
 	// Commands that MUST run on the node that owns the guest
 	// These interact directly with the container/VM runtime
 	nodeSpecificPatterns := []string{
@@ -1018,7 +1196,7 @@ func extractVMIDFromCommand(command string) (vmid int, requiresOwnerNode bool, f
 
 // formatApprovalNeededToolResult returns a structured tool result for commands that require approval.
 // It is encoded as a marker + JSON so the LLM can reliably detect it.
-func formatApprovalNeededToolResult(command, toolID, reason string) string {
+func formatApprovalNeededToolResult(command, toolID, reason, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
 		"command":        command,
@@ -1027,12 +1205,77 @@ func formatApprovalNeededToolResult(command, toolID, reason string) string {
 		"how_to_approve": "Ask the user to click the approval button shown in the UI.",
 		"do_not_retry":   true,
 	}
+	if strings.TrimSpace(approvalID) != "" {
+		payload["approval_id"] = strings.TrimSpace(approvalID)
+	}
 	b, err := json.Marshal(payload)
 	if err != nil {
 		// Fallback to a safe plain-text marker.
 		return fmt.Sprintf("APPROVAL_REQUIRED: %s", command)
 	}
 	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetHost string) (targetType, targetID, targetName string) {
+	normalizedTargetHost := strings.ToLower(strings.TrimSpace(targetHost))
+	targetType = strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetID = strings.TrimSpace(req.TargetID)
+
+	if runOnHost {
+		targetType = "agent"
+		if normalizedTargetHost != "" {
+			targetID = normalizedTargetHost
+			targetName = normalizedTargetHost
+		}
+	}
+
+	if targetType == "" {
+		targetType = "agent"
+	}
+
+	if targetType == "agent" && targetID == "" {
+		if node, ok := req.Context["node"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		}
+	}
+
+	if targetName == "" {
+		targetName = strings.TrimSpace(targetHost)
+	}
+	if targetName == "" {
+		targetName = targetID
+	}
+
+	return targetType, targetID, targetName
+}
+
+func createRunCommandApprovalRecord(orgID, command, toolID string, req ExecuteRequest, runOnHost bool, targetHost, reason string) string {
+	store := approval.GetStore()
+	if store == nil {
+		log.Debug().Msg("approval store not available, run_command approval will not be persisted")
+		return ""
+	}
+
+	targetType, targetID, targetName := resolveRunCommandApprovalTarget(req, runOnHost, targetHost)
+	approvalReq := &approval.ApprovalRequest{
+		OrgID:      strings.TrimSpace(orgID),
+		ToolID:     toolID,
+		Command:    command,
+		TargetType: targetType,
+		TargetID:   targetID,
+		TargetName: targetName,
+		Context:    reason,
+	}
+	if err := store.CreateApproval(approvalReq); err != nil {
+		log.Warn().Err(err).Msg("failed to create run_command approval record")
+		return ""
+	}
+
+	return approvalReq.ID
 }
 
 // formatPolicyBlockedToolResult returns a structured tool result for commands blocked by policy.
@@ -1061,10 +1304,11 @@ func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
 	}
 
 	var payload struct {
-		Type    string `json:"type"`
-		Command string `json:"command"`
-		ToolID  string `json:"tool_id"`
-		Reason  string `json:"reason"`
+		Type       string `json:"type"`
+		Command    string `json:"command"`
+		ToolID     string `json:"tool_id"`
+		Reason     string `json:"reason"`
+		ApprovalID string `json:"approval_id"`
 	}
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
 		return ApprovalNeededData{}, false
@@ -1074,8 +1318,9 @@ func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
 	}
 
 	return ApprovalNeededData{
-		Command: payload.Command,
-		ToolID:  payload.ToolID,
+		Command:    payload.Command,
+		ToolID:     payload.ToolID,
+		ApprovalID: strings.TrimSpace(payload.ApprovalID),
 	}, true
 }
 
@@ -1087,6 +1332,7 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 		return ApprovalNeededData{}, false
 	}
 
+	parsed, parsedOK := parseApprovalNeededMarker(result)
 	cmd, _ := tc.Input["command"].(string)
 	runOnHost, _ := tc.Input["run_on_host"].(bool)
 	targetHost, _ := tc.Input["target_host"].(string)
@@ -1099,6 +1345,24 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 		} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
 			targetHost = node
 		}
+	}
+
+	if parsedOK {
+		if parsed.Command != "" {
+			cmd = parsed.Command
+		}
+		toolID := parsed.ToolID
+		if toolID == "" {
+			toolID = tc.ID
+		}
+		return ApprovalNeededData{
+			Command:    cmd,
+			ToolID:     toolID,
+			ToolName:   tc.Name,
+			RunOnHost:  runOnHost,
+			TargetHost: targetHost,
+			ApprovalID: parsed.ApprovalID,
+		}, true
 	}
 
 	return ApprovalNeededData{
@@ -1115,6 +1379,11 @@ func (s *Service) LoadConfig() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.persistence == nil {
+		s.provider = nil
+		return fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
@@ -1122,8 +1391,27 @@ func (s *Service) LoadConfig() error {
 
 	s.cfg = cfg
 
+	s.usingQuickstart = false
+
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
+		// Check if quickstart credits can fill the gap (enabled but no BYOK)
+		if cfg != nil && cfg.Enabled && s.quickstartCredits != nil && s.quickstartCredits.HasCredits() {
+			qp := s.quickstartCredits.GetProvider()
+			if qp != nil {
+				s.provider = qp
+				s.usingQuickstart = true
+				// Force all model strings to quickstart so chat.Service creates the right provider.
+				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				cfg.Model = quickstartModelStr
+				cfg.PatrolModel = quickstartModelStr
+				cfg.ChatModel = quickstartModelStr
+				log.Info().
+					Int("credits_remaining", s.quickstartCredits.CreditsRemaining()).
+					Msg("AI service initialized via quickstart credits (no BYOK)")
+				return nil
+			}
+		}
 		s.provider = nil
 		return nil
 	}
@@ -1131,74 +1419,81 @@ func (s *Service) LoadConfig() error {
 	selectedModel := cfg.GetModel()
 	selectedProvider, _ := config.ParseModelString(selectedModel)
 
+	// BYOK transition: if the user added their own API key while the model
+	// was still set to quickstart, switch to the BYOK provider's default.
+	if selectedProvider == config.AIProviderQuickstart && cfg.IsConfigured() {
+		var byokDefault string
+		configuredProviders := cfg.GetConfiguredProviders()
+		if len(configuredProviders) > 0 {
+			byokDefault = config.DefaultModelForProvider(configuredProviders[0])
+		}
+		if byokDefault != "" {
+			log.Info().
+				Str("from", selectedModel).
+				Str("to", byokDefault).
+				Msg("AI service: BYOK configured, switching from quickstart model")
+			selectedModel = byokDefault
+			selectedProvider, _ = config.ParseModelString(selectedModel)
+			cfg.Model = selectedModel
+			cfg.PatrolModel = "" // Let it inherit from Model
+			cfg.ChatModel = ""   // Let it inherit from Model
+		}
+	}
+
 	providerClient, err := providers.NewForModel(cfg, selectedModel)
 	if err != nil {
-		// Only fall back to legacy config if no multi-provider credentials are set.
-		if len(cfg.GetConfiguredProviders()) == 0 && (cfg.Provider != "" || cfg.APIKey != "") {
-			if legacyClient, legacyErr := providers.NewFromConfig(cfg); legacyErr == nil {
-				providerClient = legacyClient
-				selectedProvider = providerClient.Name()
-				log.Info().
-					Str("provider", selectedProvider).
-					Str("model", cfg.GetModel()).
-					Msg("AI service initialized via legacy config (migration path)")
-			} else {
-				log.Warn().Err(legacyErr).Msg("Failed to initialize legacy AI provider")
-				s.provider = nil
-				return nil
-			}
-		} else {
-			// Smart fallback: if selected provider isn't configured but OTHER providers are,
-			// automatically switch to a model from a configured provider.
-			// This prevents confusing errors when the user has e.g. DeepSeek configured
-			// but the model is still set to an Anthropic model.
-			configuredProviders := cfg.GetConfiguredProviders()
-			if len(configuredProviders) > 0 {
-				fallbackProvider := configuredProviders[0]
-				var fallbackModel string
-				switch fallbackProvider {
-				case config.AIProviderAnthropic:
-					fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
-				case config.AIProviderOpenAI:
-					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
-				case config.AIProviderDeepSeek:
-					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
-				case config.AIProviderGemini:
-					fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
-				case config.AIProviderOllama:
-					fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
-				}
-
-				if fallbackModel != "" {
-					log.Warn().
-						Str("selected_model", selectedModel).
-						Str("selected_provider", selectedProvider).
-						Str("fallback_model", fallbackModel).
-						Str("fallback_provider", fallbackProvider).
-						Msg("Selected provider not configured - automatically falling back to configured provider")
-
-					providerClient, err = providers.NewForModel(cfg, fallbackModel)
-					if err == nil {
-						selectedModel = fallbackModel
-						selectedProvider = fallbackProvider
-					} else {
-						log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("Failed to create fallback provider")
-						s.provider = nil
-						return nil
-					}
-				}
+		// Smart fallback: if selected provider isn't configured but OTHER providers are,
+		// automatically switch to a model from a configured provider.
+		// This prevents confusing errors when the user has e.g. DeepSeek configured
+		// but the model is still set to an Anthropic model.
+		configuredProviders := cfg.GetConfiguredProviders()
+		if len(configuredProviders) > 0 {
+			fallbackProvider := configuredProviders[0]
+			var fallbackModel string
+			switch fallbackProvider {
+			case config.AIProviderAnthropic:
+				fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
+			case config.AIProviderOpenAI:
+				fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
+			case config.AIProviderOpenRouter:
+				fallbackModel = config.AIProviderOpenRouter + ":" + config.DefaultAIModelOpenRouter
+			case config.AIProviderDeepSeek:
+				fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
+			case config.AIProviderGemini:
+				fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
+			case config.AIProviderOllama:
+				fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
 			}
 
-			if providerClient == nil {
+			if fallbackModel != "" {
 				log.Warn().
-					Err(err).
 					Str("selected_model", selectedModel).
 					Str("selected_provider", selectedProvider).
-					Strs("configured_providers", cfg.GetConfiguredProviders()).
-					Msg("AI enabled but no providers configured")
-				s.provider = nil
-				return nil
+					Str("fallback_model", fallbackModel).
+					Str("fallback_provider", fallbackProvider).
+					Msg("Selected provider not configured - automatically falling back to configured provider")
+
+				providerClient, err = providers.NewForModel(cfg, fallbackModel)
+				if err == nil {
+					selectedModel = fallbackModel
+					selectedProvider = fallbackProvider
+				} else {
+					log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
+					s.provider = nil
+					return nil
+				}
 			}
+		}
+
+		if providerClient == nil {
+			log.Warn().
+				Err(err).
+				Str("selected_model", selectedModel).
+				Str("selected_provider", selectedProvider).
+				Strs("configured_providers", cfg.GetConfiguredProviders()).
+				Msg("AI enabled but no providers configured")
+			s.provider = nil
+			return nil
 		}
 	}
 
@@ -1224,7 +1519,43 @@ func (s *Service) IsEnabled() bool {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cfg != nil && s.cfg.Enabled && s.provider != nil
+	if s.cfg != nil && s.cfg.Enabled && s.provider != nil {
+		// When running on quickstart credits, verify credits still remain.
+		if s.usingQuickstart && s.quickstartCredits != nil && !s.quickstartCredits.HasCredits() {
+			return false
+		}
+		return true
+	}
+	// Also enabled if quickstart credits are available (even without BYOK)
+	if s.cfg != nil && s.cfg.Enabled && s.quickstartCredits != nil && s.quickstartCredits.HasCredits() {
+		return true
+	}
+	return false
+}
+
+// IsUsingQuickstart returns true if the current provider is the quickstart proxy.
+func (s *Service) IsUsingQuickstart() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.usingQuickstart
+}
+
+// SetQuickstartCredits sets the quickstart credit manager on both the
+// service and its patrol sub-service so credit checks work at runtime.
+func (s *Service) SetQuickstartCredits(mgr QuickstartCreditManager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.quickstartCredits = mgr
+	if s.patrolService != nil {
+		s.patrolService.SetQuickstartCredits(mgr)
+	}
+}
+
+// GetQuickstartCredits returns the quickstart credit manager.
+func (s *Service) GetQuickstartCredits() QuickstartCreditManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.quickstartCredits
 }
 
 // QuickAnalysis performs a lightweight AI analysis for simple decisions.
@@ -1265,22 +1596,6 @@ func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, err
 		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)
 	}
 
-	// Record token usage for cost tracking
-	if resp.InputTokens > 0 || resp.OutputTokens > 0 {
-		providerName, _ := config.ParseModelString(model)
-		if providerName == "" || model == "" {
-			providerName = provider.Name()
-		}
-		s.RecordUsage(cost.UsageEvent{
-			Timestamp:    time.Now(),
-			Provider:     providerName,
-			RequestModel: model,
-			UseCase:      "patrol",
-			InputTokens:  resp.InputTokens,
-			OutputTokens: resp.OutputTokens,
-		})
-	}
-
 	if resp.Content == "" {
 		return "", fmt.Errorf("Pulse Assistant returned empty response")
 	}
@@ -1302,30 +1617,36 @@ func (s *Service) GetConfig() *config.AIConfig {
 // GetDebugContext returns debug information about what context would be sent to the AI
 func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	s.mu.RLock()
-	stateProvider := s.stateProvider
+	rs := s.readState
 	agentServer := s.agentServer
 	cfg := s.cfg
 	s.mu.RUnlock()
 
 	result := make(map[string]interface{})
 
-	// State provider info
-	result["has_state_provider"] = stateProvider != nil
-	if stateProvider != nil {
-		state := stateProvider.GetState()
+	// ReadState info
+	result["has_state_provider"] = rs != nil
+	if rs != nil {
+		nodes := rs.Nodes()
+		vms := rs.VMs()
+		containers := rs.Containers()
+		dockerHosts := rs.DockerHosts()
+		hosts := rs.Hosts()
+		pbsInstances := rs.PBSInstances()
+
 		result["state_summary"] = map[string]interface{}{
-			"nodes":         len(state.Nodes),
-			"vms":           len(state.VMs),
-			"containers":    len(state.Containers),
-			"docker_hosts":  len(state.DockerHosts),
-			"hosts":         len(state.Hosts),
-			"pbs_instances": len(state.PBSInstances),
+			"nodes":         len(nodes),
+			"vms":           len(vms),
+			"containers":    len(containers),
+			"docker_hosts":  len(dockerHosts),
+			"hosts":         len(hosts),
+			"pbs_instances": len(pbsInstances),
 		}
 
 		// List some VMs/containers for verification
 		var vmNames []string
-		for _, vm := range state.VMs {
-			vmNames = append(vmNames, fmt.Sprintf("%s (VMID:%d, node:%s)", vm.Name, vm.VMID, vm.Node))
+		for _, vm := range vms {
+			vmNames = append(vmNames, fmt.Sprintf("%s (VMID:%d, node:%s)", vm.Name(), vm.VMID(), vm.Node()))
 		}
 		if len(vmNames) > 10 {
 			vmNames = vmNames[:10]
@@ -1333,8 +1654,8 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 		result["sample_vms"] = vmNames
 
 		var ctNames []string
-		for _, ct := range state.Containers {
-			ctNames = append(ctNames, fmt.Sprintf("%s (VMID:%d, node:%s)", ct.Name, ct.VMID, ct.Node))
+		for _, ct := range containers {
+			ctNames = append(ctNames, fmt.Sprintf("%s (VMID:%d, node:%s)", ct.Name(), ct.VMID(), ct.Node()))
 		}
 		if len(ctNames) > 10 {
 			ctNames = ctNames[:10]
@@ -1342,14 +1663,14 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 		result["sample_containers"] = ctNames
 
 		var hostNames []string
-		for _, h := range state.Hosts {
-			hostNames = append(hostNames, h.Hostname)
+		for _, h := range hosts {
+			hostNames = append(hostNames, h.Hostname())
 		}
 		result["host_names"] = hostNames
 
 		var dockerHostNames []string
-		for _, dh := range state.DockerHosts {
-			dockerHostNames = append(dockerHostNames, fmt.Sprintf("%s (%d containers)", dh.DisplayName, len(dh.Containers)))
+		for _, dh := range dockerHosts {
+			dockerHostNames = append(dockerHostNames, fmt.Sprintf("%s (%d containers)", dh.Name(), dh.ChildCount()))
 		}
 		result["docker_host_names"] = dockerHostNames
 	}
@@ -1408,7 +1729,7 @@ type ConversationMessage struct {
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
 	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"` // "host", "container", "vm", "node"
+	TargetType   string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm"
 	TargetID     string                 `json:"target_id,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
@@ -1424,8 +1745,22 @@ type ExecuteResponse struct {
 	Model            string               `json:"model"`
 	InputTokens      int                  `json:"input_tokens"`
 	OutputTokens     int                  `json:"output_tokens"`
-	ToolCalls        []ToolExecution      `json:"tool_calls,omitempty"`        // Commands that were executed
-	PendingApprovals []ApprovalNeededData `json:"pending_approvals,omitempty"` // Commands that require approval (non-streaming)
+	ToolCalls        []ToolExecution      `json:"tool_calls"`        // Commands that were executed
+	PendingApprovals []ApprovalNeededData `json:"pending_approvals"` // Commands that require approval (non-streaming)
+}
+
+func EmptyExecuteResponse() ExecuteResponse {
+	return ExecuteResponse{}.NormalizeCollections()
+}
+
+func (r ExecuteResponse) NormalizeCollections() ExecuteResponse {
+	if r.ToolCalls == nil {
+		r.ToolCalls = []ToolExecution{}
+	}
+	if r.PendingApprovals == nil {
+		r.PendingApprovals = []ApprovalNeededData{}
+	}
+	return r
 }
 
 // ToolExecution represents a tool that was executed during the AI conversation
@@ -1527,7 +1862,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 	provider, err := providers.NewForModel(cfg, modelString)
 	if err != nil {
 		// Fall back to default provider if model-specific provider can't be created
-		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		log.Debug().Err(err).Str("model", modelString).Msg("could not create provider for model, using default")
 		provider = defaultProvider
 	}
 
@@ -1558,8 +1893,8 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
-3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
-4. For operations inside a container, run commands on the container (target_type=container)
+3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
+4. For operations inside a system container, use target_type=system-container
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1727,7 +2062,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	provider, err := providers.NewForModel(cfg, modelString)
 	if err != nil {
 		// Fall back to default provider if model-specific provider can't be created
-		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		log.Debug().Err(err).Str("model", modelString).Msg("could not create provider for model, using default")
 		provider = defaultProvider
 	}
 
@@ -1767,8 +2102,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
-3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the HOST (target_type=host)
-4. For operations inside a container, run commands on the container (target_type=container)
+3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
+4. For operations inside a system container, use target_type=system-container
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -1790,7 +2125,7 @@ Always execute the commands rather than telling the user how to do it.`
 					Msg("Injecting saved knowledge into AI context")
 				systemPrompt += knowledgeContext
 			} else {
-				log.Debug().Str("guest_id", guestID).Msg("No saved knowledge for guest")
+				log.Debug().Str("guest_id", guestID).Msg("no saved knowledge for guest")
 			}
 		}
 	}
@@ -1830,7 +2165,7 @@ Always execute the commands rather than telling the user how to do it.`
 		}
 
 		if err := s.enforceBudget(req.UseCase); err != nil {
-			callback(StreamEvent{Type: "error", Data: err.Error()})
+			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return nil, err
 		}
 
@@ -1843,7 +2178,7 @@ Always execute the commands rather than telling the user how to do it.`
 		})
 		if err != nil {
 			log.Error().Err(err).Int("iteration", iteration).Msg("AI provider call failed")
-			callback(StreamEvent{Type: "error", Data: err.Error()})
+			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
 			return nil, fmt.Errorf("Pulse Assistant request failed: %w", err)
 		}
 
@@ -1920,10 +2255,14 @@ Always execute the commands rather than telling the user how to do it.`
 
 			// Check if this command needs approval
 			needsApproval := false
+			approvalID := ""
 			if tc.Name == "run_command" {
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
 				targetHost, _ := tc.Input["target_host"].(string)
+				s.mu.RLock()
+				approvalOrgID := s.orgID
+				s.mu.RUnlock()
 
 				// If AI didn't specify target_host, try to get it from request context
 				// This is crucial for proper routing when the command is approved
@@ -1981,6 +2320,15 @@ Always execute the commands rather than telling the user how to do it.`
 				if !isAuto && policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
+					approvalID = createRunCommandApprovalRecord(
+						approvalOrgID,
+						cmd,
+						tc.ID,
+						req,
+						runOnHost,
+						targetHost,
+						"Security policy requires approval",
+					)
 					callback(StreamEvent{
 						Type: "approval_needed",
 						Data: ApprovalNeededData{
@@ -1989,6 +2337,7 @@ Always execute the commands rather than telling the user how to do it.`
 							ToolName:   tc.Name,
 							RunOnHost:  runOnHost,
 							TargetHost: targetHost,
+							ApprovalID: approvalID,
 						},
 					})
 				}
@@ -2003,7 +2352,7 @@ Always execute the commands rather than telling the user how to do it.`
 				// Note: We don't add to toolExecutions here because the approval_needed event
 				// already tells the frontend to show the approval UI
 				cmd, _ := tc.Input["command"].(string)
-				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval")
+				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval", approvalID)
 				execution = ToolExecution{
 					Name:    tc.Name,
 					Input:   toolInput,
@@ -2097,12 +2446,12 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 		}
 		return cmd
 	case "fetch_url":
-		url, _ := tc.Input["url"].(string)
-		return url
+		fetchURL, _ := tc.Input["url"].(string)
+		return fetchURL
 	case "set_resource_url":
 		resourceType, _ := tc.Input["resource_type"].(string)
-		url, _ := tc.Input["url"].(string)
-		return fmt.Sprintf("Set %s URL: %s", resourceType, url)
+		resourceURL, _ := tc.Input["url"].(string)
+		return fmt.Sprintf("Set %s URL: %s", resourceType, resourceURL)
 	default:
 		return fmt.Sprintf("%v", tc.Input)
 	}
@@ -2168,7 +2517,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		truncatedOutput = truncatedOutput[:maxOutputLen] + "..."
 	}
 
-	remLog.Log(RemediationRecord{
+	if err := remLog.Log(RemediationRecord{
 		ResourceID:   req.TargetID,
 		ResourceType: req.TargetType,
 		ResourceName: resourceName,
@@ -2179,7 +2528,9 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Output:       truncatedOutput,
 		Outcome:      outcome,
 		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
-	})
+	}); err != nil {
+		log.Warn().Err(err).Str("resource_id", req.TargetID).Msg("Failed to log ACTION to Pulse AI Impact")
+	}
 
 	log.Info().
 		Str("resource_id", req.TargetID).
@@ -2412,8 +2763,8 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 		return false
 	}
 
-	// For host targets with no specific context, any agent will do
-	if req.TargetType == "host" && len(req.Context) == 0 {
+	// For agent targets with no specific context, any connected agent will do.
+	if req.TargetType == "agent" && len(req.Context) == 0 {
 		return true
 	}
 
@@ -2430,13 +2781,13 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 		}
 	}
 
-	// If no target node found in context, try the ResourceProvider
+	// If no target node found in context, try the unified resource provider
 	if targetNode == "" {
 		s.mu.RLock()
-		rp := s.resourceProvider
+		urp := s.unifiedResourceProvider
 		s.mu.RUnlock()
 
-		if rp != nil {
+		if urp != nil {
 			resourceName := ""
 			if name, ok := req.Context["containerName"].(string); ok && name != "" {
 				resourceName = name
@@ -2447,7 +2798,7 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 			}
 
 			if resourceName != "" {
-				if host := rp.FindContainerHost(resourceName); host != "" {
+				if host := urp.FindContainerHost(resourceName); host != "" {
 					targetNode = strings.ToLower(host)
 				}
 			}
@@ -2495,7 +2846,7 @@ func (s *Service) getTools() []providers.Tool {
 					},
 					"target_host": map[string]interface{}{
 						"type":        "string",
-						"description": "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct Proxmox node or Docker host. Check the 'node' or 'PVE Node' field in the target's context.",
+						"description": "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct host node or Docker host. Check the 'node' or 'Host Node' field in the target's context.",
 					},
 				},
 				"required": []string{"command"},
@@ -2509,7 +2860,7 @@ func (s *Service) getTools() []providers.Tool {
 				"properties": map[string]interface{}{
 					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The URL to fetch (e.g., 'http://192.168.1.50:8080/api/health' or 'https://example.com/docs')",
+						"description": "The URL to fetch (e.g., 'http://192.0.2.50:8080/api/health' or 'https://example.com/docs')",
 					},
 				},
 				"required": []string{"url"},
@@ -2517,22 +2868,22 @@ func (s *Service) getTools() []providers.Tool {
 		},
 		{
 			Name:        "set_resource_url",
-			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a guest/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
+			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a VM/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"resource_type": map[string]interface{}{
 						"type":        "string",
-						"description": "Type of resource: 'guest' for VMs/LXC containers, 'docker' for Docker containers/services, or 'host' for standalone hosts",
-						"enum":        []string{"guest", "docker", "host"},
+						"description": "Canonical v6 resource type: 'vm', 'system-container', 'oci-container', 'app-container', 'agent', 'node', or 'docker-host'",
+						"enum":        []string{"vm", "system-container", "oci-container", "app-container", "agent", "node", "docker-host"},
 					},
 					"resource_id": map[string]interface{}{
 						"type":        "string",
-						"description": "The resource ID from the context. For Proxmox guests, use format 'instance-VMID' (e.g., 'delly-150' where 'delly' is the PVE instance name and '150' is the VMID). For Docker, use format 'hostid:container:containerid'. Use the ID shown in the current context.",
+						"description": "The resource ID from context. For VMs/LXC, use the canonical resource ID shown by Pulse (for example 'homelab:pve-node:150'). For app containers, use the container resource ID (for example 'hostid:container:containerid').",
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The discovered URL (e.g., 'http://192.168.1.50:8096' for Jellyfin). Use an empty string to remove the URL.",
+						"description": "The discovered URL (e.g., 'http://192.0.2.50:8096' for Jellyfin). Use an empty string to remove the URL.",
 					},
 				},
 				"required": []string{"resource_type", "resource_id"},
@@ -2626,7 +2977,19 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 		if decision == agentexec.PolicyRequireApproval && !s.IsAutonomous() {
-			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval")
+			s.mu.RLock()
+			approvalOrgID := s.orgID
+			s.mu.RUnlock()
+			approvalID := createRunCommandApprovalRecord(
+				approvalOrgID,
+				command,
+				tc.ID,
+				req,
+				runOnHost,
+				targetHost,
+				"Security policy requires approval",
+			)
+			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval", approvalID)
 			execution.Success = true // Not an error, just needs approval
 			return execution.Output, execution
 		}
@@ -2662,8 +3025,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 				Str("target_host", targetHost).
 				Str("original_target_type", req.TargetType).
 				Str("original_target_id", req.TargetID).
-				Msg("run_on_host=true - overriding target type to 'host'")
-			execReq.TargetType = "host"
+				Msg("run_on_host=true - overriding target type to 'agent'")
+			execReq.TargetType = "agent"
 			execReq.TargetID = ""
 		} else {
 			log.Debug().
@@ -2677,8 +3040,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		// Execute via agent
 		result, err := s.executeOnAgent(ctx, execReq, command)
 		recordIncident := func(success bool, output string) {
-			alertID := extractAlertID(req.Context)
-			if alertID == "" {
+			alertIdentifier := extractAlertIdentifier(req.Context)
+			if alertIdentifier == "" {
 				return
 			}
 			s.mu.RLock()
@@ -2695,7 +3058,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			if targetHost != "" {
 				details["target_host"] = targetHost
 			}
-			incidentStore.RecordCommand(alertID, command, success, output, details)
+			incidentStore.RecordCommand(alertIdentifier, command, success, output, details)
 		}
 		if err != nil {
 			recordIncident(false, result)
@@ -2731,11 +3094,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	case "set_resource_url":
 		resourceType, _ := tc.Input["resource_type"].(string)
 		resourceID, _ := tc.Input["resource_id"].(string)
-		url, _ := tc.Input["url"].(string)
-		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, url)
+		resourceURL, _ := tc.Input["url"].(string)
+		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, resourceURL)
 
 		if resourceType == "" {
-			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'host')"
+			execution.Output = "Error: resource_type is required (use canonical v6 types: vm, system-container, oci-container, app-container, agent, node, docker-host)"
 			return execution.Output, execution
 		}
 		if resourceID == "" {
@@ -2749,18 +3112,18 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		// Allow empty URL to clear the setting
-		// if url == "" {
+		// if resourceURL == "" {
 		// 	execution.Output = "Error: url is required"
 		// 	return execution.Output, execution
 		// }
 
 		// Update the metadata
-		if err := s.SetResourceURL(resourceType, resourceID, url); err != nil {
+		if err := s.SetResourceURL(resourceType, resourceID, resourceURL); err != nil {
 			execution.Output = fmt.Sprintf("Error setting URL: %s", err)
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
+		execution.Output = fmt.Sprintf("Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, resourceURL)
 		execution.Success = true
 		return execution.Output, execution
 
@@ -2928,6 +3291,10 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		return "", fmt.Errorf("AI is not enabled")
 	}
 
+	if err := s.enforceBudget("discovery"); err != nil {
+		return "", err
+	}
+
 	// Get the discovery model (defaults to main model from settings)
 	model := cfg.GetDiscoveryModel()
 
@@ -2974,6 +3341,9 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 			if altProviderName == primaryProvider {
 				continue // skip the one that just failed
 			}
+			if err := s.enforceBudget("discovery"); err != nil {
+				return "", err
+			}
 
 			altModel := config.DefaultModelForProvider(altProviderName)
 			if altModel == "" {
@@ -3010,8 +3380,12 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 
 	// Track cost if cost store is available
 	if costStore != nil {
+		providerName := provider.Name()
+		if providerName == "" {
+			providerName, _ = config.ParseModelString(model)
+		}
 		costStore.Record(cost.UsageEvent{
-			Provider:     provider.Name(),
+			Provider:     providerName,
 			RequestModel: model,
 			UseCase:      "discovery",
 			InputTokens:  resp.InputTokens,
@@ -3204,7 +3578,7 @@ func sanitizeError(err error) error {
 	errMsg := err.Error()
 
 	// Replace raw TCP connection details with generic message
-	// e.g., "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout"
+	// e.g., "write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout"
 	// becomes "connection to agent timed out"
 	if strings.Contains(errMsg, "i/o timeout") {
 		if strings.Contains(errMsg, "failed to send command") {
@@ -3231,17 +3605,87 @@ func sanitizeError(err error) error {
 	return err
 }
 
+func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
+	if len(ctx) == 0 {
+		return false
+	}
+	for _, key := range []string{"node", "host", "guest_node", "hostname", "host_name", "target_host"} {
+		if value, ok := ctx[key].(string); ok && strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
+	targetType := strings.ToLower(strings.TrimSpace(raw))
+	switch targetType {
+	case "agent":
+		return "agent", nil
+	case "system-container":
+		return "system-container", nil
+	case "vm":
+		return "vm", nil
+	case "":
+		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
+			return "agent", nil
+		}
+		return "", fmt.Errorf("target_type is required (agent, system-container, or vm)")
+	default:
+		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", raw)
+	}
+}
+
+func extractVMIDFromContext(ctx map[string]interface{}) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	vmID, ok := ctx["vmid"]
+	if !ok {
+		return "", false
+	}
+
+	switch v := vmID.(type) {
+	case float64:
+		if v > 0 {
+			return fmt.Sprintf("%.0f", v), true
+		}
+	case int:
+		if v > 0 {
+			return fmt.Sprintf("%d", v), true
+		}
+	case int64:
+		if v > 0 {
+			return fmt.Sprintf("%d", v), true
+		}
+	case string:
+		if parsed := extractVMIDFromTargetID(v); parsed > 0 {
+			return strconv.Itoa(parsed), true
+		}
+	}
+
+	return "", false
+}
+
 // executeOnAgent executes a command via the agent WebSocket
 func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, command string) (string, error) {
 	if s.agentServer == nil {
 		return "", fmt.Errorf("agent server not available")
 	}
 
+	normalizedTargetType, err := normalizeExecuteTargetType(req.TargetType, req.TargetID, req.Context)
+	if err != nil {
+		return "", err
+	}
+
+	normalizedReq := req
+	normalizedReq.TargetType = normalizedTargetType
+
 	// Find the appropriate agent using robust routing
 	agents := s.agentServer.GetConnectedAgents()
 
 	// Use the new robust routing logic
-	routeResult, err := s.routeToAgent(req, command, agents)
+	routeResult, err := s.routeToAgent(normalizedReq, command, agents)
 	if err != nil {
 		// Check if this is a routing error that should ask for clarification
 		if routingErr, ok := err.(*RoutingError); ok && routingErr.AskForClarification {
@@ -3255,7 +3699,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 
 	// Log any warnings from routing
 	for _, warning := range routeResult.Warnings {
-		log.Warn().Str("warning", warning).Msg("Routing warning")
+		log.Warn().Str("warning", warning).Msg("routing warning")
 	}
 
 	agentID := routeResult.AgentID
@@ -3268,30 +3712,21 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 		Bool("cluster_peer", routeResult.ClusterPeer).
 		Msg("Command routed to agent")
 
-	// Extract numeric VMID from target ID (e.g., "delly-135" -> "135")
-	targetID := req.TargetID
-	if req.TargetType == "container" || req.TargetType == "vm" {
-		// Look for vmid in context first
-		if vmid, ok := req.Context["vmid"]; ok {
-			switch v := vmid.(type) {
-			case float64:
-				targetID = fmt.Sprintf("%.0f", v)
-			case int:
-				targetID = fmt.Sprintf("%d", v)
-			case string:
-				targetID = v
-			}
-		} else if req.TargetID != "" {
-			// Extract number from end of ID like "delly-135" or "instance-135"
-			parts := strings.Split(req.TargetID, "-")
-			if len(parts) > 0 {
-				lastPart := parts[len(parts)-1]
-				// Check if it's numeric
-				if _, err := fmt.Sscanf(lastPart, "%d", new(int)); err == nil {
-					targetID = lastPart
-				}
-			}
+	targetID := strings.TrimSpace(req.TargetID)
+	if normalizedTargetType == "system-container" || normalizedTargetType == "vm" {
+		if vmID, ok := extractVMIDFromContext(req.Context); ok {
+			targetID = vmID
+		} else if extracted := extractVMIDFromTargetID(req.TargetID); extracted > 0 {
+			targetID = strconv.Itoa(extracted)
+		} else {
+			return "", fmt.Errorf("%s target requires numeric VMID in context.vmid or target_id", normalizedTargetType)
 		}
+	}
+
+	dispatchTargetType := normalizedTargetType
+	if normalizedTargetType == "system-container" {
+		// Agent transport uses "container" for LXC command routing.
+		dispatchTargetType = "container"
 	}
 
 	requestID := uuid.New().String()
@@ -3307,7 +3742,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	cmd := agentexec.ExecuteCommandPayload{
 		RequestID:  requestID,
 		Command:    command,
-		TargetType: req.TargetType,
+		TargetType: dispatchTargetType,
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
 	}
@@ -3339,7 +3774,8 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 // RunCommandRequest represents a request to run a single command
 type RunCommandRequest struct {
 	Command    string `json:"command"`
-	TargetType string `json:"target_type"` // "host", "container", "vm"
+	ApprovalID string `json:"approval_id,omitempty"` // Consumed by API handler before execution
+	TargetType string `json:"target_type"`           // "agent", "system-container", "vm"
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
@@ -3368,7 +3804,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 	// If running on host, override target type
 	if req.RunOnHost {
-		execReq.TargetType = "host"
+		execReq.TargetType = "agent"
 		// Keep the original target info for routing
 	}
 
@@ -3436,7 +3872,7 @@ When finding web URLs for resources:
 4. Save with set_resource_url tool
 
 resource_id format: {instance}:{node}:{vmid} (colons, not dashes)
-Example: "delly:minipc:201" for VMID 201 on node minipc in instance delly
+Example: "homelab:pve-node:201" for VMID 201 on node pve-node in instance homelab
 
 ## Installing/Updating Pulse
 curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
@@ -3455,13 +3891,13 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 
 	// Add connected infrastructure info via unified resource model
 	s.mu.RLock()
-	hasResourceProvider := s.resourceProvider != nil
+	hasUnifiedResourceProvider := s.unifiedResourceProvider != nil
 	s.mu.RUnlock()
 
-	if hasResourceProvider {
+	if hasUnifiedResourceProvider {
 		prompt += s.buildUnifiedResourceContext()
 	} else {
-		log.Warn().Msg("AI context: resource provider not available, infrastructure context will be limited")
+		log.Warn().Msg("AI context: unified resource provider not available, infrastructure context will be limited")
 	}
 
 	// Add user annotations from all resources (global context)
@@ -3471,14 +3907,10 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 	prompt += s.buildAlertContext()
 
 	// Add incident memory for alert or resource context
-	alertID := ""
+	alertIdentifier := ""
 	resourceID := req.TargetID
 	if req.Context != nil {
-		if val, ok := req.Context["alertId"].(string); ok && val != "" {
-			alertID = val
-		} else if val, ok := req.Context["alert_id"].(string); ok && val != "" {
-			alertID = val
-		}
+		alertIdentifier = extractAlertIdentifier(req.Context)
 
 		if resourceID == "" {
 			if val, ok := req.Context["resourceId"].(string); ok && val != "" {
@@ -3491,7 +3923,7 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 		}
 	}
 
-	if incidentContext := s.buildIncidentContext(resourceID, alertID); incidentContext != "" {
+	if incidentContext := s.buildIncidentContext(resourceID, alertIdentifier); incidentContext != "" {
 		prompt += incidentContext
 	}
 
@@ -3618,8 +4050,8 @@ func formatContextKey(key string) string {
 		"name":              "Name",
 		"type":              "Type",
 		"vmid":              "VMID",
-		"node":              "PVE Node (host)",
-		"guest_node":        "PVE Node (host)",
+		"node":              "Host Node",
+		"guest_node":        "Host Node",
 		"status":            "Status",
 		"uptime":            "Uptime",
 		"cpu_usage":         "CPU Usage",
@@ -3668,10 +4100,10 @@ func (s *Service) buildUserAnnotationsContext() string {
 	// Load guest metadata
 	guestStore, err := s.persistence.LoadGuestMetadata()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load guest metadata for AI context")
+		log.Warn().Err(err).Msg("failed to load guest metadata for AI context")
 	} else {
 		guestMeta := guestStore.GetAll()
-		log.Debug().Int("count", len(guestMeta)).Msg("Loaded guest metadata for AI context")
+		log.Debug().Int("count", len(guestMeta)).Msg("loaded guest metadata for AI context")
 		for id, meta := range guestMeta {
 			if meta != nil && len(meta.Notes) > 0 {
 				// Use LastKnownName if available, otherwise use ID
@@ -3689,10 +4121,10 @@ func (s *Service) buildUserAnnotationsContext() string {
 	// Load docker metadata - include host info for context
 	dockerStore, err := s.persistence.LoadDockerMetadata()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load docker metadata for AI context")
+		log.Warn().Err(err).Msg("failed to load docker metadata for AI context")
 	} else {
 		dockerMeta := dockerStore.GetAll()
-		log.Debug().Int("count", len(dockerMeta)).Msg("Loaded docker metadata for AI context")
+		log.Debug().Int("count", len(dockerMeta)).Msg("loaded docker metadata for AI context")
 		for id, meta := range dockerMeta {
 			if meta != nil && len(meta.Notes) > 0 {
 				// Extract host and container info from ID (format: hostid:container:containerid)
@@ -3707,7 +4139,7 @@ func (s *Service) buildUserAnnotationsContext() string {
 					}
 					name = fmt.Sprintf("Docker container %s", containerID)
 				}
-				log.Debug().Str("name", name).Str("host", hostInfo).Int("notes", len(meta.Notes)).Msg("Found docker container with annotations")
+				log.Debug().Str("name", name).Str("host", hostInfo).Int("notes", len(meta.Notes)).Msg("found docker container with annotations")
 				for _, note := range meta.Notes {
 					if hostInfo != "" {
 						annotations = append(annotations, fmt.Sprintf("- %s (on host '%s'): %s", name, hostInfo, note))
@@ -3719,7 +4151,7 @@ func (s *Service) buildUserAnnotationsContext() string {
 		}
 	}
 
-	log.Debug().Int("total_annotations", len(annotations)).Msg("Built user annotations context")
+	log.Debug().Int("total_annotations", len(annotations)).Msg("built user annotations context")
 
 	if len(annotations) == 0 {
 		return ""
@@ -3734,18 +4166,27 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	s.mu.RLock()
 	cfg := s.cfg
 	defaultProvider := s.provider
+	persistence := s.persistence
+	isQuickstart := s.usingQuickstart
 	s.mu.RUnlock()
 
 	// Load config if not available
 	if cfg == nil {
+		if persistence == nil {
+			return fmt.Errorf("Pulse Assistant config persistence unavailable")
+		}
 		var err error
-		cfg, err = s.persistence.LoadAIConfig()
+		cfg, err = persistence.LoadAIConfig()
 		if err != nil {
 			return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 		}
 	}
 
 	if cfg == nil || !cfg.IsConfigured() {
+		// If using quickstart credits, test the quickstart proxy instead.
+		if isQuickstart && defaultProvider != nil {
+			return defaultProvider.TestConnection(ctx)
+		}
 		return fmt.Errorf("no provider configured")
 	}
 
@@ -3753,13 +4194,13 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	provider, err := providers.NewForModel(cfg, cfg.GetModel())
 	if err != nil {
 		// Fall back to default provider or NewFromConfig
-		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("Could not create provider for model, using fallback")
+		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("could not create provider for model, using fallback")
 		if defaultProvider != nil {
 			provider = defaultProvider
 		} else {
 			provider, err = providers.NewFromConfig(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create fallback AI provider: %w", err)
 			}
 		}
 	}
@@ -3775,7 +4216,14 @@ func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error)
 }
 
 func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInfo, bool, error) {
-	cfg, err := s.persistence.LoadAIConfig()
+	s.mu.RLock()
+	persistence := s.persistence
+	s.mu.RUnlock()
+	if persistence == nil {
+		return nil, false, fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+
+	cfg, err := persistence.LoadAIConfig()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
@@ -3793,7 +4241,7 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	}
 	s.modelsCache.mu.Unlock()
 
-	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
+	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOpenRouter, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
 
 	allCached := true
 
@@ -3817,14 +4265,14 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 		// Create provider
 		provider, err := providers.NewForProvider(cfg, providerName, "")
 		if err != nil {
-			log.Debug().Err(err).Str("provider", providerName).Msg("Skipping provider - not configured")
+			log.Debug().Err(err).Str("provider", providerName).Msg("skipping provider - not configured")
 			continue
 		}
 
 		// Fetch models from this provider
 		models, err := provider.ListModels(ctx)
 		if err != nil {
-			log.Warn().Err(err).Str("provider", providerName).Msg("Failed to fetch models from provider")
+			log.Warn().Err(err).Str("provider", providerName).Msg("failed to fetch models from provider")
 			// Keep stale entry (don't overwrite or delete) — the provider's
 			// previous models remain visible until a successful fetch replaces them.
 			continue
@@ -3889,6 +4337,8 @@ func providerDisplayName(provider string) string {
 		return "Anthropic"
 	case config.AIProviderOpenAI:
 		return "OpenAI"
+	case config.AIProviderOpenRouter:
+		return "OpenRouter"
 	case config.AIProviderDeepSeek:
 		return "DeepSeek"
 	case config.AIProviderGemini:
@@ -3903,7 +4353,7 @@ func providerDisplayName(provider string) string {
 // Reload reloads the AI configuration (call after settings change)
 func (s *Service) Reload() error {
 	if err := s.LoadConfig(); err != nil {
-		return err
+		return fmt.Errorf("Reload: %w", err)
 	}
 
 	// Also reload the chat service so patrol picks up model/provider changes
@@ -3914,7 +4364,7 @@ func (s *Service) Reload() error {
 
 	if cs != nil && cfg != nil {
 		if err := cs.ReloadConfig(context.Background(), cfg); err != nil {
-			log.Warn().Err(err).Msg("Failed to reload chat service config")
+			log.Warn().Err(err).Msg("failed to reload chat service config")
 		}
 	}
 
@@ -3974,7 +4424,7 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 }
 
 // buildIncidentContext adds incident timeline context for alerts/resources.
-func (s *Service) buildIncidentContext(resourceID, alertID string) string {
+func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) string {
 	s.mu.RLock()
 	store := s.incidentStore
 	s.mu.RUnlock()
@@ -3983,8 +4433,8 @@ func (s *Service) buildIncidentContext(resourceID, alertID string) string {
 		return ""
 	}
 
-	if alertID != "" {
-		return store.FormatForAlert(alertID, 8)
+	if alertIdentifier != "" {
+		return store.FormatForAlert(alertIdentifier, 8)
 	}
 	if resourceID != "" {
 		return store.FormatForResource(resourceID, 4)
@@ -3993,8 +4443,8 @@ func (s *Service) buildIncidentContext(resourceID, alertID string) string {
 }
 
 // RecordIncidentAnalysis stores an AI analysis event for an alert.
-func (s *Service) RecordIncidentAnalysis(alertID, summary string, details map[string]interface{}) {
-	if alertID == "" {
+func (s *Service) RecordIncidentAnalysis(alertIdentifier, summary string, details map[string]interface{}) {
+	if alertIdentifier == "" {
 		return
 	}
 	s.mu.RLock()
@@ -4003,12 +4453,12 @@ func (s *Service) RecordIncidentAnalysis(alertID, summary string, details map[st
 	if store == nil {
 		return
 	}
-	store.RecordAnalysis(alertID, summary, details)
+	store.RecordAnalysis(alertIdentifier, summary, details)
 }
 
 // RecordIncidentRunbook stores a runbook execution event for an alert.
-func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
-	if alertID == "" || runbookID == "" {
+func (s *Service) RecordIncidentRunbook(alertIdentifier, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
+	if alertIdentifier == "" || runbookID == "" {
 		return
 	}
 	s.mu.RLock()
@@ -4017,18 +4467,15 @@ func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcom
 	if store == nil {
 		return
 	}
-	store.RecordRunbook(alertID, runbookID, title, string(outcome), automatic, message)
+	store.RecordRunbook(alertIdentifier, runbookID, title, string(outcome), automatic, message)
 }
 
-func extractAlertID(ctx map[string]interface{}) string {
+func extractAlertIdentifier(ctx map[string]interface{}) string {
 	if ctx == nil {
 		return ""
 	}
-	if alertID, ok := ctx["alertId"].(string); ok && alertID != "" {
-		return alertID
-	}
-	if alertID, ok := ctx["alert_id"].(string); ok && alertID != "" {
-		return alertID
+	if alertIdentifier, ok := ctx["alertIdentifier"].(string); ok && alertIdentifier != "" {
+		return alertIdentifier
 	}
 	return ""
 }

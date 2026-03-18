@@ -2,49 +2,17 @@ package ai
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rs/zerolog/log"
 )
 
-// IsDemoMode returns true if mock/demo mode is enabled
-// This checks the PULSE_MOCK_MODE env var used by the mock data system
+// IsDemoMode returns true if mock/demo mode is enabled.
+// Delegates to the build-tag-gated mockmode package (always false in release).
 func IsDemoMode() bool {
-	return strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true")
-}
-
-// mockResourcePatterns contains name patterns that indicate mock/demo resources
-var mockResourcePatterns = []string{
-	"pve1", "pve2", "pve3", "pve4", "pve5", "pve6", "pve7", // mock PVE nodes
-	"mock-cluster", "mock-", // generic mock prefixes
-	"Ceres", "Atlas", "Nova", "Orion", "Vega", "Rigel", // mock host agent names
-	"docker-host-", "k8s-cluster-", // mock Docker/K8s names
-	"demo-", // demo prefixes
-}
-
-// IsMockResource returns true if the resource name/ID appears to be mock data
-// This is used to filter out mock resources from heuristic analysis when not in demo mode
-func IsMockResource(resourceID, resourceName, node string) bool {
-	// If we're in demo mode, don't filter anything - we want mock resources
-	if IsDemoMode() {
-		return false
-	}
-
-	// Check against mock patterns
-	toCheck := []string{resourceID, resourceName, node}
-	for _, value := range toCheck {
-		if value == "" {
-			continue
-		}
-		for _, pattern := range mockResourcePatterns {
-			if strings.Contains(value, pattern) {
-				return true
-			}
-		}
-	}
-	return false
+	return mockmode.IsEnabled()
 }
 
 // InjectDemoFindings populates the patrol service with realistic mock findings
@@ -54,7 +22,7 @@ func (p *PatrolService) InjectDemoFindings() {
 		return
 	}
 
-	log.Info().Msg("Demo mode: Injecting mock AI patrol findings")
+	log.Info().Msg("demo mode: Injecting mock AI patrol findings")
 
 	now := time.Now()
 
@@ -114,7 +82,7 @@ func (p *PatrolService) InjectDemoFindings() {
 			Description:  "The postgres container (CT 105) last successful backup was 8 days ago. Your backup schedule targets daily backups.",
 			ResourceID:   "lxc/105",
 			ResourceName: "postgres",
-			ResourceType: "lxc",
+			ResourceType: "system-container",
 			Node:         "pve1",
 			Recommendation: `**Investigate:**
 1. Check PBS backup job status: ` + "`pvesh get /nodes/pve1/tasks --typefilter vzdump`" + `
@@ -160,7 +128,7 @@ func (p *PatrolService) InjectDemoFindings() {
 			Description:  "The uptime-kuma container on docker-host-1 has restarted 7 times in the past 24 hours. This may indicate configuration issues or resource constraints.",
 			ResourceID:   "docker/docker-host-1/uptime-kuma",
 			ResourceName: "uptime-kuma",
-			ResourceType: "docker_container",
+			ResourceType: "app-container",
 			Node:         "docker-host-1",
 			Recommendation: `**Check logs:**
 ` + "`docker logs uptime-kuma --tail 100`" + `
@@ -184,7 +152,7 @@ func (p *PatrolService) InjectDemoFindings() {
 	// Also add some demo patrol run history
 	p.injectDemoRunHistory()
 
-	log.Info().Int("findings_count", len(demoFindings)).Msg("Demo mode: Mock findings injected")
+	log.Info().Int("findings_count", len(demoFindings)).Msg("demo mode: Mock findings injected")
 }
 
 // injectDemoRunHistory adds realistic patrol run history for the demo
@@ -333,7 +301,7 @@ EVIDENCE: Memory: 92% (7.4GB/8GB), Swap: 30%
 [FINDING]
 SEVERITY: warning
 CATEGORY: security
-KEY: host:pve2:ssh
+KEY: agent:pve2:ssh
 RESOURCE_ID: node/pve2
 RESOURCE_NAME: pve2
 RESOURCE_TYPE: node

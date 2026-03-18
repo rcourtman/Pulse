@@ -1,6 +1,9 @@
-import { Component, Show, For, Accessor, Setter } from 'solid-js';
+import { Component, Show, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
 import Sun from 'lucide-solid/icons/sun';
@@ -9,19 +12,37 @@ import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
+import {
+  PVE_POLLING_MAX_SECONDS,
+  PVE_POLLING_MIN_SECONDS,
+  PVE_POLLING_PRESETS,
+} from '@/utils/systemSettingsPresentation';
 
-const PVE_POLLING_MIN_SECONDS = 10;
-const PVE_POLLING_MAX_SECONDS = 3600;
-const PVE_POLLING_PRESETS = [
-  { label: 'Realtime (10s)', value: 10 },
-  { label: 'Balanced (30s)', value: 30 },
-  { label: 'Low (60s)', value: 60 },
-  { label: 'Very low (5m)', value: 300 },
+import Laptop from 'lucide-solid/icons/laptop';
+
+const THEME_PREFERENCE_OPTIONS: FilterOption<'light' | 'dark' | 'system'>[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Laptop },
+];
+
+const TEMPERATURE_UNIT_OPTIONS: FilterOption<'celsius' | 'fahrenheit'>[] = [
+  { value: 'celsius', label: 'Celsius' },
+  { value: 'fahrenheit', label: 'Fahrenheit' },
+];
+
+const PVE_POLLING_OPTIONS: FilterOption<number | 'custom'>[] = [
+  ...PVE_POLLING_PRESETS.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+  { value: 'custom', label: 'Custom' },
 ];
 
 interface GeneralSettingsPanelProps {
   darkMode: Accessor<boolean>;
-  toggleDarkMode: () => void;
+  themePreference: Accessor<'light' | 'dark' | 'system'>;
+  setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
   pvePollingInterval: Accessor<number>;
   setPVEPollingInterval: Setter<number>;
   pvePollingSelection: Accessor<number | 'custom'>;
@@ -30,231 +51,289 @@ interface GeneralSettingsPanelProps {
   setPVEPollingCustomSeconds: Setter<number>;
   pvePollingEnvLocked: () => boolean;
   setHasUnsavedChanges: Setter<boolean>;
+
+  disableLocalUpgradeMetrics: Accessor<boolean>;
+  disableLocalUpgradeMetricsLocked: () => boolean;
+  savingUpgradeMetrics: Accessor<boolean>;
+  handleDisableLocalUpgradeMetricsChange: (disabled: boolean) => Promise<void>;
+
+  telemetryEnabled: Accessor<boolean>;
+  telemetryEnabledLocked: () => boolean;
+  savingTelemetry: Accessor<boolean>;
+  handleTelemetryEnabledChange: (enabled: boolean) => Promise<void>;
+
+  disableDockerUpdateActions: Accessor<boolean>;
+  disableDockerUpdateActionsLocked: () => boolean;
+  savingDockerUpdateActions: Accessor<boolean>;
+  handleDisableDockerUpdateActionsChange: (disabled: boolean) => Promise<void>;
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
+  const handlePVEPollingSelection = (value: number | 'custom') => {
+    if (props.pvePollingEnvLocked()) return;
+
+    props.setPVEPollingSelection(value);
+    props.setPVEPollingInterval(
+      value === 'custom' ? props.pvePollingCustomSeconds() : value,
+    );
+    props.setHasUnsavedChanges(true);
+  };
+
   return (
     <div class="space-y-6">
       {/* Appearance Card */}
       <SettingsPanel
         title="General"
-        description="Appearance and display preferences"
+        description="Manage appearance, layout, and default monitoring cadence."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-5"
+        noPadding
+        bodyClass="divide-y divide-border"
       >
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex items-center gap-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
-            <div class={`relative p-2.5 rounded-xl transition-all duration-300 ${props.darkMode()
-              ? 'bg-indigo-500 shadow-lg shadow-indigo-500/25'
-              : 'bg-amber-400 shadow-lg shadow-amber-500/25'
-              }`}>
+            <div
+              class={`shrink-0 relative p-2.5 rounded-md border border-border bg-surface transition-all duration-300`}
+            >
               <div class="relative w-5 h-5">
-                <Sun class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
-                  }`} strokeWidth={2} />
-                <Moon class={`absolute inset-0 w-5 h-5 text-white transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'
-                  }`} strokeWidth={2} />
+                <Sun
+                  class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`}
+                  strokeWidth={2}
+                />
+                <Moon
+                  class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`}
+                  strokeWidth={2}
+                />
               </div>
             </div>
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <p class="font-medium text-gray-900 dark:text-gray-100">
-                {props.darkMode() ? 'Dark mode' : 'Light mode'}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Toggle to match your environment. Pulse remembers this preference on each browser.
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">Theme preference</p>
+              <p class="text-xs text-muted line-clamp-2">
+                Choose light, dark, or sync with your system theme.
               </p>
             </div>
           </div>
-          <Toggle
-            checked={props.darkMode()}
-            onChange={(event) => {
-              const desired = (event.currentTarget as HTMLInputElement).checked;
-              if (desired !== props.darkMode()) {
-                props.toggleDarkMode();
-              }
-            }}
+          <FilterButtonGroup
+            class="shrink-0 self-start sm:self-auto ml-12 sm:ml-0"
+            options={THEME_PREFERENCE_OPTIONS}
+            value={props.themePreference()}
+            onChange={props.setThemePreference}
+            variant="settings"
           />
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 rounded-xl bg-orange-400 shadow-lg shadow-orange-500/25">
-              <Thermometer class="w-5 h-5 text-white" strokeWidth={2} />
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+              <Thermometer class="w-5 h-5" strokeWidth={2} />
             </div>
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <p class="font-medium text-gray-900 dark:text-gray-100">
-                Temperature unit
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">Temperature unit</p>
+              <p class="text-xs text-muted line-clamp-2">
                 Display temperatures in Celsius or Fahrenheit
               </p>
             </div>
           </div>
-          <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <button
-              type="button"
-              class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${temperatureStore.unit() === 'celsius'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              onClick={() => temperatureStore.setUnit('celsius')}
-            >
-              °C
-            </button>
-            <button
-              type="button"
-              class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${temperatureStore.unit() === 'fahrenheit'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              onClick={() => temperatureStore.setUnit('fahrenheit')}
-            >
-              °F
-            </button>
-          </div>
+          <FilterButtonGroup
+            class="shrink-0"
+            options={TEMPERATURE_UNIT_OPTIONS}
+            value={temperatureStore.unit()}
+            onChange={(value) => temperatureStore.setUnit(value)}
+            variant="settings"
+          />
         </div>
 
         {/* Full-width Mode Toggle */}
-        <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div class="flex items-center gap-3">
-            <div class={`p-2.5 rounded-xl transition-all duration-300 ${layoutStore.isFullWidth()
-              ? 'bg-blue-500 shadow-lg shadow-blue-500/25'
-              : 'bg-gray-400 shadow-lg shadow-gray-500/25'
-              }`}>
-              <Maximize2 class="w-5 h-5 text-white" strokeWidth={2} />
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+              <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <p class="font-medium text-gray-900 dark:text-gray-100">
-                Full-width mode
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">Full-width mode</p>
+              <p class="text-xs text-muted line-clamp-2">
                 Expand content to use all available screen width on large monitors
               </p>
             </div>
           </div>
           <Toggle
             checked={layoutStore.isFullWidth()}
+            class="shrink-0"
             onChange={() => layoutStore.toggle()}
           />
         </div>
       </SettingsPanel>
+
+      {/* Navigation + Privacy Card */}
+      <SettingsPanel
+        title="Navigation and privacy"
+        description="Control local metrics and anonymous telemetry."
+        icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
+        noPadding
+        bodyClass="divide-y divide-border"
+      >
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex-1 min-w-0 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-base-content truncate">
+                Disable local upgrade metrics
+              </span>
+              <Show when={props.disableLocalUpgradeMetricsLocked()}>
+                <EnvironmentLockBadge envVar="PULSE_DISABLE_LOCAL_UPGRADE_METRICS" />
+              </Show>
+            </div>
+            <p class="text-xs text-muted line-clamp-2">
+              Records local-only events like "paywall viewed" and "trial started" to help debug and
+              improve upgrade flows. These events are stored locally and are not exported to third
+              parties.
+            </p>
+          </div>
+          <Toggle
+            checked={props.disableLocalUpgradeMetrics()}
+            class="shrink-0"
+            disabled={props.disableLocalUpgradeMetricsLocked() || props.savingUpgradeMetrics()}
+            onChange={() =>
+              props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())
+            }
+          />
+        </div>
+
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex-1 min-w-0 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-base-content truncate">
+                Anonymous telemetry
+              </span>
+              <Show when={props.telemetryEnabledLocked()}>
+                <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
+              </Show>
+            </div>
+            <p class="text-xs text-muted line-clamp-3">
+              Help improve Pulse by sharing anonymous usage data: a random install ID, version,
+              platform, resource counts, and feature flags. No hostnames, credentials, or personal
+              information is ever sent.{' '}
+              <a
+                href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline hover:text-base-content"
+              >
+                Full details
+              </a>
+            </p>
+          </div>
+          <Toggle
+            checked={props.telemetryEnabled()}
+            class="shrink-0"
+            disabled={props.telemetryEnabledLocked() || props.savingTelemetry()}
+            onChange={() => props.handleTelemetryEnabledChange(!props.telemetryEnabled())}
+          />
+        </div>
+      </SettingsPanel>
+
+      <DockerRuntimeSettingsCard
+        disableDockerUpdateActions={props.disableDockerUpdateActions}
+        disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
+        savingDockerUpdateActions={props.savingDockerUpdateActions}
+        handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
+      />
 
       {/* Monitoring Cadence Card */}
       <SettingsPanel
         title="Monitoring cadence"
         description="Control how frequently Pulse polls Proxmox VE nodes."
         icon={<Activity class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-5"
+        noPadding
+        bodyClass="divide-y divide-border"
       >
-        <div class="space-y-2">
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            Shorter intervals provide near-real-time updates at the cost of higher API and CPU
-            usage on each node. Set a longer interval to reduce load on busy clusters.
-          </p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Current cadence: {props.pvePollingInterval()} seconds (
-            {props.pvePollingInterval() >= 60
-              ? `${(props.pvePollingInterval() / 60).toFixed(
-                props.pvePollingInterval() % 60 === 0 ? 0 : 1
-              )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
-              : 'under a minute'}
-            ).
-          </p>
-        </div>
-
-        <div class="space-y-4">
-          {/* Preset buttons */}
-          <div class="grid gap-2 sm:grid-cols-3">
-            <For each={PVE_POLLING_PRESETS}>
-              {(option) => (
-                <button
-                  type="button"
-                  class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${props.pvePollingSelection() === option.value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                    } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  disabled={props.pvePollingEnvLocked()}
-                  onClick={() => {
-                    if (props.pvePollingEnvLocked()) return;
-                    props.setPVEPollingSelection(option.value);
-                    props.setPVEPollingInterval(option.value);
-                    props.setHasUnsavedChanges(true);
-                  }}
-                >
-                  {option.label}
-                </button>
-              )}
-            </For>
-            <button
-              type="button"
-              class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${props.pvePollingSelection() === 'custom'
-                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-              disabled={props.pvePollingEnvLocked()}
-              onClick={() => {
-                if (props.pvePollingEnvLocked()) return;
-                props.setPVEPollingSelection('custom');
-                props.setPVEPollingInterval(props.pvePollingCustomSeconds());
-                props.setHasUnsavedChanges(true);
-              }}
-            >
-              Custom interval
-            </button>
-          </div>
-
-          {/* Custom interval input */}
-          <Show when={props.pvePollingSelection() === 'custom'}>
-            <div class="space-y-2 rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-600">
-              <label class="text-xs font-medium text-gray-700 dark:text-gray-200">
-                Custom polling interval (10-3600 seconds)
-              </label>
-              <input
-                type="number"
-                min={PVE_POLLING_MIN_SECONDS}
-                max={PVE_POLLING_MAX_SECONDS}
-                value={props.pvePollingCustomSeconds()}
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900/60"
-                disabled={props.pvePollingEnvLocked()}
-                onInput={(e) => {
-                  if (props.pvePollingEnvLocked()) return;
-                  const parsed = Math.floor(Number(e.currentTarget.value));
-                  if (Number.isNaN(parsed)) {
-                    return;
-                  }
-                  const clamped = Math.min(
-                    PVE_POLLING_MAX_SECONDS,
-                    Math.max(PVE_POLLING_MIN_SECONDS, parsed)
-                  );
-                  props.setPVEPollingCustomSeconds(clamped);
-                  props.setPVEPollingInterval(clamped);
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class="text-[0.68rem] text-gray-500 dark:text-gray-400">
-                Applies to all PVE clusters and standalone nodes.
+        <div class="p-4 sm:p-6">
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-muted">
+                Current cadence: {props.pvePollingInterval()} seconds (
+                {props.pvePollingInterval() >= 60
+                  ? `${(props.pvePollingInterval() / 60).toFixed(
+                      props.pvePollingInterval() % 60 === 0 ? 0 : 1,
+                    )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
+                  : 'under a minute'}
+                )
+              </p>
+              <p class="text-xs text-muted leading-relaxed max-w-3xl">
+                Shorter intervals provide near-real-time updates at the cost of higher API and CPU
+                usage on each node. Set a longer interval to reduce load on busy clusters.
               </p>
             </div>
-          </Show>
 
-          {/* Env override warning */}
-          <Show when={props.pvePollingEnvLocked()}>
-            <div class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-              <svg
-                class="h-4 w-4 flex-shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <circle cx="12" cy="16" r="0.5" />
-              </svg>
-              <span>Managed via environment variable PVE_POLLING_INTERVAL.</span>
+            <div class="space-y-4 pt-2">
+              {/* Preset buttons */}
+              <FilterButtonGroup
+                class="sm:grid-cols-2 xl:grid-cols-5"
+                options={PVE_POLLING_OPTIONS}
+                value={props.pvePollingSelection()}
+                onChange={handlePVEPollingSelection}
+                variant="prominent"
+                disabled={props.pvePollingEnvLocked()}
+              />
+
+              {/* Custom interval input */}
+              <Show when={props.pvePollingSelection() === 'custom'}>
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-border bg-surface-hover p-4 transition-all animate-in fade-in slide-in-from-top-1">
+                  <div class="flex-1 min-w-0">
+                    <label class="block text-sm font-medium text-base-content truncate">
+                      Custom polling interval
+                    </label>
+                    <p class="text-xs text-muted mt-0.5 line-clamp-2">
+                      Enter seconds ({PVE_POLLING_MIN_SECONDS}-{PVE_POLLING_MAX_SECONDS}). Applies
+                      to all clusters.
+                    </p>
+                  </div>
+                  <input
+                    type="number"
+                    min={PVE_POLLING_MIN_SECONDS}
+                    max={PVE_POLLING_MAX_SECONDS}
+                    value={props.pvePollingCustomSeconds()}
+                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:focus:ring-blue-400 shadow-sm"
+                    disabled={props.pvePollingEnvLocked()}
+                    onInput={(e) => {
+                      if (props.pvePollingEnvLocked()) return;
+                      const parsed = Math.floor(Number(e.currentTarget.value));
+                      if (Number.isNaN(parsed)) {
+                        return;
+                      }
+                      const clamped = Math.min(
+                        PVE_POLLING_MAX_SECONDS,
+                        Math.max(PVE_POLLING_MIN_SECONDS, parsed),
+                      );
+                      props.setPVEPollingCustomSeconds(clamped);
+                      props.setPVEPollingInterval(clamped);
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                </div>
+              </Show>
+
+              {/* Env override warning */}
+              <Show when={props.pvePollingEnvLocked()}>
+                <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                  <svg
+                    class="h-4 w-4 shrink-0 mt-0.5 self-start"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <circle cx="12" cy="16" r="0.5" />
+                  </svg>
+                  <span class="leading-relaxed">
+                    Managed via environment variable <strong>PVE_POLLING_INTERVAL</strong>.
+                  </span>
+                </div>
+              </Show>
             </div>
-          </Show>
+          </div>
         </div>
       </SettingsPanel>
     </div>

@@ -21,6 +21,25 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Alerts thresholds create/delete
   - Settings persistence across refresh
   - Add/delete a Proxmox node (test-only)
+- `tests/02-navigation-perf.spec.ts` — route transition performance budgets for:
+  - Infrastructure → Workloads
+  - Workloads → Infrastructure
+- `tests/06-theme-visual.spec.ts` — visual regression baselines for light/dark auth surfaces:
+  - Logged-out login page (full page + form card)
+  - Authenticated Settings → Authentication page
+- `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
+  - Start hosted Pro trial initiation via API
+  - Verify response points to hosted `/start-pro-trial`
+  - Verify local entitlements remain unchanged until activation
+  - Verify duplicate initiation is rate limited
+- `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
+  - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
+  - Checkout completes and returns to hosted signup completion page
+  - Magic-link request path succeeds via real public endpoint
+- `tests/09-cloud-billing-lifecycle.spec.ts` — hosted cloud post-checkout lifecycle:
+  - Replays verified Stripe webhook events into control plane
+  - Asserts tenant activation after checkout event processing
+  - Asserts tenant cancellation after subscription deletion event processing
 
 ## Running Tests
 
@@ -31,14 +50,55 @@ cd tests/integration
 npm test
 ```
 
+### Eval Packs (No Manual Steps)
+Run the curated scenario pack (multi-tenant, trial-signup, cloud-hosting, cloud-billing-lifecycle) and emit a report:
+```bash
+cd tests/integration
+npm run evals
+```
+
+Filter to one scenario:
+```bash
+npm run evals -- --scenario trial-signup
+```
+
+Reports are written to:
+- `tests/integration/eval-results/<timestamp>/report.json`
+- `tests/integration/eval-results/<timestamp>/report.md`
+
+Cloud lifecycle evals require these environment variables (test-mode only):
+- `PULSE_CP_ADMIN_KEY`
+- `PULSE_E2E_STRIPE_API_KEY`
+- `PULSE_E2E_STRIPE_WEBHOOK_SECRET`
+
+### Agentic Mode (External Browser Agent)
+The eval runner supports external browser-capable agents through a command template:
+```bash
+cd tests/integration
+PULSE_EVAL_MODE=agentic \
+PULSE_EVAL_AGENT_COMMAND_TEMPLATE='<your-agent-command-using {{task_file}} and {{result_json}}>' \
+npm run evals
+```
+
+Supported placeholders in `PULSE_EVAL_AGENT_COMMAND_TEMPLATE`:
+- `{{task_file}}`
+- `{{result_json}}`
+- `{{scenario_id}}`
+- `{{base_url}}`
+
 The docker-compose stack seeds a deterministic bootstrap token for first-run setup:
 - Override via `PULSE_E2E_BOOTSTRAP_TOKEN`
 - Default token value is defined in `tests/integration/docker-compose.test.yml`
+- When `PULSE_MULTI_TENANT_ENABLED=true`, the integration harness also seeds a deterministic Enterprise-eval billing state so the multi-tenant suite runs against a licensed surface instead of skipping.
 
 Credentials used by the E2E suite can be overridden:
 - `PULSE_E2E_USERNAME` (default `admin`)
 - `PULSE_E2E_PASSWORD` (default `adminadminadmin`)
 - `PULSE_E2E_ALLOW_NODE_MUTATION=1` to enable the optional "Add Proxmox node" test (disabled by default for safety)
+- `PULSE_E2E_PERF=1` to enable navigation performance budget checks
+- `PULSE_E2E_PERF_ITERATIONS` (default `3`)
+- `PULSE_E2E_PERF_INFRA_TO_WORKLOADS_BUDGET_MS` (default `2200`)
+- `PULSE_E2E_PERF_WORKLOADS_TO_INFRA_BUDGET_MS` (default `2200`)
 
 ### Run Against An Existing Pulse Instance
 ```bash
@@ -49,6 +109,68 @@ PULSE_E2E_USERNAME='admin' \
 PULSE_E2E_PASSWORD='adminadminadmin' \
 npm test
 ```
+
+### Run Against A Managed Local Backend (No Docker, Deterministic)
+```bash
+cd tests/integration
+PULSE_E2E_USE_LOCAL_BACKEND=1 \
+PULSE_MULTI_TENANT_ENABLED=true \
+npm test -- tests/03-multi-tenant.spec.ts --project=chromium
+```
+
+This mode starts an isolated Pulse backend from the local repo binary in a temporary data directory under `tmp/integration-local-backend`, seeds the requested entitlement profile, writes runtime connection state for Playwright, and cleans everything up in `posttest`.
+
+Each `npm test` invocation gets its own runtime-state file and managed-backend root automatically, so separate managed-local-backend runs can execute in parallel without sharing PID or cleanup state. Shared embedded-frontend and backend-binary refreshes are serialized by the harness.
+
+For deterministic paid-feature runs against an existing instance, provide one of:
+- `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.
+- `PULSE_E2E_ENTITLEMENT_WRITE_COMMAND='ssh host "cat > /etc/pulse/billing.json"'` to pipe the billing JSON to a remote/local writer command.
+
+The harness understands these profiles:
+- `PULSE_E2E_ENTITLEMENT_PROFILE=multi-tenant` for Enterprise/MSP multi-tenant coverage.
+- `PULSE_E2E_ENTITLEMENT_PROFILE=infra` for Pro/relay/reporting-style journeys.
+
+### Snapshot-Clean Proxmox LXC Trial SAT
+For hosted trial initiation validation against a fresh LXC each run:
+
+- Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
+- Probe script: `tests/integration/scripts/trial-signup-contract.sh`
+- Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
+  - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
+  - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification
+
+Example:
+```bash
+cd tests/integration
+./scripts/run-lxc-sandbox-evals.sh
+```
+
+If the snapshot has stale binaries, inject the latest Linux control-plane build on each rollback:
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/pulse-control-plane-e2e-linux-amd64 ./cmd/pulse-control-plane
+cd tests/integration
+PULSE_E2E_CP_BINARY=/tmp/pulse-control-plane-e2e-linux-amd64 ./scripts/run-lxc-sandbox-evals.sh
+```
+
+### Run Theme Visual Regression Suite
+```bash
+cd tests/integration
+PULSE_E2E_SKIP_DOCKER=1 \
+PULSE_BASE_URL='http://your-pulse-host:7655' \
+PULSE_E2E_USERNAME='admin' \
+PULSE_E2E_PASSWORD='your-password' \
+npm run test:visual
+```
+
+To refresh baselines intentionally:
+```bash
+npm run test:visual:update
+```
+
+When running against an existing instance (`PULSE_E2E_SKIP_DOCKER=1`), authenticated
+visual snapshots require explicit credentials:
+- `PULSE_E2E_USERNAME`
+- `PULSE_E2E_PASSWORD`
 
 If the instance is behind self-signed TLS:
 ```bash

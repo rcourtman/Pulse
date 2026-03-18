@@ -1,15 +1,26 @@
 package system
 
 import (
+	"errors"
+	"io"
 	"os"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
+
+const maxProcReadBytes int64 = 64 * 1024
 
 var (
 	envGetFn   = os.Getenv
 	statFn     = os.Stat
-	readFileFn = os.ReadFile
+	readFileFn = boundedReadFile
 	hostnameFn = os.Hostname
+)
+
+var (
+	errFileTooLarge   = errors.New("file exceeds size limit")
+	errInvalidReadMax = errors.New("max read limit must be positive")
 )
 
 var containerMarkers = []string{
@@ -21,6 +32,15 @@ var containerMarkers = []string{
 	"crio",
 	"libpod",
 	"lxcfs",
+}
+
+var dockerRuntimeMarkers = []string{
+	"docker",
+	"containerd",
+	"kubepods",
+	"podman",
+	"crio",
+	"libpod",
 }
 
 // InContainer reports whether Pulse is running inside a containerised environment.
@@ -53,10 +73,8 @@ func InContainer() bool {
 	// Fall back to cgroup inspection which covers older Docker/LXC setups.
 	if data, err := readFileFn("/proc/1/cgroup"); err == nil {
 		content := strings.ToLower(string(data))
-		for _, marker := range containerMarkers {
-			if strings.Contains(content, marker) {
-				return true
-			}
+		if hasAnyMarker(content, containerMarkers) {
+			return true
 		}
 	}
 
@@ -66,11 +84,15 @@ func InContainer() bool {
 // DetectDockerContainerName attempts to detect the Docker container name.
 // Returns empty string if not in Docker or name cannot be determined.
 func DetectDockerContainerName() string {
+	if !inDockerRuntime() {
+		return ""
+	}
+
 	// Method 1: Check hostname (Docker uses container ID or name as hostname)
 	if hostname, err := hostnameFn(); err == nil && hostname != "" {
 		// Docker hostnames are either short container ID (12 chars) or custom name
 		// If it looks like a container ID (hex), skip it - user needs to use name
-		if !isHexString(hostname) || len(hostname) > 12 {
+		if !utils.IsHexString(hostname) || len(hostname) > 12 {
 			return hostname
 		}
 	}
@@ -83,6 +105,52 @@ func DetectDockerContainerName() string {
 	}
 
 	return ""
+}
+
+func inDockerRuntime() bool {
+	if _, err := statFn("/.dockerenv"); err == nil {
+		return true
+	}
+	if _, err := statFn("/run/.containerenv"); err == nil {
+		return true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(envGetFn("container"))) {
+	case "docker", "podman", "containerd", "crio", "cri-o", "libpod", "kubepods", "oci":
+		return true
+	}
+
+	for _, path := range []string{"/proc/1/environ", "/proc/self/environ"} {
+		if data, err := readFileFn(path); err == nil {
+			lower := strings.ToLower(string(data))
+			if strings.Contains(lower, "container=docker") ||
+				strings.Contains(lower, "container=podman") ||
+				strings.Contains(lower, "container=containerd") ||
+				strings.Contains(lower, "container=crio") ||
+				strings.Contains(lower, "container=cri-o") {
+				return true
+			}
+		}
+	}
+
+	for _, path := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+		if data, err := readFileFn(path); err == nil {
+			if hasAnyMarker(strings.ToLower(string(data)), dockerRuntimeMarkers) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func hasAnyMarker(content string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(content, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isHexString(s string) bool {
@@ -153,4 +221,30 @@ func isTruthy(value string) bool {
 	default:
 		return false
 	}
+}
+
+func boundedReadFile(path string) ([]byte, error) {
+	return readFileWithLimit(path, maxProcReadBytes)
+}
+
+func readFileWithLimit(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errInvalidReadMax
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, errFileTooLarge
+	}
+
+	return data, nil
 }

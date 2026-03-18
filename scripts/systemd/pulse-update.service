@@ -3,16 +3,16 @@ Description=Automatic Pulse update check and install
 Documentation=https://github.com/rcourtman/Pulse
 After=network-online.target
 Wants=network-online.target
-# Don't run if pulse service is not running
-Requisite=pulse.service
 
 [Service]
 Type=oneshot
 # Run as root to allow service restart
 User=root
 Group=root
+# Skip auto-update run unless a supported Pulse service is active
+ExecCondition=/bin/sh -c 'systemctl is-active --quiet pulse || systemctl is-active --quiet pulse-backend'
 # Use the update script
-ExecStart=/opt/pulse/scripts/pulse-auto-update.sh
+ExecStart=/usr/local/bin/pulse-auto-update.sh
 # Restart policy for the update service itself
 Restart=no
 # Timeout for the update process (10 minutes should be plenty)

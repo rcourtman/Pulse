@@ -15,7 +15,7 @@ type ReportResponse struct {
 
 // CommandAck is sent by the agent to confirm the result of a control command.
 type CommandAck struct {
-	HostID  string         `json:"hostId"`
+	AgentID string         `json:"agentId"`
 	Status  string         `json:"status"`
 	Message string         `json:"message,omitempty"`
 	Payload map[string]any `json:"payload,omitempty"`
@@ -26,6 +26,8 @@ const (
 	CommandTypeStop = "stop"
 	// CommandTypeUpdateContainer instructs the agent to update a specific container to its latest image.
 	CommandTypeUpdateContainer = "update_container"
+	// CommandTypeUpdateAll instructs the agent to update all containers with updates available.
+	CommandTypeUpdateAll = "update_all"
 	// CommandTypeCheckUpdates instructs the agent to clear its registry cache and check for updates immediately.
 	CommandTypeCheckUpdates = "check_updates"
 

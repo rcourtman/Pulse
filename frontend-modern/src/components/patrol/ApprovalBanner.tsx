@@ -12,6 +12,7 @@ import { Component, Show, createMemo, createSignal, createEffect, onCleanup } fr
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import type { ApprovalRequest } from '@/api/ai';
+import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
@@ -24,9 +25,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [tick, setTick] = createSignal(Date.now());
 
-  const pending = createMemo(() =>
-    aiIntelligenceStore.pendingApprovals.filter((a: ApprovalRequest) => a.status === 'pending')
-  );
+  const pending = createMemo(() => aiIntelligenceStore.pendingApprovals);
 
   // Only tick when there are pending approvals to avoid unnecessary work
   createEffect(() => {
@@ -46,14 +45,6 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     const secs = Math.floor((diff % 60000) / 1000);
     if (mins > 0) return `${mins}m ${secs}s`;
     return `${secs}s`;
-  };
-
-  const riskBadgeColor = (level: string) => {
-    switch (level) {
-      case 'high': return 'bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      case 'medium': return 'bg-amber-200 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300';
-      default: return 'bg-green-200 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-    }
   };
 
   const handleApprove = async (approval: ApprovalRequest) => {
@@ -91,13 +82,17 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     }
   };
 
+  const firstApprovalRisk = createMemo(() =>
+    firstApproval() ? getApprovalRiskPresentation(firstApproval()!.riskLevel) : null,
+  );
+
   return (
     <Show when={pending().length > 0}>
-      <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+      <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="flex items-center gap-3">
-            <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
-              <ShieldAlertIcon class="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <div class="flex-shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 rounded-md">
+              <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
             </div>
             <div>
               <Show when={pending().length === 1 && firstApproval()}>
@@ -105,14 +100,19 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                     Fix awaiting approval
                   </span>
-                  <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(firstApproval()!.riskLevel)}`}>
-                    {firstApproval()!.riskLevel} risk
+                  <span
+                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${firstApprovalRisk()!.badgeClass}`}
+                  >
+                    {firstApprovalRisk()!.label} risk
                   </span>
                   <span class="text-xs text-amber-700 dark:text-amber-300">
                     expires {timeRemaining(firstApproval()!.expiresAt)}
                   </span>
                 </div>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate" title={firstApproval()!.context}>
+                <p
+                  class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate"
+                  title={firstApproval()!.context}
+                >
                   {firstApproval()!.context}
                 </p>
               </Show>
@@ -144,7 +144,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 type="button"
                 onClick={() => handleDeny(firstApproval()!)}
                 disabled={actionLoading() === firstApproval()!.id}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-md transition-colors"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-alt hover:bg-surface-hover disabled:opacity-50 text-base-content text-xs font-medium rounded-md transition-colors"
               >
                 <XIcon class="w-3.5 h-3.5" />
                 Deny

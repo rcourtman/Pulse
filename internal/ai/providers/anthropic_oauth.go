@@ -236,7 +236,7 @@ func CreateAPIKeyFromOAuth(ctx context.Context, accessToken string) (string, err
 		return "", fmt.Errorf("no API key returned from OAuth")
 	}
 
-	log.Info().Msg("Successfully created API key from OAuth token")
+	log.Info().Msg("successfully created API key from OAuth token")
 	return result.RawKey, nil
 }
 
@@ -398,7 +398,7 @@ func (c *AnthropicOAuthClient) forceRefreshToken(ctx context.Context) error {
 func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	// Ensure we have a valid token
 	if err := c.ensureValidToken(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ensure valid OAuth token: %w", err)
 	}
 
 	// Convert messages to Anthropic format (same as regular client)
@@ -409,7 +409,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 		}
 
 		if m.ToolResult != nil {
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
@@ -518,10 +521,17 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 					Str("last_error", lastErr.Error()).
 					Msg("Retrying Anthropic OAuth API request after transient error")
 
+				backoffTimer := time.NewTimer(backoff)
 				select {
 				case <-ctx.Done():
+					if !backoffTimer.Stop() {
+						select {
+						case <-backoffTimer.C:
+						default:
+						}
+					}
 					return nil, ctx.Err()
-				case <-time.After(backoff):
+				case <-backoffTimer.C:
 				}
 			}
 		}
@@ -556,14 +566,14 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 
 		// Check for token expiry error (401) - force refresh
 		if resp.StatusCode == 401 && c.refreshToken != "" {
-			log.Info().Msg("Got 401, forcing token refresh...")
+			log.Info().Msg("got 401, forcing token refresh...")
 			if err := c.forceRefreshToken(ctx); err == nil {
 				// Token refreshed, retry immediately without backoff
 				lastErr = fmt.Errorf("token expired, retried with refreshed token")
 				skipBackoff = true
 				continue
 			} else {
-				log.Error().Err(err).Msg("Failed to refresh token after 401")
+				log.Error().Err(err).Msg("failed to refresh token after 401")
 			}
 		}
 
@@ -618,7 +628,7 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 				Str("tool_name", c.Name).
 				Msg("Server tool use detected (handled by Anthropic)")
 		case "web_search_tool_result":
-			log.Debug().Msg("Web search results received")
+			log.Debug().Msg("web search results received")
 		}
 	}
 
@@ -635,8 +645,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 // TestConnection validates the OAuth token by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicOAuthClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("anthropic oauth test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *AnthropicOAuthClient) modelsEndpoint() string {
@@ -652,7 +664,7 @@ func (c *AnthropicOAuthClient) modelsEndpoint() string {
 func (c *AnthropicOAuthClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	// Ensure we have a valid token
 	if err := c.ensureValidToken(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ensure valid OAuth token: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.modelsEndpoint(), nil)

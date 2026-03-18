@@ -1,6 +1,7 @@
 package dockeragent
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,17 @@ func TestSendReportIntegration(t *testing.T) {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 
-		body, err := io.ReadAll(r.Body)
+		var bodyReader io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gz, gzErr := gzip.NewReader(r.Body)
+			if gzErr != nil {
+				t.Fatalf("failed to create gzip reader: %v", gzErr)
+			}
+			defer gz.Close()
+			bodyReader = gz
+		}
+
+		body, err := io.ReadAll(bodyReader)
 		if err != nil {
 			t.Fatalf("failed to read request body: %v", err)
 		}
@@ -113,7 +124,7 @@ func TestSendReportIntegration(t *testing.T) {
 	if userAgents[0] == "" {
 		t.Fatalf("missing user-agent header")
 	}
-	if !strings.HasPrefix(userAgents[0], "pulse-docker-agent/") {
+	if !strings.HasPrefix(userAgents[0], "pulse-agent/") {
 		t.Fatalf("unexpected user-agent header: %s", userAgents[0])
 	}
 }
@@ -124,7 +135,7 @@ func TestSendReportHostRemoved(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"docker host \"5316f5e1\" was removed at 2025-11-02T13:45:15Z and cannot report again","code":"invalid_report"}`))
+		_, _ = w.Write([]byte(`{"error":"docker host \"5316f5e1\" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again","code":"invalid_report"}`))
 	}))
 	defer server.Close()
 

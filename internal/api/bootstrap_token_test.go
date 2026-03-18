@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -98,7 +99,7 @@ func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
 	}
 	// Restore permissions for cleanup
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0o700)
+		_ = os.Chmod(readOnlyDir, 0o700)
 	})
 
 	token, created, fullPath, err := loadOrCreateBootstrapToken(readOnlyDir)
@@ -188,7 +189,7 @@ func TestLoadOrCreateBootstrapToken_ReadFileFailure(t *testing.T) {
 		t.Fatalf("failed to create unreadable token file: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(tokenPath, 0o600)
+		_ = os.Chmod(tokenPath, 0o600)
 	})
 
 	token, created, fullPath, err := loadOrCreateBootstrapToken(tmpDir)
@@ -224,14 +225,26 @@ func TestLoadOrCreateBootstrapToken_Success_NewToken(t *testing.T) {
 		t.Errorf("expected fullPath=%q, got %q", expectedPath, fullPath)
 	}
 
-	// Verify the token was written to disk
+	// Verify the token was written encrypted to disk
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		t.Fatalf("failed to read token file: %v", err)
 	}
-	// Token is written with trailing newline
-	if string(data) != token+"\n" {
-		t.Errorf("token file contents mismatch: got %q, want %q", string(data), token+"\n")
+	if strings.Contains(string(data), token) {
+		t.Errorf("bootstrap token file leaked plaintext token: %q", string(data))
+	}
+	loaded, tokenPath, migrated, err := bootstrap.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("bootstrap.Load() error: %v", err)
+	}
+	if migrated {
+		t.Fatalf("bootstrap.Load() migrated encrypted token unexpectedly")
+	}
+	if tokenPath != fullPath {
+		t.Fatalf("bootstrap.Load() path = %q, want %q", tokenPath, fullPath)
+	}
+	if loaded != token {
+		t.Fatalf("bootstrap.Load() token = %q, want %q", loaded, token)
 	}
 }
 
@@ -257,6 +270,13 @@ func TestLoadOrCreateBootstrapToken_Success_ExistingToken(t *testing.T) {
 	}
 	if fullPath != tokenPath {
 		t.Errorf("expected fullPath=%q, got %q", tokenPath, fullPath)
+	}
+	data, err := os.ReadFile(tokenPath)
+	if err != nil {
+		t.Fatalf("read migrated token file: %v", err)
+	}
+	if strings.Contains(string(data), existingToken) {
+		t.Fatalf("expected legacy plaintext token to be rewritten encrypted, got %q", string(data))
 	}
 }
 
@@ -391,18 +411,6 @@ func TestBootstrapTokenValid(t *testing.T) {
 	})
 }
 
-func TestInitializeBootstrapToken_NilRouter(t *testing.T) {
-	var r *Router = nil
-	// Should not panic
-	r.initializeBootstrapToken()
-}
-
-func TestInitializeBootstrapToken_NilConfig(t *testing.T) {
-	r := &Router{config: nil}
-	// Should not panic
-	r.initializeBootstrapToken()
-}
-
 func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission tests not reliable on Windows")
@@ -433,7 +441,7 @@ func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
 	}
 }
 
-func TestInitializeBootstrapToken_OIDCEnabled(t *testing.T) {
+func TestInitializeBootstrapToken_SSOEnabled(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a bootstrap token file first
@@ -444,24 +452,35 @@ func TestInitializeBootstrapToken_OIDCEnabled(t *testing.T) {
 
 	cfg := &config.Config{
 		DataPath: tmpDir,
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
+	}
+	sso := config.NewSSOConfig()
+	if err := sso.AddProvider(config.SSOProvider{
+		ID:      "test-oidc",
+		Name:    "Test OIDC",
+		Type:    config.SSOProviderTypeOIDC,
+		Enabled: true,
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL: "https://issuer.example.com",
+			ClientID:  "client-id",
 		},
+	}); err != nil {
+		t.Fatalf("failed to add provider: %v", err)
 	}
 	r := &Router{
 		config:             cfg,
+		ssoConfig:          sso,
 		bootstrapTokenPath: tokenPath, // Set path so clearBootstrapToken can delete the file
 	}
 	r.initializeBootstrapToken()
 
-	// Token should be cleared when OIDC is enabled
+	// Token should be cleared when SSO is enabled
 	if r.bootstrapTokenHash != "" {
-		t.Error("expected empty bootstrapTokenHash when OIDC is enabled")
+		t.Error("expected empty bootstrapTokenHash when SSO is enabled")
 	}
 
 	// Token file should be removed
 	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
-		t.Error("expected token file to be deleted when OIDC is enabled")
+		t.Error("expected token file to be deleted when SSO is enabled")
 	}
 }
 

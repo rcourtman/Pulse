@@ -10,7 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func TestTenantMiddlewareAllowsLegacyTokenAcrossOrgs(t *testing.T) {
+func TestTenantMiddlewareBlocksLegacyTokenAcrossOrgs(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
 	t.Setenv("PULSE_DEV", "true")
@@ -34,7 +34,7 @@ func TestTenantMiddlewareAllowsLegacyTokenAcrossOrgs(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for legacy token access, got %d", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for legacy token cross-org access, got %d", rec.Code)
 	}
 }

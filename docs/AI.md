@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Patrol is available to everyone with BYOK (your own AI provider). Pulse Pro unlocks auto-fix and advanced analysis. Learn more at <https://pulserelay.pro> or see the technical overview in [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro, Pro+, and Cloud unlock auto-fix and advanced analysis. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
@@ -81,6 +81,7 @@ Every patrol run passes the LLM comprehensive context about your environment:
 | **Storage Pools** | Usage %, capacity predictions, type (ZFS/LVM/Ceph), growth rates |
 | **Docker/Podman** | Container counts, health states, unhealthy container lists |
 | **Kubernetes** | Nodes, pods, deployments, services, DaemonSets, StatefulSets, namespaces |
+| **TrueNAS** | Pools, datasets, disk health, SMART status, replication, alerts |
 | **PBS/PMG** | Datastore status, backup jobs, job failures, verification status |
 | **Ceph** | Cluster health, OSD states, PG status |
 | **Agent Hosts** | Load averages, memory, disk, RAID status, temperatures |
@@ -163,11 +164,11 @@ Dismissed and resolved findings persist across Pulse restarts.
 
 Patrol supports three autonomy modes that control how much action it can take:
 
-| Mode | Behavior | License |
-|------|----------|---------|
-| **Monitor** | Detect issues only. No investigation or fixes. | Free (BYOK) |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Free (BYOK) |
-| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro |
+| Mode | Behavior | Plan |
+|------|----------|------|
+| **Monitor** | Detect issues only. No investigation or fixes. | Community (BYOK) |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community (BYOK) |
+| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro / Pro+ / Cloud |
 
 ### Investigation Flow
 
@@ -244,8 +245,8 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 |------|---------------|---------|
 | `pulse_query`, `pulse_discovery` | Resolve | Resource discovery and query |
 | `pulse_read` | Read | Read-only operations: exec, file, find, tail, logs |
-| `pulse_metrics` | Read | Performance metrics |
-| `pulse_storage` | Read | Storage information |
+| `pulse_metrics` | Read | Performance metrics and baselines |
+| `pulse_storage` | Read | Storage pools, backups, snapshots, Ceph, RAID, disk health |
 | `pulse_kubernetes` | Read | Kubernetes cluster info |
 | `pulse_pmg` | Read | Proxmox Mail Gateway stats |
 | `pulse_alerts` | Read/Write | Alert management (resolve/dismiss are writes) |
@@ -253,7 +254,9 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 | `pulse_knowledge` | Read/Write | Knowledge persistence (remember/note/save are writes) |
 | `pulse_file_edit` | Read/Write | File operations (write/append are writes) |
 | `pulse_control` | Write | Guest control, service management |
-| `pulse_patrol` | Read | Patrol findings and status |
+| `patrol_report_finding` | Patrol | Report a new finding (patrol runs only) |
+| `patrol_resolve_finding` | Patrol | Resolve an active finding (patrol runs only) |
+| `patrol_get_findings` | Patrol | List active findings (patrol runs only) |
 
 ### Safety Gates
 
@@ -268,11 +271,11 @@ The assistant enforces multiple safety gates:
 
 ### Control Levels
 
-| Level | Behavior | License |
+| Level | Behavior | Plan |
 |-------|----------|---------|
-| **Read-only** | AI can observe and query data only | Free |
-| **Controlled** | AI asks for approval before executing commands | Free |
-| **Autonomous** | AI executes actions without prompting | Pro |
+| **Read-only** | AI can observe and query data only | Community |
+| **Controlled** | AI asks for approval before executing commands | Community |
+| **Autonomous** | AI executes actions without prompting | Pro / Pro+ / Cloud |
 
 ### Using Approvals (Controlled Mode)
 
@@ -294,6 +297,7 @@ Configure in the UI: **Settings → System → AI Assistant**
 
 - **Anthropic** (API key or OAuth)
 - **OpenAI**
+- **OpenRouter**
 - **DeepSeek**
 - **Google Gemini**
 - **Ollama** (self-hosted, with tool/function calling support)
@@ -343,7 +347,7 @@ Patrol runs on a configurable schedule:
 
 Patrol can also be triggered by:
 - **Manual run**: Click "Run Patrol" in the UI
-- **Alert-triggered analysis (Pro)**: Runs when an alert fires
+- **Alert-triggered analysis (Pro and above)**: Runs when an alert fires
 - **API call**: `POST /api/ai/patrol/run`
 
 ---
@@ -405,10 +409,10 @@ scripts/eval/run_model_matrix.sh
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Autonomous mode (Pro)**: When enabled, AI may execute safe commands without approval
-- **Patrol auto-fix (Pro)**: Allows patrol to attempt automatic remediation
-- **Alert-triggered analysis (Pro)**: Limits AI to analyzing specific events when alerts occur
-- **Full autonomy unlock (Pro)**: Enables auto-fix for critical findings without approval (requires explicit toggle)
+- **Autonomous mode (Pro and above)**: When enabled, AI may execute safe commands without approval
+- **Patrol auto-fix (Pro and above)**: Allows patrol to attempt automatic remediation
+- **Alert-triggered analysis (Pro and above)**: Limits AI to analyzing specific events when alerts occur
+- **Full autonomy unlock (Pro and above)**: Enables auto-fix for critical findings without approval (requires explicit toggle)
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 
@@ -424,7 +428,7 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). No telemetry is sent to Pulse by default.
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Anonymous telemetry (counts and feature flags only — no hostnames or credentials) is enabled by default and can be disabled any time — see [Privacy](PRIVACY.md) for details.
 
 ---
 
@@ -469,4 +473,4 @@ Pulse tracks token usage and costs:
 
 - [Architecture: Pulse Assistant (Safety Gates)](architecture/pulse-assistant.md) — Detailed FSM states, tool protocol, and invariants
 - [API Reference](API.md) — Complete API endpoint documentation
-- [Pulse Pro](PULSE_PRO.md) — Pro features and licensing
+- [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Pro+/Cloud features and licensing

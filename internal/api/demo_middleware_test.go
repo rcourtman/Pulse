@@ -49,8 +49,8 @@ func TestDemoModeMiddleware(t *testing.T) {
 
 		// Demo mode enabled - auth endpoints allowed (POST)
 		{"demo on login", true, http.MethodPost, "/api/login", "", true, http.StatusOK, true},
-		{"demo on oidc login", true, http.MethodPost, "/api/oidc/login", "", true, http.StatusOK, true},
-		{"demo on oidc callback", true, http.MethodPost, "/api/oidc/callback", "", true, http.StatusOK, true},
+		{"demo on oidc provider login", true, http.MethodPost, "/api/oidc/acme/login", "", true, http.StatusOK, true},
+		{"demo on oidc provider callback", true, http.MethodPost, "/api/oidc/acme/callback", "", true, http.StatusOK, true},
 		{"demo on logout", true, http.MethodPost, "/api/logout", "", true, http.StatusOK, true},
 
 		// Demo mode enabled - modification requests blocked
@@ -61,7 +61,8 @@ func TestDemoModeMiddleware(t *testing.T) {
 
 		// Demo mode enabled - partial path matches should not be allowed
 		{"demo on login prefix", true, http.MethodPost, "/api/login/extra", "", false, http.StatusForbidden, true},
-		{"demo on oidc prefix", true, http.MethodPost, "/api/oidc/loginx", "", false, http.StatusForbidden, true},
+		{"demo on legacy oidc alias", true, http.MethodPost, "/api/oidc/login", "", false, http.StatusForbidden, true},
+		{"demo on oidc prefix", true, http.MethodPost, "/api/oidc/acme/loginx", "", false, http.StatusForbidden, true},
 
 		// Demo mode enabled - POST to other paths blocked
 		{"demo on POST settings", true, http.MethodPost, "/api/settings", "", false, http.StatusForbidden, true},

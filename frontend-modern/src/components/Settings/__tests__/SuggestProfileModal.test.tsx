@@ -80,6 +80,36 @@ afterEach(() => {
 });
 
 describe('SuggestProfileModal', () => {
+  it('surfaces canonical schema payload failures instead of flattening them into a generic fallback', async () => {
+    getConfigSchemaMock.mockRejectedValueOnce(
+      new Error('Invalid agent profile schema response from Pulse.'),
+    );
+    suggestProfileMock.mockResolvedValue({
+      name: 'Production Servers',
+      description: 'Tighter logging for prod hosts',
+      config: {
+        enable_docker: false,
+      },
+      rationale: ['Reduce noise'],
+    });
+    validateConfigMock.mockResolvedValue({ valid: true, errors: [], warnings: [] });
+
+    renderModal();
+
+    fireEvent.input(
+      screen.getByPlaceholderText('Describe the agents and use case for this profile...'),
+      {
+        target: { value: 'Production profile with minimal logging' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
+
+    expect(await screen.findByText('Production Servers')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Invalid agent profile schema response from Pulse.'),
+    ).toBeInTheDocument();
+  });
+
   it('renders preview details, defaults, and validation hints', async () => {
     suggestProfileMock.mockResolvedValue({
       name: 'Production Servers',
@@ -144,7 +174,9 @@ describe('SuggestProfileModal', () => {
 
     const { onSuggestionAccepted } = renderModal();
 
-    const promptInput = screen.getByPlaceholderText('Describe the agents and use case for this profile...');
+    const promptInput = screen.getByPlaceholderText(
+      'Describe the agents and use case for this profile...',
+    );
     fireEvent.input(promptInput, { target: { value: 'Production profile' } });
     fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
 
@@ -163,5 +195,34 @@ describe('SuggestProfileModal', () => {
     await waitFor(() => {
       expect(onSuggestionAccepted).toHaveBeenCalledWith(secondSuggestion);
     });
+  });
+
+  it('surfaces canonical validation payload failures instead of hiding them behind a generic warning', async () => {
+    suggestProfileMock.mockResolvedValue({
+      name: 'Production Servers',
+      description: 'Tighter logging for prod hosts',
+      config: {
+        enable_docker: false,
+      },
+      rationale: ['Reduce noise'],
+    });
+    validateConfigMock.mockRejectedValueOnce(
+      new Error('Invalid agent profile validation response from Pulse.'),
+    );
+
+    renderModal();
+
+    fireEvent.input(
+      screen.getByPlaceholderText('Describe the agents and use case for this profile...'),
+      {
+        target: { value: 'Production profile with minimal logging' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
+
+    expect(await screen.findByText('Production Servers')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Invalid agent profile validation response from Pulse.'),
+    ).toBeInTheDocument();
   });
 });

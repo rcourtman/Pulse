@@ -1,0 +1,719 @@
+package hostagent
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// mockLsblkJSON builds a JSON response matching the format from
+// `lsblk -J -d -o NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS`.
+func mockLsblkJSON(devices ...lsblkDevice) []byte {
+	data := lsblkJSON{Blockdevices: devices}
+	out, _ := json.Marshal(data)
+	return out
+}
+
+func TestListBlockDevices(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "linux"
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sda1", Type: "part", Tran: "sata"},
+			lsblkDevice{Name: "sr0", Type: "rom"},
+			lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+		), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 2 || devices[0] != "/dev/sda" || devices[1] != "/dev/nvme0n1" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesFreeBSD(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "freebsd"
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "sysctl" {
+			return nil, errors.New("unexpected command: " + name)
+		}
+		return []byte("ada0 da0 nvd0\n"), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 3 || devices[0] != "/dev/ada0" || devices[1] != "/dev/da0" || devices[2] != "/dev/nvd0" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "freebsd"
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("ada0 da0 nvd0\n"), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), []string{"da0"})
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 2 || devices[0] != "/dev/ada0" || devices[1] != "/dev/nvd0" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesError(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origReadDir := readDir
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
+
+	runtimeGOOS = "linux"
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, errors.New("boom")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
+	}
+
+	if _, err := listBlockDevices(context.Background(), nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestListBlockDevicesLinuxFallbackSysfs(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origReadDir := readDir
+	origStat := osStat
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		osStat = origStat
+	})
+
+	tempDir := t.TempDir()
+	sysBlockDir := filepath.Join(tempDir, "sys", "block")
+	mkdirAll := func(path string) {
+		t.Helper()
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+	}
+
+	mkdirAll(filepath.Join(sysBlockDir, "sda", "device"))
+	mkdirAll(filepath.Join(sysBlockDir, "nvme0n1", "device"))
+	mkdirAll(filepath.Join(sysBlockDir, "loop0")) // filtered as virtual
+	mkdirAll(filepath.Join(sysBlockDir, "sr0"))   // filtered as optical
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		return nil, errors.New("lsblk not found")
+	}
+
+	readDir = func(path string) ([]os.DirEntry, error) {
+		if path == "/sys/block" {
+			return os.ReadDir(sysBlockDir)
+		}
+		return os.ReadDir(path)
+	}
+	osStat = func(name string) (os.FileInfo, error) {
+		if strings.HasPrefix(name, "/sys/block/") {
+			name = filepath.Join(sysBlockDir, strings.TrimPrefix(name, "/sys/block/"))
+		}
+		return os.Stat(name)
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), []string{"nvme*"})
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux fallback error: %v", err)
+	}
+	if len(devices) != 1 || devices[0] != "/dev/sda" {
+		t.Fatalf("unexpected fallback devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesLinuxFallbackError(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origReadDir := readDir
+	origStat := osStat
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		osStat = origStat
+	})
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, errors.New("lsblk failed")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
+	}
+
+	if _, err := listBlockDevicesLinux(context.Background(), nil); err == nil {
+		t.Fatalf("expected fallback error")
+	} else if !strings.Contains(err.Error(), "lsblk error") || !strings.Contains(err.Error(), "fallback error") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDefaultRunCommandOutput(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	smartRunCommandOutput = origRun
+
+	if _, err := smartRunCommandOutput(context.Background(), "sh", "-c", "printf ''"); err != nil {
+		t.Fatalf("expected default smartRunCommandOutput to work, got %v", err)
+	}
+}
+
+func TestDefaultRunCommandOutputRejectsOversizedOutput(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	smartRunCommandOutput = origRun
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero", maxCommandOutputBytes+1)
+	_, err := smartRunCommandOutput(context.Background(), "sh", "-c", cmd)
+	if err == nil {
+		t.Fatal("expected oversized output error")
+	}
+	if !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected oversized output error, got %v", err)
+	}
+}
+
+func TestCollectLocalNoDevices(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name == "lsblk" {
+			return mockLsblkJSON(), nil // empty device list
+		}
+		return nil, errors.New("unexpected command")
+	}
+
+	result, err := CollectSMARTLocal(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("CollectSMARTLocal error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result for no devices")
+	}
+}
+
+func TestCollectSMARTLocalListDevicesError(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origReadDir := readDir
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
+
+	runtimeGOOS = "linux"
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, errors.New("lsblk failed")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
+	}
+
+	if _, err := CollectSMARTLocal(context.Background(), nil); err == nil {
+		t.Fatalf("expected list error")
+	}
+}
+
+func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	origNow := timeNow
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+		timeNow = origNow
+	})
+
+	fixed := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	timeNow = func() time.Time { return fixed }
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name == "lsblk" {
+			return mockLsblkJSON(
+				lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+				lsblkDevice{Name: "sdb", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			), nil
+		}
+		if name == "smartctl" {
+			device := args[len(args)-1]
+			if strings.Contains(device, "sda") {
+				return nil, errors.New("read error")
+			}
+			payload := smartctlJSON{
+				ModelName:    "Model",
+				SerialNumber: "Serial",
+			}
+			payload.Device.Protocol = "ATA"
+			payload.SmartStatus = &struct {
+				Passed bool `json:"passed"`
+			}{Passed: true}
+			payload.Temperature.Current = 30
+			out, _ := json.Marshal(payload)
+			return out, nil
+		}
+		return nil, errors.New("unexpected command")
+	}
+
+	result, err := CollectSMARTLocal(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("CollectSMARTLocal error: %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+	if result[0].Device != "sdb" || !result[0].LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected result: %#v", result[0])
+	}
+}
+
+func TestCollectDeviceSMARTLookPathError(t *testing.T) {
+	origLook := execLookPath
+	t.Cleanup(func() { execLookPath = origLook })
+	execLookPath = func(string) (string, error) { return "", errors.New("missing") }
+
+	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); err == nil {
+		t.Fatalf("expected lookpath error")
+	}
+}
+
+func TestCollectDeviceSMARTOversizedOutput(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxCommandOutputBytes)
+	}
+
+	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected oversized output error, got %v", err)
+	}
+}
+
+func TestCollectDeviceSMARTStandby(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	origNow := timeNow
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+		timeNow = origNow
+	})
+
+	fixed := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
+	timeNow = func() time.Time { return fixed }
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.Standby || result.Device != "sda" || !result.LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected standby result: %#v", result)
+	}
+}
+
+func TestCollectDeviceSMARTExitErrorNoOutput(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, "sh", "-c", "exit 1").Output()
+	}
+
+	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); err == nil {
+		t.Fatalf("expected error for exit code without output")
+	}
+}
+
+func TestCollectDeviceSMARTExitErrorWithOutput(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := `{"model_name":"Model","serial_number":"Serial","device":{"protocol":"ATA"},"smart_status":{"passed":false},"temperature":{"current":45}}`
+		return exec.CommandContext(ctx, "sh", "-c", "echo '"+payload+"'; exit 1").Output()
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Health != "FAILED" || result.Temperature != 45 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestCollectDeviceSMARTJSONError(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("{"), nil
+	}
+
+	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); err == nil {
+		t.Fatalf("expected json error")
+	}
+}
+
+func TestCollectDeviceSMARTMissingSmartStatusUsesUnknownHealth(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := `{"model_name":"Model","serial_number":"Serial","device":{"protocol":"ATA"},"temperature":{"current":40}}`
+		return []byte(payload), nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Health != "UNKNOWN" {
+		t.Fatalf("expected UNKNOWN health, got %#v", result)
+	}
+}
+
+func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	origNow := timeNow
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+		timeNow = origNow
+	})
+
+	fixed := time.Date(2024, 4, 5, 6, 7, 8, 0, time.UTC)
+	timeNow = func() time.Time { return fixed }
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := smartctlJSON{}
+		payload.Device.Protocol = "NVMe"
+		payload.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{Temperature: 55}
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/nvme0n1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Temperature != 55 || result.Type != "nvme" || result.Health != "PASSED" || !result.LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestCollectDeviceSMARTWWN(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := smartctlJSON{}
+		payload.WWN.NAA = 5
+		payload.WWN.OUI = 0xabc
+		payload.WWN.ID = 0x1234
+		payload.Device.Protocol = "SAS"
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.WWN != "5-abc-1234" {
+		t.Fatalf("unexpected WWN: %q", result.WWN)
+	}
+}
+
+func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sdb", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sr0", Type: "rom"},
+		), nil
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), []string{"sdb"})
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux error: %v", err)
+	}
+	if len(devices) != 1 || devices[0] != "/dev/sda" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestLinuxSMARTSkipReason(t *testing.T) {
+	tests := []struct {
+		name   string
+		device lsblkDevice
+		skip   bool
+		reason string
+	}{
+		{
+			name:   "physical SATA disk passes",
+			device: lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			skip:   false,
+		},
+		{
+			name:   "physical NVMe disk passes",
+			device: lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+			skip:   false,
+		},
+		{
+			name:   "ZFS zvol filtered by prefix",
+			device: lsblkDevice{Name: "zd0", Type: "disk", Subsystems: "block:zfs"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "device-mapper filtered by prefix",
+			device: lsblkDevice{Name: "dm-0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "virtio transport filtered",
+			device: lsblkDevice{Name: "vda", Type: "disk", Tran: "virtio"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "QEMU model filtered by metadata",
+			device: lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Vendor: "QEMU", Model: "HARDDISK"},
+			skip:   true,
+			reason: "virtual disk model/vendor signature",
+		},
+		{
+			name:   "VMware model filtered by metadata",
+			device: lsblkDevice{Name: "sda", Type: "disk", Model: "VMware Virtual S"},
+			skip:   true,
+			reason: "virtual disk model/vendor signature",
+		},
+		{
+			name:   "virtio subsystem filtered",
+			device: lsblkDevice{Name: "sda", Type: "disk", Subsystems: "block:virtio:pci"},
+			skip:   true,
+			reason: "virtual/logical subsystem",
+		},
+		{
+			name:   "ZFS subsystem filtered",
+			device: lsblkDevice{Name: "sda", Type: "disk", Subsystems: "block:zfs"},
+			skip:   true,
+			reason: "virtual/logical subsystem",
+		},
+		{
+			name:   "partition type filtered",
+			device: lsblkDevice{Name: "sda1", Type: "part"},
+			skip:   true,
+			reason: "not a whole disk",
+		},
+		{
+			name:   "loop device filtered by prefix",
+			device: lsblkDevice{Name: "loop0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "md RAID filtered by prefix",
+			device: lsblkDevice{Name: "md0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := linuxSMARTSkipReason(tt.device)
+			if tt.skip && reason == "" {
+				t.Errorf("expected device to be skipped, but got no reason")
+			}
+			if !tt.skip && reason != "" {
+				t.Errorf("expected device to pass, but got skip reason: %s", reason)
+			}
+			if tt.skip && reason != tt.reason {
+				t.Errorf("expected reason %q, got %q", tt.reason, reason)
+			}
+		})
+	}
+}
+
+func TestListBlockDevicesLinuxFiltersVirtualDevices(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "zd0", Type: "disk", Subsystems: "block:zfs"},
+			lsblkDevice{Name: "dm-0", Type: "disk"},
+			lsblkDevice{Name: "vda", Type: "disk", Tran: "virtio"},
+			lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+			lsblkDevice{Name: "sdb", Type: "disk", Vendor: "QEMU", Model: "HARDDISK"},
+		), nil
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux error: %v", err)
+	}
+	if len(devices) != 2 || devices[0] != "/dev/sda" || devices[1] != "/dev/nvme0n1" {
+		t.Fatalf("expected only physical disks, got: %#v", devices)
+	}
+}
+
+func TestCollectDeviceSMARTNoDataReturnsNil(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		// Device that returns valid JSON but no useful SMART data
+		payload := `{"device":{"protocol":"ATA"},"model_name":"Virtual Disk"}`
+		return []byte(payload), nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if !errors.Is(err, errSMARTDataUnavailable) {
+		t.Fatalf("expected errSMARTDataUnavailable, got err=%v result=%#v", err, result)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result for device with no SMART data, got %#v", result)
+	}
+}
+
+func TestListBlockDevicesFreeBSDError(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "sysctl" {
+			return nil, errors.New("unexpected command")
+		}
+		return nil, errors.New("sysctl failed")
+	}
+
+	if _, err := listBlockDevicesFreeBSD(context.Background(), nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestMatchesDeviceExcludePrefixNoMatchFallsThrough(t *testing.T) {
+	matched := matchesDeviceExclude("sda", "/dev/sda", []string{"nvme*", "vda"})
+	if matched {
+		t.Fatalf("expected no match")
+	}
+}

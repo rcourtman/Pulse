@@ -114,15 +114,15 @@ func TestNodeToFrontend(t *testing.T) {
 			Total: 500000000000,
 			Used:  250000000000,
 		},
-		Uptime:            86400,
-		LoadAverage:       []float64{0.5, 0.7, 0.9},
-		KernelVersion:     "5.15.0",
-		PVEVersion:        "7.4-3",
-		LastSeen:          now,
-		ConnectionHealth:  "connected",
-		IsClusterMember:   true,
-		ClusterName:       "pve-cluster",
-		LinkedHostAgentID: "agent-123",
+		Uptime:           86400,
+		LoadAverage:      []float64{0.5, 0.7, 0.9},
+		KernelVersion:    "5.15.0",
+		PVEVersion:       "7.4-3",
+		LastSeen:         now,
+		ConnectionHealth: "connected",
+		IsClusterMember:  true,
+		ClusterName:      "pve-cluster",
+		LinkedAgentID:    "agent-123",
 	}
 
 	frontend := node.ToFrontend()
@@ -160,8 +160,8 @@ func TestNodeToFrontend(t *testing.T) {
 	if len(frontend.LoadAverage) != 3 {
 		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
 	}
-	if frontend.LinkedHostAgentId != node.LinkedHostAgentID {
-		t.Errorf("LinkedHostAgentId = %q, want %q", frontend.LinkedHostAgentId, node.LinkedHostAgentID)
+	if frontend.LinkedAgentID != node.LinkedAgentID {
+		t.Errorf("LinkedAgentID = %q, want %q", frontend.LinkedAgentID, node.LinkedAgentID)
 	}
 }
 
@@ -185,29 +185,28 @@ func TestVMToFrontend(t *testing.T) {
 	lastBackup := now.Add(-24 * time.Hour)
 
 	vm := VM{
-		ID:           "vm-100",
-		VMID:         100,
-		Name:         "test-vm",
-		Node:         "pve1",
-		Instance:     "default",
-		Status:       "running",
-		Type:         "qemu",
-		CPU:          0.15,
-		CPUs:         4,
-		Memory:       Memory{Total: 8000000000, Used: 4000000000},
-		Disk:         Disk{Total: 100000000000, Used: 50000000000},
-		NetworkIn:    1000000,
-		NetworkOut:   500000,
-		DiskRead:     100000,
-		DiskWrite:    50000,
-		Uptime:       3600,
-		Tags:         []string{"production", "web"},
-		MemorySource: "rrd-memavailable",
-		LastSeen:     now,
-		LastBackup:   lastBackup,
-		IPAddresses:  []string{"192.168.1.50", "10.0.0.50"},
-		OSName:       "Ubuntu",
-		OSVersion:    "22.04",
+		ID:          "vm-100",
+		VMID:        100,
+		Name:        "test-vm",
+		Node:        "pve1",
+		Instance:    "default",
+		Status:      "running",
+		Type:        "qemu",
+		CPU:         0.15,
+		CPUs:        4,
+		Memory:      Memory{Total: 8000000000, Used: 4000000000},
+		Disk:        Disk{Total: 100000000000, Used: 50000000000},
+		NetworkIn:   1000000,
+		NetworkOut:  500000,
+		DiskRead:    100000,
+		DiskWrite:   50000,
+		Uptime:      3600,
+		Tags:        []string{"production", "web"},
+		LastSeen:    now,
+		LastBackup:  lastBackup,
+		IPAddresses: []string{"192.168.1.50", "10.0.0.50"},
+		OSName:      "Ubuntu",
+		OSVersion:   "22.04",
 	}
 
 	frontend := vm.ToFrontend()
@@ -238,9 +237,6 @@ func TestVMToFrontend(t *testing.T) {
 	}
 	if frontend.OSName != "Ubuntu" {
 		t.Errorf("OSName = %q, want Ubuntu", frontend.OSName)
-	}
-	if frontend.MemorySource != "rrd-memavailable" {
-		t.Errorf("MemorySource = %q, want %q", frontend.MemorySource, "rrd-memavailable")
 	}
 	if frontend.Memory == nil {
 		t.Error("Memory should not be nil when Total > 0")
@@ -605,28 +601,6 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 	}
 }
 
-func TestRemovedDockerHostToFrontend(t *testing.T) {
-	now := time.Now()
-
-	removed := RemovedDockerHost{
-		ID:          "host-123",
-		Hostname:    "docker-host",
-		DisplayName: "Docker Host",
-		RemovedAt:   now,
-	}
-
-	frontend := removed.ToFrontend()
-
-	if frontend.ID != removed.ID {
-		t.Errorf("ID = %q, want %q", frontend.ID, removed.ID)
-	}
-	if frontend.Hostname != removed.Hostname {
-		t.Errorf("Hostname = %q, want %q", frontend.Hostname, removed.Hostname)
-	}
-	if frontend.RemovedAt != now.Unix()*1000 {
-		t.Errorf("RemovedAt = %d, want %d", frontend.RemovedAt, now.Unix()*1000)
-	}
-}
 
 func TestToDockerHostCommandFrontend(t *testing.T) {
 	now := time.Now()
@@ -1084,11 +1058,9 @@ func TestHostToFrontend(t *testing.T) {
 		Sensors: HostSensorSummary{
 			TemperatureCelsius: map[string]float64{"cpu": 55.0},
 		},
-		CommandsEnabled:   true,
-		IsLegacy:          false,
-		LinkedNodeID:      "node-abc",
-		LinkedVMID:        "vm-xyz",
-		LinkedContainerID: "ct-456",
+		CommandsEnabled: true,
+		IsLegacy:        false,
+		LinkedNodeID:    "node-abc",
 	}
 
 	frontend := host.ToFrontend()
@@ -1138,14 +1110,8 @@ func TestHostToFrontend(t *testing.T) {
 	if frontend.IsLegacy != host.IsLegacy {
 		t.Errorf("IsLegacy = %v, want %v", frontend.IsLegacy, host.IsLegacy)
 	}
-	if frontend.LinkedNodeId != host.LinkedNodeID {
-		t.Errorf("LinkedNodeId = %q, want %q", frontend.LinkedNodeId, host.LinkedNodeID)
-	}
-	if frontend.LinkedVmId != host.LinkedVMID {
-		t.Errorf("LinkedVmId = %q, want %q", frontend.LinkedVmId, host.LinkedVMID)
-	}
-	if frontend.LinkedContainerId != host.LinkedContainerID {
-		t.Errorf("LinkedContainerId = %q, want %q", frontend.LinkedContainerId, host.LinkedContainerID)
+	if frontend.LinkedNodeID != host.LinkedNodeID {
+		t.Errorf("LinkedNodeID = %q, want %q", frontend.LinkedNodeID, host.LinkedNodeID)
 	}
 	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
 		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
@@ -1193,85 +1159,6 @@ func TestHostToFrontend_DisplayNameFallback(t *testing.T) {
 				t.Errorf("DisplayName = %q, want %q", frontend.DisplayName, tc.expected)
 			}
 		})
-	}
-}
-
-func TestCephClusterToFrontend(t *testing.T) {
-	now := time.Now()
-
-	cluster := CephCluster{
-		ID:             "ceph-123",
-		Instance:       "default",
-		Name:           "ceph-cluster",
-		FSID:           "abc-def-123",
-		Health:         "HEALTH_OK",
-		HealthMessage:  "Cluster is healthy",
-		TotalBytes:     10000000000000,
-		UsedBytes:      5000000000000,
-		AvailableBytes: 5000000000000,
-		UsagePercent:   50.0,
-		NumMons:        3,
-		NumMgrs:        2,
-		NumOSDs:        12,
-		NumOSDsUp:      12,
-		NumOSDsIn:      12,
-		NumPGs:         256,
-		LastUpdated:    now,
-		Pools: []CephPool{
-			{Name: "rbd", StoredBytes: 500000000000, AvailableBytes: 500000000000},
-		},
-		Services: []CephServiceStatus{
-			{Type: "mon", Running: 3, Total: 3},
-		},
-	}
-
-	frontend := cluster.ToFrontend()
-
-	if frontend.ID != cluster.ID {
-		t.Errorf("ID = %q, want %q", frontend.ID, cluster.ID)
-	}
-	if frontend.Name != cluster.Name {
-		t.Errorf("Name = %q, want %q", frontend.Name, cluster.Name)
-	}
-	if frontend.FSID != cluster.FSID {
-		t.Errorf("FSID = %q, want %q", frontend.FSID, cluster.FSID)
-	}
-	if frontend.Health != cluster.Health {
-		t.Errorf("Health = %q, want %q", frontend.Health, cluster.Health)
-	}
-	if frontend.TotalBytes != cluster.TotalBytes {
-		t.Errorf("TotalBytes = %d, want %d", frontend.TotalBytes, cluster.TotalBytes)
-	}
-	if frontend.UsagePercent != cluster.UsagePercent {
-		t.Errorf("UsagePercent = %f, want %f", frontend.UsagePercent, cluster.UsagePercent)
-	}
-	if frontend.NumOSDs != cluster.NumOSDs {
-		t.Errorf("NumOSDs = %d, want %d", frontend.NumOSDs, cluster.NumOSDs)
-	}
-	if frontend.LastUpdated != now.Unix()*1000 {
-		t.Errorf("LastUpdated = %d, want %d", frontend.LastUpdated, now.Unix()*1000)
-	}
-	if len(frontend.Pools) != 1 {
-		t.Errorf("Pools length = %d, want 1", len(frontend.Pools))
-	}
-	if len(frontend.Services) != 1 {
-		t.Errorf("Services length = %d, want 1", len(frontend.Services))
-	}
-}
-
-func TestCephClusterToFrontend_EmptyPoolsAndServices(t *testing.T) {
-	cluster := CephCluster{
-		ID:          "ceph-empty",
-		LastUpdated: time.Now(),
-	}
-
-	frontend := cluster.ToFrontend()
-
-	if frontend.Pools != nil {
-		t.Errorf("Pools = %v, want nil for empty pools", frontend.Pools)
-	}
-	if frontend.Services != nil {
-		t.Errorf("Services = %v, want nil for empty services", frontend.Services)
 	}
 }
 

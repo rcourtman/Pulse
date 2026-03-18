@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // --- Mock GuestProber ---
@@ -64,15 +65,15 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		{
 			ID:           "vm:pve1:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "pve1",
+			TargetID:     "pve1",
 			ResourceID:   "100",
 			ServiceName:  "PostgreSQL 15",
 			ServiceType:  "postgres",
 		},
 		{
 			ID:           "lxc:pve1:101",
-			ResourceType: servicediscovery.ResourceTypeLXC,
-			HostID:       "pve1",
+			ResourceType: servicediscovery.ResourceTypeSystemContainer,
+			TargetID:     "pve1",
 			ResourceID:   "101",
 			ServiceName:  "Nginx",
 			ServiceType:  "nginx",
@@ -82,17 +83,17 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetDiscoveryStore(store)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "db-server", Node: "pve1", Status: "running"},
-			{ID: "qemu/200", VMID: 200, Name: "unknown-vm", Node: "pve1", Status: "running"},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "db-server", 100, "pve1", "", ur.StatusOnline, false, nil),
+			newTestVMView("qemu/200", "unknown-vm", 200, "pve1", "", ur.StatusOnline, false, nil),
 		},
-		Containers: []models.Container{
-			{ID: "lxc/101", VMID: 101, Name: "web-proxy", Node: "pve1", Status: "running"},
+		containers: []*ur.ContainerView{
+			newTestContainerView("lxc/101", "web-proxy", 101, "pve1", "", ur.StatusOnline, false, nil),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 
 	// VM 100 should match discovery
 	if gi := intel["qemu/100"]; gi == nil {
@@ -128,8 +129,8 @@ func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
 		if gi.ServiceName != "Nginx" {
 			t.Errorf("lxc/101 ServiceName = %q, want %q", gi.ServiceName, "Nginx")
 		}
-		if gi.GuestType != "lxc" {
-			t.Errorf("lxc/101 GuestType = %q, want %q", gi.GuestType, "lxc")
+		if gi.GuestType != "system-container" {
+			t.Errorf("lxc/101 GuestType = %q, want %q", gi.GuestType, "system-container")
 		}
 	}
 }
@@ -140,7 +141,7 @@ func TestGatherGuestIntelligence_DiscoveryInstanceFallback(t *testing.T) {
 		{
 			ID:           "vm:my-instance:100",
 			ResourceType: servicediscovery.ResourceTypeVM,
-			HostID:       "my-instance",
+			TargetID:     "my-instance",
 			ResourceID:   "100",
 			ServiceName:  "Redis",
 			ServiceType:  "redis",
@@ -150,13 +151,13 @@ func TestGatherGuestIntelligence_DiscoveryInstanceFallback(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetDiscoveryStore(store)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "cache", Node: "pve1", Instance: "my-instance", Status: "running"},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "cache", 100, "pve1", "my-instance", ur.StatusOnline, false, nil),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "Redis" {
 		t.Errorf("expected Redis from instance fallback, got %+v", gi)
 	}
@@ -176,14 +177,14 @@ func TestGatherGuestIntelligence_Reachability(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(prober)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm-up", Node: "pve1", Status: "running", IPAddresses: []string{"10.0.0.1"}},
-			{ID: "qemu/101", VMID: 101, Name: "vm-down", Node: "pve1", Status: "running", IPAddresses: []string{"10.0.0.2"}},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "vm-up", 100, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.1"}),
+			newTestVMView("qemu/101", "vm-down", 101, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.2"}),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 
 	if gi := intel["qemu/100"]; gi == nil || gi.Reachable == nil || !*gi.Reachable {
 		t.Error("expected qemu/100 to be reachable")
@@ -202,13 +203,13 @@ func TestGatherGuestIntelligence_StoppedGuestsNotPinged(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(prober)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "stopped-vm", Node: "pve1", Status: "stopped", IPAddresses: []string{"10.0.0.1"}},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "stopped-vm", 100, "pve1", "", ur.StatusOffline, false, []string{"10.0.0.1"}),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if gi := intel["qemu/100"]; gi == nil {
 		t.Fatal("expected intel entry for stopped VM")
 	} else if gi.Reachable != nil {
@@ -224,13 +225,13 @@ func TestGatherGuestIntelligence_NoAgentOnNode(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(prober)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Status: "running", IPAddresses: []string{"10.0.0.1"}},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "vm-1", 100, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.1"}),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if gi := intel["qemu/100"]; gi == nil {
 		t.Fatal("expected intel entry")
 	} else if gi.Reachable != nil {
@@ -246,13 +247,13 @@ func TestGatherGuestIntelligence_NoIPAddress(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(prober)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "no-ip-vm", Node: "pve1", Status: "running", IPAddresses: nil},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "no-ip-vm", 100, "pve1", "", ur.StatusOnline, false, nil),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if gi := intel["qemu/100"]; gi == nil {
 		t.Fatal("expected intel entry")
 	} else if gi.Reachable != nil {
@@ -269,13 +270,13 @@ func TestGatherGuestIntelligence_ProberError(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(prober)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Status: "running", IPAddresses: []string{"10.0.0.1"}},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "vm-1", 100, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.1"}),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	// Should not crash, guest should still be in map but without reachability
 	if gi := intel["qemu/100"]; gi == nil {
 		t.Fatal("expected intel entry despite prober error")
@@ -288,13 +289,13 @@ func TestGatherGuestIntelligence_NilProber(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	// No prober set
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Status: "running", IPAddresses: []string{"10.0.0.1"}},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/100", "vm-1", 100, "pve1", "", ur.StatusOnline, false, []string{"10.0.0.1"}),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if gi := intel["qemu/100"]; gi == nil {
 		t.Fatal("expected intel entry")
 	} else if gi.Reachable != nil {
@@ -305,21 +306,31 @@ func TestGatherGuestIntelligence_NilProber(t *testing.T) {
 func TestGatherGuestIntelligence_TemplatesSkipped(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	state := models.StateSnapshot{
-		VMs: []models.VM{
-			{ID: "qemu/9000", VMID: 9000, Name: "template-vm", Node: "pve1", Status: "stopped", Template: true},
+	ps.SetReadState(&mockReadState{
+		vms: []*ur.VMView{
+			newTestVMView("qemu/9000", "template-vm", 9000, "pve1", "", ur.StatusOffline, true, nil),
 		},
-		Containers: []models.Container{
-			{ID: "lxc/9001", VMID: 9001, Name: "template-ct", Node: "pve1", Status: "stopped", Template: true},
+		containers: []*ur.ContainerView{
+			newTestContainerView("lxc/9001", "template-ct", 9001, "pve1", "", ur.StatusOffline, true, nil),
 		},
-	}
+	})
 
-	intel := ps.gatherGuestIntelligence(context.Background(), state)
+	intel := ps.gatherGuestIntelligence(context.Background())
 	if _, ok := intel["qemu/9000"]; ok {
 		t.Error("template VM should be skipped")
 	}
 	if _, ok := intel["lxc/9001"]; ok {
 		t.Error("template container should be skipped")
+	}
+}
+
+func TestGatherGuestIntelligence_NilReadState(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	// ReadState not wired — should return empty map without panic.
+
+	intel := ps.gatherGuestIntelligence(context.Background())
+	if len(intel) != 0 {
+		t.Fatalf("expected empty intel when ReadState is nil, got %d entries", len(intel))
 	}
 }
 
@@ -552,7 +563,7 @@ func TestSeedResourceInventory_WithIntelligence(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, intel)
 
 	// Check table headers
 	if !strings.Contains(out, "| Service |") {
@@ -599,7 +610,7 @@ func TestSeedResourceInventory_NilIntelligence(t *testing.T) {
 	}
 
 	// nil intel should produce "-" for both columns
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, nil)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, nil)
 	if !strings.Contains(out, "| - |") {
 		t.Errorf("expected '-' for unknown service/reachability, got:\n%s", out)
 	}
@@ -623,7 +634,7 @@ func TestSeedResourceInventory_QuietMode_AllReachable(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, intel)
 	if !strings.Contains(out, "All reachable.") {
 		t.Errorf("expected 'All reachable.' in quiet summary, got:\n%s", out)
 	}
@@ -648,7 +659,7 @@ func TestSeedResourceInventory_QuietMode_Unreachable(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, intel)
 	if !strings.Contains(out, "1 UNREACHABLE: vm-bad") {
 		t.Errorf("expected unreachable guest name in quiet summary, got:\n%s", out)
 	}
@@ -665,7 +676,7 @@ func TestSeedResourceInventory_QuietMode_NoReachabilityData(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, nil)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, nil)
 	if strings.Contains(out, "reachable") {
 		t.Errorf("should not mention reachability when no data available, got:\n%s", out)
 	}
@@ -690,7 +701,7 @@ func TestSeedResourceInventory_HealthIssuesFallbackType(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, intel)
 	// When no discovery, should use "VM" not "-" in health issues
 	if !strings.Contains(out, "unknown-vm (VM on pve1): Running but UNREACHABLE") {
 		t.Errorf("expected VM type fallback in health issue, got:\n%s", out)

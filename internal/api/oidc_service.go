@@ -34,6 +34,69 @@ type OIDCService struct {
 	httpClient *http.Client
 }
 
+// OIDCServiceManager manages multiple OIDC services for different SSO providers.
+type OIDCServiceManager struct {
+	mu       sync.RWMutex
+	services map[string]*OIDCService
+}
+
+// NewOIDCServiceManager creates a new OIDC service manager.
+func NewOIDCServiceManager() *OIDCServiceManager {
+	return &OIDCServiceManager{
+		services: make(map[string]*OIDCService),
+	}
+}
+
+// GetService returns the cached OIDC service for a provider, or nil.
+func (m *OIDCServiceManager) GetService(providerID string) *OIDCService {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.services[providerID]
+}
+
+// InitializeProvider creates or replaces the OIDC service for a provider.
+func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID string, provider *config.SSOProvider, redirectURL string) error {
+	if m == nil {
+		return errors.New("oidc service manager not initialized")
+	}
+	cfg := ssoProviderToOIDCConfig(provider, redirectURL)
+	service, err := NewOIDCService(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Stop old state store cleanup goroutine if replacing
+	if old, ok := m.services[providerID]; ok {
+		old.stateStore.Stop()
+	}
+	m.services[providerID] = service
+
+	log.Info().
+		Str("provider_id", providerID).
+		Str("issuer", cfg.IssuerURL).
+		Msg("Initialized SSO OIDC provider")
+
+	return nil
+}
+
+// RemoveService removes and cleans up the OIDC service for a provider.
+func (m *OIDCServiceManager) RemoveService(providerID string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if svc, ok := m.services[providerID]; ok {
+		svc.stateStore.Stop()
+		delete(m.services, providerID)
+	}
+}
+
 type oidcSnapshot struct {
 	issuer       string
 	clientID     string
@@ -42,6 +105,18 @@ type oidcSnapshot struct {
 	scopes       []string
 	caBundle     string
 	caBundleHash string
+}
+
+func emptyOIDCSnapshot() oidcSnapshot {
+	snapshot := oidcSnapshot{}
+	snapshot.normalizeCollections()
+	return snapshot
+}
+
+func (s *oidcSnapshot) normalizeCollections() {
+	if s.scopes == nil {
+		s.scopes = []string{}
+	}
 }
 
 // NewOIDCService fetches provider metadata and prepares helper structures.
@@ -97,6 +172,7 @@ func NewOIDCService(ctx context.Context, cfg *config.OIDCConfig) (*OIDCService, 
 		caBundle:     cfg.CABundle,
 		caBundleHash: caHash,
 	}
+	snapshot.normalizeCollections()
 
 	service := &OIDCService{
 		snapshot:   snapshot,
@@ -152,7 +228,7 @@ func (s *OIDCService) Matches(cfg *config.OIDCConfig) bool {
 	return true
 }
 
-func (s *OIDCService) newStateEntry(returnTo string) (string, *oidcStateEntry, error) {
+func (s *OIDCService) newStateEntry(providerID, returnTo string) (string, *oidcStateEntry, error) {
 	state, err := generateRandomURLString(32)
 	if err != nil {
 		return "", nil, err
@@ -168,6 +244,7 @@ func (s *OIDCService) newStateEntry(returnTo string) (string, *oidcStateEntry, e
 	}
 
 	entry := &oidcStateEntry{
+		ProviderID:    providerID,
 		Nonce:         nonce,
 		CodeVerifier:  codeVerifier,
 		CodeChallenge: codeChallenge,
@@ -208,6 +285,14 @@ func (s *OIDCService) contextWithHTTPClient(ctx context.Context) context.Context
 		return ctx
 	}
 	return oidc.ClientContext(ctx, s.httpClient)
+}
+
+// Stop releases background resources owned by the service.
+func (s *OIDCService) Stop() {
+	if s == nil || s.stateStore == nil {
+		return
+	}
+	s.stateStore.Stop()
 }
 
 // OIDCRefreshResult contains the result of a token refresh operation
@@ -320,9 +405,11 @@ type oidcStateStore struct {
 	mu          sync.RWMutex
 	entries     map[string]*oidcStateEntry
 	stopCleanup chan struct{}
+	stopOnce    sync.Once
 }
 
 type oidcStateEntry struct {
+	ProviderID    string // SSO provider ID (empty for legacy flow)
 	Nonce         string
 	CodeVerifier  string
 	CodeChallenge string
@@ -369,7 +456,9 @@ func (s *oidcStateStore) cleanup() {
 
 // Stop stops the cleanup routine
 func (s *oidcStateStore) Stop() {
-	close(s.stopCleanup)
+	s.stopOnce.Do(func() {
+		close(s.stopCleanup)
+	})
 }
 
 func (s *oidcStateStore) Put(state string, entry *oidcStateEntry) {

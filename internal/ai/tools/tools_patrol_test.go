@@ -145,6 +145,29 @@ func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	assert.Equal(t, "CPU at 92% over 15 minutes", input.Evidence)
 }
 
+func TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	args := validReportArgs()
+	args["resource_id"] = "disk-1"
+	args["resource_name"] = "/dev/sda"
+	args["resource_type"] = "physical_disk"
+	args["title"] = "Disk health warning"
+	args["description"] = "Disk health reported FAILED"
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, args)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	text := extractText(result)
+	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
+
+	assert.Equal(t, true, parsed["ok"])
+	require.Len(t, creator.createCalls, 1)
+	assert.Equal(t, "physical_disk", creator.createCalls[0].ResourceType)
+}
+
 func TestHandlePatrolReportFinding_MissingRequiredFields(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)
@@ -222,6 +245,41 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 	text := extractText(result)
 	assert.Contains(t, text, "invalid category")
 	assert.Contains(t, text, "networking")
+}
+
+func TestHandlePatrolReportFinding_RejectsLegacyResourceTypeAliases(t *testing.T) {
+	for _, resourceType := range []string{"host", "container", "docker", "docker-container", "docker_container", "app_container", "k8s_cluster", "kubernetes_cluster"} {
+		t.Run(resourceType, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{checked: true}
+			exec := newPatrolTestExecutor(creator)
+
+			args := validReportArgs()
+			args["resource_type"] = resourceType
+
+			result, err := handlePatrolReportFinding(context.Background(), exec, args)
+			require.NoError(t, err)
+
+			text := extractText(result)
+			assert.Contains(t, text, "unsupported resource_type")
+			assert.Contains(t, text, resourceType)
+			assert.Empty(t, creator.createCalls)
+		})
+	}
+}
+
+func TestHandlePatrolReportFinding_InvalidResourceType(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	args := validReportArgs()
+	args["resource_type"] = "bad-type"
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, args)
+	require.NoError(t, err)
+
+	text := extractText(result)
+	assert.Contains(t, text, "unsupported resource_type")
+	assert.Contains(t, text, "bad-type")
 }
 
 func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {

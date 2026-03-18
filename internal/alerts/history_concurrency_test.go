@@ -84,3 +84,62 @@ func TestHistoryManagerConcurrentAccess(t *testing.T) {
 
 	_ = os.RemoveAll(tempDir)
 }
+
+func TestHistoryManagerOnAlertConcurrentRegistrationAndDispatch(t *testing.T) {
+	origLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	defer zerolog.SetGlobalLevel(origLevel)
+
+	hm := newTestHistoryManager(t)
+
+	const iterations = 200
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < iterations; i++ {
+			hm.OnAlert(func(alert Alert) {})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < iterations; i++ {
+			hm.AddAlert(Alert{
+				ID:        fmt.Sprintf("callback-alert-%d", i),
+				Type:      "cpu",
+				Level:     AlertLevelWarning,
+				Message:   "callback test",
+				StartTime: time.Now(),
+			})
+		}
+	}()
+
+	close(start)
+	wg.Wait()
+}
+
+func TestHistoryManagerStopIdempotent(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	hm.saveTicker = time.NewTicker(time.Hour)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hm.Stop()
+		}()
+	}
+	wg.Wait()
+
+	select {
+	case <-hm.stopChan:
+	default:
+		t.Fatal("stopChan should be closed after Stop")
+	}
+}

@@ -16,6 +16,11 @@ fi
 echo "Pre-flight checks for release v${VERSION}..."
 echo ""
 
+IS_PRERELEASE="false"
+if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+  IS_PRERELEASE="true"
+fi
+
 # Check 1: VERSION file matches
 FILE_VERSION=$(cat VERSION | tr -d '\n')
 if [ "$FILE_VERSION" != "$VERSION" ]; then
@@ -45,20 +50,19 @@ if ! git diff-index --quiet HEAD --; then
 fi
 echo "✓ Working directory is clean"
 
-# Check 3: On main branch
+# Check 3: On required branch
 CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  echo "⚠️  Warning: Not on main branch (current: ${CURRENT_BRANCH})"
+REQUIRED_BRANCH=$(python3 scripts/release_control/control_plane.py --branch-for-version "$VERSION")
+
+if [ "$CURRENT_BRANCH" != "$REQUIRED_BRANCH" ]; then
+  echo "❌ Wrong release branch"
   echo ""
-  read -p "Continue anyway? [y/N] " -n 1 -r
+  echo "  Current branch:  ${CURRENT_BRANCH}"
+  echo "  Required branch: ${REQUIRED_BRANCH}"
   echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted"
-    exit 1
-  fi
-else
-  echo "✓ On main branch"
+  exit 1
 fi
+echo "✓ On required branch (${REQUIRED_BRANCH})"
 
 # Check 4: Up to date with remote
 git fetch origin --quiet
@@ -78,6 +82,19 @@ if [ "$LOCAL" != "$REMOTE" ]; then
 else
   echo "✓ Up to date with remote"
 fi
+
+python3 scripts/check-workflow-dispatch-inputs.py \
+  --workflow-path .github/workflows/create-release.yml \
+  --require version \
+  --require release_notes \
+  --require promoted_from_tag \
+  --require rollback_version \
+  --require ga_date \
+  --require v5_eos_date \
+  --require hotfix_exception \
+  --require hotfix_reason \
+  --require draft_only
+echo "✓ Default-branch release workflow contract matches governed inputs"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -141,13 +158,85 @@ if [ -z "$NOTES_FILE" ]; then
     exit 1
 fi
 
+ROLLBACK_VERSION=""
+ROLLBACK_COMMAND=""
+PROMOTED_FROM_TAG=""
+GA_DATE=""
+V5_EOS_DATE=""
+HOTFIX_EXCEPTION="false"
+HOTFIX_REASON=""
+
+echo ""
+read -r -p "Rollback stable version (for example 5.1.14 or v5.1.14): " ROLLBACK_VERSION
+if [ -z "$ROLLBACK_VERSION" ]; then
+    echo "❌ Error: rollback version is required"
+    exit 1
+fi
+
+if [[ "$ROLLBACK_VERSION" == v* ]]; then
+    ROLLBACK_COMMAND="./scripts/install.sh --version ${ROLLBACK_VERSION}"
+else
+    ROLLBACK_COMMAND="./scripts/install.sh --version v${ROLLBACK_VERSION}"
+fi
+
+echo ""
+echo "Derived rollback command: ${ROLLBACK_COMMAND}"
+
+if [ "$IS_PRERELEASE" != "true" ]; then
+    DEFAULT_PROMOTED_FROM_TAG=$(git tag -l "v${VERSION}-rc.*" --sort=-version:refname | head -1 || true)
+    echo ""
+    if [ -n "$DEFAULT_PROMOTED_FROM_TAG" ]; then
+      read -r -p "Promoted RC tag [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
+      PROMOTED_FROM_TAG="${PROMOTED_FROM_TAG:-$DEFAULT_PROMOTED_FROM_TAG}"
+    else
+      read -r -p "Promoted RC tag (for example v${VERSION}-rc.2): " PROMOTED_FROM_TAG
+    fi
+    if [ -z "$PROMOTED_FROM_TAG" ]; then
+      echo "❌ Error: promoted RC tag is required for stable releases"
+      exit 1
+    fi
+
+    echo ""
+    read -r -p "Hotfix exception to bypass 72-hour RC soak? [y/N] " HOTFIX_REPLY
+    if [[ "$HOTFIX_REPLY" =~ ^[Yy]$ ]]; then
+      HOTFIX_EXCEPTION="true"
+      read -r -p "Hotfix reason: " HOTFIX_REASON
+      if [ -z "$HOTFIX_REASON" ]; then
+        echo "❌ Error: hotfix reason is required when bypassing RC soak"
+        exit 1
+      fi
+    fi
+
+    if [ "$VERSION" = "6.0.0" ]; then
+      echo ""
+      read -r -p "v6 GA date to publish with GA (YYYY-MM-DD): " GA_DATE
+      if [[ ! "$GA_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        echo "❌ Error: v6 GA date must be in YYYY-MM-DD form"
+        exit 1
+      fi
+
+      echo ""
+      read -r -p "v5 end-of-support date to publish with GA (YYYY-MM-DD): " V5_EOS_DATE
+      if [[ ! "$V5_EOS_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        echo "❌ Error: v5 end-of-support date must be in YYYY-MM-DD form"
+        exit 1
+      fi
+    fi
+fi
+
 # Trigger the workflow
 echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
   gh workflow run create-release.yml \
     -f version="${VERSION}" \
-    -f release_notes="$(cat "$NOTES_FILE")"
+    -f release_notes="$(cat "$NOTES_FILE")" \
+    -f rollback_version="${ROLLBACK_VERSION}" \
+    -f promoted_from_tag="${PROMOTED_FROM_TAG}" \
+    -f ga_date="${GA_DATE}" \
+    -f v5_eos_date="${V5_EOS_DATE}" \
+    -f hotfix_exception="${HOTFIX_EXCEPTION}" \
+    -f hotfix_reason="${HOTFIX_REASON}"
 else
   # This should be unreachable due to check above, but kept for safety
   echo "❌ Error: Release notes are required"

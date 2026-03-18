@@ -2,11 +2,12 @@ package api
 
 import (
 	"crypto/rand"
-	"crypto/subtle"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +16,15 @@ import (
 
 // RecoveryToken represents a recovery token for secure authentication bypass
 type RecoveryToken struct {
+	TokenHash string    `json:"token_hash"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Used      bool      `json:"used"`
+	UsedAt    time.Time `json:"used_at,omitempty"`
+	IP        string    `json:"ip,omitempty"`
+}
+
+type legacyRecoveryToken struct {
 	Token     string    `json:"token"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -29,34 +39,60 @@ type RecoveryTokenStore struct {
 	mu          sync.RWMutex
 	dataPath    string
 	stopCleanup chan struct{}
+	stopOnce    sync.Once
 }
 
 var (
-	recoveryStore     *RecoveryTokenStore
-	recoveryStoreOnce sync.Once
+	recoveryStore         *RecoveryTokenStore
+	recoveryStoreDataPath string
+	recoveryStoreMu       sync.Mutex
 )
+
+func recoveryTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
 // InitRecoveryTokenStore initializes the recovery token store
 func InitRecoveryTokenStore(dataPath string) {
-	recoveryStoreOnce.Do(func() {
-		recoveryStore = &RecoveryTokenStore{
-			tokens:      make(map[string]*RecoveryToken),
-			dataPath:    dataPath,
-			stopCleanup: make(chan struct{}),
-		}
-		recoveryStore.load()
+	newDataPath := strings.TrimSpace(dataPath)
+	if newDataPath == "" {
+		return
+	}
 
-		// Start cleanup routine
-		go recoveryStore.cleanupRoutine()
-	})
+	recoveryStoreMu.Lock()
+	defer recoveryStoreMu.Unlock()
+
+	if recoveryStore != nil && recoveryStoreDataPath == newDataPath {
+		return
+	}
+
+	oldStore := recoveryStore
+	recoveryStore = &RecoveryTokenStore{
+		tokens:      make(map[string]*RecoveryToken),
+		dataPath:    newDataPath,
+		stopCleanup: make(chan struct{}),
+	}
+	recoveryStoreDataPath = newDataPath
+	recoveryStore.load()
+
+	// Start cleanup routine
+	go recoveryStore.cleanupRoutine()
+
+	if oldStore != nil {
+		oldStore.Shutdown()
+	}
 }
 
 // GetRecoveryTokenStore returns the global recovery token store
 func GetRecoveryTokenStore() *RecoveryTokenStore {
-	if recoveryStore == nil {
-		InitRecoveryTokenStore("/etc/pulse")
+	recoveryStoreMu.Lock()
+	store := recoveryStore
+	recoveryStoreMu.Unlock()
+	if store == nil {
+		panic("recovery token store not initialized; call InitRecoveryTokenStore with the configured data path first")
 	}
-	return recoveryStore
+	return store
 }
 
 // GenerateRecoveryToken creates a new recovery token
@@ -68,18 +104,19 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	}
 
 	tokenStr := hex.EncodeToString(tokenBytes)
+	tokenHash := recoveryTokenHash(tokenStr)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	token := &RecoveryToken{
-		Token:     tokenStr,
+		TokenHash: tokenHash,
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(duration),
 		Used:      false,
 	}
 
-	r.tokens[tokenStr] = token
+	r.tokens[tokenHash] = token
 	r.saveUnsafe()
 
 	log.Info().
@@ -90,53 +127,54 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	return tokenStr, nil
 }
 
+// IsRecoveryTokenValidConstantTime checks token validity without consuming it.
+// This is intended for preflight decisions (e.g., CSRF skip routing).
+func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	token, exists := r.tokens[recoveryTokenHash(providedToken)]
+	if !exists {
+		return false
+	}
+	return !time.Now().After(token.ExpiresAt) && !token.Used
+}
+
 // ValidateRecoveryTokenConstantTime validates token with constant-time comparison
 func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken string, ip string) bool {
-	// Use constant-time comparison to prevent timing attacks
-	providedBytes := []byte(providedToken)
+	tokenHash := recoveryTokenHash(providedToken)
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	for tokenStr, token := range r.tokens {
-		tokenBytes := []byte(tokenStr)
-
-		// Constant-time comparison
-		if subtle.ConstantTimeCompare(providedBytes, tokenBytes) == 1 {
-			// Token matches
-			if time.Now().After(token.ExpiresAt) || token.Used {
-				return false
-			}
-
-			// Need to upgrade to write lock to mark as used
-			r.mu.RUnlock()
-			r.mu.Lock()
-
-			// CRITICAL: Re-check token.Used after acquiring write lock
-			// Prevents replay attack where two concurrent requests both pass initial check
-			if token.Used {
-				r.mu.Unlock()
-				r.mu.RLock()
-				return false
-			}
-
-			token.Used = true
-			token.UsedAt = time.Now()
-			token.IP = ip
-			r.saveUnsafe()
-			r.mu.Unlock()
-			r.mu.RLock()
-
-			log.Info().
-				Str("token", safePrefixForLog(tokenStr, 8)+"...").
-				Str("ip", ip).
-				Msg("Recovery token successfully validated")
-
-			return true
-		}
+	token, exists := r.tokens[tokenHash]
+	if !exists || time.Now().After(token.ExpiresAt) || token.Used {
+		return false
 	}
 
-	return false
+	r.mu.RUnlock()
+	r.mu.Lock()
+
+	token, exists = r.tokens[tokenHash]
+	if !exists || time.Now().After(token.ExpiresAt) || token.Used {
+		r.mu.Unlock()
+		r.mu.RLock()
+		return false
+	}
+
+	token.Used = true
+	token.UsedAt = time.Now()
+	token.IP = ip
+	r.saveUnsafe()
+	r.mu.Unlock()
+	r.mu.RLock()
+
+	log.Info().
+		Str("token", safePrefixForLog(tokenHash, 8)+"...").
+		Str("ip", ip).
+		Msg("Recovery token successfully validated")
+
+	return true
 }
 
 // cleanupRoutine periodically removes expired tokens
@@ -152,6 +190,26 @@ func (r *RecoveryTokenStore) cleanupRoutine() {
 			log.Debug().Msg("Recovery token cleanup routine stopped")
 			return
 		}
+	}
+}
+
+func (r *RecoveryTokenStore) Shutdown() {
+	if r == nil {
+		return
+	}
+	r.stopOnce.Do(func() {
+		close(r.stopCleanup)
+	})
+}
+
+func resetRecoveryStoreForTests() {
+	recoveryStoreMu.Lock()
+	oldStore := recoveryStore
+	recoveryStore = nil
+	recoveryStoreDataPath = ""
+	recoveryStoreMu.Unlock()
+	if oldStore != nil {
+		oldStore.Shutdown()
 	}
 }
 
@@ -188,7 +246,12 @@ func (r *RecoveryTokenStore) saveUnsafe() {
 	}
 
 	// Marshal tokens
-	data, err := json.Marshal(r.tokens)
+	persisted := make([]*RecoveryToken, 0, len(r.tokens))
+	for _, token := range r.tokens {
+		copy := *token
+		persisted = append(persisted, &copy)
+	}
+	data, err := json.Marshal(persisted)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal recovery tokens")
 		return
@@ -208,6 +271,57 @@ func (r *RecoveryTokenStore) saveUnsafe() {
 	}
 }
 
+func (r *RecoveryTokenStore) loadCanonicalTokens(tokens []*RecoveryToken, now time.Time) int {
+	loaded := 0
+	for _, token := range tokens {
+		if token == nil || token.TokenHash == "" {
+			continue
+		}
+		if now.Before(token.ExpiresAt) || (token.Used && now.Sub(token.UsedAt) < 24*time.Hour) {
+			copy := *token
+			r.tokens[token.TokenHash] = &copy
+			loaded++
+		}
+	}
+	return loaded
+}
+
+func (r *RecoveryTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, error) {
+	var legacy map[string]*legacyRecoveryToken
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return false, err
+	}
+
+	loaded := 0
+	for rawToken, token := range legacy {
+		if token == nil {
+			continue
+		}
+		if rawToken == "" {
+			rawToken = token.Token
+		}
+		if rawToken == "" {
+			continue
+		}
+		if now.Before(token.ExpiresAt) || (token.Used && now.Sub(token.UsedAt) < 24*time.Hour) {
+			tokenHash := recoveryTokenHash(rawToken)
+			r.tokens[tokenHash] = &RecoveryToken{
+				TokenHash: tokenHash,
+				CreatedAt: token.CreatedAt,
+				ExpiresAt: token.ExpiresAt,
+				Used:      token.Used,
+				UsedAt:    token.UsedAt,
+				IP:        token.IP,
+			}
+			loaded++
+		}
+	}
+
+	log.Info().Int("loaded", loaded).Int("total", len(legacy)).Msg("Recovery tokens loaded from disk (legacy raw-token format)")
+	r.saveUnsafe()
+	return true, nil
+}
+
 // load reads tokens from disk
 func (r *RecoveryTokenStore) load() {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
@@ -220,22 +334,16 @@ func (r *RecoveryTokenStore) load() {
 		return
 	}
 
-	var tokens map[string]*RecoveryToken
-	if err := json.Unmarshal(data, &tokens); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal recovery tokens")
+	now := time.Now()
+	var tokens []*RecoveryToken
+	if err := json.Unmarshal(data, &tokens); err == nil {
+		loaded := r.loadCanonicalTokens(tokens, now)
+		log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("Recovery tokens loaded from disk (hashed format)")
 		return
 	}
 
-	// Filter out expired tokens
-	now := time.Now()
-	loaded := 0
-	for tokenStr, token := range tokens {
-		// Keep unexpired tokens and recently used tokens
-		if now.Before(token.ExpiresAt) || (token.Used && now.Sub(token.UsedAt) < 24*time.Hour) {
-			r.tokens[tokenStr] = token
-			loaded++
-		}
+	if migrated, err := r.migrateLegacyTokens(data, now); err == nil && migrated {
+		return
 	}
-
-	log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("Recovery tokens loaded from disk")
+	log.Error().Msg("Failed to decode recovery tokens file; unsupported format")
 }

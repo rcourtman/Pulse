@@ -3,14 +3,16 @@ package discovery
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
 
 type fakeScanner struct {
@@ -35,6 +37,27 @@ func (f *fakeScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet s
 	return f.result, f.err
 }
 
+func waitForCall(t *testing.T, ch <-chan struct{}, timeout time.Duration, desc string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(timeout):
+		t.Fatalf("timed out waiting for %s", desc)
+	}
+}
+
+func waitForCalls(t *testing.T, ch <-chan struct{}, n int, timeout time.Duration, desc string) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ch:
+		case <-deadline:
+			t.Fatalf("timed out waiting for %s (got %d/%d)", desc, i, n)
+		}
+	}
+}
+
 type countingScanner struct {
 	result *pkgdiscovery.DiscoveryResult
 	err    error
@@ -46,6 +69,31 @@ func (c *countingScanner) DiscoverServersWithCallbacks(ctx context.Context, subn
 		c.calls <- struct{}{}
 	}
 	return c.result, c.err
+}
+
+type blockingScanner struct {
+	started chan struct{}
+	done    chan error
+}
+
+func (b *blockingScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error) {
+	if b.started != nil {
+		select {
+		case b.started <- struct{}{}:
+		default:
+		}
+	}
+
+	<-ctx.Done()
+
+	if b.done != nil {
+		select {
+		case b.done <- ctx.Err():
+		default:
+		}
+	}
+
+	return nil, ctx.Err()
 }
 
 func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
@@ -164,12 +212,6 @@ func TestPerformScanRecordsPartialFailure(t *testing.T) {
 	}
 }
 
-func resetNewScannerFn() {
-	newScannerFn = func() discoveryScanner {
-		return pkgdiscovery.NewScanner()
-	}
-}
-
 func TestHistoryEntryAccessors(t *testing.T) {
 	started := time.Now().Add(-time.Minute)
 	completed := time.Now()
@@ -212,10 +254,10 @@ func TestHistoryEntryAccessors(t *testing.T) {
 
 func TestNewServiceDefaults(t *testing.T) {
 	service := NewService(nil, 0, "", nil)
-	if service.interval != 5*time.Minute {
+	if service.interval != defaultScanInterval {
 		t.Fatalf("expected default interval, got %v", service.interval)
 	}
-	if service.subnet != "auto" {
+	if service.subnet != defaultSubnet {
 		t.Fatalf("expected auto subnet, got %s", service.subnet)
 	}
 	if service.cfgProvider == nil {
@@ -223,6 +265,29 @@ func TestNewServiceDefaults(t *testing.T) {
 	}
 	if service.scannerFactory == nil {
 		t.Fatalf("expected scannerFactory")
+	}
+}
+
+func TestNewServiceDefaultScannerFactory(t *testing.T) {
+	originalDetectEnvironment := detectEnvironmentFn
+	detectEnvironmentFn = func() (*envdetect.EnvironmentProfile, error) {
+		return &envdetect.EnvironmentProfile{
+			Type:     envdetect.Native,
+			Policy:   envdetect.DefaultScanPolicy(),
+			Metadata: map[string]string{},
+		}, nil
+	}
+	t.Cleanup(func() {
+		detectEnvironmentFn = originalDetectEnvironment
+	})
+
+	service := NewService(nil, time.Minute, "auto", nil)
+	scanner, err := service.scannerFactory(config.DefaultDiscoveryConfig())
+	if err != nil {
+		t.Fatalf("expected scannerFactory to build scanner, got error: %v", err)
+	}
+	if scanner == nil {
+		t.Fatalf("expected scannerFactory to return scanner")
 	}
 }
 
@@ -270,8 +335,8 @@ func TestGetCachedResultWithData(t *testing.T) {
 	now := time.Now()
 	service.cache.mu.Lock()
 	service.cache.result = &pkgdiscovery.DiscoveryResult{
-		Servers: []pkgdiscovery.DiscoveredServer{{IP: "10.0.0.1"}},
-		Errors:  []string{},
+		Servers:          []pkgdiscovery.DiscoveredServer{{IP: "10.0.0.1"}},
+		StructuredErrors: []pkgdiscovery.DiscoveryError{},
 	}
 	service.cache.updated = now
 	service.cache.mu.Unlock()
@@ -285,19 +350,6 @@ func TestGetCachedResultWithData(t *testing.T) {
 	}
 }
 
-func TestIsScanning(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
-		return config.DefaultDiscoveryConfig()
-	})
-	service.mu.Lock()
-	service.isScanning = true
-	service.mu.Unlock()
-
-	if !service.IsScanning() {
-		t.Fatalf("expected scanning to be true")
-	}
-}
-
 func TestSetInterval(t *testing.T) {
 	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()
@@ -305,6 +357,57 @@ func TestSetInterval(t *testing.T) {
 	service.SetInterval(2 * time.Minute)
 	if service.interval != 2*time.Minute {
 		t.Fatalf("expected interval update")
+	}
+}
+
+func TestSetIntervalNonPositiveUsesDefault(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.SetInterval(0)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected interval to normalize to default, got %v", service.interval)
+	}
+
+	service.SetInterval(-1 * time.Minute)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected negative interval to normalize to default, got %v", service.interval)
+	}
+}
+
+func TestNewServiceNormalizesInvalidInput(t *testing.T) {
+	service := NewService(nil, -1*time.Second, "not-a-subnet", nil)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected default interval for invalid input, got %v", service.interval)
+	}
+	if service.subnet != defaultSubnet {
+		t.Fatalf("expected default subnet for invalid input, got %s", service.subnet)
+	}
+}
+
+func TestSetSubnetNormalizesAndFallbacks(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+
+	service.SetSubnet(" 192.168.1.10/24 , invalid ,10.0.0.0/8,192.168.1.0/24 ")
+	if service.subnet != "192.168.1.0/24,10.0.0.0/8" {
+		t.Fatalf("expected normalized subnet list, got %q", service.subnet)
+	}
+
+	service.SetSubnet("  ")
+	if service.subnet != defaultSubnet {
+		t.Fatalf("expected blank subnet to normalize to %q, got %q", defaultSubnet, service.subnet)
+	}
+}
+
+func TestNormalizeScanInterval(t *testing.T) {
+	if got := normalizeScanInterval(0); got != defaultScanInterval {
+		t.Fatalf("normalizeScanInterval(0) = %v, want %v", got, defaultScanInterval)
+	}
+	if got := normalizeScanInterval(-time.Second); got != defaultScanInterval {
+		t.Fatalf("normalizeScanInterval(-1s) = %v, want %v", got, defaultScanInterval)
+	}
+	if got := normalizeScanInterval(time.Second); got != time.Second {
+		t.Fatalf("normalizeScanInterval(1s) = %v, want 1s", got)
 	}
 }
 
@@ -326,6 +429,57 @@ func TestGetStatus(t *testing.T) {
 	}
 	if scanning, ok := status["is_scanning"].(bool); !ok || !scanning {
 		t.Fatalf("expected is_scanning true")
+	}
+}
+
+func TestGetStatusSnapshot(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+
+	lastScan := time.Unix(42, 0)
+	service.mu.Lock()
+	service.isScanning = true
+	service.lastScan = lastScan
+	service.interval = 3 * time.Minute
+	service.subnet = "10.0.0.0/24"
+	service.mu.Unlock()
+
+	status := service.GetStatusSnapshot()
+	if !status.IsScanning {
+		t.Fatalf("expected IsScanning true")
+	}
+	if !status.LastScan.Equal(lastScan) {
+		t.Fatalf("expected LastScan %v, got %v", lastScan, status.LastScan)
+	}
+	if status.Interval != 3*time.Minute {
+		t.Fatalf("expected Interval 3m, got %v", status.Interval)
+	}
+	if status.Subnet != "10.0.0.0/24" {
+		t.Fatalf("expected Subnet 10.0.0.0/24, got %s", status.Subnet)
+	}
+}
+
+func TestServiceStatusToMap(t *testing.T) {
+	status := ServiceStatus{
+		IsScanning: true,
+		LastScan:   time.Unix(100, 0),
+		Interval:   30 * time.Second,
+		Subnet:     "auto",
+	}
+
+	asMap := status.ToMap()
+	if val, ok := asMap["is_scanning"].(bool); !ok || !val {
+		t.Fatalf("expected is_scanning=true")
+	}
+	if val, ok := asMap["last_scan"].(time.Time); !ok || !val.Equal(status.LastScan) {
+		t.Fatalf("expected last_scan=%v", status.LastScan)
+	}
+	if val, ok := asMap["interval"].(string); !ok || val != "30s" {
+		t.Fatalf("expected interval=30s, got %v", asMap["interval"])
+	}
+	if val, ok := asMap["subnet"].(string); !ok || val != "auto" {
+		t.Fatalf("expected subnet=auto, got %v", asMap["subnet"])
 	}
 }
 
@@ -372,6 +526,29 @@ func TestForceRefreshSkippedWhenScanning(t *testing.T) {
 	select {
 	case <-scanner.calls:
 		t.Fatalf("expected scan to be skipped")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestForceRefreshSkippedAfterStop(t *testing.T) {
+	scanner := &countingScanner{
+		result: &pkgdiscovery.DiscoveryResult{},
+		calls:  make(chan struct{}, 1),
+	}
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.Stop()
+	service.ForceRefresh()
+
+	select {
+	case <-scanner.calls:
+		t.Fatalf("expected ForceRefresh to be skipped after Stop")
 	case <-time.After(100 * time.Millisecond):
 	}
 }
@@ -423,6 +600,23 @@ func TestSetSubnetWhileScanning(t *testing.T) {
 	}
 }
 
+func TestSetSubnetPanicRecovery(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.ctx = context.Background()
+	calls := make(chan struct{}, 1)
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		calls <- struct{}{}
+		panic("set subnet panic")
+	}
+
+	service.SetSubnet("10.9.0.0/24")
+
+	waitForCall(t, calls, 2*time.Second, "SetSubnet scan")
+	if service.subnet != "10.9.0.0/24" {
+		t.Fatalf("expected subnet to update, got %s", service.subnet)
+	}
+}
+
 func TestScanLoopStopsOnStopChan(t *testing.T) {
 	scanner := &countingScanner{
 		result: &pkgdiscovery.DiscoveryResult{},
@@ -438,7 +632,7 @@ func TestScanLoopStopsOnStopChan(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		service.scanLoop()
+		service.scanLoop(service.ctx)
 		close(done)
 	}()
 
@@ -473,7 +667,7 @@ func TestScanLoopStopsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		service.scanLoop()
+		service.scanLoop(ctx)
 		close(done)
 	}()
 
@@ -517,6 +711,53 @@ func TestStartAndStop(t *testing.T) {
 	service.Stop()
 }
 
+func TestStopCancelsInFlightScan(t *testing.T) {
+	scanner := &blockingScanner{
+		started: make(chan struct{}, 1),
+		done:    make(chan error, 1),
+	}
+	service := NewService(nil, time.Hour, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service.Start(ctx)
+
+	select {
+	case <-scanner.started:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected scan to start")
+	}
+
+	service.Stop()
+
+	select {
+	case err := <-scanner.done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected scan to stop with context cancellation, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected in-flight scan to be canceled by Stop")
+	}
+}
+
+func TestStop_Idempotent(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.Stop()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("expected second Stop() call not to panic, got %v", r)
+		}
+	}()
+
+	service.Stop()
+}
+
 func TestStartPanicRecovery(t *testing.T) {
 	service := NewService(nil, time.Minute, "auto", nil)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -533,99 +774,36 @@ func TestStartPanicRecovery(t *testing.T) {
 	service.Stop()
 }
 
-func TestStartLoopPanicRecovery(t *testing.T) {
-	service := NewService(nil, 10*time.Millisecond, "auto", nil)
+func TestStartScanLoopPanicRecovery(t *testing.T) {
+	service := NewService(nil, 5*time.Millisecond, "auto", nil)
+	calls := make(chan struct{}, 4)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		panic("scan loop panic")
+		calls <- struct{}{}
+		panic("scan panic")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	service.Start(ctx)
-	time.Sleep(50 * time.Millisecond) // Allow ticker to fire
+	waitForCalls(t, calls, 2, 2*time.Second, "scannerFactory panic")
 	service.Stop()
 }
 
-func TestPerformScan_WebsocketHub(t *testing.T) {
-	hub := websocket.NewHub(nil)
-	service := NewService(hub, time.Minute, "auto", nil)
-	service.ctx = context.Background()
+func TestPerformScan_NoContextUsesBackground(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
 	scanner := &fakeScanner{
-		result: &pkgdiscovery.DiscoveryResult{
-			Servers: []pkgdiscovery.DiscoveredServer{
-				{IP: "1.2.3.4", Port: 80, Type: "web"},
-			},
-			Environment: &pkgdiscovery.EnvironmentInfo{Type: "test"},
-		},
+		result: &pkgdiscovery.DiscoveryResult{},
 	}
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
 		return scanner, nil
 	}
 
-	// Just run it, ensure no panic
 	service.performScan()
-}
 
-func TestPerformScan_ScannerFactoryError(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		return nil, errors.New("factory error")
+	history := service.GetHistory(1)
+	if len(history) == 0 {
+		t.Fatal("expected history entry after scan")
 	}
-
-	originalNewScannerFn := newScannerFn
-	defer func() { newScannerFn = originalNewScannerFn }()
-
-	mockScanner := &fakeScanner{result: &pkgdiscovery.DiscoveryResult{}}
-	newScannerFn = func() discoveryScanner { return mockScanner }
-
-	service.performScan()
-}
-
-func TestPerformScan_ScannerFactoryNil(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		return nil, nil // Returns nil scanner, nil error
-	}
-
-	originalNewScannerFn := newScannerFn
-	defer func() { newScannerFn = originalNewScannerFn }()
-
-	mockScanner := &fakeScanner{result: &pkgdiscovery.DiscoveryResult{}}
-	newScannerFn = func() discoveryScanner { return mockScanner }
-
-	service.performScan()
-}
-
-func TestForceRefreshPanicRecovery(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		panic("force refresh panic")
-	}
-	service.ForceRefresh()
-	time.Sleep(100 * time.Millisecond)
-}
-
-func TestSetSubnetPanicRecovery(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		panic("set subnet panic")
-	}
-	service.SetSubnet("10.0.0.0/24")
-	time.Sleep(100 * time.Millisecond)
-}
-
-func TestPerformScan_SkippedIfScanning(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.mu.Lock()
-	service.isScanning = true
-	service.mu.Unlock()
-
-	// Should return immediately
-	service.performScan()
 }
 
 func TestPerformScan_StatusFailure(t *testing.T) {
@@ -658,58 +836,19 @@ func TestAppendHistory_ResetLimit(t *testing.T) {
 	}
 }
 
-func TestDefaultScannerFactory(t *testing.T) {
-	service := NewService(nil, 0, "", nil)
-	// Don't override scannerFactory
-	_, err := service.scannerFactory(config.DefaultDiscoveryConfig())
-	if err != nil {
-		t.Logf("Default scanner factory returned error (expected in some envs): %v", err)
-	}
-}
-
-func TestPerformScan_WebsocketHub_NoEnv(t *testing.T) {
-	hub := websocket.NewHub(nil)
-	service := NewService(hub, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	scanner := &fakeScanner{
-		result: &pkgdiscovery.DiscoveryResult{
-			Servers: []pkgdiscovery.DiscoveredServer{
-				{IP: "1.2.3.4", Port: 80, Type: "web"},
-			},
-			// No Environment
-		},
-	}
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		return scanner, nil
-	}
-
-	service.performScan()
-}
-
-func TestPerformScan_DeadlineExceeded(t *testing.T) {
+func TestPerformScan_StructuredErrors(t *testing.T) {
 	service := NewService(nil, time.Minute, "auto", nil)
 	service.ctx = context.Background()
 	scanner := &fakeScanner{
 		result: &pkgdiscovery.DiscoveryResult{
 			Servers: []pkgdiscovery.DiscoveredServer{},
-		},
-		err: context.DeadlineExceeded,
-	}
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		return scanner, nil
-	}
-
-	service.performScan()
-}
-
-func TestPerformScan_LegacyErrors(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", nil)
-	service.ctx = context.Background()
-	scanner := &fakeScanner{
-		result: &pkgdiscovery.DiscoveryResult{
-			Servers:          []pkgdiscovery.DiscoveredServer{},
-			Errors:           []string{"legacy error"},
-			StructuredErrors: nil,
+			StructuredErrors: []pkgdiscovery.DiscoveryError{
+				{
+					Phase:     "extra_targets",
+					ErrorType: "phase_error",
+					Message:   "structured error",
+				},
+			},
 		},
 	}
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -728,3 +867,61 @@ func TestPerformScan_LegacyErrors(t *testing.T) {
 		t.Error("expected history entry")
 	}
 }
+
+func TestNormalizeDiscoverySubnet(t *testing.T) {
+	t.Run("auto and empty normalize to auto", func(t *testing.T) {
+		tests := []string{"", "   ", "auto", " AUTO "}
+		for _, input := range tests {
+			got, err := normalizeDiscoverySubnet(input)
+			if err != nil {
+				t.Fatalf("normalizeDiscoverySubnet(%q) returned error: %v", input, err)
+			}
+			if got != "auto" {
+				t.Fatalf("normalizeDiscoverySubnet(%q) = %q, want auto", input, got)
+			}
+		}
+	})
+
+	t.Run("manual subnet list canonicalized and deduplicated", func(t *testing.T) {
+		got, err := normalizeDiscoverySubnet(" 10.0.0.1/24,10.0.0.0/24,192.168.1.0/24 ")
+		if err != nil {
+			t.Fatalf("normalizeDiscoverySubnet returned error: %v", err)
+		}
+		if got != "10.0.0.0/24,192.168.1.0/24" {
+			t.Fatalf("unexpected normalized subnet list: %q", got)
+		}
+	})
+
+	t.Run("invalid subnet rejected", func(t *testing.T) {
+		if _, err := normalizeDiscoverySubnet("not-a-cidr"); err == nil {
+			t.Fatal("expected invalid subnet error")
+		}
+	})
+
+	t.Run("overly long subnet input rejected", func(t *testing.T) {
+		longInput := strings.Repeat("1", maxManualSubnetInputLength+1)
+		if _, err := normalizeDiscoverySubnet(longInput); err == nil {
+			t.Fatal("expected long input error")
+		}
+	})
+
+	t.Run("too many subnets rejected", func(t *testing.T) {
+		parts := make([]string, 0, maxManualSubnetCount+1)
+		for i := 0; i < maxManualSubnetCount+1; i++ {
+			parts = append(parts, "10.0.0."+strconv.Itoa(i)+"/32")
+		}
+		if _, err := normalizeDiscoverySubnet(strings.Join(parts, ",")); err == nil {
+			t.Fatal("expected subnet count limit error")
+		}
+	})
+}
+
+func TestNewServiceInvalidSubnetFallsBackToAuto(t *testing.T) {
+	service := NewService(nil, time.Minute, "invalid-subnet", nil)
+	if service.subnet != "auto" {
+		t.Fatalf("expected fallback subnet auto, got %q", service.subnet)
+	}
+}
+
+// TestSetSubnetRejectsInvalidSubnet was removed — referenced deleted
+// countingScanner fields (startedSubnet, release) from a parallel branch.

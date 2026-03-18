@@ -1,14 +1,184 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 )
+
+type testPollProvider struct {
+	providerType      InstanceType
+	instances         []string
+	describeInstances []PollProviderInstanceInfo
+	connectionStatus  map[string]bool
+	connectionKey     string
+	interval          time.Duration
+	buildPollTask     func(instanceName string) (PollTask, error)
+}
+
+func (p testPollProvider) Type() InstanceType { return p.providerType }
+
+func (p testPollProvider) ListInstances(_ *Monitor) []string {
+	out := make([]string, len(p.instances))
+	copy(out, p.instances)
+	return out
+}
+
+func (p testPollProvider) DescribeInstances(_ *Monitor) []PollProviderInstanceInfo {
+	out := make([]PollProviderInstanceInfo, len(p.describeInstances))
+	for i := range p.describeInstances {
+		out[i] = PollProviderInstanceInfo{
+			Name:        p.describeInstances[i].Name,
+			DisplayName: p.describeInstances[i].DisplayName,
+			Connection:  p.describeInstances[i].Connection,
+			Metadata:    cloneProviderMetadata(p.describeInstances[i].Metadata),
+		}
+	}
+	return out
+}
+
+func (p testPollProvider) ConnectionStatuses(_ *Monitor) map[string]bool {
+	if len(p.connectionStatus) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(p.connectionStatus))
+	for key, healthy := range p.connectionStatus {
+		out[key] = healthy
+	}
+	return out
+}
+
+func (p testPollProvider) ConnectionHealthKey(_ *Monitor, instanceName string) string {
+	if strings.TrimSpace(p.connectionKey) != "" {
+		return strings.TrimSpace(p.connectionKey)
+	}
+	return ""
+}
+
+func (p testPollProvider) BaseInterval(_ *Monitor) time.Duration { return p.interval }
+
+func (p testPollProvider) BuildPollTask(_ *Monitor, instanceName string) (PollTask, error) {
+	if p.buildPollTask == nil {
+		return PollTask{
+			InstanceName: instanceName,
+			InstanceType: string(p.providerType),
+		}, nil
+	}
+	return p.buildPollTask(instanceName)
+}
+
+type testSupplementalPollProvider struct {
+	testPollProvider
+	source           unifiedresources.DataSource
+	ownedSources     []unifiedresources.DataSource
+	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	lastRequestedOrg string
+}
+
+func (p *testSupplementalPollProvider) SupplementalSource() unifiedresources.DataSource {
+	return p.source
+}
+
+func (p *testSupplementalPollProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
+	p.lastRequestedOrg = orgID
+	records := p.recordsByOrg[orgID]
+	out := make([]unifiedresources.IngestRecord, len(records))
+	copy(out, records)
+	return out
+}
+
+func (p *testSupplementalPollProvider) SnapshotOwnedSources(_ *Monitor) []unifiedresources.DataSource {
+	out := make([]unifiedresources.DataSource, len(p.ownedSources))
+	copy(out, p.ownedSources)
+	return out
+}
+
+type testMonitorSupplementalProvider struct {
+	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	ownedSources     []unifiedresources.DataSource
+	lastRequestedOrg string
+}
+
+func (p *testMonitorSupplementalProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
+	p.lastRequestedOrg = orgID
+	records := p.recordsByOrg[orgID]
+	out := make([]unifiedresources.IngestRecord, len(records))
+	copy(out, records)
+	return out
+}
+
+func (p *testMonitorSupplementalProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
+	out := make([]unifiedresources.DataSource, len(p.ownedSources))
+	copy(out, p.ownedSources)
+	return out
+}
+
+type testSupplementalResourceStore struct {
+	snapshotCalls   int
+	lastSnapshot    models.StateSnapshot
+	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord
+}
+
+func (s *testSupplementalResourceStore) ShouldSkipAPIPolling(string) bool { return false }
+
+func (s *testSupplementalResourceStore) GetPollingRecommendations() map[string]float64 { return nil }
+
+func (s *testSupplementalResourceStore) GetAll() []unifiedresources.Resource { return nil }
+
+func (s *testSupplementalResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	s.lastSnapshot = snapshot
+	s.snapshotCalls++
+}
+
+func (s *testSupplementalResourceStore) PopulateSupplementalRecords(source unifiedresources.DataSource, records []unifiedresources.IngestRecord) {
+	if s.recordsBySource == nil {
+		s.recordsBySource = make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
+	}
+	cloned := make([]unifiedresources.IngestRecord, len(records))
+	copy(cloned, records)
+	s.recordsBySource[source] = append(s.recordsBySource[source], cloned...)
+}
+
+type testAtomicResourceStore struct {
+	snapshotCalls    int
+	atomicCalls      int
+	lastSnapshot     models.StateSnapshot
+	lastRecordsBySrc map[unifiedresources.DataSource][]unifiedresources.IngestRecord
+}
+
+func (s *testAtomicResourceStore) ShouldSkipAPIPolling(string) bool { return false }
+
+func (s *testAtomicResourceStore) GetPollingRecommendations() map[string]float64 { return nil }
+
+func (s *testAtomicResourceStore) GetAll() []unifiedresources.Resource { return nil }
+
+func (s *testAtomicResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	s.lastSnapshot = snapshot
+	s.snapshotCalls++
+}
+
+func (s *testAtomicResourceStore) PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord) {
+	s.lastSnapshot = snapshot
+	s.atomicCalls++
+	s.lastRecordsBySrc = make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(recordsBySource))
+	for source, records := range recordsBySource {
+		cloned := make([]unifiedresources.IngestRecord, len(records))
+		copy(cloned, records)
+		s.lastRecordsBySrc[source] = cloned
+	}
+}
 
 func TestBuildScheduledTasksUsesConfiguredIntervals(t *testing.T) {
 	now := time.Now()
@@ -87,11 +257,397 @@ func TestRescheduleTaskUsesInstanceIntervalWhenSchedulerDisabled(t *testing.T) {
 	}
 }
 
-func TestRecordTaskResult_NilMonitor(t *testing.T) {
-	// Should not panic when called on nil monitor
-	var m *Monitor
-	m.recordTaskResult(InstanceTypePVE, "test-instance", nil)
-	// If we get here without panic, the test passes
+func TestUpdateResourceStoreSyncsUnifiedIncidentAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	store := unifiedresources.NewMonitorAdapter(nil)
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: store,
+		alertManager:  alertManager,
+		orgID:         "default",
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+				recordsByOrg: map[string][]unifiedresources.IngestRecord{
+					"default": {{
+						SourceID: "pool:tank",
+						Resource: unifiedresources.Resource{
+							ID:         "storage:tank",
+							Type:       unifiedresources.ResourceTypeStorage,
+							Name:       "tank",
+							ParentName: "truenas-main",
+							Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+							Storage: &unifiedresources.StorageMeta{
+								Platform:   "truenas",
+								Topology:   "pool",
+								Protection: "zfs",
+								IsZFS:      true,
+							},
+							Incidents: []unifiedresources.ResourceIncident{{
+								Provider: "truenas",
+								NativeID: "alert-1",
+								Code:     "truenas_volume_status",
+								Severity: storagehealth.RiskWarning,
+								Summary:  "Pool tank is DEGRADED",
+							}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	active := alertManager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active alert, got %d", len(active))
+	}
+	if active[0].Type != "zfs-pool-state" {
+		t.Fatalf("alert type = %q, want zfs-pool-state", active[0].Type)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.ActiveAlerts) != 1 {
+		t.Fatalf("expected state snapshot to contain 1 active alert, got %d", len(snapshot.ActiveAlerts))
+	}
+}
+
+func TestUpdateResourceStoreSyncsCanonicalStorageMetrics(t *testing.T) {
+	t.Run("supplemental truenas storage", func(t *testing.T) {
+		cfg := metrics.DefaultConfig(t.TempDir())
+		store, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatalf("metrics.NewStore() error = %v", err)
+		}
+		defer func() { _ = store.Close() }()
+
+		resourceStore := unifiedresources.NewMonitorAdapter(nil)
+		used := int64(620)
+		total := int64(1000)
+		monitor := &Monitor{
+			resourceStore:  resourceStore,
+			metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+			metricsStore:   store,
+			orgID:          "default",
+			supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+				unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+					recordsByOrg: map[string][]unifiedresources.IngestRecord{
+						"default": {{
+							SourceID: "pool:tank",
+							Resource: unifiedresources.Resource{
+								ID:        "storage:tank",
+								Type:      unifiedresources.ResourceTypeStorage,
+								Name:      "tank",
+								Status:    unifiedresources.StatusOnline,
+								LastSeen:  time.Now().UTC(),
+								UpdatedAt: time.Now().UTC(),
+								Sources:   []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+								Metrics: &unifiedresources.ResourceMetrics{
+									Disk: &unifiedresources.MetricValue{Used: &used, Total: &total, Percent: 62},
+								},
+								Storage: &unifiedresources.StorageMeta{
+									Platform:   "truenas",
+									Topology:   "pool",
+									Protection: "zfs",
+								},
+							},
+						}},
+					},
+				},
+			},
+		}
+
+		monitor.updateResourceStore(models.StateSnapshot{})
+
+		memory := monitor.GetStorageMetrics("pool:tank", time.Hour)
+		if got := len(memory["usage"]); got == 0 {
+			t.Fatalf("expected in-memory usage history for pool:tank")
+		}
+
+		storeBacked := monitor.GetStorageMetricsForChart("pool:tank", 7*24*time.Hour)
+		if got := len(storeBacked["usage"]); got == 0 {
+			t.Fatalf("expected persisted usage history for pool:tank")
+		}
+	})
+
+	t.Run("agent unraid storage", func(t *testing.T) {
+		cfg := metrics.DefaultConfig(t.TempDir())
+		store, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatalf("metrics.NewStore() error = %v", err)
+		}
+		defer func() { _ = store.Close() }()
+
+		resourceStore := unifiedresources.NewMonitorAdapter(nil)
+		snapshot := models.StateSnapshot{
+			Hosts: []models.Host{
+				{
+					ID:        "host-tower",
+					Hostname:  "tower",
+					Status:    "online",
+					LastSeen:  time.Now().UTC(),
+					MachineID: "machine-tower",
+					Disks: []models.Disk{
+						{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+					},
+					Unraid: &models.HostUnraidStorage{
+						ArrayStarted: true,
+						ArrayState:   "STARTED",
+						NumProtected: 1,
+					},
+				},
+			},
+		}
+		monitor := &Monitor{
+			resourceStore:  resourceStore,
+			metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+			metricsStore:   store,
+		}
+
+		monitor.updateResourceStore(snapshot)
+
+		var storageResourceID string
+		for _, resource := range resourceStore.GetAll() {
+			if resource.Type == unifiedresources.ResourceTypeStorage && resource.Storage != nil && resource.Storage.Platform == "unraid" {
+				storageResourceID = resource.ID
+				break
+			}
+		}
+		if storageResourceID == "" {
+			t.Fatal("expected unraid storage resource in unified store")
+		}
+
+		target := resourceStore.MetricsTargetForResource(storageResourceID)
+		if target == nil || target.ResourceType != "storage" || target.ResourceID != "host-tower/storage:unraid-array" {
+			t.Fatalf("unexpected unraid storage metrics target %+v", target)
+		}
+
+		memory := monitor.GetStorageMetrics(target.ResourceID, time.Hour)
+		if got := len(memory["usage"]); got == 0 {
+			t.Fatalf("expected in-memory usage history for %s", target.ResourceID)
+		}
+
+		storeBacked := monitor.GetStorageMetricsForChart(target.ResourceID, 7*24*time.Hour)
+		if got := len(storeBacked["usage"]); got == 0 {
+			t.Fatalf("expected persisted usage history for %s", target.ResourceID)
+		}
+	})
+}
+
+func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	store := unifiedresources.NewMonitorAdapter(nil)
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: store,
+		alertManager:  alertManager,
+		orgID:         "default",
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+				recordsByOrg: map[string][]unifiedresources.IngestRecord{
+					"default": {{
+						SourceID: "system:truenas-main",
+						Resource: unifiedresources.Resource{
+							ID:      "agent:truenas-main",
+							Type:    unifiedresources.ResourceTypeAgent,
+							Name:    "truenas-main",
+							Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+							TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+							Incidents: []unifiedresources.ResourceIncident{{
+								Provider: "truenas",
+								NativeID: "alert-2",
+								Code:     "truenas_volume_status",
+								Severity: storagehealth.RiskCritical,
+								Summary:  "Pool tank is FAULTED",
+							}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{})
+
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected 1 active alert in frontend state, got %d", len(frontend.ActiveAlerts))
+	}
+	if frontend.ActiveAlerts[0].Type != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", frontend.ActiveAlerts[0].Type)
+	}
+}
+
+func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{{
+		ID:      "agent:truenas-main",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-main",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "alert-live-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}})
+
+	monitor := &Monitor{
+		state:        models.NewState(),
+		alertManager: alertManager,
+	}
+
+	staleSnapshot := models.StateSnapshot{
+		ActiveAlerts: []models.Alert{{
+			ID:           "snapshot-stale-1",
+			Type:         "offline",
+			ResourceID:   "stale-resource",
+			ResourceName: "stale-resource",
+			Message:      "stale snapshot alert",
+		}},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(staleSnapshot)
+
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected 1 live active alert in frontend state, got %d", len(frontend.ActiveAlerts))
+	}
+	if got := frontend.ActiveAlerts[0].ID; got == "snapshot-stale-1" || got == "" {
+		t.Fatalf("expected live alert manager id, got %q", got)
+	}
+	if got := frontend.ActiveAlerts[0].Type; got != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", got)
+	}
+	if got := frontend.ActiveAlerts[0].Message; got == "stale snapshot alert" {
+		t.Fatalf("expected live alert manager payload, got stale snapshot message %q", got)
+	}
+}
+
+func TestActiveAlertsSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{{
+		ID:      "agent:truenas-live",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-live",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-live"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "live-active-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}})
+
+	state := models.NewState()
+	state.UpdateActiveAlerts([]models.Alert{{
+		ID:           "snapshot-active-1",
+		Type:         "offline",
+		ResourceID:   "snapshot-resource",
+		ResourceName: "snapshot-resource",
+		Message:      "stale snapshot active alert",
+	}})
+
+	monitor := &Monitor{
+		state:        state,
+		alertManager: alertManager,
+	}
+
+	active := monitor.ActiveAlertsSnapshot()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 live active alert, got %d", len(active))
+	}
+	if got := active[0].ID; got == "snapshot-active-1" || got == "" {
+		t.Fatalf("expected live alert manager alert id, got %q", got)
+	}
+	if got := active[0].Type; got != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", got)
+	}
+}
+
+func TestRecentlyResolvedSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	resource := unifiedresources.Resource{
+		ID:      "agent:truenas-live",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-live",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-live"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "live-resolved-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+	alertManager.SyncUnifiedResourceIncidents(nil)
+
+	state := models.NewState()
+	state.UpdateRecentlyResolved([]models.ResolvedAlert{{
+		Alert: models.Alert{
+			ID:           "snapshot-resolved-1",
+			Type:         "offline",
+			ResourceID:   "snapshot-resource",
+			ResourceName: "snapshot-resource",
+			Message:      "stale snapshot resolved alert",
+		},
+		ResolvedTime: time.Now().UTC(),
+	}})
+
+	monitor := &Monitor{
+		state:        state,
+		alertManager: alertManager,
+	}
+
+	resolved := monitor.RecentlyResolvedSnapshot()
+	if len(resolved) == 0 {
+		t.Fatal("expected recently resolved alert from live alert manager")
+	}
+	if got := resolved[0].ID; got == "snapshot-resolved-1" || got == "" {
+		t.Fatalf("expected live resolved alert id, got %q", got)
+	}
+	if got := resolved[0].Type; got != "storage-incident" {
+		t.Fatalf("resolved alert type = %q, want storage-incident", got)
+	}
+}
+
+func TestBuildBroadcastFrontendStatePreservesSnapshotAlertsWithoutAlertManager(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	snapshot := models.StateSnapshot{
+		ActiveAlerts: []models.Alert{{
+			ID:           "snapshot-only-1",
+			Type:         "offline",
+			ResourceID:   "snapshot-resource",
+			ResourceName: "snapshot-resource",
+			Message:      "snapshot-only alert",
+		}},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected snapshot alert to be preserved, got %#v", frontend.ActiveAlerts)
+	}
+	if got := frontend.ActiveAlerts[0].ID; got != "snapshot-only-1" {
+		t.Fatalf("alert id = %q, want snapshot-only-1", got)
+	}
 }
 
 func TestRecordTaskResult_Success(t *testing.T) {
@@ -380,22 +936,6 @@ func TestDescribeInstancesForScheduler_NilSchedulerAndTracker(t *testing.T) {
 	if !descriptors[0].LastSuccess.IsZero() {
 		t.Error("expected LastSuccess to be zero with nil stalenessTracker")
 	}
-}
-
-func TestRescheduleTask_NilTaskQueue(t *testing.T) {
-	m := &Monitor{
-		taskQueue: nil, // nil queue
-	}
-
-	task := ScheduledTask{
-		InstanceName: "pve-1",
-		InstanceType: InstanceTypePVE,
-		Interval:     30 * time.Second,
-		NextRun:      time.Now(),
-	}
-
-	// Should not panic with nil taskQueue, just returns early
-	m.rescheduleTask(task)
 }
 
 func TestRescheduleTask_SuccessfulOutcome(t *testing.T) {
@@ -801,5 +1341,431 @@ func TestRescheduleTask_UsesExistingIntervalWhenSet(t *testing.T) {
 	// Should use the existing interval when it's already set
 	if entry.task.Interval != customInterval {
 		t.Errorf("expected existing interval %v to be preserved, got %v", customInterval, entry.task.Interval)
+	}
+}
+
+func TestCustomPollProviderIntegration(t *testing.T) {
+	const customType InstanceType = "xcp"
+	const customName = "xcp-cluster-1"
+	customInterval := 42 * time.Second
+
+	var executed atomic.Bool
+
+	monitor := &Monitor{
+		taskQueue: NewTaskQueue(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{customName},
+		interval:     customInterval,
+		buildPollTask: func(instanceName string) (PollTask, error) {
+			return PollTask{
+				InstanceName: instanceName,
+				InstanceType: string(customType),
+				Run: func(context.Context) {
+					executed.Store(true)
+				},
+			}, nil
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+	monitor.SetExecutor(nil) // restore default executor
+
+	tasks := monitor.buildScheduledTasks(time.Now())
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 scheduled task for custom provider, got %d", len(tasks))
+	}
+	task := tasks[0]
+	if task.InstanceType != customType {
+		t.Fatalf("expected custom instance type %q, got %q", customType, task.InstanceType)
+	}
+	if task.InstanceName != customName {
+		t.Fatalf("expected custom instance name %q, got %q", customName, task.InstanceName)
+	}
+	if task.Interval != customInterval {
+		t.Fatalf("expected custom interval %v, got %v", customInterval, task.Interval)
+	}
+
+	monitor.executeScheduledTask(context.Background(), task)
+	if !executed.Load() {
+		t.Fatal("expected custom provider poll task callback to execute")
+	}
+}
+
+func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testSupplementalPollProvider{
+		testPollProvider: testPollProvider{
+			providerType: InstanceType("xcp"),
+			instances:    []string{"xcp-cluster-1"},
+			interval:     30 * time.Second,
+		},
+		source: unifiedresources.DataSource("xcp"),
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "xcp-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "xcp-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	if err := monitor.RegisterPollProvider(provider); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if provider.lastRequestedOrg != "default" {
+		t.Fatalf("expected default org lookup, got %q", provider.lastRequestedOrg)
+	}
+	records := store.recordsBySource[unifiedresources.DataSource("xcp")]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record ingested, got %d", len(records))
+	}
+	if records[0].SourceID != "xcp-host-1" {
+		t.Fatalf("expected supplemental source ID xcp-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_SuppressesProviderOwnedSnapshotSources(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testSupplementalPollProvider{
+		testPollProvider: testPollProvider{
+			providerType: InstanceType("xcp"),
+			instances:    []string{"xcp-cluster-1"},
+			interval:     30 * time.Second,
+		},
+		source:       unifiedresources.SourceProxmox,
+		ownedSources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "xcp-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "xcp-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	if err := monitor.RegisterPollProvider(provider); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{
+		Nodes:         []models.Node{{}},
+		VMs:           []models.VM{{}},
+		Containers:    []models.Container{{}},
+		Storage:       []models.Storage{{}},
+		PhysicalDisks: []models.PhysicalDisk{{}},
+		CephClusters:  []models.CephCluster{{}},
+		Hosts:         []models.Host{{}},
+	})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if len(store.lastSnapshot.Nodes) != 0 || len(store.lastSnapshot.VMs) != 0 || len(store.lastSnapshot.Containers) != 0 {
+		t.Fatalf("expected proxmox compute slices to be suppressed before snapshot ingest")
+	}
+	if len(store.lastSnapshot.Storage) != 0 || len(store.lastSnapshot.PhysicalDisks) != 0 || len(store.lastSnapshot.CephClusters) != 0 {
+		t.Fatalf("expected proxmox storage slices to be suppressed before snapshot ingest")
+	}
+	if len(store.lastSnapshot.Hosts) != 1 {
+		t.Fatalf("expected agent slice to remain in snapshot ingest")
+	}
+
+	records := store.recordsBySource[unifiedresources.SourceProxmox]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 provider-owned supplemental record, got %d", len(records))
+	}
+}
+
+func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
+	}
+	if provider.lastRequestedOrg != "default" {
+		t.Fatalf("expected default org lookup, got %q", provider.lastRequestedOrg)
+	}
+	records := store.recordsBySource[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record from direct provider, got %d", len(records))
+	}
+	if records[0].SourceID != "tn-host-1" {
+		t.Fatalf("expected source ID tn-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_UsesAtomicStoreReplacementWhenAvailable(t *testing.T) {
+	store := &testAtomicResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{ID: "host-1", Hostname: "minipc", Status: "online"}},
+	}
+
+	monitor.updateResourceStore(snapshot)
+
+	if store.atomicCalls != 1 {
+		t.Fatalf("expected atomic populate to be called once, got %d", store.atomicCalls)
+	}
+	if store.snapshotCalls != 0 {
+		t.Fatalf("expected legacy PopulateFromSnapshot to be skipped, got %d calls", store.snapshotCalls)
+	}
+	if len(store.lastSnapshot.Hosts) != 1 || store.lastSnapshot.Hosts[0].Hostname != "minipc" {
+		t.Fatalf("expected snapshot to be passed atomically, got %#v", store.lastSnapshot)
+	}
+	records := store.lastRecordsBySrc[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 atomic supplemental record, got %d", len(records))
+	}
+	if records[0].SourceID != "tn-host-1" {
+		t.Fatalf("expected source ID tn-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_SuppressesSnapshotForRegisteredSupplementalOwnership(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		ownedSources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	monitor.updateResourceStore(models.StateSnapshot{
+		Nodes:      []models.Node{{}},
+		VMs:        []models.VM{{}},
+		Containers: []models.Container{{}},
+		Hosts:      []models.Host{{}},
+	})
+
+	if len(store.lastSnapshot.Nodes) != 0 || len(store.lastSnapshot.VMs) != 0 || len(store.lastSnapshot.Containers) != 0 {
+		t.Fatalf("expected proxmox slices to be suppressed for direct provider ownership")
+	}
+	if len(store.lastSnapshot.Hosts) != 1 {
+		t.Fatalf("expected non-owned host slice to remain")
+	}
+	records := store.recordsBySource[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 supplemental record from direct provider, got %d", len(records))
+	}
+}
+
+func TestSchedulerHealth_UsesProviderInstanceDescriptions(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		config:            &config.Config{},
+		instanceInfoCache: make(map[string]*instanceInfo),
+	}
+
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{"xcp-a"},
+		describeInstances: []PollProviderInstanceInfo{
+			{
+				Name:        "xcp-a",
+				DisplayName: "XCP Cluster A",
+				Connection:  "https://xcp-a.example",
+			},
+		},
+		interval: 30 * time.Second,
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	resp := monitor.SchedulerHealth()
+
+	key := schedulerKey(customType, "xcp-a")
+	for _, inst := range resp.Instances {
+		if inst.Key != key {
+			continue
+		}
+		if inst.DisplayName != "XCP Cluster A" {
+			t.Fatalf("expected display name %q, got %q", "XCP Cluster A", inst.DisplayName)
+		}
+		if inst.Connection != "https://xcp-a.example" {
+			t.Fatalf("expected connection %q, got %q", "https://xcp-a.example", inst.Connection)
+		}
+		return
+	}
+
+	t.Fatalf("expected instance %q in scheduler health", key)
+}
+
+func TestGetConnectionStatuses_CustomProviderStatuses(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType: customType,
+		instances:    []string{"xcp-a"},
+		connectionStatus: map[string]bool{
+			"xcp-xcp-a": true,
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["xcp-xcp-a"]; !ok || !connected {
+		t.Fatalf("expected xcp-xcp-a to be connected, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestGetConnectionStatuses_CustomProviderFallbackToState(t *testing.T) {
+	const customType InstanceType = "xcp"
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	monitor.state.SetConnectionHealth("xcp-xcp-a", true)
+
+	if err := monitor.RegisterPollProvider(pollProviderAdapter{
+		instanceType: customType,
+		listInstances: func(*Monitor) []string {
+			return []string{"xcp-a"}
+		},
+		baseInterval: func(*Monitor) time.Duration { return 30 * time.Second },
+		buildPollTask: func(*Monitor, string) (PollTask, error) {
+			return PollTask{}, nil
+		},
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["xcp-xcp-a"]; !ok || !connected {
+		t.Fatalf("expected xcp-xcp-a to be connected via fallback, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestGetConnectionStatuses_BuiltInPMGSupport(t *testing.T) {
+	monitor := &Monitor{
+		config: &config.Config{
+			PMGInstances: []config.PMGInstance{
+				{Name: "pmg-1"},
+				{Name: "pmg-2"},
+			},
+		},
+		state:      models.NewState(),
+		pmgClients: map[string]*pmg.Client{"pmg-1": {}},
+	}
+	monitor.state.SetConnectionHealth("pmg-pmg-1", true)
+
+	statuses := monitor.GetConnectionStatuses()
+	if connected, ok := statuses["pmg-pmg-1"]; !ok || !connected {
+		t.Fatalf("expected pmg-pmg-1 connected, got exists=%v value=%v", ok, connected)
+	}
+	if connected, ok := statuses["pmg-pmg-2"]; !ok || connected {
+		t.Fatalf("expected pmg-pmg-2 disconnected, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestSetProviderConnectionHealth_UsesProviderConnectionKey(t *testing.T) {
+	const customType InstanceType = "xcp"
+	const instanceName = "xcp-a"
+	const providerKey = "provider/xcp-a"
+
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+	if err := monitor.RegisterPollProvider(testPollProvider{
+		providerType:  customType,
+		instances:     []string{instanceName},
+		connectionKey: providerKey,
+	}); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.setProviderConnectionHealth(customType, instanceName, true)
+
+	if !monitor.state.ConnectionHealth[providerKey] {
+		t.Fatalf("expected provider key %q to be marked healthy", providerKey)
+	}
+	if _, exists := monitor.state.ConnectionHealth["xcp-"+instanceName]; exists {
+		t.Fatalf("did not expect fallback key %q when provider key override is set", "xcp-"+instanceName)
 	}
 }

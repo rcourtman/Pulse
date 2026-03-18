@@ -452,7 +452,7 @@ func TestAnthropicOAuthClient_ListModels_Error(t *testing.T) {
 func TestAnthropicOAuthClient_Chat_SystemAndParams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req anthropicRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if req.System != "sys" {
 			t.Errorf("Expected system 'sys', got %q", req.System)
@@ -585,7 +585,7 @@ func TestCreateAPIKeyFromOAuth_RequestError(t *testing.T) {
 func TestAnthropicOAuthClient_Chat_ToolUsage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req anthropicRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if len(req.Tools) != 1 || req.Tools[0].Name != "my_tool" {
 			t.Errorf("Expected tool 'my_tool', got %+v", req.Tools)

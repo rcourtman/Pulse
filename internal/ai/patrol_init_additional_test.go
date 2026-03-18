@@ -8,7 +8,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
@@ -92,7 +91,7 @@ func TestPatrolService_SettersAndScopeHints(t *testing.T) {
 		ID:           "vm:node1:101",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 		Hostname:     "node1",
 		ServiceName:  "nginx",
 		ServiceType:  "nginx",
@@ -129,7 +128,7 @@ func TestPatrolService_AdditionalSetters(t *testing.T) {
 		t.Fatalf("expected circuit breaker to be set")
 	}
 
-	engine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	engine := newTestRemediationEngine()
 	ps.SetRemediationEngine(engine)
 	if ps.GetRemediationEngine() != engine {
 		t.Fatalf("expected remediation engine to be set")

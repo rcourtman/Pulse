@@ -315,8 +315,11 @@ func TestStalenessTracker_Snapshot_Empty(t *testing.T) {
 func TestStalenessTracker_Snapshot_Nil(t *testing.T) {
 	var tracker *StalenessTracker
 	snapshots := tracker.Snapshot()
-	if snapshots != nil {
-		t.Error("nil tracker snapshot should return nil")
+	if snapshots == nil {
+		t.Error("nil tracker snapshot should return normalized empty slice")
+	}
+	if len(snapshots) != 0 {
+		t.Errorf("nil tracker snapshot count = %d, want 0", len(snapshots))
 	}
 }
 

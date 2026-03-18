@@ -64,7 +64,7 @@ jobs:
               const headingMatch = body.match(/#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
               if (headingMatch) return normalizeVersion(headingMatch[1]);
 
-              // Final fallback for older templates with "Pulse | Version: [5.1.2]".
+              // Final fallback for older templates with "Pulse | Version: [6.0.0]".
               const legacyMatch = body.match(/pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
               if (legacyMatch) return normalizeVersion(legacyMatch[1]);
 

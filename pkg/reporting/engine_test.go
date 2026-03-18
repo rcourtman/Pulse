@@ -129,9 +129,10 @@ func TestGetResourceTypeDisplayName(t *testing.T) {
 	}{
 		{"node", "Node"},
 		{"vm", "Virtual Machine"},
-		{"container", "LXC Container"},
-		{"dockerHost", "Docker Host"},
-		{"dockerContainer", "Docker Container"},
+		{"system-container", "System Container"},
+		{"oci-container", "OCI Container"},
+		{"app-container", "App Container"},
+		{"docker-host", "Container Runtime"},
 		{"storage", "Storage"},
 		{"unknown", "unknown"},
 	}

@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+import {
+  getPatrolRunStatusPresentation,
+  isPatrolRunHealthy,
+  getRunHistoryLoadingState,
+  getToolCallsLoadingState,
+  getToolCallsUnavailableState,
+  getToolCallResultBadgeClass,
+  getToolCallResultTextClass,
+} from '@/utils/patrolRunPresentation';
+
+describe('patrolRunPresentation', () => {
+  it('maps critical and error runs to danger styling', () => {
+    expect(getPatrolRunStatusPresentation('critical').badgeClass).toContain('red-100');
+    expect(getPatrolRunStatusPresentation('error').badgeClass).toContain('red-100');
+  });
+
+  it('maps issues found to warning styling', () => {
+    const presentation = getPatrolRunStatusPresentation('issues_found');
+    expect(presentation.badgeClass).toContain('amber-100');
+    expect(presentation.label).toBe('issues found');
+  });
+
+  it('maps healthy runs to success styling', () => {
+    expect(getPatrolRunStatusPresentation('healthy').badgeClass).toContain('green-100');
+  });
+
+  it('treats only healthy runs without errors as healthy', () => {
+    expect(isPatrolRunHealthy('healthy', 0)).toBe(true);
+    expect(isPatrolRunHealthy('critical', 0)).toBe(false);
+    expect(isPatrolRunHealthy('issues_found', 0)).toBe(false);
+    expect(isPatrolRunHealthy('healthy', 1)).toBe(false);
+  });
+
+  it('normalizes unknown status labels safely', () => {
+    const presentation = getPatrolRunStatusPresentation(' Needs Review ');
+    expect(presentation.label).toBe('needs review');
+    expect(presentation.badgeClass).toContain('bg-surface-alt');
+  });
+
+  it('maps tool call success and failure to canonical colors', () => {
+    expect(getToolCallResultBadgeClass(true)).toContain('green-100');
+    expect(getToolCallResultBadgeClass(false)).toContain('red-100');
+    expect(getToolCallResultTextClass(true)).toContain('text-emerald-600');
+    expect(getToolCallResultTextClass(false)).toContain('text-red-600');
+  });
+
+  it('returns canonical patrol run loading and unavailable copy', () => {
+    expect(getRunHistoryLoadingState()).toBe('Loading run history…');
+    expect(getToolCallsLoadingState()).toBe('Loading tool calls...');
+    expect(getToolCallsUnavailableState()).toBe('Tool call details not available for this run.');
+  });
+});

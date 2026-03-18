@@ -14,10 +14,10 @@ interface StatusDotProps {
 }
 
 const VARIANT_CLASSES: Record<StatusIndicatorVariant, string> = {
-  success: 'bg-emerald-500 dark:bg-emerald-400 glow-success',
-  warning: 'bg-amber-500 dark:bg-amber-400 glow-warning',
-  danger: 'bg-red-500 dark:bg-red-400 glow-danger',
-  muted: 'bg-gray-400 dark:bg-gray-500',
+  success: 'bg-emerald-500 dark:bg-emerald-400',
+  warning: 'bg-amber-500 dark:bg-amber-400',
+  danger: 'bg-red-500 dark:bg-red-400',
+  muted: 'bg-slate-400',
 };
 
 const SIZE_CLASSES: Record<StatusDotSize, string> = {
@@ -32,15 +32,16 @@ export function StatusDot(props: StatusDotProps): JSX.Element {
   const size = () => props.size ?? 'sm';
   const ariaHidden = () => props.ariaHidden ?? !props.ariaLabel;
 
-  const className = () => [
-    'inline-block rounded-full flex-shrink-0',
-    SIZE_CLASSES[size()],
-    VARIANT_CLASSES[variant()],
-    props.pulse ? 'animate-pulse' : '',
-    props.class ?? '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const className = () =>
+    [
+      'inline-block rounded-full flex-shrink-0',
+      SIZE_CLASSES[size()],
+      VARIANT_CLASSES[variant()],
+      props.pulse ? 'animate-pulse' : '',
+      props.class ?? '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   return (
     <span

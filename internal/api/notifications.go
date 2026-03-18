@@ -3,17 +3,24 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	notificationTestRequestBodyLimit = 64 * 1024
+	webhookTestRequestBodyLimit      = 64 * 1024
 )
 
 // NotificationManager defines the interface for notification management operations.
@@ -48,52 +55,99 @@ type NotificationConfigPersistence interface {
 type NotificationMonitor interface {
 	GetNotificationManager() NotificationManager
 	GetConfigPersistence() NotificationConfigPersistence
-	GetState() models.StateSnapshot
 }
 
 // NotificationHandlers handles notification-related HTTP endpoints
 type NotificationHandlers struct {
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor NotificationMonitor
+	stateMu        sync.RWMutex
+	mtMonitor      *monitoring.MultiTenantMonitor
+	defaultMonitor NotificationMonitor
+	readState      unifiedresources.ReadState
 }
 
 // NewNotificationHandlers creates new notification handlers
 func NewNotificationHandlers(mtm *monitoring.MultiTenantMonitor, monitor NotificationMonitor) *NotificationHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = NewNotificationMonitorWrapper(m)
 		}
 	}
 	return &NotificationHandlers{
-		mtMonitor:     mtm,
-		legacyMonitor: monitor,
+		mtMonitor:      mtm,
+		defaultMonitor: monitor,
 	}
 }
 
 // SetMonitor updates the monitor reference for notification handlers.
 func (h *NotificationHandlers) SetMonitor(m NotificationMonitor) {
-	h.legacyMonitor = m
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.defaultMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *NotificationHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var defaultMonitor NotificationMonitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = NewNotificationMonitorWrapper(m)
+			defaultMonitor = NewNotificationMonitorWrapper(m)
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
+// SetReadState updates the ReadState reference for notification handlers.
+func (h *NotificationHandlers) SetReadState(rs unifiedresources.ReadState) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.readState = rs
+}
+
 func (h *NotificationHandlers) getMonitor(ctx context.Context) NotificationMonitor {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	defaultMonitor := h.defaultMonitor
+	h.stateMu.RUnlock()
+
 	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return NewNotificationMonitorWrapper(m)
 		}
 	}
-	return h.legacyMonitor
+	return defaultMonitor
+}
+
+// getReadState returns the tenant-scoped ReadState for the request context.
+// It resolves the correct monitor for the org and returns its ReadState.
+// Falls back to the handler-level readState only for default/empty org.
+// Non-default orgs fail closed (return nil) if tenant ReadState is unavailable.
+func (h *NotificationHandlers) getReadState(ctx context.Context) unifiedresources.ReadState {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	fallback := h.readState
+	h.stateMu.RUnlock()
+
+	orgID := GetOrgID(ctx)
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+			if rs := m.GetUnifiedReadState(); rs != nil {
+				return rs
+			}
+		}
+		// Fail closed for non-default orgs: never leak default-org metadata.
+		if orgID != "" && orgID != "default" {
+			return nil
+		}
+	}
+	return fallback
 }
 
 // GetEmailConfig returns the current email configuration
@@ -123,6 +177,14 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	log.Info().
 		Msg("Received email config update")
 
+	// Parse strict subset to check for presence of fields
+	var presenceCheck struct {
+		RateLimit *int `json:"rateLimit"`
+	}
+	if err := json.Unmarshal(body, &presenceCheck); err != nil {
+		// Non-fatal, just means we can't do presence check
+	}
+
 	var config notifications.EmailConfig
 	if err := json.Unmarshal(body, &config); err != nil {
 		log.Error().Err(err).Msg("Failed to parse email config") // Don't log body with passwords
@@ -130,10 +192,16 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
+	existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
+
 	// If password is empty, preserve the existing password
 	if config.Password == "" {
-		existingConfig := h.getMonitor(r.Context()).GetNotificationManager().GetEmailConfig()
 		config.Password = existingConfig.Password
+	}
+
+	// If rateLimit was NOT provided (nil in presence check), preserve existing
+	if presenceCheck.RateLimit == nil {
+		config.RateLimit = existingConfig.RateLimit
 	}
 
 	log.Info().
@@ -142,6 +210,7 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		Str("from", config.From).
 		Int("toCount", len(config.To)).
 		Bool("hasPassword", config.Password != "").
+		Int("rateLimit", config.RateLimit).
 		Msg("Parsed email config")
 
 	h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(config)
@@ -273,6 +342,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	webhook = notifications.NormalizeWebhookConfig(webhook)
 
 	// Validate webhook URL
 	if err := h.getMonitor(r.Context()).GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
@@ -300,6 +370,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		responseData = make(map[string]interface{})
 	}
 	responseData["id"] = webhook.ID
+	responseData["customFields"] = webhook.CustomFields
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Msg("Failed to write webhook creation response")
@@ -333,6 +404,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	webhook = notifications.NormalizeWebhookConfig(webhook)
 
 	// Preserve original headers/customFields if the incoming values are redacted
 	// This happens when the frontend sends back masked values from GetWebhooks
@@ -394,6 +466,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		responseData = make(map[string]interface{})
 	}
 	responseData["id"] = webhookID
+	responseData["customFields"] = webhook.CustomFields
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Str("webhookID", webhookID).Msg("Failed to write webhook update response")
@@ -428,11 +501,61 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// classifyNotificationError maps raw Go errors to user-friendly summaries.
+// Returns a user-facing message and the original error string as detail.
+func classifyNotificationError(err error) (summary, detail string) {
+	raw := err.Error()
+	detail = raw
+	lower := strings.ToLower(raw)
+
+	switch {
+	case strings.Contains(lower, "connection refused"):
+		summary = "Could not connect to the server — check host, port, and firewall settings"
+	case strings.Contains(lower, "no such host"):
+		summary = "Server hostname not found — check the server address"
+	case strings.Contains(lower, "i/o timeout") || strings.Contains(lower, "deadline exceeded"):
+		summary = "Connection timed out — the server may be unreachable or the port may be blocked"
+	case strings.Contains(lower, "x509:") || strings.Contains(lower, "certificate"):
+		summary = "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'"
+	case strings.Contains(lower, "535") || strings.Contains(lower, "authentication"):
+		summary = "Authentication failed — check username and password"
+	case strings.Contains(lower, "executable file not found"):
+		summary = "Required program not found — ensure it is installed on the server"
+	case strings.Contains(lower, "permission denied"):
+		summary = "Permission denied — the server process lacks access to the required resource"
+	case strings.Contains(lower, "eof"):
+		summary = "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct"
+	default:
+		summary = raw
+		detail = ""
+	}
+	return summary, detail
+}
+
+// writeTestNotificationError writes a JSON error response for test notification failures.
+func writeTestNotificationError(w http.ResponseWriter, err error, statusCode int) {
+	summary, detail := classifyNotificationError(err)
+	resp := map[string]string{"error": summary}
+	if detail != "" {
+		resp["detail"] = detail
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(resp)
+}
+
 // TestNotification sends a test notification
 func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, notificationTestRequestBodyLimit)
+
 	// Read body for debugging
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -458,18 +581,15 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		req.Method = req.Type
 	}
 
-	// Get actual node info from monitor state
-	state := h.getMonitor(r.Context()).GetState()
+	// Get actual node info from ReadState (unified resources registry)
 	var nodeInfo *notifications.TestNodeInfo
 
-	// Use first available node and instance
-	if len(state.Nodes) > 0 {
-		for _, node := range state.Nodes {
+	if rs := h.getReadState(r.Context()); rs != nil {
+		if nodes := rs.Nodes(); len(nodes) > 0 {
 			nodeInfo = &notifications.TestNodeInfo{
-				NodeName:    node.Name,
-				InstanceURL: node.Instance,
+				NodeName:    nodes[0].Name(),
+				InstanceURL: nodes[0].Instance(),
 			}
-			break
 		}
 	}
 
@@ -496,7 +616,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 
 		// Send test webhook
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestWebhook(*foundWebhook); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else if req.Method == "email" && len(req.Config) > 0 {
@@ -522,7 +642,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			Msg("Testing email with provided config")
 
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotificationWithConfig(req.Method, &emailConfig, nodeInfo); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else if req.Method == "apprise" && len(req.Config) > 0 {
@@ -533,13 +653,13 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else {
 		// Use saved config
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotification(req.Method); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	}
@@ -646,8 +766,15 @@ func (h *NotificationHandlers) GetEmailProviders(w http.ResponseWriter, r *http.
 func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
 	// First try to decode as basic webhook config
 	var basicWebhook notifications.WebhookConfig
+
+	r.Body = http.MaxBytesReader(w, r.Body, webhookTestRequestBodyLimit)
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -656,110 +783,23 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// If testing an existing webhook, merge redacted header/custom field values
-	// with the saved originals (the frontend masks them with ***REDACTED*** on load)
-	if basicWebhook.ID != "" {
-		existingWebhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
-		for _, existing := range existingWebhooks {
-			if existing.ID == basicWebhook.ID {
-				if len(basicWebhook.Headers) > 0 && len(existing.Headers) > 0 {
-					for _, v := range basicWebhook.Headers {
-						if v == "***REDACTED***" {
-							basicWebhook.Headers = existing.Headers
-							break
-						}
-					}
-				}
-				if len(basicWebhook.CustomFields) > 0 && len(existing.CustomFields) > 0 {
-					for _, v := range basicWebhook.CustomFields {
-						if v == "***REDACTED***" {
-							basicWebhook.CustomFields = existing.CustomFields
-							break
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-
-	// Convert to enhanced webhook for testing
-	webhook := notifications.EnhancedWebhookConfig{
-		WebhookConfig: basicWebhook,
-		Service:       "generic", // Default to generic if not specified
-		RetryEnabled:  false,     // Don't retry during testing
-	}
-
-	if len(basicWebhook.CustomFields) > 0 {
-		customFields := make(map[string]interface{}, len(basicWebhook.CustomFields))
-		for key, value := range basicWebhook.CustomFields {
-			customFields[key] = value
-		}
-		webhook.CustomFields = customFields
-	}
-
-	// If the webhook has a custom template, use it
-	if basicWebhook.Template != "" {
-		webhook.PayloadTemplate = basicWebhook.Template
-	}
+	basicWebhook = notifications.NormalizeWebhookConfig(basicWebhook)
 
 	// Try to extract service from body if present
 	var serviceCheck struct {
 		Service string `json:"service"`
 	}
 	if err := json.Unmarshal(bodyBytes, &serviceCheck); err == nil && serviceCheck.Service != "" {
-		webhook.Service = serviceCheck.Service
-		// Also set it in the basic webhook for consistency
 		basicWebhook.Service = serviceCheck.Service
-		webhook.WebhookConfig.Service = serviceCheck.Service
 	}
+
+	webhook := notifications.BuildEnhancedWebhookTestConfig(basicWebhook, serviceCheck.Service)
 
 	log.Info().
 		Str("service", webhook.Service).
 		Str("url", webhook.URL).
 		Str("name", webhook.Name).
 		Msg("Testing webhook")
-
-	// Get template for the service (if not using custom template)
-	if webhook.PayloadTemplate == "" {
-		templates := notifications.GetWebhookTemplates()
-		for _, tmpl := range templates {
-			if tmpl.Service == webhook.Service {
-				webhook.PayloadTemplate = tmpl.PayloadTemplate
-				if webhook.Headers == nil {
-					webhook.Headers = make(map[string]string)
-				}
-				// Only copy headers that don't contain template syntax
-				// This prevents issues with headers that have Go template expressions
-				for k, v := range tmpl.Headers {
-					if !strings.Contains(v, "{{") {
-						webhook.Headers[k] = v
-					}
-				}
-				log.Info().Str("service", webhook.Service).Msg("Found template for service")
-				break
-			}
-		}
-	}
-
-	// If still no template found, use a simple generic template
-	if webhook.PayloadTemplate == "" {
-		webhook.PayloadTemplate = `{
-			"alert": {
-				"id": "{{.ID}}",
-				"type": "{{.Type}}",
-				"level": "{{.Level}}",
-				"resourceName": "{{.ResourceName}}",
-				"node": "{{.Node}}",
-				"message": "{{.Message}}",
-				"value": {{.Value}},
-				"threshold": {{.Threshold}}
-			},
-			"source": "pulse-monitoring",
-			"timestamp": {{.Timestamp}}
-		}`
-	}
 
 	// Test the webhook
 	status, response, err := h.getMonitor(r.Context()).GetNotificationManager().TestEnhancedWebhook(webhook)
@@ -770,7 +810,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
-		result["error"] = err.Error()
+		summary, detail := classifyNotificationError(err)
+		result["error"] = summary
+		if detail != "" {
+			result["detail"] = detail
+		}
 		w.WriteHeader(http.StatusBadRequest)
 	} else if status < 200 || status >= 300 {
 		// HTTP error from webhook endpoint

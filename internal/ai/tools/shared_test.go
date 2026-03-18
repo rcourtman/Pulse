@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -16,7 +17,7 @@ type mockStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (m *mockStateProvider) GetState() models.StateSnapshot {
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	if len(m.ExpectedCalls) == 0 {
 		return m.state
 	}
@@ -83,6 +84,14 @@ func (m *mockAlertProvider) GetActiveAlerts() []ActiveAlert {
 	return args.Get(0).([]ActiveAlert)
 }
 
+func (m *mockAlertProvider) GetRecentlyResolved(minutes int) []models.ResolvedAlert {
+	args := m.Called(minutes)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).([]models.ResolvedAlert)
+}
+
 type mockFindingsProvider struct {
 	mock.Mock
 }
@@ -101,9 +110,9 @@ type mockDiskHealthProvider struct {
 	mock.Mock
 }
 
-func (m *mockDiskHealthProvider) GetHosts() []models.Host {
+func (m *mockDiskHealthProvider) GetHosts() []*unifiedresources.HostView {
 	args := m.Called()
-	return args.Get(0).([]models.Host)
+	return args.Get(0).([]*unifiedresources.HostView)
 }
 
 type mockUpdatesProvider struct {
@@ -144,16 +153,17 @@ func (m *mockBackupProvider) GetPBSInstances() []models.PBSInstance {
 	return args.Get(0).([]models.PBSInstance)
 }
 
-type mockStorageProvider struct {
-	mock.Mock
+// stubUnifiedResourceProvider is a simple mock for UnifiedResourceProvider.
+type stubUnifiedResourceProvider struct {
+	resources []unifiedresources.Resource
 }
 
-func (m *mockStorageProvider) GetStorage() []models.Storage {
-	args := m.Called()
-	return args.Get(0).([]models.Storage)
-}
-
-func (m *mockStorageProvider) GetCephClusters() []models.CephCluster {
-	args := m.Called()
-	return args.Get(0).([]models.CephCluster)
+func (s *stubUnifiedResourceProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	var out []unifiedresources.Resource
+	for _, r := range s.resources {
+		if r.Type == t {
+			out = append(out, r)
+		}
+	}
+	return out
 }

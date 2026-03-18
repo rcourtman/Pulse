@@ -1,6 +1,6 @@
 /**
  * System Settings Store
- * 
+ *
  * Provides reactive access to server-wide system settings.
  * Used to control features like Docker update buttons based on server configuration.
  */
@@ -12,6 +12,10 @@ import type { SystemConfig } from '@/types/config';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
+// Server-side setting to reduce proactive Pro prompts (paywalls still appear when accessing gated features)
+const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
+// Server-side setting to disable local-only upgrade UX metrics collection
+const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
 
 // Track if settings have been loaded
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
@@ -21,11 +25,15 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
  * Call this after you've already fetched system settings (e.g., for theme loading).
  */
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
-    setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
-    setSystemSettingsLoaded(true);
-    logger.debug('System settings updated from response', {
-        disableDockerUpdateActions: settings.disableDockerUpdateActions
-    });
+  setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
+  setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
+  setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
+  setSystemSettingsLoaded(true);
+  logger.debug('System settings updated from response', {
+    disableDockerUpdateActions: settings.disableDockerUpdateActions,
+    reduceProUpsellNoise: settings.reduceProUpsellNoise,
+    disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
+  });
 }
 
 /**
@@ -34,15 +42,17 @@ export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
  * Prefer `updateSystemSettingsFromResponse` when you already have the settings.
  */
 export async function loadSystemSettings(): Promise<void> {
-    try {
-        const settings = await SettingsAPI.getSystemSettings();
-        updateSystemSettingsFromResponse(settings);
-    } catch (err) {
-        logger.warn('Failed to load system settings, using defaults', err);
-        // Use safe defaults
-        setDisableDockerUpdateActions(false);
-        setSystemSettingsLoaded(true);
-    }
+  try {
+    const settings = await SettingsAPI.getSystemSettings();
+    updateSystemSettingsFromResponse(settings);
+  } catch (err) {
+    logger.warn('Failed to load system settings, using defaults', err);
+    // Use safe defaults
+    setDisableDockerUpdateActions(false);
+    setReduceProUpsellNoise(false);
+    setDisableLocalUpgradeMetrics(false);
+    setSystemSettingsLoaded(true);
+  }
 }
 
 /**
@@ -50,14 +60,22 @@ export async function loadSystemSettings(): Promise<void> {
  * Returns true if the server has configured to hide update buttons.
  */
 export function shouldHideDockerUpdateActions(): boolean {
-    return disableDockerUpdateActions();
+  return disableDockerUpdateActions();
+}
+
+export function shouldReduceProUpsellNoise(): boolean {
+  return reduceProUpsellNoise();
+}
+
+export function shouldDisableLocalUpgradeMetrics(): boolean {
+  return disableLocalUpgradeMetrics();
 }
 
 /**
  * Check if system settings have been loaded from the server.
  */
 export function areSystemSettingsLoaded(): boolean {
-    return systemSettingsLoaded();
+  return systemSettingsLoaded();
 }
 
 /**
@@ -65,14 +83,24 @@ export function areSystemSettingsLoaded(): boolean {
  * Call this when settings fail to load but the app should continue working.
  */
 export function markSystemSettingsLoadedWithDefaults(): void {
-    setDisableDockerUpdateActions(false);
-    setSystemSettingsLoaded(true);
-    logger.debug('System settings marked as loaded with defaults');
+  setDisableDockerUpdateActions(false);
+  setReduceProUpsellNoise(false);
+  setDisableLocalUpgradeMetrics(false);
+  setSystemSettingsLoaded(true);
+  logger.debug('System settings marked as loaded with defaults');
 }
 
 /**
  * Update the local state when settings change (e.g., from Settings page).
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
-    setDisableDockerUpdateActions(disabled);
+  setDisableDockerUpdateActions(disabled);
+}
+
+export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {
+  setReduceProUpsellNoise(enabled);
+}
+
+export function updateDisableLocalUpgradeMetricsSetting(disabled: boolean): void {
+  setDisableLocalUpgradeMetrics(disabled);
 }

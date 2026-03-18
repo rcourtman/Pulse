@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type stubBaselineProvider struct {
@@ -135,56 +136,70 @@ func TestExecuteGetBaselinesAndPatterns(t *testing.T) {
 	}
 }
 
+func TestBaselinesResponseUsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyBaselinesResponse())
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	values, ok := decoded["baselines"].(map[string]any)
+	if !ok || len(values) != 0 {
+		t.Fatalf("expected baselines to be an empty object, got %T (%v)", decoded["baselines"], decoded["baselines"])
+	}
+}
+
 func TestExecuteListResolvedAlerts(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{})
 	result, _ := executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
-	if result.Content[0].Text != "State provider not available." {
+	if result.Content[0].Text != "Alert provider not available." {
 		t.Fatalf("unexpected response: %s", result.Content[0].Text)
 	}
 
-	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{}}
+	alertProv := &mockAlertProvider{}
+	executor.alertProvider = alertProv
+
+	alertProv.On("GetRecentlyResolved", 24*60).Return([]models.ResolvedAlert{}).Once()
 	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
 	if result.Content[0].Text != "No recently resolved alerts." {
 		t.Fatalf("unexpected response: %s", result.Content[0].Text)
 	}
 
 	now := time.Now()
-	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{
-		RecentlyResolved: []models.ResolvedAlert{
-			{
-				Alert: models.Alert{
-					ID:           "a1",
-					Type:         "cpu",
-					Level:        "warning",
-					ResourceID:   "r1",
-					ResourceName: "node1",
-					Node:         "node1",
-					Instance:     "i1",
-					Message:      "msg",
-					Value:        1,
-					Threshold:    2,
-					StartTime:    now,
-				},
-				ResolvedTime: now,
+	alertProv.On("GetRecentlyResolved", 24*60).Return([]models.ResolvedAlert{
+		{
+			Alert: models.Alert{
+				ID:           "a1",
+				Type:         "cpu",
+				Level:        "warning",
+				ResourceID:   "r1",
+				ResourceName: "node1",
+				Node:         "node1",
+				Instance:     "i1",
+				Message:      "msg",
+				Value:        1,
+				Threshold:    2,
+				StartTime:    now,
 			},
-			{
-				Alert: models.Alert{
-					ID:           "a2",
-					Type:         "disk",
-					Level:        "critical",
-					ResourceID:   "r2",
-					ResourceName: "node2",
-					Node:         "node2",
-					Instance:     "i2",
-					Message:      "msg2",
-					Value:        3,
-					Threshold:    4,
-					StartTime:    now,
-				},
-				ResolvedTime: now,
-			},
+			ResolvedTime: now,
 		},
-	}}
+		{
+			Alert: models.Alert{
+				ID:           "a2",
+				Type:         "disk",
+				Level:        "critical",
+				ResourceID:   "r2",
+				ResourceName: "node2",
+				Node:         "node2",
+				Instance:     "i2",
+				Message:      "msg2",
+				Value:        3,
+				Threshold:    4,
+				StartTime:    now,
+			},
+			ResolvedTime: now,
+		},
+	})
 
 	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{
 		"type":  "cpu",
@@ -213,6 +228,7 @@ func TestExecuteListAlertsAndFindings(t *testing.T) {
 		{ID: "a1", Severity: "warning"},
 		{ID: "a2", Severity: "critical"},
 	})
+	alertProv.On("GetRecentlyResolved", mock.Anything).Return([]models.ResolvedAlert{})
 	executor.alertProvider = alertProv
 	result, _ = executor.executeListAlerts(context.Background(), map[string]interface{}{
 		"severity": "critical",
@@ -298,6 +314,33 @@ func TestExecuteGetMetrics_InvalidResourceType(t *testing.T) {
 	}
 }
 
+func TestExecuteGetMetrics_RejectsLegacyUnderscoreResourceTypeAlias(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "system_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy system_container resource_type")
+	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "host",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy host resource_type")
+	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
+	}
+}
+
 func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
 	metricsProv := &mockMetricsHistoryProvider{}
 	metricsProv.On("GetAllMetricsSummary", mock.Anything).Return(map[string]ResourceMetricsSummary{
@@ -327,6 +370,23 @@ func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
 	if resp.Pagination == nil || resp.Pagination.Total != 2 || resp.Pagination.Offset != 1 {
 		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
 	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "system-container",
+	})
+	resp = MetricsResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode metrics response (system-container): %v", err)
+	}
+	if len(resp.Summary) != 1 {
+		t.Fatalf("expected one system-container summary, got %+v", resp.Summary)
+	}
+	for _, metric := range resp.Summary {
+		if metric.ResourceType != "system-container" {
+			t.Fatalf("expected canonical system-container output type, got %q", metric.ResourceType)
+		}
+	}
 }
 
 func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
@@ -336,6 +396,19 @@ func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for invalid resource_type")
+	}
+
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "system_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy system_container resource_type")
+	}
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
 	}
 
 	executor = NewPulseToolExecutor(ExecutorConfig{
@@ -352,7 +425,7 @@ func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
 
 	executor = NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{state: models.StateSnapshot{
-			VMs: []models.VM{{VMID: 100}, {VMID: 101}},
+			VMs: []models.VM{{ID: "vm100", VMID: 100, Name: "vm-100"}, {ID: "vm101", VMID: 101, Name: "vm-101"}},
 		}},
 		BaselineProvider: &stubBaselineProvider{
 			baselines: map[string]map[string]*MetricBaseline{
@@ -394,6 +467,51 @@ func TestExecuteGetPatterns_EmptySlices(t *testing.T) {
 	}
 }
 
+func TestAlertAndMetricsResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  any
+		keys []string
+	}{
+		{name: "alerts", raw: EmptyAlertsResponse(), keys: []string{"alerts"}},
+		{name: "findings", raw: EmptyFindingsResponse(), keys: []string{"active", "dismissed"}},
+		{name: "metrics", raw: EmptyMetricsResponse(), keys: []string{"points", "summary"}},
+		{name: "patterns", raw: EmptyPatternsResponse(), keys: []string{"patterns", "predictions"}},
+		{name: "resolved_alerts", raw: EmptyResolvedAlertsResponse(), keys: []string{"alerts"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(tc.raw)
+			if err != nil {
+				t.Fatalf("marshal %s: %v", tc.name, err)
+			}
+
+			var decoded map[string]any
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				t.Fatalf("decode %s: %v", tc.name, err)
+			}
+
+			for _, key := range tc.keys {
+				value, ok := decoded[key]
+				if !ok {
+					t.Fatalf("expected %s key %q to be present", tc.name, key)
+				}
+				switch key {
+				case "summary":
+					if object, ok := value.(map[string]any); !ok || len(object) != 0 {
+						t.Fatalf("expected %s.%s to be an empty object, got %T (%v)", tc.name, key, value, value)
+					}
+				default:
+					if values, ok := value.([]any); !ok || len(values) != 0 {
+						t.Fatalf("expected %s.%s to be an empty array, got %T (%v)", tc.name, key, value, value)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{})
 	result, _ := executor.executeListFindings(context.Background(), map[string]interface{}{
@@ -403,18 +521,37 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 		t.Fatal("expected error for invalid resource_type")
 	}
 
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "app_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy app_container resource_type")
+	}
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
+	}
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "docker",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy docker resource_type")
+	}
+
 	findingsProv := &mockFindingsProvider{}
 	findingsProv.On("GetActiveFindings").Return([]Finding{
-		{ID: "f1", Severity: "warning", ResourceType: "docker container", ResourceID: "r1"},
-		{ID: "f2", Severity: "warning", ResourceType: "lxc container", ResourceID: "r2"},
+		{ID: "f1", Severity: "warning", ResourceType: "app-container", ResourceID: "r1"},
+		{ID: "f2", Severity: "warning", ResourceType: "system-container", ResourceID: "r2"},
 	})
 	findingsProv.On("GetDismissedFindings").Return([]Finding{
-		{ID: "f3", Severity: "warning", ResourceType: "docker-container", ResourceID: "r3"},
+		{ID: "f3", Severity: "warning", ResourceType: "app-container", ResourceID: "r3"},
 	})
 
 	executor.findingsProvider = findingsProv
 	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
-		"resource_type":     "docker",
+		"resource_type":     "app-container",
 		"include_dismissed": true,
 		"limit":             1,
 		"offset":            1,
@@ -428,5 +565,31 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 	}
 	if resp.Pagination == nil || resp.Pagination.Offset != 1 {
 		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
+	}
+}
+
+func TestExecuteListFindings_SystemContainerFilterDoesNotMatchLegacyLXCLabel(t *testing.T) {
+	findingsProv := &mockFindingsProvider{}
+	findingsProv.On("GetActiveFindings").Return([]Finding{
+		{ID: "f1", Severity: "warning", ResourceType: "system-container", ResourceID: "ct1"},
+		{ID: "f2", Severity: "warning", ResourceType: "lxc container", ResourceID: "ct2"},
+	})
+	findingsProv.On("GetDismissedFindings").Return([]Finding{})
+
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	executor.findingsProvider = findingsProv
+
+	result, _ := executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "system-container",
+	})
+	var resp FindingsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode findings response: %v", err)
+	}
+	if len(resp.Active) != 1 {
+		t.Fatalf("expected exactly one system-container finding, got %d (%+v)", len(resp.Active), resp.Active)
+	}
+	if resp.Active[0].ID != "f1" {
+		t.Fatalf("expected finding f1, got %+v", resp.Active[0])
 	}
 }

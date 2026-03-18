@@ -41,9 +41,9 @@ func TestInjectRecentContextIfNeeded_InjectsSummaryAndInstruction(t *testing.T) 
 	time.Sleep(10 * time.Millisecond)
 
 	primary := &ResolvedResource{
-		ResourceID: "docker_container:minipc:abc",
+		ResourceID: "app-container:minipc:abc",
 		Name:       "api",
-		Kind:       "docker_container",
+		Kind:       "app-container",
 		Node:       "minipc",
 		TargetHost: "host-1",
 	}
@@ -57,7 +57,7 @@ func TestInjectRecentContextIfNeeded_InjectsSummaryAndInstruction(t *testing.T) 
 	if content == "show its logs" {
 		t.Fatalf("expected recent context to be injected")
 	}
-	if !strings.Contains(content, "Context: The most recently referenced resource is api (docker_container on minipc).") {
+	if !strings.Contains(content, "Context: The most recently referenced resource is api (app-container on minipc).") {
 		t.Fatalf("expected primary resource summary, got: %s", content)
 	}
 	if !strings.Contains(content, "Other recent resources:\n- db (vm on node-2)") {

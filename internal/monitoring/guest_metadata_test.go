@@ -274,7 +274,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -290,7 +290,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "lo",
 					HardwareAddr: "00:00:00:00:00:00",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "127.0.0.1", Prefix: 8},
 						{Address: "127.0.0.2", Prefix: 8},
 					},
@@ -305,7 +305,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "fe80::1", Prefix: 64},
 						{Address: "FE80::abcd", Prefix: 64},
 					},
@@ -320,7 +320,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "lo",
 					HardwareAddr: "00:00:00:00:00:00",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "::1", Prefix: 128},
 					},
 				},
@@ -334,7 +334,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "127.0.0.1", Prefix: 8},
 						{Address: "fe80::1", Prefix: 64},
@@ -353,7 +353,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "192.168.1.10", Prefix: 24},
@@ -371,14 +371,14 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
 				{
 					Name:         "eth1",
 					HardwareAddr: "AA:BB:CC:DD:EE:FF",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24}, // same IP on different interface
 					},
 				},
@@ -395,14 +395,14 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth1",
 					HardwareAddr: "AA:BB:CC:DD:EE:FF",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "10.0.0.5", Prefix: 8},
 					},
 				},
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -447,7 +447,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "  eth0  ",
 					HardwareAddr: "  00:11:22:33:44:55  ",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -463,7 +463,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "  192.168.1.10  ", Prefix: 24},
 					},
 				},
@@ -479,7 +479,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "", Prefix: 0},
 						{Address: "   ", Prefix: 0},
 						{Address: "192.168.1.10", Prefix: 24},
@@ -714,6 +714,55 @@ func TestRetryGuestAgentCall(t *testing.T) {
 		}
 		if callCount != 1 {
 			t.Fatalf("expected 1 call with maxRetries=0, got %d", callCount)
+		}
+	})
+
+	t.Run("negative retries are normalized to zero", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{}
+		callCount := 0
+		fn := func(ctx context.Context) (interface{}, error) {
+			callCount++
+			return nil, errors.New("timeout error")
+		}
+
+		ctx := context.Background()
+		result, err := m.retryGuestAgentCall(ctx, 50*time.Millisecond, -3, fn)
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if result != nil {
+			t.Fatalf("expected nil result, got %v", result)
+		}
+		if callCount != 1 {
+			t.Fatalf("expected 1 call with negative retries normalized to 0, got %d", callCount)
+		}
+	})
+
+	t.Run("non-positive timeout is normalized to a usable default", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{}
+		fn := func(ctx context.Context) (interface{}, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("expected deadline on retry context")
+			}
+			if time.Until(deadline) <= 0 {
+				t.Fatal("expected retry context deadline to be in the future")
+			}
+			return "ok", nil
+		}
+
+		ctx := context.Background()
+		result, err := m.retryGuestAgentCall(ctx, 0, 0, fn)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if result != "ok" {
+			t.Fatalf("expected result 'ok', got %v", result)
 		}
 	})
 }

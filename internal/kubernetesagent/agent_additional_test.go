@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
 	"k8s.io/apimachinery/pkg/version"
@@ -61,7 +61,7 @@ func TestRun_StopsOnContextCancel(t *testing.T) {
 		agentVersion: "v1",
 		interval:     10 * time.Millisecond,
 		kubeClient:   fake.NewSimpleClientset(),
-		reportBuffer: buffer.New[agentsk8s.Report](5),
+		reportBuffer: utils.New[agentsk8s.Report](5),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -85,6 +85,41 @@ func TestRun_StopsOnContextCancel(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("Run did not return after cancel")
+	}
+}
+
+type closeTrackingRoundTripper struct {
+	closed bool
+}
+
+func (c *closeTrackingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, context.Canceled
+}
+
+func (c *closeTrackingRoundTripper) CloseIdleConnections() {
+	c.closed = true
+}
+
+func TestRun_ClosesIdleHTTPConnectionsOnShutdown(t *testing.T) {
+	transport := &closeTrackingRoundTripper{}
+	logger := zerolog.New(io.Discard)
+	agent := &Agent{
+		cfg:          Config{APIToken: "token"},
+		logger:       logger,
+		httpClient:   &http.Client{Transport: transport},
+		interval:     10 * time.Millisecond,
+		kubeClient:   fake.NewSimpleClientset(),
+		reportBuffer: utils.New[agentsk8s.Report](1),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := agent.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !transport.closed {
+		t.Fatal("expected Run to close idle HTTP connections")
 	}
 }
 

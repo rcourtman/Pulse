@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -36,38 +36,40 @@ type SystemSettingsMonitor interface {
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
+	stateMu                  sync.RWMutex
 	config                   *config.Config
 	persistence              *config.ConfigPersistence
 	wsHub                    *websocket.Hub
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	reloadMonitorFunc        func() error
-	mtMonitor                *monitoring.MultiTenantMonitor
-	legacyMonitor            SystemSettingsMonitor
+	telemetryToggleFunc      func(enabled bool) // Called when telemetry is toggled at runtime
+	mtMonitor                interface {
+		GetMonitor(string) (*monitoring.Monitor, error)
+	}
+	defaultMonitor SystemSettingsMonitor
 }
 
-func normalizeSystemSettingsMonitor(m SystemSettingsMonitor) SystemSettingsMonitor {
-	if m == nil {
-		return nil
-	}
+type SystemSettingsResponse struct {
+	config.SystemSettings
+	EnvOverrides map[string]bool `json:"envOverrides"`
+}
 
-	v := reflect.ValueOf(m)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		if v.IsNil() {
-			return nil
-		}
-	}
+func EmptySystemSettingsResponse() SystemSettingsResponse {
+	return SystemSettingsResponse{}.NormalizeCollections()
+}
 
-	return m
+func (r SystemSettingsResponse) NormalizeCollections() SystemSettingsResponse {
+	if r.EnvOverrides == nil {
+		r.EnvOverrides = map[string]bool{}
+	}
+	return r
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
 func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, mtm *monitoring.MultiTenantMonitor, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
-	monitor = normalizeSystemSettingsMonitor(monitor)
-
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
+	// If mtm is provided, try to populate defaultMonitor from "default" org if not provided.
 	if monitor == nil && mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil && m != nil {
+		if m, err := mtm.GetMonitor("default"); err == nil {
 			monitor = m
 		}
 	}
@@ -76,35 +78,55 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 		persistence:              persistence,
 		wsHub:                    wsHub,
 		mtMonitor:                mtm,
-		legacyMonitor:            monitor,
+		defaultMonitor:           monitor,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 		reloadMonitorFunc:        reloadMonitorFunc,
 	}
 }
 
+// SetTelemetryToggleFunc sets the callback invoked when telemetry is toggled
+// at runtime (true = start, false = stop).
+func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
+	h.telemetryToggleFunc = fn
+}
+
 // SetMonitor updates the monitor reference used by the handler at runtime.
 func (h *SystemSettingsHandler) SetMonitor(m SystemSettingsMonitor) {
-	h.legacyMonitor = normalizeSystemSettingsMonitor(m)
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.defaultMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var defaultMonitor SystemSettingsMonitor
 	if mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil && m != nil {
-			h.legacyMonitor = m
+		if m, err := mtm.GetMonitor("default"); err == nil {
+			defaultMonitor = m
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if defaultMonitor != nil {
+		h.defaultMonitor = defaultMonitor
 	}
 }
 
 func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMonitor {
-	if h.mtMonitor != nil {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	defaultMonitor := h.defaultMonitor
+	h.stateMu.RUnlock()
+
+	if mtMonitor != nil {
 		orgID := GetOrgID(ctx)
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return m
 		}
 	}
-	return h.legacyMonitor
+	return defaultMonitor
 }
 
 // SetConfig updates the configuration reference used by the handler.
@@ -113,24 +135,6 @@ func (h *SystemSettingsHandler) SetConfig(cfg *config.Config) {
 		return
 	}
 	h.config = cfg
-}
-
-func firstValueForKeys(m map[string]interface{}, keys ...string) (interface{}, bool) {
-	for _, key := range keys {
-		if val, ok := m[key]; ok {
-			return val, true
-		}
-	}
-	return nil, false
-}
-
-func hasAnyKey(m map[string]interface{}, keys ...string) bool {
-	for _, key := range keys {
-		if _, ok := m[key]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, bool) {
@@ -143,13 +147,114 @@ func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, boo
 		}
 		return nil, true
 	}
-	if val, ok := raw["discovery_config"]; ok {
-		if cfgMap, ok := val.(map[string]interface{}); ok {
-			return cfgMap, true
-		}
-		return nil, true
-	}
 	return nil, false
+}
+
+func parseDiscoveryStringArray(value interface{}, field string) ([]string, error) {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("%s must be an array of CIDR strings", field)
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s entries must be strings", field)
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func parseDiscoveryWholeNumber(value interface{}, field string) (int, error) {
+	raw, ok := value.(float64)
+	if !ok {
+		return 0, fmt.Errorf("%s must be a number", field)
+	}
+	if raw != float64(int(raw)) {
+		return 0, fmt.Errorf("%s must be a whole number", field)
+	}
+	return int(raw), nil
+}
+
+func applyDiscoveryConfigOverrides(current config.DiscoveryConfig, cfgMap map[string]interface{}) (config.DiscoveryConfig, error) {
+	if envVal, ok := cfgMap["environmentOverride"]; ok {
+		envStr, ok := envVal.(string)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.environmentOverride must be a string")
+		}
+		canonicalEnv, valid := config.CanonicalDiscoveryEnvironment(envStr)
+		if !valid {
+			return current, fmt.Errorf("invalid discovery environment override: %s", envStr)
+		}
+		current.EnvironmentOverride = canonicalEnv
+	}
+
+	if val, ok := cfgMap["subnetAllowlist"]; ok {
+		allowlist, err := parseDiscoveryStringArray(val, "discoveryConfig.subnetAllowlist")
+		if err != nil {
+			return current, err
+		}
+		current.SubnetAllowlist = allowlist
+	}
+
+	if val, ok := cfgMap["subnetBlocklist"]; ok {
+		blocklist, err := parseDiscoveryStringArray(val, "discoveryConfig.subnetBlocklist")
+		if err != nil {
+			return current, err
+		}
+		current.SubnetBlocklist = blocklist
+	}
+
+	if val, ok := cfgMap["maxHostsPerScan"]; ok {
+		maxHosts, err := parseDiscoveryWholeNumber(val, "discoveryConfig.maxHostsPerScan")
+		if err != nil {
+			return current, err
+		}
+		current.MaxHostsPerScan = maxHosts
+	}
+
+	if val, ok := cfgMap["maxConcurrent"]; ok {
+		maxConcurrent, err := parseDiscoveryWholeNumber(val, "discoveryConfig.maxConcurrent")
+		if err != nil {
+			return current, err
+		}
+		current.MaxConcurrent = maxConcurrent
+	}
+
+	if val, ok := cfgMap["enableReverseDns"]; ok {
+		enabled, ok := val.(bool)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
+		}
+		current.EnableReverseDNS = enabled
+	}
+
+	if val, ok := cfgMap["scanGateways"]; ok {
+		enabled, ok := val.(bool)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
+		}
+		current.ScanGateways = enabled
+	}
+
+	if val, ok := cfgMap["dialTimeoutMs"]; ok {
+		dialTimeout, err := parseDiscoveryWholeNumber(val, "discoveryConfig.dialTimeoutMs")
+		if err != nil {
+			return current, err
+		}
+		current.DialTimeout = dialTimeout
+	}
+
+	if val, ok := cfgMap["httpTimeoutMs"]; ok {
+		httpTimeout, err := parseDiscoveryWholeNumber(val, "discoveryConfig.httpTimeoutMs")
+		if err != nil {
+			return current, err
+		}
+		current.HTTPTimeout = httpTimeout
+	}
+
+	return config.NormalizeDiscoveryConfig(current), nil
 }
 
 // validateSystemSettings validates settings before applying them
@@ -249,6 +354,18 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
+	if val, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("disableLocalUpgradeMetrics must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["reduceProUpsellNoise"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("reduceProUpsellNoise must be a boolean")
+		}
+	}
+
 	// Validate auto-update check interval (min 1 hour, max 7 days)
 	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -271,97 +388,114 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			return fmt.Errorf("discoveryConfig must be an object")
 		}
 
-		if envVal, exists := firstValueForKeys(cfgMap, "environment_override", "environmentOverride"); exists {
+		allowedDiscoveryConfigFields := map[string]struct{}{
+			"environmentOverride": {},
+			"subnetAllowlist":     {},
+			"subnetBlocklist":     {},
+			"maxHostsPerScan":     {},
+			"maxConcurrent":       {},
+			"enableReverseDns":    {},
+			"scanGateways":        {},
+			"dialTimeoutMs":       {},
+			"httpTimeoutMs":       {},
+		}
+		for key := range cfgMap {
+			if _, ok := allowedDiscoveryConfigFields[key]; !ok {
+				return fmt.Errorf("discoveryConfig.%s is not supported", key)
+			}
+		}
+
+		if envVal, exists := cfgMap["environmentOverride"]; exists {
 			envStr, ok := envVal.(string)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.environment_override must be a string")
+				return fmt.Errorf("discoveryConfig.environmentOverride must be a string")
 			}
 			if !config.IsValidDiscoveryEnvironment(envStr) {
 				return fmt.Errorf("invalid discovery environment override: %s", envStr)
 			}
 		}
 
-		if allowVal, exists := firstValueForKeys(cfgMap, "subnet_allowlist", "subnetAllowlist"); exists {
+		if allowVal, exists := cfgMap["subnetAllowlist"]; exists {
 			items, ok := allowVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnet_allowlist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnetAllowlist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnet_allowlist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnetAllowlist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_allowlist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetAllowlist: %s", cidr)
 				}
 			}
 		}
 
-		if blockVal, exists := firstValueForKeys(cfgMap, "subnet_blocklist", "subnetBlocklist"); exists {
+		if blockVal, exists := cfgMap["subnetBlocklist"]; exists {
 			items, ok := blockVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnet_blocklist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnetBlocklist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnet_blocklist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnetBlocklist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_blocklist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetBlocklist: %s", cidr)
 				}
 			}
 		}
 
-		if hostsVal, exists := firstValueForKeys(cfgMap, "max_hosts_per_scan", "maxHostsPerScan"); exists {
+		if hostsVal, exists := cfgMap["maxHostsPerScan"]; exists {
 			value, ok := hostsVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be a number")
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a number")
 			}
-			if value <= 0 {
-				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be greater than zero")
+			if value <= 0 || value != float64(int(value)) {
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a whole number greater than zero")
 			}
 		}
 
-		if concurrentVal, exists := firstValueForKeys(cfgMap, "max_concurrent", "maxConcurrent"); exists {
+		if concurrentVal, exists := cfgMap["maxConcurrent"]; exists {
 			value, ok := concurrentVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.max_concurrent must be a number")
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be a number")
 			}
 			if value <= 0 || value > 1000 || value != float64(int(value)) {
-				return fmt.Errorf("discoveryConfig.max_concurrent must be a whole number between 1 and 1000")
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be a whole number between 1 and 1000")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "enable_reverse_dns", "enableReverseDns"); exists {
+		if val, exists := cfgMap["enableReverseDns"]; exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.enable_reverse_dns must be a boolean")
+				return fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "scan_gateways", "scanGateways"); exists {
+		if val, exists := cfgMap["scanGateways"]; exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.scan_gateways must be a boolean")
+				return fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "dial_timeout_ms", "dialTimeoutMs"); exists {
+		if val, exists := cfgMap["dialTimeoutMs"]; exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be a number")
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a number")
 			}
-			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be greater than zero")
+			if timeout <= 0 || timeout != float64(int(timeout)) {
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a whole number greater than zero")
 			}
 		}
 
-		if val, exists := firstValueForKeys(cfgMap, "http_timeout_ms", "httpTimeoutMs"); exists {
+		if val, exists := cfgMap["httpTimeoutMs"]; exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.http_timeout_ms must be a number")
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a number")
 			}
-			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.http_timeout_ms must be greater than zero")
+			if timeout <= 0 || timeout != float64(int(timeout)) {
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a whole number greater than zero")
 			}
 		}
 	}
@@ -411,7 +545,12 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 // HandleGetSystemSettings returns the current system settings
 func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	// SECURITY: Session users must match configured admin identity for settings reads.
+	if !ensureSettingsReadScope(h.config, w, r) {
 		return
 	}
 
@@ -430,6 +569,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			Str("theme", settings.Theme).
 			Msg("Loaded system settings for API response")
 
+		settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
 		// Always expose effective backup polling configuration
 		settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
@@ -439,18 +579,19 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
-		// Expose public URL so the frontend can display it when env-overridden
-		settings.PublicURL = h.config.PublicURL
+		// Expose effective telemetry value (respects env override)
+		effectiveTelemetry := h.config.TelemetryEnabled
+		settings.TelemetryEnabled = &effectiveTelemetry
+		settings.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 	}
 
 	// Include env override information
-	response := struct {
-		*config.SystemSettings
-		EnvOverrides map[string]bool `json:"envOverrides,omitempty"`
-	}{
-		SystemSettings: settings,
-		EnvOverrides:   h.config.EnvOverrides,
+	response := EmptySystemSettingsResponse()
+	if settings != nil {
+		response.SystemSettings = *settings
 	}
+	response.EnvOverrides = h.config.EnvOverrides
+	response = response.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write system settings response")
@@ -460,7 +601,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 // HandleUpdateSystemSettings updates the system settings
 func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
@@ -469,7 +610,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		// CheckAuth handles explicit failures (rate limits, invalid tokens)
 		// but returns false silently for missing credentials.
 		// We ensure a 401 is returned nicely even if we risk a double-write warning in rare cases.
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Unauthorized", nil)
 		return
 	}
 
@@ -486,12 +627,15 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 					Msg("Non-admin user attempted to update system settings")
 
 				// Return forbidden error
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
+				writeErrorResponse(w, http.StatusForbidden, "forbidden", "Admin privileges required", nil)
 				return
 			}
 		}
+	}
+
+	// SECURITY: Session users must match configured admin identity for settings writes.
+	if !ensureSettingsWriteScope(h.config, w, r) {
+		return
 	}
 
 	// Load existing settings first to preserve fields not in the request
@@ -510,34 +654,33 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Read the request body into a map to check which fields were provided
 	var rawRequest map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&rawRequest); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
-	}
-
-	// Provide backwards compatibility for clients sending discovery_config instead of discoveryConfig.
-	if rawCfg, ok := rawRequest["discovery_config"]; ok {
-		if _, exists := rawRequest["discoveryConfig"]; !exists {
-			rawRequest["discoveryConfig"] = rawCfg
-		}
 	}
 
 	// Convert the map back to JSON for decoding into struct
 	jsonBytes, err := json.Marshal(rawRequest)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
 	// Decode into updates struct
 	var updates config.SystemSettings
 	if err := json.Unmarshal(jsonBytes, &updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
 
 	// Validate the settings
 	if err := validateSystemSettings(&updates, rawRequest); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+
+	// Reject early if telemetryEnabled is locked by env var
+	if _, ok := rawRequest["telemetryEnabled"]; ok && h.config.EnvOverrides["PULSE_TELEMETRY"] {
+		writeErrorResponse(w, http.StatusConflict, "env_locked", "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", nil)
 		return
 	}
 
@@ -584,36 +727,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if cfgMap, ok := discoveryConfigMap(rawRequest); ok && cfgMap != nil {
 		current := config.CloneDiscoveryConfig(settings.DiscoveryConfig)
-
-		if hasAnyKey(cfgMap, "environment_override", "environmentOverride") {
-			current.EnvironmentOverride = updates.DiscoveryConfig.EnvironmentOverride
+		normalizedDiscoveryConfig, err := applyDiscoveryConfigOverrides(current, cfgMap)
+		if err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+			return
 		}
-		if hasAnyKey(cfgMap, "subnet_allowlist", "subnetAllowlist") {
-			current.SubnetAllowlist = append([]string(nil), updates.DiscoveryConfig.SubnetAllowlist...)
-		}
-		if hasAnyKey(cfgMap, "subnet_blocklist", "subnetBlocklist") {
-			current.SubnetBlocklist = append([]string(nil), updates.DiscoveryConfig.SubnetBlocklist...)
-		}
-		if hasAnyKey(cfgMap, "max_hosts_per_scan", "maxHostsPerScan") {
-			current.MaxHostsPerScan = updates.DiscoveryConfig.MaxHostsPerScan
-		}
-		if hasAnyKey(cfgMap, "max_concurrent", "maxConcurrent") {
-			current.MaxConcurrent = updates.DiscoveryConfig.MaxConcurrent
-		}
-		if hasAnyKey(cfgMap, "enable_reverse_dns", "enableReverseDns") {
-			current.EnableReverseDNS = updates.DiscoveryConfig.EnableReverseDNS
-		}
-		if hasAnyKey(cfgMap, "scan_gateways", "scanGateways") {
-			current.ScanGateways = updates.DiscoveryConfig.ScanGateways
-		}
-		if hasAnyKey(cfgMap, "dial_timeout_ms", "dialTimeoutMs") {
-			current.DialTimeout = updates.DiscoveryConfig.DialTimeout
-		}
-		if hasAnyKey(cfgMap, "http_timeout_ms", "httpTimeoutMs") {
-			current.HTTPTimeout = updates.DiscoveryConfig.HTTPTimeout
-		}
-
-		settings.DiscoveryConfig = config.NormalizeDiscoveryConfig(current)
+		settings.DiscoveryConfig = normalizedDiscoveryConfig
 		discoveryConfigUpdated = true
 	}
 	// Allow clearing of AllowedEmbedOrigins by setting to empty string
@@ -651,13 +770,43 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
-		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	}
+	if _, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
+		settings.DisableLocalUpgradeMetrics = updates.DisableLocalUpgradeMetrics
+	}
+	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
+		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
+	}
+	if _, ok := rawRequest["telemetryEnabled"]; ok && updates.TelemetryEnabled != nil {
+		settings.TelemetryEnabled = updates.TelemetryEnabled
+		// Note: h.config.TelemetryEnabled is updated after successful persistence below
 	}
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode
 	}
+	settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
+	settings.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 
-	// Update the config
+	// Pre-save validation (may return errors before anything is persisted)
+	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid theme value. Must be 'light', 'dark', or empty", nil)
+		return
+	}
+	// Validate CIDRs before persistence (parse only — do NOT mutate runtime yet).
+	var parsedCIDRNets []*net.IPNet
+	cidrUpdateRequested := false
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok {
+		cidrUpdateRequested = true
+		var err error
+		parsedCIDRNets, err = notifications.ParseAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to validate webhook allowed private CIDRs")
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), nil)
+			return
+		}
+	}
+
+	// Detect PVE interval change (compare before mutation, apply after save)
 	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
 		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
 		if newInterval < 10*time.Second {
@@ -665,6 +814,24 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		}
 		if h.config.PVEPollingInterval != newInterval {
 			pveIntervalChanged = true
+		}
+	}
+
+	prevDiscoveryEnabled := h.config.DiscoveryEnabled
+
+	// ---- Persist FIRST, then apply to in-memory config ----
+	// This ensures runtime state never diverges from disk on save failure.
+	if err := h.persistence.SaveSystemSettings(settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save system settings")
+		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save settings", nil)
+		return
+	}
+
+	// ---- Apply all in-memory config mutations (safe: disk is committed) ----
+	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
+		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
+		if newInterval < 10*time.Second {
+			newInterval = 10 * time.Second
 		}
 		h.config.PVEPollingInterval = newInterval
 	}
@@ -687,103 +854,77 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.BackupPollingEnabled != nil {
 		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
 	}
-	if settings.UpdateChannel != "" {
-		h.config.UpdateChannel = settings.UpdateChannel
-	}
-
-	// Update auto-update settings
-	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
+	h.config.UpdateChannel = settings.UpdateChannel
+	h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 	if settings.AutoUpdateCheckInterval > 0 {
 		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
 	}
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
-
-	// Validate theme if provided
-	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
-		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
-		return
-	}
-
-	// Update discovery settings and manage the service
-	prevDiscoveryEnabled := h.config.DiscoveryEnabled
 	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet
 	}
 	h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
-
 	if tempToggleRequested {
 		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
 	}
+	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
+	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
+		h.config.TelemetryEnabled = *settings.TelemetryEnabled
+		if h.telemetryToggleFunc != nil {
+			h.telemetryToggleFunc(*settings.TelemetryEnabled)
+		}
+	}
+	if _, ok := rawRequest["publicURL"]; ok {
+		h.config.PublicURL = settings.PublicURL
+	}
 
-	// Resolve monitor once for all operations below
-	monitor := h.getMonitor(r.Context())
-
-	// Start or stop discovery service based on setting change
-	if monitor != nil {
+	// ---- Side effects (discovery, temperature, notifications) ----
+	if h.getMonitor(r.Context()) != nil {
 		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
-			// Discovery was just enabled, start the service
 			subnet := h.config.DiscoverySubnet
 			if subnet == "" {
 				subnet = "auto"
 			}
-			monitor.StartDiscoveryService(context.Background(), h.wsHub, subnet)
+			h.getMonitor(r.Context()).StartDiscoveryService(context.Background(), h.wsHub, subnet)
 			log.Info().Msg("Discovery service started via settings update")
 		} else if !settings.DiscoveryEnabled && prevDiscoveryEnabled {
-			// Discovery was just disabled, stop the service
-			monitor.StopDiscoveryService()
+			h.getMonitor(r.Context()).StopDiscoveryService()
 			log.Info().Msg("Discovery service stopped via settings update")
 		} else if settings.DiscoveryEnabled && settings.DiscoverySubnet != "" {
-			// Subnet changed while discovery is enabled, update it
-			if svc := monitor.GetDiscoveryService(); svc != nil {
+			if svc := h.getMonitor(r.Context()).GetDiscoveryService(); svc != nil {
 				svc.SetSubnet(settings.DiscoverySubnet)
 			}
 		}
 		if discoveryConfigUpdated && settings.DiscoveryEnabled {
-			if svc := monitor.GetDiscoveryService(); svc != nil {
+			if svc := h.getMonitor(r.Context()).GetDiscoveryService(); svc != nil {
 				log.Info().Msg("Discovery configuration changed; triggering refresh")
 				svc.ForceRefresh()
 			}
 		}
 	}
-
-	if tempToggleRequested && monitor != nil {
+	if tempToggleRequested && h.getMonitor(r.Context()) != nil {
 		if settings.TemperatureMonitoringEnabled && !prevTempEnabled {
-			monitor.EnableTemperatureMonitoring()
+			h.getMonitor(r.Context()).EnableTemperatureMonitoring()
 		} else if !settings.TemperatureMonitoringEnabled && prevTempEnabled {
-			monitor.DisableTemperatureMonitoring()
+			h.getMonitor(r.Context()).DisableTemperatureMonitoring()
 		}
 	}
-
-	// Update webhook allowed private CIDRs if changed
-	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && monitor != nil {
-		if nm := monitor.GetNotificationManager(); nm != nil {
-			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
-				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
-				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
-				return
-			}
+	if cidrUpdateRequested && h.getMonitor(r.Context()) != nil {
+		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
+			nm.ApplyAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs, parsedCIDRNets)
 		}
 	}
-
-	// Update public URL for notifications if changed
 	if _, ok := rawRequest["publicURL"]; ok {
-		h.config.PublicURL = settings.PublicURL
-		if monitor != nil {
-			if nm := monitor.GetNotificationManager(); nm != nil {
+		if h.getMonitor(r.Context()) != nil {
+			if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
 				nm.SetPublicURL(settings.PublicURL)
 				log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
 			}
 		}
-	}
-
-	// Save to persistence
-	if err := h.persistence.SaveSystemSettings(settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
-		return
 	}
 
 	// Reload cached system settings after successful save
@@ -794,7 +935,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if pveIntervalChanged && h.reloadMonitorFunc != nil {
 		if err := h.reloadMonitorFunc(); err != nil {
 			log.Error().Err(err).Msg("Failed to reload monitor after PVE polling interval change")
-			http.Error(w, "Configuration saved but failed to reload monitor", http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "reload_failed", "Configuration saved but failed to reload monitor", nil)
 			return
 		}
 	}
@@ -820,7 +961,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 // HandleSSHConfig writes SSH configuration for Pulse user
 func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 
@@ -835,11 +976,11 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			log.Warn().Msg("SSH config request body too large")
-			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			writeErrorResponse(w, http.StatusRequestEntityTooLarge, "request_too_large", "Request body too large", nil)
 			return
 		}
 		log.Error().Err(err).Msg("Failed to read SSH config from request")
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Failed to read request body", nil)
 		return
 	}
 
@@ -847,7 +988,7 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	configStr := string(sshConfig)
 	if len(configStr) == 0 {
 		log.Error().Msg("Empty SSH config received")
-		http.Error(w, "Empty SSH config", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Empty SSH config", nil)
 		return
 	}
 
@@ -892,14 +1033,14 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 				Str("directive", fields[0]).
 				Int("line", lineNum).
 				Msg("Rejected SSH config with forbidden directive")
-			http.Error(w, fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), http.StatusBadRequest)
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), nil)
 			return
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		log.Error().Err(err).Msg("Failed to parse SSH config")
-		http.Error(w, "Invalid SSH config format", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid SSH config format", nil)
 		return
 	}
 
@@ -913,7 +1054,13 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	sshDir := filepath.Join(homeDir, ".ssh")
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
 		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to create .ssh directory")
-		http.Error(w, "Failed to create SSH directory", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to create SSH directory", nil)
+		return
+	}
+	// Harden permissions even when the directory already existed.
+	if err := os.Chmod(sshDir, 0700); err != nil {
+		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to set .ssh directory permissions")
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to secure SSH directory", nil)
 		return
 	}
 
@@ -921,7 +1068,13 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	configPath := filepath.Join(sshDir, "config")
 	if err := os.WriteFile(configPath, sshConfig, 0600); err != nil {
 		log.Error().Err(err).Str("path", configPath).Msg("Failed to write SSH config")
-		http.Error(w, "Failed to write SSH config", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to write SSH config", nil)
+		return
+	}
+	// os.WriteFile does not change mode on existing files; enforce least-privilege.
+	if err := os.Chmod(configPath, 0600); err != nil {
+		log.Error().Err(err).Str("path", configPath).Msg("Failed to set SSH config file permissions")
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Failed to secure SSH config", nil)
 		return
 	}
 

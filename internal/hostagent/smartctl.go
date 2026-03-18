@@ -1,0 +1,733 @@
+package hostagent
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/rs/zerolog/log"
+)
+
+const smartctlComponent = "smartctl_collector"
+const maxCommandOutputBytes = 1 << 20 // 1 MiB
+
+var (
+	errCommandOutputTooLarge = errors.New("command output exceeds size limit")
+	errSMARTDataUnavailable  = errors.New("smart data unavailable for device")
+	execLookPath             = exec.LookPath
+	smartRunCommandOutput    = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return runCommandOutputLimited(ctx, maxCommandOutputBytes, name, args...)
+	}
+	readDir = os.ReadDir
+	osStat  = os.Stat
+
+	timeNow     = time.Now
+	runtimeGOOS = runtime.GOOS
+)
+
+// DiskSMART represents S.M.A.R.T. data for a single disk.
+type DiskSMART struct {
+	Device      string           `json:"device"`            // Device path (e.g., /dev/sda)
+	Model       string           `json:"model,omitempty"`   // Disk model
+	Serial      string           `json:"serial,omitempty"`  // Serial number
+	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
+	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
+	Temperature int              `json:"temperature"`       // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+	LastUpdated time.Time        `json:"lastUpdated"` // When this reading was taken
+}
+
+// SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
+// Pointer fields distinguish zero from absent.
+type SMARTAttributes struct {
+	// Common attributes
+	PowerOnHours *int64 `json:"powerOnHours,omitempty"`
+	PowerCycles  *int64 `json:"powerCycles,omitempty"`
+
+	// SATA-specific (by ATA attribute ID)
+	ReallocatedSectors   *int64 `json:"reallocatedSectors,omitempty"`   // ID 5
+	PendingSectors       *int64 `json:"pendingSectors,omitempty"`       // ID 197
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable,omitempty"` // ID 198
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors,omitempty"`        // ID 199
+
+	// NVMe-specific
+	PercentageUsed  *int   `json:"percentageUsed,omitempty"`
+	AvailableSpare  *int   `json:"availableSpare,omitempty"`
+	MediaErrors     *int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns *int64 `json:"unsafeShutdowns,omitempty"`
+}
+
+type smartStatusJSON struct {
+	Passed bool `json:"passed"`
+}
+
+type nvmeSmartHealthInformationLogJSON struct {
+	Temperature     int   `json:"temperature"`
+	AvailableSpare  int   `json:"available_spare"`
+	PercentageUsed  int   `json:"percentage_used"`
+	PowerOnHours    int64 `json:"power_on_hours"`
+	UnsafeShutdowns int64 `json:"unsafe_shutdowns"`
+	MediaErrors     int64 `json:"media_errors"`
+	PowerCycles     int64 `json:"power_cycles"`
+}
+
+// smartctlJSON represents the JSON output from smartctl --json.
+// lsblkJSON is the JSON output from lsblk -J.
+type lsblkJSON struct {
+	Blockdevices []lsblkDevice `json:"blockdevices"`
+}
+
+type lsblkDevice struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Tran       string `json:"tran"`
+	Model      string `json:"model"`
+	Vendor     string `json:"vendor"`
+	Subsystems string `json:"subsystems"`
+}
+
+// linuxSMARTVirtualPrefixes are device name prefixes for virtual/logical
+// devices that cannot provide SMART data.
+var linuxSMARTVirtualPrefixes = []string{
+	"dm-",
+	"drbd",
+	"loop",
+	"md",
+	"nbd",
+	"pmem",
+	"ram",
+	"rbd",
+	"vd",
+	"xvd",
+	"zd",
+	"zram",
+}
+
+// linuxSMARTVirtualMetadataTokens are vendor/model substrings indicating a
+// virtual disk that cannot provide SMART data.
+var linuxSMARTVirtualMetadataTokens = []string{
+	"hyper-v",
+	"msft virtual",
+	"parallels",
+	"qemu",
+	"vbox",
+	"virtual disk",
+	"virtual hd",
+	"virtualbox",
+	"vmware",
+}
+
+// linuxSMARTVirtualSubsystemTokens are lsblk SUBSYSTEMS substrings
+// indicating virtual block devices.
+var linuxSMARTVirtualSubsystemTokens = []string{
+	"drbd",
+	"nbd",
+	"vmbus",
+	"virtio",
+	"xen",
+	"zfs",
+}
+
+type smartctlJSON struct {
+	Device struct {
+		Name     string `json:"name"`
+		Type     string `json:"type"`
+		Protocol string `json:"protocol"`
+	} `json:"device"`
+	ModelFamily  string `json:"model_family"`
+	ModelName    string `json:"model_name"`
+	SerialNumber string `json:"serial_number"`
+	WWN          struct {
+		NAA uint64 `json:"naa"`
+		OUI uint64 `json:"oui"`
+		ID  uint64 `json:"id"`
+	} `json:"wwn"`
+	SmartStatus *struct {
+		Passed bool `json:"passed"`
+	} `json:"smart_status,omitempty"`
+	Temperature struct {
+		Current int `json:"current"`
+	} `json:"temperature"`
+	// ATA SMART attributes table
+	ATASmartAttributes struct {
+		Table []struct {
+			ID     int    `json:"id"`
+			Name   string `json:"name"`
+			Value  int    `json:"value"`
+			Worst  int    `json:"worst"`
+			Thresh int    `json:"thresh"`
+			Raw    struct {
+				Value  int64  `json:"value"`
+				String string `json:"string"`
+			} `json:"raw"`
+		} `json:"table"`
+	} `json:"ata_smart_attributes"`
+	// NVMe-specific health information
+	NVMeSmartHealthInformationLog *nvmeSmartHealthInformationLogJSON `json:"nvme_smart_health_information_log"`
+	PowerMode                     string                             `json:"power_mode"`
+}
+
+// CollectSMARTLocal collects S.M.A.R.T. data from all local block devices.
+// The diskExclude parameter specifies patterns for devices to skip (e.g., "sda", "/dev/nvme*", "*cache*").
+func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error) {
+	// List block devices
+	devices, err := listBlockDevices(ctx, diskExclude)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to list block devices for SMART collection")
+		return nil, fmt.Errorf("list block devices for SMART collection: %w", err)
+	}
+
+	if len(devices) == 0 {
+		return nil, nil
+	}
+
+	var results []DiskSMART
+	for _, dev := range devices {
+		smart, err := collectDeviceSMART(ctx, dev)
+		if err != nil {
+			if errors.Is(err, errSMARTDataUnavailable) {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "skip_no_smart_data").
+					Str("device", dev).
+					Msg("Device returned no usable SMART data, skipping")
+			} else {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "collect_device_smart_failed").
+					Str("device", dev).
+					Err(err).
+					Msg("Failed to collect SMART data for device")
+			}
+			continue
+		}
+		if smart != nil {
+			results = append(results, *smart)
+		}
+	}
+
+	log.Debug().
+		Str("component", smartctlComponent).
+		Str("action", "collect_local_complete").
+		Int("devices_discovered", len(devices)).
+		Int("devices_collected", len(results)).
+		Msg("Completed SMART collection for local devices")
+
+	return results, nil
+}
+
+// listBlockDevices returns a list of block devices suitable for SMART queries.
+// Devices matching any of the diskExclude patterns are skipped.
+func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, error) {
+	if runtimeGOOS == "freebsd" {
+		devices, err := listBlockDevicesFreeBSD(ctx, diskExclude)
+		if err != nil {
+			return nil, fmt.Errorf("list FreeBSD block devices: %w", err)
+		}
+		return devices, nil
+	}
+	devices, err := listBlockDevicesLinux(ctx, diskExclude)
+	if err != nil {
+		return nil, fmt.Errorf("list Linux block devices: %w", err)
+	}
+	return devices, nil
+}
+
+// listBlockDevicesLinux uses lsblk JSON output to find physical disks on Linux,
+// filtering out virtual/logical devices that cannot provide SMART data.
+func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
+	output, err := smartRunCommandOutput(ctx, "lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS")
+	if err != nil {
+		// Fall back to sysfs enumeration for minimal hosts/images where lsblk is unavailable.
+		log.Debug().Err(err).Msg("lsblk device discovery failed, falling back to /sys/block")
+		devices, fallbackErr := listBlockDevicesLinuxSysfs(diskExclude)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("linux block-device discovery failed: lsblk error: %w; /sys/block fallback error: %v", err, fallbackErr)
+		}
+		return devices, nil
+	}
+
+	var data lsblkJSON
+	if err := json.Unmarshal(output, &data); err != nil {
+		return nil, fmt.Errorf("parse lsblk JSON: %w", err)
+	}
+
+	var devices []string
+	for _, disk := range data.Blockdevices {
+		if strings.TrimSpace(disk.Name) == "" {
+			continue
+		}
+
+		devicePath := "/dev/" + disk.Name
+		if reason := linuxSMARTSkipReason(disk); reason != "" {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_virtual_device").
+				Str("device", devicePath).
+				Str("reason", reason).
+				Msg("Skipping non-physical device for SMART collection")
+			continue
+		}
+		if matchesDeviceExclude(disk.Name, devicePath, diskExclude) {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_excluded_device").
+				Str("device", devicePath).
+				Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
+	}
+
+	return devices, nil
+}
+
+// linuxSMARTSkipReason returns a human-readable reason if the device should be
+// skipped for SMART collection, or "" if the device is a real physical disk.
+func linuxSMARTSkipReason(device lsblkDevice) string {
+	if !strings.EqualFold(strings.TrimSpace(device.Type), "disk") {
+		return "not a whole disk"
+	}
+
+	name := strings.ToLower(strings.TrimSpace(device.Name))
+	for _, prefix := range linuxSMARTVirtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return "virtual/logical device prefix"
+		}
+	}
+
+	transport := strings.ToLower(strings.TrimSpace(device.Tran))
+	if transport == "virtio" {
+		return "virtio transport"
+	}
+
+	subsystems := strings.ToLower(strings.TrimSpace(device.Subsystems))
+	for _, token := range linuxSMARTVirtualSubsystemTokens {
+		if strings.Contains(subsystems, token) {
+			return "virtual/logical subsystem"
+		}
+	}
+
+	metadata := strings.ToLower(strings.TrimSpace(device.Vendor + " " + device.Model))
+	for _, token := range linuxSMARTVirtualMetadataTokens {
+		if strings.Contains(metadata, token) {
+			return "virtual disk model/vendor signature"
+		}
+	}
+
+	return ""
+}
+
+func listBlockDevicesLinuxSysfs(diskExclude []string) ([]string, error) {
+	entries, err := readDir("/sys/block")
+	if err != nil {
+		return nil, err
+	}
+
+	var devices []string
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		if name == "" || isVirtualLinuxBlockDevice(name) {
+			continue
+		}
+
+		// Keep only concrete device-backed entries and skip synthetic block devices.
+		if _, err := osStat(filepath.Join("/sys/block", name, "device")); err != nil {
+			continue
+		}
+
+		devicePath := "/dev/" + name
+		if matchesDeviceExclude(name, devicePath, diskExclude) {
+			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
+	}
+
+	return devices, nil
+}
+
+func isVirtualLinuxBlockDevice(name string) bool {
+	for _, prefix := range linuxSMARTVirtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return strings.HasPrefix(name, "fd") ||
+		strings.HasPrefix(name, "sr")
+}
+
+// listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.
+func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]string, error) {
+	output, err := smartRunCommandOutput(ctx, "sysctl", "-n", "kern.disks")
+	if err != nil {
+		return nil, fmt.Errorf("run sysctl kern.disks: %w", err)
+	}
+
+	var devices []string
+	for _, name := range strings.Fields(strings.TrimSpace(string(output))) {
+		if name == "" {
+			continue
+		}
+		devicePath := "/dev/" + name
+		if matchesDeviceExclude(name, devicePath, diskExclude) {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_excluded_device").
+				Str("device", devicePath).
+				Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
+	}
+
+	return devices, nil
+}
+
+// matchesDeviceExclude checks if a block device matches any exclusion pattern.
+// Patterns can match against the device name (e.g., "sda", "nvme0n1") or the full
+// path (e.g., "/dev/sda"). Supports:
+//   - Exact match: "sda" matches device named "sda"
+//   - Prefix pattern (ending with *): "nvme*" matches "nvme0n1", "nvme1n1", etc.
+//   - Contains pattern (surrounded by *): "*cache*" matches any device with "cache" in name
+func matchesDeviceExclude(name, devicePath string, excludePatterns []string) bool {
+	if len(excludePatterns) == 0 {
+		return false
+	}
+
+	for _, pattern := range excludePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		// Contains pattern: *substring*
+		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") && len(pattern) > 2 {
+			substring := pattern[1 : len(pattern)-1]
+			if strings.Contains(name, substring) || strings.Contains(devicePath, substring) {
+				return true
+			}
+			continue
+		}
+
+		// Prefix pattern: prefix*
+		if strings.HasSuffix(pattern, "*") {
+			prefix := pattern[:len(pattern)-1]
+			if strings.HasPrefix(name, prefix) || strings.HasPrefix(devicePath, prefix) {
+				return true
+			}
+			continue
+		}
+
+		// Exact match against name or full path
+		if name == pattern || devicePath == pattern {
+			return true
+		}
+	}
+
+	return false
+}
+
+// collectDeviceSMART runs smartctl on a single device and parses the result.
+func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) {
+	// Use timeout to avoid hanging on slow/unresponsive disks
+	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Check if smartctl is available
+	smartctlPath, err := execLookPath("smartctl")
+	if err != nil {
+		return nil, fmt.Errorf("look up smartctl binary: %w", err)
+	}
+
+	// Run smartctl with standby check to avoid waking sleeping drives
+	// -n standby: don't check if drive is in standby (return exit code 2)
+	// -i: device info
+	// -A: attributes (for temperature)
+	// --json=o: output original smartctl JSON format
+	output, err := smartRunCommandOutput(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
+
+	// smartctl returns non-zero exit codes for various conditions
+	// Exit code 2 means drive is in standby - that's okay
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode := exitErr.ExitCode()
+			// Check for standby (bit 1 set in exit status)
+			if exitCode&2 != 0 {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "device_in_standby").
+					Str("device", filepath.Base(device)).
+					Msg("Skipping SMART collection for standby device")
+				return &DiskSMART{
+					Device:      filepath.Base(device),
+					Standby:     true,
+					LastUpdated: timeNow(),
+				}, nil
+			}
+			// Other exit codes might still have valid JSON output
+			// Continue parsing if we got output
+			if len(output) == 0 {
+				return nil, fmt.Errorf("run smartctl for %s: %w", device, err)
+			}
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "collect_device_smart_nonzero_exit").
+				Str("device", filepath.Base(device)).
+				Int("exit_code", exitCode).
+				Msg("smartctl returned non-zero exit status with JSON output")
+		} else {
+			return nil, fmt.Errorf("run smartctl for %s: %w", device, err)
+		}
+	}
+
+	// Parse JSON output
+	var smartData smartctlJSON
+	if err := json.Unmarshal(output, &smartData); err != nil {
+		return nil, fmt.Errorf("parse smartctl JSON for %s: %w", device, err)
+	}
+
+	result := &DiskSMART{
+		Device:      filepath.Base(device),
+		Model:       smartData.ModelName,
+		Serial:      smartData.SerialNumber,
+		Type:        detectDiskType(smartData),
+		LastUpdated: timeNow(),
+	}
+
+	// Build WWN string if available
+	if smartData.WWN.NAA != 0 {
+		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
+	}
+
+	// Get temperature (different location for NVMe vs SATA).
+	// Try top-level fields first, then fall back to ATA attributes 194/190.
+	if smartData.Temperature.Current > 0 {
+		result.Temperature = smartData.Temperature.Current
+	} else if smartData.NVMeSmartHealthInformationLog != nil && smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
+		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
+	} else {
+		// Fallback: extract from ATA SMART attributes 194 (Temperature_Celsius)
+		// or 190 (Airflow_Temperature_Cel). Some drives don't populate the
+		// top-level temperature field.
+		for _, attr := range smartData.ATASmartAttributes.Table {
+			if attr.ID == 194 || attr.ID == 190 {
+				temp := int(parseRawValue(attr.Raw.String, attr.Raw.Value))
+				if temp > 0 && temp < 150 { // sanity: valid operating range
+					result.Temperature = temp
+					break
+				}
+			}
+		}
+	}
+
+	// Get health status
+	if smartData.SmartStatus == nil {
+		result.Health = "UNKNOWN"
+	} else if smartData.SmartStatus.Passed {
+		result.Health = "PASSED"
+	} else {
+		result.Health = "FAILED"
+	}
+
+	// Parse SMART attributes
+	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
+
+	// If the device returned no useful data at all, treat as unavailable
+	// rather than reporting a misleading UNKNOWN/FAILED entry.
+	if (result.Health == "" || result.Health == "UNKNOWN") && result.Temperature == 0 && result.Attributes == nil {
+		return nil, errSMARTDataUnavailable
+	}
+
+	log.Debug().
+		Str("component", smartctlComponent).
+		Str("action", "collect_device_smart_success").
+		Str("device", result.Device).
+		Str("type", result.Type).
+		Str("model", result.Model).
+		Int("temperature", result.Temperature).
+		Str("health", result.Health).
+		Msg("collected SMART data")
+
+	return result, nil
+}
+
+// parseSMARTAttributes extracts normalized SMART attributes from smartctl JSON output.
+func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes {
+	attrs := &SMARTAttributes{}
+	hasData := false
+
+	if diskType == "nvme" {
+		nvmeLog := data.NVMeSmartHealthInformationLog
+		if nvmeLog != nil {
+			hasData = true
+			poh := nvmeLog.PowerOnHours
+			attrs.PowerOnHours = &poh
+			pc := nvmeLog.PowerCycles
+			attrs.PowerCycles = &pc
+			pu := nvmeLog.PercentageUsed
+			attrs.PercentageUsed = &pu
+			as := nvmeLog.AvailableSpare
+			attrs.AvailableSpare = &as
+			me := nvmeLog.MediaErrors
+			attrs.MediaErrors = &me
+			us := nvmeLog.UnsafeShutdowns
+			attrs.UnsafeShutdowns = &us
+		}
+	} else {
+		// SATA / SAS — iterate the ATA attributes table
+		for _, attr := range data.ATASmartAttributes.Table {
+			hasData = true
+			raw := parseRawValue(attr.Raw.String, attr.Raw.Value)
+			switch attr.ID {
+			case 5: // Reallocated Sector Count
+				v := raw
+				attrs.ReallocatedSectors = &v
+			case 9: // Power-On Hours
+				v := raw
+				attrs.PowerOnHours = &v
+			case 12: // Power Cycle Count
+				v := raw
+				attrs.PowerCycles = &v
+			case 197: // Current Pending Sector Count
+				v := raw
+				attrs.PendingSectors = &v
+			case 198: // Offline Uncorrectable
+				v := raw
+				attrs.OfflineUncorrectable = &v
+			case 199: // UDMA CRC Error Count
+				v := raw
+				attrs.UDMACRCErrors = &v
+			}
+		}
+	}
+
+	if !hasData {
+		return nil
+	}
+	return attrs
+}
+
+// parseRawValue extracts the primary integer from a SMART attribute's raw string.
+// Some drives (notably Seagate) pack vendor-specific data in the upper bytes of
+// the 48-bit raw value, making raw.value unreliable. For example, Power_On_Hours
+// may report raw.value=150323855943 while raw.string="16951 (223 173 0)" where
+// only 16951 is the actual hours. Falls back to rawValue if string parsing fails.
+func parseRawValue(rawString string, rawValue int64) int64 {
+	s := strings.TrimSpace(rawString)
+	if s == "" {
+		return rawValue
+	}
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return rawValue
+	}
+	v, err := strconv.ParseInt(s[:end], 10, 64)
+	if err != nil {
+		return rawValue
+	}
+	return v
+}
+
+// detectDiskType determines the disk transport type from smartctl output.
+func detectDiskType(data smartctlJSON) string {
+	protocol := strings.ToLower(data.Device.Protocol)
+	switch {
+	case strings.Contains(protocol, "nvme"):
+		return "nvme"
+	case strings.Contains(protocol, "sas"):
+		return "sas"
+	case strings.Contains(protocol, "ata"), strings.Contains(protocol, "sata"):
+		return "sata"
+	default:
+		// Try to infer from device type
+		devType := strings.ToLower(data.Device.Type)
+		if strings.Contains(devType, "nvme") {
+			return "nvme"
+		}
+		return "sata" // default
+	}
+}
+
+// formatWWN formats WWN components into a standard string.
+func formatWWN(naa, oui, id uint64) string {
+	// Format as hex string: naa-oui-id
+	return strconv.FormatUint(naa, 16) + "-" +
+		strconv.FormatUint(oui, 16) + "-" +
+		strconv.FormatUint(id, 16)
+}
+
+func runCommandOutputLimited(ctx context.Context, maxBytes int, name string, args ...string) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stderr = io.Discard
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	output := make([]byte, 0, 4096)
+	buf := make([]byte, 32*1024)
+	exceeded := false
+
+	for {
+		n, readErr := stdout.Read(buf)
+		if n > 0 {
+			remaining := maxBytes - len(output)
+			if remaining > 0 {
+				if n <= remaining {
+					output = append(output, buf[:n]...)
+				} else {
+					output = append(output, buf[:remaining]...)
+					exceeded = true
+				}
+			} else {
+				exceeded = true
+			}
+
+			if exceeded && cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		}
+
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			_ = cmd.Wait()
+			return output, readErr
+		}
+	}
+
+	waitErr := cmd.Wait()
+	if exceeded {
+		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxBytes)
+	}
+	if waitErr != nil {
+		return output, waitErr
+	}
+
+	return output, nil
+}

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 )
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
@@ -17,6 +19,11 @@ var (
 	semverRe = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
 	rcNumRe  = regexp.MustCompile(`rc\.?(\d+)`)
 )
+
+// BuildVersion is the version string injected at build time via ldflags.
+// Set this from main before starting the server so GetCurrentVersion()
+// doesn't have to fall back to disk reads or the hardcoded default.
+var BuildVersion string
 
 // Version represents a semantic version
 type Version struct {
@@ -144,6 +151,12 @@ func GetCurrentVersion() (*VersionInfo, error) {
 		}
 
 		return info
+	}
+
+	// Build-time version injected via ldflags takes highest priority.
+	// This covers all release binary deployments regardless of working directory.
+	if BuildVersion != "" && BuildVersion != "dev" {
+		return buildInfo(BuildVersion, "release", false), nil
 	}
 
 	if gitVersion, err := getGitVersion(); err == nil && gitVersion != "" {
@@ -331,7 +344,7 @@ func fileExists(path string) bool {
 
 // GetDeploymentType determines how Pulse was deployed
 func GetDeploymentType() string {
-	if envBool("PULSE_MOCK_MODE") {
+	if mockmode.IsEnabled() {
 		return "mock"
 	}
 
@@ -383,7 +396,7 @@ func dockerUpdatesAllowed() bool {
 	if envBool("PULSE_ALLOW_DOCKER_UPDATES") {
 		return true
 	}
-	return envBool("PULSE_MOCK_MODE")
+	return mockmode.IsEnabled()
 }
 
 func envBool(key string) bool {

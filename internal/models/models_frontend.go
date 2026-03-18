@@ -33,7 +33,14 @@ type NodeFrontend struct {
 	IsClusterMember              bool         `json:"isClusterMember,omitempty"`
 	ClusterName                  string       `json:"clusterName,omitempty"`
 	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
-	LinkedHostAgentId            string       `json:"linkedHostAgentId,omitempty"`            // ID of linked host agent (for "Via agent" badge)
+	LinkedAgentID                string       `json:"linkedAgentId,omitempty"`                // ID of linked agent (for "Via agent" badge)
+}
+
+func (n NodeFrontend) NormalizeCollections() NodeFrontend {
+	if n.LoadAverage == nil {
+		n.LoadAverage = []float64{}
+	}
+	return n
 }
 
 // VMFrontend represents a VM with frontend-friendly field names
@@ -51,13 +58,13 @@ type VMFrontend struct {
 	Mem               int64                   `json:"mem"`                        // Maps to Memory.Used
 	MaxMem            int64                   `json:"maxmem"`                     // Maps to Memory.Total
 	DiskObj           *Disk                   `json:"disk,omitempty"`             // Full disk object
-	Disks             []Disk                  `json:"disks,omitempty"`            // Individual filesystem/disk usage
+	Disks             []Disk                  `json:"disks"`                      // Individual filesystem/disk usage
 	DiskStatusReason  string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	OSName            string                  `json:"osName,omitempty"`
 	OSVersion         string                  `json:"osVersion,omitempty"`
 	AgentVersion      string                  `json:"agentVersion,omitempty"`
-	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
-	IPAddresses       []string                `json:"ipAddresses,omitempty"`
+	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces"`
+	IPAddresses       []string                `json:"ipAddresses"`
 	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
 	NetOut            int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
 	DiskRead          int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
@@ -65,10 +72,22 @@ type VMFrontend struct {
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
 	LastBackup        int64                   `json:"lastBackup,omitempty"` // Unix timestamp
-	MemorySource      string                  `json:"memorySource,omitempty"`
-	Tags              string                  `json:"tags,omitempty"` // Joined string
+	Tags              string                  `json:"tags,omitempty"`       // Joined string
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
+}
+
+func (v VMFrontend) NormalizeCollections() VMFrontend {
+	if v.Disks == nil {
+		v.Disks = []Disk{}
+	}
+	if v.NetworkInterfaces == nil {
+		v.NetworkInterfaces = []GuestNetworkInterface{}
+	}
+	if v.IPAddresses == nil {
+		v.IPAddresses = []string{}
+	}
+	return v
 }
 
 // ContainerFrontend represents a Container with frontend-friendly field names
@@ -89,9 +108,9 @@ type ContainerFrontend struct {
 	Mem               int64                   `json:"mem"`              // Maps to Memory.Used
 	MaxMem            int64                   `json:"maxmem"`           // Maps to Memory.Total
 	DiskObj           *Disk                   `json:"disk,omitempty"`   // Full disk object
-	Disks             []Disk                  `json:"disks,omitempty"`  // Individual filesystem/disk usage
-	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
-	IPAddresses       []string                `json:"ipAddresses,omitempty"`
+	Disks             []Disk                  `json:"disks"`            // Individual filesystem/disk usage
+	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces"`
+	IPAddresses       []string                `json:"ipAddresses"`
 	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
 	NetOut            int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
 	DiskRead          int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
@@ -103,6 +122,19 @@ type ContainerFrontend struct {
 	Lock              string                  `json:"lock,omitempty"`
 	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
 	OSName            string                  `json:"osName,omitempty"`
+}
+
+func (c ContainerFrontend) NormalizeCollections() ContainerFrontend {
+	if c.Disks == nil {
+		c.Disks = []Disk{}
+	}
+	if c.NetworkInterfaces == nil {
+		c.NetworkInterfaces = []GuestNetworkInterface{}
+	}
+	if c.IPAddresses == nil {
+		c.IPAddresses = []string{}
+	}
+	return c
 }
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields
@@ -123,17 +155,17 @@ type DockerHostFrontend struct {
 	TotalMemoryBytes  int64                      `json:"totalMemoryBytes"`
 	UptimeSeconds     int64                      `json:"uptimeSeconds"`
 	CPUUsagePercent   float64                    `json:"cpuUsagePercent"`
-	LoadAverage       []float64                  `json:"loadAverage,omitempty"`
+	LoadAverage       []float64                  `json:"loadAverage"`
 	Memory            *Memory                    `json:"memory,omitempty"`
-	Disks             []Disk                     `json:"disks,omitempty"`
-	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces,omitempty"`
+	Disks             []Disk                     `json:"disks"`
+	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces"`
 	Status            string                     `json:"status"`
 	LastSeen          int64                      `json:"lastSeen"`
 	IntervalSeconds   int                        `json:"intervalSeconds"`
 	AgentVersion      string                     `json:"agentVersion,omitempty"`
 	Containers        []DockerContainerFrontend  `json:"containers"`
-	Services          []DockerServiceFrontend    `json:"services,omitempty"`
-	Tasks             []DockerTaskFrontend       `json:"tasks,omitempty"`
+	Services          []DockerServiceFrontend    `json:"services"`
+	Tasks             []DockerTaskFrontend       `json:"tasks"`
 	Swarm             *DockerSwarmFrontend       `json:"swarm,omitempty"`
 	TokenID           string                     `json:"tokenId,omitempty"`
 	TokenName         string                     `json:"tokenName,omitempty"`
@@ -143,12 +175,77 @@ type DockerHostFrontend struct {
 	Command           *DockerHostCommandFrontend `json:"command,omitempty"`
 }
 
-// RemovedDockerHostFrontend represents a blocked docker host entry for the frontend.
-type RemovedDockerHostFrontend struct {
-	ID          string `json:"id"`
-	Hostname    string `json:"hostname,omitempty"`
-	DisplayName string `json:"displayName,omitempty"`
-	RemovedAt   int64  `json:"removedAt"`
+func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
+	if h.LoadAverage == nil {
+		h.LoadAverage = []float64{}
+	}
+	if h.Disks == nil {
+		h.Disks = []Disk{}
+	}
+	if h.NetworkInterfaces == nil {
+		h.NetworkInterfaces = []HostNetworkInterface{}
+	}
+	if h.Containers == nil {
+		h.Containers = []DockerContainerFrontend{}
+	}
+	if h.Services == nil {
+		h.Services = []DockerServiceFrontend{}
+	}
+	if h.Tasks == nil {
+		h.Tasks = []DockerTaskFrontend{}
+	}
+	for i := range h.Containers {
+		h.Containers[i] = h.Containers[i].NormalizeCollections()
+	}
+	for i := range h.Services {
+		h.Services[i] = h.Services[i].NormalizeCollections()
+	}
+	return h
+}
+
+// ConnectedInfrastructureSurfaceFrontend describes one reporting surface that
+// Pulse associates with an infrastructure item in the Connected infrastructure
+// settings view.
+type ConnectedInfrastructureSurfaceFrontend struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Label     string `json:"label"`
+	Detail    string `json:"detail,omitempty"`
+	ControlID string `json:"controlId,omitempty"`
+	Action    string `json:"action,omitempty"`
+	IDLabel   string `json:"idLabel,omitempty"`
+	IDValue   string `json:"idValue,omitempty"`
+}
+
+// ConnectedInfrastructureItemFrontend is the canonical Connected
+// infrastructure projection for the settings surface. It is derived from the
+// unified resource model plus reporting-ignore state, so the frontend does not
+// need to reconstruct machine rows from raw resource facets.
+type ConnectedInfrastructureItemFrontend struct {
+	ID                string                                   `json:"id"`
+	Name              string                                   `json:"name"`
+	DisplayName       string                                   `json:"displayName,omitempty"`
+	Hostname          string                                   `json:"hostname,omitempty"`
+	Status            string                                   `json:"status"`
+	HealthStatus      string                                   `json:"healthStatus,omitempty"`
+	LastSeen          int64                                    `json:"lastSeen,omitempty"`
+	RemovedAt         int64                                    `json:"removedAt,omitempty"`
+	Version           string                                   `json:"version,omitempty"`
+	IsOutdatedBinary  bool                                     `json:"isOutdatedBinary,omitempty"`
+	LinkedNodeID      string                                   `json:"linkedNodeId,omitempty"`
+	CommandsEnabled   bool                                     `json:"commandsEnabled,omitempty"`
+	ScopeAgentID      string                                   `json:"scopeAgentId,omitempty"`
+	UpgradePlatform   string                                   `json:"upgradePlatform,omitempty"`
+	UninstallAgentID  string                                   `json:"uninstallAgentId,omitempty"`
+	UninstallHostname string                                   `json:"uninstallHostname,omitempty"`
+	Surfaces          []ConnectedInfrastructureSurfaceFrontend `json:"surfaces"`
+}
+
+func (i ConnectedInfrastructureItemFrontend) NormalizeCollections() ConnectedInfrastructureItemFrontend {
+	if i.Surfaces == nil {
+		i.Surfaces = []ConnectedInfrastructureSurfaceFrontend{}
+	}
+	return i
 }
 
 // KubernetesClusterFrontend represents a Kubernetes cluster for the frontend.
@@ -172,9 +269,31 @@ type KubernetesClusterFrontend struct {
 	Hidden            bool   `json:"hidden"`
 	PendingUninstall  bool   `json:"pendingUninstall"`
 
-	Nodes       []KubernetesNodeFrontend       `json:"nodes,omitempty"`
-	Pods        []KubernetesPodFrontend        `json:"pods,omitempty"`
-	Deployments []KubernetesDeploymentFrontend `json:"deployments,omitempty"`
+	Nodes       []KubernetesNodeFrontend       `json:"nodes"`
+	Pods        []KubernetesPodFrontend        `json:"pods"`
+	Deployments []KubernetesDeploymentFrontend `json:"deployments"`
+}
+
+func (c KubernetesClusterFrontend) NormalizeCollections() KubernetesClusterFrontend {
+	if c.Nodes == nil {
+		c.Nodes = []KubernetesNodeFrontend{}
+	}
+	if c.Pods == nil {
+		c.Pods = []KubernetesPodFrontend{}
+	}
+	if c.Deployments == nil {
+		c.Deployments = []KubernetesDeploymentFrontend{}
+	}
+	for i := range c.Nodes {
+		c.Nodes[i] = c.Nodes[i].NormalizeCollections()
+	}
+	for i := range c.Pods {
+		c.Pods[i] = c.Pods[i].NormalizeCollections()
+	}
+	for i := range c.Deployments {
+		c.Deployments[i] = c.Deployments[i].NormalizeCollections()
+	}
+	return c
 }
 
 type KubernetesNodeFrontend struct {
@@ -193,25 +312,57 @@ type KubernetesNodeFrontend struct {
 	AllocCPU                int64    `json:"allocatableCpuCores,omitempty"`
 	AllocMemoryBytes        int64    `json:"allocatableMemoryBytes,omitempty"`
 	AllocPods               int64    `json:"allocatablePods,omitempty"`
-	Roles                   []string `json:"roles,omitempty"`
+	UsageCPUMilliCores      int64    `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes        int64    `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent         float64  `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent      float64  `json:"usageMemoryPercent,omitempty"`
+	Roles                   []string `json:"roles"`
+}
+
+func (n KubernetesNodeFrontend) NormalizeCollections() KubernetesNodeFrontend {
+	if n.Roles == nil {
+		n.Roles = []string{}
+	}
+	return n
 }
 
 type KubernetesPodFrontend struct {
-	UID        string                           `json:"uid"`
-	Name       string                           `json:"name"`
-	Namespace  string                           `json:"namespace"`
-	NodeName   string                           `json:"nodeName,omitempty"`
-	Phase      string                           `json:"phase,omitempty"`
-	Reason     string                           `json:"reason,omitempty"`
-	Message    string                           `json:"message,omitempty"`
-	QoSClass   string                           `json:"qosClass,omitempty"`
-	CreatedAt  int64                            `json:"createdAt,omitempty"`
-	StartTime  *int64                           `json:"startTime,omitempty"`
-	Restarts   int                              `json:"restarts,omitempty"`
-	Labels     map[string]string                `json:"labels,omitempty"`
-	OwnerKind  string                           `json:"ownerKind,omitempty"`
-	OwnerName  string                           `json:"ownerName,omitempty"`
-	Containers []KubernetesPodContainerFrontend `json:"containers,omitempty"`
+	UID                           string                           `json:"uid"`
+	Name                          string                           `json:"name"`
+	Namespace                     string                           `json:"namespace"`
+	NodeName                      string                           `json:"nodeName,omitempty"`
+	Phase                         string                           `json:"phase,omitempty"`
+	Reason                        string                           `json:"reason,omitempty"`
+	Message                       string                           `json:"message,omitempty"`
+	QoSClass                      string                           `json:"qosClass,omitempty"`
+	CreatedAt                     int64                            `json:"createdAt,omitempty"`
+	StartTime                     *int64                           `json:"startTime,omitempty"`
+	Restarts                      int                              `json:"restarts,omitempty"`
+	UsageCPUMilliCores            int                              `json:"usageCpuMilliCores,omitempty"`
+	UsageMemoryBytes              int64                            `json:"usageMemoryBytes,omitempty"`
+	UsageCPUPercent               float64                          `json:"usageCpuPercent,omitempty"`
+	UsageMemoryPercent            float64                          `json:"usageMemoryPercent,omitempty"`
+	NetworkRxBytes                int64                            `json:"networkRxBytes,omitempty"`
+	NetworkTxBytes                int64                            `json:"networkTxBytes,omitempty"`
+	NetInRate                     float64                          `json:"netInRate,omitempty"`
+	NetOutRate                    float64                          `json:"netOutRate,omitempty"`
+	EphemeralStorageUsedBytes     int64                            `json:"ephemeralStorageUsedBytes,omitempty"`
+	EphemeralStorageCapacityBytes int64                            `json:"ephemeralStorageCapacityBytes,omitempty"`
+	DiskUsagePercent              float64                          `json:"diskUsagePercent,omitempty"`
+	Labels                        map[string]string                `json:"labels"`
+	OwnerKind                     string                           `json:"ownerKind,omitempty"`
+	OwnerName                     string                           `json:"ownerName,omitempty"`
+	Containers                    []KubernetesPodContainerFrontend `json:"containers"`
+}
+
+func (p KubernetesPodFrontend) NormalizeCollections() KubernetesPodFrontend {
+	if p.Labels == nil {
+		p.Labels = map[string]string{}
+	}
+	if p.Containers == nil {
+		p.Containers = []KubernetesPodContainerFrontend{}
+	}
+	return p
 }
 
 type KubernetesPodContainerFrontend struct {
@@ -232,23 +383,14 @@ type KubernetesDeploymentFrontend struct {
 	UpdatedReplicas   int32             `json:"updatedReplicas,omitempty"`
 	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
 	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
+	Labels            map[string]string `json:"labels"`
 }
 
-// RemovedHostFrontend represents a blocked host agent entry for the frontend.
-type RemovedHostFrontend struct {
-	ID          string `json:"id"`
-	Hostname    string `json:"hostname,omitempty"`
-	DisplayName string `json:"displayName,omitempty"`
-	RemovedAt   int64  `json:"removedAt"`
-}
-
-// RemovedKubernetesClusterFrontend represents a blocked kubernetes cluster entry for the frontend.
-type RemovedKubernetesClusterFrontend struct {
-	ID          string `json:"id"`
-	Name        string `json:"name,omitempty"`
-	DisplayName string `json:"displayName,omitempty"`
-	RemovedAt   int64  `json:"removedAt"`
+func (d KubernetesDeploymentFrontend) NormalizeCollections() KubernetesDeploymentFrontend {
+	if d.Labels == nil {
+		d.Labels = map[string]string{}
+	}
+	return d
 }
 
 // DockerContainerFrontend represents a Docker container for the frontend
@@ -269,15 +411,31 @@ type DockerContainerFrontend struct {
 	CreatedAt           int64                                `json:"createdAt"`
 	StartedAt           *int64                               `json:"startedAt,omitempty"`
 	FinishedAt          *int64                               `json:"finishedAt,omitempty"`
-	Ports               []DockerContainerPortFrontend        `json:"ports,omitempty"`
-	Labels              map[string]string                    `json:"labels,omitempty"`
-	Networks            []DockerContainerNetworkFrontend     `json:"networks,omitempty"`
+	Ports               []DockerContainerPortFrontend        `json:"ports"`
+	Labels              map[string]string                    `json:"labels"`
+	Networks            []DockerContainerNetworkFrontend     `json:"networks"`
 	WritableLayerBytes  int64                                `json:"writableLayerBytes,omitempty"`
 	RootFilesystemBytes int64                                `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIOFrontend      `json:"blockIo,omitempty"`
-	Mounts              []DockerContainerMountFrontend       `json:"mounts,omitempty"`
+	Mounts              []DockerContainerMountFrontend       `json:"mounts"`
 	Podman              *DockerPodmanContainerFrontend       `json:"podman,omitempty"`
 	UpdateStatus        *DockerContainerUpdateStatusFrontend `json:"updateStatus,omitempty"`
+}
+
+func (c DockerContainerFrontend) NormalizeCollections() DockerContainerFrontend {
+	if c.Ports == nil {
+		c.Ports = []DockerContainerPortFrontend{}
+	}
+	if c.Labels == nil {
+		c.Labels = map[string]string{}
+	}
+	if c.Networks == nil {
+		c.Networks = []DockerContainerNetworkFrontend{}
+	}
+	if c.Mounts == nil {
+		c.Mounts = []DockerContainerMountFrontend{}
+	}
+	return c
 }
 
 // DockerContainerUpdateStatusFrontend tracks the image update status for a container.
@@ -348,11 +506,21 @@ type DockerServiceFrontend struct {
 	DesiredTasks   int                          `json:"desiredTasks,omitempty"`
 	RunningTasks   int                          `json:"runningTasks,omitempty"`
 	CompletedTasks int                          `json:"completedTasks,omitempty"`
-	Labels         map[string]string            `json:"labels,omitempty"`
-	EndpointPorts  []DockerServicePortFrontend  `json:"endpointPorts,omitempty"`
+	Labels         map[string]string            `json:"labels"`
+	EndpointPorts  []DockerServicePortFrontend  `json:"endpointPorts"`
 	UpdateStatus   *DockerServiceUpdateFrontend `json:"updateStatus,omitempty"`
 	CreatedAt      *int64                       `json:"createdAt,omitempty"`
 	UpdatedAt      *int64                       `json:"updatedAt,omitempty"`
+}
+
+func (s DockerServiceFrontend) NormalizeCollections() DockerServiceFrontend {
+	if s.Labels == nil {
+		s.Labels = map[string]string{}
+	}
+	if s.EndpointPorts == nil {
+		s.EndpointPorts = []DockerServicePortFrontend{}
+	}
+	return s
 }
 
 // DockerServicePortFrontend represents a published service port.
@@ -431,35 +599,73 @@ type HostFrontend struct {
 	Architecture      string                     `json:"architecture,omitempty"`
 	CPUCount          int                        `json:"cpuCount,omitempty"`
 	CPUUsage          float64                    `json:"cpuUsage,omitempty"`
-	LoadAverage       []float64                  `json:"loadAverage,omitempty"`
+	LoadAverage       []float64                  `json:"loadAverage"`
 	Memory            *Memory                    `json:"memory,omitempty"`
-	Disks             []Disk                     `json:"disks,omitempty"`
-	DiskIO            []DiskIO                   `json:"diskIO,omitempty"`
-	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces,omitempty"`
+	Disks             []Disk                     `json:"disks"`
+	DiskIO            []DiskIO                   `json:"diskIO"`
+	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces"`
 	Sensors           *HostSensorSummaryFrontend `json:"sensors,omitempty"`
 	Status            string                     `json:"status"`
 	UptimeSeconds     int64                      `json:"uptimeSeconds,omitempty"`
 	LastSeen          int64                      `json:"lastSeen"`
 	IntervalSeconds   int                        `json:"intervalSeconds,omitempty"`
 	AgentVersion      string                     `json:"agentVersion,omitempty"`
+	MachineID         string                     `json:"machineId,omitempty"`
 	TokenID           string                     `json:"tokenId,omitempty"`
 	TokenName         string                     `json:"tokenName,omitempty"`
 	TokenHint         string                     `json:"tokenHint,omitempty"`
 	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
-	Tags              []string                   `json:"tags,omitempty"`
-	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"`   // Whether AI command execution is enabled
-	IsLegacy          bool                       `json:"isLegacy,omitempty"`          // True if using legacy agent protocol
-	LinkedNodeId      string                     `json:"linkedNodeId,omitempty"`      // ID of linked PVE node (if running on a node)
-	LinkedVmId        string                     `json:"linkedVmId,omitempty"`        // ID of linked VM (if running inside a VM)
-	LinkedContainerId string                     `json:"linkedContainerId,omitempty"` // ID of linked container (if running inside a container)
+	Tags              []string                   `json:"tags"`
+	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	IsLegacy          bool                       `json:"isLegacy,omitempty"`        // True if using legacy agent protocol
+	LinkedNodeID      string                     `json:"linkedNodeId,omitempty"`    // ID of linked PVE node (if running on a node)
+}
+
+func (h HostFrontend) NormalizeCollections() HostFrontend {
+	if h.LoadAverage == nil {
+		h.LoadAverage = []float64{}
+	}
+	if h.Disks == nil {
+		h.Disks = []Disk{}
+	}
+	if h.DiskIO == nil {
+		h.DiskIO = []DiskIO{}
+	}
+	if h.NetworkInterfaces == nil {
+		h.NetworkInterfaces = []HostNetworkInterface{}
+	}
+	if h.Tags == nil {
+		h.Tags = []string{}
+	}
+	if h.Sensors != nil {
+		sensors := h.Sensors.NormalizeCollections()
+		h.Sensors = &sensors
+	}
+	return h
 }
 
 // HostSensorSummaryFrontend mirrors HostSensorSummary with primitives for the frontend.
 type HostSensorSummaryFrontend struct {
-	TemperatureCelsius map[string]float64      `json:"temperatureCelsius,omitempty"`
-	FanRPM             map[string]float64      `json:"fanRpm,omitempty"`
-	Additional         map[string]float64      `json:"additional,omitempty"`
-	SMART              []HostDiskSMARTFrontend `json:"smart,omitempty"` // S.M.A.R.T. disk data
+	TemperatureCelsius map[string]float64      `json:"temperatureCelsius"`
+	FanRPM             map[string]float64      `json:"fanRpm"`
+	Additional         map[string]float64      `json:"additional"`
+	SMART              []HostDiskSMARTFrontend `json:"smart"` // S.M.A.R.T. disk data
+}
+
+func (s HostSensorSummaryFrontend) NormalizeCollections() HostSensorSummaryFrontend {
+	if s.TemperatureCelsius == nil {
+		s.TemperatureCelsius = map[string]float64{}
+	}
+	if s.FanRPM == nil {
+		s.FanRPM = map[string]float64{}
+	}
+	if s.Additional == nil {
+		s.Additional = map[string]float64{}
+	}
+	if s.SMART == nil {
+		s.SMART = []HostDiskSMARTFrontend{}
+	}
+	return s
 }
 
 // HostDiskSMARTFrontend represents S.M.A.R.T. data for a disk from a host agent.
@@ -482,8 +688,8 @@ type StorageFrontend struct {
 	Name      string   `json:"name"`
 	Node      string   `json:"node"`
 	Instance  string   `json:"instance"`
-	Nodes     []string `json:"nodes,omitempty"`
-	NodeIDs   []string `json:"nodeIds,omitempty"`
+	Nodes     []string `json:"nodes"`
+	NodeIDs   []string `json:"nodeIds"`
 	NodeCount int      `json:"nodeCount,omitempty"`
 	Type      string   `json:"type"`
 	Status    string   `json:"status"`
@@ -496,6 +702,16 @@ type StorageFrontend struct {
 	Shared    bool     `json:"shared"`
 	Enabled   bool     `json:"enabled"`
 	Active    bool     `json:"active"`
+}
+
+func (s StorageFrontend) NormalizeCollections() StorageFrontend {
+	if s.Nodes == nil {
+		s.Nodes = []string{}
+	}
+	if s.NodeIDs == nil {
+		s.NodeIDs = []string{}
+	}
+	return s
 }
 
 // CephClusterFrontend represents a Ceph cluster with frontend-friendly field names
@@ -516,9 +732,19 @@ type CephClusterFrontend struct {
 	NumOSDsUp      int                 `json:"numOsdsUp"`
 	NumOSDsIn      int                 `json:"numOsdsIn"`
 	NumPGs         int                 `json:"numPGs"`
-	Pools          []CephPool          `json:"pools,omitempty"`
-	Services       []CephServiceStatus `json:"services,omitempty"`
+	Pools          []CephPool          `json:"pools"`
+	Services       []CephServiceStatus `json:"services"`
 	LastUpdated    int64               `json:"lastUpdated"`
+}
+
+func (c CephClusterFrontend) NormalizeCollections() CephClusterFrontend {
+	if c.Pools == nil {
+		c.Pools = []CephPool{}
+	}
+	if c.Services == nil {
+		c.Services = []CephServiceStatus{}
+	}
+	return c
 }
 
 // ReplicationJobFrontend represents a replication job for the frontend.
@@ -560,35 +786,56 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes                        []NodeFrontend                     `json:"nodes"`
-	VMs                          []VMFrontend                       `json:"vms"`
-	Containers                   []ContainerFrontend                `json:"containers"`
-	DockerHosts                  []DockerHostFrontend               `json:"dockerHosts"`
-	RemovedDockerHosts           []RemovedDockerHostFrontend        `json:"removedDockerHosts"`
-	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters"`
-	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters"`
-	RemovedHosts                 []RemovedHostFrontend              `json:"removedHosts"`
-	Hosts                        []HostFrontend                     `json:"hosts"`
-	Storage                      []StorageFrontend                  `json:"storage"`
-	CephClusters                 []CephClusterFrontend              `json:"cephClusters"`
-	PhysicalDisks                []PhysicalDisk                     `json:"physicalDisks"`
-	PBS                          []PBSInstance                      `json:"pbs"` // Keep as is
-	PMG                          []PMGInstance                      `json:"pmg"`
-	PBSBackups                   []PBSBackup                        `json:"pbsBackups"`
-	PMGBackups                   []PMGBackup                        `json:"pmgBackups"`
-	Backups                      Backups                            `json:"backups"`
-	ReplicationJobs              []ReplicationJobFrontend           `json:"replicationJobs"`
-	ActiveAlerts                 []Alert                            `json:"activeAlerts"`                 // Active alerts
-	Metrics                      map[string]any                     `json:"metrics"`                      // Empty object for now
-	PVEBackups                   PVEBackups                         `json:"pveBackups"`                   // Keep as is
-	Performance                  map[string]any                     `json:"performance"`                  // Empty object for now
-	ConnectionHealth             map[string]bool                    `json:"connectionHealth"`             // Keep as is
-	Stats                        map[string]any                     `json:"stats"`                        // Empty object for now
-	LastUpdate                   int64                              `json:"lastUpdate"`                   // Unix timestamp
-	TemperatureMonitoringEnabled bool                               `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
-	PVETagColors                 map[string]string                  `json:"pveTagColors,omitempty"`       // Tag name → "#rrggbb" from Proxmox datacenter config
+	ActiveAlerts                 []Alert         `json:"activeAlerts"`                 // Active alerts
+	RecentlyResolved             []ResolvedAlert `json:"recentlyResolved"`             // Recently resolved alerts
+	Metrics                      []Metric        `json:"metrics"`                      // Time-series metrics
+	Performance                  Performance     `json:"performance"`                  // Polling/runtime performance
+	ConnectionHealth             map[string]bool `json:"connectionHealth"`             // Keep as is
+	Stats                        Stats           `json:"stats"`                        // Runtime statistics
+	LastUpdate                   int64           `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
 	// Unified resources - the new way to access all monitored entities
-	Resources []ResourceFrontend `json:"resources,omitempty"`
+	Resources               []ResourceFrontend                    `json:"resources"`
+	ConnectedInfrastructure []ConnectedInfrastructureItemFrontend `json:"connectedInfrastructure"`
+}
+
+// EmptyStateFrontend returns a canonical empty frontend state with stable
+// collection/object semantics for API and websocket consumers.
+func EmptyStateFrontend() StateFrontend {
+	return StateFrontend{}.NormalizeCollections()
+}
+
+// NormalizeCollections ensures StateFrontend preserves stable empty collection
+// semantics instead of leaking nil slices or maps to clients.
+func (s StateFrontend) NormalizeCollections() StateFrontend {
+	if s.ActiveAlerts == nil {
+		s.ActiveAlerts = []Alert{}
+	}
+	if s.RecentlyResolved == nil {
+		s.RecentlyResolved = []ResolvedAlert{}
+	}
+	if s.Metrics == nil {
+		s.Metrics = []Metric{}
+	}
+	if s.ConnectionHealth == nil {
+		s.ConnectionHealth = map[string]bool{}
+	}
+	if s.Performance.APICallDuration == nil {
+		s.Performance.APICallDuration = map[string]float64{}
+	}
+	if s.Resources == nil {
+		s.Resources = []ResourceFrontend{}
+	}
+	if s.ConnectedInfrastructure == nil {
+		s.ConnectedInfrastructure = []ConnectedInfrastructureItemFrontend{}
+	}
+	for i := range s.ConnectedInfrastructure {
+		s.ConnectedInfrastructure[i] = s.ConnectedInfrastructure[i].NormalizeCollections()
+	}
+	for i := range s.Resources {
+		s.Resources[i] = s.Resources[i].NormalizeCollections()
+	}
+	return s
 }
 
 // ResourceFrontend is the frontend representation of a unified Resource.
@@ -619,16 +866,33 @@ type ResourceFrontend struct {
 	Uptime      *int64                   `json:"uptime,omitempty"`
 
 	// Metadata
-	Tags     []string                `json:"tags,omitempty"`
-	Labels   map[string]string       `json:"labels,omitempty"`
+	Tags     []string                `json:"tags"`
+	Labels   map[string]string       `json:"labels"`
 	LastSeen int64                   `json:"lastSeen"` // Unix milliseconds
-	Alerts   []ResourceAlertFrontend `json:"alerts,omitempty"`
+	Alerts   []ResourceAlertFrontend `json:"alerts"`
 
 	// Identity for deduplication
 	Identity *ResourceIdentityFrontend `json:"identity,omitempty"`
 
 	// Platform-specific data (JSON blob)
 	PlatformData json.RawMessage `json:"platformData,omitempty"`
+}
+
+func (r ResourceFrontend) NormalizeCollections() ResourceFrontend {
+	if r.Tags == nil {
+		r.Tags = []string{}
+	}
+	if r.Labels == nil {
+		r.Labels = map[string]string{}
+	}
+	if r.Alerts == nil {
+		r.Alerts = []ResourceAlertFrontend{}
+	}
+	if r.Identity != nil {
+		identity := r.Identity.NormalizeCollections()
+		r.Identity = &identity
+	}
+	return r
 }
 
 // ResourceMetricFrontend represents a metric value for the frontend.
@@ -660,5 +924,12 @@ type ResourceAlertFrontend struct {
 type ResourceIdentityFrontend struct {
 	Hostname  string   `json:"hostname,omitempty"`
 	MachineID string   `json:"machineId,omitempty"`
-	IPs       []string `json:"ips,omitempty"`
+	IPs       []string `json:"ips"`
+}
+
+func (i ResourceIdentityFrontend) NormalizeCollections() ResourceIdentityFrontend {
+	if i.IPs == nil {
+		i.IPs = []string{}
+	}
+	return i
 }

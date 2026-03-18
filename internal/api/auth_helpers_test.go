@@ -11,6 +11,10 @@ import (
 )
 
 func TestDetectProxy(t *testing.T) {
+	// Set up trusted proxy CIDRs so that 127.0.0.1 (default httptest RemoteAddr) is trusted.
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,192.0.2.1/32")
+	ResetTrustedProxyConfigForTests()
+
 	tests := []struct {
 		name    string
 		headers map[string]string
@@ -100,9 +104,26 @@ func TestDetectProxy(t *testing.T) {
 			}
 		})
 	}
+
+	// Verify untrusted peer cannot inject proxy headers
+	t.Run("untrusted peer with proxy headers", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+		ResetTrustedProxyConfigForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.1:12345" // not in trusted CIDRs
+		req.Header.Set("X-Forwarded-For", "192.168.1.1")
+		if detectProxy(req) {
+			t.Error("detectProxy() should return false for untrusted peer")
+		}
+	})
 }
 
 func TestIsConnectionSecure(t *testing.T) {
+	// Trust the default httptest RemoteAddr (192.0.2.1) for proxy header tests
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.1/32")
+	ResetTrustedProxyConfigForTests()
+
 	tests := []struct {
 		name    string
 		useTLS  bool
@@ -122,7 +143,7 @@ func TestIsConnectionSecure(t *testing.T) {
 			want:    true,
 		},
 		{
-			name:    "X-Forwarded-Proto https",
+			name:    "X-Forwarded-Proto https (trusted proxy)",
 			useTLS:  false,
 			headers: map[string]string{"X-Forwarded-Proto": "https"},
 			want:    true,
@@ -140,7 +161,7 @@ func TestIsConnectionSecure(t *testing.T) {
 			want:    false, // strict comparison
 		},
 		{
-			name:    "Forwarded header with proto=https",
+			name:    "Forwarded header with proto=https (trusted proxy)",
 			useTLS:  false,
 			headers: map[string]string{"Forwarded": "for=192.168.1.1;proto=https"},
 			want:    true,
@@ -191,9 +212,26 @@ func TestIsConnectionSecure(t *testing.T) {
 			}
 		})
 	}
+
+	// Verify untrusted peer's X-Forwarded-Proto is ignored
+	t.Run("untrusted peer X-Forwarded-Proto ignored", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+		ResetTrustedProxyConfigForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.1:12345"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		if isConnectionSecure(req) {
+			t.Error("isConnectionSecure() should return false for untrusted peer")
+		}
+	})
 }
 
 func TestGetCookieSettings(t *testing.T) {
+	// Trust the default httptest RemoteAddr (192.0.2.1) for proxy tests
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.1/32")
+	ResetTrustedProxyConfigForTests()
+
 	tests := []struct {
 		name         string
 		useTLS       bool
@@ -256,7 +294,7 @@ func TestGetCookieSettings(t *testing.T) {
 			wantSameSite: http.SameSiteLaxMode,
 		},
 		{
-			name:   "direct TLS with Forwarded header",
+			name:   "direct TLS with Forwarded header (trusted proxy)",
 			useTLS: true,
 			headers: map[string]string{
 				"Forwarded": "for=192.168.1.1;proto=https",
@@ -660,12 +698,26 @@ func TestCheckAuth_ProxyAuthNoUsernameHeader(t *testing.T) {
 }
 
 func TestCheckAuth_OIDCEnabledWithoutCredentials(t *testing.T) {
+	dataDir := t.TempDir()
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
 		// No AuthUser, AuthPass, or APITokens
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	w := httptest.NewRecorder()
 
@@ -683,14 +735,29 @@ func TestCheckAuth_OIDCSessionValid(t *testing.T) {
 	// Create a session and track it for a user
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
-	store.CreateSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "testuser")
-	TrackUserSession("oidcuser", sessionToken)
+	store.CreateOIDCSession(sessionToken, 24*time.Hour, "test-agent", "127.0.0.1", "oidcuser", &OIDCTokenInfo{
+		Issuer:   "https://issuer.example.com",
+		ClientID: "client-id",
+	})
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dir,
+		ConfigPath: dir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",
@@ -715,10 +782,23 @@ func TestCheckAuth_OIDCSessionInvalid(t *testing.T) {
 	InitSessionStore(dir)
 
 	cfg := &config.Config{
-		OIDC: &config.OIDCConfig{
-			Enabled: true,
-		},
+		DataPath:   dir,
+		ConfigPath: dir,
 	}
+	setSSOAuthSnapshot(cfg, &config.SSOConfig{
+		Providers: []config.SSOProvider{
+			{
+				ID:      "test-oidc",
+				Name:    "Test OIDC",
+				Type:    config.SSOProviderTypeOIDC,
+				Enabled: true,
+				OIDC: &config.OIDCProviderConfig{
+					IssuerURL: "https://issuer.example.com",
+					ClientID:  "client-id",
+				},
+			},
+		},
+	})
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",

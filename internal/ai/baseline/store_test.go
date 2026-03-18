@@ -75,7 +75,7 @@ func TestIsAnomaly(t *testing.T) {
 		}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 
 	// Test normal value
 	isAnomaly, zScore := store.IsAnomaly("test-vm", "cpu", 50)
@@ -113,7 +113,7 @@ func TestCheckAnomaly_Severity(t *testing.T) {
 		points[i] = MetricPoint{Value: 50 + float64(i%11) - 5}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 	baseline, _ := store.GetBaseline("test-vm", "cpu")
 
 	// The stddev should be around 3.0
@@ -162,7 +162,7 @@ func TestCheckAnomaly_Severity(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		stablePoints[i] = MetricPoint{Value: 50}
 	}
-	store.Learn("stable-vm", "vm", "disk", stablePoints)
+	_ = store.Learn("stable-vm", "vm", "disk", stablePoints)
 
 	// Small change from perfectly stable baseline should NOT be anomaly
 	severity, _, _ := store.CheckAnomaly("stable-vm", "disk", 51)
@@ -188,8 +188,8 @@ func TestGetResourceBaseline(t *testing.T) {
 		memPoints[i] = MetricPoint{Value: 70}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", cpuPoints)
-	store.Learn("test-vm", "vm", "memory", memPoints)
+	_ = store.Learn("test-vm", "vm", "cpu", cpuPoints)
+	_ = store.Learn("test-vm", "vm", "memory", memPoints)
 
 	rb, ok := store.GetResourceBaseline("test-vm")
 	if !ok {
@@ -353,7 +353,7 @@ func TestCheckResourceAnomalies_Disk(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = MetricPoint{Value: 60 + float64(i%5) - 2} // 58-62
 	}
-	store.Learn("test-vm", "vm", "disk", points)
+	_ = store.Learn("test-vm", "vm", "disk", points)
 
 	// Test: disk above 85% should be reported
 	metrics := map[string]float64{"disk": 90}
@@ -385,7 +385,7 @@ func TestCheckResourceAnomalies_CPU(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = MetricPoint{Value: 20 + float64(i%3) - 1} // 19-21
 	}
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 
 	// Test: CPU at 80% (above 70% and >2x baseline) should be reported
 	metrics := map[string]float64{"cpu": 80}
@@ -417,7 +417,7 @@ func TestCheckResourceAnomalies_Memory(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = MetricPoint{Value: 40 + float64(i%3) - 1} // 39-41
 	}
-	store.Learn("test-vm", "vm", "memory", points)
+	_ = store.Learn("test-vm", "vm", "memory", points)
 
 	// Test: Memory at 85% should be reported (above 80% threshold)
 	metrics := map[string]float64{"memory": 85}
@@ -449,7 +449,7 @@ func TestCheckResourceAnomalies_OtherMetrics(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = MetricPoint{Value: 100 + float64(i%5) - 2} // 98-102
 	}
-	store.Learn("test-vm", "vm", "network_in", points)
+	_ = store.Learn("test-vm", "vm", "network_in", points)
 
 	// Test: network_in at 2x baseline should be reported
 	metrics := map[string]float64{"network_in": 250}
@@ -546,14 +546,14 @@ func TestGetAllAnomalies(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = MetricPoint{Value: 20 + float64(i%3) - 1}
 	}
-	store.Learn("vm-1", "vm", "cpu", points)
-	store.Learn("vm-2", "vm", "cpu", points)
+	_ = store.Learn("vm-1", "vm", "cpu", points)
+	_ = store.Learn("vm-2", "vm", "cpu", points)
 
 	diskPoints := make([]MetricPoint, 100)
 	for i := 0; i < 100; i++ {
 		diskPoints[i] = MetricPoint{Value: 50 + float64(i%3) - 1}
 	}
-	store.Learn("vm-1", "vm", "disk", diskPoints)
+	_ = store.Learn("vm-1", "vm", "disk", diskPoints)
 
 	// Create a metrics provider that returns anomalous values
 	metricsProvider := func(resourceID string) map[string]float64 {
@@ -685,7 +685,7 @@ func TestGetHourlyMean_OutOfRange(t *testing.T) {
 		points[i] = MetricPoint{Value: 50, Timestamp: time.Now()}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 
 	baseline, ok := store.GetBaseline("test-vm", "cpu")
 	if !ok {

@@ -1,0 +1,1873 @@
+package unifiedresources
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"log"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
+
+const autoMergeThreshold = 0.85
+
+var defaultStaleThresholds = map[DataSource]time.Duration{
+	SourceProxmox: 60 * time.Second,
+	SourceAgent:   60 * time.Second,
+	SourceDocker:  120 * time.Second,
+	SourcePBS:     120 * time.Second,
+	SourcePMG:     120 * time.Second,
+	SourceK8s:     120 * time.Second,
+	SourceTrueNAS: 120 * time.Second,
+}
+
+// IngestRecord is a source-native resource entry normalized for registry ingestion.
+type IngestRecord struct {
+	SourceID       string
+	ParentSourceID string
+	Resource       Resource
+	Identity       ResourceIdentity
+}
+
+// ResourceRegistry merges resources from multiple sources.
+type ResourceRegistry struct {
+	mu         sync.RWMutex
+	resources  map[string]*Resource
+	bySource   map[DataSource]map[string]string
+	matcher    *IdentityMatcher
+	store      ResourceStore
+	links      []ResourceLink
+	exclusions map[string]struct{}
+	pbsBackups []models.PBSBackup
+
+	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
+	// first access. Protected by mu — callers hold RLock to read, and the
+	// rebuild path upgrades to a write lock only when needed.
+	viewsDirty             bool
+	cachedVMs              []*VMView
+	cachedLXC              []*ContainerView
+	cachedNodes            []*NodeView
+	cachedHosts            []*HostView
+	cachedDocker           []*DockerHostView
+	cachedDockerContainers []*DockerContainerView
+	cachedStorage          []*StoragePoolView
+	cachedPhysicalDisks    []*PhysicalDiskView
+	cachedPBS              []*PBSInstanceView
+	cachedPMG              []*PMGInstanceView
+	cachedK8s              []*K8sClusterView
+	cachedK8sNodes         []*K8sNodeView
+	cachedPods             []*PodView
+	cachedK8sDeployments   []*K8sDeploymentView
+	cachedWorkload         []*WorkloadView
+	cachedInfra            []*InfrastructureView
+}
+
+// NewRegistry creates a new registry using the provided store for overrides.
+func NewRegistry(store ResourceStore) *ResourceRegistry {
+	rr := &ResourceRegistry{
+		resources:  make(map[string]*Resource),
+		bySource:   make(map[DataSource]map[string]string),
+		matcher:    NewIdentityMatcher(),
+		store:      store,
+		exclusions: make(map[string]struct{}),
+	}
+
+	rr.bySource[SourceProxmox] = make(map[string]string)
+	rr.bySource[SourceAgent] = make(map[string]string)
+	rr.bySource[SourceDocker] = make(map[string]string)
+	rr.bySource[SourcePBS] = make(map[string]string)
+	rr.bySource[SourcePMG] = make(map[string]string)
+	rr.bySource[SourceK8s] = make(map[string]string)
+	rr.bySource[SourceTrueNAS] = make(map[string]string)
+
+	rr.loadOverrides()
+	return rr
+}
+
+func (rr *ResourceRegistry) loadOverrides() {
+	if rr.store == nil {
+		return
+	}
+	links, err := rr.store.GetLinks()
+	if err == nil {
+		rr.links = links
+	} else {
+		log.Printf("unifiedresources: failed to load manual links from store: %v", err)
+	}
+	exclusions, err := rr.store.GetExclusions()
+	if err == nil {
+		for _, exclusion := range exclusions {
+			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
+			rr.exclusions[key] = struct{}{}
+		}
+	} else {
+		log.Printf("unifiedresources: failed to load manual exclusions from store: %v", err)
+	}
+}
+
+// IngestSnapshot ingests all resources from the current state snapshot.
+func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
+	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
+	for i := range snapshot.Hosts {
+		host := snapshot.Hosts[i]
+		if id := strings.TrimSpace(host.ID); id != "" {
+			hostByID[id] = &snapshot.Hosts[i]
+		}
+	}
+	inferredLinkedHostByNodeID := inferLinkedHostsForProxmoxNodes(snapshot.Nodes, hostByID)
+
+	// Build instance→clusterName lookup from nodes so we can propagate
+	// cluster names to VMs/Containers (their parent-ID lookup may fail
+	// when the node ID uses clusterName instead of instanceName).
+	clusterByInstance := make(map[string]string)
+	for _, node := range snapshot.Nodes {
+		if node.ClusterName != "" && node.Instance != "" {
+			clusterByInstance[node.Instance] = node.ClusterName
+		}
+		rr.ingestProxmoxNode(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)])
+	}
+	for _, host := range snapshot.Hosts {
+		rr.ingestHost(host)
+	}
+	for _, host := range snapshot.Hosts {
+		rr.ingestHostUnraidStorage(host)
+	}
+	for _, host := range snapshot.Hosts {
+		rr.ingestHostSMARTDisks(host)
+	}
+	for _, dh := range snapshot.DockerHosts {
+		rr.ingestDockerHost(dh)
+	}
+	for _, instance := range snapshot.PBSInstances {
+		rr.ingestPBSInstance(instance)
+	}
+	for _, instance := range snapshot.PMGInstances {
+		rr.ingestPMGInstance(instance)
+	}
+	for _, vm := range snapshot.VMs {
+		rr.ingestVM(vm, clusterByInstance)
+	}
+	for _, ct := range snapshot.Containers {
+		rr.ingestContainer(ct, clusterByInstance)
+	}
+	for _, storage := range snapshot.Storage {
+		rr.ingestStorage(storage)
+	}
+	for _, disk := range snapshot.PhysicalDisks {
+		rr.ingestPhysicalDisk(disk)
+	}
+	for _, cluster := range snapshot.CephClusters {
+		rr.ingestCephCluster(cluster)
+	}
+	for _, dh := range snapshot.DockerHosts {
+		for _, dc := range dh.Containers {
+			rr.ingestDockerContainer(dc, dh)
+		}
+	}
+
+	// Swarm services are cluster-scoped; multiple nodes can report identical
+	// service lists. Deduplicate by a stable source ID to avoid churn.
+	type dockerServiceCandidate struct {
+		host    models.DockerHost
+		service models.DockerService
+	}
+	serviceByID := make(map[string]dockerServiceCandidate)
+	for _, dh := range snapshot.DockerHosts {
+		if dh.Swarm == nil {
+			continue
+		}
+		for _, svc := range dh.Services {
+			sourceID := dockerServiceSourceID(dh, svc)
+			if sourceID == "" {
+				continue
+			}
+			existing, ok := serviceByID[sourceID]
+			if !ok {
+				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
+				continue
+			}
+			// Prefer candidates with richer fields and fresher host timestamps.
+			replace := false
+			if existing.service.Image == "" && svc.Image != "" {
+				replace = true
+			}
+			if existing.service.UpdateStatus == nil && svc.UpdateStatus != nil {
+				replace = true
+			}
+			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
+				replace = true
+			}
+			if replace {
+				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
+			}
+		}
+	}
+	for _, candidate := range serviceByID {
+		rr.ingestDockerService(candidate.service, candidate.host)
+	}
+
+	kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts)
+	for _, cluster := range snapshot.KubernetesClusters {
+		if cluster.Hidden {
+			continue
+		}
+		linkedHosts := linkedHostsForKubernetesCluster(cluster, kubernetesHostLookup)
+		capabilities := kubernetesMetricCapabilities(cluster, linkedHosts)
+		clusterID := rr.ingestKubernetesCluster(cluster, linkedHosts, capabilities)
+		for _, node := range cluster.Nodes {
+			linkedHost := resolveKubernetesNodeHost(node, kubernetesHostLookup)
+			rr.ingestKubernetesNode(cluster, node, linkedHost, clusterID, capabilities)
+		}
+		for _, pod := range cluster.Pods {
+			rr.ingestKubernetesPod(cluster, pod, clusterID, capabilities)
+		}
+		for _, deployment := range cluster.Deployments {
+			rr.ingestKubernetesDeployment(cluster, deployment, clusterID, capabilities)
+		}
+	}
+
+	rr.mu.Lock()
+	rr.pbsBackups = clonePBSBackups(snapshot.PBSBackups)
+	rr.applyManualLinks()
+	rr.refreshStorageConsumersLocked()
+	rr.refreshPBSRollupsLocked()
+	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
+	rr.buildChildCounts()
+	rr.markStaleLocked(time.Now().UTC(), nil)
+	rr.viewsDirty = true
+	rr.mu.Unlock()
+}
+
+// IngestRecords ingests normalized records for a single source.
+func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
+	for _, record := range records {
+		sourceID := normalizeSourceID(record.SourceID)
+		if sourceID == "" {
+			continue
+		}
+		resource := record.Resource
+		if parentSourceID := normalizeSourceID(record.ParentSourceID); parentSourceID != "" {
+			parentID := rr.sourceResourceID(source, parentSourceID)
+			if parentID != "" {
+				resource.ParentID = &parentID
+			}
+		}
+		rr.ingest(source, sourceID, resource, record.Identity)
+	}
+
+	rr.mu.Lock()
+	rr.refreshStorageConsumersLocked()
+	rr.refreshPBSRollupsLocked()
+	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
+	rr.buildChildCounts()
+	rr.viewsDirty = true
+	rr.mu.Unlock()
+}
+
+// IngestResources seeds the registry from already-unified resources.
+// This is used when a caller already has a canonical unified read model and
+// only needs store-backed manual links/exclusions applied on top.
+func (rr *ResourceRegistry) IngestResources(resources []Resource) {
+	for _, incoming := range resources {
+		resource := cloneResourcePtr(&incoming)
+		if resource == nil {
+			continue
+		}
+
+		resource.ID = CanonicalResourceID(resource.ID)
+		if resource.ID == "" {
+			continue
+		}
+		resource.Type = CanonicalResourceType(resource.Type)
+		if resource.SourceStatus == nil && len(resource.Sources) > 0 {
+			resource.SourceStatus = make(map[DataSource]SourceStatus, len(resource.Sources))
+			for _, source := range resource.Sources {
+				resource.SourceStatus[source] = SourceStatus{
+					Status:   "online",
+					LastSeen: resource.LastSeen,
+				}
+			}
+		}
+
+		rr.mu.Lock()
+		rr.resources[resource.ID] = resource
+		rr.viewsDirty = true
+		rr.mu.Unlock()
+	}
+
+	rr.mu.Lock()
+	rr.applyManualLinks()
+	rr.refreshStorageConsumersLocked()
+	rr.refreshPBSRollupsLocked()
+	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
+	rr.buildChildCounts()
+	rr.markStaleLocked(time.Now().UTC(), nil)
+	rr.viewsDirty = true
+	rr.mu.Unlock()
+}
+
+// List returns all resources.
+func (rr *ResourceRegistry) List() []Resource {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	out := make([]Resource, 0, len(rr.resources))
+	for _, r := range rr.resources {
+		out = append(out, cloneResource(r))
+	}
+	return out
+}
+
+// ListByType returns all resources of the provided type.
+//
+// The returned slice is sorted by resource ID to provide deterministic results.
+func (rr *ResourceRegistry) ListByType(t ResourceType) []Resource {
+	t = CanonicalResourceType(t)
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	out := make([]Resource, 0, len(rr.resources))
+	for _, r := range rr.resources {
+		if CanonicalResourceType(r.Type) != t {
+			continue
+		}
+		out = append(out, cloneResource(r))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// Get returns a resource by ID.
+func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	id = CanonicalResourceID(id)
+	r, ok := rr.resources[id]
+	if !ok || r == nil {
+		return nil, false
+	}
+	clone := cloneResource(r)
+	return &clone, true
+}
+
+// SourceTargets returns the source-specific IDs that map to the provided resource ID.
+func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	resourceID = CanonicalResourceID(resourceID)
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return nil
+	}
+
+	out := make([]SourceTarget, 0)
+	for source, mapping := range rr.bySource {
+		for sourceID, mappedID := range mapping {
+			if mappedID != resourceID {
+				continue
+			}
+			out = append(out, SourceTarget{
+				Source:      source,
+				SourceID:    sourceID,
+				CandidateID: rr.sourceSpecificID(resource.Type, source, sourceID),
+			})
+		}
+	}
+	return out
+}
+
+// MetricsTarget resolves the query target used by the metrics/history APIs for
+// the canonical resource.
+func (rr *ResourceRegistry) MetricsTarget(resourceID string) *MetricsTarget {
+	return BuildMetricsTargetForRegistry(rr, resourceID)
+}
+
+// BuildMetricsTargetForRegistry resolves the metrics target for a registry
+// resource ID without exposing registry internals to callers.
+func BuildMetricsTargetForRegistry(rr *ResourceRegistry, resourceID string) *MetricsTarget {
+	if rr == nil {
+		return nil
+	}
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	resourceID = CanonicalResourceID(resourceID)
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return nil
+	}
+
+	sourceTargets := make([]SourceTarget, 0)
+	for source, mapping := range rr.bySource {
+		for sourceID, mappedID := range mapping {
+			if mappedID != resourceID {
+				continue
+			}
+			sourceTargets = append(sourceTargets, SourceTarget{
+				Source:      source,
+				SourceID:    sourceID,
+				CandidateID: rr.sourceSpecificID(resource.Type, source, sourceID),
+			})
+		}
+	}
+
+	return BuildMetricsTarget(*resource, sourceTargets)
+}
+
+// GetChildren returns child resources for a parent.
+func (rr *ResourceRegistry) GetChildren(parentID string) []Resource {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	parentID = CanonicalResourceID(parentID)
+	var out []Resource
+	for _, r := range rr.resources {
+		if r.ParentID != nil && *r.ParentID == parentID {
+			out = append(out, cloneResource(r))
+		}
+	}
+	return out
+}
+
+// Stats returns aggregated stats.
+func (rr *ResourceRegistry) Stats() ResourceStats {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	stats := ResourceStats{
+		Total:    len(rr.resources),
+		ByType:   make(map[ResourceType]int),
+		ByStatus: make(map[ResourceStatus]int),
+		BySource: make(map[DataSource]int),
+	}
+	for _, r := range rr.resources {
+		stats.ByType[CanonicalResourceType(r.Type)]++
+		stats.ByStatus[r.Status]++
+		for _, source := range r.Sources {
+			stats.BySource[source]++
+		}
+	}
+	return stats
+}
+
+// MarkStale marks sources as stale based on last seen timestamps.
+// If thresholds is nil, default thresholds are used.
+func (rr *ResourceRegistry) MarkStale(now time.Time, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	rr.markStaleLocked(now, thresholds)
+}
+
+func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
+	if thresholds == nil {
+		thresholds = defaultStaleThresholds
+	}
+
+	for _, resource := range rr.resources {
+		staleFound := false
+		for source, status := range resource.SourceStatus {
+			threshold, ok := thresholds[source]
+			if !ok {
+				threshold = 120 * time.Second
+			}
+			if status.LastSeen.IsZero() {
+				continue
+			}
+			if now.Sub(status.LastSeen) > threshold {
+				status.Status = "stale"
+				resource.SourceStatus[source] = status
+				staleFound = true
+			}
+		}
+		if staleFound && resource.Status == StatusOnline {
+			resource.Status = StatusWarning
+		}
+	}
+}
+
+func (rr *ResourceRegistry) ingestProxmoxNode(node models.Node, linkedHost *models.Host) {
+	resource, identity := resourceFromProxmoxNode(node, linkedHost)
+	rr.ingest(SourceProxmox, node.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestHost(host models.Host) {
+	resource, identity := resourceFromHost(host)
+	rr.ingest(SourceAgent, host.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestHostUnraidStorage(host models.Host) {
+	if host.Unraid == nil {
+		return
+	}
+
+	resource, identity := resourceFromHostUnraidStorage(host)
+	parentID := rr.sourceResourceID(SourceAgent, host.ID)
+	if parentID != "" {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceAgent, hostUnraidStorageSourceID(host), resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
+	if len(host.Sensors.SMART) == 0 {
+		return
+	}
+
+	hostParentID := rr.sourceResourceID(SourceAgent, host.ID)
+	unraidStorageID := rr.sourceResourceID(SourceAgent, hostUnraidStorageSourceID(host))
+	for _, disk := range host.Sensors.SMART {
+		resource, identity := resourceFromHostSMARTDisk(host, disk)
+		if resource.PhysicalDisk == nil {
+			continue
+		}
+		parentID := hostParentID
+		if matched := matchUnraidDisk(host.Unraid, disk); matched != nil && unraidDiskGroup(matched) == "unraid-array" && unraidStorageID != "" {
+			parentID = unraidStorageID
+		}
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		sourceID := HostSMARTDiskSourceID(host, disk)
+		if sourceID == "" {
+			continue
+		}
+		rr.ingest(SourceAgent, sourceID, resource, identity)
+	}
+}
+
+func (rr *ResourceRegistry) ingestDockerHost(host models.DockerHost) {
+	resource, identity := resourceFromDockerHost(host)
+	rr.ingest(SourceDocker, host.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestPBSInstance(instance models.PBSInstance) {
+	resource, identity := resourceFromPBSInstance(instance)
+	sourceID := pbsInstanceSourceID(instance)
+	rr.ingest(SourcePBS, sourceID, resource, identity)
+	parentID := rr.sourceResourceID(SourcePBS, sourceID)
+	for _, datastore := range instance.Datastores {
+		resource, identity := resourceFromPBSDatastore(instance, datastore)
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		rr.ingest(SourcePBS, pbsDatastoreSourceID(instance, datastore), resource, identity)
+	}
+}
+
+func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
+	resource, identity := resourceFromPMGInstance(instance)
+	sourceID := pmgInstanceSourceID(instance)
+	rr.ingest(SourcePMG, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string) {
+	resource, identity := resourceFromVM(vm)
+	parentSourceID := proxmoxNodeSourceID(vm.Instance, vm.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	if clusterName := clusterByInstance[vm.Instance]; clusterName != "" && resource.Proxmox != nil {
+		resource.Proxmox.ClusterName = clusterName
+	}
+	rr.ingest(SourceProxmox, vm.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string) {
+	resource, identity := resourceFromContainer(ct)
+	parentSourceID := proxmoxNodeSourceID(ct.Instance, ct.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	if clusterName := clusterByInstance[ct.Instance]; clusterName != "" && resource.Proxmox != nil {
+		resource.Proxmox.ClusterName = clusterName
+	}
+	rr.ingest(SourceProxmox, ct.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
+	resource, identity := resourceFromStorage(storage)
+	parentSourceID := proxmoxNodeSourceID(storage.Instance, storage.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceProxmox, storage.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestPhysicalDisk(disk models.PhysicalDisk) {
+	resource, identity := resourceFromPhysicalDisk(disk)
+	parentSourceID := proxmoxNodeSourceID(disk.Instance, disk.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceProxmox, disk.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestCephCluster(cluster models.CephCluster) {
+	resource, identity := resourceFromCephCluster(cluster)
+	sourceID := cluster.FSID
+	if sourceID == "" {
+		sourceID = cluster.ID
+	}
+	rr.ingest(SourceProxmox, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, host models.DockerHost) {
+	resource, identity := resourceFromDockerContainer(ct, host)
+	if parentID, ok := rr.bySource[SourceDocker][host.ID]; ok {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceDocker, ct.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerService(service models.DockerService, host models.DockerHost) {
+	resource, identity := resourceFromDockerService(service, host)
+	sourceID := dockerServiceSourceID(host, service)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) string {
+	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts, capabilities)
+	sourceID := kubernetesClusterSourceID(cluster)
+	return rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluster, node models.KubernetesNode, linkedHost *models.Host, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesNode(cluster, node, linkedHost, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesNodeSourceID(kubernetesClusterSourceID(cluster), node)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster, pod models.KubernetesPod, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesPod(cluster, pod, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesPodSourceID(kubernetesClusterSourceID(cluster), pod)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.KubernetesCluster, deployment models.KubernetesDeployment, clusterResourceID string, capabilities *K8sMetricCapabilities) {
+	resource, identity := resourceFromKubernetesDeployment(cluster, deployment, capabilities)
+	if clusterResourceID != "" {
+		resource.ParentID = &clusterResourceID
+	}
+	sourceID := kubernetesDeploymentSourceID(kubernetesClusterSourceID(cluster), deployment)
+	rr.ingest(SourceK8s, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) string {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	sourceID = normalizeSourceID(sourceID)
+	if sourceID == "" {
+		return ""
+	}
+	if _, ok := rr.bySource[source]; !ok {
+		rr.bySource[source] = make(map[string]string)
+	}
+
+	resource.Identity = identity
+	resource.Type = CanonicalResourceType(resource.Type)
+	resource.Sources = []DataSource{source}
+	resource.SourceStatus = map[DataSource]SourceStatus{
+		source: {Status: "online", LastSeen: resource.LastSeen},
+	}
+	resource.parentBySource = make(map[DataSource]string)
+	rr.setSourceParent(&resource, source, resource.ParentID)
+
+	if resource.LastSeen.IsZero() {
+		resource.LastSeen = time.Now().UTC()
+	}
+
+	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
+	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
+		existing := rr.resources[linked]
+		if existing != nil {
+			rr.mergeInto(existing, resource, source)
+			rr.bySource[source][sourceID] = existing.ID
+			return existing.ID
+		}
+	}
+
+	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
+
+	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
+		if match, excluded := rr.findMatch(identity, resource.Type, candidateID); match != nil {
+			existing := rr.resources[match.ResourceB]
+			if existing != nil {
+				rr.mergeInto(existing, resource, source)
+				rr.bySource[source][sourceID] = existing.ID
+				return existing.ID
+			}
+		} else if excluded {
+			resource.ID = candidateID
+			rr.resources[resource.ID] = &resource
+			rr.bySource[source][sourceID] = resource.ID
+			rr.matcher.Add(resource.ID, identity)
+			return resource.ID
+		}
+	}
+
+	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
+	if existing := rr.resources[resource.ID]; existing != nil {
+		rr.mergeInto(existing, resource, source)
+		rr.bySource[source][sourceID] = existing.ID
+		rr.matcher.Add(existing.ID, existing.Identity)
+		return existing.ID
+	}
+	rr.resources[resource.ID] = &resource
+	rr.bySource[source][sourceID] = resource.ID
+	rr.matcher.Add(resource.ID, identity)
+
+	return resource.ID
+}
+
+func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType ResourceType, candidateID string) (*MatchResult, bool) {
+	excludedMatch := false
+	candidates := rr.matcher.FindCandidates(identity)
+	for _, candidate := range candidates {
+		if candidate.ID == "" {
+			continue
+		}
+		if candidate.Confidence < autoMergeThreshold {
+			continue
+		}
+		existing := rr.resources[candidate.ID]
+		if existing == nil || existing.Type != resourceType {
+			continue
+		}
+		if rr.isExcluded(candidate.ID, candidateID) {
+			excludedMatch = true
+			continue
+		}
+		return &MatchResult{
+			ResourceA:      candidateID,
+			ResourceB:      candidate.ID,
+			Confidence:     candidate.Confidence,
+			MatchReason:    candidate.Reason,
+			RequiresReview: candidate.RequiresReview,
+		}, false
+	}
+	return nil, excludedMatch
+}
+
+func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
+	switch source {
+	case SourceProxmox:
+		if resource.Proxmox != nil && resource.Proxmox.LinkedAgentID != "" {
+			if id, ok := rr.bySource[SourceAgent][resource.Proxmox.LinkedAgentID]; ok {
+				existing := rr.resources[id]
+				if existing == nil || existing.Agent == nil {
+					return ""
+				}
+				linkedNodeID := strings.TrimSpace(existing.Agent.LinkedNodeID)
+				if linkedNodeID == sourceID {
+					return id
+				}
+				if linkedNodeID == "" && identitiesShareHostname(existing.Identity, resource.Identity) {
+					return id
+				}
+			}
+		}
+	case SourceAgent:
+		if resource.Agent != nil && resource.Agent.LinkedNodeID != "" {
+			if id, ok := rr.bySource[SourceProxmox][resource.Agent.LinkedNodeID]; ok {
+				existing := rr.resources[id]
+				if existing == nil || existing.Proxmox == nil {
+					return ""
+				}
+				linkedHostID := strings.TrimSpace(existing.Proxmox.LinkedAgentID)
+				if linkedHostID == "" || linkedHostID != sourceID {
+					return ""
+				}
+				return id
+			}
+		}
+		if resource.Agent != nil {
+			return rr.findCorroboratedOneSidedProxmoxLink(sourceID, resource.Identity)
+		}
+	}
+	return ""
+}
+
+func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(
+	hostAgentID string,
+	identity ResourceIdentity,
+) string {
+	if strings.TrimSpace(hostAgentID) == "" {
+		return ""
+	}
+
+	matchID := ""
+	for _, resourceID := range rr.bySource[SourceProxmox] {
+		existing := rr.resources[resourceID]
+		if existing == nil || existing.Proxmox == nil {
+			continue
+		}
+		if strings.TrimSpace(existing.Proxmox.LinkedAgentID) != hostAgentID {
+			continue
+		}
+		if !identitiesShareHostname(existing.Identity, identity) {
+			continue
+		}
+		if matchID != "" && matchID != resourceID {
+			return ""
+		}
+		matchID = resourceID
+	}
+
+	return matchID
+}
+
+func identitiesShareHostname(a, b ResourceIdentity) bool {
+	if len(a.Hostnames) == 0 || len(b.Hostnames) == 0 {
+		return false
+	}
+
+	seen := make(map[string]struct{}, len(a.Hostnames))
+	for _, hostname := range a.Hostnames {
+		normalized := NormalizeHostname(hostname)
+		if normalized == "" {
+			continue
+		}
+		seen[normalized] = struct{}{}
+	}
+
+	for _, hostname := range b.Hostnames {
+		normalized := NormalizeHostname(hostname)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, source DataSource) {
+	if existing == nil {
+		return
+	}
+
+	rr.setSourceParent(existing, source, incoming.ParentID)
+
+	// Merge identity
+	existing.Identity = mergeIdentity(existing.Identity, incoming.Identity)
+
+	// Merge tags
+	existing.Tags = uniqueStrings(append(existing.Tags, incoming.Tags...))
+	existing.Incidents = mergeResourceIncidents(existing.Incidents, incoming.Incidents)
+
+	// Update source payload
+	switch source {
+	case SourceProxmox:
+		if incoming.PhysicalDisk != nil {
+			previous := existing.PhysicalDisk
+			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+			if previous != nil && hasDataSource(existing.Sources, SourceAgent) {
+				if previous.Temperature > 0 {
+					existing.PhysicalDisk.Temperature = previous.Temperature
+				}
+				if previous.Wearout >= 0 {
+					existing.PhysicalDisk.Wearout = previous.Wearout
+				}
+				if previous.SMART != nil {
+					smart := *previous.SMART
+					existing.PhysicalDisk.SMART = &smart
+				}
+			}
+			break
+		}
+		existing.Proxmox = mergeProxmoxData(existing.Proxmox, incoming.Proxmox)
+	case SourceAgent:
+		if incoming.PhysicalDisk != nil {
+			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+			break
+		}
+		existing.Agent = incoming.Agent
+	case SourceDocker:
+		existing.Docker = incoming.Docker
+	case SourcePBS:
+		existing.PBS = incoming.PBS
+	case SourceK8s:
+		existing.Kubernetes = incoming.Kubernetes
+	case SourcePMG:
+		existing.PMG = incoming.PMG
+	}
+
+	existing.Sources = addSource(existing.Sources, source)
+	if existing.SourceStatus == nil {
+		existing.SourceStatus = make(map[DataSource]SourceStatus)
+	}
+	existing.SourceStatus[source] = SourceStatus{Status: "online", LastSeen: incoming.LastSeen}
+
+	if incoming.LastSeen.After(existing.LastSeen) {
+		existing.LastSeen = incoming.LastSeen
+	}
+	existing.UpdatedAt = time.Now().UTC()
+	existing.ParentID = rr.resolveCanonicalParentID(existing)
+
+	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
+	existing.Metrics = mergeMetrics(existing.Metrics, incoming.Metrics, source)
+
+	// Prefer agent naming when available
+	if incoming.Name != "" {
+		if existing.Name == "" || sourcePriority(source) >= sourcePriority(SourceAgent) {
+			existing.Name = incoming.Name
+		}
+	}
+}
+
+func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.SourceID != "" {
+		merged.SourceID = incoming.SourceID
+	}
+	if incoming.NodeName != "" {
+		merged.NodeName = incoming.NodeName
+	}
+	if incoming.ClusterName != "" {
+		merged.ClusterName = incoming.ClusterName
+	}
+	if incoming.IsClusterMember {
+		merged.IsClusterMember = true
+	}
+	if incoming.Instance != "" {
+		merged.Instance = incoming.Instance
+	}
+	if incoming.HostURL != "" {
+		merged.HostURL = incoming.HostURL
+	}
+	if incoming.VMID != 0 {
+		merged.VMID = incoming.VMID
+	}
+	if incoming.CPUs != 0 {
+		merged.CPUs = incoming.CPUs
+	}
+	if incoming.Template {
+		merged.Template = true
+	}
+	if incoming.Temperature != nil {
+		temperature := *incoming.Temperature
+		merged.Temperature = &temperature
+	}
+	if incoming.PVEVersion != "" {
+		merged.PVEVersion = incoming.PVEVersion
+	}
+	if incoming.KernelVersion != "" {
+		merged.KernelVersion = incoming.KernelVersion
+	}
+	if incoming.Uptime != 0 {
+		merged.Uptime = incoming.Uptime
+	}
+	if !incoming.LastBackup.IsZero() {
+		merged.LastBackup = incoming.LastBackup
+	}
+	if incoming.CPUInfo != nil {
+		cpuInfo := *incoming.CPUInfo
+		merged.CPUInfo = &cpuInfo
+	}
+	if len(incoming.LoadAverage) > 0 {
+		merged.LoadAverage = append([]float64(nil), incoming.LoadAverage...)
+	}
+	if incoming.PendingUpdates != 0 {
+		merged.PendingUpdates = incoming.PendingUpdates
+	}
+	if len(incoming.Disks) > 0 {
+		merged.Disks = append([]DiskInfo(nil), incoming.Disks...)
+	}
+	if incoming.SwapUsed != 0 {
+		merged.SwapUsed = incoming.SwapUsed
+	}
+	if incoming.SwapTotal != 0 {
+		merged.SwapTotal = incoming.SwapTotal
+	}
+	if incoming.Balloon != 0 {
+		merged.Balloon = incoming.Balloon
+	}
+	if incoming.Lock != "" {
+		merged.Lock = incoming.Lock
+	}
+	if incoming.LinkedAgentID != "" {
+		merged.LinkedAgentID = incoming.LinkedAgentID
+	}
+
+	return &merged
+}
+
+func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMeta) *PhysicalDiskMeta {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.DevPath != "" {
+		merged.DevPath = incoming.DevPath
+	}
+	if incoming.Model != "" {
+		merged.Model = incoming.Model
+	}
+	if incoming.Serial != "" {
+		merged.Serial = incoming.Serial
+	}
+	if incoming.WWN != "" {
+		merged.WWN = incoming.WWN
+	}
+	if incoming.DiskType != "" {
+		merged.DiskType = incoming.DiskType
+	}
+	if incoming.SizeBytes > 0 {
+		merged.SizeBytes = incoming.SizeBytes
+	}
+	if incoming.Health != "" {
+		merged.Health = incoming.Health
+	}
+	if incoming.Wearout >= 0 && (merged.Wearout < 0 || incoming.SMART != nil || merged.SMART == nil) {
+		merged.Wearout = incoming.Wearout
+	}
+	if incoming.Temperature > 0 && (merged.Temperature == 0 || incoming.SMART != nil || merged.SMART == nil) {
+		merged.Temperature = incoming.Temperature
+	}
+	if incoming.RPM > 0 {
+		merged.RPM = incoming.RPM
+	}
+	if incoming.Used != "" {
+		merged.Used = incoming.Used
+	}
+	if incoming.StorageRole != "" {
+		merged.StorageRole = incoming.StorageRole
+	}
+	if incoming.StorageGroup != "" {
+		merged.StorageGroup = incoming.StorageGroup
+	}
+	if incoming.StorageState != "" {
+		merged.StorageState = incoming.StorageState
+	}
+	if incoming.SMART != nil {
+		smart := *incoming.SMART
+		merged.SMART = &smart
+	}
+	merged.Risk = physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged))
+
+	return &merged
+}
+
+func (rr *ResourceRegistry) applyManualLinks() {
+	if len(rr.links) == 0 {
+		return
+	}
+	for _, link := range rr.links {
+		primaryID := link.PrimaryID
+		if primaryID == "" {
+			primaryID = link.ResourceA
+		}
+		primary := rr.resources[primaryID]
+		if primary == nil {
+			primary = rr.resources[link.ResourceA]
+			primaryID = link.ResourceA
+		}
+		if primary == nil {
+			primary = rr.resources[link.ResourceB]
+			primaryID = link.ResourceB
+		}
+		if primary == nil {
+			continue
+		}
+
+		otherID := link.ResourceB
+		if otherID == primaryID {
+			otherID = link.ResourceA
+		}
+		other := rr.resources[otherID]
+		if other == nil || otherID == primaryID {
+			continue
+		}
+
+		rr.mergeResourceData(primary, other)
+		delete(rr.resources, otherID)
+		rr.updateSourceMappings(otherID, primaryID)
+	}
+}
+
+func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource) {
+	if other == nil || primary == nil {
+		return
+	}
+	if other.parentBySource != nil {
+		if primary.parentBySource == nil {
+			primary.parentBySource = make(map[DataSource]string, len(other.parentBySource))
+		}
+		for source, parentID := range other.parentBySource {
+			primary.parentBySource[source] = parentID
+		}
+	}
+	primary.Identity = mergeIdentity(primary.Identity, other.Identity)
+	primary.Tags = uniqueStrings(append(primary.Tags, other.Tags...))
+	primary.Incidents = mergeResourceIncidents(primary.Incidents, other.Incidents)
+	primary.Sources = addSources(primary.Sources, other.Sources)
+	if primary.SourceStatus == nil {
+		primary.SourceStatus = make(map[DataSource]SourceStatus)
+	}
+	for source, status := range other.SourceStatus {
+		primary.SourceStatus[source] = status
+	}
+	if other.LastSeen.After(primary.LastSeen) {
+		primary.LastSeen = other.LastSeen
+	}
+	primary.UpdatedAt = time.Now().UTC()
+	if primary.ParentID == nil && other.ParentID != nil {
+		primary.ParentID = cloneStringPtr(other.ParentID)
+	}
+	primary.ParentID = rr.resolveCanonicalParentID(primary)
+
+	if primary.Proxmox == nil {
+		primary.Proxmox = other.Proxmox
+	}
+	if primary.Agent == nil {
+		primary.Agent = other.Agent
+	}
+	if primary.Docker == nil {
+		primary.Docker = other.Docker
+	}
+	if primary.PBS == nil {
+		primary.PBS = other.PBS
+	}
+	if primary.PMG == nil {
+		primary.PMG = other.PMG
+	}
+	if primary.Kubernetes == nil {
+		primary.Kubernetes = other.Kubernetes
+	}
+	if primary.PhysicalDisk == nil {
+		primary.PhysicalDisk = other.PhysicalDisk
+	}
+	if primary.Ceph == nil {
+		primary.Ceph = other.Ceph
+	}
+
+	primary.Metrics = mergeMetrics(primary.Metrics, other.Metrics, SourceAgent)
+	primary.Status = aggregateStatus(primary)
+}
+
+func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
+	for source, mapping := range rr.bySource {
+		for key, value := range mapping {
+			if value == fromID {
+				mapping[key] = toID
+			}
+		}
+		rr.bySource[source] = mapping
+	}
+}
+
+func (rr *ResourceRegistry) setSourceParent(resource *Resource, source DataSource, parentID *string) {
+	if resource == nil {
+		return
+	}
+	if resource.parentBySource == nil {
+		resource.parentBySource = make(map[DataSource]string)
+	}
+	if parentID == nil {
+		delete(resource.parentBySource, source)
+		return
+	}
+	canonicalParentID := CanonicalResourceID(strings.TrimSpace(*parentID))
+	if canonicalParentID == "" {
+		delete(resource.parentBySource, source)
+		return
+	}
+	resource.parentBySource[source] = canonicalParentID
+}
+
+func (rr *ResourceRegistry) resolveCanonicalParentID(resource *Resource) *string {
+	if resource == nil {
+		return nil
+	}
+
+	if resource.parentBySource == nil {
+		if resource.ParentID == nil {
+			return nil
+		}
+		canonicalParentID := CanonicalResourceID(strings.TrimSpace(*resource.ParentID))
+		if canonicalParentID == "" {
+			return nil
+		}
+		if _, ok := rr.resources[canonicalParentID]; !ok {
+			return nil
+		}
+		return &canonicalParentID
+	}
+
+	bestPriority := -1
+	bestParentID := ""
+	for source, parentID := range resource.parentBySource {
+		parentID = CanonicalResourceID(strings.TrimSpace(parentID))
+		if parentID == "" {
+			continue
+		}
+		if _, ok := rr.resources[parentID]; !ok {
+			continue
+		}
+		priority := sourcePriority(source)
+		if priority > bestPriority {
+			bestPriority = priority
+			bestParentID = parentID
+		}
+	}
+	if bestParentID == "" {
+		return nil
+	}
+	return &bestParentID
+}
+
+func (rr *ResourceRegistry) buildChildCounts() {
+	// ChildCount and ParentName are derived fields. Clear prior values before
+	// recomputing to prevent stale state after re-parenting or parent removal.
+	for _, r := range rr.resources {
+		r.ParentID = rr.resolveCanonicalParentID(r)
+		r.ChildCount = 0
+		r.ParentName = ""
+	}
+
+	childCounts := make(map[string]int)
+	for _, r := range rr.resources {
+		if r.ParentID != nil {
+			childCounts[*r.ParentID]++
+		}
+	}
+	for id, count := range childCounts {
+		if r, ok := rr.resources[id]; ok {
+			r.ChildCount = count
+		}
+	}
+	// Resolve parent names for child resources.
+	for _, r := range rr.resources {
+		if r.ParentID != nil {
+			if parent, ok := rr.resources[*r.ParentID]; ok {
+				r.ParentName = parent.Name
+			}
+		}
+	}
+}
+
+func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity ResourceIdentity, source DataSource, sourceID string) string {
+	switch resourceType {
+	case ResourceTypeAgent:
+		if identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != "" {
+			return rr.canonicalIDFromIdentity(resourceType, identity)
+		}
+	case ResourceTypePhysicalDisk:
+		if identity.MachineID != "" || identity.DMIUUID != "" {
+			return rr.canonicalIDFromIdentity(resourceType, identity)
+		}
+	}
+	return rr.sourceSpecificID(resourceType, source, sourceID)
+}
+
+func (rr *ResourceRegistry) sourceResourceID(source DataSource, sourceID string) string {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	mapping, ok := rr.bySource[source]
+	if !ok {
+		return ""
+	}
+	return mapping[normalizeSourceID(sourceID)]
+}
+
+func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, identity ResourceIdentity) string {
+	var stable string
+	switch {
+	case identity.MachineID != "":
+		stable = "machine:" + strings.TrimSpace(identity.MachineID)
+	case identity.DMIUUID != "":
+		stable = "dmi:" + strings.TrimSpace(identity.DMIUUID)
+	case identity.ClusterName != "" && len(identity.Hostnames) > 0:
+		stable = fmt.Sprintf("cluster:%s:%s", identity.ClusterName, NormalizeHostname(identity.Hostnames[0]))
+	case len(identity.Hostnames) > 0:
+		stable = "hostname:" + NormalizeHostname(identity.Hostnames[0])
+	case len(identity.IPAddresses) > 0:
+		stable = "ip:" + NormalizeIP(identity.IPAddresses[0])
+	default:
+		stable = fmt.Sprintf("unknown:%d", time.Now().UnixNano())
+	}
+	return buildHashID(resourceType, stable)
+}
+
+func (rr *ResourceRegistry) sourceSpecificID(resourceType ResourceType, source DataSource, sourceID string) string {
+	stable := fmt.Sprintf("%s:%s", source, normalizeSourceID(sourceID))
+	return buildHashID(resourceType, stable)
+}
+
+func buildHashID(resourceType ResourceType, stable string) string {
+	resourceType = CanonicalResourceType(resourceType)
+	hash := sha256.Sum256([]byte(stable))
+	return fmt.Sprintf("%s-%s", resourceType, hex.EncodeToString(hash[:8]))
+}
+
+func proxmoxNodeSourceID(instance, nodeName string) string {
+	if instance == "" {
+		return nodeName
+	}
+	return fmt.Sprintf("%s-%s", instance, nodeName)
+}
+
+func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {
+	if v := strings.TrimSpace(cluster.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.AgentID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.Name); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(cluster.DisplayName); v != "" {
+		return v
+	}
+	return strings.TrimSpace(cluster.Context)
+}
+
+func kubernetesNodeSourceID(clusterSourceID string, node models.KubernetesNode) string {
+	nodeID := strings.TrimSpace(node.UID)
+	if nodeID == "" {
+		nodeID = strings.TrimSpace(node.Name)
+	}
+	return fmt.Sprintf("%s:node:%s", clusterSourceID, nodeID)
+}
+
+func kubernetesPodSourceID(clusterSourceID string, pod models.KubernetesPod) string {
+	podID := strings.TrimSpace(pod.UID)
+	if podID == "" {
+		podID = fmt.Sprintf("%s/%s", strings.TrimSpace(pod.Namespace), strings.TrimSpace(pod.Name))
+	}
+	return fmt.Sprintf("%s:pod:%s", clusterSourceID, podID)
+}
+
+func kubernetesDeploymentSourceID(clusterSourceID string, deployment models.KubernetesDeployment) string {
+	deploymentID := strings.TrimSpace(deployment.UID)
+	if deploymentID == "" {
+		deploymentID = fmt.Sprintf("%s/%s", strings.TrimSpace(deployment.Namespace), strings.TrimSpace(deployment.Name))
+	}
+	return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+}
+
+func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {
+	lookup := make(map[string]*models.Host, len(hosts)*2)
+	for i := range hosts {
+		host := &hosts[i]
+		if host == nil {
+			continue
+		}
+
+		exactKey := strings.ToLower(strings.TrimSpace(host.Hostname))
+		if exactKey != "" {
+			lookup["agent:"+exactKey] = host
+		}
+
+		normalized := NormalizeHostname(host.Hostname)
+		if normalized != "" {
+			if _, exists := lookup["short:"+normalized]; !exists {
+				lookup["short:"+normalized] = host
+			}
+		}
+	}
+	return lookup
+}
+
+func resolveKubernetesNodeHost(node models.KubernetesNode, lookup map[string]*models.Host) *models.Host {
+	if len(lookup) == 0 {
+		return nil
+	}
+
+	exactKey := strings.ToLower(strings.TrimSpace(node.Name))
+	if exactKey != "" {
+		if host, ok := lookup["agent:"+exactKey]; ok {
+			return host
+		}
+	}
+
+	normalized := NormalizeHostname(node.Name)
+	if normalized != "" {
+		if host, ok := lookup["short:"+normalized]; ok {
+			return host
+		}
+	}
+
+	return nil
+}
+
+func linkedHostsForKubernetesCluster(cluster models.KubernetesCluster, lookup map[string]*models.Host) []*models.Host {
+	if len(cluster.Nodes) == 0 || len(lookup) == 0 {
+		return nil
+	}
+
+	hosts := make([]*models.Host, 0, len(cluster.Nodes))
+	seen := make(map[string]struct{}, len(cluster.Nodes))
+	for _, node := range cluster.Nodes {
+		host := resolveKubernetesNodeHost(node, lookup)
+		if host == nil {
+			continue
+		}
+		hostID := strings.TrimSpace(host.ID)
+		if hostID == "" {
+			hostID = strings.ToLower(strings.TrimSpace(host.Hostname))
+		}
+		if hostID == "" {
+			continue
+		}
+		if _, exists := seen[hostID]; exists {
+			continue
+		}
+		seen[hostID] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	return hosts
+}
+
+func pbsInstanceSourceID(instance models.PBSInstance) string {
+	if v := strings.TrimSpace(instance.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(instance.Name); v != "" {
+		return v
+	}
+	return extractHostname(instance.Host)
+}
+
+func pbsDatastoreSourceID(instance models.PBSInstance, datastore models.PBSDatastore) string {
+	instanceID := pbsInstanceSourceID(instance)
+	datastoreName := strings.TrimSpace(datastore.Name)
+	if instanceID == "" {
+		return datastoreName
+	}
+	if datastoreName == "" {
+		return instanceID
+	}
+	return instanceID + "/" + datastoreName
+}
+
+func pmgInstanceSourceID(instance models.PMGInstance) string {
+	if v := strings.TrimSpace(instance.ID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(instance.Name); v != "" {
+		return v
+	}
+	return extractHostname(instance.Host)
+}
+
+func clonePBSBackups(in []models.PBSBackup) []models.PBSBackup {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]models.PBSBackup, len(in))
+	copy(out, in)
+	return out
+}
+
+func dockerSwarmClusterKey(host models.DockerHost) string {
+	if host.Swarm == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(host.Swarm.ClusterID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(host.Swarm.ClusterName); v != "" {
+		return v
+	}
+	return ""
+}
+
+func dockerServiceSourceID(host models.DockerHost, service models.DockerService) string {
+	cluster := dockerSwarmClusterKey(host)
+	if cluster == "" {
+		return ""
+	}
+	serviceID := strings.TrimSpace(service.ID)
+	if serviceID == "" {
+		serviceID = strings.TrimSpace(service.Name)
+	}
+	if serviceID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:service:%s", cluster, serviceID)
+}
+
+func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {
+	if existing.MachineID == "" {
+		existing.MachineID = incoming.MachineID
+	}
+	if existing.DMIUUID == "" {
+		existing.DMIUUID = incoming.DMIUUID
+	}
+	if existing.ClusterName == "" {
+		existing.ClusterName = incoming.ClusterName
+	}
+	existing.Hostnames = uniqueStrings(append(existing.Hostnames, incoming.Hostnames...))
+	existing.IPAddresses = uniqueStrings(append(existing.IPAddresses, incoming.IPAddresses...))
+	existing.MACAddresses = uniqueStrings(append(existing.MACAddresses, incoming.MACAddresses...))
+	return existing
+}
+
+func addSource(sources []DataSource, source DataSource) []DataSource {
+	for _, existing := range sources {
+		if existing == source {
+			return sources
+		}
+	}
+	return append(sources, source)
+}
+
+func hasDataSource(sources []DataSource, source DataSource) bool {
+	for _, existing := range sources {
+		if existing == source {
+			return true
+		}
+	}
+	return false
+}
+
+func addSources(sources []DataSource, more []DataSource) []DataSource {
+	out := sources
+	for _, source := range more {
+		out = addSource(out, source)
+	}
+	return out
+}
+
+func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource) *ResourceMetrics {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+	merged := *existing
+	merged.CPU = mergeMetric(existing.CPU, incoming.CPU, source)
+	merged.Memory = mergeMetric(existing.Memory, incoming.Memory, source)
+	merged.Disk = mergeMetric(existing.Disk, incoming.Disk, source)
+	merged.NetIn = mergeMetric(existing.NetIn, incoming.NetIn, source)
+	merged.NetOut = mergeMetric(existing.NetOut, incoming.NetOut, source)
+	merged.DiskRead = mergeMetric(existing.DiskRead, incoming.DiskRead, source)
+	merged.DiskWrite = mergeMetric(existing.DiskWrite, incoming.DiskWrite, source)
+	return &merged
+}
+
+func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource) *MetricValue {
+	if incoming == nil {
+		return existing
+	}
+	incomingCopy := *incoming
+	incomingCopy.Source = source
+	if existing == nil {
+		return &incomingCopy
+	}
+	if sourcePriority(source) >= sourcePriority(existing.Source) {
+		return &incomingCopy
+	}
+	return existing
+}
+
+func sourcePriority(source DataSource) int {
+	switch source {
+	case SourceAgent:
+		return 3
+	case SourceProxmox:
+		return 2
+	case SourceDocker:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataSource) ResourceStatus {
+	if existing == "" || existing == StatusUnknown {
+		return incoming
+	}
+	if sourcePriority(source) >= sourcePriority(SourceAgent) {
+		return incoming
+	}
+	return existing
+}
+
+func aggregateStatus(resource *Resource) ResourceStatus {
+	statusPriority := map[string]int{
+		"online":  3,
+		"stale":   2,
+		"offline": 1,
+	}
+	best := StatusUnknown
+	bestScore := 0
+	for _, status := range resource.SourceStatus {
+		score := statusPriority[strings.ToLower(status.Status)]
+		if score > bestScore {
+			bestScore = score
+			if status.Status == "online" {
+				best = StatusOnline
+			} else if status.Status == "stale" {
+				best = StatusWarning
+			} else if status.Status == "offline" {
+				best = StatusOffline
+			}
+		}
+	}
+	if best == "" {
+		return StatusUnknown
+	}
+	return best
+}
+
+func (rr *ResourceRegistry) isExcluded(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	_, ok := rr.exclusions[exclusionKey(a, b)]
+	return ok
+}
+
+func exclusionKey(a, b string) string {
+	if a > b {
+		a, b = b, a
+	}
+	return a + "|" + b
+}
+
+// Stable ordering helper for deterministic output.
+func sortResourcesByName(resources []Resource) {
+	sort.Slice(resources, func(i, j int) bool {
+		return strings.ToLower(resources[i].Name) < strings.ToLower(resources[j].Name)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// ReadState implementation — typed, cached view accessors
+// ---------------------------------------------------------------------------
+
+// ensureViewsLocked rebuilds all cached view slices if dirty.
+// Caller must hold rr.mu for writing.
+func (rr *ResourceRegistry) ensureViewsLocked() {
+	if !rr.viewsDirty {
+		return
+	}
+	rr.rebuildViews()
+}
+
+// withViewCache acquires a write lock to ensure views are fresh, then
+// downgrades to a read lock and calls fn. This avoids TOCTOU gaps.
+func withViewCache[T any](rr *ResourceRegistry, fn func() T) T {
+	rr.mu.Lock()
+	rr.ensureViewsLocked()
+	rr.mu.Unlock()
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	return fn()
+}
+
+// rebuildViews recomputes all cached view slices from the current resource map.
+// Caller must hold rr.mu for writing.
+func (rr *ResourceRegistry) rebuildViews() {
+	rr.cachedVMs = nil
+	rr.cachedLXC = nil
+	rr.cachedNodes = nil
+	rr.cachedHosts = nil
+	rr.cachedDocker = nil
+	rr.cachedDockerContainers = nil
+	rr.cachedStorage = nil
+	rr.cachedPhysicalDisks = nil
+	rr.cachedPBS = nil
+	rr.cachedPMG = nil
+	rr.cachedK8s = nil
+	rr.cachedK8sNodes = nil
+	rr.cachedPods = nil
+	rr.cachedK8sDeployments = nil
+	rr.cachedWorkload = nil
+	rr.cachedInfra = nil
+
+	for _, r := range rr.resources {
+		viewResource := cloneResourcePtr(r)
+		switch r.Type {
+		case ResourceTypeVM:
+			v := NewVMView(viewResource)
+			rr.cachedVMs = append(rr.cachedVMs, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeSystemContainer:
+			v := NewContainerView(viewResource)
+			rr.cachedLXC = append(rr.cachedLXC, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeAppContainer:
+			v := NewDockerContainerView(viewResource)
+			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
+		case ResourceTypeAgent:
+			inf := NewInfrastructureView(viewResource)
+			rr.cachedInfra = append(rr.cachedInfra, &inf)
+			if r.Proxmox != nil {
+				v := NewNodeView(viewResource)
+				rr.cachedNodes = append(rr.cachedNodes, &v)
+			}
+			if r.Agent != nil {
+				v := NewHostView(viewResource)
+				rr.cachedHosts = append(rr.cachedHosts, &v)
+			}
+			if r.Docker != nil {
+				v := NewDockerHostView(viewResource)
+				rr.cachedDocker = append(rr.cachedDocker, &v)
+			}
+		case ResourceTypeStorage:
+			v := NewStoragePoolView(viewResource)
+			rr.cachedStorage = append(rr.cachedStorage, &v)
+		case ResourceTypePhysicalDisk:
+			v := NewPhysicalDiskView(viewResource)
+			rr.cachedPhysicalDisks = append(rr.cachedPhysicalDisks, &v)
+		case ResourceTypePBS:
+			v := NewPBSInstanceView(viewResource)
+			rr.cachedPBS = append(rr.cachedPBS, &v)
+		case ResourceTypePMG:
+			v := NewPMGInstanceView(viewResource)
+			rr.cachedPMG = append(rr.cachedPMG, &v)
+		case ResourceTypeK8sCluster:
+			v := NewK8sClusterView(viewResource)
+			rr.cachedK8s = append(rr.cachedK8s, &v)
+		case ResourceTypeK8sNode:
+			v := NewK8sNodeView(viewResource)
+			rr.cachedK8sNodes = append(rr.cachedK8sNodes, &v)
+		case ResourceTypePod:
+			v := NewPodView(viewResource)
+			rr.cachedPods = append(rr.cachedPods, &v)
+		case ResourceTypeK8sDeployment:
+			v := NewK8sDeploymentView(viewResource)
+			rr.cachedK8sDeployments = append(rr.cachedK8sDeployments, &v)
+		}
+	}
+
+	// Sort all caches by name for deterministic output.
+	sort.Slice(rr.cachedVMs, func(i, j int) bool { return rr.cachedVMs[i].Name() < rr.cachedVMs[j].Name() })
+	sort.Slice(rr.cachedLXC, func(i, j int) bool { return rr.cachedLXC[i].Name() < rr.cachedLXC[j].Name() })
+	sort.Slice(rr.cachedNodes, func(i, j int) bool { return rr.cachedNodes[i].Name() < rr.cachedNodes[j].Name() })
+	sort.Slice(rr.cachedHosts, func(i, j int) bool { return rr.cachedHosts[i].Name() < rr.cachedHosts[j].Name() })
+	sort.Slice(rr.cachedDocker, func(i, j int) bool { return rr.cachedDocker[i].Name() < rr.cachedDocker[j].Name() })
+	sort.Slice(rr.cachedDockerContainers, func(i, j int) bool { return rr.cachedDockerContainers[i].Name() < rr.cachedDockerContainers[j].Name() })
+	sort.Slice(rr.cachedStorage, func(i, j int) bool { return rr.cachedStorage[i].Name() < rr.cachedStorage[j].Name() })
+	sort.Slice(rr.cachedPhysicalDisks, func(i, j int) bool { return rr.cachedPhysicalDisks[i].Name() < rr.cachedPhysicalDisks[j].Name() })
+	sort.Slice(rr.cachedPBS, func(i, j int) bool { return rr.cachedPBS[i].Name() < rr.cachedPBS[j].Name() })
+	sort.Slice(rr.cachedPMG, func(i, j int) bool { return rr.cachedPMG[i].Name() < rr.cachedPMG[j].Name() })
+	sort.Slice(rr.cachedK8s, func(i, j int) bool { return rr.cachedK8s[i].Name() < rr.cachedK8s[j].Name() })
+	sort.Slice(rr.cachedK8sNodes, func(i, j int) bool { return rr.cachedK8sNodes[i].Name() < rr.cachedK8sNodes[j].Name() })
+	sort.Slice(rr.cachedPods, func(i, j int) bool { return rr.cachedPods[i].Name() < rr.cachedPods[j].Name() })
+	sort.Slice(rr.cachedK8sDeployments, func(i, j int) bool { return rr.cachedK8sDeployments[i].Name() < rr.cachedK8sDeployments[j].Name() })
+	sort.Slice(rr.cachedWorkload, func(i, j int) bool { return rr.cachedWorkload[i].Name() < rr.cachedWorkload[j].Name() })
+	sort.Slice(rr.cachedInfra, func(i, j int) bool { return rr.cachedInfra[i].Name() < rr.cachedInfra[j].Name() })
+
+	rr.viewsDirty = false
+}
+
+// VMs returns cached VM views sorted by name.
+func (rr *ResourceRegistry) VMs() []*VMView {
+	return withViewCache(rr, func() []*VMView { return rr.cachedVMs })
+}
+
+// Containers returns cached LXC container views sorted by name.
+func (rr *ResourceRegistry) Containers() []*ContainerView {
+	return withViewCache(rr, func() []*ContainerView { return rr.cachedLXC })
+}
+
+// Nodes returns cached Proxmox node views sorted by name.
+// Only includes host resources that have Proxmox data.
+func (rr *ResourceRegistry) Nodes() []*NodeView {
+	return withViewCache(rr, func() []*NodeView { return rr.cachedNodes })
+}
+
+// Hosts returns cached host agent views sorted by name.
+// Only includes host resources that have Agent data.
+func (rr *ResourceRegistry) Hosts() []*HostView {
+	return withViewCache(rr, func() []*HostView { return rr.cachedHosts })
+}
+
+// DockerHosts returns cached Docker host views sorted by name.
+// Only includes host resources that have Docker data.
+func (rr *ResourceRegistry) DockerHosts() []*DockerHostView {
+	return withViewCache(rr, func() []*DockerHostView { return rr.cachedDocker })
+}
+
+func (rr *ResourceRegistry) DockerContainers() []*DockerContainerView {
+	return withViewCache(rr, func() []*DockerContainerView { return rr.cachedDockerContainers })
+}
+
+// StoragePools returns cached storage pool views sorted by name.
+func (rr *ResourceRegistry) StoragePools() []*StoragePoolView {
+	return withViewCache(rr, func() []*StoragePoolView { return rr.cachedStorage })
+}
+
+// PhysicalDisks returns cached physical disk views sorted by name.
+func (rr *ResourceRegistry) PhysicalDisks() []*PhysicalDiskView {
+	return withViewCache(rr, func() []*PhysicalDiskView { return rr.cachedPhysicalDisks })
+}
+
+// PBSInstances returns cached PBS instance views sorted by name.
+func (rr *ResourceRegistry) PBSInstances() []*PBSInstanceView {
+	return withViewCache(rr, func() []*PBSInstanceView { return rr.cachedPBS })
+}
+
+// PMGInstances returns cached PMG instance views sorted by name.
+func (rr *ResourceRegistry) PMGInstances() []*PMGInstanceView {
+	return withViewCache(rr, func() []*PMGInstanceView { return rr.cachedPMG })
+}
+
+// K8sClusters returns cached Kubernetes cluster views sorted by name.
+func (rr *ResourceRegistry) K8sClusters() []*K8sClusterView {
+	return withViewCache(rr, func() []*K8sClusterView { return rr.cachedK8s })
+}
+
+func (rr *ResourceRegistry) K8sNodes() []*K8sNodeView {
+	return withViewCache(rr, func() []*K8sNodeView { return rr.cachedK8sNodes })
+}
+
+func (rr *ResourceRegistry) Pods() []*PodView {
+	return withViewCache(rr, func() []*PodView { return rr.cachedPods })
+}
+
+func (rr *ResourceRegistry) K8sDeployments() []*K8sDeploymentView {
+	return withViewCache(rr, func() []*K8sDeploymentView { return rr.cachedK8sDeployments })
+}
+
+// Workloads returns a unified slice of VM + LXC container views sorted by name.
+func (rr *ResourceRegistry) Workloads() []*WorkloadView {
+	return withViewCache(rr, func() []*WorkloadView { return rr.cachedWorkload })
+}
+
+// Infrastructure returns a unified slice of all infrastructure parent resource views sorted by name.
+func (rr *ResourceRegistry) Infrastructure() []*InfrastructureView {
+	return withViewCache(rr, func() []*InfrastructureView { return rr.cachedInfra })
+}
+
+// Compile-time check: ResourceRegistry implements ReadState.
+var _ ReadState = (*ResourceRegistry)(nil)

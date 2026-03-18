@@ -18,6 +18,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
+
+func readResponseBodyLimited(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxResponseBodyBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return body, nil
+}
+
 // FlexInt handles JSON fields that can be int, float, or string (for cpulimit support)
 type FlexInt int
 
@@ -293,7 +306,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
+		}
 		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
@@ -339,6 +355,10 @@ func shouldFallbackToForm(err error) bool {
 
 // request performs an API request
 func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
+	return c.requestWithRetry(ctx, method, path, data, false)
+}
+
+func (c *Client) requestWithRetry(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool) (*http.Response, error) {
 	// Re-authenticate if needed
 	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
 		if err := c.authenticate(ctx); err != nil {
@@ -389,27 +409,39 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 
 	// Check for errors
 	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("API error %d: %w", resp.StatusCode, err)
+		}
+
+		// Password sessions can be invalidated server-side before local expiry.
+		// Retry once after forcing re-authentication on 401.
+		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && c.auth.tokenName == "" {
+			if err := c.authenticate(ctx); err != nil {
+				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
+			}
+			return c.requestWithRetry(ctx, method, path, data, true)
+		}
 
 		// Create base error with helpful guidance for common issues
-		var err error
+		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
 			// Special case for 403 with API token - this is usually a permission issue
-			err = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
+			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
 			if strings.Contains(req.URL.Path, "/nodes/") && strings.Count(req.URL.Path, "/") > 3 {
 				// This looks like a node-specific resource request
-				err = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
+				apiErr = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
 			} else {
-				err = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
+				apiErr = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
 			}
 		} else if resp.StatusCode == 401 {
-			err = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
+			apiErr = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
 		} else {
-			err = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+			apiErr = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		}
 
 		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
@@ -435,10 +467,10 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		// Wrap with appropriate error type
 		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
 			// Import errors package at top of file
-			return nil, fmt.Errorf("authentication error: %w", err)
+			return nil, fmt.Errorf("authentication error: %w", apiErr)
 		}
 
-		return nil, err
+		return nil, apiErr
 	}
 
 	return resp, nil
@@ -469,6 +501,8 @@ type NodeRRDPoint struct {
 	MemTotal     *float64 `json:"memtotal,omitempty"`
 	MemUsed      *float64 `json:"memused,omitempty"`
 	MemAvailable *float64 `json:"memavailable,omitempty"`
+	NetIn        *float64 `json:"netin,omitempty"`
+	NetOut       *float64 `json:"netout,omitempty"`
 }
 
 // GuestRRDPoint represents a single RRD datapoint for a VM or LXC container.
@@ -695,9 +729,9 @@ func (c *Client) GetNodeRRDData(ctx context.Context, node, timeframe, cf string,
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.  The API returns
+	// all available RRD fields regardless, so we simply filter client-side.
 
 	path := fmt.Sprintf("/nodes/%s/rrddata", url.PathEscape(node))
 	if query := params.Encode(); query != "" {
@@ -733,9 +767,8 @@ func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timef
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.
 
 	path := fmt.Sprintf("/nodes/%s/lxc/%d/rrddata", url.PathEscape(node), vmid)
 	if query := params.Encode(); query != "" {
@@ -771,9 +804,8 @@ func (c *Client) GetVMRRDData(ctx context.Context, node string, vmid int, timefr
 	params := url.Values{}
 	params.Set("timeframe", timeframe)
 	params.Set("cf", cf)
-	if len(ds) > 0 {
-		params.Set("ds", strings.Join(ds, ","))
-	}
+	// Note: the "ds" parameter is not sent because older PVE versions
+	// (including 9.x) reject it as an unknown property.
 
 	path := fmt.Sprintf("/nodes/%s/qemu/%d/rrddata", url.PathEscape(node), vmid)
 	if query := params.Encode(); query != "" {
@@ -895,7 +927,7 @@ type NodeNetworkInterface struct {
 	Address  string `json:"address,omitempty"`  // IPv4 address
 	Address6 string `json:"address6,omitempty"` // IPv6 address
 	Netmask  string `json:"netmask,omitempty"`  // IPv4 netmask
-	CIDR     string `json:"cidr,omitempty"`     // CIDR notation (e.g., "10.1.1.5/24")
+	CIDR     string `json:"cidr,omitempty"`     // CIDR notation (e.g., "198.51.100.5/24")
 	Active   int    `json:"active"`             // 1 if active
 }
 
@@ -909,7 +941,10 @@ func (c *Client) GetNodeNetworkInterfaces(ctx context.Context, node string) ([]N
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to get node network interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
@@ -1158,7 +1193,10 @@ func (c *Client) GetContainerInterfaces(ctx context.Context, node string, vmid i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to get container interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
@@ -1513,7 +1551,7 @@ func parseUint64Flexible(value interface{}) (uint64, error) {
 	}
 }
 
-type VMIpAddress struct {
+type VMIPAddress struct {
 	Address string `json:"ip-address"`
 	Prefix  int    `json:"prefix"`
 }
@@ -1521,7 +1559,7 @@ type VMIpAddress struct {
 type VMNetworkInterface struct {
 	Name          string        `json:"name"`
 	HardwareAddr  string        `json:"hardware-address"`
-	IPAddresses   []VMIpAddress `json:"ip-addresses"`
+	IPAddresses   []VMIPAddress `json:"ip-addresses"`
 	Statistics    interface{}   `json:"statistics,omitempty"`
 	HasIp4Gateway bool          `json:"has-ipv4-synth-gateway,omitempty"`
 	HasIp6Gateway bool          `json:"has-ipv6-synth-gateway,omitempty"`
@@ -1537,7 +1575,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	defer resp.Body.Close()
 
 	// First, read the response body into bytes so we can try multiple unmarshal attempts
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -1655,52 +1693,6 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 	return result.Data.Result, nil
 }
 
-// GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent's
-// file-read endpoint and returns MemAvailable in bytes. This is a fallback for
-// VMs where the balloon driver does not populate the meminfo field in the
-// status endpoint. Returns 0 if the guest agent is unavailable, the file
-// cannot be read, or MemAvailable is not present (e.g. Windows VMs).
-func (c *Client) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	fileParam := url.QueryEscape("/proc/meminfo")
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/file-read?file=%s", node, vmid, fileParam))
-	if err != nil {
-		return 0, fmt.Errorf("guest agent file-read /proc/meminfo: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data struct {
-			Content   string `json:"content"`
-			Truncated *bool  `json:"truncated,omitempty"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode file-read response: %w", err)
-	}
-
-	// Parse MemAvailable from /proc/meminfo (format: "MemAvailable:   12345 kB")
-	for _, line := range strings.Split(result.Data.Content, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "MemAvailable:") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		kB, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("parse MemAvailable value %q: %w", fields[1], err)
-		}
-		if kB > math.MaxUint64/1024 {
-			return 0, fmt.Errorf("MemAvailable value %d kB overflows uint64", kB)
-		}
-		return kB * 1024, nil // Convert kB to bytes
-	}
-
-	return 0, fmt.Errorf("MemAvailable not found in /proc/meminfo")
-}
-
 // GetVMStatus returns detailed VM status including balloon info
 func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMStatus, error) {
 	// Note: Proxmox 9.x removed support for the "full" parameter
@@ -1786,48 +1778,6 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	}
 
 	return result.Data, nil
-}
-
-// ClusterOptions holds selected Proxmox datacenter configuration options.
-type ClusterOptions struct {
-	TagStyle string `json:"tag-style,omitempty"`
-}
-
-// GetClusterOptions fetches datacenter-level options (e.g. tag colour map).
-func (c *Client) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
-	resp, err := c.get(ctx, "/cluster/options")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data ClusterOptions `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return &result.Data, nil
-}
-
-// ParseTagColorMap parses a Proxmox tag-style string and returns a map of
-// lowercase tag name → "#rrggbb" hex colour string.
-// Example input: "color-map=production:ff0000;staging:ffaa00,ordering=config"
-func ParseTagColorMap(tagStyle string) map[string]string {
-	colors := make(map[string]string)
-	for _, part := range strings.Split(tagStyle, ",") {
-		part = strings.TrimSpace(part)
-		if !strings.HasPrefix(part, "color-map=") {
-			continue
-		}
-		for _, pair := range strings.Split(strings.TrimPrefix(part, "color-map="), ";") {
-			kv := strings.SplitN(pair, ":", 2)
-			if len(kv) == 2 && len(kv[1]) == 6 {
-				colors[strings.ToLower(strings.TrimSpace(kv[0]))] = "#" + kv[1]
-			}
-		}
-	}
-	return colors
 }
 
 // ZFSPoolStatus represents the status of a ZFS pool (list endpoint)

@@ -189,6 +189,16 @@ func TestUpdatePlan_Fields(t *testing.T) {
 	}
 }
 
+func TestUpdatePlan_UsesCanonicalEmptyCollections(t *testing.T) {
+	plan := EmptyUpdatePlan()
+	if plan.Instructions == nil {
+		t.Fatal("expected instructions to normalize to an empty slice")
+	}
+	if plan.Prerequisites == nil {
+		t.Fatal("expected prerequisites to normalize to an empty slice")
+	}
+}
+
 func TestUpdateProgress_Fields(t *testing.T) {
 	progress := UpdateProgress{
 		Stage:      "downloading",

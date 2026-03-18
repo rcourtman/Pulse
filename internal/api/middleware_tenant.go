@@ -15,9 +15,11 @@ import (
 type OrganizationContextKey string
 
 const (
-	OrgIDContextKey    OrganizationContextKey = "org_id"
-	OrgContextKey      OrganizationContextKey = "org_object"
-	APITokenContextKey OrganizationContextKey = "api_token_record"
+	OrgIDContextKey OrganizationContextKey = "org_id"
+	OrgContextKey   OrganizationContextKey = "org_object"
+	subStateActive  string                 = "active"
+	subStateGrace   string                 = "grace"
+	subStateTrial   string                 = "trial"
 )
 
 // TenantMiddleware extracts the organization ID from the request and
@@ -25,12 +27,50 @@ const (
 type TenantMiddleware struct {
 	persistence *config.MultiTenantPersistence
 	authChecker AuthorizationChecker
+	hostedMode  bool
 }
 
 // TenantMiddlewareConfig holds configuration for the tenant middleware.
 type TenantMiddlewareConfig struct {
 	Persistence *config.MultiTenantPersistence
 	AuthChecker AuthorizationChecker
+	HostedMode  bool
+}
+
+func resolveTenantOrgID(r *http.Request) string {
+	orgID := ""
+	explicitOrg := false
+
+	if r != nil {
+		orgID = strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
+		explicitOrg = orgID != ""
+		if orgID == "" {
+			if cookie, err := r.Cookie(CookieNameOrgID); err == nil {
+				orgID = strings.TrimSpace(cookie.Value)
+				explicitOrg = orgID != ""
+			}
+		}
+	}
+
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	// Cloud/agent UX: if no org was explicitly selected, prefer an org-bound token.
+	// This enables tenant-scoped install commands that only need --token.
+	if !explicitOrg && orgID == "default" && r != nil {
+		if tokenVal := auth.GetAPIToken(r.Context()); tokenVal != nil {
+			if t, ok := tokenVal.(*config.APITokenRecord); ok && t != nil {
+				if strings.TrimSpace(t.OrgID) != "" {
+					orgID = strings.TrimSpace(t.OrgID)
+				} else if len(t.OrgIDs) == 1 && strings.TrimSpace(t.OrgIDs[0]) != "" {
+					orgID = strings.TrimSpace(t.OrgIDs[0])
+				}
+			}
+		}
+	}
+
+	return orgID
 }
 
 func NewTenantMiddleware(p *config.MultiTenantPersistence) *TenantMiddleware {
@@ -42,6 +82,7 @@ func NewTenantMiddlewareWithConfig(cfg TenantMiddlewareConfig) *TenantMiddleware
 	return &TenantMiddleware{
 		persistence: cfg.Persistence,
 		authChecker: cfg.AuthChecker,
+		hostedMode:  cfg.HostedMode,
 	}
 }
 
@@ -52,7 +93,15 @@ func (m *TenantMiddleware) SetAuthChecker(checker AuthorizationChecker) {
 
 func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orgID := requestedOrgID(r)
+		// 1. Extract Org ID
+		// Priority:
+		// 1. Header: X-Pulse-Org-ID (for API clients/agents)
+		// 2. Cookie: pulse_org_id (for browser session)
+		// 3. Fallback: "default" (for backward compatibility)
+
+		orgID := resolveTenantOrgID(r)
+
+		var loadedOrg *models.Organization
 
 		// 2. Validate Organization Exists (only for non-default orgs)
 		// This must check existence WITHOUT creating directories to prevent DoS.
@@ -65,28 +114,62 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Feature flag and License Check for multi-tenant access
-		// Non-default orgs require:
-		// 1. Feature flag enabled (PULSE_MULTI_TENANT_ENABLED=true) - returns 501 if disabled
-		// 2. Enterprise license - returns 402 if unlicensed
-		if orgID != "default" {
-			// Check feature flag first - 501 Not Implemented if disabled
-			if !IsMultiTenantEnabled() {
-				writeMultiTenantDisabledError(w)
-				return
+		// 2b. Load org metadata and enforce lifecycle status for non-default orgs.
+		// If loading fails, keep backward-compatible behavior by falling back later.
+		if orgID != "default" && m.persistence != nil {
+			org, loadErr := m.persistence.LoadOrganization(orgID)
+			if loadErr == nil && org != nil {
+				loadedOrg = org
+				status := models.NormalizeOrgStatus(org.Status)
+				if status == models.OrgStatusSuspended || status == models.OrgStatusPendingDeletion {
+					writeJSONError(w, http.StatusForbidden, "org_suspended", "Organization is suspended")
+					return
+				}
 			}
-			// Feature is enabled, check license - 402 Payment Required if unlicensed
-			checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
-			if !hasMultiTenantFeatureForContext(checkCtx) {
-				writeMultiTenantRequiredError(w)
-				return
+		}
+
+		// 3. Tenant access gating for non-default orgs.
+		// Hosted mode: tenant routing is infrastructure — check subscription lifecycle instead of FeatureMultiTenant.
+		// Self-hosted mode: non-default orgs require PULSE_MULTI_TENANT_ENABLED=true AND FeatureMultiTenant (Enterprise/MSP).
+		if orgID != "default" {
+			if m.hostedMode {
+				// Hosted mode: verify the org has a valid subscription or bounded trial.
+				checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				if !isHostedSubscriptionValid(checkCtx) {
+					writeHostedSubscriptionRequiredError(w)
+					return
+				}
+			} else {
+				// Self-hosted mode: multi-tenant requires feature flag + Enterprise license.
+				if !IsMultiTenantEnabled() {
+					writeMultiTenantDisabledError(w)
+					return
+				}
+				checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				if !hasMultiTenantFeatureForContext(checkCtx) {
+					writeMultiTenantRequiredError(w)
+					return
+				}
 			}
 		}
 
 		// 4. Authorization Check
-		// Check if the authenticated user/token is allowed to access this organization
-		// Note: This runs AFTER AuthContextMiddleware, so auth context is available
-		if m.authChecker != nil && orgID != "default" {
+		// Check if the authenticated user/token is allowed to access this organization.
+		// Note: This runs AFTER AuthContextMiddleware, so auth context is available.
+		if m.authChecker != nil {
+			// Dev-only emergency bypass should skip tenant membership checks too.
+			// Use request context marker to avoid leaking global bypass state across tests.
+			if isAdminBypassRequest(r.Context()) {
+				ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				org := loadedOrg
+				if org == nil {
+					org = &models.Organization{ID: orgID, DisplayName: orgID}
+				}
+				ctx = context.WithValue(ctx, OrgContextKey, org)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			// Get API token from context (set by AuthContextMiddleware)
 			var token *config.APITokenRecord
 			if tokenVal := auth.GetAPIToken(r.Context()); tokenVal != nil {
@@ -112,21 +195,16 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 					writeJSONError(w, http.StatusForbidden, "access_denied", result.Reason)
 					return
 				}
-
-				// Log warning for legacy tokens accessing non-default orgs
-				if result.IsLegacyToken {
-					log.Warn().
-						Str("org_id", orgID).
-						Msg("Legacy token with wildcard access used - consider binding to specific org")
-				}
 			}
 		}
 
 		// 5. Inject into Context
 		ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
-		// Also store a mock organization object for now
-		org := &models.Organization{ID: orgID, DisplayName: orgID}
+		org := loadedOrg
+		if org == nil {
+			org = &models.Organization{ID: orgID, DisplayName: orgID}
+		}
 		ctx = context.WithValue(ctx, OrgContextKey, org)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -159,28 +237,29 @@ func GetOrganization(ctx context.Context) *models.Organization {
 	return &models.Organization{ID: "default", DisplayName: "Default Organization"}
 }
 
-func requestedOrgID(r *http.Request) string {
-	orgID := ""
-	if r != nil {
-		orgID = strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
-		if orgID == "" {
-			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
-				orgID = strings.TrimSpace(cookie.Value)
-			}
-		}
+// isHostedSubscriptionValid checks whether a hosted Cloud tenant has a valid subscription
+// or a bounded trial. This replaces the FeatureMultiTenant check for hosted mode, where
+// tenant routing is infrastructure rather than a paid feature.
+func isHostedSubscriptionValid(ctx context.Context) bool {
+	svc := getLicenseServiceForContext(ctx)
+	subState := strings.ToLower(strings.TrimSpace(svc.SubscriptionState()))
+	eval := svc.Evaluator()
+	hasTrialEnd := eval != nil && eval.TrialEndsAt() != nil
+	switch subState {
+	case subStateActive, subStateGrace:
+		return true
+	case subStateTrial:
+		return hasTrialEnd
+	default:
+		return false
 	}
+}
 
-	if orgID != "" && orgID != "default" && isV5SingleTenantMode() {
-		log.Debug().
-			Str("path", r.URL.Path).
-			Str("requested_org", orgID).
-			Msg("Ignoring non-default org for single-tenant v5 runtime")
-		return "default"
-	}
-
-	if orgID == "" {
-		return "default"
-	}
-
-	return orgID
+// writeHostedSubscriptionRequiredError writes a 402 response for Cloud tenants
+// whose subscription is not active (expired, canceled, or missing).
+func writeHostedSubscriptionRequiredError(w http.ResponseWriter) {
+	writePaymentRequired(w, map[string]interface{}{
+		"error":   "subscription_required",
+		"message": "Your Cloud subscription is not active. Please check your billing status.",
+	})
 }

@@ -32,7 +32,7 @@ systemd::safe_systemctl() {
 systemd::detect_service_name() {
   local -a candidates=("$@")
   if ((${#candidates[@]} == 0)); then
-    candidates=(pulse.service pulse-backend.service pulse-docker-agent.service pulse-hot-dev.service)
+    candidates=(pulse.service pulse-backend.service pulse-hot-dev.service)
   fi
 
   local name

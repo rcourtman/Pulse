@@ -206,12 +206,11 @@ func TestStateMultiInstanceConcurrentUpdates(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
 				snapshot := state.GetSnapshot()
-				frontendState := snapshot.ToFrontend()
 
 				// Verify state consistency - all instances' data should be present
 				// After initial updates, we should have 1 + 2 + 3 = 6 total nodes
 				if i > 100 { // Give time for initial updates
-					nodeCount := len(frontendState.Nodes)
+					nodeCount := len(snapshot.Nodes)
 					if nodeCount != 0 && nodeCount != 6 {
 						// It's OK to have 0 nodes initially, or partial counts during ramp-up,
 						// but once stable we should have all 6 nodes

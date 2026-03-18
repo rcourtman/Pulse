@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -109,30 +110,33 @@ func (a *AlertManagerAdapter) GetAlertHistory(resourceID string, limit int) []Re
 	return result
 }
 
+// buildAlertInfo constructs an AlertInfo from pre-extracted field values.
+// This is the shared implementation used by both convertAlertFromManager and convertAlertFromModels.
+func buildAlertInfo(id, alertType, level, resourceID, resourceName, node, instance, message string, value, threshold float64, startTime time.Time, acknowledged bool, metadata map[string]interface{}) AlertInfo {
+	return AlertInfo{
+		ID:           id,
+		Type:         alertType,
+		Level:        level,
+		ResourceID:   resourceID,
+		ResourceName: resourceName,
+		ResourceType: inferResourceType(alertType, metadata),
+		Node:         node,
+		Instance:     instance,
+		Message:      message,
+		Value:        value,
+		Threshold:    threshold,
+		StartTime:    startTime,
+		Duration:     formatDuration(time.Since(startTime)),
+		Acknowledged: acknowledged,
+	}
+}
+
 // convertAlertFromManager converts an alerts.Alert to AI's AlertInfo
 func convertAlertFromManager(alert *alerts.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-
-	resourceType := inferResourceType(alert.Type, alert.Metadata)
-
-	return AlertInfo{
-		ID:           alert.ID,
-		Type:         alert.Type,
-		Level:        string(alert.Level),
-		ResourceID:   alert.ResourceID,
-		ResourceName: alert.ResourceName,
-		ResourceType: resourceType,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime,
-		Duration:     formatDuration(time.Since(alert.StartTime)),
-		Acknowledged: alert.Acknowledged,
-	}
+	return buildAlertInfo(alert.ID, alert.Type, string(alert.Level), alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, alert.Metadata)
 }
 
 // convertAlertFromModels converts a models.Alert to AI's AlertInfo
@@ -140,32 +144,16 @@ func convertAlertFromModels(alert *models.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-
-	resourceType := inferResourceType(alert.Type, nil)
-
-	return AlertInfo{
-		ID:           alert.ID,
-		Type:         alert.Type,
-		Level:        alert.Level,
-		ResourceID:   alert.ResourceID,
-		ResourceName: alert.ResourceName,
-		ResourceType: resourceType,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime,
-		Duration:     formatDuration(time.Since(alert.StartTime)),
-		Acknowledged: alert.Acknowledged,
-	}
+	return buildAlertInfo(alert.ID, alert.Type, alert.Level, alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, nil)
 }
 
 // inferResourceType infers resource type from alert type
 func inferResourceType(alertType string, metadata map[string]interface{}) string {
 	if metadata != nil {
 		if rt, ok := metadata["resourceType"].(string); ok {
-			return rt
+			if normalized := normalizeAlertResourceType(rt); normalized != "" {
+				return normalized
+			}
 		}
 	}
 
@@ -175,9 +163,9 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	case alertType == "storage_usage" || alertType == "storage":
 		return "storage"
 	case alertType == "docker_cpu" || alertType == "docker_memory" || alertType == "docker_restart" || alertType == "docker_offline":
-		return "docker"
+		return "app-container"
 	case alertType == "host_cpu" || alertType == "host_memory" || alertType == "host_offline" || alertType == "host_disk":
-		return "host"
+		return "agent"
 	case alertType == "pmg" || alertType == "pmg_queue" || alertType == "pmg_quarantine":
 		return "pmg"
 	case alertType == "backup" || alertType == "backup_missing":
@@ -185,7 +173,35 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 	case alertType == "snapshot" || alertType == "snapshot_age":
 		return "snapshot"
 	default:
-		return "guest"
+		return "vm"
+	}
+}
+
+func normalizeAlertResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	if resourceType == "" {
+		return ""
+	}
+	if isUnsupportedLegacyAIResourceTypeToken(resourceType) || resourceType == "docker-service" {
+		return ""
+	}
+	switch resourceType {
+	case "vm":
+		return "vm"
+	case "system-container", "oci-container":
+		return "system-container"
+	case "app-container":
+		return "app-container"
+	case "docker-host":
+		return "docker-host"
+	case "agent":
+		return "agent"
+	case "node":
+		return "node"
+	case "k8s-cluster":
+		return "k8s-cluster"
+	default:
+		return resourceType
 	}
 }
 

@@ -11,8 +11,22 @@ type Message struct {
 	Role             string      `json:"role"`                        // "user", "assistant", "system"
 	Content          string      `json:"content"`                     // Text content (simple case)
 	ReasoningContent string      `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
-	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`        // For assistant messages with tool calls
+	ToolCalls        []ToolCall  `json:"tool_calls"`                  // For assistant messages with tool calls
 	ToolResult       *ToolResult `json:"tool_result,omitempty"`       // For user messages with tool results
+}
+
+func EmptyMessage() Message {
+	return Message{}.NormalizeCollections()
+}
+
+func (m Message) NormalizeCollections() Message {
+	if m.ToolCalls == nil {
+		m.ToolCalls = []ToolCall{}
+	}
+	for i := range m.ToolCalls {
+		m.ToolCalls[i] = m.ToolCalls[i].NormalizeCollections()
+	}
+	return m
 }
 
 // ToolCall represents a tool invocation from the AI
@@ -21,6 +35,17 @@ type ToolCall struct {
 	Name             string                 `json:"name"`
 	Input            map[string]interface{} `json:"input"`
 	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
+}
+
+func EmptyToolCall() ToolCall {
+	return ToolCall{}.NormalizeCollections()
+}
+
+func (t ToolCall) NormalizeCollections() ToolCall {
+	if t.Input == nil {
+		t.Input = map[string]interface{}{}
+	}
+	return t
 }
 
 // ToolResult represents the result of a tool execution
@@ -35,8 +60,19 @@ type Tool struct {
 	Type        string                 `json:"type,omitempty"` // "web_search_20250305" for web search, empty for regular tools
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
-	InputSchema map[string]interface{} `json:"input_schema,omitempty"`
+	InputSchema map[string]interface{} `json:"input_schema"`
 	MaxUses     int                    `json:"max_uses,omitempty"` // For web search: limit searches per request
+}
+
+func EmptyTool() Tool {
+	return Tool{}.NormalizeCollections()
+}
+
+func (t Tool) NormalizeCollections() Tool {
+	if t.InputSchema == nil {
+		t.InputSchema = map[string]interface{}{}
+	}
+	return t
 }
 
 // ToolChoiceType represents how the model should choose tools
@@ -70,15 +106,45 @@ type ChatRequest struct {
 	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // How to select tools (nil = auto)
 }
 
+func (r ChatRequest) NormalizeCollections() ChatRequest {
+	if r.Messages == nil {
+		r.Messages = []Message{}
+	}
+	for i := range r.Messages {
+		r.Messages[i] = r.Messages[i].NormalizeCollections()
+	}
+	if r.Tools == nil {
+		r.Tools = []Tool{}
+	}
+	for i := range r.Tools {
+		r.Tools[i] = r.Tools[i].NormalizeCollections()
+	}
+	return r
+}
+
 // ChatResponse represents a response from the AI provider
 type ChatResponse struct {
 	Content          string     `json:"content"`
 	ReasoningContent string     `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
 	Model            string     `json:"model"`
 	StopReason       string     `json:"stop_reason,omitempty"` // "end_turn", "tool_use"
-	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`  // Tool invocations
+	ToolCalls        []ToolCall `json:"tool_calls"`            // Tool invocations
 	InputTokens      int        `json:"input_tokens,omitempty"`
 	OutputTokens     int        `json:"output_tokens,omitempty"`
+}
+
+func EmptyChatResponse() ChatResponse {
+	return ChatResponse{}.NormalizeCollections()
+}
+
+func (r ChatResponse) NormalizeCollections() ChatResponse {
+	if r.ToolCalls == nil {
+		r.ToolCalls = []ToolCall{}
+	}
+	for i := range r.ToolCalls {
+		r.ToolCalls[i] = r.ToolCalls[i].NormalizeCollections()
+	}
+	return r
 }
 
 // ModelInfo represents information about an available model
@@ -126,7 +192,14 @@ type ThinkingEvent struct {
 type ToolStartEvent struct {
 	ID    string                 `json:"id"`
 	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input,omitempty"`
+	Input map[string]interface{} `json:"input"`
+}
+
+func (e ToolStartEvent) NormalizeCollections() ToolStartEvent {
+	if e.Input == nil {
+		e.Input = map[string]interface{}{}
+	}
+	return e
 }
 
 // ToolEndEvent is the data for "tool_end" stream events
@@ -145,9 +218,19 @@ type ErrorEvent struct {
 // DoneEvent is the data for "done" stream events
 type DoneEvent struct {
 	StopReason   string     `json:"stop_reason,omitempty"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
+	ToolCalls    []ToolCall `json:"tool_calls"`
 	InputTokens  int        `json:"input_tokens,omitempty"`
 	OutputTokens int        `json:"output_tokens,omitempty"`
+}
+
+func (e DoneEvent) NormalizeCollections() DoneEvent {
+	if e.ToolCalls == nil {
+		e.ToolCalls = []ToolCall{}
+	}
+	for i := range e.ToolCalls {
+		e.ToolCalls[i] = e.ToolCalls[i].NormalizeCollections()
+	}
+	return e
 }
 
 // StreamCallback is called for each streaming event

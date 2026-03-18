@@ -53,7 +53,7 @@ func TestNormalizeRequestedScopesRejectsEmpty(t *testing.T) {
 }
 
 func TestNormalizeRequestedScopesRejectsBlankScope(t *testing.T) {
-	raw := []string{config.ScopeHostReport, "   ", config.ScopeSettingsRead}
+	raw := []string{config.ScopeAgentReport, "   ", config.ScopeSettingsRead}
 	_, err := normalizeRequestedScopes(&raw)
 	if err == nil {
 		t.Fatal("expected error for blank scope identifier")
@@ -71,5 +71,19 @@ func TestNormalizeRequestedScopesWildcardOnly(t *testing.T) {
 	}
 	if len(scopes) != 1 || scopes[0] != config.ScopeWildcard {
 		t.Fatalf("expected wildcard scope only, got %#v", scopes)
+	}
+}
+
+func TestNormalizeRequestedScopesCanonicalizesLegacyUnifiedAgentAliases(t *testing.T) {
+	raw := []string{"host-agent:report", "host-agent:config:read"}
+	scopes, err := normalizeRequestedScopes(&raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(scopes) != 2 {
+		t.Fatalf("expected 2 scopes, got %d", len(scopes))
+	}
+	if scopes[0] != config.ScopeAgentConfigRead || scopes[1] != config.ScopeAgentReport {
+		t.Fatalf("expected canonicalized agent scopes, got %#v", scopes)
 	}
 }

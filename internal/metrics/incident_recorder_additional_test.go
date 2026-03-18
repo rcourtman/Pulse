@@ -99,29 +99,35 @@ func TestGetWindowsForResource(t *testing.T) {
 	}
 }
 
-func TestGetRecentWindows(t *testing.T) {
-	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
-	recorder.activeWindows["active"] = &IncidentWindow{ID: "active", ResourceID: "res-1"}
-	recorder.completedWindows = []*IncidentWindow{
-		{ID: "old", ResourceID: "res-2"},
-		{ID: "new", ResourceID: "res-3"},
-	}
+func TestRecordSampleSkipsPreIncidentBufferOnMetricsError(t *testing.T) {
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		PreIncidentWindow:      time.Minute,
+		PostIncidentWindow:     time.Minute,
+		MaxDataPointsPerWindow: 10,
+	})
 
-	recent := recorder.GetRecentWindows(2)
-	if len(recent) != 2 {
-		t.Fatalf("expected 2 windows, got %d", len(recent))
+	provider := &stubMetricsProvider{
+		metricsByID: map[string]map[string]float64{
+			"res-ok": {"cpu": 1},
+		},
+		ids: []string{"res-ok", "res-missing"},
 	}
+	recorder.SetMetricsProvider(provider)
 
-	var sawActive, sawNew bool
-	for _, window := range recent {
-		if window.ID == "active" {
-			sawActive = true
-		}
-		if window.ID == "new" {
-			sawNew = true
-		}
+	windowID := recorder.StartRecording("res-ok", "db", "agent", "alert", "alert-1")
+	recorder.recordSample()
+
+	window := recorder.activeWindows[windowID]
+	if window == nil {
+		t.Fatalf("expected active window %s", windowID)
 	}
-	if !sawActive || !sawNew {
-		t.Fatalf("expected active and newest completed windows, got %+v", recent)
+	if len(window.DataPoints) != 1 {
+		t.Fatalf("expected active window sample to be captured, got %d", len(window.DataPoints))
+	}
+	if len(recorder.preIncidentBuffer["res-ok"]) == 0 {
+		t.Fatalf("expected pre-incident buffer for res-ok")
+	}
+	if _, ok := recorder.preIncidentBuffer["res-missing"]; ok {
+		t.Fatalf("expected no pre-incident buffer for res-missing when metrics collection fails")
 	}
 }

@@ -16,10 +16,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -43,11 +42,72 @@ type DiagnosticsInfo struct {
 	AIChat       *AIChatDiagnostic       `json:"aiChat,omitempty"`
 	Errors       []string                `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
-	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
+	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
-	GuestSnapshots []monitoring.GuestMemorySnapshot `json:"guestSnapshots,omitempty"`
+	GuestSnapshots []monitoring.GuestMemorySnapshot `json:"guestSnapshots"`
 	// MemorySources summarizes how many nodes currently rely on each memory source per instance.
-	MemorySources []MemorySourceStat `json:"memorySources,omitempty"`
+	MemorySources []MemorySourceStat `json:"memorySources"`
+	// MemorySourceBreakdown captures node and guest source quality, trust, and fallback reasons.
+	MemorySourceBreakdown []MemorySourceBreakdown `json:"memorySourceBreakdown"`
+}
+
+func EmptyDiagnosticsInfo() DiagnosticsInfo {
+	return DiagnosticsInfo{}.NormalizeCollections()
+}
+
+func (d DiagnosticsInfo) NormalizeCollections() DiagnosticsInfo {
+	if d.Nodes == nil {
+		d.Nodes = []NodeDiagnostic{}
+	}
+	if d.PBS == nil {
+		d.PBS = []PBSDiagnostic{}
+	}
+	if d.Errors == nil {
+		d.Errors = []string{}
+	}
+	if d.NodeSnapshots == nil {
+		d.NodeSnapshots = []monitoring.NodeMemorySnapshot{}
+	}
+	if d.GuestSnapshots == nil {
+		d.GuestSnapshots = []monitoring.GuestMemorySnapshot{}
+	}
+	if d.MemorySources == nil {
+		d.MemorySources = []MemorySourceStat{}
+	}
+	if d.MemorySourceBreakdown == nil {
+		d.MemorySourceBreakdown = []MemorySourceBreakdown{}
+	}
+	for i := range d.Nodes {
+		d.Nodes[i] = d.Nodes[i].NormalizeCollections()
+	}
+	for i := range d.MemorySourceBreakdown {
+		d.MemorySourceBreakdown[i] = d.MemorySourceBreakdown[i].NormalizeCollections()
+	}
+	if d.MetricsStore != nil {
+		normalized := d.MetricsStore.NormalizeCollections()
+		d.MetricsStore = &normalized
+	}
+	if d.Discovery != nil {
+		normalized := d.Discovery.NormalizeCollections()
+		d.Discovery = &normalized
+	}
+	if d.APITokens != nil {
+		normalized := d.APITokens.NormalizeCollections()
+		d.APITokens = &normalized
+	}
+	if d.DockerAgents != nil {
+		normalized := d.DockerAgents.NormalizeCollections()
+		d.DockerAgents = &normalized
+	}
+	if d.Alerts != nil {
+		normalized := d.Alerts.NormalizeCollections()
+		d.Alerts = &normalized
+	}
+	if d.AIChat != nil {
+		normalized := d.AIChat.NormalizeCollections()
+		d.AIChat = &normalized
+	}
+	return d
 }
 
 // DiscoveryDiagnostic summarizes discovery configuration and recent activity.
@@ -64,7 +124,20 @@ type DiscoveryDiagnostic struct {
 	LastResultTimestamp string                 `json:"lastResultTimestamp,omitempty"`
 	LastResultServers   int                    `json:"lastResultServers,omitempty"`
 	LastResultErrors    int                    `json:"lastResultErrors,omitempty"`
-	History             []DiscoveryHistoryItem `json:"history,omitempty"`
+	History             []DiscoveryHistoryItem `json:"history"`
+}
+
+func (d DiscoveryDiagnostic) NormalizeCollections() DiscoveryDiagnostic {
+	if d.SubnetAllowlist == nil {
+		d.SubnetAllowlist = []string{}
+	}
+	if d.SubnetBlocklist == nil {
+		d.SubnetBlocklist = []string{}
+	}
+	if d.History == nil {
+		d.History = []DiscoveryHistoryItem{}
+	}
+	return d
 }
 
 // DiscoveryHistoryItem summarizes the outcome of a recent discovery scan.
@@ -87,6 +160,26 @@ type MemorySourceStat struct {
 	NodeCount   int    `json:"nodeCount"`
 	LastUpdated string `json:"lastUpdated"`
 	Fallback    bool   `json:"fallback"`
+	Trust       string `json:"trust,omitempty"`
+}
+
+// MemorySourceBreakdown captures diagnostics for node and guest memory source selection.
+type MemorySourceBreakdown struct {
+	Instance        string   `json:"instance"`
+	Scope           string   `json:"scope"`
+	Source          string   `json:"source"`
+	Count           int      `json:"count"`
+	LastUpdated     string   `json:"lastUpdated"`
+	Fallback        bool     `json:"fallback"`
+	Trust           string   `json:"trust"`
+	FallbackReasons []string `json:"fallbackReasons"`
+}
+
+func (b MemorySourceBreakdown) NormalizeCollections() MemorySourceBreakdown {
+	if b.FallbackReasons == nil {
+		b.FallbackReasons = []string{}
+	}
+	return b
 }
 
 // MetricsStoreDiagnostic summarizes metrics store health and data availability.
@@ -100,17 +193,146 @@ type MetricsStoreDiagnostic struct {
 	DailyCount  int64    `json:"dailyCount,omitempty"`
 	TotalPoints int64    `json:"totalPoints,omitempty"`
 	BufferSize  int      `json:"bufferSize,omitempty"`
-	Notes       []string `json:"notes,omitempty"`
+	Notes       []string `json:"notes"`
 	Error       string   `json:"error,omitempty"`
 }
 
-func isFallbackMemorySource(source string) bool {
-	switch strings.ToLower(source) {
-	case "", "unknown", "nodes-endpoint", "node-status-used", "previous-snapshot":
-		return true
-	default:
-		return false
+func (d MetricsStoreDiagnostic) NormalizeCollections() MetricsStoreDiagnostic {
+	if d.Notes == nil {
+		d.Notes = []string{}
 	}
+	return d
+}
+
+func isFallbackMemorySource(source string) bool {
+	return monitoring.MemorySourceIsFallback(source)
+}
+
+func classifyMemorySourceTrust(source string) string {
+	return monitoring.MemorySourceTrust(source)
+}
+
+func buildMemorySourceDiagnostics(snapshots monitoring.DiagnosticSnapshotSet) ([]MemorySourceStat, []MemorySourceBreakdown) {
+	type nodeAgg struct {
+		stat   MemorySourceStat
+		latest time.Time
+	}
+	type breakdownAgg struct {
+		stat            MemorySourceBreakdown
+		latest          time.Time
+		fallbackReasons map[string]struct{}
+	}
+
+	nodeStats := make(map[string]*nodeAgg)
+	breakdown := make(map[string]*breakdownAgg)
+
+	appendBreakdown := func(instance, scope, source string, retrievedAt time.Time, fallbackReason string) {
+		source = monitoring.CanonicalMemorySource(source)
+		if source == "" {
+			source = "unknown"
+		}
+		if strings.TrimSpace(fallbackReason) == "" {
+			fallbackReason = monitoring.MemorySourceFallbackReason(source)
+		}
+
+		key := fmt.Sprintf("%s|%s|%s", instance, scope, source)
+		entry, ok := breakdown[key]
+		if !ok {
+			trust := classifyMemorySourceTrust(source)
+			entry = &breakdownAgg{
+				stat: MemorySourceBreakdown{
+					Instance: instance,
+					Scope:    scope,
+					Source:   source,
+					Fallback: isFallbackMemorySource(source),
+					Trust:    trust,
+				},
+				fallbackReasons: make(map[string]struct{}),
+			}
+			breakdown[key] = entry
+		}
+
+		entry.stat.Count++
+		if fallbackReason = strings.TrimSpace(fallbackReason); fallbackReason != "" {
+			entry.fallbackReasons[fallbackReason] = struct{}{}
+		}
+		if retrievedAt.After(entry.latest) {
+			entry.latest = retrievedAt
+		}
+	}
+
+	for _, snap := range snapshots.Nodes {
+		source := monitoring.CanonicalMemorySource(snap.MemorySource)
+		if source == "" {
+			source = "unknown"
+		}
+
+		key := fmt.Sprintf("%s|%s", snap.Instance, source)
+		entry, ok := nodeStats[key]
+		if !ok {
+			trust := classifyMemorySourceTrust(source)
+			entry = &nodeAgg{
+				stat: MemorySourceStat{
+					Instance: snap.Instance,
+					Source:   source,
+					Fallback: isFallbackMemorySource(source),
+					Trust:    trust,
+				},
+			}
+			nodeStats[key] = entry
+		}
+
+		entry.stat.NodeCount++
+		if snap.RetrievedAt.After(entry.latest) {
+			entry.latest = snap.RetrievedAt
+		}
+
+		appendBreakdown(snap.Instance, "node", source, snap.RetrievedAt, snap.FallbackReason)
+	}
+
+	for _, snap := range snapshots.Guests {
+		appendBreakdown(snap.Instance, "guest", snap.MemorySource, snap.RetrievedAt, snap.FallbackReason)
+	}
+
+	nodeSourceStats := make([]MemorySourceStat, 0, len(nodeStats))
+	for _, entry := range nodeStats {
+		if !entry.latest.IsZero() {
+			entry.stat.LastUpdated = entry.latest.UTC().Format(time.RFC3339)
+		}
+		nodeSourceStats = append(nodeSourceStats, entry.stat)
+	}
+	sort.Slice(nodeSourceStats, func(i, j int) bool {
+		if nodeSourceStats[i].Instance == nodeSourceStats[j].Instance {
+			return nodeSourceStats[i].Source < nodeSourceStats[j].Source
+		}
+		return nodeSourceStats[i].Instance < nodeSourceStats[j].Instance
+	})
+
+	breakdownStats := make([]MemorySourceBreakdown, 0, len(breakdown))
+	for _, entry := range breakdown {
+		if !entry.latest.IsZero() {
+			entry.stat.LastUpdated = entry.latest.UTC().Format(time.RFC3339)
+		}
+		if len(entry.fallbackReasons) > 0 {
+			entry.stat.FallbackReasons = make([]string, 0, len(entry.fallbackReasons))
+			for reason := range entry.fallbackReasons {
+				entry.stat.FallbackReasons = append(entry.stat.FallbackReasons, reason)
+			}
+			sort.Strings(entry.stat.FallbackReasons)
+		}
+		breakdownStats = append(breakdownStats, entry.stat)
+	}
+	sort.Slice(breakdownStats, func(i, j int) bool {
+		if breakdownStats[i].Instance == breakdownStats[j].Instance {
+			if breakdownStats[i].Scope == breakdownStats[j].Scope {
+				return breakdownStats[i].Source < breakdownStats[j].Source
+			}
+			return breakdownStats[i].Scope < breakdownStats[j].Scope
+		}
+		return breakdownStats[i].Instance < breakdownStats[j].Instance
+	})
+
+	return nodeSourceStats, breakdownStats
 }
 
 func buildMetricsStoreDiagnostic(monitor *monitoring.Monitor) *MetricsStoreDiagnostic {
@@ -207,6 +429,18 @@ type NodeDiagnostic struct {
 	PhysicalDisks *PhysicalDiskCheck `json:"physicalDisks,omitempty"`
 }
 
+func (d NodeDiagnostic) NormalizeCollections() NodeDiagnostic {
+	if d.VMDiskCheck != nil {
+		normalized := d.VMDiskCheck.NormalizeCollections()
+		d.VMDiskCheck = &normalized
+	}
+	if d.PhysicalDisks != nil {
+		normalized := d.PhysicalDisks.NormalizeCollections()
+		d.PhysicalDisks = &normalized
+	}
+	return d
+}
+
 // NodeDetails contains node-specific details
 type NodeDetails struct {
 	NodeCount int    `json:"node_count,omitempty"`
@@ -221,10 +455,26 @@ type VMDiskCheckResult struct {
 	TestVMID         int                `json:"testVMID,omitempty"`
 	TestVMName       string             `json:"testVMName,omitempty"`
 	TestResult       string             `json:"testResult,omitempty"`
-	Permissions      []string           `json:"permissions,omitempty"`
-	Recommendations  []string           `json:"recommendations,omitempty"`
-	ProblematicVMs   []VMDiskIssue      `json:"problematicVMs,omitempty"`
-	FilesystemsFound []FilesystemDetail `json:"filesystemsFound,omitempty"`
+	Permissions      []string           `json:"permissions"`
+	Recommendations  []string           `json:"recommendations"`
+	ProblematicVMs   []VMDiskIssue      `json:"problematicVMs"`
+	FilesystemsFound []FilesystemDetail `json:"filesystemsFound"`
+}
+
+func (r VMDiskCheckResult) NormalizeCollections() VMDiskCheckResult {
+	if r.Permissions == nil {
+		r.Permissions = []string{}
+	}
+	if r.Recommendations == nil {
+		r.Recommendations = []string{}
+	}
+	if r.ProblematicVMs == nil {
+		r.ProblematicVMs = []VMDiskIssue{}
+	}
+	if r.FilesystemsFound == nil {
+		r.FilesystemsFound = []FilesystemDetail{}
+	}
+	return r
 }
 
 type VMDiskIssue struct {
@@ -250,15 +500,35 @@ type PhysicalDiskCheck struct {
 	TotalDisks      int              `json:"totalDisks"`
 	NodeResults     []NodeDiskResult `json:"nodeResults"`
 	TestResult      string           `json:"testResult,omitempty"`
-	Recommendations []string         `json:"recommendations,omitempty"`
+	Recommendations []string         `json:"recommendations"`
+}
+
+func (c PhysicalDiskCheck) NormalizeCollections() PhysicalDiskCheck {
+	if c.NodeResults == nil {
+		c.NodeResults = []NodeDiskResult{}
+	}
+	if c.Recommendations == nil {
+		c.Recommendations = []string{}
+	}
+	for i := range c.NodeResults {
+		c.NodeResults[i] = c.NodeResults[i].NormalizeCollections()
+	}
+	return c
 }
 
 type NodeDiskResult struct {
 	NodeName    string   `json:"nodeName"`
 	DiskCount   int      `json:"diskCount"`
 	Error       string   `json:"error,omitempty"`
-	DiskDevices []string `json:"diskDevices,omitempty"`
+	DiskDevices []string `json:"diskDevices"`
 	APIResponse string   `json:"apiResponse,omitempty"`
+}
+
+func (r NodeDiskResult) NormalizeCollections() NodeDiskResult {
+	if r.DiskDevices == nil {
+		r.DiskDevices = []string{}
+	}
+	return r
 }
 
 // ClusterInfo contains cluster information
@@ -293,17 +563,29 @@ type SystemDiagnostic struct {
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
 type APITokenDiagnostic struct {
-	Enabled                bool              `json:"enabled"`
-	TokenCount             int               `json:"tokenCount"`
-	HasEnvTokens           bool              `json:"hasEnvTokens"`
-	HasLegacyToken         bool              `json:"hasLegacyToken"`
-	RecommendTokenSetup    bool              `json:"recommendTokenSetup"`
-	RecommendTokenRotation bool              `json:"recommendTokenRotation"`
-	LegacyDockerHostCount  int               `json:"legacyDockerHostCount,omitempty"`
-	UnusedTokenCount       int               `json:"unusedTokenCount,omitempty"`
-	Notes                  []string          `json:"notes,omitempty"`
-	Tokens                 []APITokenSummary `json:"tokens,omitempty"`
-	Usage                  []APITokenUsage   `json:"usage,omitempty"`
+	Enabled             bool              `json:"enabled"`
+	TokenCount          int               `json:"tokenCount"`
+	RecommendTokenSetup bool              `json:"recommendTokenSetup"`
+	UnusedTokenCount    int               `json:"unusedTokenCount,omitempty"`
+	Notes               []string          `json:"notes"`
+	Tokens              []APITokenSummary `json:"tokens"`
+	Usage               []APITokenUsage   `json:"usage"`
+}
+
+func (d APITokenDiagnostic) NormalizeCollections() APITokenDiagnostic {
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	if d.Tokens == nil {
+		d.Tokens = []APITokenSummary{}
+	}
+	if d.Usage == nil {
+		d.Usage = []APITokenUsage{}
+	}
+	for i := range d.Usage {
+		d.Usage[i] = d.Usage[i].NormalizeCollections()
+	}
+	return d
 }
 
 // APITokenSummary provides sanitized token metadata for diagnostics display.
@@ -318,31 +600,51 @@ type APITokenSummary struct {
 
 // APITokenUsage summarises how tokens are consumed by connected agents.
 type APITokenUsage struct {
-	TokenID   string   `json:"tokenId"`
-	HostCount int      `json:"hostCount"`
-	Hosts     []string `json:"hosts,omitempty"`
+	TokenID    string   `json:"tokenId"`
+	AgentCount int      `json:"agentCount"`
+	Agents     []string `json:"agents"`
+}
+
+func (u APITokenUsage) NormalizeCollections() APITokenUsage {
+	if u.Agents == nil {
+		u.Agents = []string{}
+	}
+	return u
 }
 
 // DockerAgentDiagnostic summarizes adoption of the Docker agent command system.
 type DockerAgentDiagnostic struct {
-	HostsTotal               int                    `json:"hostsTotal"`
-	HostsOnline              int                    `json:"hostsOnline"`
-	HostsReportingVersion    int                    `json:"hostsReportingVersion"`
-	HostsWithTokenBinding    int                    `json:"hostsWithTokenBinding"`
-	HostsWithoutTokenBinding int                    `json:"hostsWithoutTokenBinding"`
-	HostsWithoutVersion      int                    `json:"hostsWithoutVersion,omitempty"`
-	HostsOutdatedVersion     int                    `json:"hostsOutdatedVersion,omitempty"`
-	HostsWithStaleCommand    int                    `json:"hostsWithStaleCommand,omitempty"`
-	HostsPendingUninstall    int                    `json:"hostsPendingUninstall,omitempty"`
-	HostsNeedingAttention    int                    `json:"hostsNeedingAttention"`
-	RecommendedAgentVersion  string                 `json:"recommendedAgentVersion,omitempty"`
-	Attention                []DockerAgentAttention `json:"attention,omitempty"`
-	Notes                    []string               `json:"notes,omitempty"`
+	AgentsTotal               int                    `json:"agentsTotal"`
+	AgentsOnline              int                    `json:"agentsOnline"`
+	AgentsReportingVersion    int                    `json:"agentsReportingVersion"`
+	AgentsWithTokenBinding    int                    `json:"agentsWithTokenBinding"`
+	AgentsWithoutTokenBinding int                    `json:"agentsWithoutTokenBinding"`
+	AgentsWithoutVersion      int                    `json:"agentsWithoutVersion,omitempty"`
+	AgentsOutdatedVersion     int                    `json:"agentsOutdatedVersion,omitempty"`
+	AgentsWithStaleCommand    int                    `json:"agentsWithStaleCommand,omitempty"`
+	AgentsPendingUninstall    int                    `json:"agentsPendingUninstall,omitempty"`
+	AgentsNeedingAttention    int                    `json:"agentsNeedingAttention"`
+	RecommendedAgentVersion   string                 `json:"recommendedAgentVersion,omitempty"`
+	Attention                 []DockerAgentAttention `json:"attention"`
+	Notes                     []string               `json:"notes"`
+}
+
+func (d DockerAgentDiagnostic) NormalizeCollections() DockerAgentDiagnostic {
+	if d.Attention == nil {
+		d.Attention = []DockerAgentAttention{}
+	}
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	for i := range d.Attention {
+		d.Attention[i] = d.Attention[i].NormalizeCollections()
+	}
+	return d
 }
 
 // DockerAgentAttention captures an individual agent that requires user action.
 type DockerAgentAttention struct {
-	HostID       string   `json:"hostId"`
+	AgentID      string   `json:"agentId"`
 	Name         string   `json:"name"`
 	Status       string   `json:"status"`
 	AgentVersion string   `json:"agentVersion,omitempty"`
@@ -351,14 +653,25 @@ type DockerAgentAttention struct {
 	Issues       []string `json:"issues"`
 }
 
+func (a DockerAgentAttention) NormalizeCollections() DockerAgentAttention {
+	if a.Issues == nil {
+		a.Issues = []string{}
+	}
+	return a
+}
+
 // AlertsDiagnostic summarises alert configuration migration state.
 type AlertsDiagnostic struct {
-	LegacyThresholdsDetected bool     `json:"legacyThresholdsDetected"`
-	LegacyThresholdSources   []string `json:"legacyThresholdSources,omitempty"`
-	LegacyScheduleSettings   []string `json:"legacyScheduleSettings,omitempty"`
-	MissingCooldown          bool     `json:"missingCooldown"`
-	MissingGroupingWindow    bool     `json:"missingGroupingWindow"`
-	Notes                    []string `json:"notes,omitempty"`
+	MissingCooldown       bool     `json:"missingCooldown"`
+	MissingGroupingWindow bool     `json:"missingGroupingWindow"`
+	Notes                 []string `json:"notes"`
+}
+
+func (d AlertsDiagnostic) NormalizeCollections() AlertsDiagnostic {
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	return d
 }
 
 // AIChatDiagnostic reports on the AI chat service status.
@@ -371,7 +684,14 @@ type AIChatDiagnostic struct {
 	Model        string   `json:"model,omitempty"`
 	MCPConnected bool     `json:"mcpConnected"`
 	MCPToolCount int      `json:"mcpToolCount,omitempty"`
-	Notes        []string `json:"notes,omitempty"`
+	Notes        []string `json:"notes"`
+}
+
+func (d AIChatDiagnostic) NormalizeCollections() AIChatDiagnostic {
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	return d
 }
 
 // handleDiagnostics returns comprehensive diagnostic information
@@ -412,6 +732,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 }
 
 func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cachedAt time.Time) {
+	diag = diag.NormalizeCollections()
 	w.Header().Set("Content-Type", "application/json")
 	if !cachedAt.IsZero() {
 		w.Header().Set("X-Diagnostics-Cached-At", cachedAt.UTC().Format(time.RFC3339))
@@ -423,9 +744,7 @@ func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cache
 }
 
 func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
-	diag := DiagnosticsInfo{
-		Errors: []string{},
-	}
+	diag := EmptyDiagnosticsInfo()
 
 	// Version info
 	if versionInfo, err := updates.GetCurrentVersion(); err == nil {
@@ -480,19 +799,20 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Password:   node.Password,
 			TokenName:  node.TokenName,
 			TokenValue: node.TokenValue,
-			Fingerprint: node.Fingerprint,
 			VerifySSL:  node.VerifySSL,
 		}
 
 		client, err := proxmox.NewClient(testCfg)
 		if err != nil {
 			nodeDiag.Connected = false
-			nodeDiag.Error = err.Error()
+			nodeDiag.Error = "Failed to initialize connection"
+			log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox client init failed")
 		} else {
 			nodes, err := client.GetNodes(ctx)
 			if err != nil {
 				nodeDiag.Connected = false
-				nodeDiag.Error = "Failed to connect to Proxmox API: " + err.Error()
+				nodeDiag.Error = "Failed to connect to Proxmox API"
+				log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox API connection failed")
 			} else {
 				nodeDiag.Connected = true
 
@@ -544,11 +864,13 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		client, err := pbs.NewClient(testCfg)
 		if err != nil {
 			pbsDiag.Connected = false
-			pbsDiag.Error = err.Error()
+			pbsDiag.Error = "Failed to initialize connection"
+			log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS client init failed")
 		} else {
 			if version, err := client.GetVersion(ctx); err != nil {
 				pbsDiag.Connected = false
-				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
+				pbsDiag.Error = "Connection established but version check failed"
+				log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS version check failed")
 			} else {
 				pbsDiag.Connected = true
 				pbsDiag.Details = &PBSDetails{Version: version.Version}
@@ -568,61 +890,14 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		snapshots := r.monitor.GetDiagnosticSnapshots()
 		if len(snapshots.Nodes) > 0 {
 			diag.NodeSnapshots = snapshots.Nodes
-
-			type memorySourceAgg struct {
-				stat   MemorySourceStat
-				latest time.Time
-			}
-
-			sourceAverages := make(map[string]*memorySourceAgg)
-			for _, snap := range snapshots.Nodes {
-				source := snap.MemorySource
-				if source == "" {
-					source = "unknown"
-				}
-
-				key := fmt.Sprintf("%s|%s", snap.Instance, source)
-				entry, ok := sourceAverages[key]
-				if !ok {
-					entry = &memorySourceAgg{
-						stat: MemorySourceStat{
-							Instance: snap.Instance,
-							Source:   source,
-							Fallback: isFallbackMemorySource(source),
-						},
-					}
-					sourceAverages[key] = entry
-				}
-
-				entry.stat.NodeCount++
-				if snap.RetrievedAt.After(entry.latest) {
-					entry.latest = snap.RetrievedAt
-				}
-			}
-
-			if len(sourceAverages) > 0 {
-				diag.MemorySources = make([]MemorySourceStat, 0, len(sourceAverages))
-				for _, entry := range sourceAverages {
-					if !entry.latest.IsZero() {
-						entry.stat.LastUpdated = entry.latest.UTC().Format(time.RFC3339)
-					}
-					diag.MemorySources = append(diag.MemorySources, entry.stat)
-				}
-
-				sort.Slice(diag.MemorySources, func(i, j int) bool {
-					if diag.MemorySources[i].Instance == diag.MemorySources[j].Instance {
-						return diag.MemorySources[i].Source < diag.MemorySources[j].Source
-					}
-					return diag.MemorySources[i].Instance < diag.MemorySources[j].Instance
-				})
-			}
 		}
 		if len(snapshots.Guests) > 0 {
 			diag.GuestSnapshots = snapshots.Guests
 		}
+		diag.MemorySources, diag.MemorySourceBreakdown = buildMemorySourceDiagnostics(snapshots)
 	}
 
-	return diag
+	return diag.NormalizeCollections()
 }
 
 func copyStringSlice(values []string) []string {
@@ -674,11 +949,7 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 
 			if result, updated := svc.GetCachedResult(); result != nil {
 				discovery.LastResultServers = len(result.Servers)
-				if len(result.StructuredErrors) > 0 {
-					discovery.LastResultErrors = len(result.StructuredErrors)
-				} else if len(result.Errors) > 0 {
-					discovery.LastResultErrors = len(result.Errors)
-				}
+				discovery.LastResultErrors = len(result.StructuredErrors)
 				if !updated.IsZero() {
 					discovery.LastResultTimestamp = updated.UTC().Format(time.RFC3339)
 				}
@@ -726,25 +997,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	envTokens := false
-	if cfg.EnvOverrides != nil && (cfg.EnvOverrides["API_TOKEN"] || cfg.EnvOverrides["API_TOKENS"]) {
-		envTokens = true
-	}
-
-	legacyToken := false
-	for _, record := range cfg.APITokens {
-		if strings.EqualFold(record.Name, "Environment token") {
-			envTokens = true
-		}
-		if strings.EqualFold(record.Name, "Legacy token") {
-			legacyToken = true
-		}
-	}
-
-	diag.HasEnvTokens = envTokens
-	diag.HasLegacyToken = legacyToken
 	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
-	diag.RecommendTokenRotation = envTokens || legacyToken
 
 	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
@@ -777,14 +1030,7 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 			summary.Hint = "…" + record.Suffix
 		}
 
-		switch {
-		case strings.EqualFold(record.Name, "Environment token"):
-			summary.Source = "environment"
-		case strings.EqualFold(record.Name, "Legacy token"):
-			summary.Source = "legacy"
-		default:
-			summary.Source = "user"
-		}
+		summary.Source = "user"
 
 		tokens = append(tokens, summary)
 	}
@@ -801,22 +1047,17 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	}
 
 	tokenUsage := make(map[string][]string)
-	legacyHosts := 0
 	if monitor != nil {
-		for _, host := range monitor.GetDockerHosts() {
-			name := preferredDockerHostName(host)
-			if strings.TrimSpace(host.TokenID) == "" {
-				legacyHosts++
-				continue
+		if readState := monitor.GetUnifiedReadStateOrSnapshot(); readState != nil {
+			for _, host := range readState.DockerHosts() {
+				name := preferredDockerHostName(host)
+				if strings.TrimSpace(host.TokenID()) == "" {
+					continue
+				}
+				tokenID := strings.TrimSpace(host.TokenID())
+				tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 			}
-			tokenID := strings.TrimSpace(host.TokenID)
-			tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 		}
-	}
-
-	diag.LegacyDockerHostCount = legacyHosts
-	if legacyHosts > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Generate dedicated tokens and rerun the installer from Settings → Docker Agents.", legacyHosts))
 	}
 
 	if len(tokenUsage) > 0 {
@@ -828,21 +1069,14 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 
 		diag.Usage = make([]APITokenUsage, 0, len(keys))
 		for _, tokenID := range keys {
-			hosts := tokenUsage[tokenID]
-			sort.Strings(hosts)
+			agents := tokenUsage[tokenID]
+			sort.Strings(agents)
 			diag.Usage = append(diag.Usage, APITokenUsage{
-				TokenID:   tokenID,
-				HostCount: len(hosts),
-				Hosts:     hosts,
+				TokenID:    tokenID,
+				AgentCount: len(agents),
+				Agents:     agents,
 			})
 		}
-	}
-
-	if envTokens {
-		appendNote("Environment-based API token detected. Migrate to tokens created in the UI for per-token tracking and safer rotation.")
-	}
-	if legacyToken {
-		appendNote("Legacy token detected. Generate new API tokens and update integrations to benefit from per-token management.")
 	}
 
 	return diag
@@ -853,9 +1087,13 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		return nil
 	}
 
-	hosts := m.GetDockerHosts()
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+	hosts := readState.DockerHosts()
 	diag := &DockerAgentDiagnostic{
-		HostsTotal:              len(hosts),
+		AgentsTotal:             len(hosts),
 		RecommendedAgentVersion: normalizeVersionLabel(serverVersion),
 	}
 
@@ -867,7 +1105,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	}
 
 	if len(hosts) == 0 {
-		appendNote("No Docker agents have reported in yet. Use Settings → Docker Agents to install the container-side agent and unlock remote commands.")
+		appendNote("No container runtime agents have reported in yet. Use Settings → Agents to install the container-side agent and unlock remote commands.")
 		return diag
 	}
 
@@ -886,19 +1124,19 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	now := time.Now().UTC()
 	legacyTokenHosts := 0
 	for _, host := range hosts {
-		status := strings.ToLower(strings.TrimSpace(host.Status))
+		status := strings.ToLower(strings.TrimSpace(string(host.Status())))
 		if status == "online" {
-			diag.HostsOnline++
+			diag.AgentsOnline++
 		}
-		versionStr := strings.TrimSpace(host.AgentVersion)
+		versionStr := strings.TrimSpace(host.AgentVersion())
 		if versionStr != "" {
-			diag.HostsReportingVersion++
+			diag.AgentsReportingVersion++
 		} else {
-			diag.HostsWithoutVersion++
+			diag.AgentsWithoutVersion++
 		}
 
-		if strings.TrimSpace(host.TokenID) != "" {
-			diag.HostsWithTokenBinding++
+		if strings.TrimSpace(host.TokenID()) != "" {
+			diag.AgentsWithTokenBinding++
 		} else {
 			legacyTokenHosts++
 		}
@@ -906,15 +1144,15 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		issues := make([]string, 0, 4)
 
 		if status != "online" && status != "" {
-			issues = append(issues, fmt.Sprintf("Host reports status %q.", status))
+			issues = append(issues, fmt.Sprintf("Container runtime reports status %q.", status))
 		}
 
 		if versionStr == "" {
-			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Docker Agents.")
+			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Agents.")
 		} else if serverVer != nil {
 			if agentVer, err := updates.ParseVersion(versionStr); err == nil {
 				if agentVer.Compare(serverVer) < 0 {
-					diag.HostsOutdatedVersion++
+					diag.AgentsOutdatedVersion++
 					issues = append(issues, fmt.Sprintf("Agent version %s lags behind the recommended %s. Re-run the installer to update.", normalizeVersionLabel(versionStr), recommendedLabel))
 				}
 			} else {
@@ -922,67 +1160,71 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 			}
 		}
 
-		if strings.TrimSpace(host.TokenID) == "" {
-			issues = append(issues, "Host is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
+		if strings.TrimSpace(host.TokenID()) == "" {
+			issues = append(issues, "Container runtime is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
 		}
 
-		if !host.LastSeen.IsZero() && now.Sub(host.LastSeen.UTC()) > 10*time.Minute {
-			issues = append(issues, fmt.Sprintf("No heartbeat since %s. Verify the agent container is running.", host.LastSeen.UTC().Format(time.RFC3339)))
+		if !host.LastSeen().IsZero() && now.Sub(host.LastSeen().UTC()) > 10*time.Minute {
+			issues = append(issues, fmt.Sprintf("No heartbeat since %s. Verify the agent container is running.", host.LastSeen().UTC().Format(time.RFC3339)))
 		}
 
-		if host.Command != nil {
-			cmdStatus := strings.ToLower(strings.TrimSpace(host.Command.Status))
+		if command := host.Command(); command != nil {
+			cmdStatus := strings.ToLower(strings.TrimSpace(command.Status))
 			switch cmdStatus {
 			case monitoring.DockerCommandStatusQueued, monitoring.DockerCommandStatusDispatched, monitoring.DockerCommandStatusAcknowledged:
 				message := fmt.Sprintf("Command %s is still in progress.", cmdStatus)
-				if !host.Command.UpdatedAt.IsZero() && now.Sub(host.Command.UpdatedAt.UTC()) > 15*time.Minute {
-					diag.HostsWithStaleCommand++
-					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, host.Command.UpdatedAt.UTC().Format(time.RFC3339))
+				if !command.UpdatedAt.IsZero() && now.Sub(command.UpdatedAt.UTC()) > 15*time.Minute {
+					diag.AgentsWithStaleCommand++
+					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, command.UpdatedAt.UTC().Format(time.RFC3339))
 				}
 				issues = append(issues, message)
 			}
 		}
 
-		if host.PendingUninstall {
-			diag.HostsPendingUninstall++
-			issues = append(issues, "Host is pending uninstall; confirm the agent container stopped or clear the flag.")
+		if host.PendingUninstall() {
+			diag.AgentsPendingUninstall++
+			issues = append(issues, "Container runtime is pending uninstall; confirm the agent container stopped or clear the flag.")
 		}
 
 		if len(issues) == 0 {
 			continue
 		}
+		hostID := host.HostSourceID()
+		if hostID == "" {
+			hostID = host.ID()
+		}
 
 		diag.Attention = append(diag.Attention, DockerAgentAttention{
-			HostID:       host.ID,
+			AgentID:      hostID,
 			Name:         preferredDockerHostName(host),
-			Status:       host.Status,
+			Status:       string(host.Status()),
 			AgentVersion: versionStr,
-			TokenHint:    host.TokenHint,
-			LastSeen:     formatTimeMaybe(host.LastSeen),
+			TokenHint:    host.TokenHint(),
+			LastSeen:     formatTimeMaybe(host.LastSeen()),
 			Issues:       issues,
 		})
 	}
 
-	diag.HostsWithoutTokenBinding = legacyTokenHosts
-	diag.HostsNeedingAttention = len(diag.Attention)
+	diag.AgentsWithoutTokenBinding = legacyTokenHosts
+	diag.AgentsNeedingAttention = len(diag.Attention)
 
 	if legacyTokenHosts > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Migrate each host to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
+		appendNote(fmt.Sprintf("%d container runtime(s) still rely on the shared API token. Migrate each runtime to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
 	}
-	if diag.HostsOutdatedVersion > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) run an out-of-date agent. Re-run the installer from Settings → Docker Agents to upgrade them.", diag.HostsOutdatedVersion))
+	if diag.AgentsOutdatedVersion > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) run an out-of-date agent. Re-run the installer from Settings → Agents to upgrade them.", diag.AgentsOutdatedVersion))
 	}
-	if diag.HostsWithoutVersion > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.HostsWithoutVersion))
+	if diag.AgentsWithoutVersion > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.AgentsWithoutVersion))
 	}
-	if diag.HostsWithStaleCommand > 0 {
-		appendNote(fmt.Sprintf("%d Docker host command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Docker Agents to reset them.", diag.HostsWithStaleCommand))
+	if diag.AgentsWithStaleCommand > 0 {
+		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow reconnect' action in Settings → Infrastructure to reset them.", diag.AgentsWithStaleCommand))
 	}
-	if diag.HostsPendingUninstall > 0 {
-		appendNote(fmt.Sprintf("%d Docker host(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Docker Agents.", diag.HostsPendingUninstall))
+	if diag.AgentsPendingUninstall > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.AgentsPendingUninstall))
 	}
-	if diag.HostsNeedingAttention == 0 {
-		appendNote("All Docker agents are reporting with dedicated tokens and the expected version.")
+	if diag.AgentsNeedingAttention == 0 {
+		appendNote("All container runtime agents are reporting with dedicated tokens and the expected version.")
 	}
 
 	return diag
@@ -1006,52 +1248,6 @@ func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
 			return
 		}
 		diag.Notes = append(diag.Notes, note)
-	}
-
-	legacySources := make([]string, 0, 4)
-	if hasLegacyThresholds(config.GuestDefaults) {
-		diag.LegacyThresholdsDetected = true
-		legacySources = append(legacySources, "guest-defaults")
-	}
-	if hasLegacyThresholds(config.NodeDefaults) {
-		diag.LegacyThresholdsDetected = true
-		legacySources = append(legacySources, "node-defaults")
-	}
-
-	overrideIndex := 0
-	for _, override := range config.Overrides {
-		overrideIndex++
-		if hasLegacyThresholds(override) {
-			diag.LegacyThresholdsDetected = true
-			legacySources = append(legacySources, fmt.Sprintf("override-%d", overrideIndex))
-		}
-	}
-
-	for idx, rule := range config.CustomRules {
-		if hasLegacyThresholds(rule.Thresholds) {
-			diag.LegacyThresholdsDetected = true
-			legacySources = append(legacySources, fmt.Sprintf("custom-%d", idx+1))
-		}
-	}
-
-	if len(legacySources) > 0 {
-		sort.Strings(legacySources)
-		diag.LegacyThresholdSources = legacySources
-		appendNote("Some alert rules still rely on legacy single-value thresholds. Edit and save them to enable hysteresis-based alerts.")
-	}
-
-	legacySchedule := make([]string, 0, 2)
-	if config.TimeThreshold > 0 {
-		legacySchedule = append(legacySchedule, "timeThreshold")
-		appendNote("Global alert delay still uses the legacy timeThreshold setting. Save the alerts configuration to migrate to per-metric delays.")
-	}
-	if config.Schedule.GroupingWindow > 0 && config.Schedule.Grouping.Window == 0 {
-		legacySchedule = append(legacySchedule, "groupingWindow")
-		appendNote("Alert grouping uses the deprecated groupingWindow value. Update the schedule to use the new grouping options.")
-	}
-	if len(legacySchedule) > 0 {
-		sort.Strings(legacySchedule)
-		diag.LegacyScheduleSettings = legacySchedule
 	}
 
 	if config.Schedule.Cooldown <= 0 {
@@ -1115,27 +1311,23 @@ func countLegacySSHKeys(dir string) (int, error) {
 	return count, nil
 }
 
-func hasLegacyThresholds(th alerts.ThresholdConfig) bool {
-	return th.CPULegacy != nil ||
-		th.MemoryLegacy != nil ||
-		th.DiskLegacy != nil ||
-		th.DiskReadLegacy != nil ||
-		th.DiskWriteLegacy != nil ||
-		th.NetworkInLegacy != nil ||
-		th.NetworkOutLegacy != nil
-}
-
-func preferredDockerHostName(host models.DockerHost) string {
-	if name := strings.TrimSpace(host.DisplayName); name != "" {
+func preferredDockerHostName(host *unifiedresources.DockerHostView) string {
+	if host == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(host.Name()); name != "" {
 		return name
 	}
-	if name := strings.TrimSpace(host.Hostname); name != "" {
+	if name := strings.TrimSpace(host.Hostname()); name != "" {
 		return name
 	}
-	if name := strings.TrimSpace(host.AgentID); name != "" {
+	if name := strings.TrimSpace(host.AgentID()); name != "" {
 		return name
 	}
-	return host.ID
+	if name := strings.TrimSpace(host.HostSourceID()); name != "" {
+		return name
+	}
+	return host.ID()
 }
 
 func formatTimeMaybe(t time.Time) string {
@@ -1170,7 +1362,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	// Get all nodes to check
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		result.TestResult = "Failed to get nodes: " + err.Error()
+		log.Error().Err(err).Msg("VM disk check: failed to get nodes")
+		result.TestResult = "Failed to get nodes"
 		return result
 	}
 
@@ -1220,12 +1413,12 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			vmStatus, err := client.GetVMStatus(statusCtx, vmNode, vm.VMID)
 			statusCancel()
 			if err != nil {
-				errStr := err.Error()
+				log.Error().Err(err).Int("vmid", vm.VMID).Msg("VM disk check: failed to get VM status")
 				result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
 					VMID:   vm.VMID,
 					Name:   vm.Name,
 					Status: vm.Status,
-					Issue:  "Failed to get VM status: " + errStr,
+					Issue:  "Failed to get VM status",
 				})
 			} else if vmStatus != nil && vmStatus.Agent.Value > 0 {
 				result.VMsWithAgent++
@@ -1239,7 +1432,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						VMID:   vm.VMID,
 						Name:   vm.Name,
 						Status: vm.Status,
-						Issue:  "Agent enabled but failed to get filesystem info: " + err.Error(),
+						Issue:  "Agent enabled but failed to get filesystem info",
 					})
 					if testVM == nil {
 						testVM = &vms[i]
@@ -1309,7 +1502,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		statusCancel()
 		if err != nil {
 			errStr := err.Error()
-			result.TestResult = "Failed to get VM status: " + errStr
+			log.Error().Err(err).Int("vmid", testVM.VMID).Msg("VM disk check: failed to get VM status for test VM")
+			result.TestResult = "Failed to get VM status"
 			if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
 				result.Recommendations = append(result.Recommendations,
 					"VM status request timed out; check network connectivity to the node",
@@ -1318,7 +1512,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			} else if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") {
 				result.Recommendations = append(result.Recommendations,
 					"Ensure API token has PVEAuditor role for baseline access",
-					"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
+					"Add VM.GuestAgent.Audit (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
 					"Include Sys.Audit when available for Ceph metrics",
 				)
 			} else {
@@ -1348,7 +1542,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					result.TestResult = "Permission denied accessing guest agent"
 					result.Recommendations = append(result.Recommendations,
 						"Ensure API token has PVEAuditor role for baseline access",
-						"Add VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
+						"Add VM.GuestAgent.Audit (PVE 9) or VM.Monitor (PVE 8) privileges; Pulse setup adds these via the PulseMonitor role",
 						"Include Sys.Audit when available for Ceph metrics")
 				} else if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
 					result.TestResult = "Guest agent request timed out"
@@ -1357,7 +1551,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						"Consider increasing the diagnostics timeout if the environment is large",
 					)
 				} else {
-					result.TestResult = "Failed to get guest agent data: " + errStr
+					log.Error().Err(err).Int("vmid", testVM.VMID).Msg("VM disk check: failed to get guest agent data")
+					result.TestResult = "Failed to get guest agent data"
 				}
 			} else if len(fsInfo) == 0 {
 				result.TestResult = "Guest agent returned no filesystem info"
@@ -1435,7 +1630,8 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 	// Get all nodes
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		result.TestResult = "Failed to get nodes: " + err.Error()
+		log.Error().Err(err).Msg("Physical disk check: failed to get nodes")
+		result.TestResult = "Failed to get nodes"
 		return result
 	}
 
@@ -1460,7 +1656,8 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 		diskCancel()
 		if err != nil {
 			errStr := err.Error()
-			nodeResult.Error = errStr
+			log.Error().Err(err).Str("node", node.Node).Msg("Physical disk check: failed to get disks")
+			nodeResult.Error = "Failed to query disk information"
 
 			// Provide specific recommendations based on error
 			if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {

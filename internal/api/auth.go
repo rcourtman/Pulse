@@ -3,13 +3,13 @@ package api
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -23,34 +23,219 @@ import (
 
 // Global session store instance
 var (
-	sessionStore     *SessionStore
-	sessionOnce      sync.Once
-	adminBypassState struct {
+	sessionStore         *SessionStore
+	sessionStoreDataPath string
+	sessionStoreMu       sync.Mutex
+	adminBypassState     struct {
 		once     sync.Once
 		enabled  bool
 		declined bool
 	}
 )
 
+type ssoOIDCProviderAuthSnapshot struct {
+	ProviderID    string
+	IssuerURL     string
+	ClientID      string
+	ClientSecret  string
+	RedirectURL   string
+	Scopes        []string
+	UsernameClaim string
+	EmailClaim    string
+	CABundle      string
+}
+
+type ssoAuthSnapshot struct {
+	HasEnabledProviders bool
+	OIDCProviders       []ssoOIDCProviderAuthSnapshot
+}
+
+func emptySSOAuthSnapshot() ssoAuthSnapshot {
+	snapshot := ssoAuthSnapshot{}
+	snapshot.normalizeCollections()
+	return snapshot
+}
+
+func (s *ssoAuthSnapshot) normalizeCollections() {
+	if s.OIDCProviders == nil {
+		s.OIDCProviders = []ssoOIDCProviderAuthSnapshot{}
+	}
+}
+
+var authSSOState = struct {
+	mu         sync.RWMutex
+	byConfigID map[string]ssoAuthSnapshot
+}{
+	byConfigID: make(map[string]ssoAuthSnapshot),
+}
+
+func authConfigID(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(cfg.DataPath); id != "" {
+		return id
+	}
+	return strings.TrimSpace(cfg.ConfigPath)
+}
+
+func buildSSOAuthSnapshot(ssoCfg *config.SSOConfig) ssoAuthSnapshot {
+	if ssoCfg == nil {
+		return emptySSOAuthSnapshot()
+	}
+
+	enabledProviders := ssoCfg.GetEnabledProviders()
+	snapshot := ssoAuthSnapshot{HasEnabledProviders: len(enabledProviders) > 0}
+	for _, provider := range enabledProviders {
+		if provider.Type != config.SSOProviderTypeOIDC || provider.OIDC == nil {
+			continue
+		}
+		scopes := append([]string{}, provider.OIDC.Scopes...)
+		if len(scopes) == 0 {
+			scopes = []string{"openid", "profile", "email"}
+		}
+		snapshot.OIDCProviders = append(snapshot.OIDCProviders, ssoOIDCProviderAuthSnapshot{
+			ProviderID:    provider.ID,
+			IssuerURL:     provider.OIDC.IssuerURL,
+			ClientID:      provider.OIDC.ClientID,
+			ClientSecret:  provider.OIDC.ClientSecret,
+			RedirectURL:   provider.OIDC.RedirectURL,
+			Scopes:        scopes,
+			UsernameClaim: provider.OIDC.UsernameClaim,
+			EmailClaim:    provider.OIDC.EmailClaim,
+			CABundle:      provider.OIDC.CABundle,
+		})
+	}
+
+	snapshot.normalizeCollections()
+	return snapshot
+}
+
+func setSSOAuthSnapshot(cfg *config.Config, ssoCfg *config.SSOConfig) {
+	configID := authConfigID(cfg)
+	if configID == "" {
+		return
+	}
+
+	authSSOState.mu.Lock()
+	authSSOState.byConfigID[configID] = buildSSOAuthSnapshot(ssoCfg)
+	authSSOState.mu.Unlock()
+}
+
+func getSSOAuthSnapshot(cfg *config.Config) ssoAuthSnapshot {
+	configID := authConfigID(cfg)
+	if configID == "" {
+		return emptySSOAuthSnapshot()
+	}
+
+	authSSOState.mu.RLock()
+	snapshot := authSSOState.byConfigID[configID]
+	authSSOState.mu.RUnlock()
+	snapshot.normalizeCollections()
+	return snapshot
+}
+
+func hasEnabledSSOProvidersForAuth(cfg *config.Config) bool {
+	return getSSOAuthSnapshot(cfg).HasEnabledProviders
+}
+
+func resolveOIDCRefreshConfig(cfg *config.Config, session *SessionData) (*config.OIDCConfig, string) {
+	if session == nil {
+		return nil, ""
+	}
+
+	issuer := strings.TrimSpace(session.OIDCIssuer)
+	if issuer == "" {
+		return nil, ""
+	}
+
+	sessionClientID := strings.TrimSpace(session.OIDCClientID)
+	snapshot := getSSOAuthSnapshot(cfg)
+	if !snapshot.HasEnabledProviders {
+		return nil, ""
+	}
+
+	for _, provider := range snapshot.OIDCProviders {
+		if strings.TrimSpace(provider.IssuerURL) != issuer {
+			continue
+		}
+		if sessionClientID != "" && strings.TrimSpace(provider.ClientID) != sessionClientID {
+			continue
+		}
+		return &config.OIDCConfig{
+			Enabled:       true,
+			IssuerURL:     provider.IssuerURL,
+			ClientID:      provider.ClientID,
+			ClientSecret:  provider.ClientSecret,
+			RedirectURL:   provider.RedirectURL,
+			Scopes:        append([]string{}, provider.Scopes...),
+			UsernameClaim: provider.UsernameClaim,
+			EmailClaim:    provider.EmailClaim,
+			CABundle:      provider.CABundle,
+		}, provider.ProviderID
+	}
+
+	return nil, ""
+}
+
+type authContextKey string
+
+const (
+	adminBypassContextKey authContextKey = "admin_bypass"
+)
+
 // InitSessionStore initializes the persistent session store
 func InitSessionStore(dataPath string) {
-	sessionOnce.Do(func() {
-		sessionStore = NewSessionStore(dataPath)
-	})
+	newDataPath := strings.TrimSpace(dataPath)
+	if newDataPath == "" {
+		return
+	}
+
+	sessionStoreMu.Lock()
+	defer sessionStoreMu.Unlock()
+
+	if sessionStore != nil && sessionStoreDataPath == newDataPath {
+		return
+	}
+
+	oldStore := sessionStore
+	sessionStore = NewSessionStore(newDataPath)
+	sessionStoreDataPath = newDataPath
+	if oldStore != nil {
+		oldStore.Shutdown()
+	}
 }
 
 // GetSessionStore returns the global session store instance
 func GetSessionStore() *SessionStore {
-	if sessionStore == nil {
-		// Initialize with default path if not already initialized
-		InitSessionStore("/etc/pulse")
+	sessionStoreMu.Lock()
+	store := sessionStore
+	sessionStoreMu.Unlock()
+	if store == nil {
+		panic("session store not initialized; call InitSessionStore with the configured data path first")
 	}
-	return sessionStore
+	return store
 }
 
-// detectProxy checks if the request is coming through a reverse proxy
+func resetSessionStoreForTests() {
+	sessionStoreMu.Lock()
+	oldStore := sessionStore
+	sessionStore = nil
+	sessionStoreDataPath = ""
+	sessionStoreMu.Unlock()
+	if oldStore != nil {
+		oldStore.Shutdown()
+	}
+}
+
+// detectProxy checks if the request is coming through a reverse proxy.
+// Only trusts proxy-set headers when the direct peer is a known trusted proxy
+// to prevent attackers from injecting these headers on direct connections.
 func detectProxy(r *http.Request) bool {
-	// Check multiple headers that proxies commonly set
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
 	return r.Header.Get("X-Forwarded-For") != "" ||
 		r.Header.Get("X-Real-IP") != "" ||
 		r.Header.Get("X-Forwarded-Proto") != "" ||
@@ -62,10 +247,19 @@ func detectProxy(r *http.Request) bool {
 		r.Header.Get("X-Forwarded-Port") != "" // Some proxies
 }
 
-// isConnectionSecure checks if the connection is over HTTPS
+// isConnectionSecure checks if the connection is over HTTPS.
+// Forwarded-proto headers are only trusted when the direct peer is a known
+// trusted proxy, preventing attackers from injecting X-Forwarded-Proto: https
+// on plain HTTP connections to influence cookie security attributes.
 func isConnectionSecure(r *http.Request) bool {
-	return r.TLS != nil ||
-		r.Header.Get("X-Forwarded-Proto") == "https" ||
+	if r.TLS != nil {
+		return true
+	}
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https" ||
 		strings.Contains(r.Header.Get("Forwarded"), "proto=https")
 }
 
@@ -111,6 +305,38 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	return isSecure, sameSitePolicy
 }
 
+// Cookie name constants. The session cookie uses the __Host- prefix when served
+// over HTTPS, which instructs browsers to reject the cookie unless Secure is set,
+// Path is "/", and no Domain attribute is present — preventing cookie injection via
+// related subdomains. The CSRF and org cookies do not use the prefix: the CSRF
+// cookie must be JS-readable for AJAX headers, and the org cookie must be
+// JS-readable for WebSocket org context synchronization.
+const (
+	cookieNameSession       = "pulse_session"
+	cookieNameSessionSecure = "__Host-pulse_session"
+	CookieNameCSRF          = "pulse_csrf"
+	CookieNameOrgID         = "pulse_org_id"
+)
+
+// sessionCookieName returns the appropriate session cookie name based on whether
+// the connection is secure. When secure, the __Host- prefix is used.
+func sessionCookieName(secure bool) string {
+	if secure {
+		return cookieNameSessionSecure
+	}
+	return cookieNameSession
+}
+
+// readSessionCookie reads the session cookie from the request, checking for the
+// __Host- prefixed name first (HTTPS) then falling back to the unprefixed name
+// (HTTP or upgrade transition). This ensures sessions survive an HTTP→HTTPS migration.
+func readSessionCookie(r *http.Request) (*http.Cookie, error) {
+	if c, err := r.Cookie(cookieNameSessionSecure); err == nil {
+		return c, nil
+	}
+	return r.Cookie(cookieNameSession)
+}
+
 // generateSessionToken creates a cryptographically secure session token
 func generateSessionToken() string {
 	b := make([]byte, 32)
@@ -132,6 +358,59 @@ func ValidateAndExtendSession(token string) bool {
 	return GetSessionStore().ValidateAndExtendSession(token)
 }
 
+func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
+	if r == nil {
+		return "", false
+	}
+
+	if values := r.Header.Values("X-API-Token"); len(values) > 0 {
+		return strings.TrimSpace(values[0]), true
+	}
+
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" && strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		return strings.TrimSpace(authHeader[7:]), true
+	}
+
+	if isWebSocketUpgrade(r) {
+		if values, ok := r.URL.Query()["token"]; ok && len(values) > 0 {
+			return strings.TrimSpace(values[0]), true
+		}
+	}
+
+	return "", false
+}
+
+func validateGlobalAPITokenLocked(cfg *config.Config, token string) (*config.APITokenRecord, bool) {
+	if cfg == nil || token == "" || !cfg.IsValidAPIToken(token) {
+		return nil, false
+	}
+
+	config.Mu.RUnlock()
+	config.Mu.Lock()
+	record, ok := cfg.ValidateAPIToken(token)
+	config.Mu.Unlock()
+	config.Mu.RLock()
+
+	if !ok {
+		return nil, false
+	}
+	return record, true
+}
+
+func validateAPITokenAgainstConfigsLocked(globalCfg, targetCfg *config.Config, token string) (*config.APITokenRecord, bool) {
+	if token == "" {
+		return nil, false
+	}
+
+	if targetCfg != nil && targetCfg != globalCfg {
+		if record, ok := targetCfg.ValidateAPIToken(token); ok {
+			return record, true
+		}
+	}
+
+	return validateGlobalAPITokenLocked(globalCfg, token)
+}
+
 // CheckProxyAuth validates proxy authentication headers
 func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	// Check if proxy auth is configured
@@ -141,7 +420,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 
 	// Validate proxy secret header
 	proxySecret := r.Header.Get("X-Proxy-Secret")
-	if proxySecret != cfg.ProxyAuthSecret {
+	if subtle.ConstantTimeCompare([]byte(proxySecret), []byte(cfg.ProxyAuthSecret)) != 1 {
 		log.Debug().
 			Int("provided_secret_length", len(proxySecret)).
 			Msg("Invalid proxy secret")
@@ -203,10 +482,18 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		return true
 	}
 
-	// Requests that already carry validated auth context from the outer
-	// middleware should not be forced back through global-config auth checks.
-	if applyAuthContextHeaders(w, r) {
-		return true
+	if cfg == nil {
+		path := ""
+		if r != nil && r.URL != nil {
+			path = r.URL.Path
+		}
+		log.Error().
+			Str("path", path).
+			Msg("CheckAuth called without configuration")
+		if w != nil {
+			http.Error(w, "Authentication unavailable", http.StatusServiceUnavailable)
+		}
+		return false
 	}
 
 	config.Mu.RLock()
@@ -224,33 +511,10 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// Check for OIDC session cookie
-	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-			if ValidateSession(cookie.Value) {
-				// Check if this is an OIDC session
-				if username := GetSessionUsername(cookie.Value); username != "" {
-					// Check if OIDC tokens need refresh
-					session := GetSessionStore().GetSession(cookie.Value)
-					if session != nil && session.OIDCRefreshToken != "" {
-						// Check if access token is expired or about to expire (5 min buffer)
-						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
-							// Token needs refresh - attempt it asynchronously
-							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
-						}
-					}
-					w.Header().Set("X-Authenticated-User", username)
-					w.Header().Set("X-Auth-Method", "oidc")
-					return true
-				}
-			}
-		}
-	}
-
-	// If no auth is configured at all, allow access unless OIDC is enabled
+	// If no auth is configured at all, allow access unless SSO is enabled.
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
-		if cfg.OIDC != nil && cfg.OIDC.Enabled {
-			log.Debug().Msg("OIDC enabled without local credentials, authentication required")
+		if hasEnabledSSOProvidersForAuth(cfg) {
+			log.Debug().Msg("SSO enabled without local credentials, authentication required")
 		} else {
 			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
 			if w != nil {
@@ -263,44 +527,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// API-only mode: when only API token is configured (no password auth)
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
-		// Check if an API token was provided (via header, bearer, or query)
-		var providedToken string
-		if t := r.Header.Get("X-API-Token"); t != "" {
-			providedToken = t
-		} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-			providedToken = strings.TrimSpace(authHeader[7:])
-		} else if t := r.URL.Query().Get("token"); t != "" && isWebSocketUpgrade(r) {
-			providedToken = t
-		}
-
-		// If a token was provided, validate it
-		if providedToken != "" {
-			// Optimistically check validity with RLock to avoid write lock overhead for invalid tokens
-			if !cfg.IsValidAPIToken(providedToken) {
-				if w != nil {
-					http.Error(w, "Invalid API token", http.StatusUnauthorized)
-				}
-				return false
-			}
-
-			// Token appears valid, upgrade to Write lock to update stats
-			config.Mu.RUnlock()
-			config.Mu.Lock()
-			record, ok := cfg.ValidateAPIToken(providedToken)
-			config.Mu.Unlock()
-			config.Mu.RLock() // Restore Read lock for the defer at end of function
-
-			if ok {
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if record, ok := validateGlobalAPITokenLocked(cfg, providedToken); ok {
 				attachAPITokenRecord(r, record)
-				tokenID := record.ID
-				if tokenID == "" && len(record.Hash) >= 8 {
-					tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
+				if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
+					w.Header().Set("X-Authenticated-User", authenticatedUser)
 				}
-				w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
 				w.Header().Set("X-Auth-Method", "api_token")
 				return true
 			}
-			// Should not happen if IsValidAPIToken returned true, unless race/expiration occurred
 			if w != nil {
 				http.Error(w, "Invalid API token", http.StatusUnauthorized)
 			}
@@ -322,66 +557,51 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		Str("url", r.URL.Path).
 		Msg("Checking authentication")
 
-	validateToken := func(token string) bool {
-		if token == "" {
-			return false
-		}
-		// Optimistically check validity with RLock
-		if !cfg.IsValidAPIToken(token) {
-			return false
-		}
-
-		// Upgrade to Write lock for stats update
-		config.Mu.RUnlock()
-		config.Mu.Lock()
-		record, ok := cfg.ValidateAPIToken(token)
-		config.Mu.Unlock()
-		config.Mu.RLock() // Restore Read lock
-
-		if ok {
+	authenticateToken := func(token string) bool {
+		if record, ok := validateGlobalAPITokenLocked(cfg, token); ok {
 			attachAPITokenRecord(r, record)
-			tokenID := record.ID
-			if tokenID == "" && len(record.Hash) >= 8 {
-				tokenID = "legacy-" + record.Hash[:8] // Fallback for missing IDs
+			if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
+				w.Header().Set("X-Authenticated-User", authenticatedUser)
 			}
-			w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", tokenID))
 			w.Header().Set("X-Auth-Method", "api_token")
 			return true
 		}
 		return false
 	}
 
-	// Check API tokens (header, bearer, query) before other auth methods
+	// Explicit token credentials always take precedence over session/basic auth.
 	if cfg.HasAPITokens() {
-		if validateToken(r.Header.Get("X-API-Token")) {
-			return true
-		}
-		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				if validateToken(strings.TrimSpace(authHeader[7:])) {
-					return true
-				}
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if authenticateToken(providedToken) {
+				return true
 			}
-		}
-		// Check query parameter (only for WebSocket upgrades that can't send headers)
-		if isWebSocketUpgrade(r) {
-			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-				if validateToken(queryToken) {
-					return true
-				}
+			if w != nil {
+				http.Error(w, "Invalid API token", http.StatusUnauthorized)
 			}
+			return false
 		}
 	}
 
 	// Check session cookie (for WebSocket and UI)
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
 			username := GetSessionUsername(cookie.Value)
+			session := GetSessionStore().GetSession(cookie.Value)
+			if session != nil && session.OIDCRefreshToken != "" && hasEnabledSSOProvidersForAuth(cfg) {
+				// Check if access token is expired or about to expire (5 min buffer)
+				if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+					go refreshOIDCSessionTokens(cfg, cookie.Value, session)
+				}
+			}
 			if username != "" {
 				w.Header().Set("X-Authenticated-User", username)
 			}
-			w.Header().Set("X-Auth-Method", "session")
+			if session != nil && strings.TrimSpace(session.OIDCIssuer) != "" {
+				w.Header().Set("X-Auth-Method", "oidc")
+			} else {
+				w.Header().Set("X-Auth-Method", "session")
+			}
 			return true
 		}
 		// Debug logging for failed session validation
@@ -479,6 +699,9 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 							// Valid credentials - create session
 							if w != nil {
+								// Invalidate any pre-existing session to prevent session fixation attacks.
+								InvalidateOldSessionFromRequest(r)
+
 								token := generateSessionToken()
 								if token == "" {
 									return false
@@ -518,7 +741,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
-									Name:     "pulse_session",
+									Name:     sessionCookieName(isSecure),
 									Value:    token,
 									Path:     "/",
 									HttpOnly: true,
@@ -529,7 +752,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 								// Set CSRF cookie (not HttpOnly so JS can read it)
 								http.SetCookie(w, &http.Cookie{
-									Name:     "pulse_csrf",
+									Name:     CookieNameCSRF,
 									Value:    csrfToken,
 									Path:     "/",
 									Secure:   isSecure,
@@ -582,26 +805,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
-func applyAuthContextHeaders(w http.ResponseWriter, r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-
-	username := internalauth.GetUser(r.Context())
-	if username == "" {
-		return false
-	}
-
-	if w != nil {
-		w.Header().Set("X-Authenticated-User", username)
-		if internalauth.GetAPIToken(r.Context()) != nil {
-			w.Header().Set("X-Auth-Method", "api_token")
-		}
-	}
-
-	return true
-}
-
 // RequireAuth middleware checks for authentication
 func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -639,9 +842,9 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
-// RequireAdmin middleware checks for authentication and admin privileges
-// For proxy auth users, it ensures they have the admin role
-// For other auth methods, all authenticated users are considered admins
+// RequireAdmin middleware checks for authentication and admin privileges.
+// Proxy-auth users must have the configured admin role. Session/OIDC users
+// must match the configured admin identity.
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)
@@ -698,7 +901,12 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 			}
 		}
 
-		// User is authenticated and has admin privileges (or not using proxy auth)
+		// Enforce configured admin identity for session-based auth.
+		if !ensureAdminSession(cfg, w, r) {
+			return
+		}
+
+		// User is authenticated and has admin privileges.
 		handler(w, r)
 	}
 }
@@ -718,28 +926,41 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 			return
 		}
 
-		// Check if using proxy auth and if so, verify admin status
+		// Check if using proxy auth and if so, verify admin status.
+		// When a real RBAC authorizer is active (non-DefaultAuthorizer), non-admin
+		// proxy users are allowed through to the RBAC check below, which may grant
+		// access based on their role assignments. Without RBAC, non-admin proxy
+		// users are hard-rejected since there's no other authorization mechanism.
 		if cfg.ProxyAuthSecret != "" {
 			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
 				if !isAdmin {
-					// User is authenticated but not an admin
-					log.Warn().
-						Str("ip", r.RemoteAddr).
-						Str("path", r.URL.Path).
+					// Check if a real RBAC authorizer is active
+					_, isDefaultAuth := authorizer.(*internalauth.DefaultAuthorizer)
+					if isDefaultAuth {
+						// No RBAC: non-admin proxy users are rejected
+						log.Warn().
+							Str("ip", r.RemoteAddr).
+							Str("path", r.URL.Path).
+							Str("action", action).
+							Str("resource", resource).
+							Str("username", username).
+							Msg("Non-admin proxy user attempted to access permissioned endpoint (no RBAC active)")
+
+						if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(http.StatusForbidden)
+							w.Write([]byte(`{"error":"Admin privileges required"}`))
+						} else {
+							http.Error(w, "Admin privileges required", http.StatusForbidden)
+						}
+						return
+					}
+					// RBAC active: defer to authorizer check below
+					log.Debug().
+						Str("username", username).
 						Str("action", action).
 						Str("resource", resource).
-						Str("username", username).
-						Msg("Non-admin user attempted to access permissioned endpoint")
-
-					// Return forbidden error
-					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusForbidden)
-						w.Write([]byte(`{"error":"Admin privileges required"}`))
-					} else {
-						http.Error(w, "Admin privileges required", http.StatusForbidden)
-					}
-					return
+						Msg("Non-admin proxy user deferred to RBAC authorizer")
 				}
 			}
 		}
@@ -849,6 +1070,16 @@ func attachUserContext(r *http.Request, username string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+func attachAdminBypassContext(r *http.Request) *http.Request {
+	ctx := context.WithValue(r.Context(), adminBypassContextKey, true)
+	return r.WithContext(ctx)
+}
+
+func isAdminBypassRequest(ctx context.Context) bool {
+	bypass, ok := ctx.Value(adminBypassContextKey).(bool)
+	return ok && bypass
+}
+
 // AuthContextMiddleware creates a middleware that extracts auth info and stores it in context.
 // This should run early in the middleware chain so subsequent middleware can access auth context.
 // Note: This middleware does NOT enforce authentication - it only populates context.
@@ -875,31 +1106,13 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 	// Dev mode bypass
 	if adminBypassEnabled() {
-		return attachUserContext(r, "admin")
+		return attachAdminBypassContext(attachUserContext(r, "admin"))
 	}
 
 	// Check proxy auth
 	if cfg.ProxyAuthSecret != "" {
 		if valid, username, _ := CheckProxyAuth(cfg, r); valid && username != "" {
 			return attachUserContext(r, username)
-		}
-	}
-
-	// Check OIDC session
-	if cfg.OIDC != nil && cfg.OIDC.Enabled {
-		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-			if ValidateSession(cookie.Value) {
-				if username := GetSessionUsername(cookie.Value); username != "" {
-					// Trigger token refresh if access token is near expiry
-					session := GetSessionStore().GetSession(cookie.Value)
-					if session != nil && session.OIDCRefreshToken != "" {
-						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
-							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
-						}
-					}
-					return attachUserContext(r, username)
-				}
-			}
 		}
 	}
 
@@ -911,7 +1124,13 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		targetConfig := cfg
 
 		if mtm != nil {
-			orgID := requestedOrgID(r)
+			// Check for Tenant ID in header or cookie
+			orgID := "default"
+			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {
+				orgID = headerOrgID
+			} else if cookie, err := r.Cookie(CookieNameOrgID); err == nil && cookie.Value != "" {
+				orgID = cookie.Value
+			}
 
 			// If targeting a specific tenant, try to load that tenant's config
 			if orgID != "default" {
@@ -924,77 +1143,24 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			}
 		}
 
-		// Helper to validate against the selected config (and return updated request if valid)
 		validateToken := func(token string) (*http.Request, bool) {
-			if token == "" {
-				return nil, false
-			}
-
-			// If using global config, we need to handle locking carefully
-			if targetConfig == cfg {
-				// Optimistic check with RLock
-				if !cfg.IsValidAPIToken(token) {
-					return nil, false
-				}
-
-				// Upgrade to Write lock for stats update
-				config.Mu.RUnlock()
-				config.Mu.Lock()
-				record, ok := cfg.ValidateAPIToken(token)
-				config.Mu.Unlock()
-				config.Mu.RLock() // Restore Read lock
-
-				if ok {
-					attachAPITokenRecord(r, record)
-					tokenID := record.ID
-					if tokenID == "" && len(record.Hash) >= 8 {
-						tokenID = "legacy-" + record.Hash[:8]
-					}
-					return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
-				}
-				return nil, false
-			}
-
-			// For tenant configs or other non-global configs, assume they handle their own locking
-			// or don't use the global config.Mu
-			if record, ok := targetConfig.ValidateAPIToken(token); ok {
+			if record, ok := validateAPITokenAgainstConfigsLocked(cfg, targetConfig, token); ok {
 				attachAPITokenRecord(r, record)
-				tokenID := record.ID
-				if tokenID == "" && len(record.Hash) >= 8 {
-					tokenID = "legacy-" + record.Hash[:8]
-				}
-				return attachUserContext(r, fmt.Sprintf("token:%s", tokenID)), true
+				return attachUserContext(r, apiTokenAuthenticatedUser(record)), true
 			}
 			return nil, false
 		}
 
-		// Header
-		if token := r.Header.Get("X-API-Token"); token != "" {
-			if req, ok := validateToken(token); ok {
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if req, ok := validateToken(providedToken); ok {
 				return req
 			}
-		}
-		// Bearer
-		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				token := strings.TrimSpace(authHeader[7:])
-				if req, ok := validateToken(token); ok {
-					return req
-				}
-			}
-		}
-		// Query param (only for WebSocket upgrades)
-		if isWebSocketUpgrade(r) {
-			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-				if req, ok := validateToken(queryToken); ok {
-					return req
-				}
-			}
+			return r
 		}
 	}
 
 	// Check session cookie
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			if username := GetSessionUsername(cookie.Value); username != "" {
 				return attachUserContext(r, username)
@@ -1041,15 +1207,6 @@ var oidcRefreshMutex sync.Map
 // refreshOIDCSessionTokens refreshes OIDC tokens for a session in the background
 // If refresh fails, the session is invalidated and the user will need to re-login
 func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *SessionData) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error().
-				Interface("panic", r).
-				Bytes("stack", debug.Stack()).
-				Msg("Recovered panic in OIDC token refresh")
-		}
-	}()
-
 	// Prevent concurrent refresh attempts for the same session
 	if _, loaded := oidcRefreshMutex.LoadOrStore(sessionToken, true); loaded {
 		return // Another goroutine is already refreshing this session
@@ -1069,20 +1226,12 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Get or create OIDC service for this session's issuer
-	oidcCfg := cfg.OIDC
-	if oidcCfg == nil || !oidcCfg.Enabled {
-		log.Warn().Msg("OIDC not enabled, cannot refresh tokens")
-		return
-	}
-
-	// Verify the session's issuer matches our config
-	if oidcCfg.IssuerURL != session.OIDCIssuer {
-		log.Warn().
-			Str("session_issuer", session.OIDCIssuer).
-			Str("config_issuer", oidcCfg.IssuerURL).
-			Msg("OIDC issuer mismatch, cannot refresh tokens")
-		GetSessionStore().InvalidateSession(sessionToken)
+	// Resolve OIDC provider config from v6 enabled SSO providers.
+	oidcCfg, providerID := resolveOIDCRefreshConfig(cfg, session)
+	if oidcCfg == nil {
+		// Session may belong to a disabled/removed provider. Skip refresh silently;
+		// the session continues until natural expiry.
+		log.Debug().Msg("No matching enabled SSO OIDC provider for session refresh")
 		return
 	}
 
@@ -1099,6 +1248,7 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 		log.Warn().
 			Err(err).
 			Str("issuer", session.OIDCIssuer).
+			Str("provider_id", providerID).
 			Msg("OIDC token refresh failed - invalidating session")
 
 		// Token refresh failed - this usually means the refresh token was revoked
@@ -1113,6 +1263,7 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 
 	log.Info().
 		Time("new_expiry", result.Expiry).
+		Str("provider_id", providerID).
 		Msg("OIDC token refresh successful - session extended")
 
 	LogAuditEvent("oidc_token_refresh", "", "", "", true, "Token refreshed successfully")

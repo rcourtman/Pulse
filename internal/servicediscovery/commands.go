@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// safeResourceIDPattern matches valid resource IDs: alphanumeric, dash, underscore, period, colon
-// This prevents shell injection via malicious resource names.
-var safeResourceIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
+// safeResourceIDPattern matches valid resource IDs: alphanumeric, dash, underscore, period, colon.
+// The first character must be alphanumeric so values cannot be interpreted as CLI flags.
+var safeResourceIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]*$`)
 
 // ValidateResourceID checks if a resource ID is safe to use in shell commands.
 // Returns an error if the ID contains potentially dangerous characters.
@@ -43,34 +43,32 @@ type DiscoveryCommand struct {
 	Optional    bool     `json:"optional"`    // If true, don't fail if command fails
 }
 
-// CommandSet represents a set of commands for a resource type.
-type CommandSet struct {
-	ResourceType ResourceType
-	Commands     []DiscoveryCommand
-}
+// dockerMountsCommand collects Docker mount metadata without relying on extra
+// text utilities (sed/grep), which may be missing in minimal guest images.
+const dockerMountsCommand = `sh -c 'docker ps -q 2>/dev/null | head -15 | while read -r id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null); name=${name#/}; [ -n "$name" ] || name="$id"; echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null || true; done; echo docker_mounts_done'`
 
 // GetCommandsForResource returns the commands to run for a given resource type.
 func GetCommandsForResource(resourceType ResourceType) []DiscoveryCommand {
 	switch resourceType {
-	case ResourceTypeLXC:
-		return getLXCCommands()
+	case ResourceTypeSystemContainer:
+		return getSystemContainerCommands()
 	case ResourceTypeVM:
 		return getVMCommands()
 	case ResourceTypeDocker:
 		return getDockerCommands()
-	case ResourceTypeDockerVM, ResourceTypeDockerLXC:
+	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
 		return getNestedDockerCommands()
 	case ResourceTypeK8s:
 		return getK8sCommands()
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		return getHostCommands()
 	default:
 		return []DiscoveryCommand{}
 	}
 }
 
-// getLXCCommands returns commands for discovering LXC containers.
-func getLXCCommands() []DiscoveryCommand {
+// getSystemContainerCommands returns commands for discovering system containers (LXC).
+func getSystemContainerCommands() []DiscoveryCommand {
 	return []DiscoveryCommand{
 		{
 			Name:        "os_release",
@@ -123,7 +121,7 @@ func getLXCCommands() []DiscoveryCommand {
 		},
 		{
 			Name:        "docker_mounts",
-			Command:     `sh -c 'docker ps -q 2>/dev/null | head -15 | while read id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null | sed "s|^/||"); echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null | grep -v "^$" || true; done; echo docker_mounts_done'`,
+			Command:     dockerMountsCommand,
 			Description: "Docker container bind mounts (source -> destination)",
 			Categories:  []string{"config", "storage"},
 			Optional:    true,
@@ -220,7 +218,7 @@ func getVMCommands() []DiscoveryCommand {
 		},
 		{
 			Name:        "docker_mounts",
-			Command:     `sh -c 'docker ps -q 2>/dev/null | head -15 | while read id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null | sed "s|^/||"); echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null | grep -v "^$" || true; done; echo docker_mounts_done'`,
+			Command:     dockerMountsCommand,
 			Description: "Docker container bind mounts (source -> destination)",
 			Categories:  []string{"config", "storage"},
 			Optional:    true,
@@ -414,12 +412,12 @@ func getHostCommands() []DiscoveryCommand {
 	}
 }
 
-// BuildLXCCommand wraps a command for execution in an LXC container.
+// BuildLXCCommand wraps a command for execution in a system container (LXC).
 // The vmid is validated to prevent command injection.
 func BuildLXCCommand(vmid string, cmd string) string {
 	if err := ValidateResourceID(vmid); err != nil {
 		// Don't include the invalid ID in output to prevent any injection
-		return "sh -c 'echo \"Discovery error: invalid LXC container ID\" >&2; exit 1'"
+		return "sh -c 'echo \"Discovery error: invalid container ID\" >&2; exit 1'"
 	}
 	return fmt.Sprintf("pct exec %s -- sh -c %s", vmid, shellQuote(cmd))
 }
@@ -488,24 +486,24 @@ func BuildK8sCommand(namespace, podName, containerName, cmd string) string {
 // Commands via pulse_control run directly on the target where the agent is installed.
 func GetCLIAccessTemplate(resourceType ResourceType) string {
 	switch resourceType {
-	case ResourceTypeLXC:
-		// Agent runs ON the LXC - commands execute directly inside the container
-		return "Use pulse_control with target_host matching this LXC's hostname. Commands run directly inside the container."
+	case ResourceTypeSystemContainer:
+		// Agent runs ON the system container - commands execute directly inside
+		return "Use pulse_control with target_host matching this container's hostname. Commands run directly inside the container."
 	case ResourceTypeVM:
 		// Agent runs ON the VM - commands execute directly inside the VM
 		return "Use pulse_control with target_host matching this VM's hostname. Commands run directly inside the VM."
 	case ResourceTypeDocker:
 		// Docker container on a host - need docker exec from the host
 		return "Use pulse_control targeting the Docker host with command: docker exec {container} <your-command>"
-	case ResourceTypeDockerLXC:
-		// Docker inside an LXC - agent on the LXC runs docker exec
-		return "Use pulse_control targeting the LXC hostname with command: docker exec {container} <your-command>"
+	case ResourceTypeDockerSystemContainer:
+		// Docker inside a system container - agent on the container runs docker exec
+		return "Use pulse_control targeting the system container hostname with command: docker exec {container} <your-command>"
 	case ResourceTypeDockerVM:
 		// Docker inside a VM - agent on the VM runs docker exec
 		return "Use pulse_control targeting the VM hostname with command: docker exec {container} <your-command>"
 	case ResourceTypeK8s:
 		return "Use kubectl exec -n {namespace} {pod} -- <your-command>"
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		return "Use pulse_control with target_host matching this host. Commands run directly."
 	default:
 		return "Use pulse_control with target_host matching the resource hostname."
@@ -550,14 +548,4 @@ func GetCommandCategories(resourceType ResourceType) []string {
 	}
 
 	return categories
-}
-
-// GetCommandSummary returns a human-readable list of commands for a resource type.
-func GetCommandSummary(resourceType ResourceType) []string {
-	commands := GetCommandsForResource(resourceType)
-	summaries := make([]string, 0, len(commands))
-	for _, cmd := range commands {
-		summaries = append(summaries, cmd.Command)
-	}
-	return summaries
 }

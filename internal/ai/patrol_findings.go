@@ -5,6 +5,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,9 +13,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,10 +45,26 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 		if !(stored.Key == "ai-patrol-error" || stored.ResourceID == "ai-service") {
 			p.generateRemediationPlan(stored)
 		}
+
+		// Send push notification for new critical/warning findings
+		if stored.Severity == FindingSeverityCritical || stored.Severity == FindingSeverityWarning {
+			p.mu.RLock()
+			pushCb := p.pushNotifyCallback
+			p.mu.RUnlock()
+			if pushCb != nil {
+				pushCb(relay.NewPatrolFindingNotification(
+					stored.ID,
+					string(stored.Severity),
+					string(stored.Category),
+					stored.Title,
+				))
+			}
+		}
 	}
 
-	// Push to unified store only if finding is active (not suppressed/dismissed)
-	if p.unifiedFindingCallback != nil && stored.IsActive() {
+	// Keep unified store in sync even when findings transition to snoozed/dismissed/resolved.
+	// The unified UI can filter by status; losing updates here makes the patrol loop look broken.
+	if p.unifiedFindingCallback != nil {
 		p.unifiedFindingCallback(stored)
 	}
 
@@ -96,41 +114,41 @@ func (p *PatrolService) generateRemediationPlan(finding *Finding) {
 	}
 
 	// Determine risk level based on finding severity and category
-	riskLevel := remediation.RiskLow
+	riskLevel := aicontracts.RiskLow
 	if finding.Severity == FindingSeverityWarning {
-		riskLevel = remediation.RiskMedium
+		riskLevel = aicontracts.RiskMedium
 	}
 	if finding.Severity == FindingSeverityCritical {
-		riskLevel = remediation.RiskHigh
+		riskLevel = aicontracts.RiskHigh
 	}
 	// Reliability issues involving restarts/reboots are higher risk
 	if finding.Category == FindingCategoryReliability {
 		title := strings.ToLower(finding.Title)
 		if strings.Contains(title, "restart") || strings.Contains(title, "reboot") || strings.Contains(title, "offline") {
-			if riskLevel < remediation.RiskHigh {
-				riskLevel = remediation.RiskHigh
+			if riskLevel < aicontracts.RiskHigh {
+				riskLevel = aicontracts.RiskHigh
 			}
-		} else if riskLevel < remediation.RiskMedium {
-			riskLevel = remediation.RiskMedium
+		} else if riskLevel < aicontracts.RiskMedium {
+			riskLevel = aicontracts.RiskMedium
 		}
 	}
 
 	// Create the remediation plan
-	plan := &remediation.RemediationPlan{
+	plan := &aicontracts.RemediationPlan{
 		FindingID:   finding.ID,
 		ResourceID:  finding.ResourceID,
 		Title:       fmt.Sprintf("Fix: %s", finding.Title),
 		Description: finding.Description,
-		Category:    remediation.CategoryGuided, // All auto-generated plans require user approval
+		Category:    aicontracts.CategoryGuided, // All auto-generated plans require user approval
 		RiskLevel:   riskLevel,
 		Steps:       steps,
 		Rationale:   finding.Recommendation,
 	}
 
 	// Add warnings based on risk level
-	if riskLevel == remediation.RiskHigh {
+	if riskLevel == aicontracts.RiskHigh {
 		plan.Warnings = append(plan.Warnings, "High risk: This action may cause service disruption. Review carefully and consider scheduling during maintenance window.")
-	} else if riskLevel == remediation.RiskMedium {
+	} else if riskLevel == aicontracts.RiskMedium {
 		plan.Warnings = append(plan.Warnings, "Review steps carefully before execution")
 	}
 
@@ -151,9 +169,136 @@ func (p *PatrolService) generateRemediationPlan(finding *Finding) {
 		Msg("AI Patrol: Remediation plan generated")
 }
 
+// generateRemediationPlanFromInvestigation persists a remediation plan artifact when
+// an investigation proposes a concrete fix command. This is intentionally separate
+// from the "approval" execution pipeline; it's a durable summary users can act on
+// later (often via Pulse Assistant).
+func (p *PatrolService) generateRemediationPlanFromInvestigation(findingID string) {
+	p.mu.RLock()
+	engine := p.remediationEngine
+	orchestrator := p.investigationOrchestrator
+	p.mu.RUnlock()
+
+	if engine == nil || orchestrator == nil || p.findings == nil || findingID == "" {
+		return
+	}
+
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return
+	}
+
+	inv := orchestrator.GetInvestigationByFinding(findingID)
+	if inv == nil || inv.ProposedFix == nil || len(inv.ProposedFix.Commands) == 0 {
+		return
+	}
+	fix := inv.ProposedFix
+
+	targetHost := strings.TrimSpace(fix.TargetHost)
+	if targetHost == "" {
+		targetHost = "local"
+	}
+
+	// Map investigation risk strings into remediation risk levels.
+	riskLevel := aicontracts.RiskMedium
+	switch strings.ToLower(strings.TrimSpace(fix.RiskLevel)) {
+	case "low":
+		riskLevel = aicontracts.RiskLow
+	case "medium":
+		riskLevel = aicontracts.RiskMedium
+	case "high":
+		riskLevel = aicontracts.RiskHigh
+	case "critical":
+		riskLevel = aicontracts.RiskHigh
+	}
+
+	steps := make([]aicontracts.RemediationStep, 0, 2+len(fix.Commands))
+	steps = append(steps, aicontracts.RemediationStep{
+		Order:       1,
+		Description: "Review the finding context and confirm the proposed fix is appropriate",
+	})
+
+	blockedCount := 0
+	order := 2
+	for _, raw := range fix.Commands {
+		cmd := strings.TrimSpace(raw)
+		if cmd == "" {
+			continue
+		}
+
+		stepCommand := cmd
+		stepDesc := fmt.Sprintf("Run the proposed fix on %s", targetHost)
+		if safety.IsBlockedCommand(cmd) {
+			// Don't store blocked commands in the remediation engine; keep the plan as an
+			// artifact for users to review and apply manually (typically via Assistant).
+			stepCommand = ""
+			stepDesc = fmt.Sprintf("Blocked command proposed by investigation (review and apply manually): %s", cmd)
+			blockedCount++
+		}
+
+		steps = append(steps, aicontracts.RemediationStep{
+			Order:       order,
+			Description: stepDesc,
+			Command:     stepCommand,
+			Target:      targetHost,
+		})
+		order++
+	}
+
+	steps = append(steps, aicontracts.RemediationStep{
+		Order:       order,
+		Description: "Verify the issue is resolved (re-check metrics/logs, confirm service health)",
+	})
+
+	description := strings.TrimSpace(fix.Rationale)
+	if description == "" {
+		description = strings.TrimSpace(inv.Summary)
+	}
+	if description == "" {
+		description = finding.Description
+	}
+
+	plan := &aicontracts.RemediationPlan{
+		FindingID:   finding.ID,
+		ResourceID:  finding.ResourceID,
+		Title:       fmt.Sprintf("Investigation Fix: %s", finding.Title),
+		Description: description,
+		Category:    aicontracts.CategoryGuided,
+		RiskLevel:   riskLevel,
+		Steps:       steps,
+		Rationale:   fix.Description,
+	}
+
+	// Patrol findings are often reviewed hours/days later; keep investigation-derived
+	// plans around longer than the default ephemeral remediation TTL.
+	expires := time.Now().Add(7 * 24 * time.Hour)
+	plan.ExpiresAt = &expires
+
+	if blockedCount > 0 {
+		plan.Warnings = append(plan.Warnings, "Investigation suggested one or more commands that are blocked by safety policy. Review carefully and apply manually (prefer Pulse Assistant).")
+	}
+
+	if err := engine.CreatePlan(plan); err != nil {
+		// As a fallback, keep the plan as purely informational so it can still be
+		// surfaced to the user without enabling remediation engine execution.
+		for i := range plan.Steps {
+			if plan.Steps[i].Command == "" {
+				continue
+			}
+			plan.Steps[i].Description = fmt.Sprintf("%s: %s", plan.Steps[i].Description, plan.Steps[i].Command)
+			plan.Steps[i].Command = ""
+		}
+		plan.RiskLevel = aicontracts.RiskMedium
+		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Failed to store command steps for automated remediation: %v", err))
+		if createErr := engine.CreatePlan(plan); createErr != nil {
+			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("failed to create fallback remediation plan")
+		}
+	}
+}
+
 // generateRemediationSteps creates appropriate steps based on finding type
-func (p *PatrolService) generateRemediationSteps(finding *Finding) []remediation.RemediationStep {
-	var steps []remediation.RemediationStep
+func (p *PatrolService) generateRemediationSteps(finding *Finding) []aicontracts.RemediationStep {
+	var steps []aicontracts.RemediationStep
 
 	switch finding.Category {
 	case FindingCategoryPerformance:
@@ -170,7 +315,7 @@ func (p *PatrolService) generateRemediationSteps(finding *Finding) []remediation
 		steps = p.generateConfigurationSteps(finding)
 	default:
 		// Generic investigation steps for unknown categories
-		steps = []remediation.RemediationStep{
+		steps = []aicontracts.RemediationStep{
 			{Order: 1, Description: "Investigate the issue by reviewing current resource state"},
 			{Order: 2, Description: "Review recent changes that may have caused this issue"},
 			{Order: 3, Description: "Take appropriate corrective action based on findings"},
@@ -181,11 +326,11 @@ func (p *PatrolService) generateRemediationSteps(finding *Finding) []remediation
 }
 
 // generatePerformanceSteps creates steps for performance issues
-func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation.RemediationStep {
+func (p *PatrolService) generatePerformanceSteps(finding *Finding) []aicontracts.RemediationStep {
 	title := strings.ToLower(finding.Title)
 
 	if strings.Contains(title, "cpu") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Identify processes consuming excessive CPU", Target: finding.ResourceID},
 			{Order: 2, Description: "Check if resource needs more CPU cores allocated"},
 			{Order: 3, Description: "Consider migrating to a less loaded host if VM/container"},
@@ -194,7 +339,7 @@ func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation
 	}
 
 	if strings.Contains(title, "memory") || strings.Contains(title, "ram") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Identify processes consuming excessive memory", Target: finding.ResourceID},
 			{Order: 2, Description: "Check for memory leaks in running applications"},
 			{Order: 3, Description: "Consider increasing allocated memory"},
@@ -203,7 +348,7 @@ func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation
 	}
 
 	if strings.Contains(title, "io") || strings.Contains(title, "disk") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Identify processes causing high disk I/O", Target: finding.ResourceID},
 			{Order: 2, Description: "Check for runaway log files or heavy writes"},
 			{Order: 3, Description: "Consider migrating to faster storage"},
@@ -211,7 +356,7 @@ func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation
 	}
 
 	// Generic performance steps
-	return []remediation.RemediationStep{
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Review current resource utilization metrics", Target: finding.ResourceID},
 		{Order: 2, Description: "Identify performance bottlenecks"},
 		{Order: 3, Description: "Optimize resource allocation or application configuration"},
@@ -219,11 +364,11 @@ func (p *PatrolService) generatePerformanceSteps(finding *Finding) []remediation
 }
 
 // generateCapacitySteps creates steps for capacity issues
-func (p *PatrolService) generateCapacitySteps(finding *Finding) []remediation.RemediationStep {
+func (p *PatrolService) generateCapacitySteps(finding *Finding) []aicontracts.RemediationStep {
 	title := strings.ToLower(finding.Title)
 
 	if strings.Contains(title, "disk") || strings.Contains(title, "storage") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Identify largest files and directories consuming space", Target: finding.ResourceID},
 			{Order: 2, Description: "Clean up temporary files, logs, and caches"},
 			{Order: 3, Description: "Remove unused packages and old kernels"},
@@ -232,7 +377,7 @@ func (p *PatrolService) generateCapacitySteps(finding *Finding) []remediation.Re
 	}
 
 	if strings.Contains(title, "memory") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Review memory allocation across workloads", Target: finding.ResourceID},
 			{Order: 2, Description: "Reduce memory allocation on over-provisioned VMs"},
 			{Order: 3, Description: "Add more physical memory to the host"},
@@ -240,7 +385,7 @@ func (p *PatrolService) generateCapacitySteps(finding *Finding) []remediation.Re
 	}
 
 	// Generic capacity steps
-	return []remediation.RemediationStep{
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Review current capacity utilization", Target: finding.ResourceID},
 		{Order: 2, Description: "Identify growth trends and plan for expansion"},
 		{Order: 3, Description: "Clean up unused resources to free capacity"},
@@ -248,11 +393,11 @@ func (p *PatrolService) generateCapacitySteps(finding *Finding) []remediation.Re
 }
 
 // generateAvailabilitySteps creates steps for availability issues
-func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []remediation.RemediationStep {
+func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []aicontracts.RemediationStep {
 	title := strings.ToLower(finding.Title)
 
 	if strings.Contains(title, "offline") || strings.Contains(title, "down") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Verify network connectivity to the resource", Target: finding.ResourceID},
 			{Order: 2, Description: "Check host status if this is a VM/container"},
 			{Order: 3, Description: "Review system logs for crash or shutdown reasons"},
@@ -261,7 +406,7 @@ func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []remediatio
 	}
 
 	if strings.Contains(title, "restart") || strings.Contains(title, "reboot") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Review system logs for cause of restarts", Target: finding.ResourceID},
 			{Order: 2, Description: "Check for OOM kills or kernel panics"},
 			{Order: 3, Description: "Investigate application crashes"},
@@ -270,7 +415,7 @@ func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []remediatio
 	}
 
 	// Generic availability steps
-	return []remediation.RemediationStep{
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Verify resource health and connectivity", Target: finding.ResourceID},
 		{Order: 2, Description: "Review recent events and logs"},
 		{Order: 3, Description: "Take corrective action to restore availability"},
@@ -278,11 +423,11 @@ func (p *PatrolService) generateAvailabilitySteps(finding *Finding) []remediatio
 }
 
 // generateBackupSteps creates steps for backup-related issues
-func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.RemediationStep {
+func (p *PatrolService) generateBackupSteps(finding *Finding) []aicontracts.RemediationStep {
 	title := strings.ToLower(finding.Title)
 
 	if strings.Contains(title, "missing") || strings.Contains(title, "no backup") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Verify backup job configuration exists", Target: finding.ResourceID},
 			{Order: 2, Description: "Check backup storage availability and capacity"},
 			{Order: 3, Description: "Create or enable backup schedule"},
@@ -291,7 +436,7 @@ func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.Reme
 	}
 
 	if strings.Contains(title, "failed") || strings.Contains(title, "error") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Review backup job logs for error details", Target: finding.ResourceID},
 			{Order: 2, Description: "Check backup storage connectivity and space"},
 			{Order: 3, Description: "Verify backup credentials and permissions"},
@@ -300,7 +445,7 @@ func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.Reme
 	}
 
 	if strings.Contains(title, "old") || strings.Contains(title, "stale") || strings.Contains(title, "outdated") {
-		return []remediation.RemediationStep{
+		return []aicontracts.RemediationStep{
 			{Order: 1, Description: "Check why scheduled backups are not running", Target: finding.ResourceID},
 			{Order: 2, Description: "Review backup retention policy"},
 			{Order: 3, Description: "Trigger a new backup immediately"},
@@ -308,7 +453,7 @@ func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.Reme
 	}
 
 	// Generic backup steps
-	return []remediation.RemediationStep{
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Review backup configuration and schedule", Target: finding.ResourceID},
 		{Order: 2, Description: "Verify backup storage health"},
 		{Order: 3, Description: "Ensure backup jobs are running successfully"},
@@ -316,8 +461,8 @@ func (p *PatrolService) generateBackupSteps(finding *Finding) []remediation.Reme
 }
 
 // generateConfigurationSteps creates steps for configuration issues
-func (p *PatrolService) generateConfigurationSteps(finding *Finding) []remediation.RemediationStep {
-	return []remediation.RemediationStep{
+func (p *PatrolService) generateConfigurationSteps(finding *Finding) []aicontracts.RemediationStep {
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Review current configuration settings", Target: finding.ResourceID},
 		{Order: 2, Description: "Compare against recommended best practices"},
 		{Order: 3, Description: "Apply configuration changes as needed"},
@@ -326,8 +471,8 @@ func (p *PatrolService) generateConfigurationSteps(finding *Finding) []remediati
 }
 
 // generateSecuritySteps creates steps for security issues
-func (p *PatrolService) generateSecuritySteps(finding *Finding) []remediation.RemediationStep {
-	return []remediation.RemediationStep{
+func (p *PatrolService) generateSecuritySteps(finding *Finding) []aicontracts.RemediationStep {
+	return []aicontracts.RemediationStep{
 		{Order: 1, Description: "Assess the security impact and urgency", Target: finding.ResourceID},
 		{Order: 2, Description: "Review access logs for suspicious activity"},
 		{Order: 3, Description: "Apply security patches or configuration fixes"},
@@ -429,6 +574,14 @@ func (p *PatrolService) GetRunHistory(limit int) []PatrolRunRecord {
 	return p.runHistoryStore.GetRecent(limit)
 }
 
+// GetRunByID returns a single patrol run from history.
+func (p *PatrolService) GetRunByID(id string) (PatrolRunRecord, bool) {
+	if strings.TrimSpace(id) == "" {
+		return PatrolRunRecord{}, false
+	}
+	return p.runHistoryStore.GetByID(id)
+}
+
 // GetAllFindings returns all active findings sorted by severity
 // Only returns critical and warning findings - watch/info are filtered out as noise
 func (p *PatrolService) GetAllFindings() []*Finding {
@@ -455,7 +608,15 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 
 func normalizeFindingResourceTypes(findings []*Finding) {
 	for _, f := range findings {
-		if f == nil || f.ResourceType != "" {
+		if f == nil {
+			continue
+		}
+		if strings.TrimSpace(f.ResourceType) == "" {
+			f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
+			continue
+		}
+		if normalized := canonicalFindingResourceType(f.ResourceType); normalized != "" {
+			f.ResourceType = normalized
 			continue
 		}
 		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
@@ -466,6 +627,7 @@ func normalizeFindingResourceTypes(findings []*Finding) {
 // Optionally filter by startTime
 func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 	findings := p.findings.GetAll(startTime)
+	normalizeFindingResourceTypes(findings)
 
 	// Sort by detected time (newest first)
 	sort.Slice(findings, func(i, j int) bool {
@@ -495,7 +657,7 @@ type chatServiceExecutorAccessor interface {
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
 	patrol          *PatrolService
-	state           models.StateSnapshot
+	snap            patrolRuntimeState
 	findingsMu      sync.Mutex
 	findings        []*Finding
 	resolvedIDs     []string
@@ -503,10 +665,10 @@ type patrolFindingCreatorAdapter struct {
 	checkedFindings bool
 }
 
-func newPatrolFindingCreatorAdapter(p *PatrolService, state models.StateSnapshot) *patrolFindingCreatorAdapter {
+func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
 	return &patrolFindingCreatorAdapter{
 		patrol: p,
-		state:  state,
+		snap:   snap,
 	}
 }
 
@@ -684,34 +846,7 @@ func (a *patrolFindingCreatorAdapter) isBaselineAnomaly(resourceID, metric strin
 // Uses user-configured thresholds from PatrolThresholds and baseline anomaly detection
 // as a second-chance check for findings below the threshold but statistically anomalous.
 func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
-	// Build resource metrics lookup from current state
-	resourceMetrics := make(map[string]map[string]float64)
-	for _, n := range a.state.Nodes {
-		m := map[string]float64{"cpu": n.CPU * 100}
-		if n.Memory.Total > 0 {
-			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
-		}
-		resourceMetrics[n.ID] = m
-		resourceMetrics[n.Name] = m
-	}
-	for _, vm := range a.state.VMs {
-		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
-		resourceMetrics[vm.ID] = m
-		resourceMetrics[vm.Name] = m
-	}
-	for _, ct := range a.state.Containers {
-		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
-		resourceMetrics[ct.ID] = m
-		resourceMetrics[ct.Name] = m
-	}
-	for _, s := range a.state.Storage {
-		m := map[string]float64{}
-		if s.Total > 0 {
-			m["usage"] = float64(s.Used) / float64(s.Total) * 100
-		}
-		resourceMetrics[s.ID] = m
-		resourceMetrics[s.Name] = m
-	}
+	resourceMetrics, hasInventory := a.actionabilityResourceMetrics()
 
 	// Reject findings for resources that no longer exist in the current infrastructure.
 	// Only enforce when we have state data (avoid rejecting during empty/error states).
@@ -719,8 +854,7 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	if !hasMetrics {
 		metrics, hasMetrics = resourceMetrics[f.ResourceName]
 	}
-	stateHasResources := len(a.state.Nodes) > 0 || len(a.state.VMs) > 0 || len(a.state.Containers) > 0 || len(a.state.Storage) > 0
-	if !hasMetrics && stateHasResources {
+	if !hasMetrics && hasInventory {
 		// Resource not found — it may have been deleted. Reject the finding.
 		return false
 	}
@@ -779,7 +913,22 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	return true
 }
 
+func (a *patrolFindingCreatorAdapter) actionabilityResourceMetrics() (map[string]map[string]float64, bool) {
+	return patrolActionabilityResourceMetrics(a.snap)
+}
+
 func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) error {
+	scopedResources := patrolRuntimeKnownResources(a.snap)
+	if len(scopedResources) > 0 {
+		finding := a.patrol.findings.Get(findingID)
+		if finding == nil {
+			return fmt.Errorf("finding %s not found or already resolved", findingID)
+		}
+		if !scopedResources[finding.ResourceID] && !scopedResources[finding.ResourceName] {
+			return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
+		}
+	}
+
 	resolved := a.patrol.findings.Resolve(findingID, true)
 	if !resolved {
 		return fmt.Errorf("finding %s not found or already resolved", findingID)
@@ -822,9 +971,13 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 	}
 
 	active := a.patrol.findings.GetActive(minSev)
+	scopedResources := patrolRuntimeKnownResources(a.snap)
 	var result []tools.PatrolFindingInfo
 	for _, f := range active {
 		if resourceID != "" && f.ResourceID != resourceID && f.ResourceName != resourceID {
+			continue
+		}
+		if len(scopedResources) > 0 && !scopedResources[f.ResourceID] && !scopedResources[f.ResourceName] {
 			continue
 		}
 		result = append(result, tools.PatrolFindingInfo{
@@ -989,11 +1142,10 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 	if aiService == nil {
 		return
 	}
-	cfg := aiService.GetConfig()
-	if cfg == nil {
+	if aiService.GetConfig() == nil {
 		return
 	}
-	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+	autonomyLevel := aiService.GetEffectivePatrolAutonomyLevel()
 
 	// Check if finding should be investigated
 	if !f.ShouldInvestigate(autonomyLevel) {
@@ -1024,7 +1176,7 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			log.Warn().Str("finding_id", f.ID).Msg("AI config unavailable at investigation start, aborting")
 			return
 		}
-		currentAutonomy := currentCfg.GetPatrolAutonomyLevel()
+		currentAutonomy := aiService.GetEffectivePatrolAutonomyLevel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -1033,7 +1185,63 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 				Err(err).
 				Str("finding_id", f.ID).
 				Msg("Failed to start investigation")
+			return
 		}
+
+		// The orchestrator updates the patrol findings store; sync the latest state to the unified store.
+		// This makes fix verification and resolution visible as an actual closed loop in the UI.
+		var pushUnified UnifiedFindingCallback
+		var resolveUnified func(string)
+		var pushCb PushNotifyCallback
+		p.mu.RLock()
+		pushUnified = p.unifiedFindingCallback
+		resolveUnified = p.unifiedFindingResolver
+		pushCb = p.pushNotifyCallback
+		p.mu.RUnlock()
+		if latest := p.findings.Get(f.ID); latest != nil {
+			if pushUnified != nil {
+				pushUnified(latest)
+			}
+			if latest.ResolvedAt != nil && resolveUnified != nil {
+				resolveUnified(latest.ID)
+			}
+
+			// Send push notifications for investigation outcomes
+			if pushCb != nil {
+				switch latest.InvestigationOutcome {
+				case string(InvestigationOutcomeFixQueued):
+					approvalID := ""
+					riskLevel := ""
+					if orchestrator != nil {
+						if inv := orchestrator.GetInvestigationByFinding(latest.ID); inv != nil {
+							approvalID = inv.ApprovalID
+							if inv.ProposedFix != nil {
+								riskLevel = inv.ProposedFix.RiskLevel
+							}
+						}
+					}
+					if approvalID == "" {
+						log.Warn().
+							Str("finding_id", latest.ID).
+							Str("investigation_session_id", latest.InvestigationSessionID).
+							Msg("Investigation queued for approval but approval ID missing")
+					}
+					pushCb(relay.NewApprovalRequestNotification(
+						approvalID,
+						latest.Title,
+						riskLevel,
+					))
+				case string(InvestigationOutcomeFixExecuted), string(InvestigationOutcomeFixVerified):
+					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, true))
+				case string(InvestigationOutcomeFixFailed), string(InvestigationOutcomeFixVerificationFailed):
+					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, false))
+				}
+			}
+		}
+
+		// Investigation finished successfully. If it produced a proposed fix, persist a
+		// remediation plan artifact so the user can review and execute later.
+		p.generateRemediationPlanFromInvestigation(f.ID)
 	}()
 
 	log.Info().
@@ -1049,61 +1257,54 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 // It bypasses tryStartRun (the patrol mutex) because verification runs inline
 // within the investigation goroutine.
 func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
-	if p.stateProvider == nil {
-		return false, fmt.Errorf("no state provider available for verification")
+	if p == nil || !p.hasPatrolRuntimeInputs() {
+		return false, fmt.Errorf("%w: no patrol runtime state available", aicontracts.ErrVerificationUnknown)
 	}
-	if p.aiService == nil {
-		return false, fmt.Errorf("AI service not available for verification")
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	// Check circuit breaker before making LLM calls
-	if p.circuitBreaker != nil && !p.circuitBreaker.Allow() {
-		return false, fmt.Errorf("circuit breaker open, skipping verification")
+	startTime := time.Now()
+
+	// Prefer canonical finding details from store when available.
+	var finding *Finding
+	if p.findings != nil && findingID != "" {
+		finding = p.findings.Get(findingID)
+	}
+	if finding != nil {
+		if resourceID == "" {
+			resourceID = finding.ResourceID
+		}
+		if resourceType == "" {
+			resourceType = finding.ResourceType
+		}
+		if findingKey == "" {
+			findingKey = finding.Key
+		}
 	}
 
 	log.Info().
 		Str("finding_id", findingID).
 		Str("resource_id", resourceID).
-		Msg("Running verification patrol to confirm fix")
+		Str("key", findingKey).
+		Msg("Running deterministic verification to confirm fix")
 
-	scope := PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonVerification,
-		Context:       fmt.Sprintf("Verifying fix for finding: %s", findingID),
-		FindingID:     findingID,
-		NoStream:      true,
-	}
+	verified, verifyErr := p.verifyFixDeterministically(ctx, finding, resourceID, resourceType, findingKey, findingID)
 
-	startTime := time.Now()
-
-	fullState := p.stateProvider.GetState()
-	filteredState := p.filterStateByScope(fullState, scope)
-
-	result, err := p.runAIAnalysis(ctx, filteredState, &scope)
-	if err != nil {
-		if p.circuitBreaker != nil {
-			p.circuitBreaker.RecordFailure(err)
-		}
-		return false, fmt.Errorf("verification patrol failed: %w", err)
-	}
-	if result == nil {
-		return false, fmt.Errorf("verification patrol returned no result")
-	}
-	if p.circuitBreaker != nil {
-		p.circuitBreaker.RecordSuccess()
-	}
-
-	// Record verification run in patrol history
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
-	status := "completed"
-	findingsSummary := "Verification: no issues found"
-	if len(result.Findings) > 0 {
-		findingsSummary = fmt.Sprintf("Verification: %d issue(s) still present", len(result.Findings))
+
+	// Persist a verification run record for debugging and user transparency.
+	status := "healthy"
+	summary := "Verification: issue resolved"
+	if verifyErr != nil {
+		status = "error"
+		summary = fmt.Sprintf("Verification inconclusive: %v", verifyErr)
+	} else if !verified {
 		status = "issues_found"
+		summary = "Verification: issue still present"
 	}
+
 	verifyRecord := PatrolRunRecord{
 		ID:                 fmt.Sprintf("%d", startTime.UnixNano()),
 		StartedAt:          startTime,
@@ -1112,34 +1313,581 @@ func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resou
 		DurationMs:         duration.Milliseconds(),
 		Type:               "verification",
 		TriggerReason:      string(TriggerReasonVerification),
-		ScopeResourceIDs:   scope.ResourceIDs,
-		ScopeResourceTypes: scope.ResourceTypes,
-		ScopeContext:       scope.Context,
+		ScopeResourceIDs:   []string{resourceID},
+		ScopeResourceTypes: []string{resourceType},
+		ScopeContext:       fmt.Sprintf("Verifying fix for finding: %s", findingID),
 		FindingID:          findingID,
-		NewFindings:        len(result.Findings),
-		FindingsSummary:    findingsSummary,
+		NewFindings:        0,
+		FindingsSummary:    summary,
 		Status:             status,
-		InputTokens:        result.InputTokens,
-		OutputTokens:       result.OutputTokens,
 	}
 	if p.runHistoryStore != nil {
 		p.runHistoryStore.Add(verifyRecord)
 	}
 
-	// Check if the original finding was re-detected
-	for _, f := range result.Findings {
-		if (findingKey != "" && f.Key == findingKey) || f.ResourceID == resourceID {
-			log.Info().
-				Str("finding_id", findingID).
-				Str("re_detected_key", f.Key).
-				Msg("Verification patrol re-detected the issue")
-			return false, nil // Issue still present
+	return verified, verifyErr
+}
+
+func (p *PatrolService) verifyFixDeterministically(
+	ctx context.Context,
+	finding *Finding,
+	resourceID, resourceType, findingKey, findingID string,
+) (bool, error) {
+	key := normalizeFindingKey(findingKey)
+	if key == "" {
+		return false, fmt.Errorf("%w: missing finding key", aicontracts.ErrVerificationUnknown)
+	}
+
+	// State-only verifiers (no tools required).
+	fullState := p.currentPatrolRuntimeState()
+	switch key {
+	case "backup-stale":
+		ok, err := verifyBackupFreshState(fullState, resourceID)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	case "cpu-high", "memory-high", "disk-high":
+		ok, err := verifyMetricRecoveredState(fullState, p.thresholds, key, resourceID, resourceType)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	case "guest-unreachable":
+		ok, err := p.verifyGuestReachabilityState(ctx, fullState, resourceID)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	}
+
+	// Tool-based verifiers (deterministic tool calls + deterministic signal parsing).
+	executor, execErr := p.getExecutorForVerification()
+	if execErr != nil {
+		return false, execErr
+	}
+
+	p.mu.RLock()
+	sigThresholds := SignalThresholdsFromPatrol(p.thresholds)
+	p.mu.RUnlock()
+
+	switch key {
+	case "smart-failure":
+		node := strings.TrimSpace(resourceID)
+		device := ""
+		if finding != nil {
+			device = strings.TrimSpace(finding.ResourceName)
+		}
+		return p.verifyBySignals(ctx, executor, sigThresholds, key, node, device)
+	case "backup-failed":
+		guestID := strings.TrimSpace(resourceID)
+		return p.verifyBySignals(ctx, executor, sigThresholds, key, guestID, "")
+	default:
+		return false, fmt.Errorf("%w: no deterministic verifier for key=%q (finding_id=%s)", aicontracts.ErrVerificationUnknown, key, findingID)
+	}
+}
+
+func (p *PatrolService) getExecutorForVerification() (*tools.PulseToolExecutor, error) {
+	if p == nil || p.aiService == nil {
+		return nil, fmt.Errorf("%w: AI service unavailable", aicontracts.ErrVerificationUnknown)
+	}
+	cs := p.aiService.GetChatService()
+	if cs == nil {
+		return nil, fmt.Errorf("%w: chat service unavailable", aicontracts.ErrVerificationUnknown)
+	}
+	executorAccessor, ok := cs.(chatServiceExecutorAccessor)
+	if !ok {
+		return nil, fmt.Errorf("%w: chat service does not expose tool executor", aicontracts.ErrVerificationUnknown)
+	}
+	exec := executorAccessor.GetExecutor()
+	if exec == nil {
+		return nil, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
+	}
+	return exec, nil
+}
+
+func (p *PatrolService) verifyBySignals(
+	ctx context.Context,
+	executor *tools.PulseToolExecutor,
+	thresholds SignalThresholds,
+	findingKey string,
+	resourceID string,
+	resourceName string,
+) (bool, error) {
+	if executor == nil {
+		return false, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
+	}
+
+	var toolName string
+	args := map[string]interface{}{}
+	switch findingKey {
+	case "smart-failure":
+		toolName = "pulse_storage"
+		args = map[string]interface{}{"type": "disk_health"}
+		if strings.TrimSpace(resourceID) != "" {
+			args["node"] = resourceID
+		}
+	case "backup-failed":
+		toolName = "pulse_storage"
+		args = map[string]interface{}{"type": "backup_tasks"}
+		if strings.TrimSpace(resourceID) != "" {
+			args["guest_id"] = resourceID
+		}
+	default:
+		return false, fmt.Errorf("%w: unhandled signal verifier key=%q", aicontracts.ErrVerificationUnknown, findingKey)
+	}
+
+	tc, err := executeToolCall(ctx, executor, toolName, args)
+	if err != nil {
+		return false, err
+	}
+
+	signals := DetectSignals([]ToolCallRecord{tc}, thresholds)
+	persisting := false
+	for _, s := range signals {
+		switch findingKey {
+		case "smart-failure":
+			if s.SignalType == SignalSMARTFailure {
+				if resourceName == "" || strings.TrimSpace(strings.ToLower(s.ResourceName)) == strings.TrimSpace(strings.ToLower(resourceName)) {
+					persisting = true
+				}
+			}
+		case "backup-failed":
+			if s.SignalType == SignalBackupFailed && (resourceID == "" || s.ResourceID == resourceID) {
+				persisting = true
+			}
+		}
+	}
+	if persisting {
+		return false, nil
+	}
+	return true, nil
+}
+
+func executeToolCall(ctx context.Context, executor *tools.PulseToolExecutor, toolName string, args map[string]interface{}) (ToolCallRecord, error) {
+	if executor == nil {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool executor unavailable", aicontracts.ErrVerificationUnknown)
+	}
+	if toolName == "" {
+		return ToolCallRecord{}, fmt.Errorf("%w: missing tool name", aicontracts.ErrVerificationUnknown)
+	}
+	if args == nil {
+		args = map[string]interface{}{}
+	}
+	inputBytes, _ := json.Marshal(args)
+	inputStr := string(inputBytes)
+	start := time.Now().UnixMilli()
+
+	result, execErr := executor.ExecuteTool(ctx, toolName, args)
+	output := ""
+	success := false
+	if execErr != nil {
+		output = execErr.Error()
+	} else {
+		output = formatToolResult(result)
+		success = !result.IsError
+	}
+	end := time.Now().UnixMilli()
+
+	if execErr != nil {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool execution failed (%s): %v", aicontracts.ErrVerificationUnknown, toolName, execErr)
+	}
+	if result.IsError {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool returned error (%s): %s", aicontracts.ErrVerificationUnknown, toolName, output)
+	}
+	// Most verification probes rely on parsing structured JSON outputs. If we receive
+	// non-JSON text, treat verification as inconclusive rather than "resolved".
+	if toolName == "pulse_storage" || toolName == "pulse_metrics" || toolName == "pulse_alerts" {
+		if !isValidJSON(output) {
+			return ToolCallRecord{}, fmt.Errorf("%w: tool returned non-JSON output (%s)", aicontracts.ErrVerificationUnknown, toolName)
 		}
 	}
 
-	log.Info().
-		Str("finding_id", findingID).
-		Int("findings_count", len(result.Findings)).
-		Msg("Verification patrol found no matching issues - fix confirmed")
-	return true, nil // No matching finding = issue resolved
+	return ToolCallRecord{
+		ID:        fmt.Sprintf("verify-%d", time.Now().UnixNano()),
+		ToolName:  toolName,
+		Input:     truncateString(inputStr, MaxToolInputSize),
+		Output:    output,
+		Success:   success,
+		StartTime: start,
+		EndTime:   end,
+		Duration:  end - start,
+	}, nil
+}
+
+func isValidJSON(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return false
+	}
+	if trimmed[0] != '{' && trimmed[0] != '[' {
+		return false
+	}
+	var v interface{}
+	return json.Unmarshal([]byte(trimmed), &v) == nil
+}
+
+func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, error) {
+	vmID := strings.TrimSpace(guestID)
+	if vmID == "" {
+		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
+	}
+
+	now := time.Now()
+	details, ok := patrolLookupGuestRuntimeDetails(snap, vmID)
+	if !ok || details.lastBackup.IsZero() {
+		// If the guest cannot be found, verification can't be concluded deterministically.
+		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", aicontracts.ErrVerificationUnknown, vmID)
+	}
+
+	if now.Sub(details.lastBackup) <= 48*time.Hour {
+		return true, nil
+	}
+	return false, nil
+}
+
+func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
+	rid := strings.TrimSpace(resourceID)
+	if rid == "" {
+		return false, fmt.Errorf("%w: missing resource id", aicontracts.ErrVerificationUnknown)
+	}
+
+	// Use a small margin to avoid flapping around exact thresholds.
+	const margin = 0.95
+	metrics, ok := patrolLookupResourceMetricsForType(snap, rid, resourceType)
+	if ok {
+		switch key {
+		case "cpu-high":
+			if value, exists := metrics["cpu"]; exists {
+				return value < thresholds.NodeCPUWarning*margin, nil
+			}
+		case "memory-high":
+			value, exists := metrics["memory"]
+			if !exists {
+				break
+			}
+			if resourceType == "node" {
+				return value < thresholds.NodeMemWarning*margin, nil
+			}
+			return value < thresholds.GuestMemWarning*margin, nil
+		case "disk-high":
+			if resourceType == "physical_disk" {
+				if disk, exists := patrolLookupPhysicalDiskVerificationState(snap, rid); exists {
+					if disk.health != "" && !strings.EqualFold(disk.health, "PASSED") && !strings.EqualFold(disk.health, "UNKNOWN") && !strings.EqualFold(disk.health, "OK") {
+						return false, nil
+					}
+					if disk.wearout >= 0 && disk.wearout < 20 {
+						return false, nil
+					}
+					if disk.temperature > 55 {
+						return false, nil
+					}
+					return true, nil
+				}
+				break
+			}
+			if resourceType == "storage" {
+				if value, exists := metrics["usage"]; exists {
+					return value < thresholds.StorageWarning*margin, nil
+				}
+				break
+			}
+			if value, exists := metrics["disk"]; exists {
+				return value < thresholds.GuestDiskWarn*margin, nil
+			}
+		}
+	}
+
+	// If we can't locate the resource, verification is inconclusive.
+	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", aicontracts.ErrVerificationUnknown, rid)
+}
+
+type patrolPhysicalDiskVerification struct {
+	health      string
+	wearout     int
+	temperature int
+}
+
+type patrolPhysicalDiskVisitor func(identifiers []string, verification patrolPhysicalDiskVerification) bool
+
+func patrolLookupPhysicalDiskVerificationState(snap patrolRuntimeState, resourceID string) (patrolPhysicalDiskVerification, bool) {
+	return patrolLookupPhysicalDiskVerificationWithVisitor(resourceID, func(visit patrolPhysicalDiskVisitor) bool {
+		return patrolVisitPhysicalDiskVerification(snap, visit)
+	})
+}
+
+func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap patrolRuntimeState, guestID string) (bool, error) {
+	p.mu.RLock()
+	prober := p.guestProber
+	p.mu.RUnlock()
+	if prober == nil {
+		return false, fmt.Errorf("%w: guest prober not configured", aicontracts.ErrVerificationUnknown)
+	}
+
+	vmID := strings.TrimSpace(guestID)
+	if vmID == "" {
+		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
+	}
+
+	details, ok := patrolLookupGuestRuntimeDetails(snap, vmID)
+	if !ok || details.node == "" || details.ip == "" {
+		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", aicontracts.ErrVerificationUnknown, vmID)
+	}
+
+	agentID, ok := prober.GetAgentForHost(details.node)
+	if !ok || strings.TrimSpace(agentID) == "" {
+		return false, fmt.Errorf("%w: no agent available for host %s", aicontracts.ErrVerificationUnknown, details.node)
+	}
+
+	results, err := prober.PingGuests(ctx, agentID, []string{details.ip})
+	if err != nil {
+		return false, fmt.Errorf("%w: reachability probe failed: %v", aicontracts.ErrVerificationUnknown, err)
+	}
+	if res, ok := results[details.ip]; ok {
+		if res.Reachable {
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, fmt.Errorf("%w: missing ping result for %s", aicontracts.ErrVerificationUnknown, details.ip)
+}
+
+type patrolGuestRuntimeDetails struct {
+	lastBackup time.Time
+	node       string
+	ip         string
+}
+
+type patrolGuestRuntimeDetailsVisitor func(identifiers []string, details patrolGuestRuntimeDetails) bool
+
+type patrolMetricVisitor func(identifiers []string, metrics map[string]float64) bool
+
+func patrolActionabilityResourceMetrics(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
+	resourceMetrics := make(map[string]map[string]float64)
+	hasInventory := patrolVisitMetrics(snap, func(identifiers []string, metrics map[string]float64) bool {
+		patrolRegisterResourceMetrics(resourceMetrics, metrics, identifiers...)
+		return true
+	})
+	return patrolAugmentActionabilityMetricsWithPhysicalDisks(resourceMetrics, snap), hasInventory
+}
+
+func patrolAugmentActionabilityMetricsWithPhysicalDisks(dest map[string]map[string]float64, snap patrolRuntimeState) map[string]map[string]float64 {
+	if dest == nil {
+		dest = make(map[string]map[string]float64)
+	}
+	for _, disk := range patrolPhysicalDiskRows(snap, nil) {
+		patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.id, disk.name, disk.devPath, disk.model)
+	}
+	return dest
+}
+
+func patrolLookupGuestRuntimeDetails(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
+	return patrolLookupGuestRuntimeDetailsWithVisitor(guestID, func(visit patrolGuestRuntimeDetailsVisitor) bool {
+		return patrolVisitGuestRuntimeDetails(snap, visit)
+	})
+}
+
+func patrolLookupResourceMetrics(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+		return patrolVisitMetrics(snap, visit)
+	})
+}
+
+func patrolLookupResourceMetricsForType(snap patrolRuntimeState, resourceID, resourceType string) (map[string]float64, bool) {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "node", "agent":
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitNodeMetrics(snap, visit)
+		})
+	case "vm":
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(snap, "VM", visit)
+		})
+	case "container", "system-container":
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(snap, "Container", visit)
+		})
+	case "storage":
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitStorageMetrics(snap, visit)
+		})
+	case "physical_disk":
+		if metrics, ok := patrolLookupPhysicalDiskMetricsState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return nil, false
+	default:
+		return patrolLookupResourceMetrics(snap, resourceID)
+	}
+}
+
+func patrolLookupPhysicalDiskMetricsState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if _, ok := patrolLookupPhysicalDiskVerificationState(snap, resourceID); ok {
+		return map[string]float64{}, true
+	}
+	return nil, false
+}
+
+func patrolLookupPhysicalDiskVerificationWithVisitor(resourceID string, walk func(patrolPhysicalDiskVisitor) bool) (patrolPhysicalDiskVerification, bool) {
+	found := false
+	var result patrolPhysicalDiskVerification
+	walk(func(identifiers []string, verification patrolPhysicalDiskVerification) bool {
+		for _, identifier := range identifiers {
+			if strings.TrimSpace(identifier) != strings.TrimSpace(resourceID) {
+				continue
+			}
+			result = verification
+			found = true
+			return false
+		}
+		return true
+	})
+	return result, found
+}
+
+func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPhysicalDiskVisitor) bool {
+	rows := patrolPhysicalDiskRows(snap, nil)
+	for _, disk := range rows {
+		if !visit([]string{disk.id, disk.name, disk.devPath, disk.model}, patrolPhysicalDiskVerification{
+			health:      strings.TrimSpace(disk.health),
+			wearout:     disk.wearout,
+			temperature: disk.temperature,
+		}) {
+			return true
+		}
+	}
+	return len(rows) > 0
+}
+
+func patrolLookupGuestRuntimeDetailsWithVisitor(guestID string, walk func(patrolGuestRuntimeDetailsVisitor) bool) (patrolGuestRuntimeDetails, bool) {
+	found := false
+	var result patrolGuestRuntimeDetails
+	walk(func(identifiers []string, details patrolGuestRuntimeDetails) bool {
+		for _, identifier := range identifiers {
+			if strings.TrimSpace(identifier) != strings.TrimSpace(guestID) {
+				continue
+			}
+			result = details
+			found = true
+			return false
+		}
+		return true
+	})
+	return result, found
+}
+
+func patrolVisitGuestRuntimeDetails(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
+	rows := patrolGuestInventoryRows(snap, nil, nil)
+	for _, guest := range rows {
+		identifiers := []string{guest.id, guest.name}
+		if guest.vmid > 0 {
+			identifiers = append(identifiers, fmt.Sprintf("%d", guest.vmid))
+		}
+		if !visit(identifiers, patrolGuestRuntimeDetails{
+			lastBackup: guest.lastBackup,
+			node:       guest.node,
+			ip:         guest.ip,
+		}) {
+			return true
+		}
+	}
+	return len(rows) > 0
+}
+
+func patrolLookupMetricsWithVisitor(resourceID string, walk func(patrolMetricVisitor) bool) (map[string]float64, bool) {
+	found := false
+	var result map[string]float64
+	walk(func(identifiers []string, metrics map[string]float64) bool {
+		for _, identifier := range identifiers {
+			if strings.TrimSpace(identifier) != strings.TrimSpace(resourceID) {
+				continue
+			}
+			result = metrics
+			found = true
+			return false
+		}
+		return true
+	})
+	return result, found
+}
+
+func patrolVisitMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+	hasInventory := false
+	for _, walk := range []func(patrolRuntimeState, patrolMetricVisitor) bool{
+		patrolVisitNodeMetrics,
+		func(s patrolRuntimeState, v patrolMetricVisitor) bool { return patrolVisitGuestMetrics(s, "VM", v) },
+		func(s patrolRuntimeState, v patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(s, "Container", v)
+		},
+		patrolVisitStorageMetrics,
+	} {
+		if walk(snap, visit) {
+			hasInventory = true
+		}
+	}
+	return hasInventory
+}
+
+func patrolVisitNodeMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+	rows := patrolNodeInventoryRows(snap, nil)
+	for _, node := range rows {
+		metrics := map[string]float64{"cpu": node.cpu}
+		if node.mem > 0 {
+			metrics["memory"] = node.mem
+		}
+		if !visit([]string{node.id, node.name}, metrics) {
+			return true
+		}
+	}
+	return len(rows) > 0
+}
+
+func patrolVisitGuestMetrics(snap patrolRuntimeState, guestType string, visit patrolMetricVisitor) bool {
+	rows := patrolGuestInventoryRows(snap, nil, nil)
+	count := 0
+	for _, guest := range rows {
+		if guest.gType != guestType {
+			continue
+		}
+		count++
+		if !visit([]string{guest.id, guest.name}, map[string]float64{
+			"cpu":    guest.cpu,
+			"memory": guest.mem,
+			"disk":   guest.disk,
+		}) {
+			return true
+		}
+	}
+	return count > 0
+}
+
+func patrolVisitStorageMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+	rows := patrolStoragePoolRows(snap, nil)
+	for _, storage := range rows {
+		if !visit([]string{storage.id, storage.name}, map[string]float64{"usage": storage.usage}) {
+			return true
+		}
+	}
+	return len(rows) > 0
+}
+
+func patrolRegisterResourceMetrics(dest map[string]map[string]float64, metrics map[string]float64, identifiers ...string) {
+	for _, identifier := range identifiers {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" {
+			continue
+		}
+		dest[identifier] = metrics
+	}
+}
+
+func patrolGuestMatches(guestID, id, name string, vmid int) bool {
+	return id == guestID || name == guestID || fmt.Sprintf("%d", vmid) == guestID
+}
+
+func patrolFirstIP(ips []string) string {
+	if len(ips) == 0 {
+		return ""
+	}
+	return ips[0]
 }

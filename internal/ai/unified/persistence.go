@@ -3,6 +3,8 @@ package unified
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,6 +27,17 @@ func NewFilePersistence(dataDir string) *FilePersistence {
 	}
 }
 
+func findingsMapFromList(list []*UnifiedFinding) map[string]*UnifiedFinding {
+	findings := make(map[string]*UnifiedFinding, len(list))
+	for _, f := range list {
+		if f == nil || f.ID == "" {
+			continue
+		}
+		findings[f.ID] = f
+	}
+	return findings
+}
+
 // SaveFindings saves findings to disk
 func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) error {
 	p.mu.Lock()
@@ -32,32 +45,36 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 
 	// Ensure directory exists
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: create data directory %q: %w", p.dataDir, err)
 	}
 
 	// Convert to list for cleaner JSON
-	var findingsList []*UnifiedFinding
+	findingsList := []*UnifiedFinding{}
 	for _, f := range findings {
 		findingsList = append(findingsList, f)
 	}
 
 	data, err := json.MarshalIndent(findingsList, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: marshal findings: %w", err)
 	}
 
 	filePath := filepath.Join(p.dataDir, p.filename)
 	tempPath := filePath + ".tmp"
 
 	// Write to temp file first
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		return err
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 
 	// Atomic rename
 	if err := os.Rename(tempPath, filePath); err != nil {
-		os.Remove(tempPath)
-		return err
+		removeErr := os.Remove(tempPath)
+		renameErr := fmt.Errorf("unified.FilePersistence.SaveFindings: rename %q to %q: %w", tempPath, filePath, err)
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("unified.FilePersistence.SaveFindings: remove temp file %q: %w", tempPath, removeErr))
+		}
+		return renameErr
 	}
 
 	log.Debug().
@@ -80,20 +97,16 @@ func (p *FilePersistence) LoadFindings() (map[string]*UnifiedFinding, error) {
 		if os.IsNotExist(err) {
 			return make(map[string]*UnifiedFinding), nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("unified.FilePersistence.LoadFindings: read file %q: %w", filePath, err)
 	}
 
-	var findingsList []*UnifiedFinding
+	findingsList := []*UnifiedFinding{}
 	if err := json.Unmarshal(data, &findingsList); err != nil {
-		log.Error().Err(err).Msg("Failed to parse unified findings, starting fresh")
+		log.Error().Err(err).Msg("failed to parse unified findings, starting fresh")
 		return make(map[string]*UnifiedFinding), nil
 	}
 
-	// Convert to map
-	findings := make(map[string]*UnifiedFinding, len(findingsList))
-	for _, f := range findingsList {
-		findings[f.ID] = f
-	}
+	findings := findingsMapFromList(findingsList)
 
 	log.Debug().
 		Int("findings_count", len(findings)).
@@ -107,6 +120,14 @@ func (p *FilePersistence) LoadFindings() (map[string]*UnifiedFinding, error) {
 type persistedState struct {
 	Version  int               `json:"version"`
 	Findings []*UnifiedFinding `json:"findings"`
+}
+
+func emptyPersistedState(version int) persistedState {
+	state := persistedState{Version: version}
+	if state.Findings == nil {
+		state.Findings = []*UnifiedFinding{}
+	}
+	return state
 }
 
 // VersionedPersistence adds versioning to persistence
@@ -130,13 +151,11 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 
 	// Ensure directory exists
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: create data directory %q: %w", p.dataDir, err)
 	}
 
-	state := persistedState{
-		Version:  p.currentVersion,
-		Findings: make([]*UnifiedFinding, 0, len(findings)),
-	}
+	state := emptyPersistedState(p.currentVersion)
+	state.Findings = make([]*UnifiedFinding, 0, len(findings))
 
 	for _, f := range findings {
 		state.Findings = append(state.Findings, f)
@@ -144,19 +163,23 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: marshal findings state: %w", err)
 	}
 
 	filePath := filepath.Join(p.dataDir, p.filename)
 	tempPath := filePath + ".tmp"
 
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		return err
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 
 	if err := os.Rename(tempPath, filePath); err != nil {
-		os.Remove(tempPath)
-		return err
+		removeErr := os.Remove(tempPath)
+		renameErr := fmt.Errorf("unified.VersionedPersistence.SaveFindings: rename %q to %q: %w", tempPath, filePath, err)
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("unified.VersionedPersistence.SaveFindings: remove temp file %q: %w", tempPath, removeErr))
+		}
+		return renameErr
 	}
 
 	return nil
@@ -174,30 +197,24 @@ func (p *VersionedPersistence) LoadFindings() (map[string]*UnifiedFinding, error
 		if os.IsNotExist(err) {
 			return make(map[string]*UnifiedFinding), nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("unified.VersionedPersistence.LoadFindings: read file %q: %w", filePath, err)
 	}
 
 	// Try versioned format first
 	var state persistedState
 	if err := json.Unmarshal(data, &state); err == nil && state.Version > 0 {
-		findings := make(map[string]*UnifiedFinding, len(state.Findings))
-		for _, f := range state.Findings {
-			findings[f.ID] = f
+		if state.Findings == nil {
+			state.Findings = []*UnifiedFinding{}
 		}
-		return findings, nil
+		return findingsMapFromList(state.Findings), nil
 	}
 
 	// Fall back to legacy format (list only)
-	var findingsList []*UnifiedFinding
+	findingsList := []*UnifiedFinding{}
 	if err := json.Unmarshal(data, &findingsList); err != nil {
-		log.Error().Err(err).Msg("Failed to parse unified findings")
+		log.Error().Err(err).Msg("failed to parse unified findings")
 		return make(map[string]*UnifiedFinding), nil
 	}
 
-	findings := make(map[string]*UnifiedFinding, len(findingsList))
-	for _, f := range findingsList {
-		findings[f.ID] = f
-	}
-
-	return findings, nil
+	return findingsMapFromList(findingsList), nil
 }

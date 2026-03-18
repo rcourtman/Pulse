@@ -182,25 +182,13 @@ func TestIncidentCoordinator_OnAnomalyDetected(t *testing.T) {
 	coord.Start()
 
 	// Start anomaly recording
-	coord.OnAnomalyDetected("res-1", "host", "cpu", "critical")
+	coord.OnAnomalyDetected("res-1", "agent", "cpu", "critical")
 
 	if coord.GetActiveIncidentCount() != 1 {
 		t.Errorf("Should start incident for anomaly, got %d", coord.GetActiveIncidentCount())
 	}
 
 	// Anomaly ID format check (internal detail, but verify implicitly via count)
-}
-
-func TestNewIncidentCoordinator_Defaults(t *testing.T) {
-	cfg := IncidentCoordinatorConfig{
-		PreBuffer:     0,
-		PostDuration:  0,
-		MaxConcurrent: 0,
-	}
-
-	coord := NewIncidentCoordinator(cfg)
-	_ = coord
-	// Just coverage trace, logic verified in other tests
 }
 
 func TestIncidentCoordinator_GetRecordingWindowID(t *testing.T) {

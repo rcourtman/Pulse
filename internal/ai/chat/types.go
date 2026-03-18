@@ -26,9 +26,23 @@ type Message struct {
 	Role             string      `json:"role"` // "user", "assistant", "system"
 	Content          string      `json:"content"`
 	ReasoningContent string      `json:"reasoning_content,omitempty"` // For extended thinking
-	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+	ToolCalls        []ToolCall  `json:"tool_calls"`
 	ToolResult       *ToolResult `json:"tool_result,omitempty"`
 	Timestamp        time.Time   `json:"timestamp"`
+}
+
+func EmptyMessage() Message {
+	return Message{}.NormalizeCollections()
+}
+
+func (m Message) NormalizeCollections() Message {
+	if m.ToolCalls == nil {
+		m.ToolCalls = []ToolCall{}
+	}
+	for i := range m.ToolCalls {
+		m.ToolCalls[i] = m.ToolCalls[i].NormalizeCollections()
+	}
+	return m
 }
 
 // ToolCall represents a tool invocation
@@ -37,6 +51,17 @@ type ToolCall struct {
 	Name             string                 `json:"name"`
 	Input            map[string]interface{} `json:"input"`
 	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
+}
+
+func EmptyToolCall() ToolCall {
+	return ToolCall{}.NormalizeCollections()
+}
+
+func (t ToolCall) NormalizeCollections() ToolCall {
+	if t.Input == nil {
+		t.Input = map[string]interface{}{}
+	}
+	return t
 }
 
 // ToolResult represents the result of a tool execution
@@ -59,9 +84,9 @@ type StreamCallback func(event StreamEvent)
 // The frontend resolves these from the autocomplete and sends them alongside the prompt,
 // so the backend doesn't need to re-derive resource identity from text.
 type StructuredMention struct {
-	ID   string `json:"id"`             // e.g. "lxc:delly:123", "docker:host:container"
+	ID   string `json:"id"`             // e.g. "system-container:pve-node:123", "docker:docker-host-1:container", "agent:host-1"
 	Name string `json:"name"`           // Display name, e.g. "ntfy"
-	Type string `json:"type"`           // "vm", "lxc", "container", "docker", "node", "host"
+	Type string `json:"type"`           // "vm", "system-container", "app-container", "node", "agent"
 	Node string `json:"node,omitempty"` // Proxmox node or parent host
 }
 
@@ -90,6 +115,14 @@ type ContentData struct {
 // ThinkingData is the data for "thinking" events (extended thinking/reasoning)
 type ThinkingData struct {
 	Text string `json:"text"`
+}
+
+// ExploreStatusData is the data for "explore_status" events
+type ExploreStatusData struct {
+	Phase   string `json:"phase"`             // started | completed | failed | skipped
+	Message string `json:"message"`           // Human-readable status text for the UI
+	Model   string `json:"model,omitempty"`   // provider:model used for explore
+	Outcome string `json:"outcome,omitempty"` // success | failed | skipped_no_model | skipped_no_tools
 }
 
 // ToolStartData is the data for "tool_start" events
@@ -124,6 +157,7 @@ type ApprovalNeededData struct {
 
 // QuestionData is the data for "question" events
 type QuestionData struct {
+	SessionID  string     `json:"session_id,omitempty"`
 	QuestionID string     `json:"question_id"`
 	Questions  []Question `json:"questions"`
 }
@@ -131,6 +165,7 @@ type QuestionData struct {
 // Question represents a question from the AI to the user
 type Question struct {
 	ID       string           `json:"id"`
+	Type     string           `json:"type,omitempty"` // "text" | "select"
 	Question string           `json:"question"`
 	Header   string           `json:"header,omitempty"`
 	Options  []QuestionOption `json:"options,omitempty"`
@@ -139,6 +174,7 @@ type Question struct {
 // QuestionOption represents an option for a question
 type QuestionOption struct {
 	Label       string `json:"label"`
+	Value       string `json:"value,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
@@ -169,7 +205,7 @@ const (
 type ResolvedResource struct {
 	// === Structured Identity (primary) ===
 
-	// Kind is the resource type: "node", "vm", "lxc", "docker_container", "docker_host", "k8s_pod", etc.
+	// Kind is the resource type: "node", "vm", "system-container", "app-container", "docker-host", "k8s-pod", etc.
 	Kind string `json:"kind"`
 
 	// ProviderUID is the stable identifier from the provider (container ID, VMID, pod UID).
@@ -186,7 +222,7 @@ type ResolvedResource struct {
 	// === Derived/Display Fields ===
 
 	// ResourceID is the canonical string identifier, derived from Kind:ProviderUID
-	// Format: "{kind}:{provider_uid}" e.g., "docker_container:abc123def456"
+	// Format: "{kind}:{provider_uid}" e.g., "app-container:abc123def456"
 	// For backwards compatibility, falls back to "{kind}:{name}" if no ProviderUID
 	ResourceID string `json:"resource_id"`
 
@@ -197,11 +233,11 @@ type ResolvedResource struct {
 	ResourceType string `json:"resource_type"`
 
 	// DisplayPath is the human-readable location string
-	// e.g., "docker:jellyfin @ lxc:media-server @ node:delly"
+	// e.g., "docker:jellyfin @ lxc:media-server @ node:pve-node"
 	DisplayPath string `json:"display_path,omitempty"`
 
 	// LocationChain is the hierarchical path (for backwards compatibility)
-	// Example: ["node:delly", "lxc:media-server", "docker:jellyfin"]
+	// Example: ["node:pve-node", "lxc:media-server", "docker:jellyfin"]
 	LocationChain []string `json:"location_chain"`
 
 	// === Executor Paths ===
@@ -791,10 +827,10 @@ func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
 	//         {kind}:{provider_uid} for global resources (nodes, clusters)
 	//
 	// Examples:
-	//   lxc:delly:141         (LXC container 141 on node delly)
+	//   lxc:pve-node:141      (LXC container 141 on node pve-node)
 	//   vm:minipc:203         (VM 203 on node minipc)
-	//   docker_container:media-server:abc123  (Docker container on host media-server)
-	//   node:delly            (Proxmox node - no parent scope)
+	//   app-container:media-server:abc123  (Docker container on host media-server)
+	//   node:pve-node         (Proxmox node - no parent scope)
 	var resourceID string
 	if reg.ProviderUID != "" {
 		// Include host scope for resources that have a parent host

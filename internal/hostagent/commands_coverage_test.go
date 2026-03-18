@@ -14,6 +14,10 @@ import (
 )
 
 func TestCommandClient_LoopsCoverage(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 0
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil)
@@ -21,40 +25,37 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 		// 1. Receive registration
 		var msg wsMessage
-		conn.ReadJSON(&msg)
+		_ = conn.ReadJSON(&msg)
 
 		// 2. Send registered success
 		payload, _ := json.Marshal(registeredPayload{Success: true})
-		conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
 
 		// 3. Send a pong (will be ignored)
-		conn.WriteJSON(wsMessage{Type: msgTypePong})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypePong})
 
 		// 4. Send an execute_command
 		cmdPayload, _ := json.Marshal(executeCommandPayload{
 			RequestID: "req-1",
 			Command:   "echo hi",
 		})
-		conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: cmdPayload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: cmdPayload})
 
 		// 5. Send a read_file
 		readPayload, _ := json.Marshal(executeCommandPayload{
 			RequestID: "req-2",
 			Command:   "cat /etc/hostname",
 		})
-		conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: readPayload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: readPayload})
 
 		// 6. Send unknown message type
-		conn.WriteJSON(wsMessage{Type: "unknown_type"})
+		_ = conn.WriteJSON(wsMessage{Type: "unknown_type"})
 
 		// 7. Send invalid JSON for execute_command
-		conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: json.RawMessage(`{invalid}`)})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: json.RawMessage(`{invalid}`)})
 
 		// 8. Send invalid JSON for read_file
-		conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: json.RawMessage(`{invalid}`)})
-
-		// Wait a bit then close
-		time.Sleep(100 * time.Millisecond)
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: json.RawMessage(`{invalid}`)})
 	}))
 	defer server.Close()
 
@@ -66,14 +67,8 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 	client := NewCommandClient(cfg, "agent", "host", "linux", "1.0")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
-
-	// Run in background and stop after a short while
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		cancel()
-	}()
 
 	err := client.Run(ctx)
 	if err != nil && err != context.Canceled {
@@ -107,14 +102,16 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 	defer cancel()
 
 	done := make(chan struct{})
-	// We can't wait for the ticker easily, so we just run it briefly
+	// We can't wait for the ticker easily; this is just a cancellation/exit-path coverage check.
 	go client.pingLoop(ctx, conn, done)
-
-	time.Sleep(50 * time.Millisecond)
 	close(done)
 }
 
 func TestCommandClient_RegistrationFailure(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 0
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := upgrader.Upgrade(w, r, nil)
@@ -122,13 +119,11 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 
 		// Receive registration
 		var msg wsMessage
-		conn.ReadJSON(&msg)
+		_ = conn.ReadJSON(&msg)
 
 		// Send registered FAILURE
 		payload, _ := json.Marshal(registeredPayload{Success: false, Message: "registration rejected"})
-		conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
-
-		time.Sleep(100 * time.Millisecond)
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
 	}))
 	defer server.Close()
 
@@ -145,5 +140,35 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 	err := client.Run(ctx)
 	if err == nil {
 		t.Error("expected error from registration failure")
+	}
+}
+
+func TestCommandClient_RunStopsAfterClose(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 5 * time.Millisecond
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
+	client := &CommandClient{
+		pulseURL: "http://127.0.0.1:1",
+		logger:   zerolog.Nop(),
+		done:     make(chan struct{}),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.Run(context.Background())
+	}()
+
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run() error = %v, want nil after Close()", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after Close()")
 	}
 }

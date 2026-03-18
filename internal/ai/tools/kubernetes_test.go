@@ -6,18 +6,25 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newKubernetesExecutor(snapshot models.StateSnapshot) *PulseToolExecutor {
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(snapshot)
+	return NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+}
 
 func TestExecuteGetKubernetesClusters(t *testing.T) {
 	ctx := context.Background()
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 	result, err := exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "State provider not available.", result.Content[0].Text)
+	assert.Equal(t, "read state not available", result.Content[0].Text)
 
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec = newKubernetesExecutor(models.StateSnapshot{})
 	result, err = exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "No Kubernetes clusters found. Kubernetes monitoring may not be configured.", result.Content[0].Text)
@@ -38,7 +45,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
 
@@ -51,7 +58,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 
 func TestExecuteGetKubernetesNodes(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesNodes(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -76,7 +83,7 @@ func TestExecuteGetKubernetesNodes(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesNodes(ctx, map[string]interface{}{
 		"cluster": "Custom One",
 	})
@@ -90,7 +97,7 @@ func TestExecuteGetKubernetesNodes(t *testing.T) {
 
 func TestExecuteGetKubernetesPods(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesPods(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -120,7 +127,7 @@ func TestExecuteGetKubernetesPods(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesPods(ctx, map[string]interface{}{
 		"cluster":   "cluster-1",
 		"namespace": "default",
@@ -138,7 +145,7 @@ func TestExecuteGetKubernetesPods(t *testing.T) {
 
 func TestExecuteGetKubernetesDeployments(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesDeployments(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -157,7 +164,7 @@ func TestExecuteGetKubernetesDeployments(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesDeployments(ctx, map[string]interface{}{
 		"cluster":   "cluster-1",
 		"namespace": "default",
@@ -169,4 +176,67 @@ func TestExecuteGetKubernetesDeployments(t *testing.T) {
 	require.Len(t, resp.Deployments, 1)
 	assert.Equal(t, "web", resp.Deployments[0].Name)
 	assert.Equal(t, 2, resp.Total)
+}
+
+func TestKubernetesResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  any
+		keys []string
+	}{
+		{name: "clusters", raw: EmptyKubernetesClustersResponse(), keys: []string{"clusters"}},
+		{name: "nodes", raw: EmptyKubernetesNodesResponse(), keys: []string{"nodes"}},
+		{name: "pods", raw: EmptyKubernetesPodsResponse(), keys: []string{"pods"}},
+		{name: "deployments", raw: EmptyKubernetesDeploymentsResponse(), keys: []string{"deployments"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(tc.raw)
+			require.NoError(t, err)
+
+			var decoded map[string]any
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+
+			for _, key := range tc.keys {
+				values, ok := decoded[key].([]any)
+				if !ok || len(values) != 0 {
+					t.Fatalf("expected %s.%s to be an empty array, got %T (%v)", tc.name, key, decoded[key], decoded[key])
+				}
+			}
+		})
+	}
+
+	payload, err := json.Marshal(KubernetesNodesResponse{
+		Nodes: []KubernetesNodeSummary{{
+			Name: "node1",
+		}},
+	}.NormalizeCollections())
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	nodes := decoded["nodes"].([]any)
+	node := nodes[0].(map[string]any)
+	roles, ok := node["roles"].([]any)
+	if !ok || len(roles) != 0 {
+		t.Fatalf("expected nodes[0].roles to be an empty array, got %T (%v)", node["roles"], node["roles"])
+	}
+
+	payload, err = json.Marshal(KubernetesPodsResponse{
+		Pods: []KubernetesPodSummary{{
+			Name:      "pod-a",
+			Namespace: "default",
+		}},
+	}.NormalizeCollections())
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	pods := decoded["pods"].([]any)
+	pod := pods[0].(map[string]any)
+	containers, ok := pod["containers"].([]any)
+	if !ok || len(containers) != 0 {
+		t.Fatalf("expected pods[0].containers to be an empty array, got %T (%v)", pod["containers"], pod["containers"])
+	}
 }

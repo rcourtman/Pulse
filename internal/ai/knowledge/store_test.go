@@ -284,9 +284,9 @@ func TestGetNotesByCategory(t *testing.T) {
 	}
 
 	// Save multiple notes with different categories
-	store.SaveNote("test-guest", "TestGuest", "vm", "service", "WebServer", "nginx")
-	store.SaveNote("test-guest", "TestGuest", "vm", "config", "Setting", "value")
-	store.SaveNote("test-guest", "TestGuest", "vm", "service", "Database", "postgres")
+	_ = store.SaveNote("test-guest", "TestGuest", "vm", "service", "WebServer", "nginx")
+	_ = store.SaveNote("test-guest", "TestGuest", "vm", "config", "Setting", "value")
+	_ = store.SaveNote("test-guest", "TestGuest", "vm", "service", "Database", "postgres")
 
 	// Get service notes
 	serviceNotes, err := store.GetNotesByCategory("test-guest", "service")
@@ -316,8 +316,8 @@ func TestListGuests(t *testing.T) {
 	}
 
 	// Save notes for different guests
-	store.SaveNote("guest-1", "Guest1", "vm", "service", "Note", "content")
-	store.SaveNote("guest-2", "Guest2", "vm", "service", "Note", "content")
+	_ = store.SaveNote("guest-1", "Guest1", "vm", "service", "Note", "content")
+	_ = store.SaveNote("guest-2", "Guest2", "vm", "service", "Note", "content")
 
 	guests, err := store.ListGuests()
 	if err != nil {

@@ -15,16 +15,16 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 	}{
 		// Legacy / Wildcard
 		{
-			name:     "Legacy Token (No OrgID) - Access Random Org",
+			name:     "Legacy Token (No OrgID) - Access Random Org Denied",
 			token:    APITokenRecord{OrgID: ""},
 			orgID:    "any-org",
-			expected: true,
+			expected: false,
 		},
 		{
-			name:     "Legacy Token - Access Default",
+			name:     "Legacy Token - Access Default Denied",
 			token:    APITokenRecord{OrgID: ""},
 			orgID:    "default",
-			expected: true,
+			expected: false,
 		},
 
 		// Single Org Binding
@@ -41,11 +41,10 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Bound Token - Access Default (Allowed)",
+			name:     "Bound Token - Access Default (Denied)",
 			token:    APITokenRecord{OrgID: "org-1"},
 			orgID:    "default",
-			expected: true, // Specific requirement: Default org is always accessible?
-			// Let's check api_tokens.go: "Default org is always accessible for backward compatibility" -> YES
+			expected: false,
 		},
 
 		// Multi-Org Binding
@@ -66,6 +65,12 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 			token:    APITokenRecord{OrgIDs: []string{"org-1", "org-2"}},
 			orgID:    "org-3",
 			expected: false,
+		},
+		{
+			name:     "Multi-Bound Token - Explicit Default",
+			token:    APITokenRecord{OrgIDs: []string{"org-1", "default"}},
+			orgID:    "default",
+			expected: true,
 		},
 	}
 

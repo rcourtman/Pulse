@@ -15,62 +15,62 @@ func NewAlertThresholdAdapter(manager *alerts.Manager) *AlertThresholdAdapter {
 	return &AlertThresholdAdapter{manager: manager}
 }
 
-// GetNodeCPUThreshold returns the CPU alert trigger threshold for nodes (0-100%)
-func (a *AlertThresholdAdapter) GetNodeCPUThreshold() float64 {
+// getThreshold is a shared helper that extracts a trigger value from the alert config.
+// extract should return the trigger value and true if the config field is present.
+func (a *AlertThresholdAdapter) getThreshold(extract func(alerts.AlertConfig) (float64, bool), defaultVal float64) float64 {
 	if a.manager == nil {
-		return 80 // default
+		return defaultVal
 	}
 	cfg := a.manager.GetConfig()
-	if cfg.NodeDefaults.CPU != nil && cfg.NodeDefaults.CPU.Trigger > 0 {
-		return cfg.NodeDefaults.CPU.Trigger
+	if trigger, ok := extract(cfg); ok && trigger > 0 {
+		return trigger
 	}
-	return 80 // default
+	return defaultVal
+}
+
+// GetNodeCPUThreshold returns the CPU alert trigger threshold for nodes (0-100%)
+func (a *AlertThresholdAdapter) GetNodeCPUThreshold() float64 {
+	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {
+		if cfg.NodeDefaults.CPU != nil {
+			return cfg.NodeDefaults.CPU.Trigger, true
+		}
+		return 0, false
+	}, 80)
 }
 
 // GetNodeMemoryThreshold returns the memory alert trigger threshold for nodes (0-100%)
 func (a *AlertThresholdAdapter) GetNodeMemoryThreshold() float64 {
-	if a.manager == nil {
-		return 85 // default
-	}
-	cfg := a.manager.GetConfig()
-	if cfg.NodeDefaults.Memory != nil && cfg.NodeDefaults.Memory.Trigger > 0 {
-		return cfg.NodeDefaults.Memory.Trigger
-	}
-	return 85 // default
+	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {
+		if cfg.NodeDefaults.Memory != nil {
+			return cfg.NodeDefaults.Memory.Trigger, true
+		}
+		return 0, false
+	}, 85)
 }
 
 // GetGuestMemoryThreshold returns the memory alert trigger threshold for guests (0-100%)
 func (a *AlertThresholdAdapter) GetGuestMemoryThreshold() float64 {
-	if a.manager == nil {
-		return 85 // default
-	}
-	cfg := a.manager.GetConfig()
-	if cfg.GuestDefaults.Memory != nil && cfg.GuestDefaults.Memory.Trigger > 0 {
-		return cfg.GuestDefaults.Memory.Trigger
-	}
-	return 85 // default
+	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {
+		if cfg.GuestDefaults.Memory != nil {
+			return cfg.GuestDefaults.Memory.Trigger, true
+		}
+		return 0, false
+	}, 85)
 }
 
 // GetGuestDiskThreshold returns the disk alert trigger threshold for guests (0-100%)
 func (a *AlertThresholdAdapter) GetGuestDiskThreshold() float64 {
-	if a.manager == nil {
-		return 90 // default
-	}
-	cfg := a.manager.GetConfig()
-	if cfg.GuestDefaults.Disk != nil && cfg.GuestDefaults.Disk.Trigger > 0 {
-		return cfg.GuestDefaults.Disk.Trigger
-	}
-	return 90 // default
+	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {
+		if cfg.GuestDefaults.Disk != nil {
+			return cfg.GuestDefaults.Disk.Trigger, true
+		}
+		return 0, false
+	}, 90)
 }
 
 // GetStorageThreshold returns the usage alert trigger threshold for storage (0-100%)
 func (a *AlertThresholdAdapter) GetStorageThreshold() float64 {
-	if a.manager == nil {
-		return 85 // default
-	}
-	cfg := a.manager.GetConfig()
-	if cfg.StorageDefault.Trigger > 0 {
-		return cfg.StorageDefault.Trigger
-	}
-	return 85 // default
+	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {
+		return cfg.StorageDefault.Trigger, true
+	}, 85)
 }

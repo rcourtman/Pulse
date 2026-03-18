@@ -1,13 +1,10 @@
 import { Component, createSignal, Show, For, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
 
-const SetupWizard = lazy(() =>
-  import('./SetupWizard').then((m) => ({ default: m.SetupWizard })),
-);
+const SetupWizard = lazy(() => import('./SetupWizard').then((m) => ({ default: m.SetupWizard })));
 
 interface LoginProps {
   onLogin: () => void;
@@ -23,15 +20,18 @@ export const Login: Component<LoginProps> = (props) => {
   const [rememberMe, setRememberMe] = createSignal(false);
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
-  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(props.securityStatus ?? null);
+  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(
+    props.securityStatus ?? null,
+  );
   // If hasAuth is passed from App.tsx, we already know auth status - skip the loading state
   // Also skip if securityStatus is provided
-  const [loadingAuth, setLoadingAuth] = createSignal(props.hasAuth === undefined && !props.securityStatus);
-  const [oidcLoading, setOidcLoading] = createSignal(false);
+  const [loadingAuth, setLoadingAuth] = createSignal(
+    props.hasAuth === undefined && !props.securityStatus,
+  );
+  const [oidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
 
-  const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
   const ssoProviders = () => authStatus()?.ssoProviders || [];
 
   const resolveSSOError = (reason?: string | null) => {
@@ -51,7 +51,7 @@ export const Login: Component<LoginProps> = (props) => {
       case 'invalid_id_token':
         return 'ID token verification failed. Check that OIDC_ISSUER_URL matches the issuer claim in your provider tokens (check server logs for details).';
       case 'invalid_signature_alg':
-        return 'The identity provider is issuing HS256 tokens. Configure it to sign ID tokens with RS256 (see your IdP\'s OIDC settings).';
+        return "The identity provider is issuing HS256 tokens. Configure it to sign ID tokens with RS256 (see your IdP's OIDC settings).";
       case 'invalid_nonce':
         return 'Security validation failed (nonce mismatch). Please try again.';
       case 'saml_validation_failed':
@@ -66,21 +66,6 @@ export const Login: Component<LoginProps> = (props) => {
   };
 
   onMount(async () => {
-    // Apply saved theme preference from localStorage
-    const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-    if (savedTheme === 'false') {
-      document.documentElement.classList.remove('dark');
-    } else if (savedTheme === 'true') {
-      document.documentElement.classList.add('dark');
-    } else {
-      // No saved preference - use system preference
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
-
     const params = new URLSearchParams(window.location.search);
 
     // Handle OIDC callback
@@ -118,18 +103,21 @@ export const Login: Component<LoginProps> = (props) => {
 
     // If securityStatus was passed from App.tsx, use it directly without making another API call
     // This eliminates the flicker between "Checking authentication..." and the login form
-    // AND ensures hideLocalLogin, oidcEnabled, etc. are properly respected
+    // AND ensures hideLocalLogin and SSO settings are properly respected
     if (props.securityStatus) {
-      logger.debug('[Login] Using securityStatus from App.tsx, skipping redundant auth check', props.securityStatus);
+      logger.debug(
+        '[Login] Using securityStatus from App.tsx, skipping redundant auth check',
+        props.securityStatus,
+      );
       setAuthStatus(props.securityStatus);
       setLoadingAuth(false);
       return;
     }
 
-    // Legacy fallback: if only hasAuth was passed (without full securityStatus)
+    // Compatibility fallback: if only hasAuth was passed (without full securityStatus)
     if (props.hasAuth !== undefined && !props.securityStatus) {
-      logger.debug('[Login] Using hasAuth from App.tsx (legacy), fetching full security status');
-      // Still need to fetch full status to get hideLocalLogin, OIDC settings, etc.
+      logger.debug('[Login] Using hasAuth from App.tsx fallback, fetching full security status');
+      // Still need to fetch full status to get hideLocalLogin and SSO settings.
     }
 
     logger.debug('[Login] Starting auth check...');
@@ -150,21 +138,6 @@ export const Login: Component<LoginProps> = (props) => {
       setLoadingAuth(false);
     }
   });
-
-  const startOidcLogin = () => {
-    if (!supportsOIDC()) return;
-
-    setOidcError('');
-    setOidcMessage('');
-    setError('');
-    setOidcLoading(true);
-
-    // Navigate directly to the OIDC login endpoint using GET.
-    // The server will respond with an HTTP redirect to the OIDC provider.
-    // This guarantees same-window navigation in all browsers, including Arc.
-    const returnTo = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-    window.location.href = `/api/oidc/login?returnTo=${returnTo}`;
-  };
 
   // Auto-redirect to OIDC is intentionally disabled to prevent redirect loops
   // when both password and OIDC are configured. Users must manually click OIDC button.
@@ -249,34 +222,7 @@ export const Login: Component<LoginProps> = (props) => {
         setError(data.message || 'Server error. Please try again.');
       }
     } catch (_err) {
-      // Try the old method as fallback
-      try {
-        const response = await apiClient.fetch('/api/state', {
-          headers: {
-            Authorization: `Basic ${btoa(`${usernameValue}:${passwordValue}`)}`,
-            'X-Requested-With': 'XMLHttpRequest',
-            Accept: 'application/json',
-          },
-          skipAuth: true,
-        });
-
-        if (response.ok) {
-          try {
-            sessionStorage.setItem('pulse_auth_user', usernameValue);
-          } catch (_storageErr) {
-            // Ignore storage issues
-          }
-          props.onLogin();
-        } else if (response.status === 401) {
-          setError('Invalid username or password');
-          setUsername('');
-          setPassword('');
-        } else {
-          setError('Server error. Please try again.');
-        }
-      } catch (_fallbackErr) {
-        setError('Failed to connect to server');
-      }
+      setError('Failed to connect to server');
     } finally {
       setLoading(false);
     }
@@ -288,18 +234,7 @@ export const Login: Component<LoginProps> = (props) => {
     authStatus: authStatus(),
   });
 
-  const hasStoredSetupCredentials = () => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return Boolean(sessionStorage.getItem(STORAGE_KEYS.SETUP_CREDENTIALS));
-    } catch (_err) {
-      return false;
-    }
-  };
-
-  const legacyDisableAuth = () => authStatus()?.deprecatedDisableAuth === true;
-  const showFirstRunSetup = () =>
-    authStatus()?.hasAuthentication === false || legacyDisableAuth() || hasStoredSetupCredentials();
+  const showFirstRunSetup = () => authStatus()?.hasAuthentication === false;
 
   const shouldShowLocalLogin = () => {
     const params = new URLSearchParams(window.location.search);
@@ -311,10 +246,10 @@ export const Login: Component<LoginProps> = (props) => {
     <Show
       when={!loadingAuth()}
       fallback={
-        <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
+        <div class="min-h-screen flex items-center justify-center bg-base">
           <div class="text-center">
             <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p class="text-gray-600 dark:text-gray-400">Checking authentication...</p>
+            <p class="text-muted">Checking authentication...</p>
           </div>
         </div>
       }
@@ -333,8 +268,6 @@ export const Login: Component<LoginProps> = (props) => {
               error,
               loading,
               handleSubmit,
-              supportsOIDC,
-              startOidcLogin,
               oidcLoading,
               oidcError,
               oidcMessage,
@@ -346,16 +279,19 @@ export const Login: Component<LoginProps> = (props) => {
       >
         <Suspense
           fallback={
-            <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
+            <div class="min-h-screen flex items-center justify-center bg-base">
               <div class="text-center">
                 <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+                <p class="text-muted">Loading setup...</p>
               </div>
             </div>
           }
         >
           <SetupWizard
-            onComplete={() => window.location.reload()}
+            onComplete={(nextPath) => {
+              const target = nextPath || window.location.pathname;
+              window.location.assign(target);
+            }}
           />
         </Suspense>
       </Show>
@@ -374,8 +310,6 @@ const LoginForm: Component<{
   error: () => string;
   loading: () => boolean;
   handleSubmit: (e: Event) => void;
-  supportsOIDC: () => boolean;
-  startOidcLogin: () => void | Promise<void>;
   oidcLoading: () => boolean;
   oidcError: () => string;
   oidcMessage: () => string;
@@ -392,8 +326,6 @@ const LoginForm: Component<{
     error,
     loading,
     handleSubmit,
-    supportsOIDC,
-    startOidcLogin,
     oidcLoading,
     oidcError,
     oidcMessage,
@@ -404,25 +336,43 @@ const LoginForm: Component<{
   // Check if we're on the demo server
   const isDemoServer = () => {
     const hostname = window.location.hostname;
-    return hostname === 'demo.pulserelay.pro' || hostname.includes('demo.');
+    const normalized = hostname.toLowerCase();
+    return normalized === 'demo' || normalized.startsWith('demo.') || normalized.includes('.demo.');
   };
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center bg-base py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={isDemoServer()}>
-          <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-4 shadow-xl border border-blue-200 dark:border-blue-800 animate-fade-in">
+          <div class="bg-surface rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
               <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                <svg
+                  class="w-5 h-5 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                  />
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-semibold text-sm text-gray-900 dark:text-white">Demo Mode</div>
-                <div class="text-sm text-gray-600 dark:text-gray-300">
-                  Login with <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
+                <div class="font-semibold text-sm text-base-content">Demo Mode</div>
+                <div class="text-sm text-muted">
+                  Login with{' '}
+                  <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                    demo
+                  </code>{' '}
+                  /{' '}
+                  <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                    demo
+                  </code>
                 </div>
               </div>
             </div>
@@ -432,11 +382,10 @@ const LoginForm: Component<{
         <div class="animate-fade-in">
           <div class="flex justify-center mb-8">
             <div class="relative group">
-              <div class="absolute -inset-1 bg-blue-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
               <img
                 src="/logo.svg"
                 alt="Pulse Logo"
-                class="relative w-24 h-24 transform transition duration-500 group-hover:scale-110"
+                class="relative w-24 h-24 rounded-md shadow-sm"
               />
             </div>
           </div>
@@ -446,13 +395,13 @@ const LoginForm: Component<{
           </h2>
 
           <Show when={showLocalLogin}>
-            <p class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400 animate-fade-in delay-200">
+            <p class="mt-3 text-center text-sm text-muted animate-fade-in delay-200">
               Enter your credentials to continue
             </p>
           </Show>
         </div>
         <form
-          class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up"
+          class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-sm border border-border animate-slide-up"
           onSubmit={handleSubmit}
         >
           {/* Multi-Provider SSO Section */}
@@ -462,7 +411,7 @@ const LoginForm: Component<{
                 {(provider) => (
                   <button
                     type="button"
-                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                     disabled={oidcLoading()}
                     onClick={() => {
                       window.location.href = provider.loginUrl;
@@ -479,11 +428,7 @@ const LoginForm: Component<{
                           )
                         }
                       >
-                        <img
-                          src={provider.iconUrl}
-                          alt=""
-                          class="w-5 h-5"
-                        />
+                        <img src={provider.iconUrl} alt="" class="w-5 h-5" />
                       </Show>
                       Continue with {provider.displayName || provider.name}
                     </span>
@@ -491,72 +436,22 @@ const LoginForm: Component<{
                 )}
               </For>
               <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
                   {oidcError()}
                 </div>
               </Show>
               <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                <div class="rounded-md bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
                 </div>
               </Show>
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                    or
-                  </span>
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  <span class="flex-1 h-px bg-surface-hover" />
+                  <span class="text-xs uppercase tracking-wide text-muted">or</span>
+                  <span class="flex-1 h-px bg-surface-hover" />
                 </div>
-                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
-                  Use your admin credentials to sign in below.
-                </p>
-              </Show>
-            </div>
-          </Show>
-          {/* Legacy OIDC fallback (when no multi-provider SSO but legacy OIDC is enabled) */}
-          <Show when={ssoProviders.length === 0 && supportsOIDC()}>
-            <div class="space-y-3">
-              <button
-                type="button"
-                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
-                disabled={oidcLoading()}
-                onClick={() => startOidcLogin()}
-              >
-                <Show
-                  when={!oidcLoading()}
-                  fallback={
-                    <span class="inline-flex items-center gap-2">
-                      <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Redirecting…
-                    </span>
-                  }
-                >
-                  <span class="inline-flex items-center gap-2">
-                    <Globe class="w-5 h-5" />
-                    Continue with Single Sign-On
-                  </span>
-                </Show>
-              </button>
-              <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
-                  {oidcError()}
-                </div>
-              </Show>
-              <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
-                  {oidcMessage()}
-                </div>
-              </Show>
-              <Show when={showLocalLogin}>
-                <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                    or
-                  </span>
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                </div>
-                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-center text-muted">
                   Use your admin credentials to sign in below.
                 </p>
               </Show>
@@ -569,12 +464,7 @@ const LoginForm: Component<{
                   Username
                 </label>
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    class="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -589,7 +479,7 @@ const LoginForm: Component<{
                   type="text"
                   autocomplete="username"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
                   placeholder="Username"
                   value={username()}
                   onInput={(e) => setUsername(e.currentTarget.value)}
@@ -600,12 +490,7 @@ const LoginForm: Component<{
                   Password
                 </label>
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    class="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -620,7 +505,7 @@ const LoginForm: Component<{
                   type="password"
                   autocomplete="current-password"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
                   placeholder="Password"
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
@@ -633,11 +518,11 @@ const LoginForm: Component<{
                   type="checkbox"
                   checked={rememberMe()}
                   onChange={(e) => setRememberMe(e.currentTarget.checked)}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer dark:border-gray-600 dark:bg-gray-700"
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-border rounded cursor-pointer"
                 />
                 <label
                   for="remember-me"
-                  class="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                  class="ml-2 block text-sm text-base-content cursor-pointer"
                 >
                   Remember me
                 </label>
@@ -646,10 +531,11 @@ const LoginForm: Component<{
 
             <Show when={error()}>
               <div
-                class={`rounded-md p-4 ${error().includes('locked')
-                  ? 'bg-orange-50 dark:bg-orange-900/20'
-                  : 'bg-red-50 dark:bg-red-900/20'
-                  }`}
+                class={`rounded-md p-4 ${
+                  error().includes('locked')
+                    ? 'bg-orange-50 dark:bg-orange-900'
+                    : 'bg-red-50 dark:bg-red-900'
+                }`}
               >
                 <div class="flex">
                   <div class="flex-shrink-0">
@@ -676,17 +562,18 @@ const LoginForm: Component<{
                   </div>
                   <div class="ml-3">
                     <p
-                      class={`text-sm ${error().includes('locked')
-                        ? 'text-orange-800 dark:text-orange-200'
-                        : 'text-red-800 dark:text-red-200'
-                        }`}
+                      class={`text-sm ${
+                        error().includes('locked')
+                          ? 'text-orange-800 dark:text-orange-200'
+                          : 'text-red-800 dark:text-red-200'
+                      }`}
                     >
                       {error()}
                     </p>
                     <Show when={error().includes('locked') && error().includes('minute')}>
                       <p class="text-xs mt-1 text-orange-700 dark:text-orange-300">
-                        Lockouts automatically expire after the specified time. If you need immediate
-                        access, contact your administrator.
+                        Lockouts automatically expire after the specified time. If you need
+                        immediate access, contact your administrator.
                       </p>
                     </Show>
                   </div>
@@ -698,7 +585,7 @@ const LoginForm: Component<{
               <button
                 type="submit"
                 disabled={loading()}
-                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
+                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Show when={loading()}>
                   <svg

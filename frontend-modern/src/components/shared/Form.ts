@@ -1,13 +1,12 @@
 const baseField = 'flex flex-col gap-1';
-const baseLabel = 'text-sm font-medium text-gray-700 dark:text-gray-300';
-const baseHelp = 'text-xs text-gray-500 dark:text-gray-400';
+const baseLabel = 'text-sm font-medium text-base-content';
+const baseHelp = 'text-xs text-muted';
 const baseControl = [
-  'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm',
-  'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-  'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100',
+  'w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content',
+  'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
 ].join(' ');
 const baseCheckbox =
-  'rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-blue-400';
+  'h-4 w-4 rounded border-border text-blue-600 focus:ring-0 focus:ring-offset-0 transition-colors';
 
 const join = (base: string, extra?: string) => (extra ? `${base} ${extra}`.trim() : base);
 
@@ -25,7 +24,7 @@ export const formControlMono = join(baseControl, 'font-mono');
 export const formSelect = join(baseControl, 'pr-8 appearance-none');
 export const formTextarea = join(baseControl, 'min-h-[120px] resize-vertical');
 
-export const formLabelMuted = join(baseLabel, 'text-gray-500 dark:text-gray-400 font-normal');
+export const formLabelMuted = join(baseLabel, 'text-muted font-normal');
 
 export function labelClass(extra?: string) {
   return join(baseLabel, extra);

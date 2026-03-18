@@ -57,6 +57,76 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com", Token: ""}}); err == nil {
 		t.Fatalf("expected error for missing token")
 	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for missing scheme")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "ftp://pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for unsupported scheme")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com:70000", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for out-of-range port")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com/path?env=prod", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for URL query parameters")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://user:pass@pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for URL userinfo")
+	}
+}
+
+func TestNormalizeTargetURL(t *testing.T) {
+	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ")
+	if err != nil {
+		t.Fatalf("normalizeTargetURL returned error: %v", err)
+	}
+	if normalized != "https://pulse.example.com:443/api" {
+		t.Fatalf("unexpected normalized URL %q", normalized)
+	}
+}
+
+func TestNormalizeTargetsRejectsInsecureOrInvalidURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{name: "non-loopback http", url: "http://pulse.example.com"},
+		{name: "unsupported scheme", url: "ftp://pulse.example.com"},
+		{name: "missing scheme", url: "pulse.example.com"},
+		{name: "query string", url: "https://pulse.example.com?x=1"},
+		{name: "fragment", url: "https://pulse.example.com#frag"},
+		{name: "userinfo", url: "https://user:pass@pulse.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := normalizeTargets([]TargetConfig{{URL: tt.url, Token: "token"}}); err == nil {
+				t.Fatalf("expected error for URL %q", tt.url)
+			}
+		})
+	}
+}
+
+func TestNormalizeTargetsAllowsLoopbackHTTP(t *testing.T) {
+	targets, err := normalizeTargets([]TargetConfig{
+		{URL: "http://localhost:7655/", Token: "token"},
+		{URL: "http://127.0.0.1:7655", Token: "token2"},
+		{URL: "http://[::1]:7655", Token: "token3"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(targets) != 3 {
+		t.Fatalf("expected 3 targets, got %d", len(targets))
+	}
+	if targets[0].URL != "http://localhost:7655" {
+		t.Fatalf("unexpected localhost URL: %q", targets[0].URL)
+	}
+	if targets[1].URL != "http://127.0.0.1:7655" {
+		t.Fatalf("unexpected IPv4 loopback URL: %q", targets[1].URL)
+	}
+	if targets[2].URL != "http://[::1]:7655" {
+		t.Fatalf("unexpected IPv6 loopback URL: %q", targets[2].URL)
+	}
 }
 
 func TestNormalizeContainerStates(t *testing.T) {
@@ -547,6 +617,31 @@ func TestSummarizeBlockIO(t *testing.T) {
 	})
 }
 
+func TestSummarizeNetworkIO(t *testing.T) {
+	t.Run("aggregates all interfaces", func(t *testing.T) {
+		stats := containertypes.StatsResponse{
+			Networks: map[string]containertypes.NetworkStats{
+				"eth0": {RxBytes: 1200, TxBytes: 3400},
+				"eth1": {RxBytes: 800, TxBytes: 600},
+			},
+		}
+		rx, tx := summarizeNetworkIO(stats)
+		if rx != 2000 {
+			t.Fatalf("rx bytes = %d, want 2000", rx)
+		}
+		if tx != 4000 {
+			t.Fatalf("tx bytes = %d, want 4000", tx)
+		}
+	})
+
+	t.Run("empty stats returns zero", func(t *testing.T) {
+		rx, tx := summarizeNetworkIO(containertypes.StatsResponse{})
+		if rx != 0 || tx != 0 {
+			t.Fatalf("expected zero rx/tx, got %d/%d", rx, tx)
+		}
+	})
+}
+
 func TestExtractPodmanMetadata(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -927,12 +1022,12 @@ func TestBuildRuntimeCandidates(t *testing.T) {
 		{
 			name:       "auto includes both podman and docker sockets",
 			preference: RuntimeAuto,
-			wantMin:    4, // at least env defaults + podman rootless + docker rootless + docker desktop + docker default
+			wantMin:    3, // at least env defaults + podman rootless + docker default
 		},
 		{
 			name:       "docker preference includes docker socket",
 			preference: RuntimeDocker,
-			wantMin:    3, // at least env defaults + docker rootless + docker desktop + docker default
+			wantMin:    2, // at least env defaults + docker default
 		},
 		{
 			name:       "podman preference includes podman sockets",
@@ -1001,12 +1096,8 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 	t.Run("auto includes both docker and podman", func(t *testing.T) {
 		candidates := buildRuntimeCandidates(RuntimeAuto)
 		hasDocker := false
-		hasRootlessDocker := false
 		hasPodman := false
 		for _, c := range candidates {
-			if c.label == "docker rootless socket" {
-				hasRootlessDocker = true
-			}
 			if c.label == "default docker socket" {
 				hasDocker = true
 			}
@@ -1014,102 +1105,11 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 				hasPodman = true
 			}
 		}
-		if !hasRootlessDocker {
-			t.Error("auto preference should include docker rootless socket")
-		}
 		if !hasDocker {
 			t.Error("auto preference should include docker socket")
 		}
 		if !hasPodman {
 			t.Error("auto preference should include podman sockets")
-		}
-	})
-}
-
-func TestBuildRuntimeCandidatesDockerRootlessOrder(t *testing.T) {
-	t.Run("docker tries rootless before system socket", func(t *testing.T) {
-		candidates := buildRuntimeCandidates(RuntimeDocker)
-		rootlessIdx := -1
-		systemIdx := -1
-		for i, c := range candidates {
-			if c.label == "docker rootless socket" && rootlessIdx < 0 {
-				rootlessIdx = i
-			}
-			if c.label == "default docker socket" && systemIdx < 0 {
-				systemIdx = i
-			}
-		}
-
-		if rootlessIdx < 0 {
-			t.Fatal("expected docker rootless socket candidate")
-		}
-		if systemIdx < 0 {
-			t.Fatal("expected default docker socket candidate")
-		}
-		if rootlessIdx > systemIdx {
-			t.Fatalf("expected docker rootless socket to be tried before default docker socket; rootlessIdx=%d systemIdx=%d", rootlessIdx, systemIdx)
-		}
-	})
-}
-
-func TestBuildRuntimeCandidatesDockerDesktop(t *testing.T) {
-	t.Run("docker includes docker desktop socket", func(t *testing.T) {
-		candidates := buildRuntimeCandidates(RuntimeDocker)
-		found := false
-		for _, c := range candidates {
-			if c.label == "docker desktop socket" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Error("docker preference should include docker desktop socket")
-		}
-	})
-
-	t.Run("auto includes docker desktop socket", func(t *testing.T) {
-		candidates := buildRuntimeCandidates(RuntimeAuto)
-		found := false
-		for _, c := range candidates {
-			if c.label == "docker desktop socket" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Error("auto preference should include docker desktop socket")
-		}
-	})
-
-	t.Run("podman excludes docker desktop socket", func(t *testing.T) {
-		candidates := buildRuntimeCandidates(RuntimePodman)
-		for _, c := range candidates {
-			if c.label == "docker desktop socket" {
-				t.Error("podman preference should not include docker desktop socket")
-			}
-		}
-	})
-
-	t.Run("desktop socket comes before default socket", func(t *testing.T) {
-		candidates := buildRuntimeCandidates(RuntimeDocker)
-		desktopIdx := -1
-		defaultIdx := -1
-		for i, c := range candidates {
-			if c.label == "docker desktop socket" && desktopIdx < 0 {
-				desktopIdx = i
-			}
-			if c.label == "default docker socket" && defaultIdx < 0 {
-				defaultIdx = i
-			}
-		}
-		if desktopIdx < 0 {
-			t.Fatal("expected docker desktop socket candidate")
-		}
-		if defaultIdx < 0 {
-			t.Fatal("expected default docker socket candidate")
-		}
-		if desktopIdx > defaultIdx {
-			t.Fatalf("expected docker desktop socket before default; desktopIdx=%d defaultIdx=%d", desktopIdx, defaultIdx)
 		}
 	})
 }
@@ -1285,6 +1285,11 @@ func TestDetectHostRemovedError(t *testing.T) {
 			name: "missing code field returns empty",
 			body: []byte(`{"error": "host was removed"}`),
 			want: "",
+		},
+		{
+			name: "monitoring stopped error is detected",
+			body: []byte(`{"error": "docker host \"host-1\" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again", "code": "invalid_report"}`),
+			want: `docker host "host-1" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again`,
 		},
 	}
 

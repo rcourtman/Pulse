@@ -1,0 +1,337 @@
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
+import { useWebSocket } from '@/App';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useDashboardOverview } from '@/hooks/useDashboardOverview';
+import { useDashboardTrends } from '@/hooks/useDashboardTrends';
+import { useDashboardLayout } from '@/hooks/useDashboardLayout';
+import { useDashboardActions } from '@/hooks/useDashboardActions';
+import { useDashboardRecovery } from '@/hooks/useDashboardRecovery';
+import {
+  getDashboardDisconnectedBannerState,
+  getDashboardNoResourcesState,
+  getDashboardUnavailableState,
+} from '@/utils/dashboardEmptyStatePresentation';
+import type { HistoryTimeRange } from '@/api/charts';
+import type { Alert } from '@/types/api';
+import {
+  ActionRequiredPanel,
+  ProblemResourcesTable,
+  KPIStrip,
+  RecentAlertsPanel,
+  RecoveryStatusPanel,
+  StoragePanel,
+  TrendCharts,
+  DashboardCustomizer,
+} from './DashboardPanels';
+import type { DashboardWidgetDef, DashboardWidgetId } from './DashboardPanels/dashboardWidgets';
+export default function Dashboard() {
+  const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
+
+  // REST-backed resources: instant first paint, no WebSocket wait.
+  const dashboardResources = useUnifiedResources({ query: '', cacheKey: 'dashboard-all' });
+  const resources = createMemo(() => dashboardResources.resources?.() ?? []);
+
+  const alertsList = createMemo<Alert[]>(() =>
+    Object.values(activeAlerts as Record<string, Alert | undefined>).filter(
+      (a): a is Alert => a !== undefined,
+    ),
+  );
+
+  const overview = useDashboardOverview(resources, alertsList);
+  const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
+  const trends = useDashboardTrends(overview, resources, trendRange);
+  const layout = useDashboardLayout();
+  const actions = useDashboardActions(alertsList);
+  const recoverySummary = useDashboardRecovery();
+
+  // Loading timeout: if REST fetch takes >30s, treat as connection error.
+  const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
+  let loadingTimeout: number | undefined;
+
+  const isLoading = createMemo(() => dashboardResources.loading());
+
+  // Track whether we've completed the initial load successfully so that subsequent
+  // background refetches don't tear down the content tree (which causes
+  // flickering and scroll-position resets). Only set on successful load (not errors).
+  const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
+  createEffect(() => {
+    if (!isLoading() && !initialLoadComplete() && !dashboardResources.error()) {
+      setInitialLoadComplete(true);
+    }
+  });
+
+  createEffect(() => {
+    if (isLoading()) {
+      if (!loadingTimeout) {
+        loadingTimeout = window.setTimeout(() => setLoadingTimedOut(true), 30000);
+      }
+      return;
+    }
+    if (loadingTimeout) {
+      window.clearTimeout(loadingTimeout);
+      loadingTimeout = undefined;
+    }
+    setLoadingTimedOut(false);
+  });
+
+  onCleanup(() => {
+    if (loadingTimeout) window.clearTimeout(loadingTimeout);
+  });
+
+  const hasConnectionError = createMemo(() => {
+    if (loadingTimedOut()) return true;
+    if (dashboardResources.error()) return true;
+    return !isLoading() && !connected() && !reconnecting();
+  });
+
+  // True when we have renderable cached data (even if connection is now lost)
+  const hasCachedData = createMemo(() => (resources()?.length ?? 0) > 0);
+  const dashboardDisconnectedBannerState = createMemo(() =>
+    getDashboardDisconnectedBannerState(reconnecting()),
+  );
+  const dashboardUnavailableState = createMemo(() => getDashboardUnavailableState());
+  const dashboardNoResourcesState = createMemo(() => getDashboardNoResourcesState());
+
+  const isEmpty = createMemo(() => !isLoading() && initialLoadComplete() && !hasCachedData());
+
+  const storageCapacityPercent = createMemo(() => {
+    const { totalUsed, totalCapacity } = overview().storage;
+    if (totalCapacity <= 0) return 0;
+    return Math.max(0, Math.min(100, (totalUsed / totalCapacity) * 100));
+  });
+
+  const renderWidget = (id: DashboardWidgetId) => {
+    switch (id) {
+      case 'trends':
+        return (
+          <TrendCharts
+            trends={trends()}
+            overview={overview()}
+            trendRange={trendRange}
+            setTrendRange={setTrendRange}
+          />
+        );
+      case 'alerts':
+        return (
+          <RecentAlertsPanel
+            alerts={alertsList()}
+            criticalCount={overview().alerts.activeCritical}
+            warningCount={overview().alerts.activeWarning}
+            totalCount={overview().alerts.total}
+          />
+        );
+      case 'recovery':
+        return <RecoveryStatusPanel recovery={recoverySummary()} />;
+      case 'storage':
+        return (
+          <StoragePanel
+            storage={overview().storage}
+            storageTrend={trends().storage.capacity}
+            loading={trends().loading}
+          />
+        );
+      default: {
+        const unreachable: never = id;
+        return unreachable;
+      }
+    }
+  };
+
+  type WidgetGroup =
+    | { type: 'full'; widget: DashboardWidgetDef }
+    | { type: 'grid'; widgets: DashboardWidgetDef[] };
+  const widgetGroups = createMemo<WidgetGroup[]>(() => {
+    const visible = layout.visibleWidgets();
+    const result: WidgetGroup[] = [];
+    let currentQuarters: DashboardWidgetDef[] = [];
+
+    const flushQuarters = () => {
+      if (currentQuarters.length > 0) {
+        result.push({ type: 'grid', widgets: currentQuarters });
+        currentQuarters = [];
+      }
+    };
+
+    for (const widget of visible) {
+      if (widget.size === 'full') {
+        flushQuarters();
+        result.push({ type: 'full', widget });
+      } else {
+        currentQuarters.push(widget);
+      }
+    }
+
+    flushQuarters();
+    return result;
+  });
+
+  return (
+    <main data-testid="dashboard-page" class="space-y-6">
+      {/* Connection warning banner — shown above all content, NOT a full-page takeover */}
+      <Show when={hasConnectionError() && initialLoadComplete()}>
+        <div
+          class="flex items-center justify-between gap-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-4 py-2.5"
+          role="alert"
+          aria-live="polite"
+        >
+          <div>
+            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">
+              {dashboardDisconnectedBannerState().title}
+            </p>
+            <p class="text-xs text-amber-700 dark:text-amber-300">
+              {dashboardDisconnectedBannerState().description}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => reconnect()}
+            class="shrink-0 inline-flex items-center rounded-md border border-amber-300 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+          >
+            {dashboardDisconnectedBannerState().actionLabel}
+          </button>
+        </div>
+      </Show>
+
+      <Switch>
+        <Match when={isLoading() && !hasCachedData() && !hasConnectionError()}>
+          <section class="space-y-4" data-testid="dashboard-loading">
+            {/* KPI strip skeleton */}
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {(() => {
+                const colors = [
+                  'border-l-blue-500/40',
+                  'border-l-violet-500/40',
+                  'border-l-cyan-500/40',
+                  'border-l-amber-500/40',
+                ];
+                return (
+                  <For each={colors}>
+                    {(color) => (
+                      <div
+                        data-testid="dashboard-skeleton-block"
+                        class={`animate-pulse bg-surface border border-border rounded-md border-l-[3px] ${color} h-[88px]`}
+                      />
+                    )}
+                  </For>
+                );
+              })()}
+            </div>
+            {/* Widget skeletons */}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <For each={Array.from({ length: 2 })}>
+                {() => (
+                  <div
+                    data-testid="dashboard-skeleton-block"
+                    class="border border-border rounded-md bg-surface"
+                  >
+                    <div class="px-4 py-3">
+                      <div class="animate-pulse bg-surface-hover rounded h-3 w-16 mb-3" />
+                      <div class="animate-pulse bg-surface-hover rounded h-[200px]" />
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </section>
+        </Match>
+
+        {/* Full-page connection error only when we have NO cached data */}
+        <Match when={hasConnectionError() && !initialLoadComplete()}>
+          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-base-content">
+              {dashboardUnavailableState().title}
+            </h2>
+            <p class="mt-2 text-sm text-muted">{dashboardUnavailableState().description}</p>
+            <button
+              type="button"
+              onClick={() => reconnect()}
+              class="mt-4 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-surface-hover"
+            >
+              {dashboardUnavailableState().actionLabel}
+            </button>
+          </section>
+        </Match>
+
+        <Match when={isEmpty()}>
+          <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-base-content">
+              {dashboardNoResourcesState().title}
+            </h2>
+            <p class="mt-2 text-sm text-muted">{dashboardNoResourcesState().description}</p>
+          </section>
+        </Match>
+
+        <Match when={initialLoadComplete() && hasCachedData()}>
+          <section class="space-y-5">
+            {/* 1. Action Required Panel — only when actions exist */}
+            <ActionRequiredPanel
+              pendingApprovals={actions.pendingApprovals()}
+              unackedCriticalAlerts={actions.unackedCriticalAlerts()}
+              findingsNeedingAttention={actions.findingsNeedingAttention()}
+            />
+
+            {/* 2. Problem Resources Table — only when problems exist */}
+            <ProblemResourcesTable problems={overview().problemResources} />
+
+            {/* 3. KPI Strip — always visible */}
+            <KPIStrip
+              infrastructure={{
+                total: overview().infrastructure.total,
+                online: overview().infrastructure.byStatus.online ?? 0,
+              }}
+              workloads={{
+                total: overview().workloads.total,
+                running: overview().workloads.running,
+              }}
+              storage={{
+                capacityPercent: storageCapacityPercent(),
+                totalUsed: overview().storage.totalUsed,
+                totalCapacity: overview().storage.totalCapacity,
+              }}
+              alerts={{
+                activeCritical: overview().alerts.activeCritical,
+                activeWarning: overview().alerts.activeWarning,
+                total: overview().alerts.total,
+              }}
+            />
+
+            {/* 4–5. Customizable widgets: Trend Charts, Recent Alerts */}
+            <For each={widgetGroups()}>
+              {(group) =>
+                group.type === 'full' ? (
+                  renderWidget(group.widget.id)
+                ) : (
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+                    <For each={group.widgets}>{(widget) => renderWidget(widget.id)}</For>
+                  </div>
+                )
+              }
+            </For>
+
+            {/* Customize button at the bottom-right of widget area */}
+            <div class="flex justify-end">
+              <DashboardCustomizer
+                allWidgets={layout.allWidgetsOrdered}
+                isHidden={layout.isHidden}
+                toggleWidget={layout.toggleWidget}
+                moveUp={layout.moveUp}
+                moveDown={layout.moveDown}
+                resetToDefaults={layout.resetToDefaults}
+                isDefault={layout.isDefault}
+              />
+            </div>
+          </section>
+        </Match>
+      </Switch>
+    </main>
+  );
+}

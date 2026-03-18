@@ -16,46 +16,21 @@ import (
 
 // KubernetesAgentHandlers manages ingest from the Kubernetes agent.
 type KubernetesAgentHandlers struct {
-	mtMonitor     *monitoring.MultiTenantMonitor
-	legacyMonitor *monitoring.Monitor
-	wsHub         *websocket.Hub
+	baseAgentHandlers
+	recoveryIngestor interface {
+		IngestKubernetesReport(ctx context.Context, orgID string, report agentsk8s.Report) error
+	}
 }
 
 // NewKubernetesAgentHandlers constructs a new Kubernetes agent handler group.
 func NewKubernetesAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub) *KubernetesAgentHandlers {
-	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
-	if m == nil && mtm != nil {
-		if mon, err := mtm.GetMonitor("default"); err == nil {
-			m = mon
-		}
-	}
-	return &KubernetesAgentHandlers{mtMonitor: mtm, legacyMonitor: m, wsHub: hub}
+	return &KubernetesAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub)}
 }
 
-// SetMonitor updates the monitor reference for kubernetes agent handlers.
-func (h *KubernetesAgentHandlers) SetMonitor(m *monitoring.Monitor) {
-	h.legacyMonitor = m
-}
-
-// SetMultiTenantMonitor updates the multi-tenant monitor reference
-func (h *KubernetesAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
-	if mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = m
-		}
-	}
-}
-
-// getMonitor helper
-func (h *KubernetesAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
-	orgID := GetOrgID(ctx)
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
-			return m
-		}
-	}
-	return h.legacyMonitor
+func (h *KubernetesAgentHandlers) SetRecoveryIngestor(ingestor interface {
+	IngestKubernetesReport(ctx context.Context, orgID string, report agentsk8s.Report) error
+}) {
+	h.recoveryIngestor = ingestor
 }
 
 // HandleReport accepts heartbeat payloads from the Kubernetes agent.
@@ -69,8 +44,16 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024)
 	defer r.Body.Close()
 
+	// Support gzip-compressed reports from agents (backward compatible with uncompressed)
+	body, err := utils.DecompressBodyIfGzipped(r, 10*1024*1024)
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", err.Error(), nil)
+		return
+	}
+	defer body.Close()
+
 	var report agentsk8s.Report
-	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+	if err := json.NewDecoder(body).Decode(&report); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}
@@ -80,11 +63,28 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	}
 
 	tokenRecord := getAPITokenRecordFromRequest(r)
+	if enforceMonitoredSystemLimitForKubernetesReport(
+		w,
+		r.Context(),
+		h.getMonitor(r.Context()),
+		report,
+		tokenRecord,
+	) {
+		return
+	}
 
 	cluster, err := h.getMonitor(r.Context()).ApplyKubernetesReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
+	}
+
+	if h.recoveryIngestor != nil {
+		orgID := GetOrgID(r.Context())
+		if ingestErr := h.recoveryIngestor.IngestKubernetesReport(r.Context(), orgID, report); ingestErr != nil {
+			// Never fail the agent ingest path because recovery ingestion is best-effort.
+			log.Warn().Err(ingestErr).Str("org_id", orgID).Msg("Failed to ingest kubernetes recovery artifacts")
+		}
 	}
 
 	log.Debug().
@@ -95,7 +95,7 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 		Int("deployments", len(cluster.Deployments)).
 		Msg("Kubernetes agent report processed")
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":     true,
@@ -161,11 +161,11 @@ func (h *KubernetesAgentHandlers) HandleDeleteCluster(w http.ResponseWriter, r *
 
 	cluster, err := h.getMonitor(r.Context()).RemoveKubernetesCluster(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -192,7 +192,7 @@ func (h *KubernetesAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *
 	}
 
 	if err := h.getMonitor(r.Context()).AllowKubernetesClusterReenroll(clusterID); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "kubernetes_cluster_reenroll_failed", err.Error(), nil)
+		writeErrorResponse(w, http.StatusBadRequest, "k8s_cluster_reenroll_failed", err.Error(), nil)
 		return
 	}
 
@@ -221,11 +221,11 @@ func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *
 
 	cluster, err := h.getMonitor(r.Context()).UnhideKubernetesCluster(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -253,11 +253,11 @@ func (h *KubernetesAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWrit
 
 	cluster, err := h.getMonitor(r.Context()).MarkKubernetesClusterPendingUninstall(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
@@ -299,11 +299,11 @@ func (h *KubernetesAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWrit
 
 	cluster, err := h.getMonitor(r.Context()).SetKubernetesClusterCustomDisplayName(clusterID, customName)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,

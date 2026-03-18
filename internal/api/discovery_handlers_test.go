@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -38,16 +40,6 @@ func (m *MockCommandExecutor) IsAgentConnected(agentID string) bool {
 	return args.Bool(0)
 }
 
-// MockDiscoveryStateProvider for service
-type MockDiscoveryStateProvider struct {
-	mock.Mock
-}
-
-func (m *MockDiscoveryStateProvider) GetState() servicediscovery.StateSnapshot {
-	args := m.Called()
-	return args.Get(0).(servicediscovery.StateSnapshot)
-}
-
 func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery.Service, *servicediscovery.Store) {
 	// Create temp dir
 	tmpDir := t.TempDir()
@@ -60,16 +52,17 @@ func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery
 	mockExecutor := new(MockCommandExecutor)
 	scanner := servicediscovery.NewDeepScanner(mockExecutor)
 
-	// Create mock state provider
-	mockState := new(MockDiscoveryStateProvider)
-	mockState.On("GetState").Return(servicediscovery.StateSnapshot{})
-
 	// Create service
 	cfg := servicediscovery.DefaultConfig()
-	service := servicediscovery.NewService(store, scanner, mockState, cfg)
+	service := servicediscovery.NewService(store, scanner, cfg)
 
 	// Create config for handlers (needed for admin check)
-	apiCfg := &config.Config{}
+	hashed, err := internalauth.HashPassword("admin")
+	require.NoError(t, err)
+	apiCfg := &config.Config{
+		AuthUser: "admin",
+		AuthPass: hashed,
+	}
 
 	// Create handlers
 	handlers := NewDiscoveryHandlers(service, apiCfg)
@@ -85,7 +78,7 @@ func TestHandleListDiscoveries(t *testing.T) {
 		ID:           "test:1",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Test Service",
 	}
 	require.NoError(t, store.Save(discovery))
@@ -104,7 +97,9 @@ func TestHandleListDiscoveries(t *testing.T) {
 	assert.Equal(t, float64(1), result["total"])
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1)
-	assert.Equal(t, "Test Service", discoveries[0].(map[string]interface{})["service_name"])
+	first := discoveries[0].(map[string]interface{})
+	assert.Equal(t, "Test Service", first["service_name"])
+	assert.NotContains(t, first, "host_id")
 }
 
 func TestHandleGetDiscovery(t *testing.T) {
@@ -114,7 +109,7 @@ func TestHandleGetDiscovery(t *testing.T) {
 		ID:           "vm:node1:100",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Test Service",
 		UserSecrets:  map[string]string{"key": "secret"},
 	}
@@ -144,6 +139,112 @@ func TestHandleGetDiscovery(t *testing.T) {
 	var resultRedacted servicediscovery.ResourceDiscovery
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resultRedacted))
 	assert.Nil(t, resultRedacted.UserSecrets)
+}
+
+func TestHandleGetDiscovery_SessionAdminRequiresConfiguredAdminUser(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+	h.config.AuthUser = "admin"
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:101",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "101",
+		TargetID:     "node1",
+		ServiceName:  "Session Test Service",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	memberSession := "discovery-member-session"
+	GetSessionStore().CreateSession(memberSession, time.Hour, "agent", "127.0.0.1", "member")
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/101", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: memberSession})
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
+
+	adminSession := "discovery-admin-session"
+	GetSessionStore().CreateSession(adminSession, time.Hour, "agent", "127.0.0.1", "admin")
+
+	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/101", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminSession})
+	w = httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var full servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&full))
+	assert.Equal(t, "secret", full.UserSecrets["key"])
+}
+
+func TestHandleGetDiscovery_TokenAdminRequiresSettingsWriteScope(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	readToken, err := config.NewAPITokenRecord("discovery-read-token-123.12345678", "read", []string{config.ScopeMonitoringRead})
+	require.NoError(t, err)
+	writeToken, err := config.NewAPITokenRecord("discovery-write-token-123.12345678", "write", []string{config.ScopeSettingsWrite})
+	require.NoError(t, err)
+	h.config.APITokens = []config.APITokenRecord{*readToken, *writeToken}
+	h.config.SortAPITokens()
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:102",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "102",
+		TargetID:     "node1",
+		ServiceName:  "Token Test Service",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/102", nil)
+	req.Header.Set("X-API-Token", "discovery-read-token-123.12345678")
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
+
+	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/102", nil)
+	req.Header.Set("X-API-Token", "discovery-write-token-123.12345678")
+	w = httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var full servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&full))
+	assert.Equal(t, "secret", full.UserSecrets["key"])
+}
+
+func TestHandleGetDiscovery_ForgedBasicHeaderDoesNotBypassAdmin(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:103",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "103",
+		TargetID:     "node1",
+		ServiceName:  "Forged Basic Test",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/103", nil)
+	req.SetBasicAuth("admin", "wrong-password")
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
 }
 
 func TestHandleGetDiscovery_NotFound(t *testing.T) {
@@ -191,7 +292,7 @@ func TestHandleUpdateNotes(t *testing.T) {
 		ID:           id,
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Old Name",
 	}
 	require.NoError(t, store.Save(discovery))
@@ -220,7 +321,7 @@ func TestHandleDeleteDiscovery(t *testing.T) {
 	h, svc, store := setupDiscoveryHandlers(t)
 
 	id := "vm:node1:100"
-	discovery := &servicediscovery.ResourceDiscovery{ID: id, ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "100", HostID: "node1"}
+	discovery := &servicediscovery.ResourceDiscovery{ID: id, ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "100", TargetID: "node1"}
 	require.NoError(t, store.Save(discovery))
 
 	req := httptest.NewRequest("DELETE", "/api/discovery/vm/node1/100", nil)
@@ -274,10 +375,10 @@ func TestHandleUpdateSettings(t *testing.T) {
 func TestHandleListByType(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
-	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "h"}
-	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeLXC, ResourceID: "2", HostID: "h"}
-	store.Save(d1)
-	store.Save(d2)
+	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", TargetID: "h"}
+	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeSystemContainer, ResourceID: "2", TargetID: "h"}
+	require.NoError(t, store.Save(d1))
+	require.NoError(t, store.Save(d2))
 
 	req := httptest.NewRequest("GET", "/api/discovery/type/vm", nil)
 	w := httptest.NewRecorder()
@@ -286,27 +387,71 @@ func TestHandleListByType(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1) // Only VM
 }
 
-func TestHandleListByHost(t *testing.T) {
-	h, _, store := setupDiscoveryHandlers(t)
+func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
+	h, _, _ := setupDiscoveryHandlers(t)
 
-	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "node1"}
-	d2 := &servicediscovery.ResourceDiscovery{ID: "vm:2", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "2", HostID: "node2"}
-	store.Save(d1)
-	store.Save(d2)
-
-	req := httptest.NewRequest("GET", "/api/discovery/host/node1", nil)
+	req := httptest.NewRequest("GET", "/api/discovery/type/host", nil)
 	w := httptest.NewRecorder()
 
-	h.HandleListByHost(w, req)
+	h.HandleListByType(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, `unsupported resource type "host"`, body["message"])
+}
+
+func TestParseDiscoveryResourceType_RejectsLegacyHostAlias(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    servicediscovery.ResourceType
+		wantErr string
+	}{
+		{name: "agent", in: "agent", want: servicediscovery.ResourceTypeAgent},
+		{name: "vm", in: "vm", want: servicediscovery.ResourceTypeVM},
+		{name: "mixed case system container", in: " System-Container ", want: servicediscovery.ResourceTypeSystemContainer},
+		{name: "legacy host rejected", in: "host", wantErr: `unsupported resource type "host"`},
+		{name: "mixed case host rejected", in: " HoSt ", wantErr: `unsupported resource type "host"`},
+		{name: "missing required", in: "   ", wantErr: "resource type is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDiscoveryResourceType(tt.in)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestHandleListByAgent(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", TargetID: "node1"}
+	d2 := &servicediscovery.ResourceDiscovery{ID: "vm:2", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "2", TargetID: "node2"}
+	require.NoError(t, store.Save(d1))
+	require.NoError(t, store.Save(d2))
+
+	req := httptest.NewRequest("GET", "/api/discovery/agent/node1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleListByAgent(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, "node1", result["agentId"])
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1) // Only node1
 }
@@ -320,18 +465,58 @@ func TestHandleGetProgress(t *testing.T) {
 	h.HandleGetProgress(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	var res1 map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&res1)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&res1))
 	assert.Equal(t, "not_started", res1["status"])
 
 	// Case 2: Completed (if discovery exists)
-	store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", HostID: "node1"})
+	require.NoError(t, store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", TargetID: "node1"}))
 	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/100/progress", nil)
 	w = httptest.NewRecorder()
 	h.HandleGetProgress(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	var res2 map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&res2)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&res2))
 	assert.Equal(t, "completed", res2["status"])
+}
+
+func TestHandleGetDiscovery_RejectsLegacyHostType(t *testing.T) {
+	h, _, _ := setupDiscoveryHandlers(t)
+
+	req := httptest.NewRequest("GET", "/api/discovery/host/host-1/host-1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, `unsupported resource type "host"`, body["message"])
+}
+
+func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	agentDiscovery := &servicediscovery.ResourceDiscovery{
+		ID:           "agent:agent-1:agent-1",
+		ResourceType: servicediscovery.ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		TargetID:     "agent-1",
+		Hostname:     "agent-1.local",
+	}
+	require.NoError(t, store.Save(agentDiscovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/agent/agent-1/agent-1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	assert.Equal(t, "agent-1", body["target_id"])
+	assert.Equal(t, "agent-1", body["agent_id"])
+	assert.NotContains(t, body, "host_id")
 }
 
 // Additional test to cover service not configured case

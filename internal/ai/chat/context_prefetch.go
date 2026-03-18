@@ -6,24 +6,26 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
-	Name         string
-	ResourceType string // "vm", "lxc", "docker", "host"
-	ResourceID   string
-	HostID       string
-	MatchedText  string // The actual text that matched
+	Name          string
+	ResourceType  string // "vm", "system-container", "app-container", "agent", "node"
+	ResourceID    string
+	TargetID      string
+	MatchedText   string // The actual text that matched
+	Policy        *unifiedresources.ResourcePolicy
+	AISafeSummary string
 	// Docker-specific: bind mounts (source -> destination)
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
-	DockerHostName string // Name of LXC/VM/host running Docker (e.g., "homepage-docker")
-	DockerHostType string // "lxc", "vm", or "host"
-	DockerHostVMID int    // VMID if DockerHost is an LXC/VM
-	ProxmoxNode    string // Proxmox node name (e.g., "delly")
+	DockerHostName string // Name of system-container/VM/host running Docker (e.g., "homepage-docker")
+	DockerHostType string // "system-container", "vm", or "standalone" (from ResolveResource)
+	DockerHostVMID int    // Guest ID (VMID) if DockerHost is a system container or VM
+	NodeName       string // Hypervisor node name (e.g., "pve-node")
 	TargetHost     string // The correct target_host to use for commands
 }
 
@@ -42,14 +44,14 @@ type PrefetchedContext struct {
 
 // ContextPrefetcher proactively gathers context based on user message content
 type ContextPrefetcher struct {
-	stateProvider     StateProvider
+	readState         unifiedresources.ReadState
 	discoveryProvider tools.DiscoveryProvider
 }
 
 // NewContextPrefetcher creates a new context prefetcher
-func NewContextPrefetcher(stateProvider StateProvider, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
+func NewContextPrefetcher(readState unifiedresources.ReadState, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
 	return &ContextPrefetcher{
-		stateProvider:     stateProvider,
+		readState:         readState,
 		discoveryProvider: discoveryProvider,
 	}
 }
@@ -59,21 +61,25 @@ func NewContextPrefetcher(stateProvider StateProvider, discoveryProvider tools.D
 // directly instead of fuzzy-matching resource names from the message text.
 func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
 	log.Info().
-		Bool("hasStateProvider", p.stateProvider != nil).
+		Bool("hasReadState", p.readState != nil).
 		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
 		Int("structured_mentions", len(structuredMentions)).
 		Msg("[ContextPrefetch] Starting prefetch")
 
-	if p.stateProvider == nil {
-		log.Warn().Msg("[ContextPrefetch] No state provider, cannot prefetch")
+	if p.readState == nil {
+		log.Warn().Msg("[ContextPrefetch] No ReadState, cannot prefetch")
 		return nil
 	}
 
-	state := p.stateProvider.GetState()
+	vmsCount := len(p.readState.VMs())
+	containersCount := len(p.readState.Containers())
+	nodesCount := len(p.readState.Nodes())
+	dockerHostsCount := len(p.readState.DockerHosts())
 	log.Info().
-		Int("vms", len(state.VMs)).
-		Int("containers", len(state.Containers)).
-		Int("dockerHosts", len(state.DockerHosts)).
+		Int("vms", vmsCount).
+		Int("containers", containersCount).
+		Int("nodes", nodesCount).
+		Int("dockerHosts", dockerHostsCount).
 		Msg("[ContextPrefetch] Got state for matching")
 
 	var mentions []ResourceMention
@@ -81,7 +87,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	if len(structuredMentions) > 0 {
 		// Structured path: frontend already resolved the resources via autocomplete.
 		// Convert to ResourceMention using ResolveResource for full routing info.
-		mentions = p.resolveStructuredMentions(structuredMentions, state)
+		mentions = p.resolveStructuredMentions(structuredMentions)
 		log.Info().
 			Int("structured_input", len(structuredMentions)).
 			Int("resolved", len(mentions)).
@@ -89,7 +95,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	} else {
 		// Fallback: fuzzy-match resource names from the message text.
 		// Used when the user types @name manually without selecting from autocomplete.
-		mentions = p.extractResourceMentions(message, state)
+		mentions = p.extractResourceMentions(message)
 	}
 
 	if len(mentions) == 0 {
@@ -107,7 +113,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 			var sb strings.Builder
 			sb.WriteString("=== RESOURCE LOOKUP RESULT ===\n")
 			for _, name := range unresolvedMentions {
-				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, LXC, Docker container, or host.\n", name))
+				sb.WriteString(fmt.Sprintf("'%s' was NOT found in Pulse monitoring. It is not a tracked VM, container, Docker container, or host.\n", name))
 			}
 			sb.WriteString("Do NOT use pulse_discovery to search for these resources — they are not in the system.\n")
 			sb.WriteString("Instead: use pulse_control directly if you know the host where the service runs, or ask the user for the location.\n")
@@ -128,6 +134,9 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	var discoveries []*tools.ResourceDiscoveryInfo
 	if p.discoveryProvider != nil {
 		for _, mention := range mentions {
+			if mention.requiresGovernedSummary() {
+				continue
+			}
 			discovery, err := p.getOrTriggerDiscovery(ctx, mention)
 			if err != nil {
 				log.Debug().
@@ -156,7 +165,8 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 // It supports two modes:
 // 1. Explicit @ mentions: @homepage, @influxdb (high confidence, exact match)
 // 2. Fuzzy name matching: "homepage" matches "homepage-docker" (fallback)
-func (p *ContextPrefetcher) extractResourceMentions(message string, state models.StateSnapshot) []ResourceMention {
+func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMention {
+	rs := p.readState
 	messageLower := strings.ToLower(message)
 	var mentions []ResourceMention
 	seen := make(map[string]bool) // Deduplicate by name
@@ -164,54 +174,84 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 	// Extract words from message (3+ chars) for partial matching
 	messageWords := extractWords(messageLower)
 
-	// Check VMs
-	for _, vm := range state.VMs {
-		nameLower := strings.ToLower(vm.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				mentions = append(mentions, ResourceMention{
-					Name:         vm.Name,
-					ResourceType: "vm",
-					ResourceID:   fmt.Sprintf("%d", vm.VMID),
-					HostID:       vm.Node,
-					MatchedText:  vm.Name,
-				})
+	// Check VMs (via ReadState)
+	if rs != nil {
+		for _, vm := range rs.VMs() {
+			if vm == nil {
+				continue
+			}
+			name := vm.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, name)
+					mentions = append(mentions, ResourceMention{
+						Name:          name,
+						ResourceType:  "vm",
+						ResourceID:    fmt.Sprintf("%d", vm.VMID()),
+						TargetID:      vm.Node(),
+						MatchedText:   name,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+					})
+				}
 			}
 		}
 	}
 
-	// Check LXC containers (in StateSnapshot, LXCs are in Containers with Type "lxc")
-	for _, container := range state.Containers {
-		if container.Type != "lxc" {
-			continue
-		}
-		nameLower := strings.ToLower(container.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				mentions = append(mentions, ResourceMention{
-					Name:         container.Name,
-					ResourceType: "lxc",
-					ResourceID:   fmt.Sprintf("%d", container.VMID),
-					HostID:       container.Node,
-					MatchedText:  container.Name,
-				})
+	// Check system containers (LXC via ReadState)
+	if rs != nil {
+		for _, ct := range rs.Containers() {
+			if ct == nil {
+				continue
+			}
+			name := ct.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, name)
+					mentions = append(mentions, ResourceMention{
+						Name:          name,
+						ResourceType:  "system-container",
+						ResourceID:    fmt.Sprintf("%d", ct.VMID()),
+						TargetID:      ct.Node(),
+						MatchedText:   name,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+					})
+				}
 			}
 		}
 	}
 
-	// Check Docker containers - use ResolveResource for authoritative location
-	for _, dockerHost := range state.DockerHosts {
-		for _, container := range dockerHost.Containers {
-			nameLower := strings.ToLower(container.Name)
+	// Check Docker containers (via ReadState) - use ResolveResource for authoritative location
+	if rs != nil {
+		// Build a map from unified resource ID → source host ID so container
+		// ParentID (unified) can be resolved to the original models.DockerHost.ID
+		// that discovery and other subsystems expect.
+		dockerHostSourceIDs := make(map[string]string)
+		for _, dh := range rs.DockerHosts() {
+			if dh == nil {
+				continue
+			}
+			dockerHostSourceIDs[dh.ID()] = dh.HostSourceID()
+		}
+
+		for _, container := range rs.DockerContainers() {
+			if container == nil {
+				continue
+			}
+			name := container.Name()
+			nameLower := strings.ToLower(name)
 			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
 				if !seen[nameLower] {
 					seen[nameLower] = true
 
 					// Capture bind mounts
 					var mounts []MountInfo
-					for _, m := range container.Mounts {
+					for _, m := range container.Mounts() {
 						if m.Source != "" && m.Destination != "" {
 							mounts = append(mounts, MountInfo{
 								Source:      m.Source,
@@ -220,20 +260,29 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 						}
 					}
 
-					// Use the authoritative ResolveResource function
-					loc := state.ResolveResource(container.Name)
+					// Resolve parent ID to original source host ID
+					hostID := dockerHostSourceIDs[container.ParentID()]
+					if hostID == "" {
+						hostID = container.ParentID()
+					}
+
+					// Use the authoritative unified-resource resolver for routing plus policy.
+					resolved := unifiedresources.ResolveResourceContext(rs, name)
+					loc := resolved.Location
 
 					mentions = append(mentions, ResourceMention{
-						Name:           container.Name,
-						ResourceType:   "docker",
-						ResourceID:     container.ID,
-						HostID:         dockerHost.ID,
-						MatchedText:    container.Name,
+						Name:           name,
+						ResourceType:   "app-container",
+						ResourceID:     container.ContainerID(),
+						TargetID:       hostID,
+						MatchedText:    name,
+						Policy:         cloneMentionPolicy(resolved.Resource),
+						AISafeSummary:  mentionAISafeSummary(resolved.Resource),
 						BindMounts:     mounts,
 						DockerHostName: loc.DockerHostName,
 						DockerHostType: loc.DockerHostType,
 						DockerHostVMID: loc.DockerHostVMID,
-						ProxmoxNode:    loc.Node,
+						NodeName:       loc.Node,
 						TargetHost:     loc.TargetHost,
 					})
 				}
@@ -241,95 +290,152 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 		}
 	}
 
-	// Check Proxmox nodes
-	for _, node := range state.Nodes {
-		nameLower := strings.ToLower(node.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				loc := state.ResolveResource(node.Name)
-				mentions = append(mentions, ResourceMention{
-					Name:         node.Name,
-					ResourceType: "node",
-					ResourceID:   node.Name,
-					HostID:       node.Name,
-					MatchedText:  node.Name,
-					TargetHost:   loc.TargetHost,
-				})
+	// Check Proxmox nodes (via ReadState)
+	if rs != nil {
+		for _, node := range rs.Nodes() {
+			if node == nil {
+				continue
 			}
-		}
-	}
-
-	// Check generic Hosts (Windows/Linux via Pulse Unified Agent)
-	for _, host := range state.Hosts {
-		nameLower := strings.ToLower(host.Hostname)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				loc := state.ResolveResource(host.Hostname)
-				mentions = append(mentions, ResourceMention{
-					Name:         host.Hostname,
-					ResourceType: "host",
-					ResourceID:   host.ID,
-					HostID:       host.ID,
-					MatchedText:  host.Hostname,
-					TargetHost:   loc.TargetHost,
-				})
-			}
-		}
-	}
-
-	// Check Kubernetes clusters, pods, and deployments
-	for _, cluster := range state.KubernetesClusters {
-		clusterLower := strings.ToLower(cluster.Name)
-		if clusterLower != "" && len(clusterLower) >= 3 && matchesResource(messageLower, messageWords, clusterLower) {
-			if !seen[clusterLower] {
-				seen[clusterLower] = true
-				loc := state.ResolveResource(cluster.Name)
-				mentions = append(mentions, ResourceMention{
-					Name:         cluster.Name,
-					ResourceType: "k8s_cluster",
-					ResourceID:   cluster.ID,
-					HostID:       cluster.ID,
-					MatchedText:  cluster.Name,
-					TargetHost:   loc.TargetHost,
-				})
-			}
-		}
-
-		// Check pods
-		for _, pod := range cluster.Pods {
-			podLower := strings.ToLower(pod.Name)
-			if podLower != "" && len(podLower) >= 3 && matchesResource(messageLower, messageWords, podLower) {
-				if !seen[podLower] {
-					seen[podLower] = true
-					loc := state.ResolveResource(pod.Name)
+			name := node.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, name)
+					loc := resolved.Location
 					mentions = append(mentions, ResourceMention{
-						Name:         pod.Name,
-						ResourceType: "k8s_pod",
-						ResourceID:   pod.Name,
-						HostID:       cluster.ID,
-						MatchedText:  pod.Name,
-						TargetHost:   loc.TargetHost,
+						Name:          name,
+						ResourceType:  "node",
+						ResourceID:    name,
+						TargetID:      name,
+						MatchedText:   name,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						TargetHost:    loc.TargetHost,
+					})
+				}
+			}
+		}
+	}
+
+	// Check generic Hosts (Windows/Linux via Pulse Unified Agent, via ReadState)
+	if rs != nil {
+		for _, host := range rs.Hosts() {
+			if host == nil {
+				continue
+			}
+			hostname := host.Hostname()
+			nameLower := strings.ToLower(hostname)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, hostname)
+					loc := resolved.Location
+					// Use AgentID which maps to the original models.Host.ID
+					hostID := host.AgentID()
+					mentions = append(mentions, ResourceMention{
+						Name:          hostname,
+						ResourceType:  "agent",
+						ResourceID:    hostID,
+						TargetID:      hostID,
+						MatchedText:   hostname,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						TargetHost:    loc.TargetHost,
+					})
+				}
+			}
+		}
+	}
+
+	// Check Kubernetes clusters, pods, and deployments (via ReadState)
+	if rs != nil {
+		// Build map from unified resource ID → source cluster ID so pods/deployments
+		// can resolve TargetID to the original models.KubernetesCluster.ID.
+		k8sClusterSourceIDs := make(map[string]string)
+		for _, cluster := range rs.K8sClusters() {
+			if cluster == nil {
+				continue
+			}
+			k8sClusterSourceIDs[cluster.ID()] = cluster.ClusterID()
+
+			clusterName := cluster.Name()
+			clusterLower := strings.ToLower(clusterName)
+			if clusterLower != "" && len(clusterLower) >= 3 && matchesResource(messageLower, messageWords, clusterLower) {
+				if !seen[clusterLower] {
+					seen[clusterLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, clusterName)
+					loc := resolved.Location
+					clusterSourceID := cluster.ClusterID()
+					mentions = append(mentions, ResourceMention{
+						Name:          clusterName,
+						ResourceType:  "k8s-cluster",
+						ResourceID:    clusterSourceID,
+						TargetID:      clusterSourceID,
+						MatchedText:   clusterName,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						TargetHost:    loc.TargetHost,
 					})
 				}
 			}
 		}
 
-		// Check deployments
-		for _, deploy := range cluster.Deployments {
-			deployLower := strings.ToLower(deploy.Name)
+		// Check pods (flat list, linked to cluster via ParentID)
+		for _, pod := range rs.Pods() {
+			if pod == nil {
+				continue
+			}
+			podName := pod.Name()
+			podLower := strings.ToLower(podName)
+			if podLower != "" && len(podLower) >= 3 && matchesResource(messageLower, messageWords, podLower) {
+				if !seen[podLower] {
+					seen[podLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, podName)
+					loc := resolved.Location
+					hostID := k8sClusterSourceIDs[pod.ParentID()]
+					if hostID == "" {
+						hostID = pod.ParentID()
+					}
+					mentions = append(mentions, ResourceMention{
+						Name:          podName,
+						ResourceType:  "k8s-pod",
+						ResourceID:    podName,
+						TargetID:      hostID,
+						MatchedText:   podName,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						TargetHost:    loc.TargetHost,
+					})
+				}
+			}
+		}
+
+		// Check deployments (flat list, linked to cluster via ParentID)
+		for _, deploy := range rs.K8sDeployments() {
+			if deploy == nil {
+				continue
+			}
+			deployName := deploy.Name()
+			deployLower := strings.ToLower(deployName)
 			if deployLower != "" && len(deployLower) >= 3 && matchesResource(messageLower, messageWords, deployLower) {
 				if !seen[deployLower] {
 					seen[deployLower] = true
-					loc := state.ResolveResource(deploy.Name)
+					resolved := unifiedresources.ResolveResourceContext(rs, deployName)
+					loc := resolved.Location
+					hostID := k8sClusterSourceIDs[deploy.ParentID()]
+					if hostID == "" {
+						hostID = deploy.ParentID()
+					}
 					mentions = append(mentions, ResourceMention{
-						Name:         deploy.Name,
-						ResourceType: "k8s_deployment",
-						ResourceID:   deploy.Name,
-						HostID:       cluster.ID,
-						MatchedText:  deploy.Name,
-						TargetHost:   loc.TargetHost,
+						Name:          deployName,
+						ResourceType:  "k8s-deployment",
+						ResourceID:    deployName,
+						TargetID:      hostID,
+						MatchedText:   deployName,
+						Policy:        cloneMentionPolicy(resolved.Resource),
+						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						TargetHost:    loc.TargetHost,
 					})
 				}
 			}
@@ -341,71 +447,80 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 
 // resolveStructuredMentions converts frontend StructuredMention objects into ResourceMention
 // objects with full routing info. This is the preferred path — no fuzzy matching needed.
-func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention, state models.StateSnapshot) []ResourceMention {
+func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention) []ResourceMention {
 	var mentions []ResourceMention
+	rs := p.readState
 
 	for _, sm := range structured {
 		// Parse the structured ID to extract resource details.
-		// Frontend ID formats: "vm:node:vmid", "lxc:node:vmid", "docker:hostId:containerId",
-		// "host:id", "node:instance:name"
+		// Frontend ID formats: "vm:node:vmid", "system-container:node:vmid",
+		// "docker:hostId:containerId", "agent:id", "node:instance:name"
 		parts := strings.Split(sm.ID, ":")
 
-		// Normalize frontend type "container" → "lxc"
-		resourceType := sm.Type
-		if resourceType == "container" {
-			resourceType = "lxc"
+		// Enforce canonical v6 frontend mention types only.
+		legacyMentionType := strings.ToLower(strings.TrimSpace(sm.Type))
+		if legacyMentionType == "container" || legacyMentionType == "lxc" || legacyMentionType == "docker" || legacyMentionType == "docker-container" {
+			log.Warn().
+				Str("name", sm.Name).
+				Str("id", sm.ID).
+				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
+			continue
 		}
+		resourceType := canonicalMentionResourceType(sm.Type)
 
-		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
-		loc := state.ResolveResource(sm.Name)
+		// Use the canonical unified-resource resolver for routing plus policy metadata.
+		resolved := unifiedresources.ResolveResourceContext(rs, sm.Name)
+		loc := resolved.Location
 
 		switch resourceType {
 		case "vm":
-			vmid := ""
+			vmID := ""
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmid = parts[2]
+				vmID = parts[2]
 			}
 			mentions = append(mentions, ResourceMention{
-				Name:         sm.Name,
-				ResourceType: "vm",
-				ResourceID:   vmid,
-				HostID:       node,
-				MatchedText:  sm.Name,
-				TargetHost:   loc.TargetHost,
+				Name:          sm.Name,
+				ResourceType:  "vm",
+				ResourceID:    vmID,
+				TargetID:      node,
+				MatchedText:   sm.Name,
+				Policy:        cloneMentionPolicy(resolved.Resource),
+				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				TargetHost:    loc.TargetHost,
 			})
 
-		case "lxc":
-			vmid := ""
+		case "system-container":
+			vmID := ""
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmid = parts[2]
+				vmID = parts[2]
 			}
 			mentions = append(mentions, ResourceMention{
-				Name:         sm.Name,
-				ResourceType: "lxc",
-				ResourceID:   vmid,
-				HostID:       node,
-				MatchedText:  sm.Name,
-				TargetHost:   loc.TargetHost,
+				Name:          sm.Name,
+				ResourceType:  "system-container",
+				ResourceID:    vmID,
+				TargetID:      node,
+				MatchedText:   sm.Name,
+				Policy:        cloneMentionPolicy(resolved.Resource),
+				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				TargetHost:    loc.TargetHost,
 			})
 
-		case "docker":
-			hostID := ""
-			containerID := ""
-			if len(parts) >= 3 {
-				hostID = parts[1]
-				containerID = strings.Join(parts[2:], ":") // container ID may contain colons
-			}
+		case "app-container":
+			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs)
 
-			// Gather bind mounts from state
+			// Gather bind mounts via ReadState
 			var mounts []MountInfo
-			for _, dockerHost := range state.DockerHosts {
-				for _, container := range dockerHost.Containers {
-					if container.Name == sm.Name || container.ID == containerID {
-						for _, m := range container.Mounts {
+			if rs != nil {
+				for _, container := range rs.DockerContainers() {
+					if container == nil {
+						continue
+					}
+					if container.Name() == sm.Name || container.ContainerID() == containerID {
+						for _, m := range container.Mounts() {
 							if m.Source != "" && m.Destination != "" {
 								mounts = append(mounts, MountInfo{
 									Source:      m.Source,
@@ -420,54 +535,69 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 
 			mentions = append(mentions, ResourceMention{
 				Name:           sm.Name,
-				ResourceType:   "docker",
+				ResourceType:   "app-container",
 				ResourceID:     containerID,
-				HostID:         hostID,
+				TargetID:       hostID,
 				MatchedText:    sm.Name,
+				Policy:         cloneMentionPolicy(resolved.Resource),
+				AISafeSummary:  mentionAISafeSummary(resolved.Resource),
 				BindMounts:     mounts,
 				DockerHostName: loc.DockerHostName,
 				DockerHostType: loc.DockerHostType,
 				DockerHostVMID: loc.DockerHostVMID,
-				ProxmoxNode:    loc.Node,
+				NodeName:       loc.Node,
 				TargetHost:     loc.TargetHost,
 			})
 
 		case "node":
 			mentions = append(mentions, ResourceMention{
-				Name:         sm.Name,
-				ResourceType: "node",
-				ResourceID:   sm.Name,
-				HostID:       sm.Name,
-				MatchedText:  sm.Name,
-				TargetHost:   loc.TargetHost,
+				Name:          sm.Name,
+				ResourceType:  "node",
+				ResourceID:    sm.Name,
+				TargetID:      sm.Name,
+				MatchedText:   sm.Name,
+				Policy:        cloneMentionPolicy(resolved.Resource),
+				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				TargetHost:    loc.TargetHost,
 			})
 
-		case "host":
+		case "agent":
 			hostID := ""
 			if len(parts) >= 2 {
 				hostID = strings.Join(parts[1:], ":")
 			}
 			mentions = append(mentions, ResourceMention{
-				Name:         sm.Name,
-				ResourceType: "host",
-				ResourceID:   hostID,
-				HostID:       hostID,
-				MatchedText:  sm.Name,
-				TargetHost:   loc.TargetHost,
+				Name:          sm.Name,
+				ResourceType:  "agent",
+				ResourceID:    hostID,
+				TargetID:      hostID,
+				MatchedText:   sm.Name,
+				Policy:        cloneMentionPolicy(resolved.Resource),
+				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				TargetHost:    loc.TargetHost,
 			})
 
 		default:
+			if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
+				log.Warn().
+					Str("name", sm.Name).
+					Str("id", sm.ID).
+					Msg("[ContextPrefetch] Ignoring unsupported structured mention type")
+				continue
+			}
 			log.Warn().
 				Str("name", sm.Name).
 				Str("type", sm.Type).
 				Msg("[ContextPrefetch] Unknown structured mention type, falling back to ResolveResource")
 			mentions = append(mentions, ResourceMention{
-				Name:         sm.Name,
-				ResourceType: resourceType,
-				ResourceID:   sm.ID,
-				HostID:       sm.Node,
-				MatchedText:  sm.Name,
-				TargetHost:   loc.TargetHost,
+				Name:          sm.Name,
+				ResourceType:  resourceType,
+				ResourceID:    sm.ID,
+				TargetID:      sm.Node,
+				MatchedText:   sm.Name,
+				Policy:        cloneMentionPolicy(resolved.Resource),
+				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				TargetHost:    loc.TargetHost,
 			})
 		}
 	}
@@ -475,10 +605,99 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	return mentions
 }
 
+func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
+	const prefix = "docker:"
+	if !strings.HasPrefix(mentionID, prefix) {
+		return "", ""
+	}
+
+	raw := strings.TrimPrefix(mentionID, prefix)
+	if raw == "" {
+		return "", ""
+	}
+
+	// Prefer matching known docker host IDs via ReadState so host IDs containing
+	// colons remain intact (V6 unified IDs can include colon separators).
+	bestHostID := ""
+	bestContainerID := ""
+	if rs != nil {
+		for _, dockerHost := range rs.DockerHosts() {
+			if dockerHost == nil {
+				continue
+			}
+			id := strings.TrimSpace(dockerHost.HostSourceID())
+			if id == "" {
+				continue
+			}
+			hostPrefix := id + ":"
+			if !strings.HasPrefix(raw, hostPrefix) {
+				continue
+			}
+			candidateContainerID := strings.TrimPrefix(raw, hostPrefix)
+			if candidateContainerID == "" {
+				continue
+			}
+			if len(id) > len(bestHostID) {
+				bestHostID = id
+				bestContainerID = candidateContainerID
+			}
+		}
+	}
+	if bestHostID != "" {
+		return bestHostID, bestContainerID
+	}
+
+	// Legacy fallback: split once after the docker prefix.
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) < 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
+}
+
+func canonicalMentionResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker":
+		return "app-container"
+	case "docker-host":
+		return "docker-host"
+	case "k8s-cluster":
+		return "k8s-cluster"
+	case "k8s-pod":
+		return "k8s-pod"
+	case "k8s-deployment":
+		return "k8s-deployment"
+	default:
+		return resourceType
+	}
+}
+
+func discoveryResourceType(resourceType string) string {
+	switch canonicalMentionResourceType(resourceType) {
+	case "app-container":
+		// Discovery backend still stores Docker containers under "docker".
+		return "docker"
+	default:
+		return canonicalMentionResourceType(resourceType)
+	}
+}
+
+func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
+	if discovery == nil {
+		return ""
+	}
+	targetID := strings.TrimSpace(discovery.TargetID)
+	return targetID
+}
+
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
+	discoveryType := discoveryResourceType(mention.ResourceType)
+	canonicalType := canonicalMentionResourceType(mention.ResourceType)
+
 	// First try to get existing discovery
-	discovery, err := p.discoveryProvider.GetDiscoveryByResource(mention.ResourceType, mention.HostID, mention.ResourceID)
+	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.TargetID, mention.ResourceID)
 	if err == nil && discovery != nil {
 		log.Debug().
 			Str("resource", mention.Name).
@@ -486,14 +705,14 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 		return discovery, nil
 	}
 
-	// Trigger discovery if not found (for VMs and LXCs)
-	if mention.ResourceType == "vm" || mention.ResourceType == "lxc" || mention.ResourceType == "docker" {
+	// Trigger discovery if not found (for VMs, system containers, and Docker containers)
+	if canonicalType == "vm" || canonicalType == "system-container" || canonicalType == "app-container" {
 		log.Debug().
 			Str("resource", mention.Name).
-			Str("type", mention.ResourceType).
+			Str("type", canonicalType).
 			Msg("[ContextPrefetch] Triggering discovery")
 
-		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, mention.ResourceType, mention.HostID, mention.ResourceID)
+		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID)
 		if err != nil {
 			return nil, err
 		}
@@ -511,30 +730,37 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 	var sb strings.Builder
 	sb.WriteString("=== PULSE MONITORING DATA (AUTHORITATIVE) ===\n")
-	sb.WriteString("This is verified data from Pulse agents. Use these exact paths and hostnames.\n\n")
+	sb.WriteString("This is verified data from Pulse agents. Canonical resource policy is enforced below.\n")
+	sb.WriteString("Raw hostnames, paths, and local identifiers are withheld when governed resource policy requires redaction.\n\n")
 
 	// Create a map for quick discovery lookup
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
 	for _, d := range discoveries {
-		key := fmt.Sprintf("%s:%s:%s", d.ResourceType, d.HostID, d.ResourceID)
+		discoveryTargetID := canonicalDiscoveryTargetID(d)
+		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(d.ResourceType), discoveryTargetID, d.ResourceID)
 		discoveryMap[key] = d
 	}
 
 	for _, mention := range mentions {
-		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.HostID, mention.ResourceID)
+		if mention.requiresGovernedSummary() {
+			formatGovernedMentionSummary(&sb, mention)
+			continue
+		}
+
+		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain
-		if mention.ResourceType == "docker" {
+		if canonicalMentionResourceType(mention.ResourceType) == "app-container" {
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
 			// Show the full routing chain unambiguously
-			if mention.DockerHostType == "lxc" {
-				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (LXC %d) on Proxmox node \"%s\"\n",
-					mention.DockerHostName, mention.DockerHostVMID, mention.ProxmoxNode))
+			if mention.DockerHostType == "system-container" {
+				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (container %d) on node \"%s\"\n",
+					mention.DockerHostName, mention.DockerHostVMID, mention.NodeName))
 			} else if mention.DockerHostType == "vm" {
-				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (VM %d) on Proxmox node \"%s\"\n",
-					mention.DockerHostName, mention.DockerHostVMID, mention.ProxmoxNode))
+				sb.WriteString(fmt.Sprintf("Location: Docker on \"%s\" (VM %d) on node \"%s\"\n",
+					mention.DockerHostName, mention.DockerHostVMID, mention.NodeName))
 			} else {
 				sb.WriteString(fmt.Sprintf("Location: Docker on host \"%s\"\n", mention.DockerHostName))
 			}
@@ -576,10 +802,10 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 		// Non-Docker resources (LXC, VM, host, node)
 		sb.WriteString(fmt.Sprintf("## %s\n", mention.Name))
-		sb.WriteString(fmt.Sprintf("Type: %s | Host: %s\n", mention.ResourceType, mention.HostID))
+		sb.WriteString(fmt.Sprintf("Type: %s | Target: %s\n", mention.ResourceType, mention.TargetID))
 
-		// Include VMID for VMs and LXCs — the AI needs this for pulse_control guest operations
-		if (mention.ResourceType == "lxc" || mention.ResourceType == "vm") && mention.ResourceID != "" {
+		// Include VMID for VMs and system containers — the AI needs this for pulse_control guest operations
+		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
 			sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
 		}
@@ -636,7 +862,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 				sb.WriteString(fmt.Sprintf("Ports: %v\n", portStrs))
 			}
 
-			// Docker bind mounts for LXCs/VMs running Docker
+			// Docker bind mounts for containers/VMs running Docker
 			if len(discovery.BindMounts) > 0 {
 				sb.WriteString("Docker containers on this host:\n")
 				containerMounts := make(map[string][]tools.DiscoveryMount)
@@ -658,7 +884,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		} else {
 			// No discovery - provide basic routing without suggesting discovery calls
 			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			if mention.ResourceType == "lxc" || mention.ResourceType == "vm" {
+			if mention.ResourceType == "system-container" || mention.ResourceType == "vm" {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
 			} else {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
@@ -669,6 +895,57 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	return sb.String()
+}
+
+func cloneMentionPolicy(resource *unifiedresources.Resource) *unifiedresources.ResourcePolicy {
+	if resource == nil || resource.Policy == nil {
+		return nil
+	}
+
+	policy := *resource.Policy
+	policy.Routing.Redact = append([]unifiedresources.ResourceRedactionHint(nil), resource.Policy.Routing.Redact...)
+	return &policy
+}
+
+func mentionAISafeSummary(resource *unifiedresources.Resource) string {
+	if resource == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.AISafeSummary)
+}
+
+func (m ResourceMention) requiresGovernedSummary() bool {
+	if m.Policy == nil {
+		return false
+	}
+	if m.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
+		return true
+	}
+	return len(m.Policy.Routing.Redact) > 0
+}
+
+func formatGovernedMentionSummary(sb *strings.Builder, mention ResourceMention) {
+	sb.WriteString("## Governed resource\n")
+	if summary := strings.TrimSpace(mention.AISafeSummary); summary != "" {
+		sb.WriteString(summary)
+		sb.WriteString("\n")
+	}
+	if mention.Policy != nil {
+		sb.WriteString(fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t, cloud_raw_signals=%t\n",
+			mention.Policy.Sensitivity,
+			mention.Policy.Routing.Scope,
+			mention.Policy.Routing.AllowCloudSummary,
+			mention.Policy.Routing.AllowCloudRawSignals,
+		))
+		if len(mention.Policy.Routing.Redact) > 0 {
+			redactions := make([]string, 0, len(mention.Policy.Routing.Redact))
+			for _, hint := range mention.Policy.Routing.Redact {
+				redactions = append(redactions, string(hint))
+			}
+			sb.WriteString(fmt.Sprintf("Redactions: %s\n", strings.Join(redactions, ", ")))
+		}
+	}
+	sb.WriteString("Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy.\n\n")
 }
 
 // extractWords extracts words (3+ characters) from a message for matching

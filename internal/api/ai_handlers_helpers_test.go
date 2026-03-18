@@ -11,13 +11,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 type stubStateProvider struct{}
 
-func (s *stubStateProvider) GetState() models.StateSnapshot {
+func (s *stubStateProvider) ReadSnapshot() models.StateSnapshot {
 	return models.StateSnapshot{}
 }
 
@@ -27,44 +26,41 @@ type fakeChatWrapper struct {
 
 func newTestAISettingsHandlerLite() *AISettingsHandler {
 	return &AISettingsHandler{
-		legacyAIService: ai.NewService(nil, nil),
-		aiServices:      make(map[string]*ai.Service),
+		defaultAIService: ai.NewService(nil, nil),
+		aiServices:       make(map[string]*ai.Service),
 	}
 }
 
 func TestIsMCPToolCall(t *testing.T) {
-	handler := &AISettingsHandler{}
-	if !handler.isMCPToolCall("pulse_control_guest(guest_id='102')") {
+	if !isMCPToolCall("pulse_control_guest(guest_id='102')") {
 		t.Fatalf("expected MCP tool call to be detected")
 	}
-	if !handler.isMCPToolCall("default_api:pulse_get_resource(id='1')") {
+	if !isMCPToolCall("default_api:pulse_get_resource(id='1')") {
 		t.Fatalf("expected MCP tool call with default_api prefix")
 	}
-	if handler.isMCPToolCall("echo hello") {
+	if isMCPToolCall("echo hello") {
 		t.Fatalf("expected non-tool command to be false")
 	}
 }
 
 func TestCleanTargetHost(t *testing.T) {
-	handler := &AISettingsHandler{}
-	if got := handler.cleanTargetHost("delly (The container's host is 'delly')"); got != "delly" {
+	if got := cleanTargetHost("pve-node (The container's host is 'pve-node')"); got != "pve-node" {
 		t.Fatalf("expected cleaned host, got %q", got)
 	}
-	if got := handler.cleanTargetHost("delly extra"); got != "delly" {
+	if got := cleanTargetHost("pve-node extra"); got != "pve-node" {
 		t.Fatalf("expected first token, got %q", got)
 	}
-	if got := handler.cleanTargetHost("  delly "); got != "delly" {
+	if got := cleanTargetHost("  pve-node "); got != "pve-node" {
 		t.Fatalf("expected trimmed host, got %q", got)
 	}
-	if got := handler.cleanTargetHost(""); got != "" {
+	if got := cleanTargetHost(""); got != "" {
 		t.Fatalf("expected empty host")
 	}
 }
 
 func TestSplitToolArgs(t *testing.T) {
-	handler := &AISettingsHandler{}
 	args := "action='start', guest_id=\"102\", note='hello, world', path=\"/tmp/a,b\", escaped=\"\\\"quote\\\"\""
-	parts := handler.splitToolArgs(args)
+	parts := splitToolArgs(args)
 	expected := []string{
 		"action='start'",
 		"guest_id=\"102\"",
@@ -83,8 +79,7 @@ func TestSplitToolArgs(t *testing.T) {
 }
 
 func TestParseMCPToolCall(t *testing.T) {
-	handler := &AISettingsHandler{}
-	tool, args, err := handler.parseMCPToolCall("default_api:pulse_control_guest(guest_id=\"102\", action='start')")
+	tool, args, err := parseMCPToolCall("default_api:pulse_control_guest(guest_id=\"102\", action='start')")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +90,7 @@ func TestParseMCPToolCall(t *testing.T) {
 		t.Fatalf("unexpected args: %#v", args)
 	}
 
-	tool, args, err = handler.parseMCPToolCall("pulse_run_command()")
+	tool, args, err = parseMCPToolCall("pulse_run_command()")
 	if err != nil {
 		t.Fatalf("unexpected error for empty args: %v", err)
 	}
@@ -103,27 +98,27 @@ func TestParseMCPToolCall(t *testing.T) {
 		t.Fatalf("expected empty args, got %#v", args)
 	}
 
-	if _, _, err = handler.parseMCPToolCall("pulse_control_guest"); err == nil {
+	if _, _, err = parseMCPToolCall("pulse_control_guest"); err == nil {
 		t.Fatalf("expected error for missing parenthesis")
 	}
-	if _, _, err = handler.parseMCPToolCall("pulse_control_guest("); err == nil {
+	if _, _, err = parseMCPToolCall("pulse_control_guest("); err == nil {
 		t.Fatalf("expected error for missing closing parenthesis")
 	}
 }
 
-func TestExecuteMCPToolFix_Errors(t *testing.T) {
-	handler := &AISettingsHandler{}
-	if _, _, err := handler.executeMCPToolFix(context.Background(), "pulse_control_guest()", ""); err == nil {
+func TestMCPToolAdapter_Errors(t *testing.T) {
+	adapter := &mcpToolAdapter{handler: &AISettingsHandler{}}
+	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error when chat handler is missing")
 	}
 
-	handler.chatHandler = &AIHandler{}
-	if _, _, err := handler.executeMCPToolFix(context.Background(), "pulse_control_guest()", ""); err == nil {
+	adapter.handler.chatHandler = &AIHandler{}
+	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error when chat service is missing")
 	}
 
-	handler.chatHandler.legacyService = &fakeChatWrapper{}
-	if _, _, err := handler.executeMCPToolFix(context.Background(), "pulse_control_guest()", ""); err == nil {
+	adapter.handler.chatHandler.defaultService = &fakeChatWrapper{}
+	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error for chat service type mismatch")
 	}
 }
@@ -160,7 +155,7 @@ func TestAISettingsHandler_Setters(t *testing.T) {
 		t.Fatalf("expected correlator to be set")
 	}
 
-	engine := &remediation.Engine{}
+	engine := newTestRemediationEngine()
 	handler.SetRemediationEngine(engine)
 	if handler.GetRemediationEngine() != engine {
 		t.Fatalf("expected remediation engine to be set")

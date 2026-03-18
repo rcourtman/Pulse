@@ -382,6 +382,47 @@ func TestGetDockerHosts_Copy(t *testing.T) {
 	}
 }
 
+func TestGetDockerHosts_DeepCopyNestedFields(t *testing.T) {
+	state := NewState()
+	command := &DockerHostCommandStatus{ID: "cmd-1", Status: "running"}
+
+	host := DockerHost{
+		ID:       "host-1",
+		Hostname: "host1",
+		Containers: []DockerContainer{
+			{
+				ID:     "ct-1",
+				Labels: map[string]string{"app": "original"},
+			},
+		},
+		NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"192.168.1.10"}}},
+		Command:           command,
+	}
+
+	state.UpsertDockerHost(host)
+
+	// Mutate caller-owned host and verify stored state was detached on write.
+	host.Containers[0].Labels["app"] = "changed-before-read"
+	host.NetworkInterfaces[0].Addresses[0] = "192.168.1.99"
+	command.Status = "mutated-before-read"
+
+	first := state.GetDockerHosts()
+	first[0].Containers[0].Labels["app"] = "changed-after-read"
+	first[0].NetworkInterfaces[0].Addresses[0] = "10.0.0.1"
+	first[0].Command.Status = "mutated-after-read"
+
+	second := state.GetDockerHosts()
+	if got := second[0].Containers[0].Labels["app"]; got != "original" {
+		t.Fatalf("expected container label to remain original, got %q", got)
+	}
+	if got := second[0].NetworkInterfaces[0].Addresses[0]; got != "192.168.1.10" {
+		t.Fatalf("expected network address to remain 192.168.1.10, got %q", got)
+	}
+	if got := second[0].Command.Status; got != "running" {
+		t.Fatalf("expected command status to remain running, got %q", got)
+	}
+}
+
 func TestAddRemovedDockerHost(t *testing.T) {
 	state := NewState()
 

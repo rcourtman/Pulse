@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,18 +39,15 @@ func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	m := rm.GetMonitor()
 	require.NotNil(t, m)
 
-	// Test GetState (default)
-	state := rm.GetState("default")
+	// Test ReadSnapshot (default)
+	state := rm.ReadSnapshot("default")
 	require.NotNil(t, state)
 
-	// Test GetState (non-existent) - should auto-provision and return empty state
-	stateMissing := rm.GetState("missing-org")
-	require.NotNil(t, stateMissing)
-	snapshot, ok := stateMissing.(models.StateSnapshot)
-	require.True(t, ok)
-	assert.Empty(t, snapshot.Nodes)
+	// Test ReadSnapshot (non-existent) - should not auto-provision an unprovisioned tenant
+	stateMissing := rm.ReadSnapshot("missing-org")
+	assert.Nil(t, stateMissing)
 
-	// Test GetState with invalid OrgID (should fail persistence check)
+	// Test ReadSnapshot with invalid OrgID (should fail persistence check)
 	// Assuming "../" or similar might be rejected by GetPersistence or underlying path logic
 	// If GetMonitor is robust, checking error branch might require mocking persistence failure.
 	// For now, attempting path traversal char.
@@ -78,42 +74,5 @@ func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	assert.NotNil(t, rm.ctx)
 
 	// Test Stop
-	rm.Stop()
-}
-
-func TestReloadableMonitor_SingleTenantLifecycle(t *testing.T) {
-	cfg := &config.Config{
-		DataPath: t.TempDir(),
-	}
-
-	rm, err := NewReloadableMonitor(cfg, nil, nil)
-	require.NoError(t, err)
-	require.NotNil(t, rm)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	rm.Start(ctx)
-
-	defaultMonitor := rm.GetMonitor()
-	require.NotNil(t, defaultMonitor)
-
-	defaultState := rm.GetState("default")
-	require.NotNil(t, defaultState)
-
-	nonDefaultState := rm.GetState("acme")
-	assert.Nil(t, nonDefaultState)
-
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- rm.Reload()
-	}()
-
-	select {
-	case err := <-errChan:
-		require.NoError(t, err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("single-tenant reload timed out")
-	}
-
 	rm.Stop()
 }

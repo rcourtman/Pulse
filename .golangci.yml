@@ -8,9 +8,17 @@ linters:
     - gofmt
     - goimports
     - errcheck
+    - dupl
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
+  exclude-rules:
+    # Exclude dupl findings in test files and mock generators — test boilerplate
+    # is inherently repetitive and mock data generators share patterns by design.
+    - linters: [dupl]
+      path: "_test\\.go$"
+    - linters: [dupl]
+      path: "internal/mock/"
 linters-settings:
   gofmt:
     simplify: true
@@ -18,3 +26,5 @@ linters-settings:
     exclude-functions:
       - (*encoding/json.Encoder).Encode
       - (net/http.ResponseWriter).Write
+  dupl:
+    threshold: 150

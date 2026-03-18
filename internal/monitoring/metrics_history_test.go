@@ -316,7 +316,9 @@ func TestAddNodeMetric(t *testing.T) {
 		{name: "cpu metric", nodeID: "node1", metricType: "cpu", value: 45.5, shouldAdd: true},
 		{name: "memory metric", nodeID: "node1", metricType: "memory", value: 60.0, shouldAdd: true},
 		{name: "disk metric", nodeID: "node2", metricType: "disk", value: 70.0, shouldAdd: true},
-		{name: "unknown metric type", nodeID: "node3", metricType: "netin", value: 100.0, shouldAdd: false},
+		{name: "netin metric", nodeID: "node3", metricType: "netin", value: 100.0, shouldAdd: true},
+		{name: "netout metric", nodeID: "node3", metricType: "netout", value: 80.0, shouldAdd: true},
+		{name: "unknown metric type", nodeID: "node3", metricType: "unknown", value: 50.0, shouldAdd: false},
 	}
 
 	for _, tt := range tests {
@@ -340,6 +342,10 @@ func TestAddNodeMetric(t *testing.T) {
 				slice = metrics.Memory
 			case "disk":
 				slice = metrics.Disk
+			case "netin":
+				slice = metrics.NetworkIn
+			case "netout":
+				slice = metrics.NetworkOut
 			default:
 				if tt.shouldAdd {
 					t.Error("expected metric to be added")
@@ -777,8 +783,10 @@ func TestGetNodeMetrics_UnknownMetricTypes(t *testing.T) {
 	mh.AddNodeMetric("node1", "cpu", 50.0, now.Add(-5*time.Minute))
 	mh.AddNodeMetric("node1", "memory", 70.0, now.Add(-5*time.Minute))
 	mh.AddNodeMetric("node1", "disk", 40.0, now.Add(-5*time.Minute))
+	mh.AddNodeMetric("node1", "netin", 1000.0, now.Add(-5*time.Minute))
+	mh.AddNodeMetric("node1", "netout", 500.0, now.Add(-5*time.Minute))
 
-	unknownTypes := []string{"invalid", "unknown", "netin", "netout", "diskread", "CPU", "Memory", "Disk", ""}
+	unknownTypes := []string{"invalid", "unknown", "diskread", "CPU", "Memory", "Disk", ""}
 
 	for _, metricType := range unknownTypes {
 		t.Run("type_"+metricType, func(t *testing.T) {

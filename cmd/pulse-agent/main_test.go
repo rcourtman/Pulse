@@ -256,6 +256,34 @@ func TestApplyRemoteSettingsIntervalFloat(t *testing.T) {
 	}
 }
 
+func TestApplyRemoteSettingsIgnoresInvalidValues(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	cfg := &Config{
+		Interval:      30 * time.Second,
+		DockerRuntime: "docker",
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"interval":       "invalid",
+		"docker_runtime": "not-a-runtime",
+	}, &logger)
+
+	if cfg.Interval != 30*time.Second {
+		t.Fatalf("expected interval to remain unchanged, got %v", cfg.Interval)
+	}
+	if cfg.DockerRuntime != "docker" {
+		t.Fatalf("expected docker runtime to remain unchanged, got %q", cfg.DockerRuntime)
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"interval": float64(0),
+	}, &logger)
+
+	if cfg.Interval != 30*time.Second {
+		t.Fatalf("expected non-positive numeric interval to be ignored, got %v", cfg.Interval)
+	}
+}
+
 func TestDefaultInt(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -775,6 +803,7 @@ func TestLoadConfig(t *testing.T) {
 			"PULSE_TOKEN":         "my-token",
 			"PULSE_ENABLE_HOST":   "false",
 			"PULSE_ENABLE_DOCKER": "true",
+			"PULSE_CACERT":        "/etc/pulse/ca.pem",
 		}
 		cfg, err := loadConfig([]string{}, func(s string) string { return env[s] })
 		if err != nil {
@@ -792,10 +821,13 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.EnableDocker != true {
 			t.Errorf("expected docker enabled by env")
 		}
+		if cfg.CACertPath != "/etc/pulse/ca.pem" {
+			t.Errorf("expected CA cert path from env, got %s", cfg.CACertPath)
+		}
 	})
 
 	t.Run("flag overrides", func(t *testing.T) {
-		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false"}, func(s string) string { return "" })
+		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false", "-cacert", "/tmp/custom-ca.pem"}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -808,12 +840,43 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.EnableHost != false {
 			t.Errorf("expected host disabled by flag")
 		}
+		if cfg.CACertPath != "/tmp/custom-ca.pem" {
+			t.Errorf("expected CA cert path from flag, got %s", cfg.CACertPath)
+		}
 	})
 
 	t.Run("invalid interval flag", func(t *testing.T) {
 		_, err := loadConfig([]string{"-interval", "invalid"}, func(s string) string { return "" })
 		if err == nil {
 			t.Fatal("expected error for invalid interval")
+		}
+	})
+
+	t.Run("non-positive interval returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-interval", "0s"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for non-positive interval")
+		}
+	})
+
+	t.Run("invalid kube max pods returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-kube-max-pods", "0"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for non-positive kube-max-pods")
+		}
+	})
+
+	t.Run("invalid docker runtime returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-docker-runtime", "containerd"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for invalid docker runtime")
+		}
+	})
+
+	t.Run("invalid log level returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-log-level", "invalid"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for invalid log level")
 		}
 	})
 
@@ -874,6 +937,39 @@ func TestInitDockerWithRetry_Cancel(t *testing.T) {
 	}
 }
 
+func TestInitDockerWithRetry_CancelDuringBackoff(t *testing.T) {
+	origAgent := newDockerAgent
+	origInitial := retryInitialDelay
+	origMax := retryMaxDelay
+	defer func() {
+		newDockerAgent = origAgent
+		retryInitialDelay = origInitial
+		retryMaxDelay = origMax
+	}()
+
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return nil, errors.New("not available")
+	}
+	retryInitialDelay = 5 * time.Second
+	retryMaxDelay = 5 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	logger := zerolog.New(os.Stdout)
+	agent := initDockerWithRetry(ctx, dockeragent.Config{}, &logger)
+	if agent != nil {
+		t.Fatalf("expected nil agent when cancelled")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("expected prompt cancellation during backoff, took %v", elapsed)
+	}
+}
+
 func TestInitDockerWithRetry_Success(t *testing.T) {
 	orig := newDockerAgent
 	defer func() { newDockerAgent = orig }()
@@ -922,6 +1018,39 @@ func TestInitKubernetesWithRetry_Cancel(t *testing.T) {
 	agent := initKubernetesWithRetry(ctx, cfg, &logger)
 	if agent != nil {
 		t.Errorf("expected nil agent when cancelled")
+	}
+}
+
+func TestInitKubernetesWithRetry_CancelDuringBackoff(t *testing.T) {
+	origAgent := newKubeAgent
+	origInitial := retryInitialDelay
+	origMax := retryMaxDelay
+	defer func() {
+		newKubeAgent = origAgent
+		retryInitialDelay = origInitial
+		retryMaxDelay = origMax
+	}()
+
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		return nil, errors.New("not available")
+	}
+	retryInitialDelay = 5 * time.Second
+	retryMaxDelay = 5 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	logger := zerolog.New(os.Stdout)
+	agent := initKubernetesWithRetry(ctx, kubernetesagent.Config{}, &logger)
+	if agent != nil {
+		t.Fatalf("expected nil agent when cancelled")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("expected prompt cancellation during backoff, took %v", elapsed)
 	}
 }
 
@@ -1214,6 +1343,53 @@ func TestRun_AgentFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "simulated failure") {
 		t.Errorf("expected 'simulated failure', got %v", err)
+	}
+}
+
+func TestRun_PropagatesDisableCephToHostAgent(t *testing.T) {
+	origDocker := newDockerAgent
+	origKube := newKubeAgent
+	origHost := newHostAgent
+	defer func() {
+		newDockerAgent = origDocker
+		newKubeAgent = origKube
+		newHostAgent = origHost
+	}()
+
+	hostCfgCh := make(chan hostagent.Config, 1)
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfgCh <- cfg
+		return &mockRunnable{}, nil
+	}
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return &mockRunnableCloser{}, nil
+	}
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := run(ctx, []string{
+		"-token", "T",
+		"-enable-host=true",
+		"-enable-docker=false",
+		"-enable-kubernetes=false",
+		"-disable-ceph=true",
+		"-health-addr", "127.0.0.1:0",
+	}, func(string) string { return "" })
+	if err != nil && err != context.Canceled {
+		t.Fatalf("run returned unexpected error: %v", err)
+	}
+
+	select {
+	case hostCfg := <-hostCfgCh:
+		if !hostCfg.DisableCeph {
+			t.Fatalf("expected DisableCeph=true on host agent config")
+		}
+	default:
+		t.Fatalf("host agent was not initialized")
 	}
 }
 
@@ -1519,5 +1695,38 @@ func TestRun_KubeRetry(t *testing.T) {
 
 	if calls < 2 {
 		t.Errorf("expected at least 2 calls to newKubeAgent, got %d", calls)
+	}
+}
+
+func TestRetryLogEvent_LevelThrottling(t *testing.T) {
+	// Ensure debug events are not filtered by the global level
+	prev := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	t.Cleanup(func() { zerolog.SetGlobalLevel(prev) })
+
+	tests := []struct {
+		attempt   int
+		wantLevel string
+	}{
+		{1, "warn"},
+		{5, "warn"},
+		{10, "warn"},
+		{11, "info"},
+		{25, "info"},
+		{50, "info"},
+		{51, "debug"},
+		{100, "debug"},
+	}
+
+	for _, tt := range tests {
+		var buf strings.Builder
+		logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+		event := retryLogEvent(&logger, tt.attempt)
+		event.Msg("test")
+
+		output := buf.String()
+		if !strings.Contains(output, `"level":"`+tt.wantLevel+`"`) {
+			t.Errorf("attempt %d: expected level %q in output, got: %s", tt.attempt, tt.wantLevel, output)
+		}
 	}
 }

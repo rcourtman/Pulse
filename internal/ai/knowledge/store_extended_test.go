@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Additional tests to improve coverage
@@ -140,18 +141,18 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 	if err := store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "Postgres"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("qemu/200", "app", "vm", "service", "API", "FastAPI"); err != nil {
+	if err := store.SaveNote("vm-200", "app", "vm", "service", "API", "FastAPI"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("host:alpha", "alpha", "host", "service", "Agent", "v1"); err != nil {
+	if err := store.SaveNote("agent:alpha", "alpha", "agent", "service", "Agent", "v1"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("docker:host1/container1", "container1", "docker", "service", "Web", "Nginx"); err != nil {
+	if err := store.SaveNote("docker:host1/container1", "container1", "app-container", "service", "Web", "Nginx"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
 
-	// Scope to a single VM by qemu resource ID
-	scoped := store.FormatForContextForResources([]string{"qemu/100"})
+	// Scope to a single VM by canonical vm resource ID
+	scoped := store.FormatForContextForResources([]string{"vm-100"})
 	if scoped == "" {
 		t.Fatalf("Expected scoped context, got empty")
 	}
@@ -159,7 +160,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 		t.Fatalf("Expected vm-100 notes in scoped context")
 	}
 	if strings.Contains(scoped, "app") {
-		t.Fatalf("Did not expect qemu/200 notes in scoped context")
+		t.Fatalf("Did not expect vm-200 notes in scoped context")
 	}
 
 	// Scope to docker resource ID
@@ -171,13 +172,98 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 		t.Fatalf("Did not expect vm-100 notes in docker scoped context")
 	}
 
-	// Scope to host resource ID
-	scoped = store.FormatForContextForResources([]string{"host:alpha"})
+	// Scope to agent resource ID
+	scoped = store.FormatForContextForResources([]string{"agent:alpha"})
 	if !strings.Contains(scoped, "alpha") {
-		t.Fatalf("Expected host notes in scoped context")
+		t.Fatalf("Expected agent notes in scoped context")
 	}
 	if strings.Contains(scoped, "container1") {
-		t.Fatalf("Did not expect docker notes in host scoped context")
+		t.Fatalf("Did not expect docker notes in agent scoped context")
+	}
+}
+
+func TestStore_RejectsUnsupportedHostGuestInput(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "knowledge-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	if err := store.SaveNote("host:alpha", "alpha", "agent", "service", "Agent", "v1"); err == nil {
+		t.Fatalf("expected unsupported host guest ID to be rejected")
+	}
+	for _, legacyGuestID := range []string{"qemu/200", "lxc/101", "lxc-101", "ct-101"} {
+		if err := store.SaveNote(legacyGuestID, "legacy", "vm", "service", "Agent", "v1"); err == nil {
+			t.Fatalf("expected unsupported legacy guest ID %q to be rejected", legacyGuestID)
+		}
+		if _, err := store.GetKnowledge(legacyGuestID); err == nil {
+			t.Fatalf("expected unsupported legacy guest ID query %q to be rejected", legacyGuestID)
+		}
+	}
+	if _, err := store.GetKnowledge("host:alpha"); err == nil {
+		t.Fatalf("expected unsupported host guest ID query to be rejected")
+	}
+	if err := store.SaveNote("agent:alpha", "alpha", "host", "service", "Agent", "v1"); err == nil {
+		t.Fatalf("expected unsupported host guest type to be rejected")
+	}
+	for _, legacyType := range []string{"container", "docker", "lxc", "qemu", "kubernetes"} {
+		if err := store.SaveNote("agent:alpha", "alpha", legacyType, "service", "Agent", "v1"); err == nil {
+			t.Fatalf("expected unsupported legacy guest type %q to be rejected", legacyType)
+		}
+	}
+}
+
+func TestStore_DoesNotMigrateUnsupportedHostGuestFiles(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "knowledge-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+
+	now := time.Now()
+	legacy := &GuestKnowledge{
+		GuestID:   "host:alpha",
+		GuestName: "alpha",
+		GuestType: "host",
+		Notes: []Note{
+			{
+				ID:        "service-1",
+				Category:  "service",
+				Title:     "Agent",
+				Content:   "v1",
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		UpdatedAt: now,
+	}
+
+	if err := store.saveToFile("host:alpha", legacy); err != nil {
+		t.Fatalf("Failed to seed unsupported host file: %v", err)
+	}
+
+	knowledge, err := store.GetKnowledge("agent:alpha")
+	if err != nil {
+		t.Fatalf("GetKnowledge failed: %v", err)
+	}
+	if len(knowledge.Notes) != 0 {
+		t.Fatalf("expected no migrated notes for agent:alpha, got %d", len(knowledge.Notes))
+	}
+	if _, err := store.GetKnowledge("host:alpha"); err == nil {
+		t.Fatalf("expected unsupported host guest ID query to be rejected")
+	}
+	if _, err := os.Stat(store.guestFilePath("host:alpha")); err != nil {
+		t.Fatalf("expected unsupported host file to remain unchanged, got err=%v", err)
 	}
 }
 
@@ -247,9 +333,9 @@ func TestStore_GetNotesByCategory(t *testing.T) {
 	}
 
 	// Save notes in different categories
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx")
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis")
 
 	// Get config notes only
 	notes, err := store.GetNotesByCategory("vm-100", "config")
@@ -301,8 +387,8 @@ func TestStore_FormatForContext_WithData(t *testing.T) {
 	}
 
 	// Save some notes
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx on port 80")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx on port 80")
 
 	// Format for context
 	result := store.FormatForContext("vm-100")
@@ -343,8 +429,8 @@ func TestStore_ListGuests(t *testing.T) {
 	}
 
 	// Add some guests
-	store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "PostgreSQL")
-	store.SaveNote("vm-200", "db-server", "vm", "config", "DB", "MySQL")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "PostgreSQL")
+	_ = store.SaveNote("vm-200", "db-server", "vm", "config", "DB", "MySQL")
 
 	// List again
 	guests, err = store.ListGuests()
@@ -370,7 +456,7 @@ func TestStore_Persistence(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	store1.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store1.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
 
 	// Create new store in same dir - should load data
 	store2, err := NewStore(tmpDir)
@@ -401,9 +487,9 @@ func TestStore_MultipleNotes(t *testing.T) {
 	}
 
 	// Save multiple notes with different titles
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis 7")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis 7")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web", "nginx")
 
 	knowledge, err := store.GetKnowledge("vm-100")
 	if err != nil {

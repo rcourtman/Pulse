@@ -60,52 +60,65 @@ func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	if !ok {
 		t.Fatalf("failed to locate test file path")
 	}
-	routerPath := filepath.Join(filepath.Dir(file), "router.go")
+	routerFiles := []string{
+		"router.go",
+		"router_routes_registration.go",
+		"router_routes_ai_relay.go",
+		"router_routes_monitoring.go",
+		"router_routes_auth_security.go",
+		"router_routes_licensing.go",
+		"router_routes_cloud.go",
+		"router_routes_debug.go",
+	}
 
 	fset := token.NewFileSet()
-	fileAST, err := parser.ParseFile(fset, routerPath, nil, 0)
-	if err != nil {
-		t.Fatalf("parse router.go: %v", err)
-	}
 
 	var literalRoutes []string
 	var dynamicRoutes []string
 	var bareLiteralRoutes []string
 	var found bool
 
-	ast.Inspect(fileAST, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
+	for _, routerFile := range routerFiles {
+		routerPath := filepath.Join(filepath.Dir(file), routerFile)
+		fileAST, err := parser.ParseFile(fset, routerPath, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", routerFile, err)
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel == nil {
-			return true
-		}
-		if selector.Sel.Name != "Handle" && selector.Sel.Name != "HandleFunc" {
-			return true
-		}
-		if len(call.Args) < 2 {
-			return true
-		}
-		route, isDynamic := routeLiteral(call.Args[0])
-		if route == "" {
-			return true
-		}
-		found = true
-		if isDynamic {
-			dynamicRoutes = append(dynamicRoutes, route)
-		} else {
-			literalRoutes = append(literalRoutes, route)
-			if !isProtectedHandler(call.Args[1]) {
-				bareLiteralRoutes = append(bareLiteralRoutes, route)
+
+		ast.Inspect(fileAST, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
 			}
-		}
-		return true
-	})
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel == nil {
+				return true
+			}
+			if selector.Sel.Name != "Handle" && selector.Sel.Name != "HandleFunc" {
+				return true
+			}
+			if len(call.Args) < 2 {
+				return true
+			}
+			route, isDynamic := routeLiteral(call.Args[0])
+			if route == "" {
+				return true
+			}
+			found = true
+			if isDynamic {
+				dynamicRoutes = append(dynamicRoutes, route)
+			} else {
+				literalRoutes = append(literalRoutes, route)
+				if !isProtectedHandler(call.Args[1]) {
+					bareLiteralRoutes = append(bareLiteralRoutes, route)
+				}
+			}
+			return true
+		})
+	}
 
 	if !found {
-		t.Fatalf("no routes found in router.go")
+		t.Fatalf("no routes found in parsed router files")
 	}
 
 	return literalRoutes, dynamicRoutes, bareLiteralRoutes
@@ -149,17 +162,25 @@ func isProtectedHandler(expr ast.Expr) bool {
 	}
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
-		return isAuthWrapper(fn.Name)
+		if isAuthWrapper(fn.Name) {
+			return true
+		}
 	case *ast.SelectorExpr:
-		return isAuthWrapper(fn.Sel.Name)
-	default:
-		return false
+		if isAuthWrapper(fn.Sel.Name) {
+			return true
+		}
 	}
+	for _, arg := range call.Args {
+		if isProtectedHandler(arg) {
+			return true
+		}
+	}
+	return false
 }
 
 func isAuthWrapper(name string) bool {
 	switch name {
-	case "RequireAuth", "RequireAdmin", "RequirePermission":
+	case "RequireAuth", "RequireAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin", "RequirePlatformAdmin":
 		return true
 	default:
 		return false
@@ -197,9 +218,7 @@ func sortedKeys(set map[string]struct{}) []string {
 	return keys
 }
 
-var dynamicRouteAllowlist = []string{
-	"config.DefaultOIDCCallbackPath",
-}
+var dynamicRouteAllowlist = []string{}
 
 var publicRouteAllowlist = []string{
 	"/api/health",
@@ -211,32 +230,31 @@ var publicRouteAllowlist = []string{
 	"/api/security/validate-bootstrap-token",
 	"/api/security/quick-setup",
 	"/api/login",
-	"/api/oidc/login",
-	"/api/saml/",
+	"/api/public/signup",
+	"/api/public/magic-link/request",
+	"/api/public/magic-link/verify",
+	"/api/cloud/handoff/exchange",
 	"/api/ai/oauth/callback",
+	"/api/webhooks/stripe",
 	"/api/setup-script",
 	"/api/system/verify-temperature-ssh",
 	"/api/system/ssh-config",
 	"/api/auto-register",
-	"/api/install/install-docker.sh",
-	"/install-docker-agent.sh",
-	"/install-container-agent.sh",
-	"/download/pulse-docker-agent",
-	"/install-host-agent.sh",
-	"/install-host-agent.ps1",
-	"/uninstall-host-agent.sh",
-	"/uninstall-host-agent.ps1",
-	"/download/pulse-host-agent",
+	"/auth/cloud-handoff",
+	"/auth/trial-activate",
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
 }
 
 var bareRouteAllowlist = []string{
+	"/api/agent-deploy/jobs/",
+	"/api/agent-deploy/preflights/",
 	"/api/agent/version",
 	"/api/agent/ws",
 	"/api/ai/oauth/callback",
 	"/api/auto-register",
+	"/api/webhooks/stripe",
 	"/api/config/export",
 	"/api/config/import",
 	"/api/config/nodes",
@@ -244,15 +262,14 @@ var bareRouteAllowlist = []string{
 	"/api/config/nodes/test-config",
 	"/api/config/nodes/test-connection",
 	"/api/config/system",
+	"/api/truenas/connections",
+	"/api/truenas/connections/test",
+	"/api/truenas/connections/",
 	"/api/health",
-	"/api/install/install-docker.sh",
-	"/api/install/install.ps1",
-	"/api/install/install.sh",
 	"/api/login",
 	"/api/logout",
 	"/api/logs/level",
-	"/api/oidc/login",
-	"/api/saml/",
+	"/api/oidc/",
 	"/api/security/apply-restart",
 	"/api/security/change-password",
 	"/api/security/quick-setup",
@@ -270,22 +287,26 @@ var bareRouteAllowlist = []string{
 	"/api/system/verify-temperature-ssh",
 	"/api/version",
 	"/download/pulse-agent",
-	"/download/pulse-docker-agent",
-	"/download/pulse-host-agent",
-	"/download/pulse-host-agent.sha256",
-	"/install-container-agent.sh",
-	"/install-docker-agent.sh",
-	"/install-host-agent.ps1",
-	"/install-host-agent.sh",
 	"/install.ps1",
 	"/install.sh",
-	"/socket.io/",
-	"/uninstall-host-agent.ps1",
-	"/uninstall-host-agent.sh",
+	"/api/public/signup",
+	"/api/public/magic-link/request",
+	"/api/public/magic-link/verify",
+	"/api/cloud/handoff/exchange",
+	"/api/clusters/",
+	"/auth/cloud-handoff",
+	"/auth/trial-activate",
 	"/ws",
+	"/api/saml/",
 }
 
 var allRouteAllowlist = []string{
+	"/debug/pprof",
+	"/debug/pprof/",
+	"/debug/pprof/cmdline",
+	"/debug/pprof/profile",
+	"/debug/pprof/symbol",
+	"/debug/pprof/trace",
 	"/api/health",
 	"/api/monitoring/scheduler/health",
 	"/api/state",
@@ -294,45 +315,58 @@ var allRouteAllowlist = []string{
 	"/api/logs/level",
 	"/api/agents/docker/report",
 	"/api/agents/kubernetes/report",
+	"/api/agents/agent/report",
 	"/api/agents/host/report",
+	"/api/agents/agent/lookup",
 	"/api/agents/host/lookup",
+	"/api/agents/agent/uninstall",
 	"/api/agents/host/uninstall",
+	"/api/agents/agent/unlink",
 	"/api/agents/host/unlink",
+	"/api/agents/agent/link",
 	"/api/agents/host/link",
+	"/api/agents/agent/",
 	"/api/agents/host/",
 	"/api/agents/docker/commands/",
-	"/api/agents/docker/hosts/",
+	"/api/agents/docker/runtimes/",
 	"/api/agents/docker/containers/update",
 	"/api/agents/kubernetes/clusters/",
 	"/api/version",
 	"/api/storage/",
 	"/api/storage-charts",
 	"/api/charts",
+	"/api/charts/workloads",
+	"/api/charts/infrastructure",
+	"/api/charts/workloads-summary",
 	"/api/metrics-store/stats",
 	"/api/metrics-store/history",
 	"/api/diagnostics",
 	"/api/diagnostics/docker/prepare-token",
-	"/api/install/install-docker.sh",
-	"/api/install/install.sh",
-	"/api/install/install.ps1",
 	"/api/config",
-	"/api/backups",
-	"/api/backups/",
-	"/api/backups/unified",
-	"/api/backups/pve",
-	"/api/backups/pbs",
-	"/api/snapshots",
+	"/api/recovery/points",
+	"/api/recovery/series",
+	"/api/recovery/facets",
+	"/api/recovery/rollups",
 	"/api/resources",
+	"/api/resources/storage-incidents",
+	"/api/resources/storage-summary",
+	"/api/resources/k8s/namespaces",
 	"/api/resources/stats",
 	"/api/resources/",
 	"/api/guests/metadata",
 	"/api/guests/metadata/",
 	"/api/docker/metadata",
 	"/api/docker/metadata/",
-	"/api/docker/hosts/metadata",
-	"/api/docker/hosts/metadata/",
-	"/api/hosts/metadata",
-	"/api/hosts/metadata/",
+	"/api/docker/runtimes/metadata",
+	"/api/docker/runtimes/metadata/",
+	"/api/agents/metadata",
+	"/api/agents/metadata/",
+	"GET /api/settings/relay",
+	"GET /api/settings/relay/status",
+	"PUT /api/settings/relay",
+	"GET /api/onboarding/qr",
+	"POST /api/onboarding/validate",
+	"GET /api/onboarding/deep-link",
 	"/api/updates/check",
 	"/api/updates/apply",
 	"/api/updates/status",
@@ -343,27 +377,70 @@ var allRouteAllowlist = []string{
 	"/api/infra-updates",
 	"/api/infra-updates/summary",
 	"/api/infra-updates/check",
-	"/api/infra-updates/host/",
+	"/api/infra-updates/agent/",
 	"/api/infra-updates/",
 	"/api/config/nodes",
 	"/api/security/validate-bootstrap-token",
 	"/api/config/nodes/test-config",
 	"/api/config/nodes/test-connection",
 	"/api/config/nodes/",
+	"/api/truenas/connections",
+	"/api/truenas/connections/test",
+	"/api/truenas/connections/",
 	"/api/admin/profiles/",
 	"/api/config/system",
 	"/api/system/mock-mode",
 	"/api/license/status",
+	"/api/webhooks/stripe",
 	"/api/license/features",
 	"/api/license/activate",
 	"/api/license/clear",
+	"GET /api/license/entitlements",
+	"POST /api/license/trial/start",
+	"GET /api/license/monitored-system-ledger",
+	"POST /api/upgrade-metrics/events",
+	"GET /api/upgrade-metrics/stats",
+	"GET /api/upgrade-metrics/health",
+	"GET /api/upgrade-metrics/config",
+	"PUT /api/upgrade-metrics/config",
+	"GET /api/admin/upgrade-metrics-funnel",
+	"GET /api/orgs",
+	"POST /api/orgs",
+	"GET /api/orgs/{id}",
+	"PUT /api/orgs/{id}",
+	"DELETE /api/orgs/{id}",
+	"GET /api/orgs/{id}/members",
+	"POST /api/orgs/{id}/members",
+	"DELETE /api/orgs/{id}/members/{userId}",
+	"GET /api/orgs/{id}/shares",
+	"GET /api/orgs/{id}/shares/incoming",
+	"POST /api/orgs/{id}/shares",
+	"DELETE /api/orgs/{id}/shares/{shareId}",
 	"GET /api/audit",
 	"GET /api/audit/",
 	"GET /api/audit/{id}/verify",
+	"GET /api/audit/export",
+	"GET /api/audit/summary",
+	"GET /api/admin/orgs/{id}/billing-state",
+	"PUT /api/admin/orgs/{id}/billing-state",
+	"POST /api/admin/orgs/{id}/suspend",
+	"POST /api/admin/orgs/{id}/unsuspend",
+	"POST /api/admin/orgs/{id}/soft-delete",
+	"GET /api/hosted/organizations",
+	"POST /api/admin/orgs/{id}/agent-install-command",
+	"/api/public/signup",
+	"/api/public/magic-link/request",
+	"/api/public/magic-link/verify",
+	"/api/cloud/handoff/exchange",
+	"/auth/cloud-handoff",
+	"/auth/trial-activate",
+	"/api/saml/",
 	"/api/admin/roles",
 	"/api/admin/roles/",
 	"/api/admin/users",
 	"/api/admin/users/",
+	"GET /api/admin/rbac/integrity",
+	"POST /api/admin/rbac/reset-admin",
 	"/api/admin/reports/generate",
 	"/api/admin/reports/generate-multi",
 	"/api/admin/webhooks/audit",
@@ -371,13 +448,11 @@ var allRouteAllowlist = []string{
 	"/api/logout",
 	"/api/login",
 	"/api/security/reset-lockout",
-	"/api/security/oidc",
-	"/api/oidc/login",
-	"/api/security/sso/providers",
+	"/api/oidc/",
 	"/api/security/sso/providers/test",
 	"/api/security/sso/providers/metadata/preview",
+	"/api/security/sso/providers",
 	"/api/security/sso/providers/",
-	"/api/saml/",
 	"/api/security/tokens",
 	"/api/security/tokens/",
 	"/api/security/status",
@@ -436,12 +511,12 @@ var allRouteAllowlist = []string{
 	"/api/ai/patrol/run",
 	"/api/ai/patrol/acknowledge",
 	"/api/ai/patrol/dismiss",
-	"/api/ai/patrol/undismiss",
 	"/api/ai/patrol/findings/note",
 	"/api/ai/patrol/suppress",
 	"/api/ai/patrol/snooze",
 	"/api/ai/patrol/resolve",
 	"/api/ai/patrol/runs",
+	"/api/ai/patrol/runs/",
 	"/api/ai/patrol/suppressions",
 	"/api/ai/patrol/suppressions/",
 	"/api/ai/patrol/dismissed",
@@ -470,8 +545,6 @@ var allRouteAllowlist = []string{
 	"/api/ai/circuit/status",
 	"/api/ai/incidents",
 	"/api/ai/incidents/",
-	"/api/ai/chat/sessions",
-	"/api/ai/chat/sessions/",
 	"/api/ai/status",
 	"/api/ai/chat",
 	"/api/ai/sessions",
@@ -484,24 +557,19 @@ var allRouteAllowlist = []string{
 	"/api/discovery/settings",
 	"/api/discovery/info/",
 	"/api/discovery/type/",
-	"/api/discovery/host/",
+	"/api/discovery/agent/",
 	"/api/discovery/",
 	"/api/agent/ws",
-	"/install-docker-agent.sh",
-	"/install-container-agent.sh",
-	"/download/pulse-docker-agent",
-	"/install-host-agent.sh",
-	"/install-host-agent.ps1",
-	"/uninstall-host-agent.sh",
-	"/uninstall-host-agent.ps1",
-	"/download/pulse-host-agent",
-	"/download/pulse-host-agent.sha256",
+	"/api/agents/agent/enroll",
+	"/api/agents/host/enroll",
+	"/api/clusters/",
+	"/api/agent-deploy/preflights/",
+	"/api/agent-deploy/jobs/",
 	"/install.sh",
 	"/install.ps1",
 	"/download/pulse-agent",
 	"/api/agent/version",
 	"/api/server/info",
 	"/ws",
-	"/socket.io/",
 	"/simple-stats",
 }

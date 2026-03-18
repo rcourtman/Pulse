@@ -3,7 +3,6 @@ package hostmetrics
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -52,18 +51,25 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 
 	if cpuCount, err := cpuCounts(collectCtx, true); err == nil {
 		snapshot.CPUCount = cpuCount
+	} else {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu count")
 	}
 
 	if cpuUsage, err := collectCPUUsage(collectCtx); err == nil {
 		snapshot.CPUUsagePercent = cpuUsage
+	} else {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu usage")
 	}
 
 	if loadAvg, err := loadAvg(collectCtx); err == nil && loadAvg != nil {
 		snapshot.LoadAverage = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
+	} else if err != nil {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect load average")
 	}
 
 	memStats, err := virtualMemory(collectCtx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to collect memory stats")
 		return Snapshot{}, fmt.Errorf("memory stats: %w", err)
 	}
 
@@ -71,29 +77,26 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	freeBytes := memStats.Free
 	usedPercent := memStats.UsedPercent
 
-	if runtime.GOOS == "freebsd" {
-		// ZFS ARC is counted as "wired" by FreeBSD but is reclaimable under pressure.
-		// Subtract it from Used to match actual memory pressure (same as how Linux
-		// classifies ZFS ARC as SReclaimable in /proc/meminfo). Refs: #1264/#1051
-		if arcSize, err := readFreeBSDARCSize(); err == nil && arcSize > 0 {
-			if arcSize < usedBytes {
-				usedBytes -= arcSize
-			} else {
-				usedBytes = 0
+	// ZFS ARC memory is reclaimable under pressure but is counted as "used" by
+	// both FreeBSD (wired memory) and Linux (not in MemAvailable, openzfs/zfs#10255).
+	// Subtract it from Used to reflect actual memory pressure. Refs: #1264/#1051
+	if arcSize, err := readARCSize(); err == nil && arcSize > 0 {
+		if arcSize < usedBytes {
+			usedBytes -= arcSize
+		} else {
+			usedBytes = 0
+		}
+		if memStats.Total > 0 {
+			usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
+			if usedPercent < 0 {
+				usedPercent = 0
 			}
-			if memStats.Total > 0 {
-				usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
-				if usedPercent < 0 {
-					usedPercent = 0
-				}
-				if usedPercent > 100 {
-					usedPercent = 100
-				}
+			if usedPercent > 100 {
+				usedPercent = 100
 			}
-			if memStats.Total >= usedBytes {
-				// Keep invariants sensible for the UI (Total ~= Used+Free).
-				freeBytes = memStats.Total - usedBytes
-			}
+		}
+		if memStats.Total >= usedBytes {
+			freeBytes = memStats.Total - usedBytes
 		}
 	}
 
@@ -169,16 +172,6 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 			continue
 		}
 
-		isZFSMount := strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs")
-
-		// Filter mounts that should never be counted before probing usage stats.
-		// This avoids potentially blocking statfs calls on stale/unreachable network mounts.
-		if !isZFSMount {
-			if shouldSkip, _ := fsfilters.ShouldSkipFilesystemBeforeUsage(part.Fstype, part.Mountpoint); shouldSkip {
-				continue
-			}
-		}
-
 		usage, err := diskUsage(ctx, part.Mountpoint)
 		if err != nil {
 			log.Debug().Err(err).Str("mount", part.Mountpoint).Str("device", part.Device).Str("fstype", part.Fstype).Msg("disk: failed to get usage")
@@ -189,7 +182,7 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 			continue
 		}
 
-		if isZFSMount {
+		if strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs") {
 			pool := zfsPoolFromDevice(part.Device)
 			if pool == "" {
 				log.Debug().Str("device", part.Device).Str("mount", part.Mountpoint).Msg("disk: zfs partition with empty pool name, skipping")
@@ -264,11 +257,13 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	ifaces, err := netInterfaces(ctx)
 	if err != nil {
+		log.Debug().Err(err).Msg("network: failed to list interfaces")
 		return nil
 	}
 
 	ioCounters, err := netIOCounters(ctx, true)
 	if err != nil {
+		log.Debug().Err(err).Msg("network: failed to get interface io counters")
 		ioCounters = nil
 	}
 	ioMap := make(map[string]gonet.IOCountersStat, len(ioCounters))
@@ -309,6 +304,7 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	}
 
 	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Name < interfaces[j].Name })
+	log.Debug().Int("count", len(interfaces)).Msg("network: collected interfaces")
 	return interfaces
 }
 
@@ -327,6 +323,7 @@ func isLoopback(flags []string) bool {
 func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskIO {
 	counters, err := diskIOCounters(ctx)
 	if err != nil {
+		log.Debug().Err(err).Msg("diskio: failed to read disk io counters")
 		return nil
 	}
 
@@ -362,6 +359,7 @@ func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskI
 	}
 
 	sort.Slice(devices, func(i, j int) bool { return devices[i].Device < devices[j].Device })
+	log.Debug().Int("count", len(devices)).Msg("diskio: collected devices")
 	return devices
 }
 

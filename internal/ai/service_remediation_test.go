@@ -59,41 +59,6 @@ func TestService_Remediation(t *testing.T) {
 	}
 }
 
-func TestService_Remediation_NoPatrolService(t *testing.T) {
-	svc := NewService(nil, nil)
-	// patrolService is nil, logRemediation should handle gracefully
-
-	req := ExecuteRequest{
-		TargetID:   "vm-102",
-		TargetType: "vm",
-		Prompt:     "Test",
-	}
-	// Should not panic
-	svc.logRemediation(req, "test", "output", true)
-}
-
-func TestService_Remediation_NoRemediationLog(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-ai-rem-test-nolog-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	persistence := config.NewConfigPersistence(tmpDir)
-	svc := NewService(persistence, nil)
-	patrol := NewPatrolService(svc, nil)
-	svc.patrolService = patrol
-	// remediationLog is nil on patrol
-
-	req := ExecuteRequest{
-		TargetID:   "vm-103",
-		TargetType: "vm",
-		Prompt:     "Test",
-	}
-	// Should not panic
-	svc.logRemediation(req, "test", "output", true)
-}
-
 func TestService_BuildRemediationContext_Empty(t *testing.T) {
 	svc := NewService(nil, nil)
 

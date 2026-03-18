@@ -1,0 +1,238 @@
+package cloudcp
+
+import (
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/account"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/handoff"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
+)
+
+// Deps holds shared dependencies injected into HTTP handlers.
+type Deps struct {
+	Config             *CPConfig
+	Registry           *registry.TenantRegistry
+	Docker             *docker.Manager // nil if Docker is unavailable
+	MagicLinks         *cpauth.Service // control plane magic link service
+	TrialSignupStore   *TrialSignupStore
+	Provisioner        *cpstripe.Provisioner
+	HostedEntitlements *entitlements.Service
+	Version            string
+	EmailSender        email.Sender
+}
+
+// RegisterRoutes wires all HTTP handlers onto the given ServeMux.
+func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
+	webhookLimiter := NewCPRateLimiter(deps.Config.WebhookRateLimitPerMinute, time.Minute)
+	magicLinkVerifyLimiter := NewCPRateLimiter(deps.Config.MagicLinkVerifyRateLimitPerMinute, time.Minute)
+	sessionAuthLimiter := NewCPRateLimiter(deps.Config.SessionAuthRateLimitPerMinute, time.Minute)
+	adminLimiter := NewCPRateLimiter(deps.Config.AdminRateLimitPerMinute, time.Minute)
+	accountAPILimiter := NewCPRateLimiter(deps.Config.AccountAPIRateLimitPerMinute, time.Minute)
+	portalAPILimiter := NewCPRateLimiter(deps.Config.PortalAPIRateLimitPerMinute, time.Minute)
+	trialSignupPageLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupVerificationLimiter := NewCPRateLimiter(6, time.Hour)
+	trialSignupVerifyLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupCheckoutLimiter := NewCPRateLimiter(12, time.Hour)
+	trialSignupCompleteLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupRedeemLimiter := NewCPRateLimiter(30, time.Minute)
+	hostedEntitlementRefreshLimiter := NewCPRateLimiter(60, time.Hour)
+	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
+	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
+
+	adminAuth := func(next http.Handler) http.Handler {
+		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)
+	}
+	sessionAuth := func(next http.Handler) http.Handler {
+		if deps.MagicLinks == nil {
+			return adminAuth(next)
+		}
+		return requireSessionAuth(deps.MagicLinks, deps.Registry, next)
+	}
+	accountSessionAuth := func(extract accountIDExtractor, next http.Handler) http.Handler {
+		if deps.MagicLinks == nil {
+			return adminAuth(next)
+		}
+		return sessionAuth(requireAccountMembership(deps.Registry, extract, next))
+	}
+	accountMutationAuth := requireAnyAccountRole(registry.MemberRoleOwner, registry.MemberRoleAdmin)
+
+	// Health / readiness are unauthenticated liveness/readiness probes.
+	mux.HandleFunc("/healthz", admin.HandleHealthz)
+	mux.HandleFunc("/readyz", admin.HandleReadyz(deps.Registry))
+
+	// Status and metrics are private by default.
+	statusHandler := http.HandlerFunc(admin.HandleStatus(deps.Registry, deps.Version))
+	if deps.Config.PublicStatus {
+		mux.Handle("/status", statusHandler)
+	} else {
+		mux.Handle("/status", adminAuth(statusHandler))
+	}
+
+	metricsHandler := promhttp.Handler()
+	if deps.Config.PublicMetrics {
+		mux.Handle("/metrics", metricsHandler)
+	} else {
+		mux.Handle("/metrics", adminAuth(metricsHandler))
+	}
+
+	// Stripe webhook (signature-authenticated)
+	hostedEntitlements := deps.HostedEntitlements
+	if hostedEntitlements == nil {
+		hostedEntitlements = entitlements.NewService(deps.Registry, deps.Config.BaseURL, deps.Config.TrialActivationPrivateKey)
+	}
+	provisioner := deps.Provisioner
+	if provisioner == nil {
+		provisioner = cpstripe.NewProvisioner(
+			deps.Registry,
+			deps.Config.TenantsDir(),
+			deps.Docker,
+			deps.MagicLinks,
+			deps.Config.BaseURL,
+			deps.EmailSender,
+			deps.Config.EmailFrom,
+			deps.Config.AllowDockerlessProvisioning,
+			cpstripe.WithHostedEntitlementService(hostedEntitlements),
+			cpstripe.WithTrialActivationPrivateKey(deps.Config.TrialActivationPrivateKey),
+		)
+	}
+	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
+	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
+
+	// Magic link verification (public, token-authenticated)
+	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
+	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))))
+	if deps.MagicLinks != nil {
+		mux.Handle("/auth/logout", sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
+	}
+
+	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
+	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
+	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
+	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
+	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
+	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
+	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
+	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
+	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
+	mux.Handle("/api/trial-signup/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
+
+	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
+	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)
+	mux.Handle("/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+	mux.Handle("/cloud/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+	mux.Handle("/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+	mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+	mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
+	mux.Handle("/api/public/magic-link/request", publicMagicLinkLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicMagicLinkRequest)))
+
+	// Admin API (key-authenticated)
+	tenantsHandler := admin.HandleListTenants(deps.Registry)
+	mux.Handle("/admin/tenants", adminLimiter.Middleware(adminAuth(tenantsHandler)))
+	mux.Handle("/admin/magic-link", adminLimiter.Middleware(adminAuth(cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom))))
+
+	// Account membership (session + account-membership authenticated)
+	listMembers := account.HandleListMembers(deps.Registry)
+	inviteMember := account.HandleInviteMember(deps.Registry)
+	updateRole := account.HandleUpdateMemberRole(deps.Registry)
+	removeMember := account.HandleRemoveMember(deps.Registry)
+
+	membersCollection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listMembers(w, r)
+		case http.MethodPost:
+			accountMutationAuth(http.HandlerFunc(inviteMember)).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	member := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPatch:
+			accountMutationAuth(http.HandlerFunc(updateRole)).ServeHTTP(w, r)
+		case http.MethodDelete:
+			accountMutationAuth(http.HandlerFunc(removeMember)).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	accountIDFromPath := func(r *http.Request) string {
+		return r.PathValue("account_id")
+	}
+	accountIDFromPortalRequest := func(r *http.Request) string {
+		if v := strings.TrimSpace(r.URL.Query().Get("account_id")); v != "" {
+			return v
+		}
+		if v := strings.TrimSpace(r.Header.Get("X-Account-ID")); v != "" {
+			return v
+		}
+		if v := strings.TrimSpace(r.Header.Get("X-Account-Id")); v != "" {
+			return v
+		}
+		return ""
+	}
+
+	mux.Handle("/api/accounts/{account_id}/members", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, membersCollection)))
+	mux.Handle("/api/accounts/{account_id}/members/{user_id}", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, member)))
+
+	// Workspace management (session + account-membership authenticated)
+	listTenants := account.HandleListTenants(deps.Registry)
+	createTenant := account.HandleCreateTenant(deps.Registry, provisioner)
+	updateTenant := account.HandleUpdateTenant(deps.Registry)
+	deleteTenant := account.HandleDeleteTenant(deps.Registry, provisioner)
+
+	tenantsCollection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTenants(w, r)
+		case http.MethodPost:
+			accountMutationAuth(http.HandlerFunc(createTenant)).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	tenant := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPatch:
+			accountMutationAuth(http.HandlerFunc(updateTenant)).ServeHTTP(w, r)
+		case http.MethodDelete:
+			accountMutationAuth(http.HandlerFunc(deleteTenant)).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.Handle("/api/accounts/{account_id}/tenants", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, tenantsCollection)))
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, tenant)))
+
+	// Tenant switching handoff (session + account-membership authenticated)
+	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
+
+	// MSP portal API (session + account-membership authenticated)
+	mux.Handle("/api/portal/dashboard", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
+	mux.Handle("/api/portal/workspaces/{tenant_id}", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
+
+	// Stripe Customer Portal redirect (session + account-membership authenticated)
+	billingCfg := portal.BillingPortalConfig{
+		StripeAPIKey: deps.Config.StripeAPIKey,
+		ReturnURL:    buildCPURL(deps.Config.BaseURL, "/portal", nil),
+	}
+	mux.Handle("/api/portal/billing", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
+
+	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
+	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
+	mux.Handle("/portal", portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))
+}

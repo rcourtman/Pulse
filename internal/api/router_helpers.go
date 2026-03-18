@@ -2,9 +2,10 @@ package api
 
 import (
 	"net/http"
+	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,37 +39,43 @@ func NewMultiTenantStateProvider(mtm *monitoring.MultiTenantMonitor, defaultM *m
 	}
 }
 
-// GetStateForTenant returns the state for a specific tenant.
-func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {
-	// Default org uses the default monitor
+func (p *MultiTenantStateProvider) monitorForTenant(orgID string) *monitoring.Monitor {
 	if orgID == "" || orgID == "default" {
-		if p.defaultMonitor != nil {
-			return p.defaultMonitor.GetState()
-		}
-		return models.StateSnapshot{}
+		return p.defaultMonitor
 	}
 
-	// Try to get tenant-specific monitor
 	if p.mtMonitor != nil {
 		monitor, err := p.mtMonitor.GetMonitor(orgID)
 		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for state")
-			// Fall back to default monitor
-			if p.defaultMonitor != nil {
-				return p.defaultMonitor.GetState()
-			}
-			return models.StateSnapshot{}
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor")
+			return nil
 		}
-		if monitor != nil {
-			return monitor.GetState()
-		}
+		return monitor
 	}
 
-	// Fall back to default monitor
-	if p.defaultMonitor != nil {
-		return p.defaultMonitor.GetState()
+	return nil
+}
+
+// UnifiedReadStateForTenant returns the canonical typed unified read-state for a
+// specific tenant, falling back to a snapshot-backed adapter only when the
+// monitor has not been wired with a resource store yet.
+func (p *MultiTenantStateProvider) UnifiedReadStateForTenant(orgID string) unifiedresources.ReadState {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return nil
 	}
-	return models.StateSnapshot{}
+	return monitor.GetUnifiedReadStateOrSnapshot()
+}
+
+// UnifiedResourceSnapshotForTenant returns the canonical unified-resource seed
+// for a specific tenant, along with its freshness marker.
+func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string) ([]unifiedresources.Resource, time.Time) {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return nil, time.Time{}
+	}
+
+	return monitor.UnifiedResourceSnapshot()
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor manager.
@@ -84,8 +91,8 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	if r.dockerAgentHandlers != nil {
 		r.dockerAgentHandlers.SetMultiTenantMonitor(mtm)
 	}
-	if r.hostAgentHandlers != nil {
-		r.hostAgentHandlers.SetMultiTenantMonitor(mtm)
+	if r.unifiedAgentHandlers != nil {
+		r.unifiedAgentHandlers.SetMultiTenantMonitor(mtm)
 	}
 	if r.kubernetesAgentHandlers != nil {
 		r.kubernetesAgentHandlers.SetMultiTenantMonitor(mtm)
@@ -97,6 +104,7 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			r.monitor = m
 		}
+		mtm.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
 
 	// Wire tenant state provider to resource handlers

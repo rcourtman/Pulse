@@ -70,8 +70,12 @@ func parseCSRFSkipPaths(t *testing.T) []string {
 
 var csrfSkipAllowlist = []string{
 	"/api/login",
-	"/api/security/apply-restart",
+	"/api/public/magic-link/request",
+	"/api/public/signup",
+	"/api/cloud/handoff/exchange",
 	"/api/security/quick-setup",
 	"/api/security/validate-bootstrap-token",
 	"/api/setup-script-url",
+	"/auth/cloud-handoff",
+	"/auth/trial-activate",
 }

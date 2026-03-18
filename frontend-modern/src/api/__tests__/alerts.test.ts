@@ -1,0 +1,250 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { AlertsAPI } from '../alerts';
+import { apiFetchJSON } from '@/utils/apiClient';
+
+vi.mock('@/utils/apiClient', () => ({
+  apiFetchJSON: vi.fn(),
+}));
+
+describe('AlertsAPI', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('getActive', () => {
+    it('fetches active alerts', async () => {
+      const mockAlerts = [{ id: 'alert-1', severity: 'critical' }];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockAlerts);
+
+      const result = await AlertsAPI.getActive();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/active');
+      expect(result).toEqual(mockAlerts);
+    });
+  });
+
+  describe('getHistory', () => {
+    it('fetches history with no params', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce([]);
+
+      await AlertsAPI.getHistory();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/history?');
+    });
+
+    it('fetches history with params', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce([]);
+
+      await AlertsAPI.getHistory({ limit: 50, severity: 'critical' });
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/history?limit=50&severity=critical');
+    });
+
+    it('handles undefined params', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce([]);
+
+      await AlertsAPI.getHistory({ limit: 10, offset: undefined });
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/history?limit=10');
+    });
+  });
+
+  describe('getConfig', () => {
+    it('fetches alert config', async () => {
+      const mockConfig = { activationState: 'active' };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockConfig);
+
+      const result = await AlertsAPI.getConfig();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config');
+      expect(result).toEqual(mockConfig);
+    });
+
+    it('uses canonical v6 payload as-is', async () => {
+      const mockConfig = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { cpu: { trigger: 80, clear: 75 } },
+        overrides: {},
+        storageDefault: { trigger: 90, clear: 85 },
+        disableAllAgents: true,
+        disableAllAgentsOffline: true,
+        timeThresholds: { agent: 30 },
+        metricTimeThresholds: { agent: { cpu: 45 } },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockConfig);
+
+      const result = await AlertsAPI.getConfig();
+
+      expect(result).toEqual(mockConfig);
+    });
+  });
+
+  describe('updateConfig', () => {
+    it('updates alert config', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const config = {
+        enabled: true,
+        activationState: 'active' as const,
+        guestDefaults: {},
+        nodeDefaults: {},
+        storageDefault: { trigger: 90, clear: 80 },
+        overrides: {},
+      };
+      const result = await AlertsAPI.updateConfig(config);
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/config',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify(config),
+        }),
+      );
+      expect(result).toEqual({ success: true });
+    });
+
+    it('sends canonical v6 config without legacy host aliases', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { cpu: { trigger: 80, clear: 75 } },
+        overrides: {},
+        storageDefault: { trigger: 90, clear: 85 },
+        disableAllAgents: true,
+        disableAllAgentsOffline: true,
+        timeThresholds: { agent: 20 },
+        metricTimeThresholds: { agent: { memory: 60 } },
+      };
+
+      await AlertsAPI.updateConfig(config as any);
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/config',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify(config),
+        }),
+      );
+    });
+  });
+
+  describe('activate', () => {
+    it('activates alerts', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true, state: 'active' });
+
+      const result = await AlertsAPI.activate();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/activate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual({ success: true, state: 'active' });
+    });
+  });
+
+  describe('clearHistory', () => {
+    it('clears alert history', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const result = await AlertsAPI.clearHistory();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/history',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('bulkAcknowledge', () => {
+    it('acknowledges multiple alerts', async () => {
+      const results = {
+        results: [
+          { alertIdentifier: 'canonical:alert-1', success: true },
+          { alertIdentifier: 'canonical:alert-2', success: true },
+        ],
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(results);
+
+      const result = await AlertsAPI.bulkAcknowledge(['alert-1', 'alert-2'], 'user1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/alerts/bulk/acknowledge',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ alertIdentifiers: ['alert-1', 'alert-2'], user: 'user1' }),
+        }),
+      );
+      expect(result).toEqual(results);
+    });
+  });
+
+  describe('incident normalization', () => {
+    it('normalizes a single incident alert identifier', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        id: 'incident-1',
+        alertIdentifier: 'canonical:a1',
+        alertType: 'cpu',
+        level: 'warning',
+        resourceId: 'resource-1',
+        resourceName: 'resource-1',
+        status: 'open',
+        openedAt: '2026-03-01T00:00:00Z',
+        acknowledged: false,
+      });
+
+      const result = await AlertsAPI.getIncidentTimeline('canonical:a1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/incidents?alertIdentifier=canonical%3Aa1');
+
+      expect(result).toMatchObject({
+        alertIdentifier: 'canonical:a1',
+      });
+    });
+
+    it('normalizes incident lists for resources', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce([
+        {
+          id: 'incident-1',
+          alertIdentifier: 'canonical:a1',
+          alertType: 'cpu',
+          level: 'warning',
+          resourceId: 'resource-1',
+          resourceName: 'resource-1',
+          status: 'open',
+          openedAt: '2026-03-01T00:00:00Z',
+          acknowledged: false,
+        },
+      ]);
+
+      const result = await AlertsAPI.getIncidentsForResource('resource-1');
+
+      expect(result[0]).toMatchObject({
+        alertIdentifier: 'canonical:a1',
+      });
+    });
+
+    it('normalizes malformed incident lists to empty arrays', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(null);
+
+      const result = await AlertsAPI.getIncidentsForResource('resource-1');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('collection normalization', () => {
+    it('normalizes missing bulk acknowledge results to empty arrays', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const result = await AlertsAPI.bulkAcknowledge(['alert-1']);
+
+      expect(result).toEqual({ success: true, results: [] });
+    });
+  });
+});

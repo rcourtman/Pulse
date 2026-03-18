@@ -5,15 +5,7 @@ import type {
   WSMessage,
   Alert,
   ResolvedAlert,
-  PVEBackups,
-  VM,
-  Container,
-  DockerHost,
-  Host,
-  KubernetesCluster,
-  RemovedDockerHost,
-  RemovedHost,
-  RemovedKubernetesCluster,
+  ConnectedInfrastructureItem,
 } from '@/types/api';
 import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
@@ -21,48 +13,29 @@ import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
-import { pruneMetricsByPrefix } from './metricsHistory';
-import { getMetricKeyPrefix } from '@/utils/metricsKeys';
-import { syncWithHostCommand } from './containerUpdates';
+import { syncWithAgentCommand } from './containerUpdates';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
+
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
+  let wsUrl = url;
   const [connected, setConnected] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal(false);
   const [initialDataReceived, setInitialDataReceived] = createSignal(false);
-  const [state, setState] = createStore<State>({
-    nodes: [],
-    vms: [],
-    containers: [],
-    dockerHosts: [],
-    removedDockerHosts: [],
-    kubernetesClusters: [],
-    removedKubernetesClusters: [],
-    removedHosts: [],
-    hosts: [],
-    replicationJobs: [],
-    storage: [],
-    cephClusters: [],
-    physicalDisks: [],
-    pbs: [],
-    pmg: [],
+  const createInitialState = (): State => ({
+    // Canonical v6 state comes from unified resources.
+    connectedInfrastructure: [],
     metrics: [],
-    pveBackups: {
-      backupTasks: [],
-      storageBackups: [],
-      guestSnapshots: [],
-    } as PVEBackups,
-    pbsBackups: [],
-    pmgBackups: [],
-    backups: {
-      pve: {
-        backupTasks: [],
-        storageBackups: [],
-        guestSnapshots: [],
-      },
-      pbs: [],
-      pmg: [],
-    },
     performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
@@ -82,108 +55,39 @@ export function createWebSocketStore(url: string) {
     },
     activeAlerts: [],
     recentlyResolved: [],
-    lastUpdate: '',
-    pveTagColors: {},
+    lastUpdate: 0,
     // Unified resources for cross-platform monitoring
     resources: [],
   });
+  const [state, setState] = createStore<State>(createInitialState());
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
 
-  // Track consecutive empty dockerHost payloads so we can tolerate transient
-  // blanks without spamming the UI.
-  let consecutiveEmptyDockerUpdates = 0;
-  let hasReceivedNonEmptyDockerHosts = false;
-
-  // Track consecutive empty hosts payloads (same protection as dockerHosts)
-  // This prevents "Host" type badge from disappearing when transient empty
-  // hosts arrays are received. See #773.
-  let consecutiveEmptyHostUpdates = 0;
-  let hasReceivedNonEmptyHosts = false;
-
-  // Track consecutive empty Kubernetes clusters payloads (same protection as dockerHosts/hosts)
-  // This prevents clusters from disappearing when transient empty arrays are received.
-  let consecutiveEmptyK8sUpdates = 0;
-  let hasReceivedNonEmptyK8sClusters = false;
-
-  const mergeDockerHostRevocations = (incomingHosts: DockerHost[]) => {
-    if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
-      return incomingHosts;
-    }
-
-    const existingHosts = state.dockerHosts || [];
-    if (!Array.isArray(existingHosts) || existingHosts.length === 0) {
-      return incomingHosts;
-    }
-
-    return incomingHosts.map((host) => {
-      const previous = existingHosts.find((entry) => entry.id === host.id);
-      if (!previous?.tokenRevokedAt || !previous.revokedTokenId) {
-        return host;
-      }
-
-      const tokenChanged =
-        previous.revokedTokenId &&
-        host.tokenId &&
-        host.tokenId !== previous.revokedTokenId;
-      const tokenUsedAfterRevocation =
-        typeof host.tokenLastUsedAt === 'number' &&
-        host.tokenLastUsedAt >= previous.tokenRevokedAt;
-
-      if (tokenChanged || tokenUsedAfterRevocation) {
-        return host;
-      }
-
-      return {
-        ...host,
-        revokedTokenId: previous.revokedTokenId,
-        tokenRevokedAt: previous.tokenRevokedAt,
-      };
-    });
-  };
-
-  const mergeHostRevocations = (incomingHosts: Host[]) => {
-    if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
-      return incomingHosts;
-    }
-
-    const existingHosts = state.hosts || [];
-    if (!Array.isArray(existingHosts) || existingHosts.length === 0) {
-      return incomingHosts;
-    }
-
-    return incomingHosts.map((host) => {
-      const previous = existingHosts.find((entry) => entry.id === host.id);
-      if (!previous?.tokenRevokedAt || !previous.revokedTokenId) {
-        return host;
-      }
-
-      const tokenChanged =
-        previous.revokedTokenId &&
-        host.tokenId &&
-        host.tokenId !== previous.revokedTokenId;
-      const tokenUsedAfterRevocation =
-        typeof host.tokenLastUsedAt === 'number' &&
-        host.tokenLastUsedAt >= previous.tokenRevokedAt;
-
-      if (tokenChanged || tokenUsedAfterRevocation) {
-        return host;
-      }
-
-      return {
-        ...host,
-        revokedTokenId: previous.revokedTokenId,
-        tokenRevokedAt: previous.tokenRevokedAt,
-      };
-    });
-  };
-
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
+  const pendingAckTimeouts = new Map<string, number>();
 
   let alertsEnabled = isAlertsActivationEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
+  const handleAlertsActivation = (event: Event) => {
+    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
+    alertsEnabled = detail === 'active';
+    applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
+  };
+
+  const clearPendingAckTimeout = (alertIdentifier: string) => {
+    const timeout = pendingAckTimeouts.get(alertIdentifier);
+    if (timeout) {
+      window.clearTimeout(timeout);
+      pendingAckTimeouts.delete(alertIdentifier);
+    }
+  };
+
+  const clearPendingAck = (alertIdentifier: string) => {
+    pendingAckChanges.delete(alertIdentifier);
+    clearPendingAckTimeout(alertIdentifier);
+  };
 
   const applyActiveAlerts = (alertsMap: Record<string, Alert>) => {
     // Remove alerts that no longer exist
@@ -221,7 +125,7 @@ export function createWebSocketStore(url: string) {
           return;
         }
 
-        pendingAckChanges.delete(id);
+        clearPendingAck(id);
       }
 
       setActiveAlerts(id, alert);
@@ -230,28 +134,101 @@ export function createWebSocketStore(url: string) {
     setState('activeAlerts', Object.values(alertsMap));
   };
 
+  const handleAlertsActivationEvent = (event: Event) => {
+    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
+    alertsEnabled = detail === 'active';
+    applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
+  };
+
   if (typeof window !== 'undefined') {
-    window.addEventListener(
-      ALERTS_ACTIVATION_EVENT,
-      (event: Event) => {
-        const detail = (event as CustomEvent<ActivationStateType | null>).detail;
-        alertsEnabled = detail === 'active';
-        applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
-      },
-      { passive: true },
-    );
+    window.addEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent, {
+      passive: true,
+    });
   }
 
   let ws: WebSocket | null = null;
-  let reconnectTimeout: number;
-  let heartbeatInterval: number;
+  let reconnectTimeout = 0;
+  let reconnectDelayTimeout = 0;
+  let lastServerActivityAt = Date.now();
+  let heartbeatInterval = 0;
   let reconnectAttempt = 0;
   let isReconnecting = false;
+  let isDisposed = false;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
   const heartbeatIntervalMs = 30000; // Send heartbeat every 30 seconds
+  const heartbeatTimeoutMs = heartbeatIntervalMs * 3;
+  const reconnectJitterRatio = 0.2;
+
+  const clearHeartbeatTimer = () => {
+    if (heartbeatInterval) {
+      window.clearInterval(heartbeatInterval);
+      heartbeatInterval = 0;
+    }
+  };
+
+  const computeReconnectDelay = (attempt: number) => {
+    const baseDelay = Math.min(initialReconnectDelay * Math.pow(2, attempt), maxReconnectDelay);
+    const jitterWindow = Math.floor(baseDelay * reconnectJitterRatio);
+    if (jitterWindow <= 0) {
+      return baseDelay;
+    }
+
+    const jitter = Math.floor(Math.random() * (jitterWindow * 2 + 1)) - jitterWindow;
+    return Math.min(maxReconnectDelay, Math.max(0, baseDelay + jitter));
+  };
+
+  const clearReconnectTimeout = () => {
+    if (reconnectTimeout) {
+      window.clearTimeout(reconnectTimeout);
+      reconnectTimeout = 0;
+    }
+  };
+
+  const clearReconnectDelayTimeout = () => {
+    if (reconnectDelayTimeout) {
+      window.clearTimeout(reconnectDelayTimeout);
+      reconnectDelayTimeout = 0;
+    }
+  };
+
+  const clearHeartbeatInterval = () => {
+    if (heartbeatInterval) {
+      window.clearInterval(heartbeatInterval);
+      heartbeatInterval = 0;
+    }
+  };
+
+  const shutdown = () => {
+    if (isDisposed) return;
+    isDisposed = true;
+    isReconnecting = false;
+    setReconnecting(false);
+    clearReconnectTimeout();
+    clearReconnectDelayTimeout();
+    clearHeartbeatInterval();
+    pendingAckTimeouts.forEach((timeout) => window.clearTimeout(timeout));
+    pendingAckTimeouts.clear();
+    pendingAckChanges.clear();
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
+    }
+
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.close(1000, 'Component unmounting');
+      ws = null;
+    }
+  };
 
   const connect = () => {
+    if (isDisposed) return;
+    clearReconnectDelayTimeout();
+
     try {
       // Close existing connection if any
       if (ws) {
@@ -261,17 +238,7 @@ export function createWebSocketStore(url: string) {
         ws = null;
       }
 
-      // Add a small delay before reconnecting to avoid rapid reconnect loops
-      if (reconnectAttempt > 0) {
-        const delay = Math.min(100 * reconnectAttempt, 1000);
-        setTimeout(() => {
-          ws = new WebSocket(url);
-          setupWebSocket();
-        }, delay);
-        return;
-      }
-
-      ws = new WebSocket(url);
+      ws = new WebSocket(wsUrl);
       setupWebSocket();
     } catch (err) {
       logger.error('Failed to create WebSocket', err);
@@ -280,55 +247,56 @@ export function createWebSocketStore(url: string) {
   };
 
   const handleReconnect = () => {
-    if (isReconnecting) return;
+    if (isDisposed || isReconnecting) return;
 
     isReconnecting = true;
     setReconnecting(true);
 
     // Clear any existing timeout
-    if (reconnectTimeout) {
-      window.clearTimeout(reconnectTimeout);
-      reconnectTimeout = 0;
-    }
+    clearReconnectTimeout();
 
-    // Calculate exponential backoff delay
-    const delay = Math.min(
-      initialReconnectDelay * Math.pow(2, reconnectAttempt),
-      maxReconnectDelay,
-    );
+    // Calculate exponential backoff delay with jitter
+    const delay = computeReconnectDelay(reconnectAttempt);
 
     logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempt + 1})`);
     reconnectAttempt++;
 
     reconnectTimeout = window.setTimeout(() => {
+      if (isDisposed) {
+        isReconnecting = false;
+        return;
+      }
       isReconnecting = false;
+      if (isDisposed) return;
       connect();
     }, delay);
   };
 
   const setupWebSocket = () => {
-    if (!ws) return;
+    if (!ws || isDisposed) return;
 
     ws.onopen = () => {
+      if (isDisposed) return;
       logger.debug('connect');
       const wasReconnecting = reconnectAttempt > 0;
       setConnected(true);
       setReconnecting(false); // Clear reconnecting state
       reconnectAttempt = 0; // Reset reconnect attempts on successful connection
       isReconnecting = false;
-      consecutiveEmptyDockerUpdates = 0;
-      hasReceivedNonEmptyDockerHosts = false;
-      consecutiveEmptyHostUpdates = 0;
-      hasReceivedNonEmptyHosts = false;
-      consecutiveEmptyK8sUpdates = 0;
-      hasReceivedNonEmptyK8sClusters = false;
+      lastServerActivityAt = Date.now();
 
       // Start heartbeat to keep connection alive
-      if (heartbeatInterval) {
-        window.clearInterval(heartbeatInterval);
-      }
+      clearHeartbeatTimer();
       heartbeatInterval = window.setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
+          const silenceDuration = Date.now() - lastServerActivityAt;
+          if (silenceDuration >= heartbeatTimeoutMs) {
+            logger.warn('WebSocket heartbeat timeout, forcing reconnect', {
+              silenceMs: silenceDuration,
+            });
+            ws.close(4000, 'Heartbeat timeout');
+            return;
+          }
           ws.send(JSON.stringify({ type: 'ping', data: { timestamp: Date.now() } }));
         }
       }, heartbeatIntervalMs);
@@ -343,8 +311,21 @@ export function createWebSocketStore(url: string) {
       // Alerts will come with the initial state broadcast
     };
 
-
     ws.onmessage = (event) => {
+      if (typeof event.data !== 'string') {
+        logger.warn('Ignoring non-text WebSocket payload');
+        return;
+      }
+
+      const payloadSizeBytes = new Blob([event.data]).size;
+      if (payloadSizeBytes > MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES) {
+        logger.warn('Ignoring oversized WebSocket payload', {
+          sizeBytes: payloadSizeBytes,
+          maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
+        });
+        return;
+      }
+
       let data;
       try {
         data = JSON.parse(event.data);
@@ -362,405 +343,114 @@ export function createWebSocketStore(url: string) {
         ) {
           // Update state properties individually, but batch the whole payload to
           // reduce reactive recomputations and UI thrash on large updates.
-          if (message.data) batch(() => {
-            // Mark that we've received usable data (initial payload or raw update)
-            if (!initialDataReceived()) {
-              setInitialDataReceived(true);
-            }
-
-            // Only update if we have actual data, don't overwrite with empty arrays
-            if (message.data.nodes !== undefined) {
-              logger.debug('[WebSocket] Updating nodes', {
-                count: message.data.nodes?.length || 0,
-              });
-              setState('nodes', reconcile(message.data.nodes, { key: 'id' }));
-
-              // Lifecycle cleanup: remove metrics for nodes that disappeared
-              const currentIds = new Set(message.data.nodes?.map((n: any) => n.id).filter(Boolean) || []);
-              pruneMetricsByPrefix(getMetricKeyPrefix('node'), currentIds);
-            }
-            if (message.data.vms !== undefined) {
-              // Transform tags from comma-separated strings to arrays
-              const transformedVMs = message.data.vms.map((vm: VM) => {
-                const originalTags = vm.tags;
-                let transformedTags: string[];
-
-                if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
-                  // String with content - split into array
-                  transformedTags = originalTags
-                    .split(',')
-                    .map((t: string) => t.trim())
-                    .filter((t: string) => t.length > 0);
-                } else if (Array.isArray(originalTags)) {
-                  // Already an array - filter out empty/whitespace-only tags
-                  transformedTags = originalTags.filter(
-                    (tag: string) => typeof tag === 'string' && tag.trim().length > 0,
-                  );
-                } else {
-                  // null, undefined, empty string, or other - convert to empty array
-                  transformedTags = [];
-                }
-
-                return {
-                  ...vm,
-                  tags: transformedTags,
-                };
-              });
-              setState('vms', reconcile(transformedVMs, { key: 'id' }));
-
-              // Lifecycle cleanup: remove metrics for VMs that disappeared
-              const vmIds = new Set(transformedVMs.map((vm: VM) => vm.id).filter(Boolean));
-              pruneMetricsByPrefix(getMetricKeyPrefix('vm'), vmIds);
-            }
-            if (message.data.containers !== undefined) {
-              // Transform tags from comma-separated strings to arrays
-              const transformedContainers = message.data.containers.map((container: Container) => {
-                const originalTags = container.tags;
-                let transformedTags: string[];
-
-                if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
-                  // String with content - split into array
-                  transformedTags = originalTags
-                    .split(',')
-                    .map((t: string) => t.trim())
-                    .filter((t: string) => t.length > 0);
-                } else if (Array.isArray(originalTags)) {
-                  // Already an array - filter out empty/whitespace-only tags
-                  transformedTags = originalTags.filter(
-                    (tag: string) => typeof tag === 'string' && tag.trim().length > 0,
-                  );
-                } else {
-                  // null, undefined, empty string, or other - convert to empty array
-                  transformedTags = [];
-                }
-
-                return {
-                  ...container,
-                  tags: transformedTags,
-                };
-              });
-              setState('containers', reconcile(transformedContainers, { key: 'id' }));
-
-              // Lifecycle cleanup: remove metrics for containers that disappeared
-              const containerIds = new Set(transformedContainers.map((c: Container) => c.id).filter(Boolean));
-              pruneMetricsByPrefix(getMetricKeyPrefix('container'), containerIds);
-            }
-            // Process dockerHosts and hosts together to prevent UI flapping.
-            // When a unified agent reports both host and docker data, the UI's
-            // allHosts memo depends on both state.hosts and state.dockerHosts.
-            // Updating them separately causes brief inconsistent states where
-            // the component sees only dockerHosts updated but not hosts yet,
-            // making the agent type badge flap between "Docker" and "Host & Docker".
-            // Fix: batch both updates into a single setState call. See #778.
-            const hasDockerHostsUpdate = message.data.dockerHosts !== undefined && message.data.dockerHosts !== null;
-            const hasHostsUpdate = message.data.hosts !== undefined && message.data.hosts !== null;
-
-            // Prepare dockerHosts data if present
-            let processedDockerHosts: DockerHost[] | null = null;
-            let shouldApplyDockerHosts = false;
-
-            if (hasDockerHostsUpdate) {
-              if (Array.isArray(message.data.dockerHosts)) {
-                const incomingHosts = message.data.dockerHosts;
-                if (incomingHosts.length === 0) {
-                  consecutiveEmptyDockerUpdates += 1;
-
-                  // Check if all existing docker hosts are stale (>60s since lastSeen)
-                  // If so, they're probably really gone - apply the empty update immediately
-                  const now = Date.now();
-                  const staleThresholdMs = 60_000; // 60 seconds
-                  const existingDockerHosts = state.dockerHosts || [];
-                  const allStale = existingDockerHosts.length === 0 || existingDockerHosts.every(
-                    (h) => !h.lastSeen || (now - h.lastSeen) > staleThresholdMs
-                  );
-
-                  shouldApplyDockerHosts =
-                    !hasReceivedNonEmptyDockerHosts ||
-                    allStale ||
-                    consecutiveEmptyDockerUpdates >= 3 ||
-                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
-
-                  if (shouldApplyDockerHosts) {
-                    logger.debug('[WebSocket] Updating dockerHosts', {
-                      count: incomingHosts.length,
-                      reason: allStale ? 'allStale' : 'threshold',
-                    });
-                    processedDockerHosts = mergeDockerHostRevocations(incomingHosts);
-                  } else {
-                    logger.debug('[WebSocket] Skipping transient empty dockerHosts payload', {
-                      streak: consecutiveEmptyDockerUpdates,
-                    });
-                  }
-                } else {
-                  consecutiveEmptyDockerUpdates = 0;
-                  hasReceivedNonEmptyDockerHosts = true;
-                  shouldApplyDockerHosts = true;
-                  logger.debug('[WebSocket] Updating dockerHosts', {
-                    count: incomingHosts.length,
-                  });
-                  processedDockerHosts = mergeDockerHostRevocations(incomingHosts);
-                }
-              } else {
-                logger.warn('[WebSocket] Received non-array dockerHosts payload', {
-                  type: typeof message.data.dockerHosts,
-                });
+          if (message.data)
+            batch(() => {
+              // Mark that we've received usable data (initial payload or raw update)
+              if (!initialDataReceived()) {
+                setInitialDataReceived(true);
               }
-            } else if (message.data.dockerHosts === null) {
-              logger.debug('[WebSocket] Received null dockerHosts payload');
-            }
 
-            // Prepare hosts data if present (with same transient empty protection as dockerHosts)
-            let processedHosts: Host[] | null = null;
-            let shouldApplyHosts = false;
-
-            if (hasHostsUpdate) {
-              if (Array.isArray(message.data.hosts)) {
-                const incomingHosts = message.data.hosts;
-                if (incomingHosts.length === 0) {
-                  consecutiveEmptyHostUpdates += 1;
-
-                  // Check if all existing hosts are stale (>60s since lastSeen)
-                  // If so, they're probably really gone - apply the empty update immediately
-                  const now = Date.now();
-                  const staleThresholdMs = 60_000; // 60 seconds
-                  const existingHosts = state.hosts || [];
-                  const allHostsStale = existingHosts.length === 0 || existingHosts.every(
-                    (h) => !h.lastSeen || (now - h.lastSeen) > staleThresholdMs
-                  );
-
-                  shouldApplyHosts =
-                    !hasReceivedNonEmptyHosts ||
-                    allHostsStale ||
-                    consecutiveEmptyHostUpdates >= 3 ||
-                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
-
-                  if (shouldApplyHosts) {
-                    logger.debug('[WebSocket] Updating hosts', {
-                      count: incomingHosts.length,
-                      reason: allHostsStale ? 'allStale' : 'threshold',
-                    });
-                    processedHosts = mergeHostRevocations(incomingHosts);
-                  } else {
-                    logger.debug('[WebSocket] Skipping transient empty hosts payload', {
-                      streak: consecutiveEmptyHostUpdates,
-                    });
-                  }
-                } else {
-                  consecutiveEmptyHostUpdates = 0;
-                  hasReceivedNonEmptyHosts = true;
-                  shouldApplyHosts = true;
-                  logger.debug('[WebSocket] Updating hosts', {
-                    count: incomingHosts.length,
-                  });
-                  processedHosts = mergeHostRevocations(incomingHosts);
-                }
-              } else {
-                logger.warn('[WebSocket] Received non-array hosts payload', {
-                  type: typeof message.data.hosts,
-                });
-              }
-            } else if (message.data.hosts === null) {
-              logger.debug('[WebSocket] Received null hosts payload');
-            }
-
-            // Apply updates - batch together if both are present to prevent flapping
-            if (shouldApplyDockerHosts && shouldApplyHosts) {
-              // Both dockerHosts and hosts in this message - batch them atomically
-              batch(() => {
-                setState('dockerHosts', reconcile(processedDockerHosts!, { key: 'id' }));
-                setState('hosts', reconcile(processedHosts!, { key: 'id' }));
-              });
-
-              // Lifecycle cleanup for Docker hosts and containers
-              const hostIds = new Set(processedDockerHosts!.map((h: DockerHost) => h.id).filter(Boolean));
-              const dockerContainerIds = new Set<string>();
-              processedDockerHosts!.forEach((h: DockerHost) => {
-                h.containers?.forEach((c: any) => {
-                  if (c.id) dockerContainerIds.add(c.id);
-                });
-              });
-              pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
-              pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
-            } else {
-              // Update separately if only one is present
-              if (shouldApplyDockerHosts && processedDockerHosts !== null) {
-                setState('dockerHosts', reconcile(processedDockerHosts, { key: 'id' }));
-
-                // Lifecycle cleanup for Docker hosts and containers
-                const hostIds = new Set(processedDockerHosts.map((h: DockerHost) => h.id).filter(Boolean));
-                const dockerContainerIds = new Set<string>();
-                processedDockerHosts.forEach((h: DockerHost) => {
-                  h.containers?.forEach((c: any) => {
-                    if (c.id) dockerContainerIds.add(c.id);
-                  });
-                });
-                pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
-                pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
-              }
-              if (shouldApplyHosts && processedHosts !== null) {
-                setState('hosts', reconcile(processedHosts, { key: 'id' }));
-              }
-            }
-
-            // Sync container update states with host command statuses for real-time progress
-            if (shouldApplyDockerHosts && processedDockerHosts !== null) {
-              processedDockerHosts.forEach((host: DockerHost) => {
-                if (host.command) {
-                  syncWithHostCommand(host.id, host.command);
-                }
-              });
-            }
-            if (message.data.removedDockerHosts !== undefined) {
-              const removed = Array.isArray(message.data.removedDockerHosts)
-                ? (message.data.removedDockerHosts as RemovedDockerHost[])
+              // Canonical resource contract:
+              // `state.resources` is the authoritative frontend model.
+              // Connected infrastructure is the authoritative reporting/ignore projection.
+              const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
+                ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
                 : [];
-              setState('removedDockerHosts', reconcile(removed, { key: 'id' }));
-            }
-            // Process Kubernetes clusters with transient empty payload protection
-            // (same logic as dockerHosts/hosts to prevent UI flapping)
-            if (message.data.kubernetesClusters !== undefined) {
-              if (Array.isArray(message.data.kubernetesClusters)) {
-                const incomingClusters = message.data.kubernetesClusters as KubernetesCluster[];
-                if (incomingClusters.length === 0) {
-                  consecutiveEmptyK8sUpdates += 1;
+              setState(
+                'connectedInfrastructure',
+                reconcile(connectedInfrastructure, { key: 'id' }),
+              );
+              if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
+              if (message.data.performance !== undefined)
+                setState('performance', message.data.performance);
+              if (message.data.connectionHealth !== undefined)
+                setState('connectionHealth', message.data.connectionHealth);
+              if (message.data.stats !== undefined) setState('stats', message.data.stats);
+              // Handle unified resources
+              if (message.data.resources !== undefined) {
+                logger.debug('[WebSocket] Updating resources', {
+                  count: message.data.resources?.length || 0,
+                  types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
+                });
+                setState('resources', reconcile(message.data.resources, { key: 'id' }));
 
-                  // Check if all existing clusters are stale (>60s since lastSeen)
-                  // If so, they're probably really gone - apply the empty update immediately
-                  const now = Date.now();
-                  const staleThresholdMs = 60_000; // 60 seconds
-                  const existingClusters = state.kubernetesClusters || [];
-                  const allStale = existingClusters.length === 0 || existingClusters.every(
-                    (c) => !c.lastSeen || (now - c.lastSeen) > staleThresholdMs
-                  );
+                // Sync container update states with docker host command status payloads.
+                const resources = Array.isArray(message.data.resources)
+                  ? message.data.resources
+                  : [];
+                resources.forEach((resource: any) => {
+                  if (resource?.type !== 'docker-host') return;
+                  const platformData = asRecord(resource.platformData);
+                  const dockerData = asRecord(platformData?.docker);
+                  const command = dockerData?.command || platformData?.command;
+                  if (!command || typeof command !== 'object') return;
 
-                  const shouldApply =
-                    !hasReceivedNonEmptyK8sClusters ||
-                    allStale ||
-                    consecutiveEmptyK8sUpdates >= 3 ||
-                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
-
-                  if (shouldApply) {
-                    logger.debug('[WebSocket] Updating kubernetesClusters', {
-                      count: incomingClusters.length,
-                      reason: allStale ? 'allStale' : 'threshold',
-                    });
-                    setState('kubernetesClusters', reconcile(incomingClusters, { key: 'id' }));
-                  } else {
-                    logger.debug('[WebSocket] Skipping transient empty kubernetesClusters payload', {
-                      streak: consecutiveEmptyK8sUpdates,
-                    });
-                  }
-                } else {
-                  consecutiveEmptyK8sUpdates = 0;
-                  hasReceivedNonEmptyK8sClusters = true;
-                  logger.debug('[WebSocket] Updating kubernetesClusters', {
-                    count: incomingClusters.length,
+                  const agentIds = new Set<string>([
+                    resource.id,
+                    asString(dockerData?.hostSourceId) || '',
+                    asString(platformData?.hostSourceId) || '',
+                    asString(resource?.discoveryTarget?.agentId) || '',
+                    isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
+                      ? asString(resource?.discoveryTarget?.resourceId) || ''
+                      : '',
+                  ]);
+                  agentIds.forEach((agentId) => {
+                    if (agentId) {
+                      syncWithAgentCommand(agentId, command as any);
+                    }
                   });
-                  setState('kubernetesClusters', reconcile(incomingClusters, { key: 'id' }));
+                });
+              }
+              // Sync active alerts from state
+              if (message.data.activeAlerts !== undefined) {
+                const newAlerts: Record<string, Alert> = {};
+                if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
+                  message.data.activeAlerts.forEach((alert: Alert) => {
+                    newAlerts[alert.id] = alert;
+                  });
                 }
-              } else {
-                logger.warn('[WebSocket] Received non-array kubernetesClusters payload', {
-                  type: typeof message.data.kubernetesClusters,
-                });
-              }
-            }
-            if (message.data.removedKubernetesClusters !== undefined) {
-              const removed = Array.isArray(message.data.removedKubernetesClusters)
-                ? (message.data.removedKubernetesClusters as RemovedKubernetesCluster[])
-                : [];
-              setState('removedKubernetesClusters', reconcile(removed, { key: 'id' }));
-            }
-            if (message.data.removedHosts !== undefined) {
-              const removed = Array.isArray(message.data.removedHosts)
-                ? (message.data.removedHosts as RemovedHost[])
-                : [];
-              setState('removedHosts', reconcile(removed, { key: 'id' }));
-            }
-            if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
-            if (message.data.cephClusters !== undefined)
-              setState('cephClusters', reconcile(message.data.cephClusters, { key: 'id' }));
-            if (message.data.pbs !== undefined) setState('pbs', reconcile(message.data.pbs, { key: 'id' }));
-            if (message.data.pmg !== undefined) setState('pmg', reconcile(message.data.pmg, { key: 'id' }));
-            if (message.data.replicationJobs !== undefined)
-              setState('replicationJobs', reconcile(message.data.replicationJobs, { key: 'id' }));
-            if (message.data.backups !== undefined) {
-              setState('backups', message.data.backups);
-              if (message.data.backups.pve !== undefined)
-                setState('pveBackups', message.data.backups.pve);
-              if (message.data.backups.pbs !== undefined)
-                setState('pbsBackups', message.data.backups.pbs);
-              if (message.data.backups.pmg !== undefined)
-                setState('pmgBackups', message.data.backups.pmg);
-            }
-            if (message.data.pbsBackups !== undefined)
-              setState('pbsBackups', message.data.pbsBackups);
-            if (message.data.pmgBackups !== undefined)
-              setState('pmgBackups', message.data.pmgBackups);
-            if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
-            if (message.data.pveBackups !== undefined)
-              setState('pveBackups', message.data.pveBackups);
-            if (message.data.performance !== undefined)
-              setState('performance', message.data.performance);
-            if (message.data.connectionHealth !== undefined)
-              setState('connectionHealth', message.data.connectionHealth);
-            if (message.data.stats !== undefined) setState('stats', message.data.stats);
-            if (message.data.physicalDisks !== undefined)
-              setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
-            // Handle unified resources
-            if (message.data.resources !== undefined) {
-              logger.debug('[WebSocket] Updating resources', {
-                count: message.data.resources?.length || 0,
-                types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
-              });
-              setState('resources', reconcile(message.data.resources, { key: 'id' }));
-            }
-            // Sync active alerts from state
-            if (message.data.activeAlerts !== undefined) {
-              const newAlerts: Record<string, Alert> = {};
-              if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
-                message.data.activeAlerts.forEach((alert: Alert) => {
-                  newAlerts[alert.id] = alert;
-                });
-              }
 
-              lastActiveAlertsPayload = newAlerts;
-              applyActiveAlerts(alertsEnabled ? newAlerts : {});
-            }
-            // Sync recently resolved alerts
-            if (message.data.recentlyResolved !== undefined) {
-              // Received recentlyResolved update
-
-              // Update resolved alerts atomically to prevent race conditions
-              const newResolvedAlerts: Record<string, ResolvedAlert> = {};
-              if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
-                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
-                  newResolvedAlerts[alert.id] = alert;
-                });
+                lastActiveAlertsPayload = newAlerts;
+                applyActiveAlerts(alertsEnabled ? newAlerts : {});
               }
+              // Sync recently resolved alerts
+              if (message.data.recentlyResolved !== undefined) {
+                // Received recentlyResolved update
 
-              // Clear existing resolved alerts and set new ones
-              const currentResolvedIds = Object.keys(recentlyResolved);
-              currentResolvedIds.forEach((id) => {
-                if (!newResolvedAlerts[id]) {
-                  setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
+                // Update resolved alerts atomically to prevent race conditions
+                const newResolvedAlerts: Record<string, ResolvedAlert> = {};
+                if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
+                  message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+                    newResolvedAlerts[alert.id] = alert;
+                  });
                 }
-              });
 
-              // Add new resolved alerts
-              Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
-                setRecentlyResolved(id, alert);
-              });
+                // Clear existing resolved alerts and set new ones
+                const currentResolvedIds = Object.keys(recentlyResolved);
+                currentResolvedIds.forEach((id) => {
+                  if (!newResolvedAlerts[id]) {
+                    setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
+                  }
+                });
 
-              // Updated recentlyResolved
-            }
-            setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
-          });
+                // Add new resolved alerts
+                Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
+                  setRecentlyResolved(id, alert);
+                });
+
+                setState('recentlyResolved', Object.values(newResolvedAlerts));
+
+                // Updated recentlyResolved
+              }
+              setState(
+                'lastUpdate',
+                typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
+              );
+            });
           logger.debug('message', {
             type: message.type,
             hasData: !!message.data,
-            nodeCount: message.data?.nodes?.length || 0,
-            vmCount: message.data?.vms?.length || 0,
-            containerCount: message.data?.containers?.length || 0,
+            resourceCount: message.data?.resources?.length || 0,
           });
         } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
           logger.debug('error', message.error);
@@ -781,7 +471,7 @@ export function createWebSocketStore(url: string) {
         } else if (message.type === 'alertResolved') {
           // Individual alert resolution now handled via state sync
           logger.info('Alert resolved (will sync with next state update)', {
-            alertId: message.data.alertId,
+            alertIdentifier: message.data.alertIdentifier,
           });
         } else if (message.type === 'update:progress') {
           // Update progress event
@@ -822,9 +512,12 @@ export function createWebSocketStore(url: string) {
             scanning: false,
             timestamp: message.data?.timestamp,
           });
-        } else if ((message as {type: string}).type === 'ai_discovery_progress') {
+        } else if ((message as { type: string }).type === 'ai_discovery_progress') {
           // AI-powered discovery progress update
-          eventBus.emit('ai_discovery_progress', (message as {data: unknown}).data as import('../types/discovery').DiscoveryProgress);
+          eventBus.emit(
+            'ai_discovery_progress',
+            (message as { data: unknown }).data as import('../types/discovery').DiscoveryProgress,
+          );
         } else if (message.type === 'settingsUpdate') {
           // Settings have been updated (e.g., theme change)
           if (message.data?.theme) {
@@ -844,18 +537,23 @@ export function createWebSocketStore(url: string) {
     };
 
     ws.onclose = (event) => {
+      if (isDisposed) return;
       logger.debug('disconnect', { code: event.code, reason: event.reason });
       setConnected(false);
       setInitialDataReceived(false);
 
       // Clear heartbeat interval
-      if (heartbeatInterval) {
-        window.clearInterval(heartbeatInterval);
-        heartbeatInterval = 0;
+      clearHeartbeatTimer();
+
+      if (isDisposed) {
+        return;
       }
 
       // Don't try to reconnect if the close was intentional (code 1000)
-      if (event.code === 1000 && event.reason === 'Reconnecting') {
+      if (
+        event.code === 1000 &&
+        (event.reason === 'Reconnecting' || event.reason === 'Component unmounting')
+      ) {
         return;
       }
 
@@ -875,6 +573,7 @@ export function createWebSocketStore(url: string) {
     };
 
     ws.onerror = (error) => {
+      if (isDisposed) return;
       // Don't log connection errors if we're already connected
       // Browser may show errors for initial connection attempts even after success
       if (!connected()) {
@@ -888,12 +587,80 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
+    isDisposed = true;
+    isReconnecting = false;
+    window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivation);
+    }
     if (ws) {
       ws.close(1000, 'Component unmounting');
+      ws = null;
     }
   });
+
+  const markTokenRevoked = (
+    key: 'dockerRuntimes' | 'agents',
+    tokenId: string,
+    agentIds: string[],
+  ) => {
+    if (!agentIds || agentIds.length === 0) return;
+    const timestamp = Date.now();
+    const targetIds = new Set(agentIds.filter(Boolean));
+    setState(
+      'resources',
+      produce((draft: any[]) => {
+        if (!Array.isArray(draft)) return;
+
+        draft.forEach((resource) => {
+          if (!resource || typeof resource !== 'object') return;
+
+          const platformData =
+            resource.platformData && typeof resource.platformData === 'object'
+              ? resource.platformData
+              : (resource.platformData = {});
+          const agentData =
+            platformData.agent && typeof platformData.agent === 'object'
+              ? platformData.agent
+              : (platformData.agent = {});
+          const dockerData =
+            platformData.docker && typeof platformData.docker === 'object'
+              ? platformData.docker
+              : (platformData.docker = {});
+
+          const agentActionId =
+            asString(agentData.agentId) ||
+            asString(platformData.agentId) ||
+            getAgentDiscoveryResourceId(resource?.discoveryTarget) ||
+            asString(resource?.discoveryTarget?.agentId) ||
+            asString(resource.id);
+          const runtimeActionId =
+            asString(dockerData.hostSourceId) ||
+            asString(platformData.hostSourceId) ||
+            asString(resource?.discoveryTarget?.agentId) ||
+            (isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
+              ? asString(resource?.discoveryTarget?.resourceId)
+              : undefined) ||
+            asString(resource.id);
+
+          const matchedId = key === 'agents' ? agentActionId : runtimeActionId;
+          if (!matchedId || !targetIds.has(matchedId)) return;
+
+          platformData.revokedTokenId = tokenId;
+          platformData.tokenRevokedAt = timestamp;
+          if (key === 'agents') {
+            agentData.revokedTokenId = tokenId;
+            agentData.tokenRevokedAt = timestamp;
+          } else {
+            dockerData.revokedTokenId = tokenId;
+            dockerData.tokenRevokedAt = timestamp;
+          }
+        });
+      }),
+    );
+  };
 
   return {
     state,
@@ -903,61 +670,55 @@ export function createWebSocketStore(url: string) {
     reconnecting,
     initialDataReceived,
     updateProgress,
+    shutdown,
     reconnect: () => {
+      if (isDisposed) return;
       ws?.close();
-      window.clearTimeout(reconnectTimeout);
+      clearReconnectTimeout();
+      clearReconnectDelayTimeout();
       reconnectAttempt = 0; // Reset attempts for manual reconnect
+      isReconnecting = false;
+      setReconnecting(false);
       connect();
     },
-    markDockerHostsTokenRevoked: (tokenId: string, hostIds: string[]) => {
-      if (!hostIds || hostIds.length === 0) {
+    switchUrl: (nextUrl: string) => {
+      if (!nextUrl || nextUrl === wsUrl) {
         return;
       }
-      const timestamp = Date.now();
-      setState(
-        'dockerHosts',
-        produce((draft: DockerHost[]) => {
-          if (!Array.isArray(draft)) return;
-          hostIds.forEach((hostId) => {
-            const target = draft.find((host) => host.id === hostId);
-            if (target) {
-              target.revokedTokenId = tokenId;
-              target.tokenRevokedAt = timestamp;
-            }
-          });
-        }),
-      );
+
+      wsUrl = nextUrl;
+      batch(() => {
+        setConnected(false);
+        setReconnecting(false);
+        setInitialDataReceived(false);
+        setUpdateProgress(null);
+        setState(reconcile(createInitialState()));
+        setActiveAlerts(reconcile({}));
+        setRecentlyResolved(reconcile({}));
+      });
+
+      clearReconnectTimeout();
+      clearReconnectDelayTimeout();
+      reconnectAttempt = 0;
+      isReconnecting = false;
+      ws?.close(1000, 'Reconnecting');
+      connect();
     },
-    markHostsTokenRevoked: (tokenId: string, hostIds: string[]) => {
-      if (!hostIds || hostIds.length === 0) {
-        return;
-      }
-      const timestamp = Date.now();
-      setState(
-        'hosts',
-        produce((draft: Host[]) => {
-          if (!Array.isArray(draft)) return;
-          hostIds.forEach((hostId) => {
-            const target = draft.find((host) => host.id === hostId);
-            if (target) {
-              target.revokedTokenId = tokenId;
-              target.tokenRevokedAt = timestamp;
-            }
-          });
-        }),
-      );
-    },
+    markDockerRuntimesTokenRevoked: (tokenId: string, agentIds: string[]) =>
+      markTokenRevoked('dockerRuntimes', tokenId, agentIds),
+    markAgentsTokenRevoked: (tokenId: string, agentIds: string[]) =>
+      markTokenRevoked('agents', tokenId, agentIds),
     removeAlerts: (predicate: (alert: Alert) => boolean) => {
       const keysToRemove: string[] = [];
-      Object.entries(activeAlerts).forEach(([alertId, alert]) => {
+      Object.entries(activeAlerts).forEach(([alertIdentifier, alert]) => {
         if (!alert) {
-          keysToRemove.push(alertId);
+          keysToRemove.push(alertIdentifier);
           return;
         }
         try {
           if (predicate(alert)) {
-            pendingAckChanges.delete(alertId);
-            keysToRemove.push(alertId);
+            clearPendingAck(alertIdentifier);
+            keysToRemove.push(alertIdentifier);
           }
         } catch (error) {
           logger.error('Failed to evaluate alert removal predicate', error);
@@ -975,29 +736,33 @@ export function createWebSocketStore(url: string) {
       }
     },
     // Method to update an alert locally (e.g., after acknowledgment)
-    updateAlert: (alertId: string, updates: Partial<Alert>) => {
-      const existingAlert = activeAlerts[alertId];
+    updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => {
+      const existingAlert = activeAlerts[alertIdentifier];
       if (existingAlert) {
         // Track this alert as having pending changes if acknowledgment is changing
         if ('acknowledged' in updates) {
           const previousAckTime = existingAlert.ackTime;
-          pendingAckChanges.set(alertId, {
+          pendingAckChanges.set(alertIdentifier, {
             ack: !!updates.acknowledged,
             previousAckTime,
           });
+          clearPendingAckTimeout(alertIdentifier);
           // Safety valve: if we never hear back from the server (e.g., request failed silently),
           // clear the pending flag after a generous timeout so we eventually resync with reality.
-          setTimeout(() => {
-            if (pendingAckChanges.has(alertId)) {
-              logger.warn(`Clearing stale pending ack change for alert ${alertId}`);
-              pendingAckChanges.delete(alertId);
+          const pendingTimeout = window.setTimeout(() => {
+            if (pendingAckChanges.has(alertIdentifier)) {
+              logger.warn(
+                `Clearing stale pending ack change for alert ${alertIdentifier}`,
+              );
+              clearPendingAck(alertIdentifier);
               notificationStore.error(
                 'Server did not confirm the alert acknowledgment in time. Re-syncing from latest data.',
               );
             }
           }, 15000);
+          pendingAckTimeouts.set(alertIdentifier, pendingTimeout);
         }
-        setActiveAlerts(alertId, { ...existingAlert, ...updates });
+        setActiveAlerts(alertIdentifier, { ...existingAlert, ...updates });
       }
     },
   };

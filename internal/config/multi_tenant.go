@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
+
+var orgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 // MultiTenantPersistence manages a collection of TenantPersistence instances,
 // one for each organization.
@@ -24,6 +28,21 @@ func NewMultiTenantPersistence(baseDataDir string) *MultiTenantPersistence {
 		baseDataDir: baseDataDir,
 		tenants:     make(map[string]*ConfigPersistence),
 	}
+}
+
+// BaseDataDir returns the base data directory used by multi-tenant persistence.
+func (mtp *MultiTenantPersistence) BaseDataDir() string {
+	return mtp.baseDataDir
+}
+
+func isValidOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if filepath.Base(orgID) != orgID {
+		return false
+	}
+	return orgIDPattern.MatchString(orgID)
 }
 
 // GetPersistence returns the persistence instance for a specific organization.
@@ -46,7 +65,7 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 	}
 
 	// Validate OrgID (prevent directory traversal)
-	if filepath.Base(orgID) != orgID || orgID == "" || orgID == "." || orgID == ".." {
+	if !isValidOrgID(orgID) {
 		return nil, fmt.Errorf("invalid organization ID: %s", orgID)
 	}
 
@@ -71,7 +90,7 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 
 	// Ensure the directory exists
 	if err := cp.EnsureConfigDir(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure config directory for org %s: %w", orgID, err)
 	}
 
 	mtp.tenants[orgID] = cp
@@ -85,7 +104,7 @@ func (mtp *MultiTenantPersistence) OrgExists(orgID string) bool {
 	}
 
 	// Validate to prevent traversal
-	if filepath.Base(orgID) != orgID || orgID == "" || orgID == "." || orgID == ".." {
+	if !isValidOrgID(orgID) {
 		return false
 	}
 
@@ -99,12 +118,15 @@ func (mtp *MultiTenantPersistence) OrgExists(orgID string) bool {
 func (mtp *MultiTenantPersistence) LoadOrganization(orgID string) (*models.Organization, error) {
 	persistence, err := mtp.GetPersistence(orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get persistence for org %s: %w", orgID, err)
 	}
 
 	org, err := persistence.LoadOrganization()
 	if err != nil {
-		// If org.json doesn't exist, return a default org
+		// If org.json doesn't exist, return a default org.
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("load organization %s: %w", orgID, err)
+		}
 		return &models.Organization{
 			ID:          orgID,
 			DisplayName: orgID,
@@ -114,12 +136,106 @@ func (mtp *MultiTenantPersistence) LoadOrganization(orgID string) (*models.Organ
 	return org, nil
 }
 
+// LoadOrganizationStrict loads organization metadata from org.json and returns an error when it does not exist.
+// This is useful for hosted control-plane paths that need to distinguish "missing org metadata" from defaults.
+func (mtp *MultiTenantPersistence) LoadOrganizationStrict(orgID string) (*models.Organization, error) {
+	if mtp == nil {
+		return nil, fmt.Errorf("no persistence configured")
+	}
+	if orgID != "default" && !mtp.OrgExists(orgID) {
+		return nil, os.ErrNotExist
+	}
+	persistence, err := mtp.GetPersistence(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("get persistence for org %s: %w", orgID, err)
+	}
+	org, err := persistence.LoadOrganization()
+	if err != nil {
+		return nil, fmt.Errorf("load organization %s: %w", orgID, err)
+	}
+	return org, nil
+}
+
 // SaveOrganization saves the organization metadata.
 func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) error {
-	persistence, err := mtp.GetPersistence(org.ID)
-	if err != nil {
-		return err
+	if org == nil {
+		return fmt.Errorf("organization is required")
 	}
 
-	return persistence.SaveOrganization(org)
+	persistence, err := mtp.GetPersistence(org.ID)
+	if err != nil {
+		return fmt.Errorf("get persistence for org %s: %w", org.ID, err)
+	}
+
+	if err := persistence.SaveOrganization(org); err != nil {
+		return fmt.Errorf("save organization %s: %w", org.ID, err)
+	}
+
+	return nil
+}
+
+// ListOrganizations returns all known organizations (including the default org).
+func (mtp *MultiTenantPersistence) ListOrganizations() ([]*models.Organization, error) {
+	orgIDs := map[string]struct{}{
+		"default": {},
+	}
+
+	orgsDir := filepath.Join(mtp.baseDataDir, "orgs")
+	entries, err := os.ReadDir(orgsDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to read organizations directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		orgID := entry.Name()
+		if !isValidOrgID(orgID) {
+			log.Warn().Str("org_id", orgID).Msg("Skipping invalid organization directory name")
+			continue
+		}
+		orgIDs[orgID] = struct{}{}
+	}
+
+	sortedIDs := make([]string, 0, len(orgIDs))
+	for orgID := range orgIDs {
+		sortedIDs = append(sortedIDs, orgID)
+	}
+	sort.Strings(sortedIDs)
+
+	orgs := make([]*models.Organization, 0, len(sortedIDs))
+	for _, orgID := range sortedIDs {
+		org, loadErr := mtp.LoadOrganization(orgID)
+		if loadErr != nil {
+			return nil, fmt.Errorf("failed to load organization %s: %w", orgID, loadErr)
+		}
+		orgs = append(orgs, org)
+	}
+
+	return orgs, nil
+}
+
+// DeleteOrganization removes a non-default organization and its persisted directory.
+func (mtp *MultiTenantPersistence) DeleteOrganization(orgID string) error {
+	if orgID == "default" {
+		return fmt.Errorf("default organization cannot be deleted")
+	}
+	if !isValidOrgID(orgID) {
+		return fmt.Errorf("invalid organization ID: %s", orgID)
+	}
+	if !mtp.OrgExists(orgID) {
+		return os.ErrNotExist
+	}
+
+	mtp.mu.Lock()
+	delete(mtp.tenants, orgID)
+	mtp.mu.Unlock()
+
+	orgDir := filepath.Join(mtp.baseDataDir, "orgs", orgID)
+	if err := os.RemoveAll(orgDir); err != nil {
+		return fmt.Errorf("failed to delete organization directory: %w", err)
+	}
+
+	return nil
 }

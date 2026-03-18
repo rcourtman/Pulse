@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -10,8 +11,27 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+// mockStateProvider implements StateProvider for testing.
+type mockStateProvider struct {
+	state models.StateSnapshot
+}
+
+func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
+	return m.state
+}
+
+// mockAlertAnalyzer satisfies aicontracts.AlertAnalyzer for testing.
+type mockAlertAnalyzer struct{ enabled bool }
+
+func (m *mockAlertAnalyzer) OnAlertFired(aicontracts.AlertPayload) {}
+func (m *mockAlertAnalyzer) SetEnabled(e bool)                     { m.enabled = e }
+func (m *mockAlertAnalyzer) IsEnabled() bool                       { return m.enabled }
+func (m *mockAlertAnalyzer) Start()                                {}
+func (m *mockAlertAnalyzer) Stop()                                 {}
 
 func TestNewService(t *testing.T) {
 	svc := NewService(nil, nil)
@@ -78,8 +98,55 @@ func TestService_GetAlertTriggeredAnalyzer_Initial(t *testing.T) {
 	}
 }
 
+func TestExecuteResponse_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyExecuteResponse())
+	if err != nil {
+		t.Fatalf("marshal empty execute response: %v", err)
+	}
+	if !strings.Contains(string(payload), `"tool_calls":[]`) {
+		t.Fatalf("expected empty execute response to retain tool_calls array, got %s", payload)
+	}
+	if !strings.Contains(string(payload), `"pending_approvals":[]`) {
+		t.Fatalf("expected empty execute response to retain pending_approvals array, got %s", payload)
+	}
+}
+
+func TestChatMessage_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyChatMessage())
+	if err != nil {
+		t.Fatalf("marshal empty chat message: %v", err)
+	}
+	if !strings.Contains(string(payload), `"tool_calls":[]`) {
+		t.Fatalf("expected empty chat message to retain tool_calls array, got %s", payload)
+	}
+
+	payload, err = json.Marshal(EmptyChatToolCall())
+	if err != nil {
+		t.Fatalf("marshal empty chat tool call: %v", err)
+	}
+	if !strings.Contains(string(payload), `"input":{}`) {
+		t.Fatalf("expected empty chat tool call to retain input object, got %s", payload)
+	}
+
+	payload, err = json.Marshal(ChatMessage{
+		ToolCalls: []ChatToolCall{{
+			ID:   "call-1",
+			Name: "diagnose",
+		}},
+	}.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal normalized chat message with tool call: %v", err)
+	}
+	if !strings.Contains(string(payload), `"input":{}`) {
+		t.Fatalf("expected normalized chat message tool call to retain input object, got %s", payload)
+	}
+}
+
 func TestService_SetStateProvider(t *testing.T) {
 	svc := NewService(nil, nil)
+	svc.SetAlertAnalyzerFactory(func(deps aicontracts.AlertAnalyzerDeps) aicontracts.AlertAnalyzer {
+		return &mockAlertAnalyzer{}
+	})
 
 	stateProvider := &mockStateProvider{
 		state: models.StateSnapshot{
@@ -97,7 +164,7 @@ func TestService_SetStateProvider(t *testing.T) {
 		t.Error("Expected patrol service to be initialized after setting state provider")
 	}
 
-	// Alert triggered analyzer should now be initialized
+	// Alert triggered analyzer should now be initialized (factory was set)
 	analyzer := svc.GetAlertTriggeredAnalyzer()
 	if analyzer == nil {
 		t.Error("Expected alert analyzer to be initialized after setting state provider")
@@ -147,6 +214,28 @@ func TestService_ClearCostHistory_NoStore(t *testing.T) {
 	}
 }
 
+func TestExtractAlertIdentifierPrefersCanonicalIdentifier(t *testing.T) {
+	ctx := map[string]interface{}{
+		"alertIdentifier": "instance:node:100::metric/cpu",
+	}
+
+	if got := extractAlertIdentifier(ctx); got != "instance:node:100::metric/cpu" {
+		t.Fatalf("extractAlertIdentifier canonical preference = %q", got)
+	}
+}
+
+func TestExtractAlertIdentifierRequiresCanonicalIdentifier(t *testing.T) {
+	if got := extractAlertIdentifier(map[string]interface{}{"alertId": "legacy-alert-id"}); got != "" {
+		t.Fatalf("extractAlertIdentifier should ignore alertId, got %q", got)
+	}
+	if got := extractAlertIdentifier(map[string]interface{}{"alert_id": "legacy-alert-id-2"}); got != "" {
+		t.Fatalf("extractAlertIdentifier should ignore alert_id, got %q", got)
+	}
+	if got := extractAlertIdentifier(nil); got != "" {
+		t.Fatalf("extractAlertIdentifier nil context = %q", got)
+	}
+}
+
 func TestService_AcquireExecutionSlot(t *testing.T) {
 	svc := NewService(nil, nil)
 
@@ -190,42 +279,24 @@ func TestService_EnforceBudget_NoBudget(t *testing.T) {
 	}
 }
 
-func TestService_StartPatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.StartPatrol(context.Background())
-}
-
-func TestService_StopPatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.StopPatrol()
-}
-
-func TestService_ReconfigurePatrol_NoPatrol(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Should not panic when patrol is nil
-	svc.ReconfigurePatrol()
-}
-
 func TestService_LookupGuestsByVMID(t *testing.T) {
 	svc := NewService(nil, nil)
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1"},
-				{ID: "vm-101", VMID: 101, Name: "database", Node: "pve-1"},
-			},
-			Containers: []models.Container{
-				{ID: "ct-200", VMID: 200, Name: "nginx", Node: "pve-1"},
-			},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/pve-1", Name: "pve-1", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1", Instance: "pve-1"},
+			{ID: "vm-101", VMID: 101, Name: "database", Node: "pve-1", Instance: "pve-1"},
+		},
+		Containers: []models.Container{
+			{ID: "ct-200", VMID: 200, Name: "nginx", Node: "pve-1", Instance: "pve-1"},
 		},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	// Test finding a VM
 	guests := svc.lookupGuestsByVMID(100, "")
@@ -241,8 +312,8 @@ func TestService_LookupGuestsByVMID(t *testing.T) {
 	if len(guests) != 1 {
 		t.Errorf("Expected 1 guest for VMID 200, got %d", len(guests))
 	}
-	if len(guests) > 0 && guests[0].Type != "lxc" {
-		t.Errorf("Expected type 'lxc', got '%s'", guests[0].Type)
+	if len(guests) > 0 && guests[0].Type != "system-container" {
+		t.Errorf("Expected type 'system-container', got '%s'", guests[0].Type)
 	}
 
 	// Test not found
@@ -252,26 +323,29 @@ func TestService_LookupGuestsByVMID(t *testing.T) {
 	}
 }
 
-func TestService_LookupGuestsByVMID_NoStateProvider(t *testing.T) {
+func TestService_LookupGuestsByVMID_NoReadState(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	guests := svc.lookupGuestsByVMID(100, "")
 	if guests != nil {
-		t.Error("Expected nil guests without state provider")
+		t.Error("Expected nil guests without ReadState")
 	}
 }
 
 func TestService_LookupNodeForVMID(t *testing.T) {
 	svc := NewService(nil, nil)
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1"},
-			},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/pve-1", Name: "pve-1", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "vm-100", VMID: 100, Name: "web-server", Node: "pve-1", Instance: "pve-1"},
 		},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	node, name, guestType := svc.lookupNodeForVMID(100)
 
@@ -281,8 +355,33 @@ func TestService_LookupNodeForVMID(t *testing.T) {
 	if name != "web-server" {
 		t.Errorf("Expected name 'web-server', got '%s'", name)
 	}
-	if guestType != "qemu" {
-		t.Errorf("Expected type 'qemu', got '%s'", guestType)
+	if guestType != "vm" {
+		t.Errorf("Expected type 'vm', got '%s'", guestType)
+	}
+}
+
+func TestService_SetReadState_InitializesPatrolWithoutStateProvider(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/pve-1", Name: "pve-1", Instance: "pve-1", Status: "online"},
+		},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+
+	svc.SetReadState(registry)
+
+	patrol := svc.GetPatrolService()
+	if patrol == nil {
+		t.Fatal("expected patrol service to initialize from read state")
+	}
+	if patrol.hasPatrolRuntimeInputs() != true {
+		t.Fatal("expected patrol runtime inputs to be available from read state")
+	}
+	if svc.GetStateProvider() != nil {
+		t.Fatal("expected state provider to remain nil")
 	}
 }
 
@@ -347,9 +446,9 @@ func TestExtractVMIDFromCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vmid, owner, found := extractVMIDFromCommand(tt.command)
-			if vmid != tt.expectedVMID {
-				t.Errorf("Expected VMID %d, got %d", tt.expectedVMID, vmid)
+			vmID, owner, found := extractVMIDFromCommand(tt.command)
+			if vmID != tt.expectedVMID {
+				t.Errorf("Expected VMID %d, got %d", tt.expectedVMID, vmID)
 			}
 			if owner != tt.expectedOwner {
 				t.Errorf("Expected owner %v, got %v", tt.expectedOwner, owner)
@@ -362,7 +461,7 @@ func TestExtractVMIDFromCommand(t *testing.T) {
 }
 
 func TestFormatApprovalNeededToolResult(t *testing.T) {
-	result := formatApprovalNeededToolResult("rm -rf /", "tool-123", "Dangerous command")
+	result := formatApprovalNeededToolResult("rm -rf /", "tool-123", "Dangerous command", "approval-1")
 
 	if result == "" {
 		t.Error("Expected non-empty result")
@@ -394,7 +493,7 @@ func TestFormatPolicyBlockedToolResult(t *testing.T) {
 
 func TestParseApprovalNeededMarker(t *testing.T) {
 	// Valid approval needed response
-	validResult := formatApprovalNeededToolResult("rm -rf /", "tool-123", "test")
+	validResult := formatApprovalNeededToolResult("rm -rf /", "tool-123", "test", "approval-1")
 	data, found := parseApprovalNeededMarker(validResult)
 	if !found {
 		t.Error("Expected to parse approval needed marker")
@@ -404,6 +503,9 @@ func TestParseApprovalNeededMarker(t *testing.T) {
 	}
 	if data.ToolID != "tool-123" {
 		t.Errorf("Expected tool ID 'tool-123', got '%s'", data.ToolID)
+	}
+	if data.ApprovalID != "approval-1" {
+		t.Errorf("Expected approval ID 'approval-1', got '%s'", data.ApprovalID)
 	}
 
 	// Invalid input
@@ -427,34 +529,6 @@ func TestParseApprovalNeededMarker(t *testing.T) {
 
 // Note: GetDebugContext tests removed - they require persistence to be properly
 // initialized and are better suited for integration tests
-
-func TestService_SetProviders(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Set up state provider first (needed for patrol service)
-	stateProvider := &mockStateProvider{}
-	svc.SetStateProvider(stateProvider)
-
-	// Test SetPatrolThresholdProvider
-	thresholdProvider := &mockThresholdProvider{
-		nodeCPU:    90,
-		nodeMemory: 85,
-	}
-	svc.SetPatrolThresholdProvider(thresholdProvider)
-	// No direct way to verify, but shouldn't panic
-
-	// Test SetChangeDetector with nil
-	svc.SetChangeDetector(nil)
-
-	// Test SetRemediationLog with nil
-	svc.SetRemediationLog(nil)
-
-	// Test SetPatternDetector with nil
-	svc.SetPatternDetector(nil)
-
-	// Test SetCorrelationDetector with nil
-	svc.SetCorrelationDetector(nil)
-}
 
 func TestService_Execute(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-ai-execute-test-*")
@@ -627,12 +701,12 @@ func TestService_Execute_SystemPrompt(t *testing.T) {
 		CustomContext: "This is my home lab",
 	}
 
-	mockRP := &mockResourceProvider{
-		getStatsFunc: func() resources.StoreStats {
-			return resources.StoreStats{TotalResources: 1}
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats {
+			return unifiedresources.ResourceStats{Total: 1}
 		},
 	}
-	svc.SetResourceProvider(mockRP)
+	svc.SetUnifiedResourceProvider(mockURP)
 
 	var capturedSystemPrompt string
 	mockP := &mockProvider{
@@ -707,6 +781,18 @@ func TestService_Reload(t *testing.T) {
 	}
 }
 
+func TestService_Reload_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	err := svc.Reload()
+	if err == nil {
+		t.Fatal("expected Reload to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestService_ListModels(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "pulse-ai-list-models-test-*")
 	defer os.RemoveAll(tmpDir)
@@ -736,6 +822,36 @@ func TestService_TestConnection(t *testing.T) {
 	err := svc.TestConnection(context.Background())
 	if err == nil {
 		t.Error("Expected error with no config")
+	}
+}
+
+func TestService_TestConnection_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	err := svc.TestConnection(context.Background())
+	if err == nil {
+		t.Fatal("expected TestConnection to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_ListModelsWithCache_NoPersistence(t *testing.T) {
+	svc := NewService(nil, nil)
+
+	models, cached, err := svc.ListModelsWithCache(context.Background())
+	if err == nil {
+		t.Fatal("expected ListModelsWithCache to fail when config persistence is unavailable")
+	}
+	if !strings.Contains(err.Error(), "config persistence unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models, got %#v", models)
+	}
+	if cached {
+		t.Fatal("expected cached=false on persistence failure")
 	}
 }
 
@@ -770,12 +886,12 @@ func TestService_LicenseGating(t *testing.T) {
 
 func TestService_IsAutonomous(t *testing.T) {
 	svc := NewService(nil, nil)
-	svc.cfg = &config.AIConfig{AutonomousMode: true}
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
 	if !svc.IsAutonomous() {
 		t.Error("Expected true")
 	}
 
-	svc.cfg.AutonomousMode = false
+	svc.cfg.ControlLevel = config.ControlLevelReadOnly
 	if svc.IsAutonomous() {
 		t.Error("Expected false")
 	}

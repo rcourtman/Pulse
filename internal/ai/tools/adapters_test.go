@@ -7,22 +7,20 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-type fakeStateGetter struct {
-	state models.StateSnapshot
-}
-
-func (f fakeStateGetter) GetState() models.StateSnapshot {
-	return f.state
-}
-
 type fakeAlertManager struct {
-	alerts []alerts.Alert
+	alerts   []alerts.Alert
+	resolved []models.ResolvedAlert
 }
 
 func (f fakeAlertManager) GetActiveAlerts() []alerts.Alert {
 	return f.alerts
+}
+
+func (f fakeAlertManager) GetRecentlyResolved() []models.ResolvedAlert {
+	return f.resolved
 }
 
 type fakeMetricsSource struct {
@@ -113,23 +111,18 @@ func (f *fakeMetadataUpdater) SetResourceURL(resourceType, resourceID, url strin
 	return f.err
 }
 
-type fakeUpdatesMonitor struct {
-	state        models.StateSnapshot
+type fakeUpdatesCommandRunner struct {
 	checkStatus  models.DockerHostCommandStatus
 	updateStatus models.DockerHostCommandStatus
 	checkErr     error
 	updateErr    error
 }
 
-func (f *fakeUpdatesMonitor) GetState() models.StateSnapshot {
-	return f.state
-}
-
-func (f *fakeUpdatesMonitor) QueueDockerCheckUpdatesCommand(_ string) (models.DockerHostCommandStatus, error) {
+func (f *fakeUpdatesCommandRunner) QueueDockerCheckUpdatesCommand(_ string) (models.DockerHostCommandStatus, error) {
 	return f.checkStatus, f.checkErr
 }
 
-func (f *fakeUpdatesMonitor) QueueDockerContainerUpdateCommand(_ string, _ string, _ string) (models.DockerHostCommandStatus, error) {
+func (f *fakeUpdatesCommandRunner) QueueDockerContainerUpdateCommand(_ string, _ string, _ string) (models.DockerHostCommandStatus, error) {
 	return f.updateStatus, f.updateErr
 }
 
@@ -173,37 +166,27 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 	}
 }
 
-func TestStorageBackupDiskAdapters(t *testing.T) {
-	state := models.StateSnapshot{
-		Storage:      []models.Storage{{ID: "s1"}},
-		CephClusters: []models.CephCluster{{ID: "c1"}},
-		Backups: models.Backups{PVE: models.PVEBackups{
-			BackupTasks: []models.BackupTask{{ID: "task1"}},
-		}},
-		PBSInstances: []models.PBSInstance{{ID: "pbs1"}},
-		Hosts:        []models.Host{{ID: "h1"}},
-	}
+func TestBackupAndDiskAdapters(t *testing.T) {
+	backups := models.Backups{PVE: models.PVEBackups{
+		BackupTasks: []models.BackupTask{{ID: "task1"}},
+	}}
+	pbsInstances := []models.PBSInstance{{ID: "pbs1"}}
+	repJobs := []models.ReplicationJob{{ID: "rep1"}}
 
-	if NewStorageMCPAdapter(nil) != nil {
-		t.Fatal("expected nil storage adapter for nil state")
+	if NewBackupMCPAdapter(nil, nil) != nil {
+		t.Fatal("expected nil backup adapter for nil getters")
 	}
-	emptyStorage := (&StorageMCPAdapter{}).GetStorage()
-	if emptyStorage != nil {
-		t.Fatal("expected nil storage when state getter missing")
+	// Partial-nil: one getter nil should also return nil
+	if NewBackupMCPAdapter(func() models.Backups { return models.Backups{} }, nil) != nil {
+		t.Fatal("expected nil backup adapter when getPBSInstances is nil")
 	}
-
-	storageAdapter := NewStorageMCPAdapter(fakeStateGetter{state: state})
-	if len(storageAdapter.GetStorage()) != 1 {
-		t.Fatal("expected storage data")
+	if NewBackupMCPAdapter(nil, func() []models.PBSInstance { return nil }) != nil {
+		t.Fatal("expected nil backup adapter when getBackups is nil")
 	}
-	if len(storageAdapter.GetCephClusters()) != 1 {
-		t.Fatal("expected ceph data")
-	}
-
-	if NewBackupMCPAdapter(nil) != nil {
-		t.Fatal("expected nil backup adapter for nil state")
-	}
-	backupAdapter := NewBackupMCPAdapter(fakeStateGetter{state: state})
+	backupAdapter := NewBackupMCPAdapter(
+		func() models.Backups { return backups },
+		func() []models.PBSInstance { return pbsInstances },
+	)
 	if len(backupAdapter.GetBackups().PVE.BackupTasks) != 1 {
 		t.Fatal("expected backup tasks")
 	}
@@ -212,11 +195,38 @@ func TestStorageBackupDiskAdapters(t *testing.T) {
 	}
 
 	if NewDiskHealthMCPAdapter(nil) != nil {
-		t.Fatal("expected nil disk health adapter for nil state")
+		t.Fatal("expected nil disk health adapter for nil read state")
 	}
-	diskAdapter := NewDiskHealthMCPAdapter(fakeStateGetter{state: state})
+	rs := &fakeReadState{
+		hosts: []*ur.HostView{
+			newHostView("host-resource-1", "Host 1", "host1", "host-1", nil, nil, nil),
+		},
+	}
+	diskAdapter := NewDiskHealthMCPAdapter(
+		rs,
+	)
 	if len(diskAdapter.GetHosts()) != 1 {
 		t.Fatal("expected hosts")
+	}
+
+	if NewReplicationMCPAdapter(nil) != nil {
+		t.Fatal("expected nil replication adapter for nil getter")
+	}
+	replicationAdapter := NewReplicationMCPAdapter(
+		func() []models.ReplicationJob { return repJobs },
+	)
+	if len(replicationAdapter.GetReplicationJobs()) != 1 {
+		t.Fatal("expected replication jobs")
+	}
+
+	if NewConnectionHealthMCPAdapter(nil) != nil {
+		t.Fatal("expected nil connection health adapter for nil getter")
+	}
+	connectionHealthAdapter := NewConnectionHealthMCPAdapter(
+		func() map[string]bool { return nil },
+	)
+	if connectionHealthAdapter.GetConnectionHealth() != nil {
+		t.Fatal("expected nil connection health map")
 	}
 }
 
@@ -232,7 +242,8 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source)
+	rs := &fakeReadState{}
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	got, err := adapter.GetResourceMetrics("100", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -251,7 +262,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 			},
 		},
 	}
-	adapter = NewMetricsHistoryMCPAdapter(fakeStateGetter{}, source)
+	adapter = NewMetricsHistoryMCPAdapter(source, rs)
 	got, err = adapter.GetResourceMetrics("node1", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -275,6 +286,10 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 				"cpu":    {{Value: 10, Timestamp: now}, {Value: 20, Timestamp: now.Add(time.Minute)}},
 				"memory": {{Value: 30, Timestamp: now}},
 			},
+			"200": {
+				"cpu":    {{Value: 5, Timestamp: now}},
+				"memory": {{Value: 15, Timestamp: now}},
+			},
 		},
 		node: map[string]map[string][]RawMetricPoint{
 			"node1": {
@@ -284,22 +299,25 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 		},
 	}
 
-	state := models.StateSnapshot{
-		VMs:        []models.VM{{VMID: 100, Name: "vm1"}},
-		Containers: []models.Container{{VMID: 200, Name: "ct1"}},
-		Nodes:      []models.Node{{ID: "node1", Name: "node-1"}},
+	rs := &fakeReadState{
+		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
+		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(fakeStateGetter{state: state}, source)
+	adapter := NewMetricsHistoryMCPAdapter(source, rs)
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(summary) != 2 {
-		t.Fatalf("expected summaries for vm and node, got %d", len(summary))
+	if len(summary) != 3 {
+		t.Fatalf("expected summaries for vm, system-container, and node, got %d", len(summary))
 	}
 	if summary["100"].ResourceName != "vm1" || summary["node1"].ResourceName != "node-1" {
 		t.Fatalf("unexpected summary names: %+v", summary)
+	}
+	if summary["200"].ResourceType != "system-container" {
+		t.Fatalf("expected canonical system-container type for container summary, got %q", summary["200"].ResourceType)
 	}
 
 	merged := mergeMetricsByTimestamp(map[string][]RawMetricPoint{
@@ -366,10 +384,10 @@ func TestBaselineMCPAdapter(t *testing.T) {
 }
 
 func TestPatternMCPAdapter(t *testing.T) {
-	state := models.StateSnapshot{
-		VMs:        []models.VM{{VMID: 100, Name: "vm1"}},
-		Nodes:      []models.Node{{ID: "node1", Name: "node-1"}},
-		Containers: []models.Container{{VMID: 200, Name: "ct1"}},
+	rs := &fakeReadState{
+		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
+		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
+		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 	source := &fakePatternSource{
 		patterns: []PatternData{
@@ -381,7 +399,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, fakeStateGetter{state: state})
+	adapter := NewPatternMCPAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 || patterns[0].ResourceName != "vm1" || patterns[1].ResourceName != "node-1" {
 		t.Fatalf("unexpected patterns: %+v", patterns)
@@ -394,7 +412,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 	adapter = NewPatternMCPAdapter(source, nil)
 	patterns = adapter.GetPatterns()
 	if patterns[0].ResourceName != "100" {
-		t.Fatal("expected resource ID when state missing")
+		t.Fatal("expected resource ID when readState missing")
 	}
 }
 
@@ -431,49 +449,58 @@ func TestFindingsAndMetadataAdapters(t *testing.T) {
 }
 
 func TestUpdatesMCPAdapter(t *testing.T) {
-	if NewUpdatesMCPAdapter(nil, nil) != nil {
-		t.Fatal("expected nil updates adapter for nil monitor")
+	if NewUpdatesMCPAdapter(nil, nil, nil) != nil {
+		t.Fatal("expected nil updates adapter for nil getters")
+	}
+	// Partial-nil: either read state or commands nil should return nil.
+	if NewUpdatesMCPAdapter(&fakeReadState{}, nil, nil) != nil {
+		t.Fatal("expected nil updates adapter when commands is nil")
+	}
+	if NewUpdatesMCPAdapter(nil, &fakeUpdatesCommandRunner{}, nil) != nil {
+		t.Fatal("expected nil updates adapter when readState is nil")
 	}
 
 	now := time.Now()
-	state := models.StateSnapshot{
-		DockerHosts: []models.DockerHost{
-			{
-				ID:          "host1",
-				Hostname:    "h1",
-				DisplayName: "Host 1",
-				Containers: []models.DockerContainer{
-					{
-						ID:   "c1",
-						Name: "/nginx",
-						UpdateStatus: &models.DockerContainerUpdateStatus{
-							UpdateAvailable: true,
-							CurrentDigest:   "old",
-							LatestDigest:    "new",
-							LastChecked:     now,
-						},
-					},
+	rs := &fakeReadState{
+		dockerHosts: []*ur.DockerHostView{
+			newDockerHostView("docker-resource-1", "host1", "Host 1", "h1"),
+			newDockerHostView("docker-resource-2", "host2", "Host 2", "h2"),
+		},
+		dockerContainers: []*ur.DockerContainerView{
+			newDockerContainerView(
+				"docker-container-resource-1",
+				"docker-resource-1",
+				"host1",
+				"/nginx",
+				"c1",
+				"nginx:latest",
+				&ur.DockerUpdateStatusMeta{
+					UpdateAvailable: true,
+					CurrentDigest:   "old",
+					LatestDigest:    "new",
+					LastChecked:     now,
 				},
-			},
-			{
-				ID:          "host2",
-				Hostname:    "h2",
-				DisplayName: "Host 2",
-				Containers: []models.DockerContainer{
-					{
-						ID:   "c2",
-						Name: "redis",
-						UpdateStatus: &models.DockerContainerUpdateStatus{
-							Error: "rate limited",
-						},
-					},
+			),
+			newDockerContainerView(
+				"docker-container-resource-2",
+				"docker-resource-2",
+				"host2",
+				"redis",
+				"c2",
+				"redis:latest",
+				&ur.DockerUpdateStatusMeta{
+					Error: "rate limited",
 				},
-			},
+			),
 		},
 	}
 
-	monitor := &fakeUpdatesMonitor{state: state}
-	adapter := NewUpdatesMCPAdapter(monitor, &fakeUpdatesConfig{enabled: false})
+	runner := &fakeUpdatesCommandRunner{}
+	adapter := NewUpdatesMCPAdapter(
+		rs,
+		runner,
+		&fakeUpdatesConfig{enabled: false},
+	)
 
 	updates := adapter.GetPendingUpdates("host1")
 	if len(updates) != 1 || updates[0].ContainerName != "nginx" {
@@ -487,25 +514,25 @@ func TestUpdatesMCPAdapter(t *testing.T) {
 		t.Fatal("expected updates enabled by default")
 	}
 
-	monitor.checkErr = errors.New("check")
+	runner.checkErr = errors.New("check")
 	if _, err := adapter.TriggerUpdateCheck("host1"); err == nil {
 		t.Fatal("expected check error")
 	}
 
-	monitor.checkErr = nil
-	monitor.checkStatus = models.DockerHostCommandStatus{ID: "cmd1", Type: "check", Status: "queued"}
+	runner.checkErr = nil
+	runner.checkStatus = models.DockerHostCommandStatus{ID: "cmd1", Type: "check", Status: "queued"}
 	status, err := adapter.TriggerUpdateCheck("host1")
 	if err != nil || status.ID != "cmd1" {
 		t.Fatalf("unexpected status: %+v err=%v", status, err)
 	}
 
-	monitor.updateErr = errors.New("update")
+	runner.updateErr = errors.New("update")
 	if _, err := adapter.UpdateContainer("host1", "c1", "nginx"); err == nil {
 		t.Fatal("expected update error")
 	}
 
-	monitor.updateErr = nil
-	monitor.updateStatus = models.DockerHostCommandStatus{ID: "cmd2", Type: "update", Status: "queued"}
+	runner.updateErr = nil
+	runner.updateStatus = models.DockerHostCommandStatus{ID: "cmd2", Type: "update", Status: "queued"}
 	status, err = adapter.UpdateContainer("host1", "c1", "nginx")
 	if err != nil || status.ID != "cmd2" {
 		t.Fatalf("unexpected update status: %+v err=%v", status, err)

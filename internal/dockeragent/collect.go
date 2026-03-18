@@ -13,14 +13,17 @@ import (
 
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	systemtypes "github.com/docker/docker/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 // buildReport gathers all system and container metrics into a single report
 func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
-	info, err := a.docker.Info(ctx)
+	info, err := dockerCallWithRetry(ctx, dockerInfoCallTimeout, func(callCtx context.Context) (systemtypes.Info, error) {
+		return a.docker.Info(callCtx)
+	})
 	if err != nil {
-		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", err)
+		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", annotateDockerConnectionError(err))
 	}
 
 	a.runtimeVer = info.ServerVersion
@@ -180,9 +183,11 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		options.Filters = filterArgs
 	}
 
-	list, err := a.docker.ContainerList(ctx, options)
+	list, err := dockerCallWithRetry(ctx, dockerContainerListCallTimeout, func(callCtx context.Context) ([]containertypes.Summary, error) {
+		return a.docker.ContainerList(callCtx, options)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
+		return nil, fmt.Errorf("failed to list containers: %w", annotateDockerConnectionError(err))
 	}
 
 	containers := make([]agentsdocker.Container, 0, len(list))
@@ -195,14 +200,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		}
 
 		// Skip backup containers created during updates - they're temporary
-		isBackup := false
-		for _, name := range summary.Names {
-			if strings.Contains(name, "_pulse_backup_") {
-				isBackup = true
-				break
-			}
-		}
-		if isBackup {
+		if isBackupContainer(summary.Names) {
 			continue
 		}
 
@@ -210,7 +208,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 
 		container, err := a.collectContainer(ctx, summary)
 		if err != nil {
-			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("Failed to collect container stats")
+			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("failed to collect container stats")
 			continue
 		}
 		containers = append(containers, container)
@@ -227,9 +225,9 @@ func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
 		return
 	}
 
-	for id := range a.prevContainerCPU {
-		if _, ok := active[id]; !ok {
-			delete(a.prevContainerCPU, id)
+	for containerID := range a.prevContainerCPU {
+		if _, ok := active[containerID]; !ok {
+			delete(a.prevContainerCPU, containerID)
 			// Reset stats failure counter when containers are removed,
 			// though it's global per agent so not strictly necessary but good hygiene
 		}
@@ -254,6 +252,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		memLimit   int64
 		memPercent float64
 		blockIO    *agentsdocker.ContainerBlockIO
+		networkRX  uint64
+		networkTX  uint64
 	)
 
 	if inspect.State.Running || inspect.State.Paused {
@@ -261,7 +261,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("stats: %w", err)
 		}
-		defer statsResp.Body.Close()
+		defer func() {
+			if closeErr := statsResp.Body.Close(); closeErr != nil {
+				a.logger.Warn().Err(closeErr).Str("container", summary.ID).Msg("Failed to close container stats response body")
+			}
+		}()
 
 		var stats containertypes.StatsResponse
 		if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
@@ -271,6 +275,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
+		networkRX, networkTX = summarizeNetworkIO(stats)
 	} else {
 		a.cpuMu.Lock()
 		delete(a.prevContainerCPU, summary.ID)
@@ -380,6 +385,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		Labels:              labels,
 		Env:                 maskSensitiveEnvVars(inspect.Config.Env),
 		Networks:            networks,
+		NetworkRXBytes:      networkRX,
+		NetworkTXBytes:      networkTX,
 		WritableLayerBytes:  writableLayerBytes,
 		RootFilesystemBytes: rootFsBytes,
 		BlockIO:             blockIO,
@@ -594,7 +601,7 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	return meta
 }
 
-func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.StatsResponse) float64 {
+func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse) float64 {
 	a.cpuMu.Lock()
 	defer a.cpuMu.Unlock()
 
@@ -610,13 +617,13 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	// cache between non-streaming reads, causing PreCPUStats to remain stale
 	// (from container start) and producing a constant lifetime-average CPU%
 	// instead of a current value.
-	prev, ok := a.prevContainerCPU[id]
+	prev, ok := a.prevContainerCPU[containerID]
 	if !ok {
 		// First time seeing this container - store current sample and return 0
 		// On next collection cycle we'll have a previous sample to compare against
-		a.prevContainerCPU[id] = current
+		a.prevContainerCPU[containerID] = current
 		a.logger.Debug().
-			Str("container_id", id[:12]).
+			Str("container_id", containerID[:12]).
 			Uint64("total_usage", current.totalUsage).
 			Uint64("system_usage", current.systemUsage).
 			Msg("First CPU sample collected, no previous data for delta calculation")
@@ -624,7 +631,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	}
 
 	// We have a previous sample - update it after calculation
-	a.prevContainerCPU[id] = current
+	a.prevContainerCPU[containerID] = current
 
 	var totalDelta float64
 	if current.totalUsage >= prev.totalUsage {
@@ -659,7 +666,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	if systemDelta > 0 {
 		cpuPercent := safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
 		a.logger.Debug().
-			Str("container_id", id[:12]).
+			Str("container_id", containerID[:12]).
 			Float64("cpu_percent", cpuPercent).
 			Float64("total_delta", totalDelta).
 			Float64("system_delta", systemDelta).
@@ -677,7 +684,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 				cpuPercent := (totalDelta / denominator) * 100.0
 				result := safeFloat(cpuPercent)
 				a.logger.Debug().
-					Str("container_id", id[:12]).
+					Str("container_id", containerID[:12]).
 					Float64("cpu_percent", result).
 					Float64("total_delta", totalDelta).
 					Float64("elapsed_seconds", elapsed).
@@ -689,7 +696,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	}
 
 	a.logger.Debug().
-		Str("container_id", id[:12]).
+		Str("container_id", containerID[:12]).
 		Float64("total_delta", totalDelta).
 		Float64("system_delta", systemDelta).
 		Bool("prev_read_zero", prev.read.IsZero()).
@@ -827,6 +834,21 @@ func summarizeBlockIO(stats containertypes.StatsResponse) *agentsdocker.Containe
 		ReadBytes:  readBytes,
 		WriteBytes: writeBytes,
 	}
+}
+
+func summarizeNetworkIO(stats containertypes.StatsResponse) (uint64, uint64) {
+	if len(stats.Networks) == 0 {
+		return 0, 0
+	}
+
+	var rxBytes uint64
+	var txBytes uint64
+	for _, network := range stats.Networks {
+		rxBytes += network.RxBytes
+		txBytes += network.TxBytes
+	}
+
+	return rxBytes, txBytes
 }
 
 // sensitiveEnvPatterns are substrings that, when found in an env var name (case-insensitive),

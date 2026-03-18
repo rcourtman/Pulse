@@ -5,8 +5,6 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-
-	"github.com/rs/zerolog"
 )
 
 func TestHealthHandler_HealthzAlwaysOK(t *testing.T) {
@@ -39,15 +37,5 @@ func TestHealthHandler_ReadyzDependsOnReadyFlag(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-}
-
-func TestRunAsWindowsService_Stub(t *testing.T) {
-	ran, err := runAsWindowsService(Config{}, zerolog.Nop())
-	if err != nil {
-		t.Fatalf("err = %v", err)
-	}
-	if ran {
-		t.Fatalf("expected ran=false on non-windows")
 	}
 }

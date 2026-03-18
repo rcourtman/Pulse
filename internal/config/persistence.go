@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,29 +23,29 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu                       sync.RWMutex
-	tx                       *importTransaction
-	configDir                string
-	alertFile                string
-	emailFile                string
-	webhookFile              string
-	appriseFile              string
-	nodesFile                string
-	systemFile               string
-	oidcFile                 string
-	ssoFile                  string
-	apiTokensFile            string
-	envTokenSuppressionsFile string
-	aiFile                   string
-	aiFindingsFile           string
-	aiPatrolRunsFile         string
-	aiUsageHistoryFile       string
-	agentProfilesFile        string
-	agentAssignmentsFile     string
-	aiChatSessionsFile       string
-	orgFile                  string
-	crypto                   *crypto.CryptoManager
-	fs                       FileSystem
+	mu                   sync.RWMutex
+	tx                   *importTransaction
+	configDir            string
+	alertFile            string
+	emailFile            string
+	webhookFile          string
+	appriseFile          string
+	nodesFile            string
+	trueNASFile          string
+	systemFile           string
+	ssoFile              string
+	apiTokensFile        string
+	aiFile               string
+	aiFindingsFile       string
+	aiPatrolRunsFile     string
+	aiUsageHistoryFile   string
+	agentProfilesFile    string
+	agentAssignmentsFile string
+	aiChatSessionsFile   string
+	orgFile              string
+	relayFile            string
+	crypto               *crypto.CryptoManager
+	fs                   FileSystem
 
 	// Lazy loaded metadata stores
 	guestMetadataStore  *GuestMetadataStore
@@ -78,6 +79,14 @@ func (dfs defaultFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
+type alertSchedulePresence struct {
+	Schedule *alertScheduleFieldPresence `json:"schedule"`
+}
+
+type alertScheduleFieldPresence struct {
+	NotifyOnResolve *bool `json:"notifyOnResolve"`
+}
+
 // NewConfigPersistence creates a new config persistence manager.
 // The process terminates if encryption cannot be initialized to avoid
 // writing secrets to disk in plaintext.
@@ -93,13 +102,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 }
 
 func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
-	if configDir == "" {
-		if envDir := os.Getenv("PULSE_DATA_DIR"); envDir != "" {
-			configDir = envDir
-		} else {
-			configDir = "/etc/pulse"
-		}
-	}
+	configDir = ResolveRuntimeDataDir(configDir)
 
 	// Initialize crypto manager
 	cryptoMgr, err := crypto.NewCryptoManagerAt(configDir)
@@ -108,27 +111,27 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:                configDir,
-		alertFile:                filepath.Join(configDir, "alerts.json"),
-		emailFile:                filepath.Join(configDir, "email.enc"),
-		webhookFile:              filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:              filepath.Join(configDir, "apprise.enc"),
-		nodesFile:                filepath.Join(configDir, "nodes.enc"),
-		systemFile:               filepath.Join(configDir, "system.json"),
-		oidcFile:                 filepath.Join(configDir, "oidc.enc"),
-		ssoFile:                  filepath.Join(configDir, "sso.enc"),
-		apiTokensFile:            filepath.Join(configDir, "api_tokens.json"),
-		envTokenSuppressionsFile: filepath.Join(configDir, "env_token_suppressions.json"),
-		aiFile:                   filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile:           filepath.Join(configDir, "ai_findings.json"),
-		aiPatrolRunsFile:         filepath.Join(configDir, "ai_patrol_runs.json"),
-		aiUsageHistoryFile:       filepath.Join(configDir, "ai_usage_history.json"),
-		agentProfilesFile:        filepath.Join(configDir, "agent_profiles.json"),
-		agentAssignmentsFile:     filepath.Join(configDir, "agent_profile_assignments.json"),
-		aiChatSessionsFile:       filepath.Join(configDir, "ai_chat_sessions.json"),
-		orgFile:                  filepath.Join(configDir, "org.json"),
-		crypto:                   cryptoMgr,
-		fs:                       defaultFileSystem{},
+		configDir:            configDir,
+		alertFile:            filepath.Join(configDir, "alerts.json"),
+		emailFile:            filepath.Join(configDir, "email.enc"),
+		webhookFile:          filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:          filepath.Join(configDir, "apprise.enc"),
+		nodesFile:            filepath.Join(configDir, "nodes.enc"),
+		trueNASFile:          filepath.Join(configDir, "truenas.enc"),
+		systemFile:           filepath.Join(configDir, "system.json"),
+		ssoFile:              filepath.Join(configDir, "sso.enc"),
+		apiTokensFile:        filepath.Join(configDir, "api_tokens.json"),
+		aiFile:               filepath.Join(configDir, "ai.enc"),
+		aiFindingsFile:       filepath.Join(configDir, "ai_findings.json"),
+		aiPatrolRunsFile:     filepath.Join(configDir, "ai_patrol_runs.json"),
+		aiUsageHistoryFile:   filepath.Join(configDir, "ai_usage_history.json"),
+		agentProfilesFile:    filepath.Join(configDir, "agent_profiles.json"),
+		agentAssignmentsFile: filepath.Join(configDir, "agent_profile_assignments.json"),
+		aiChatSessionsFile:   filepath.Join(configDir, "ai_chat_sessions.json"),
+		orgFile:              filepath.Join(configDir, "org.json"),
+		relayFile:            filepath.Join(configDir, "relay.enc"),
+		crypto:               cryptoMgr,
+		fs:                   defaultFileSystem{},
 	}
 
 	log.Debug().
@@ -192,7 +195,10 @@ func (c *ConfigPersistence) SaveOrganization(org *models.Organization) error {
 
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
-	return c.fs.MkdirAll(c.configDir, 0700)
+	if err := c.fs.MkdirAll(c.configDir, 0700); err != nil {
+		return fmt.Errorf("ensure config directory %s: %w", c.configDir, err)
+	}
+	return nil
 }
 
 func (c *ConfigPersistence) beginTransaction(tx *importTransaction) {
@@ -217,89 +223,255 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	tx := c.tx
 
 	if tx != nil {
-		return tx.StageFile(path, data, perm)
+		if err := tx.StageFile(path, data, perm); err != nil {
+			return fmt.Errorf("stage config file %s: %w", path, err)
+		}
+		return nil
 	}
 
 	tmp := path + ".tmp"
 	if err := c.fs.WriteFile(tmp, data, perm); err != nil {
-		return err
+		return fmt.Errorf("write temp config file %s: %w", tmp, err)
 	}
 	if err := c.fs.Rename(tmp, path); err != nil {
-		_ = c.fs.Remove(tmp)
-		return err
+		renameErr := fmt.Errorf("rename temp config file %s to %s: %w", tmp, path, err)
+		if removeErr := c.fs.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("cleanup temp config file %s: %w", tmp, removeErr))
+		}
+		return renameErr
 	}
+	return nil
+}
+
+// saveJSON is a generic helper that marshals data to JSON, optionally encrypts,
+// and writes to file. Caller must NOT already hold c.mu.
+func saveJSON[T any](c *ConfigPersistence, filePath string, data T, encrypt bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config data for %s: %w", filePath, err)
+	}
+
+	if encrypt && c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(jsonData)
+		if err != nil {
+			return fmt.Errorf("encrypt config data for %s: %w", filePath, err)
+		}
+		jsonData = encrypted
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return fmt.Errorf("prepare config directory for %s: %w", filePath, err)
+	}
+
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist config file %s: %w", filePath, err)
+	}
+	return nil
+}
+
+func rewriteEncryptedJSONLocked(c *ConfigPersistence, filePath string, jsonData []byte, context string) error {
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(jsonData)
+		if err != nil {
+			return fmt.Errorf("encrypt %s: %w", context, err)
+		}
+		jsonData = encrypted
+	}
+
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist %s: %w", context, err)
+	}
+	return nil
+}
+
+func rewriteEncryptedSliceLocked[T any](c *ConfigPersistence, filePath string, data []T, context string) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", context, err)
+	}
+	return rewriteEncryptedJSONLocked(c, filePath, jsonData, context)
+}
+
+func loadEncryptedJSONLocked[T any](c *ConfigPersistence, filePath string, target *T, context string) (bool, []byte, error) {
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		return false, nil, err
+	}
+
+	migratedPlaintext := false
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(decErr).Str("file", filePath).Msg("Failed to decrypt config - falling back to plaintext")
+			migratedPlaintext = true
+		}
+	}
+
+	if err := json.Unmarshal(data, target); err != nil {
+		return false, nil, fmt.Errorf("decode %s %s: %w", context, filePath, err)
+	}
+
+	return migratedPlaintext, data, nil
+}
+
+// loadSlice is a generic helper that reads a JSON file, optionally decrypts,
+// and unmarshals into a slice of T. Returns an empty slice if the file doesn't
+// exist or is empty. Caller must NOT already hold c.mu.
+func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []T{}, nil
+		}
+		return nil, fmt.Errorf("read config file %s: %w", filePath, err)
+	}
+
+	if len(data) == 0 {
+		return []T{}, nil
+	}
+
+	migratedPlaintext := false
+	if decrypt && c.crypto != nil {
+		if decrypted, err := c.crypto.Decrypt(data); err == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(err).Str("file", filePath).Msg("Failed to decrypt config - falling back to plaintext")
+			migratedPlaintext = true
+		}
+	}
+
+	var result []T
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("decode config file %s: %w", filePath, err)
+	}
+
+	if migratedPlaintext {
+		if err := rewriteEncryptedSliceLocked(c, filePath, result, "config slice migration rewrite"); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// loadJSON is a generic helper that reads a JSON file, optionally decrypts,
+// and unmarshals into the provided target value. Caller must NOT already hold c.mu.
+func loadJSON[T any](c *ConfigPersistence, filePath string, decrypt bool, target *T) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("read config file %s: %w", filePath, err)
+	}
+
+	migratedPlaintext := false
+	if decrypt && c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			log.Warn().Err(decErr).Str("file", filePath).Msg("Failed to decrypt config - falling back to plaintext")
+			migratedPlaintext = true
+		}
+	}
+
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode config file %s: %w", filePath, err)
+	}
+
+	if migratedPlaintext {
+		if err := rewriteEncryptedJSONLocked(c, filePath, data, "config object migration rewrite"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// persistMetadata writes metadata to disk atomically (temp file + rename).
+// Caller must hold the lock. The data should already be marshaled to JSON.
+// This is used by both GuestMetadataStore and HostMetadataStore to avoid code duplication.
+func persistMetadata(fs FileSystem, dataPath, fileName string, data []byte) error {
+	filePath := filepath.Join(dataPath, fileName)
+
+	log.Debug().Str("path", filePath).Msg("Saving metadata to disk")
+
+	if err := fs.MkdirAll(dataPath, 0o700); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	tempFile := filePath + ".tmp"
+	if err := fs.WriteFile(tempFile, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	if err := fs.Rename(tempFile, filePath); err != nil {
+		return fmt.Errorf("failed to rename metadata file: %w", err)
+	}
+
 	return nil
 }
 
 // LoadAPITokens loads API token metadata from disk.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	data, err := c.fs.ReadFile(c.apiTokensFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []APITokenRecord{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	if len(data) == 0 {
 		return []APITokenRecord{}, nil
 	}
 
+	migratedPlaintext := false
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			migratedPlaintext = true
+		}
+	}
+
 	var tokens []APITokenRecord
 	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	for i := range tokens {
+		tokens[i].ensureID()
 		tokens[i].ensureScopes()
+	}
+
+	if migratedPlaintext && c.crypto != nil {
+		if err := c.persistAPITokensLocked(tokens); err != nil {
+			return nil, fmt.Errorf("rewrite plaintext api tokens file %s: %w", c.apiTokensFile, err)
+		}
 	}
 
 	return tokens, nil
 }
 
-// LoadEnvTokenSuppressions loads the list of suppressed env token hashes.
-func (c *ConfigPersistence) LoadEnvTokenSuppressions() ([]string, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.envTokenSuppressionsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []string{}, nil
-	}
-
-	var hashes []string
-	if err := json.Unmarshal(data, &hashes); err != nil {
-		return nil, err
-	}
-
-	return hashes, nil
+// SaveTrueNASConfig persists TrueNAS instance configuration to encrypted storage.
+func (c *ConfigPersistence) SaveTrueNASConfig(instances []TrueNASInstance) error {
+	return saveJSON(c, c.trueNASFile, instances, true)
 }
 
-// SaveEnvTokenSuppressions persists the suppressed env token hashes to disk.
-func (c *ConfigPersistence) SaveEnvTokenSuppressions(hashes []string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	data, err := json.Marshal(hashes)
-	if err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.envTokenSuppressionsFile, data, 0600)
+// LoadTrueNASConfig loads TrueNAS instance configuration from encrypted storage.
+func (c *ConfigPersistence) LoadTrueNASConfig() ([]TrueNASInstance, error) {
+	return loadSlice[TrueNASInstance](c, c.trueNASFile, true)
 }
 
 // SaveAPITokens persists API token metadata to disk.
@@ -307,8 +479,13 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	return c.persistAPITokensLocked(tokens)
+}
+
+func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) error {
+
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for api tokens: %w", err)
 	}
 
 	// Backup previous state (best effort).
@@ -321,52 +498,74 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	sanitized := make([]APITokenRecord, len(tokens))
 	for i := range tokens {
 		record := tokens[i]
+		record.ensureID()
 		record.ensureScopes()
 		sanitized[i] = record
 	}
 
 	data, err := json.Marshal(sanitized)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal api token records: %w", err)
 	}
 
-	return c.writeConfigFileLocked(c.apiTokensFile, data, 0600)
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(data); encErr == nil {
+			data = encrypted
+		} else {
+			return fmt.Errorf("encrypt api tokens: %w", encErr)
+		}
+	}
+
+	if err := c.writeConfigFileLocked(c.apiTokensFile, data, 0600); err != nil {
+		return fmt.Errorf("persist api tokens file %s: %w", c.apiTokensFile, err)
+	}
+	return nil
 }
 
-// SaveAlertConfig saves alert configuration to file
-func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Ensure critical defaults are set before saving
-	// Storage: Allow Trigger=0 to disable storage alerting
-	if config.StorageDefault.Trigger < 0 {
-		config.StorageDefault.Trigger = 85
-		config.StorageDefault.Clear = 80
-	} else if config.StorageDefault.Trigger == 0 {
-		config.StorageDefault.Clear = 0
-	} else if config.StorageDefault.Clear <= 0 {
-		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
-		if config.StorageDefault.Clear < 0 {
-			config.StorageDefault.Clear = 0
+// normalizeHysteresisThreshold ensures a hysteresis threshold pointer has valid
+// trigger/clear values. If the pointer is nil or trigger is negative, it is set
+// to the given defaults. Trigger==0 means "disabled" (clear forced to 0).
+// Otherwise a non-positive clear is derived from trigger-5 with defaultClear as floor.
+func normalizeHysteresisThreshold(t **alerts.HysteresisThreshold, defaultTrigger, defaultClear float64) {
+	if *t == nil || (*t).Trigger < 0 {
+		*t = &alerts.HysteresisThreshold{Trigger: defaultTrigger, Clear: defaultClear}
+	} else if (*t).Trigger == 0 {
+		(*t).Clear = 0
+	} else if (*t).Clear <= 0 {
+		(*t).Clear = (*t).Trigger - 5
+		if (*t).Clear <= 0 {
+			(*t).Clear = defaultClear
 		}
 	}
+}
+
+// normalizeStorageDefault normalizes a non-pointer HysteresisThreshold used for
+// storage defaults. Same logic as normalizeHysteresisThreshold but operates on
+// a value (not pointer) and uses 0 as the clear floor.
+func normalizeStorageDefault(t *alerts.HysteresisThreshold) {
+	if t.Trigger < 0 {
+		t.Trigger = 85
+		t.Clear = 80
+	} else if t.Trigger == 0 {
+		t.Clear = 0
+	} else if t.Clear <= 0 {
+		t.Clear = t.Trigger - 5
+		if t.Clear < 0 {
+			t.Clear = 0
+		}
+	}
+}
+
+// normalizeAlertDefaults applies shared normalization logic to an AlertConfig.
+// Called by both SaveAlertConfig and LoadAlertConfig to avoid duplicating the
+// same validation and defaulting code.
+func normalizeAlertDefaults(config *alerts.AlertConfig) {
+	alerts.NormalizeAlertConfigAliases(config)
+
+	// Storage threshold
+	normalizeStorageDefault(&config.StorageDefault)
+
 	if config.MinimumDelta <= 0 {
-		margin := config.HysteresisMargin
-		if margin <= 0 {
-			margin = 5.0
-		}
-		for id, override := range config.Overrides {
-			if override.Usage != nil {
-				if override.Usage.Clear <= 0 {
-					override.Usage.Clear = override.Usage.Trigger - margin
-					if override.Usage.Clear < 0 {
-						override.Usage.Clear = 0
-					}
-				}
-				config.Overrides[id] = override
-			}
-		}
 		config.MinimumDelta = 2.0
 	}
 	if config.SuppressionWindow <= 0 {
@@ -376,60 +575,32 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		config.HysteresisMargin = 5.0
 	}
 
-	// Host Defaults: Allow Trigger=0 to disable specific alerts
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
-		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.HostDefaults.CPU.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.CPU.Clear = 0
-	} else if config.HostDefaults.CPU.Clear <= 0 {
-		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
-		if config.HostDefaults.CPU.Clear <= 0 {
-			config.HostDefaults.CPU.Clear = 75
-		}
-	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
-		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.HostDefaults.Memory.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Memory.Clear = 0
-	} else if config.HostDefaults.Memory.Clear <= 0 {
-		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
-		if config.HostDefaults.Memory.Clear <= 0 {
-			config.HostDefaults.Memory.Clear = 80
-		}
-	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
-		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.HostDefaults.Disk.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Disk.Clear = 0
-	} else if config.HostDefaults.Disk.Clear <= 0 {
-		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
-		if config.HostDefaults.Disk.Clear <= 0 {
-			config.HostDefaults.Disk.Clear = 85
-		}
-	}
+	// Agent defaults
+	normalizeHysteresisThreshold(&config.AgentDefaults.CPU, 80, 75)
+	normalizeHysteresisThreshold(&config.AgentDefaults.Memory, 85, 80)
+	normalizeHysteresisThreshold(&config.AgentDefaults.Disk, 90, 85)
 
+	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
-	if config.TimeThreshold <= 0 {
-		config.TimeThreshold = 5
-	}
 	if config.TimeThresholds == nil {
 		config.TimeThresholds = make(map[string]int)
 	}
+	defaultDelay := 5
 	ensureDelay := func(key string) {
 		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
-			config.TimeThresholds[key] = config.TimeThreshold
+			config.TimeThresholds[key] = defaultDelay
 		}
 	}
 	ensureDelay("guest")
 	ensureDelay("node")
+	ensureDelay("agent")
 	ensureDelay("storage")
 	ensureDelay("pbs")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
-		config.TimeThresholds["all"] = config.TimeThreshold
+		config.TimeThresholds["all"] = defaultDelay
 	}
+
+	// Snapshot defaults
 	if config.SnapshotDefaults.WarningDays < 0 {
 		config.SnapshotDefaults.WarningDays = 0
 	}
@@ -439,14 +610,11 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
-	if config.SnapshotDefaults.CriticalDays == 0 && config.SnapshotDefaults.WarningDays > 0 {
-		config.SnapshotDefaults.CriticalDays = config.SnapshotDefaults.WarningDays
+	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = 0
 	}
 	if config.SnapshotDefaults.WarningSizeGiB < 0 {
 		config.SnapshotDefaults.WarningSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = 0
 	}
 	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
 		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
@@ -454,6 +622,8 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
 		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
 	}
+
+	// Backup defaults
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
 	}
@@ -467,6 +637,8 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		alertOrphaned := true
 		config.BackupDefaults.AlertOrphaned = &alertOrphaned
 	}
+
+	// Deduplicate IgnoreVMIDs
 	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
 		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
 		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
@@ -483,19 +655,47 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		}
 		config.BackupDefaults.IgnoreVMIDs = normalized
 	}
+
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+}
+
+// SaveAlertConfig saves alert configuration to file
+func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Save-specific: normalize override clear values before shared defaults run
+	if config.MinimumDelta <= 0 {
+		margin := config.HysteresisMargin
+		if margin <= 0 {
+			margin = 5.0
+		}
+		for id, override := range config.Overrides {
+			if override.Usage != nil {
+				if override.Usage.Clear <= 0 {
+					override.Usage.Clear = override.Usage.Trigger - margin
+					if override.Usage.Clear < 0 {
+						override.Usage.Clear = 0
+					}
+				}
+				config.Overrides[id] = override
+			}
+		}
+	}
+
+	normalizeAlertDefaults(&config)
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal alert config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for alert config: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.alertFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist alert config: %w", err)
 	}
 
 	log.Info().Str("file", c.alertFile).Msg("Alert configuration saved")
@@ -525,16 +725,19 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 				},
-				HostDefaults: alerts.ThresholdConfig{
+				AgentDefaults: alerts.ThresholdConfig{
 					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
+				Schedule: alerts.ScheduleConfig{
+					NotifyOnResolve: true,
+				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-				TimeThreshold:  5,
 				TimeThresholds: map[string]int{
 					"guest":   5,
 					"node":    5,
+					"agent":   5,
 					"storage": 5,
 					"pbs":     5,
 				},
@@ -558,9 +761,6 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					IgnoreVMIDs:   []string{},
 				},
 				Overrides: make(map[string]alerts.ThresholdConfig),
-				Schedule: alerts.ScheduleConfig{
-					NotifyOnResolve: true,
-				},
 			}, nil
 		}
 		return nil, err
@@ -576,168 +776,38 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if string(data) == "{}" {
 		config.Enabled = true
 	}
-	// Storage: Allow Trigger=0 to disable storage alerting
-	if config.StorageDefault.Trigger < 0 {
-		config.StorageDefault.Trigger = 85
-		config.StorageDefault.Clear = 80
-	} else if config.StorageDefault.Trigger == 0 {
-		config.StorageDefault.Clear = 0
-	} else if config.StorageDefault.Clear <= 0 {
-		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
-		if config.StorageDefault.Clear < 0 {
-			config.StorageDefault.Clear = 0
+
+	// Load-specific: NotifyOnResolve defaults to true (send recovery notifications).
+	// Since bool zero-value is false, we check raw JSON to distinguish
+	// "missing field" (old configs) from "explicitly set to false".
+	if !config.Schedule.NotifyOnResolve {
+		var presence alertSchedulePresence
+		// Ignore error here as we've already unmarshaled successfully above.
+		if json.Unmarshal(data, &presence) == nil {
+			if presence.Schedule == nil || presence.Schedule.NotifyOnResolve == nil {
+				config.Schedule.NotifyOnResolve = true
+			}
 		}
 	}
-	if config.MinimumDelta <= 0 {
-		config.MinimumDelta = 2.0
-	}
-	if config.SuppressionWindow <= 0 {
-		config.SuppressionWindow = 5
-	}
-	if config.HysteresisMargin <= 0 {
-		config.HysteresisMargin = 5.0
-	}
-	// NodeDefaults.Temperature: Allow Trigger=0 to disable temperature alerting
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
-		config.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.NodeDefaults.Temperature.Trigger == 0 {
-		config.NodeDefaults.Temperature.Clear = 0
-	} else if config.NodeDefaults.Temperature.Clear <= 0 {
-		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
-		if config.NodeDefaults.Temperature.Clear <= 0 {
-			config.NodeDefaults.Temperature.Clear = 75
-		}
-	}
-	// Host Defaults: Allow Trigger=0 to disable specific alerts
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
-		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.HostDefaults.CPU.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.CPU.Clear = 0
-	} else if config.HostDefaults.CPU.Clear <= 0 {
-		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
-		if config.HostDefaults.CPU.Clear <= 0 {
-			config.HostDefaults.CPU.Clear = 75
-		}
-	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
-		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.HostDefaults.Memory.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Memory.Clear = 0
-	} else if config.HostDefaults.Memory.Clear <= 0 {
-		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
-		if config.HostDefaults.Memory.Clear <= 0 {
-			config.HostDefaults.Memory.Clear = 80
-		}
-	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
-		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.HostDefaults.Disk.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Disk.Clear = 0
-	} else if config.HostDefaults.Disk.Clear <= 0 {
-		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
-		if config.HostDefaults.Disk.Clear <= 0 {
-			config.HostDefaults.Disk.Clear = 85
-		}
-	}
-	if config.TimeThreshold <= 0 {
-		config.TimeThreshold = 5
-	}
-	if config.TimeThresholds == nil {
-		config.TimeThresholds = make(map[string]int)
-	}
-	ensureDelay := func(key string) {
-		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
-			config.TimeThresholds[key] = config.TimeThreshold
-		}
-	}
-	ensureDelay("guest")
-	ensureDelay("node")
-	ensureDelay("storage")
-	ensureDelay("pbs")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
-		config.TimeThresholds["all"] = config.TimeThreshold
-	}
-	if config.SnapshotDefaults.WarningDays < 0 {
-		config.SnapshotDefaults.WarningDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays < 0 {
-		config.SnapshotDefaults.CriticalDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
-		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
-	}
-	if config.SnapshotDefaults.WarningSizeGiB < 0 {
-		config.SnapshotDefaults.WarningSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
-		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
-	}
-	if config.BackupDefaults.WarningDays < 0 {
-		config.BackupDefaults.WarningDays = 0
-	}
-	if config.BackupDefaults.CriticalDays < 0 {
-		config.BackupDefaults.CriticalDays = 0
-	}
-	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
-		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
-	}
-	// Default indicator thresholds for dashboard (separate from alert thresholds)
+
+	// Load-specific: NodeDefaults.Temperature normalization
+	normalizeHysteresisThreshold(&config.NodeDefaults.Temperature, 80, 75)
+
+	// Shared normalization (storage, host defaults, time thresholds, snapshots, backups, etc.)
+	normalizeAlertDefaults(&config)
+
+	// Load-specific: Default indicator thresholds for dashboard
 	if config.BackupDefaults.FreshHours <= 0 {
 		config.BackupDefaults.FreshHours = 24
 	}
 	if config.BackupDefaults.StaleHours <= 0 {
 		config.BackupDefaults.StaleHours = 72
 	}
-	// Ensure stale threshold is at least as large as fresh threshold
 	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
 		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
 	}
-	if config.BackupDefaults.AlertOrphaned == nil {
-		alertOrphaned := true
-		config.BackupDefaults.AlertOrphaned = &alertOrphaned
-	}
-	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
-		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
-		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
-		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
-			value := strings.TrimSpace(entry)
-			if value == "" {
-				continue
-			}
-			if _, exists := seen[value]; exists {
-				continue
-			}
-			seen[value] = struct{}{}
-			normalized = append(normalized, value)
-		}
-		config.BackupDefaults.IgnoreVMIDs = normalized
-	}
-	// Default NotifyOnResolve to true if not explicitly set in saved config.
-	// Older configs (pre-5.1.12) don't have this field, so Go unmarshals it
-	// as false — but the intended default is true (recovery notifications ON).
-	var scheduleProbe struct {
-		Schedule struct {
-			NotifyOnResolve *bool `json:"notifyOnResolve"`
-		} `json:"schedule"`
-	}
-	if err := json.Unmarshal(data, &scheduleProbe); err == nil && scheduleProbe.Schedule.NotifyOnResolve == nil {
-		config.Schedule.NotifyOnResolve = true
-	}
 
-	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
-	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
-
-	// Migration: Set I/O metrics to Off (0) if they have the old default values
-	// This helps existing users avoid noisy I/O alerts
+	// Load-specific migration: Set I/O metrics to Off (0) if they have old default values
 	if config.GuestDefaults.DiskRead != nil && config.GuestDefaults.DiskRead.Trigger == 150 {
 		config.GuestDefaults.DiskRead = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
 	}
@@ -766,25 +836,25 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 	// Marshal to JSON first
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal email config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for email config: %w", err)
 	}
 
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt email config: %w", err)
 		}
 		data = encrypted
 	}
 
 	// Save with restricted permissions (owner read/write only)
 	if err := c.writeConfigFileLocked(c.emailFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist email config: %w", err)
 	}
 
 	log.Info().
@@ -796,10 +866,11 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 
 // LoadEmailConfig loads email configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	data, err := c.fs.ReadFile(c.emailFile)
+	var config notifications.EmailConfig
+	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.emailFile, &config, "email config")
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return empty config if encrypted file doesn't exist
@@ -813,18 +884,14 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 		return nil, err
 	}
 
-	// Decrypt if crypto manager is available
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
+	if migratedPlaintext {
+		jsonData, err := json.Marshal(config)
 		if err != nil {
+			return nil, fmt.Errorf("marshal email config migration rewrite: %w", err)
+		}
+		if err := rewriteEncryptedJSONLocked(c, c.emailFile, jsonData, "email config migration rewrite"); err != nil {
 			return nil, err
 		}
-		data = decrypted
-	}
-
-	var config notifications.EmailConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
 	}
 
 	log.Info().
@@ -843,23 +910,23 @@ func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal apprise config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for apprise config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt apprise config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.appriseFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist apprise config: %w", err)
 	}
 
 	log.Info().
@@ -871,10 +938,11 @@ func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig
 
 // LoadAppriseConfig loads Apprise configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	data, err := c.fs.ReadFile(c.appriseFile)
+	var config notifications.AppriseConfig
+	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.appriseFile, &config, "apprise config")
 	if err != nil {
 		if os.IsNotExist(err) {
 			defaultCfg := notifications.AppriseConfig{
@@ -890,17 +958,14 @@ func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, e
 		return nil, err
 	}
 
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
+	if migratedPlaintext {
+		jsonData, err := json.Marshal(config)
 		if err != nil {
+			return nil, fmt.Errorf("marshal apprise config migration rewrite: %w", err)
+		}
+		if err := rewriteEncryptedJSONLocked(c, c.appriseFile, jsonData, "apprise config migration rewrite"); err != nil {
 			return nil, err
 		}
-		data = decrypted
-	}
-
-	var config notifications.AppriseConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
 	}
 
 	normalized := notifications.NormalizeAppriseConfig(config)
@@ -917,26 +982,28 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	webhooks = normalizeWebhookConfigs(webhooks)
+
 	data, err := json.Marshal(webhooks)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal webhooks config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for webhooks: %w", err)
 	}
 
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt webhooks config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.webhookFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist webhooks config: %w", err)
 	}
 
 	log.Info().Str("file", c.webhookFile).
@@ -948,8 +1015,8 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 
 // LoadWebhooks loads webhook configurations from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	// First try to load from encrypted file
 	data, err := c.fs.ReadFile(c.webhookFile)
@@ -962,12 +1029,19 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 				// Legacy file exists, parse it
 				var webhooks []notifications.WebhookConfig
 				if err := json.Unmarshal(legacyData, &webhooks); err == nil {
+					webhooks = normalizeWebhookConfigs(webhooks)
 					log.Info().
 						Str("file", legacyFile).
 						Int("count", len(webhooks)).
-						Msg("Found unencrypted webhooks - migration needed")
+						Msg("Found unencrypted webhooks - migrating to encrypted storage")
 
-					// Return the loaded webhooks - migration will be handled by caller
+					if err := rewriteEncryptedSliceLocked(c, c.webhookFile, webhooks, "legacy webhook migration rewrite"); err != nil {
+						return nil, err
+					}
+					backupFile := legacyFile + ".backup"
+					if err := c.fs.Rename(legacyFile, backupFile); err != nil {
+						log.Warn().Err(err).Str("file", legacyFile).Msg("Failed to back up legacy webhooks file after migration")
+					}
 					return webhooks, nil
 				}
 			}
@@ -984,10 +1058,14 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 			// Try parsing as plain JSON (migration case)
 			var webhooks []notifications.WebhookConfig
 			if jsonErr := json.Unmarshal(data, &webhooks); jsonErr == nil {
+				webhooks = normalizeWebhookConfigs(webhooks)
 				log.Info().
 					Str("file", c.webhookFile).
 					Int("count", len(webhooks)).
-					Msg("Loaded unencrypted webhooks (will encrypt on next save)")
+					Msg("Loaded unencrypted webhooks - rewriting encrypted storage")
+				if err := rewriteEncryptedSliceLocked(c, c.webhookFile, webhooks, "webhook migration rewrite"); err != nil {
+					return nil, err
+				}
 				return webhooks, nil
 			}
 			return nil, fmt.Errorf("failed to decrypt webhooks: %w", err)
@@ -999,6 +1077,7 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 	if err := json.Unmarshal(data, &webhooks); err != nil {
 		return nil, err
 	}
+	webhooks = normalizeWebhookConfigs(webhooks)
 
 	log.Info().
 		Str("file", c.webhookFile).
@@ -1006,6 +1085,18 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 		Bool("encrypted", c.crypto != nil).
 		Msg("Webhooks loaded")
 	return webhooks, nil
+}
+
+func normalizeWebhookConfigs(webhooks []notifications.WebhookConfig) []notifications.WebhookConfig {
+	if len(webhooks) == 0 {
+		return []notifications.WebhookConfig{}
+	}
+
+	normalized := make([]notifications.WebhookConfig, 0, len(webhooks))
+	for _, webhook := range webhooks {
+		normalized = append(normalized, notifications.NormalizeWebhookConfig(webhook))
+	}
+	return normalized
 }
 
 // MigrateWebhooksIfNeeded checks for legacy webhooks.json and migrates to encrypted format
@@ -1093,7 +1184,7 @@ type SystemSettings struct {
 	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 	HideLocalLogin               bool            `json:"hideLocalLogin"`                       // Hide local login form (username/password)
-	PublicURL                    string          `json:"publicURL,omitempty"`                  // Public URL for email notifications (e.g., http://192.168.1.100:8080)
+	PublicURL                    string          `json:"publicURL,omitempty"`                  // Public URL for email notifications (e.g., http://198.51.100.100:8080)
 
 	// Metrics retention configuration (in hours)
 	// These control how long historical metrics are stored at each aggregation tier.
@@ -1108,7 +1199,14 @@ type SystemSettings struct {
 	// about Pulse being a "monitoring-first" tool vs an orchestration tool.
 	DisableDockerUpdateActions bool `json:"disableDockerUpdateActions"` // Hide update buttons while still detecting updates
 
-	// APIToken removed - now handled via .env file only
+	// UX + privacy knobs (server-wide)
+	ReduceProUpsellNoise       bool `json:"reduceProUpsellNoise,omitempty"`       // Hide proactive Pro prompts; paywalls still appear when accessing gated features
+	DisableLocalUpgradeMetrics bool `json:"disableLocalUpgradeMetrics,omitempty"` // Disable local-only upgrade UX metrics collection (no network calls)
+
+	// Telemetry (enabled by default, opt-out)
+	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)
+
+	// APIToken is not persisted in system settings; API tokens are managed in api_tokens.json.
 }
 
 // DefaultSystemSettings returns a SystemSettings struct populated with sane defaults.
@@ -1193,11 +1291,11 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal nodes config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for nodes config: %w", err)
 	}
 
 	// Create TIMESTAMPED backup of existing file before overwriting (if it exists and has content)
@@ -1229,13 +1327,13 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt nodes config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.nodesFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist nodes config: %w", err)
 	}
 
 	log.Info().Str("file", c.nodesFile).
@@ -1245,6 +1343,29 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration saved")
 	return nil
+}
+
+// persistEmptyRecoveryConfig writes an empty NodesConfig to the nodes file.
+// Used during recovery scenarios when the existing config is corrupted.
+func (c *ConfigPersistence) persistEmptyRecoveryConfig(config *NodesConfig) {
+	emptyData, marshalErr := json.Marshal(config)
+	if marshalErr != nil {
+		log.Error().Err(marshalErr).Msg("Failed to marshal empty recovery nodes config")
+		return
+	}
+
+	if c.crypto != nil {
+		encryptedData, encryptErr := c.crypto.Encrypt(emptyData)
+		if encryptErr != nil {
+			log.Error().Err(encryptErr).Msg("Failed to encrypt empty recovery nodes config")
+			return
+		}
+		emptyData = encryptedData
+	}
+
+	if writeErr := c.fs.WriteFile(c.nodesFile, emptyData, 0600); writeErr != nil {
+		log.Error().Err(writeErr).Str("file", c.nodesFile).Msg("Failed to persist empty recovery nodes config")
+	}
 }
 
 // LoadNodesConfig loads nodes configuration from file (decrypts if encrypted)
@@ -1268,83 +1389,96 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				PMGInstances: []PMGInstance{},
 			}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read nodes config: %w", err)
 	}
 
+	plaintextMigrated := false
 	// Decrypt if crypto manager is available
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
-			// Decryption failed - file may be corrupted
-			log.Error().Err(err).Str("file", c.nodesFile).Msg("Failed to decrypt nodes config - file may be corrupted")
+			// Accept plaintext nodes.enc only as migration input. If the payload still
+			// parses, keep it in memory and let the canonical save path rewrite
+			// encrypted storage below. Otherwise continue into corruption recovery.
+			var plaintext NodesConfig
+			if jsonErr := json.Unmarshal(data, &plaintext); jsonErr == nil {
+				log.Warn().
+					Err(err).
+					Str("file", c.nodesFile).
+					Msg("Failed to decrypt nodes config - treating plaintext file as migration input")
+				plaintextMigrated = true
+			} else {
+				// Decryption failed - file may be corrupted
+				log.Error().Err(err).Str("file", c.nodesFile).Msg("Failed to decrypt nodes config - file may be corrupted")
 
-			// Try to restore from backup
-			backupFile := c.nodesFile + ".backup"
-			if backupData, backupErr := c.fs.ReadFile(backupFile); backupErr == nil {
-				log.Info().Str("backup", backupFile).Msg("Attempting to restore nodes config from backup")
-				if decryptedBackup, decryptErr := c.crypto.Decrypt(backupData); decryptErr == nil {
-					log.Info().Msg("Successfully decrypted backup file")
-					data = decryptedBackup
+				// Try to restore from backup
+				backupFile := c.nodesFile + ".backup"
+				if backupData, backupErr := c.fs.ReadFile(backupFile); backupErr == nil {
+					log.Info().Str("backup", backupFile).Msg("Attempting to restore nodes config from backup")
+					if decryptedBackup, decryptErr := c.crypto.Decrypt(backupData); decryptErr == nil {
+						log.Info().Msg("Successfully decrypted backup file")
+						data = decryptedBackup
 
-					// Move corrupted file out of the way with timestamp
+						// Move corrupted file out of the way with timestamp
+						corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+						if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+							log.Warn().Err(renameErr).Msg("Failed to rename corrupted file")
+						} else {
+							log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
+						}
+
+						// Restore backup as current file
+						if writeErr := c.fs.WriteFile(c.nodesFile, backupData, 0600); writeErr != nil {
+							log.Error().Err(writeErr).Msg("Failed to restore backup as current file")
+						} else {
+							log.Info().Msg("Successfully restored nodes config from backup")
+						}
+					} else {
+						log.Error().Err(decryptErr).Msg("Backup file is also corrupted or encrypted with different key")
+
+						// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
+						// Create an empty config so startup can continue, but log prominently
+						log.Error().
+							Str("corruptedFile", c.nodesFile).
+							Str("backupFile", backupFile).
+							Msg("CRITICAL: Both nodes.enc and backup are corrupted/unreadable. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+
+						// Move corrupted file with timestamp for forensics
+						corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+						if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+							log.Warn().Err(renameErr).Msg("Failed to rename corrupted nodes config during recovery")
+						} else {
+							log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
+						}
+
+						// Create empty but valid config so system can start
+						emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
+						c.persistEmptyRecoveryConfig(&emptyConfig)
+
+						return &emptyConfig, nil
+					}
+				} else {
+					log.Error().Err(backupErr).Msg("No backup file available for recovery")
+
+					// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
+					log.Error().
+						Str("corruptedFile", c.nodesFile).
+						Msg("CRITICAL: nodes.enc is corrupted and no backup exists. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+
+					// Move corrupted file with timestamp for forensics
 					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
 					if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
-						log.Warn().Err(renameErr).Msg("Failed to rename corrupted file")
+						log.Warn().Err(renameErr).Msg("Failed to rename corrupted nodes config during recovery")
 					} else {
 						log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
 					}
 
-					// Restore backup as current file
-					if writeErr := c.fs.WriteFile(c.nodesFile, backupData, 0600); writeErr != nil {
-						log.Error().Err(writeErr).Msg("Failed to restore backup as current file")
-					} else {
-						log.Info().Msg("Successfully restored nodes config from backup")
-					}
-				} else {
-					log.Error().Err(decryptErr).Msg("Backup file is also corrupted or encrypted with different key")
-
-					// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
-					// Create an empty config so startup can continue, but log prominently
-					log.Error().
-						Str("corruptedFile", c.nodesFile).
-						Str("backupFile", backupFile).
-						Msg("CRITICAL: Both nodes.enc and backup are corrupted/unreadable. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
-
-					// Move corrupted file with timestamp for forensics
-					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-					c.fs.Rename(c.nodesFile, corruptedFile)
-
 					// Create empty but valid config so system can start
 					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-					emptyData, _ := json.Marshal(emptyConfig)
-					if c.crypto != nil {
-						emptyData, _ = c.crypto.Encrypt(emptyData)
-					}
-					c.fs.WriteFile(c.nodesFile, emptyData, 0600)
+					c.persistEmptyRecoveryConfig(&emptyConfig)
 
 					return &emptyConfig, nil
 				}
-			} else {
-				log.Error().Err(backupErr).Msg("No backup file available for recovery")
-
-				// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
-				log.Error().
-					Str("corruptedFile", c.nodesFile).
-					Msg("CRITICAL: nodes.enc is corrupted and no backup exists. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
-
-				// Move corrupted file with timestamp for forensics
-				corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-				c.fs.Rename(c.nodesFile, corruptedFile)
-
-				// Create empty but valid config so system can start
-				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-				emptyData, _ := json.Marshal(emptyConfig)
-				if c.crypto != nil {
-					emptyData, _ = c.crypto.Encrypt(emptyData)
-				}
-				c.fs.WriteFile(c.nodesFile, emptyData, 0600)
-
-				return &emptyConfig, nil
 			}
 		} else {
 			data = decrypted
@@ -1353,7 +1487,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse nodes config: %w", err)
 	}
 
 	if config.PVEInstances == nil {
@@ -1367,7 +1501,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	}
 
 	// Track if any migrations were applied
-	migrationApplied := false
+	migrationApplied := plaintextMigrated
 
 	normalizeHostWithDefault := func(host, defaultPort string) (string, bool) {
 		normalized := normalizeHostPort(host, defaultPort)
@@ -1414,6 +1548,11 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 	}
 
+	if consolidated, changed := ConsolidatePVEInstances(config.PVEInstances); changed {
+		config.PVEInstances = consolidated
+		migrationApplied = true
+	}
+
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
 	for i := range config.PBSInstances {
@@ -1443,6 +1582,18 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				Str("instance", config.PBSInstances[i].Name).
 				Msg("Enabling MonitorBackups for PBS instance (was disabled)")
 			config.PBSInstances[i].MonitorBackups = true
+			migrationApplied = true
+		}
+
+		// Migration: Ensure MonitorDatastores is enabled for PBS instances
+		// Without this, PBS datastores aren't polled, which means backup data
+		// from the direct PBS connection is never fetched — and PVE-side backup
+		// polling skips PBS storages when a direct connection exists.
+		if !config.PBSInstances[i].MonitorDatastores {
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Msg("Enabling MonitorDatastores for PBS instance (was disabled)")
+			config.PBSInstances[i].MonitorDatastores = true
 			migrationApplied = true
 		}
 	}
@@ -1510,15 +1661,15 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 
 	data, err := json.Marshal(settings)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal system settings: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for system settings: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.systemFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist system settings: %w", err)
 	}
 
 	// Also update the .env file if it exists
@@ -1532,76 +1683,13 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	return nil
 }
 
-// SaveOIDCConfig stores OIDC settings, encrypting them when a crypto manager is available.
-func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	// Do not persist runtime-only flags.
-	settings.EnvOverrides = nil
-
-	data, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.writeConfigFileLocked(c.oidcFile, data, 0600); err != nil {
-		return err
-	}
-
-	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration saved")
-	return nil
-}
-
-// LoadOIDCConfig retrieves the persisted OIDC settings. It returns nil when no configuration exists yet.
-func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.oidcFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			return nil, err
-		}
-		data = decrypted
-	}
-
-	var settings OIDCConfig
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return nil, err
-	}
-
-	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration loaded")
-	return &settings, nil
-}
-
 // SaveSSOConfig stores SSO settings, encrypting them when a crypto manager is available.
 func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for sso config: %w", err)
 	}
 
 	if settings == nil {
@@ -1620,19 +1708,19 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 
 	data, err := json.Marshal(clone)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal sso config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt sso config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.ssoFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist sso config: %w", err)
 	}
 
 	log.Info().Str("file", c.ssoFile).Int("providers", len(clone.Providers)).Msg("SSO configuration saved")
@@ -1640,100 +1728,31 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 }
 
 // LoadSSOConfig retrieves the persisted SSO settings. It returns nil when no configuration exists yet.
-// If no SSO config exists but legacy OIDC config does, it will automatically migrate the configuration.
 func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
-	c.mu.RLock()
-	data, err := c.fs.ReadFile(c.ssoFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			c.mu.RUnlock()
-			// Check if we should migrate from legacy OIDC config
-			return c.migrateFromLegacyOIDCConfig()
-		}
-		c.mu.RUnlock()
-		return nil, err
-	}
-
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			c.mu.RUnlock()
-			return nil, err
-		}
-		data = decrypted
-	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	var settings SSOConfig
-	if err := json.Unmarshal(data, &settings); err != nil {
-		c.mu.RUnlock()
+	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.ssoFile, &settings, "sso config")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
-	c.mu.RUnlock()
+	if migratedPlaintext {
+		jsonData, err := json.Marshal(settings)
+		if err != nil {
+			return nil, fmt.Errorf("marshal sso config migration rewrite: %w", err)
+		}
+		if err := rewriteEncryptedJSONLocked(c, c.ssoFile, jsonData, "sso config migration rewrite"); err != nil {
+			return nil, err
+		}
+	}
+
 	log.Info().Str("file", c.ssoFile).Int("providers", len(settings.Providers)).Msg("SSO configuration loaded")
 	return &settings, nil
-}
-
-// migrateFromLegacyOIDCConfig checks for a legacy OIDC config file and migrates it to the new SSO format.
-// This function should be called WITHOUT any lock held.
-func (c *ConfigPersistence) migrateFromLegacyOIDCConfig() (*SSOConfig, error) {
-	c.mu.RLock()
-	// Check if legacy OIDC config exists
-	data, err := c.fs.ReadFile(c.oidcFile)
-	if err != nil {
-		c.mu.RUnlock()
-		if os.IsNotExist(err) {
-			// No legacy config either, return nil
-			return nil, nil
-		}
-		// Error reading file
-		return nil, nil // Don't fail the startup, just return nil
-	}
-
-	// Decrypt if needed
-	if c.crypto != nil {
-		decrypted, err := c.crypto.Decrypt(data)
-		if err != nil {
-			c.mu.RUnlock()
-			log.Warn().Err(err).Msg("Failed to decrypt legacy OIDC config for migration")
-			return nil, nil
-		}
-		data = decrypted
-	}
-	c.mu.RUnlock()
-
-	var oidcConfig OIDCConfig
-	if err := json.Unmarshal(data, &oidcConfig); err != nil {
-		log.Warn().Err(err).Msg("Failed to parse legacy OIDC config for migration")
-		return nil, nil
-	}
-
-	// Only migrate if OIDC was actually configured
-	if oidcConfig.IssuerURL == "" || oidcConfig.ClientID == "" {
-		log.Debug().Msg("Legacy OIDC config not configured, skipping migration")
-		return nil, nil
-	}
-
-	// Migrate to new SSO format
-	ssoConfig := MigrateFromOIDCConfig(&oidcConfig)
-
-	log.Info().
-		Str("issuer", oidcConfig.IssuerURL).
-		Str("clientId", oidcConfig.ClientID).
-		Bool("enabled", oidcConfig.Enabled).
-		Msg("Migrating legacy OIDC configuration to new SSO format")
-
-	// Save the migrated config
-	if err := c.SaveSSOConfig(ssoConfig); err != nil {
-		log.Error().Err(err).Msg("Failed to save migrated SSO configuration")
-		return ssoConfig, nil // Return the migrated config even if save failed
-	}
-
-	log.Info().
-		Int("providers", len(ssoConfig.Providers)).
-		Msg("Successfully migrated legacy OIDC config to new SSO format")
-
-	return ssoConfig, nil
 }
 
 // SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.
@@ -1742,24 +1761,24 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai config: %w", err)
 	}
 
 	data, err := json.Marshal(settings)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt ai config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.aiFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai config: %w", err)
 	}
 
 	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration saved")
@@ -1768,11 +1787,11 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 
 // LoadAIConfig retrieves the persisted AI settings. It returns default config when no configuration exists yet.
 func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	data, err := c.fs.ReadFile(c.aiFile)
 	if err != nil {
-		c.mu.RUnlock()
 		if os.IsNotExist(err) {
 			// Return default config if file doesn't exist
 			return NewDefaultAIConfig(), nil
@@ -1780,50 +1799,150 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		return nil, err
 	}
 
+	migratedPlaintext := false
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
-			c.mu.RUnlock()
-			return nil, err
+			migratedPlaintext = true
+		} else {
+			data = decrypted
 		}
-		data = decrypted
 	}
+
+	var legacyRaw map[string]json.RawMessage
+	_ = json.Unmarshal(data, &legacyRaw)
 
 	// Start with defaults so new fields get proper values
 	settings := NewDefaultAIConfig()
 	if err := json.Unmarshal(data, settings); err != nil {
-		c.mu.RUnlock()
 		return nil, err
 	}
 
 	// Migration: Ensure patrol settings have sensible defaults for existing configs
 	// PatrolIntervalMinutes=0 means it was never set - use default
 	if settings.PatrolIntervalMinutes <= 0 {
-		if !settings.PatrolEnabled || strings.EqualFold(settings.PatrolSchedulePreset, "disabled") {
+		if !settings.PatrolEnabled {
 			settings.PatrolIntervalMinutes = 0
 		} else {
 			settings.PatrolIntervalMinutes = 360
 		}
 	}
 
+	migratedLegacyFields := applyLegacyAIConfigFields(settings, legacyRaw)
 	migratedControlLevel := false
 	if settings.ControlLevel == "suggest" {
 		settings.ControlLevel = ControlLevelControlled
 		migratedControlLevel = true
 	}
 
-	c.mu.RUnlock()
-
-	if migratedControlLevel {
-		if err := c.SaveAIConfig(*settings); err != nil {
-			log.Warn().Err(err).Msg("Failed to save migrated AI control level")
-		} else {
-			log.Info().Str("control_level", settings.ControlLevel).Msg("Migrated AI control level")
+	if migratedPlaintext || migratedLegacyFields || migratedControlLevel {
+		jsonData, err := json.Marshal(*settings)
+		if err != nil {
+			return nil, fmt.Errorf("marshal ai config migration rewrite: %w", err)
 		}
+		if err := rewriteEncryptedJSONLocked(c, c.aiFile, jsonData, "ai config migration rewrite"); err != nil {
+			return nil, err
+		}
+		log.Info().
+			Str("control_level", settings.ControlLevel).
+			Bool("legacy_fields_migrated", migratedLegacyFields).
+			Bool("plaintext_migrated", migratedPlaintext).
+			Msg("Migrated AI configuration")
 	}
 
 	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Msg("AI configuration loaded")
 	return settings, nil
+}
+
+func applyLegacyAIConfigFields(settings *AIConfig, raw map[string]json.RawMessage) bool {
+	if settings == nil || len(raw) == 0 {
+		return false
+	}
+
+	legacyProvider := decodeOptionalJSONString(raw["provider"])
+	legacyAPIKey := decodeOptionalJSONString(raw["api_key"])
+	legacyBaseURL := decodeOptionalJSONString(raw["base_url"])
+	legacyAutonomousMode, hasLegacyAutonomous := decodeOptionalJSONBool(raw["autonomous_mode"])
+
+	migrated := false
+
+	if settings.Model == "" && legacyProvider != "" {
+		if defaultModel := DefaultModelForProvider(legacyProvider); defaultModel != "" {
+			settings.Model = defaultModel
+			migrated = true
+		}
+	}
+
+	if legacyAPIKey != "" {
+		switch {
+		case settings.AnthropicAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderAnthropic):
+			settings.AnthropicAPIKey = legacyAPIKey
+			migrated = true
+		case settings.OpenAIAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenAI):
+			settings.OpenAIAPIKey = legacyAPIKey
+			migrated = true
+		case settings.OpenRouterAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenRouter):
+			settings.OpenRouterAPIKey = legacyAPIKey
+			migrated = true
+		case settings.DeepSeekAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderDeepSeek):
+			settings.DeepSeekAPIKey = legacyAPIKey
+			migrated = true
+		case settings.GeminiAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderGemini):
+			settings.GeminiAPIKey = legacyAPIKey
+			migrated = true
+		}
+	}
+
+	if legacyBaseURL != "" {
+		switch {
+		case settings.OpenAIBaseURL == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenAI):
+			settings.OpenAIBaseURL = legacyBaseURL
+			migrated = true
+		case settings.OllamaBaseURL == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOllama):
+			settings.OllamaBaseURL = legacyBaseURL
+			migrated = true
+		}
+	}
+
+	if hasLegacyAutonomous && legacyAutonomousMode && settings.ControlLevel == "" {
+		settings.ControlLevel = ControlLevelAutonomous
+		migrated = true
+	}
+
+	return migrated
+}
+
+func shouldUseLegacyProviderCredential(settings *AIConfig, legacyProvider, targetProvider string) bool {
+	if settings == nil {
+		return false
+	}
+	if strings.TrimSpace(legacyProvider) != "" {
+		return strings.EqualFold(strings.TrimSpace(legacyProvider), targetProvider)
+	}
+	modelProvider, _ := ParseModelString(settings.Model)
+	return modelProvider == targetProvider
+}
+
+func decodeOptionalJSONString(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func decodeOptionalJSONBool(raw json.RawMessage) (bool, bool) {
+	if len(raw) == 0 {
+		return false, false
+	}
+	var value bool
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, false
+	}
+	return value, true
 }
 
 // AIFindingsData represents persisted AI findings with metadata
@@ -1834,30 +1953,47 @@ type AIFindingsData struct {
 	LastSaved time.Time `json:"last_saved"`
 	// Findings is a map of finding ID to finding data
 	Findings map[string]*AIFindingRecord `json:"findings"`
+	// SuppressionRules stores explicit suppression rules created by the user (or derived from a "suppress" action).
+	// These must persist across restarts; they are distinct from dismissed findings.
+	SuppressionRules map[string]*AISuppressionRuleRecord `json:"suppression_rules,omitempty"`
+}
+
+// AISuppressionRuleRecord is a persisted suppression rule.
+type AISuppressionRuleRecord struct {
+	ID              string    `json:"id"`
+	ResourceID      string    `json:"resource_id,omitempty"`      // Empty means "any resource"
+	ResourceName    string    `json:"resource_name,omitempty"`    // Human-readable name for display
+	Category        string    `json:"category,omitempty"`         // Empty means "any category"
+	Description     string    `json:"description"`                // User's reason
+	DismissedReason string    `json:"dismissed_reason,omitempty"` // Optional
+	CreatedAt       time.Time `json:"created_at"`
+	CreatedFrom     string    `json:"created_from,omitempty"` // "finding"/"dismissed"/"manual"/"suppress"
+	FindingID       string    `json:"finding_id,omitempty"`   // Original finding ID (if derived)
 }
 
 // AIFindingRecord is a persisted finding with full history
 type AIFindingRecord struct {
-	ID             string     `json:"id"`
-	Key            string     `json:"key,omitempty"`
-	Severity       string     `json:"severity"`
-	Category       string     `json:"category"`
-	ResourceID     string     `json:"resource_id"`
-	ResourceName   string     `json:"resource_name"`
-	ResourceType   string     `json:"resource_type"`
-	Node           string     `json:"node,omitempty"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	Recommendation string     `json:"recommendation,omitempty"`
-	Evidence       string     `json:"evidence,omitempty"`
-	Source         string     `json:"source,omitempty"`
-	DetectedAt     time.Time  `json:"detected_at"`
-	LastSeenAt     time.Time  `json:"last_seen_at"`
-	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	AutoResolved   bool       `json:"auto_resolved"`
-	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
-	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
-	AlertID        string     `json:"alert_id,omitempty"`
+	ID              string     `json:"id"`
+	Key             string     `json:"key,omitempty"`
+	Severity        string     `json:"severity"`
+	Category        string     `json:"category"`
+	ResourceID      string     `json:"resource_id"`
+	ResourceName    string     `json:"resource_name"`
+	ResourceType    string     `json:"resource_type"`
+	Node            string     `json:"node,omitempty"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description"`
+	Recommendation  string     `json:"recommendation,omitempty"`
+	Evidence        string     `json:"evidence,omitempty"`
+	Source          string     `json:"source,omitempty"`
+	DetectedAt      time.Time  `json:"detected_at"`
+	LastSeenAt      time.Time  `json:"last_seen_at"`
+	ResolvedAt      *time.Time `json:"resolved_at,omitempty"`
+	AutoResolved    bool       `json:"auto_resolved"`
+	ResolveReason   string     `json:"resolve_reason,omitempty"`
+	AcknowledgedAt  *time.Time `json:"acknowledged_at,omitempty"`
+	SnoozedUntil    *time.Time `json:"snoozed_until,omitempty"`
+	AlertIdentifier string     `json:"-"`
 	// User feedback fields - enables persistence of dismissal state
 	DismissedReason string `json:"dismissed_reason,omitempty"`
 	UserNote        string `json:"user_note,omitempty"`
@@ -1870,35 +2006,77 @@ type AIFindingRecord struct {
 	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
 	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
 	InvestigationAttempts  int        `json:"investigation_attempts"`
+	LoopState              string     `json:"loop_state,omitempty"`
+	Lifecycle              []struct {
+		At       time.Time         `json:"at"`
+		Type     string            `json:"type"`
+		Message  string            `json:"message,omitempty"`
+		From     string            `json:"from,omitempty"`
+		To       string            `json:"to,omitempty"`
+		Metadata map[string]string `json:"metadata,omitempty"`
+	} `json:"lifecycle,omitempty"`
+	RegressionCount  int        `json:"regression_count,omitempty"`
+	LastRegressionAt *time.Time `json:"last_regression_at,omitempty"`
 }
 
-// SaveAIFindings persists AI findings to disk
-func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+type aiFindingRecordAlias AIFindingRecord
 
-	if err := c.EnsureConfigDir(); err != nil {
+type aiFindingRecordJSON struct {
+	aiFindingRecordAlias
+	AlertIdentifier string `json:"alert_identifier,omitempty"`
+}
+
+func (r AIFindingRecord) MarshalJSON() ([]byte, error) {
+	return json.Marshal(aiFindingRecordJSON{
+		aiFindingRecordAlias: aiFindingRecordAlias(r),
+		AlertIdentifier:      strings.TrimSpace(r.AlertIdentifier),
+	})
+}
+
+func (r *AIFindingRecord) UnmarshalJSON(data []byte) error {
+	var payload aiFindingRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
 		return err
+	}
+
+	*r = AIFindingRecord(payload.aiFindingRecordAlias)
+	r.AlertIdentifier = strings.TrimSpace(payload.AlertIdentifier)
+	return nil
+}
+
+// SaveAIFindings persists AI findings to disk, preserving any existing suppression rules.
+func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord) error {
+	return c.SaveAIFindingsWithSuppression(findings, nil)
+}
+
+// SaveAIFindingsWithSuppression persists AI findings + explicit suppression rules to disk.
+// If suppressionRules is nil, existing suppression rules (if any) are preserved.
+func (c *ConfigPersistence) SaveAIFindingsWithSuppression(findings map[string]*AIFindingRecord, suppressionRules map[string]*AISuppressionRuleRecord) error {
+	// Preserve suppression rules if caller didn't provide them.
+	if suppressionRules == nil {
+		if existing, err := c.LoadAIFindings(); err == nil && existing != nil && existing.SuppressionRules != nil {
+			suppressionRules = existing.SuppressionRules
+		}
+	}
+	if findings == nil {
+		findings = make(map[string]*AIFindingRecord)
 	}
 
 	data := AIFindingsData{
-		Version:   2, // Bumped from 1: finding IDs now include issue key
-		LastSaved: time.Now(),
-		Findings:  findings,
+		Version:          3, // Bumped from 2: persisted suppression rules alongside findings
+		LastSaved:        time.Now(),
+		Findings:         findings,
+		SuppressionRules: suppressionRules,
 	}
 
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+	if err := saveJSON(c, c.aiFindingsFile, data, true); err != nil {
 		return err
 	}
 
 	log.Debug().
 		Str("file", c.aiFindingsFile).
 		Int("count", len(findings)).
+		Int("suppression_rules", len(suppressionRules)).
 		Msg("AI findings saved")
 	return nil
 }
@@ -1921,11 +2099,22 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
 			return &AIFindingsData{
-				Version:  2,
-				Findings: make(map[string]*AIFindingRecord),
+				Version:          3,
+				Findings:         make(map[string]*AIFindingRecord),
+				SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 			}, nil
 		}
 		return nil, err
+	}
+
+	migratedPlaintext := false
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			migratedPlaintext = true
+		}
 	}
 
 	var findingsData AIFindingsData
@@ -1933,13 +2122,17 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
 		// Return empty data on parse error rather than failing
 		return &AIFindingsData{
-			Version:  2,
-			Findings: make(map[string]*AIFindingRecord),
+			Version:          3,
+			Findings:         make(map[string]*AIFindingRecord),
+			SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 		}, nil
 	}
 
 	if findingsData.Findings == nil {
 		findingsData.Findings = make(map[string]*AIFindingRecord)
+	}
+	if findingsData.SuppressionRules == nil {
+		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
 	}
 
 	// Version 2 changed finding ID format to include issue key.
@@ -1947,20 +2140,58 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	if findingsData.Version < 2 {
 		oldCount := len(findingsData.Findings)
 		findingsData.Findings = make(map[string]*AIFindingRecord)
-		findingsData.Version = 2
+		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
+		findingsData.Version = 3
 		findingsData.LastSaved = time.Now()
 
 		if oldCount > 0 {
 			log.Info().
 				Int("cleared_count", oldCount).
-				Msg("AI findings cleared due to schema upgrade (v1 -> v2)")
+				Msg("AI findings cleared due to schema upgrade (v1 -> v3)")
 		}
 
-		// Persist the migrated (empty) v2 file immediately to avoid re-migrating on restart
+		// Persist the migrated (empty) file immediately to avoid re-migrating on restart
 		c.mu.Lock()
 		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if c.crypto != nil {
+				encrypted, encErr := c.crypto.Encrypt(jsonData)
+				if encErr != nil {
+					log.Warn().Err(encErr).Msg("Failed to encrypt migrated AI findings — skipping write to avoid plaintext storage")
+					c.mu.Unlock()
+					return &findingsData, nil
+				}
+				jsonData = encrypted
+			}
 			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
+			}
+		}
+		c.mu.Unlock()
+	} else if findingsData.Version < 3 {
+		// v2 -> v3: keep findings; start persisting explicit suppression rules.
+		findingsData.Version = 3
+		findingsData.LastSaved = time.Now()
+		c.mu.Lock()
+		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if c.crypto != nil {
+				encrypted, encErr := c.crypto.Encrypt(jsonData)
+				if encErr != nil {
+					log.Warn().Err(encErr).Msg("Failed to encrypt migrated AI findings — skipping write to avoid plaintext storage")
+					c.mu.Unlock()
+					return &findingsData, nil
+				}
+				jsonData = encrypted
+			}
+			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
+			}
+		}
+		c.mu.Unlock()
+	} else if migratedPlaintext {
+		c.mu.Lock()
+		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if err := rewriteEncryptedJSONLocked(c, c.aiFindingsFile, jsonData, "ai findings migration rewrite"); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist encrypted AI findings migration rewrite")
 			}
 		}
 		c.mu.Unlock()
@@ -1969,6 +2200,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	log.Info().
 		Str("file", c.aiFindingsFile).
 		Int("count", len(findingsData.Findings)).
+		Int("suppression_rules", len(findingsData.SuppressionRules)).
 		Time("last_saved", findingsData.LastSaved).
 		Msg("AI findings loaded")
 	return &findingsData, nil
@@ -1983,18 +2215,19 @@ type PatrolRunHistoryData struct {
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID                 string    `json:"id"`
-	StartedAt          time.Time `json:"started_at"`
-	CompletedAt        time.Time `json:"completed_at"`
-	DurationMs         int64     `json:"duration_ms"`
-	Type               string    `json:"type"` // "quick" or "deep"
-	TriggerReason      string    `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs   []string  `json:"scope_resource_ids,omitempty"`
-	ScopeResourceTypes []string  `json:"scope_resource_types,omitempty"`
-	ScopeContext       string    `json:"scope_context,omitempty"`
-	AlertID            string    `json:"alert_id,omitempty"`
-	FindingID          string    `json:"finding_id,omitempty"`
-	ResourcesChecked   int       `json:"resources_checked"`
+	ID                        string    `json:"id"`
+	StartedAt                 time.Time `json:"started_at"`
+	CompletedAt               time.Time `json:"completed_at"`
+	DurationMs                int64     `json:"duration_ms"`
+	Type                      string    `json:"type"` // "quick" or "deep"
+	TriggerReason             string    `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          []string  `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs []string  `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        []string  `json:"scope_resource_types,omitempty"`
+	ScopeContext              string    `json:"scope_context,omitempty"`
+	AlertIdentifier           string    `json:"alert_identifier,omitempty"`
+	FindingID                 string    `json:"finding_id,omitempty"`
+	ResourcesChecked          int       `json:"resources_checked"`
 	// Breakdown by resource type
 	NodesChecked      int `json:"nodes_checked"`
 	GuestsChecked     int `json:"guests_checked"`
@@ -2002,16 +2235,21 @@ type PatrolRunRecord struct {
 	StorageChecked    int `json:"storage_checked"`
 	HostsChecked      int `json:"hosts_checked"`
 	PBSChecked        int `json:"pbs_checked"`
+	PMGChecked        int `json:"pmg_checked"`
 	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`
+	RejectedFindings int      `json:"rejected_findings"`
 	ResolvedFindings int      `json:"resolved_findings"`
 	AutoFixCount     int      `json:"auto_fix_count,omitempty"`
 	FindingsSummary  string   `json:"findings_summary"`
-	FindingIDs       []string `json:"finding_ids,omitempty"`
+	FindingIDs       []string `json:"finding_ids"`
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "critical", "error"
+	// Triage stats
+	TriageFlags      int  `json:"triage_flags"`
+	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"`
 	// AI Analysis details
 	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
@@ -2019,6 +2257,172 @@ type PatrolRunRecord struct {
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`
+}
+
+type patrolRunRecordJSON struct {
+	ID                        string           `json:"id"`
+	StartedAt                 time.Time        `json:"started_at"`
+	CompletedAt               time.Time        `json:"completed_at"`
+	DurationMs                int64            `json:"duration_ms"`
+	Type                      string           `json:"type"`
+	TriggerReason             string           `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          *[]string        `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string        `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string        `json:"scope_resource_types,omitempty"`
+	ScopeContext              string           `json:"scope_context,omitempty"`
+	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
+	FindingID                 string           `json:"finding_id,omitempty"`
+	ResourcesChecked          int              `json:"resources_checked"`
+	NodesChecked              int              `json:"nodes_checked"`
+	GuestsChecked             int              `json:"guests_checked"`
+	DockerChecked             int              `json:"docker_checked"`
+	StorageChecked            int              `json:"storage_checked"`
+	HostsChecked              int              `json:"hosts_checked"`
+	PBSChecked                int              `json:"pbs_checked"`
+	PMGChecked                int              `json:"pmg_checked"`
+	KubernetesChecked         int              `json:"kubernetes_checked"`
+	NewFindings               int              `json:"new_findings"`
+	ExistingFindings          int              `json:"existing_findings"`
+	RejectedFindings          int              `json:"rejected_findings"`
+	ResolvedFindings          int              `json:"resolved_findings"`
+	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
+	FindingsSummary           string           `json:"findings_summary"`
+	FindingIDs                []string         `json:"finding_ids"`
+	ErrorCount                int              `json:"error_count"`
+	Status                    string           `json:"status"`
+	TriageFlags               int              `json:"triage_flags"`
+	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
+	AIAnalysis                string           `json:"ai_analysis,omitempty"`
+	InputTokens               int              `json:"input_tokens,omitempty"`
+	OutputTokens              int              `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord `json:"tool_calls,omitempty"`
+	ToolCallCount             int              `json:"tool_call_count"`
+}
+
+func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
+	return strings.TrimSpace(alertIdentifier)
+}
+
+func marshalOptionalPatrolStringSlice(values []string) *[]string {
+	if values == nil {
+		return nil
+	}
+	cloned := append([]string{}, values...)
+	return &cloned
+}
+
+func unmarshalOptionalPatrolStringSlice(values *[]string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string{}, (*values)...)
+}
+
+func canonicalPatrolFindingIDs(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return append([]string{}, ids...)
+}
+
+func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier)
+	record.AlertIdentifier = alertIdentifier
+	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
+	return record
+}
+
+func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
+	normalized := normalizePatrolRunRecord(r)
+	alertIdentifier := strings.TrimSpace(normalized.AlertIdentifier)
+	return json.Marshal(patrolRunRecordJSON{
+		ID:                        normalized.ID,
+		StartedAt:                 normalized.StartedAt,
+		CompletedAt:               normalized.CompletedAt,
+		DurationMs:                normalized.DurationMs,
+		Type:                      normalized.Type,
+		TriggerReason:             normalized.TriggerReason,
+		ScopeResourceIDs:          marshalOptionalPatrolStringSlice(normalized.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: marshalOptionalPatrolStringSlice(normalized.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        marshalOptionalPatrolStringSlice(normalized.ScopeResourceTypes),
+		ScopeContext:              normalized.ScopeContext,
+		AlertIdentifier:           alertIdentifier,
+		FindingID:                 normalized.FindingID,
+		ResourcesChecked:          normalized.ResourcesChecked,
+		NodesChecked:              normalized.NodesChecked,
+		GuestsChecked:             normalized.GuestsChecked,
+		DockerChecked:             normalized.DockerChecked,
+		StorageChecked:            normalized.StorageChecked,
+		HostsChecked:              normalized.HostsChecked,
+		PBSChecked:                normalized.PBSChecked,
+		PMGChecked:                normalized.PMGChecked,
+		KubernetesChecked:         normalized.KubernetesChecked,
+		NewFindings:               normalized.NewFindings,
+		ExistingFindings:          normalized.ExistingFindings,
+		RejectedFindings:          normalized.RejectedFindings,
+		ResolvedFindings:          normalized.ResolvedFindings,
+		AutoFixCount:              normalized.AutoFixCount,
+		FindingsSummary:           normalized.FindingsSummary,
+		FindingIDs:                normalized.FindingIDs,
+		ErrorCount:                normalized.ErrorCount,
+		Status:                    normalized.Status,
+		TriageFlags:               normalized.TriageFlags,
+		TriageSkippedLLM:          normalized.TriageSkippedLLM,
+		AIAnalysis:                normalized.AIAnalysis,
+		InputTokens:               normalized.InputTokens,
+		OutputTokens:              normalized.OutputTokens,
+		ToolCalls:                 normalized.ToolCalls,
+		ToolCallCount:             normalized.ToolCallCount,
+	})
+}
+
+func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
+	var payload patrolRunRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	alertIdentifier := canonicalPatrolAlertIdentifier(payload.AlertIdentifier)
+	*r = PatrolRunRecord{
+		ID:                        payload.ID,
+		StartedAt:                 payload.StartedAt,
+		CompletedAt:               payload.CompletedAt,
+		DurationMs:                payload.DurationMs,
+		Type:                      payload.Type,
+		TriggerReason:             payload.TriggerReason,
+		ScopeResourceIDs:          unmarshalOptionalPatrolStringSlice(payload.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: unmarshalOptionalPatrolStringSlice(payload.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        unmarshalOptionalPatrolStringSlice(payload.ScopeResourceTypes),
+		ScopeContext:              payload.ScopeContext,
+		AlertIdentifier:           alertIdentifier,
+		FindingID:                 payload.FindingID,
+		ResourcesChecked:          payload.ResourcesChecked,
+		NodesChecked:              payload.NodesChecked,
+		GuestsChecked:             payload.GuestsChecked,
+		DockerChecked:             payload.DockerChecked,
+		StorageChecked:            payload.StorageChecked,
+		HostsChecked:              payload.HostsChecked,
+		PBSChecked:                payload.PBSChecked,
+		PMGChecked:                payload.PMGChecked,
+		KubernetesChecked:         payload.KubernetesChecked,
+		NewFindings:               payload.NewFindings,
+		ExistingFindings:          payload.ExistingFindings,
+		RejectedFindings:          payload.RejectedFindings,
+		ResolvedFindings:          payload.ResolvedFindings,
+		AutoFixCount:              payload.AutoFixCount,
+		FindingsSummary:           payload.FindingsSummary,
+		FindingIDs:                payload.FindingIDs,
+		ErrorCount:                payload.ErrorCount,
+		Status:                    payload.Status,
+		TriageFlags:               payload.TriageFlags,
+		TriageSkippedLLM:          payload.TriageSkippedLLM,
+		AIAnalysis:                payload.AIAnalysis,
+		InputTokens:               payload.InputTokens,
+		OutputTokens:              payload.OutputTokens,
+		ToolCalls:                 payload.ToolCalls,
+		ToolCallCount:             payload.ToolCallCount,
+	}
+	return nil
 }
 
 // ToolCallRecord captures a single tool invocation during a patrol run.
@@ -2061,7 +2465,7 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai usage history: %w", err)
 	}
 
 	data := AIUsageHistoryData{
@@ -2072,11 +2476,19 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai usage history: %w", err)
+	}
+
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt ai usage history: %w", encErr)
+		}
 	}
 
 	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai usage history: %w", err)
 	}
 
 	log.Debug().
@@ -2086,41 +2498,100 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 	return nil
 }
 
-// LoadAIUsageHistory loads AI usage events from disk.
-func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
+	return &AIUsageHistoryData{
+		Version: 1,
+		Events:  make([]AIUsageEventRecord, 0),
+	}
+}
 
-	data, err := c.fs.ReadFile(c.aiUsageHistoryFile)
+// loadHistoryData generic helper for loading history data from disk.
+// When crypto is non-nil, attempts to decrypt before parsing; falls back to
+// plaintext on decryption failure (transparent migration from unencrypted files).
+func loadHistoryData[T any](
+	fs FileSystem,
+	mu *sync.RWMutex,
+	filePath string,
+	cryptoMgr *crypto.CryptoManager,
+	emptyDataFactory func() *T,
+	normalizeSlice func(*T),
+	rewrite func(*T) error,
+	getCount func(*T) int,
+	getLastSaved func(*T) time.Time,
+	logLabel string,
+) (*T, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	data, err := fs.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &AIUsageHistoryData{
-				Version: 1,
-				Events:  make([]AIUsageEventRecord, 0),
-			}, nil
+			return emptyDataFactory(), nil
 		}
 		return nil, err
 	}
 
-	var usageData AIUsageHistoryData
-	if err := json.Unmarshal(data, &usageData); err != nil {
-		log.Error().Err(err).Str("file", c.aiUsageHistoryFile).Msg("Failed to parse AI usage history file")
-		return &AIUsageHistoryData{
-			Version: 1,
-			Events:  make([]AIUsageEventRecord, 0),
-		}, nil
+	migratedPlaintext := false
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if cryptoMgr != nil {
+		if decrypted, decErr := cryptoMgr.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			log.Debug().Str("file", filePath).Msg("Failed to decrypt history data — falling back to plaintext")
+			migratedPlaintext = true
+		}
 	}
 
-	if usageData.Events == nil {
-		usageData.Events = make([]AIUsageEventRecord, 0)
+	var historyData T
+	if err := json.Unmarshal(data, &historyData); err != nil {
+		log.Error().Err(err).Str("file", filePath).Msgf("Failed to parse %s file", logLabel)
+		return emptyDataFactory(), nil
+	}
+
+	normalizeSlice(&historyData)
+
+	if migratedPlaintext && rewrite != nil {
+		if err := rewrite(&historyData); err != nil {
+			return nil, err
+		}
 	}
 
 	log.Info().
-		Str("file", c.aiUsageHistoryFile).
-		Int("count", len(usageData.Events)).
-		Time("last_saved", usageData.LastSaved).
-		Msg("AI usage history loaded")
-	return &usageData, nil
+		Str("file", filePath).
+		Int("count", getCount(&historyData)).
+		Time("last_saved", getLastSaved(&historyData)).
+		Msgf("%s loaded", logLabel)
+	return &historyData, nil
+}
+
+// LoadAIUsageHistory loads AI usage events from disk.
+func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.aiUsageHistoryFile,
+		c.crypto,
+		newEmptyAIUsageHistoryData,
+		func(data *AIUsageHistoryData) {
+			if data.Events == nil {
+				data.Events = make([]AIUsageEventRecord, 0)
+			}
+		},
+		func(data *AIUsageHistoryData) error {
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("marshal ai usage history migration rewrite: %w", err)
+			}
+			return rewriteEncryptedJSONLocked(c, c.aiUsageHistoryFile, jsonData, "ai usage history migration rewrite")
+		},
+		func(data *AIUsageHistoryData) int {
+			return len(data.Events)
+		},
+		func(data *AIUsageHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"AI usage history",
+	)
 }
 
 // SavePatrolRunHistory persists patrol run history to disk
@@ -2129,7 +2600,7 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for patrol run history: %w", err)
 	}
 
 	data := PatrolRunHistoryData{
@@ -2140,11 +2611,19 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal patrol run history: %w", err)
+	}
+
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt patrol run history: %w", encErr)
+		}
 	}
 
 	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist patrol run history: %w", err)
 	}
 
 	log.Debug().
@@ -2154,43 +2633,41 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	return nil
 }
 
+func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
+	return &PatrolRunHistoryData{
+		Version: 1,
+		Runs:    make([]PatrolRunRecord, 0),
+	}
+}
+
 // LoadPatrolRunHistory loads patrol run history from disk
 func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.aiPatrolRunsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Return empty data if file doesn't exist
-			return &PatrolRunHistoryData{
-				Version: 1,
-				Runs:    make([]PatrolRunRecord, 0),
-			}, nil
-		}
-		return nil, err
-	}
-
-	var historyData PatrolRunHistoryData
-	if err := json.Unmarshal(data, &historyData); err != nil {
-		log.Error().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to parse patrol run history file")
-		// Return empty data on parse error rather than failing
-		return &PatrolRunHistoryData{
-			Version: 1,
-			Runs:    make([]PatrolRunRecord, 0),
-		}, nil
-	}
-
-	if historyData.Runs == nil {
-		historyData.Runs = make([]PatrolRunRecord, 0)
-	}
-
-	log.Info().
-		Str("file", c.aiPatrolRunsFile).
-		Int("count", len(historyData.Runs)).
-		Time("last_saved", historyData.LastSaved).
-		Msg("Patrol run history loaded")
-	return &historyData, nil
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.aiPatrolRunsFile,
+		c.crypto,
+		newEmptyPatrolRunHistoryData,
+		func(data *PatrolRunHistoryData) {
+			if data.Runs == nil {
+				data.Runs = make([]PatrolRunRecord, 0)
+			}
+		},
+		func(data *PatrolRunHistoryData) error {
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("marshal patrol run history migration rewrite: %w", err)
+			}
+			return rewriteEncryptedJSONLocked(c, c.aiPatrolRunsFile, jsonData, "patrol run history migration rewrite")
+		},
+		func(data *PatrolRunHistoryData) int {
+			return len(data.Runs)
+		},
+		func(data *PatrolRunHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"Patrol run history",
+	)
 }
 
 // LoadSystemSettings loads system settings from file
@@ -2230,7 +2707,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	// Read the existing .env file content
 	existingContent, err := c.fs.ReadFile(envFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("read env file %s: %w", envFile, err)
 	}
 
 	var lines []string
@@ -2255,7 +2732,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	}
 
 	if err := scanner.Err(); err != nil {
-		return err
+		return fmt.Errorf("scan env file %s: %w", envFile, err)
 	}
 
 	// Note: legacy POLLING_INTERVAL is deprecated and no longer written
@@ -2284,11 +2761,14 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		}
 	}
 	if err := c.fs.WriteFile(tempFile, []byte(content), perm); err != nil {
-		return err
+		return fmt.Errorf("write temp env file %s: %w", tempFile, err)
 	}
 
 	// Atomic rename
-	return c.fs.Rename(tempFile, envFile)
+	if err := c.fs.Rename(tempFile, envFile); err != nil {
+		return fmt.Errorf("rename temp env file %s to %s: %w", tempFile, envFile, err)
+	}
+	return nil
 }
 
 // IsEncryptionEnabled returns whether the config persistence has encryption enabled
@@ -2361,289 +2841,59 @@ func (c *ConfigPersistence) LoadDockerMetadata() (*DockerMetadataStore, error) {
 
 // LoadAgentProfiles loads agent profiles from file
 func (c *ConfigPersistence) LoadAgentProfiles() ([]models.AgentProfile, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.agentProfilesFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfile{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfile{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profiles - falling back to plaintext")
-		}
-	}
-
-	var profiles []models.AgentProfile
-	if err := json.Unmarshal(data, &profiles); err != nil {
-		return nil, err
-	}
-
-	return profiles, nil
+	return loadSlice[models.AgentProfile](c, c.agentProfilesFile, true)
 }
 
 // SaveAgentProfiles saves agent profiles to file
 func (c *ConfigPersistence) SaveAgentProfiles(profiles []models.AgentProfile) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(profiles, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.agentProfilesFile, data, 0600)
+	return saveJSON(c, c.agentProfilesFile, profiles, true)
 }
 
 // LoadAgentProfileAssignments loads agent profile assignments from file
 func (c *ConfigPersistence) LoadAgentProfileAssignments() ([]models.AgentProfileAssignment, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.agentAssignmentsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfileAssignment{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfileAssignment{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profile assignments - falling back to plaintext")
-		}
-	}
-
-	var assignments []models.AgentProfileAssignment
-	if err := json.Unmarshal(data, &assignments); err != nil {
-		return nil, err
-	}
-
-	return assignments, nil
+	return loadSlice[models.AgentProfileAssignment](c, c.agentAssignmentsFile, true)
 }
 
 // SaveAgentProfileAssignments saves agent profile assignments to file
 func (c *ConfigPersistence) SaveAgentProfileAssignments(assignments []models.AgentProfileAssignment) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(assignments, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	return c.writeConfigFileLocked(c.agentAssignmentsFile, data, 0600)
+	return saveJSON(c, c.agentAssignmentsFile, assignments, true)
 }
 
 // LoadAgentProfileVersions loads profile version history from file
 func (c *ConfigPersistence) LoadAgentProfileVersions() ([]models.AgentProfileVersion, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-versions.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.AgentProfileVersion{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.AgentProfileVersion{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt agent profile versions - falling back to plaintext")
-		}
-	}
-
-	var versions []models.AgentProfileVersion
-	if err := json.Unmarshal(data, &versions); err != nil {
-		return nil, err
-	}
-
-	return versions, nil
+	return loadSlice[models.AgentProfileVersion](c, filepath.Join(c.configDir, "profile-versions.json"), true)
 }
 
 // SaveAgentProfileVersions saves profile version history to file
 func (c *ConfigPersistence) SaveAgentProfileVersions(versions []models.AgentProfileVersion) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(versions, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-versions.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-versions.json"), versions, true)
 }
 
 // LoadProfileDeploymentStatus loads deployment status from file
 func (c *ConfigPersistence) LoadProfileDeploymentStatus() ([]models.ProfileDeploymentStatus, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-deployments.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.ProfileDeploymentStatus{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.ProfileDeploymentStatus{}, nil
-	}
-
-	if c.crypto != nil {
-		if decrypted, err := c.crypto.Decrypt(data); err == nil {
-			data = decrypted
-		} else {
-			log.Warn().Err(err).Msg("Failed to decrypt profile deployment status - falling back to plaintext")
-		}
-	}
-
-	var status []models.ProfileDeploymentStatus
-	if err := json.Unmarshal(data, &status); err != nil {
-		return nil, err
-	}
-
-	return status, nil
+	return loadSlice[models.ProfileDeploymentStatus](c, filepath.Join(c.configDir, "profile-deployments.json"), true)
 }
 
 // SaveProfileDeploymentStatus saves deployment status to file
 func (c *ConfigPersistence) SaveProfileDeploymentStatus(status []models.ProfileDeploymentStatus) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(status, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if c.crypto != nil {
-		encrypted, err := c.crypto.Encrypt(data)
-		if err != nil {
-			return err
-		}
-		data = encrypted
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-deployments.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-deployments.json"), status, true)
 }
 
 // LoadProfileChangeLogs loads change logs from file
 func (c *ConfigPersistence) LoadProfileChangeLogs() ([]models.ProfileChangeLog, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	filePath := filepath.Join(c.configDir, "profile-changelog.json")
-	data, err := c.fs.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.ProfileChangeLog{}, nil
-		}
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return []models.ProfileChangeLog{}, nil
-	}
-
-	var logs []models.ProfileChangeLog
-	if err := json.Unmarshal(data, &logs); err != nil {
-		return nil, err
-	}
-
-	return logs, nil
+	return loadSlice[models.ProfileChangeLog](c, filepath.Join(c.configDir, "profile-changelog.json"), true)
 }
 
 // SaveProfileChangeLogs saves change logs to file
 func (c *ConfigPersistence) SaveProfileChangeLogs(logs []models.ProfileChangeLog) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.MarshalIndent(logs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
-	}
-
-	filePath := filepath.Join(c.configDir, "profile-changelog.json")
-	return c.writeConfigFileLocked(filePath, data, 0600)
+	return saveJSON(c, filepath.Join(c.configDir, "profile-changelog.json"), logs, true)
 }
 
 // AppendProfileChangeLog adds a new entry to the change log
 func (c *ConfigPersistence) AppendProfileChangeLog(entry models.ProfileChangeLog) error {
 	logs, err := c.LoadProfileChangeLogs()
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile change logs: %w", err)
 	}
 
 	// Keep last 1000 entries
@@ -2707,7 +2957,7 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai chat sessions: %w", err)
 	}
 
 	data := AIChatSessionsData{
@@ -2718,11 +2968,19 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai chat sessions: %w", err)
+	}
+
+	if c.crypto != nil {
+		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
+			jsonData = encrypted
+		} else {
+			return fmt.Errorf("encrypt ai chat sessions: %w", encErr)
+		}
 	}
 
 	if err := c.writeConfigFileLocked(c.aiChatSessionsFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai chat sessions: %w", err)
 	}
 
 	log.Debug().
@@ -2734,8 +2992,8 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 
 // LoadAIChatSessions loads all chat sessions from disk
 func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	data, err := c.fs.ReadFile(c.aiChatSessionsFile)
 	if err != nil {
@@ -2746,6 +3004,16 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 			}, nil
 		}
 		return nil, err
+	}
+
+	migratedPlaintext := false
+	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
+	if c.crypto != nil {
+		if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			migratedPlaintext = true
+		}
 	}
 
 	var sessionsData AIChatSessionsData
@@ -2761,6 +3029,16 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 		sessionsData.Sessions = make(map[string]*AIChatSession)
 	}
 
+	if migratedPlaintext {
+		jsonData, err := json.MarshalIndent(sessionsData, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal ai chat sessions migration rewrite: %w", err)
+		}
+		if err := rewriteEncryptedJSONLocked(c, c.aiChatSessionsFile, jsonData, "ai chat sessions migration rewrite"); err != nil {
+			return nil, err
+		}
+	}
+
 	log.Debug().
 		Str("file", c.aiChatSessionsFile).
 		Int("count", len(sessionsData.Sessions)).
@@ -2772,7 +3050,7 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 func (c *ConfigPersistence) SaveAIChatSession(session *AIChatSession) error {
 	sessionsData, err := c.LoadAIChatSessions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load ai chat sessions: %w", err)
 	}
 
 	session.UpdatedAt = time.Now()
@@ -2785,7 +3063,7 @@ func (c *ConfigPersistence) SaveAIChatSession(session *AIChatSession) error {
 func (c *ConfigPersistence) DeleteAIChatSession(sessionID string) error {
 	sessionsData, err := c.LoadAIChatSessions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load ai chat sessions: %w", err)
 	}
 
 	delete(sessionsData.Sessions, sessionID)

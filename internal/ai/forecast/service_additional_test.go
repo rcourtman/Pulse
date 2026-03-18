@@ -5,13 +5,17 @@ import (
 	"time"
 )
 
-type mockStateProvider struct {
-	state StateSnapshot
+type mockResourceIterator struct {
+	vms      []ResourceInfo
+	cts      []ResourceInfo
+	nodes    []ResourceInfo
+	storages []ResourceInfo
 }
 
-func (m mockStateProvider) GetState() StateSnapshot {
-	return m.state
-}
+func (m mockResourceIterator) ForecastVMs() []ResourceInfo          { return m.vms }
+func (m mockResourceIterator) ForecastContainers() []ResourceInfo   { return m.cts }
+func (m mockResourceIterator) ForecastNodes() []ResourceInfo        { return m.nodes }
+func (m mockResourceIterator) ForecastStoragePools() []ResourceInfo { return m.storages }
 
 func buildLinearData(end time.Time, points int, step time.Duration, startValue, stepValue float64) []MetricDataPoint {
 	data := make([]MetricDataPoint, points)
@@ -225,11 +229,11 @@ func TestFormatKeyForecasts_NoProviders(t *testing.T) {
 	}
 }
 
-func TestFormatKeyForecasts_NoStateProvider(t *testing.T) {
+func TestFormatKeyForecasts_NoResourceIterator(t *testing.T) {
 	svc := NewService(DefaultForecastConfig())
 	svc.SetDataProvider(&mockDataProvider{data: map[string][]MetricDataPoint{}})
 	if result := svc.FormatKeyForecasts(); result != "" {
-		t.Fatalf("expected empty result when state provider is missing")
+		t.Fatalf("expected empty result when resource iterator is missing")
 	}
 }
 
@@ -246,10 +250,8 @@ func TestFormatKeyForecasts_Concerns(t *testing.T) {
 			"vm-1:cpu": data,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs: []VMInfo{{ID: "vm-1", Name: ""}},
-		},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms: []ResourceInfo{{ID: "vm-1", Name: ""}},
 	})
 
 	result := svc.FormatKeyForecasts()
@@ -283,13 +285,11 @@ func TestFormatKeyForecasts_AllResourceTypes(t *testing.T) {
 			"storage-1:disk": data,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs:        []VMInfo{{ID: "vm-1", Name: "vm"}},
-			Containers: []ContainerInfo{{ID: "ct-1", Name: "ct"}},
-			Nodes:      []NodeInfo{{ID: "node-1", Name: "node"}},
-			Storage:    []StorageInfo{{ID: "storage-1", Name: ""}},
-		},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms:      []ResourceInfo{{ID: "vm-1", Name: "vm"}},
+		cts:      []ResourceInfo{{ID: "ct-1", Name: "ct"}},
+		nodes:    []ResourceInfo{{ID: "node-1", Name: "node"}},
+		storages: []ResourceInfo{{ID: "storage-1", Name: ""}},
 	})
 
 	result := svc.FormatKeyForecasts()
@@ -318,13 +318,11 @@ func TestForecastAll_ActionableSorted(t *testing.T) {
 			"vm-flat:disk": flat,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs: []VMInfo{
-				{ID: "vm-fast", Name: "fast"},
-				{ID: "vm-slow", Name: "slow"},
-				{ID: "vm-flat", Name: "flat"},
-			},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms: []ResourceInfo{
+			{ID: "vm-fast", Name: "fast"},
+			{ID: "vm-slow", Name: "slow"},
+			{ID: "vm-flat", Name: "flat"},
 		},
 	})
 
@@ -370,12 +368,10 @@ func TestForecastAll_FiltersNonActionable(t *testing.T) {
 			"vm-low:disk":   lowConfidence,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs: []VMInfo{
-				{ID: "vm-above", Name: "above"},
-				{ID: "vm-low", Name: "low"},
-			},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms: []ResourceInfo{
+			{ID: "vm-above", Name: "above"},
+			{ID: "vm-low", Name: "low"},
 		},
 	})
 
@@ -405,12 +401,10 @@ func TestForecastAll_MultipleResourceTypes(t *testing.T) {
 			"node-1:disk": nodeData,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs:        []VMInfo{{ID: "vm-1", Name: "vm"}},
-			Containers: []ContainerInfo{{ID: "ct-1", Name: "ct"}},
-			Nodes:      []NodeInfo{{ID: "node-1", Name: "node"}},
-		},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms:   []ResourceInfo{{ID: "vm-1", Name: "vm"}},
+		cts:   []ResourceInfo{{ID: "ct-1", Name: "ct"}},
+		nodes: []ResourceInfo{{ID: "node-1", Name: "node"}},
 	})
 
 	resp, err := svc.ForecastAll("disk", 24*time.Hour, 90)
@@ -435,11 +429,9 @@ func TestForecastAll_SkipsErroredResources(t *testing.T) {
 			"vm-1:disk": vmData,
 		},
 	})
-	svc.SetStateProvider(mockStateProvider{
-		state: StateSnapshot{
-			VMs:        []VMInfo{{ID: "vm-1", Name: "vm"}},
-			Containers: []ContainerInfo{{ID: "ct-1", Name: "ct"}},
-		},
+	svc.SetResourceIterator(mockResourceIterator{
+		vms: []ResourceInfo{{ID: "vm-1", Name: "vm"}},
+		cts: []ResourceInfo{{ID: "ct-1", Name: "ct"}},
 	})
 
 	resp, err := svc.ForecastAll("disk", 24*time.Hour, 90)

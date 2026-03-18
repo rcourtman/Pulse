@@ -47,23 +47,96 @@ type IncidentEvent struct {
 
 // Incident captures an alert occurrence and its timeline.
 type Incident struct {
-	ID           string          `json:"id"`
-	AlertID      string          `json:"alertId"`
-	AlertType    string          `json:"alertType"`
-	Level        string          `json:"level"`
-	ResourceID   string          `json:"resourceId"`
-	ResourceName string          `json:"resourceName"`
-	ResourceType string          `json:"resourceType,omitempty"`
-	Node         string          `json:"node,omitempty"`
-	Instance     string          `json:"instance,omitempty"`
-	Message      string          `json:"message,omitempty"`
-	Status       IncidentStatus  `json:"status"`
-	OpenedAt     time.Time       `json:"openedAt"`
-	ClosedAt     *time.Time      `json:"closedAt,omitempty"`
-	Acknowledged bool            `json:"acknowledged"`
-	AckUser      string          `json:"ackUser,omitempty"`
-	AckTime      *time.Time      `json:"ackTime,omitempty"`
-	Events       []IncidentEvent `json:"events,omitempty"`
+	ID              string          `json:"id"`
+	AlertIdentifier string          `json:"alertIdentifier"`
+	AlertType       string          `json:"alertType"`
+	Level           string          `json:"level"`
+	ResourceID      string          `json:"resourceId"`
+	ResourceName    string          `json:"resourceName"`
+	ResourceType    string          `json:"resourceType,omitempty"`
+	Node            string          `json:"node,omitempty"`
+	Instance        string          `json:"instance,omitempty"`
+	Message         string          `json:"message,omitempty"`
+	Status          IncidentStatus  `json:"status"`
+	OpenedAt        time.Time       `json:"openedAt"`
+	ClosedAt        *time.Time      `json:"closedAt,omitempty"`
+	Acknowledged    bool            `json:"acknowledged"`
+	AckUser         string          `json:"ackUser,omitempty"`
+	AckTime         *time.Time      `json:"ackTime,omitempty"`
+	Events          []IncidentEvent `json:"events,omitempty"`
+}
+
+type incidentJSON struct {
+	ID              string          `json:"id"`
+	AlertIdentifier string          `json:"alertIdentifier"`
+	AlertType       string          `json:"alertType"`
+	Level           string          `json:"level"`
+	ResourceID      string          `json:"resourceId"`
+	ResourceName    string          `json:"resourceName"`
+	ResourceType    string          `json:"resourceType,omitempty"`
+	Node            string          `json:"node,omitempty"`
+	Instance        string          `json:"instance,omitempty"`
+	Message         string          `json:"message,omitempty"`
+	Status          IncidentStatus  `json:"status"`
+	OpenedAt        time.Time       `json:"openedAt"`
+	ClosedAt        *time.Time      `json:"closedAt,omitempty"`
+	Acknowledged    bool            `json:"acknowledged"`
+	AckUser         string          `json:"ackUser,omitempty"`
+	AckTime         *time.Time      `json:"ackTime,omitempty"`
+	Events          []IncidentEvent `json:"events,omitempty"`
+}
+
+func (i Incident) MarshalJSON() ([]byte, error) {
+	alertIdentifier := strings.TrimSpace(i.AlertIdentifier)
+	return json.Marshal(incidentJSON{
+		ID:              i.ID,
+		AlertIdentifier: alertIdentifier,
+		AlertType:       i.AlertType,
+		Level:           i.Level,
+		ResourceID:      i.ResourceID,
+		ResourceName:    i.ResourceName,
+		ResourceType:    i.ResourceType,
+		Node:            i.Node,
+		Instance:        i.Instance,
+		Message:         i.Message,
+		Status:          i.Status,
+		OpenedAt:        i.OpenedAt,
+		ClosedAt:        i.ClosedAt,
+		Acknowledged:    i.Acknowledged,
+		AckUser:         i.AckUser,
+		AckTime:         i.AckTime,
+		Events:          i.Events,
+	})
+}
+
+func (i *Incident) UnmarshalJSON(data []byte) error {
+	if i == nil {
+		return nil
+	}
+	var payload incidentJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+	*i = Incident{
+		ID:              payload.ID,
+		AlertIdentifier: strings.TrimSpace(payload.AlertIdentifier),
+		AlertType:       payload.AlertType,
+		Level:           payload.Level,
+		ResourceID:      payload.ResourceID,
+		ResourceName:    payload.ResourceName,
+		ResourceType:    payload.ResourceType,
+		Node:            payload.Node,
+		Instance:        payload.Instance,
+		Message:         payload.Message,
+		Status:          payload.Status,
+		OpenedAt:        payload.OpenedAt,
+		ClosedAt:        payload.ClosedAt,
+		Acknowledged:    payload.Acknowledged,
+		AckUser:         payload.AckUser,
+		AckTime:         payload.AckTime,
+		Events:          payload.Events,
+	}
+	return nil
 }
 
 // IncidentStoreConfig configures incident retention and persistence.
@@ -121,9 +194,9 @@ func NewIncidentStore(cfg IncidentStoreConfig) *IncidentStore {
 	if store.dataDir != "" {
 		store.filePath = filepath.Join(store.dataDir, incidentFileName)
 		if err := store.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load incident history from disk")
+			log.Warn().Err(err).Msg("failed to load incident history from disk")
 		} else if len(store.incidents) > 0 {
-			log.Info().Int("count", len(store.incidents)).Msg("Loaded incident history from disk")
+			log.Info().Int("count", len(store.incidents)).Msg("loaded incident history from disk")
 		}
 	}
 
@@ -139,7 +212,7 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	incident := s.findOpenIncidentByAlertIDLocked(alert.ID)
+	incident := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
 		incident = newIncidentFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
@@ -217,7 +290,7 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	incident := s.findOpenIncidentByAlertIDLocked(alert.ID)
+	incident := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
 		incident = newIncidentFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
@@ -239,21 +312,21 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 }
 
 // RecordAnalysis adds an AI analysis event to the incident for an alert.
-func (s *IncidentStore) RecordAnalysis(alertID, summary string, details map[string]interface{}) {
-	if alertID == "" {
+func (s *IncidentStore) RecordAnalysis(alertIdentifier, summary string, details map[string]interface{}) {
+	if alertIdentifier == "" {
 		return
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	incident := s.findLatestIncidentByAlertIDLocked(alertID)
+	incident := s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	if incident == nil {
 		incident = &Incident{
-			ID:       generateIncidentID(),
-			AlertID:  alertID,
-			Status:   IncidentStatusOpen,
-			OpenedAt: time.Now(),
+			ID:              generateIncidentID(),
+			AlertIdentifier: alertIdentifier,
+			Status:          IncidentStatusOpen,
+			OpenedAt:        time.Now(),
 		}
 		s.incidents = append(s.incidents, incident)
 	}
@@ -268,21 +341,21 @@ func (s *IncidentStore) RecordAnalysis(alertID, summary string, details map[stri
 }
 
 // RecordCommand adds a command execution event to the incident for an alert.
-func (s *IncidentStore) RecordCommand(alertID, command string, success bool, output string, details map[string]interface{}) {
-	if alertID == "" || command == "" {
+func (s *IncidentStore) RecordCommand(alertIdentifier, command string, success bool, output string, details map[string]interface{}) {
+	if alertIdentifier == "" || command == "" {
 		return
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	incident := s.findLatestIncidentByAlertIDLocked(alertID)
+	incident := s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	if incident == nil {
 		incident = &Incident{
-			ID:       generateIncidentID(),
-			AlertID:  alertID,
-			Status:   IncidentStatusOpen,
-			OpenedAt: time.Now(),
+			ID:              generateIncidentID(),
+			AlertIdentifier: alertIdentifier,
+			Status:          IncidentStatusOpen,
+			OpenedAt:        time.Now(),
 		}
 		s.incidents = append(s.incidents, incident)
 	}
@@ -308,21 +381,21 @@ func (s *IncidentStore) RecordCommand(alertID, command string, success bool, out
 }
 
 // RecordRunbook adds a runbook execution event to the incident for an alert.
-func (s *IncidentStore) RecordRunbook(alertID, runbookID, title string, outcome string, automatic bool, message string) {
-	if alertID == "" || runbookID == "" {
+func (s *IncidentStore) RecordRunbook(alertIdentifier, runbookID, title string, outcome string, automatic bool, message string) {
+	if alertIdentifier == "" || runbookID == "" {
 		return
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	incident := s.findLatestIncidentByAlertIDLocked(alertID)
+	incident := s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	if incident == nil {
 		incident = &Incident{
-			ID:       generateIncidentID(),
-			AlertID:  alertID,
-			Status:   IncidentStatusOpen,
-			OpenedAt: time.Now(),
+			ID:              generateIncidentID(),
+			AlertIdentifier: alertIdentifier,
+			Status:          IncidentStatusOpen,
+			OpenedAt:        time.Now(),
 		}
 		s.incidents = append(s.incidents, incident)
 	}
@@ -342,8 +415,8 @@ func (s *IncidentStore) RecordRunbook(alertID, runbookID, title string, outcome 
 	s.saveAsync()
 }
 
-// RecordNote appends a user note to an incident identified by alert ID or incident ID.
-func (s *IncidentStore) RecordNote(alertID, incidentID, note, user string) bool {
+// RecordNote appends a user note to an incident identified by canonical alert identifier or incident ID.
+func (s *IncidentStore) RecordNote(alertIdentifier, incidentID, note, user string) bool {
 	note = strings.TrimSpace(note)
 	if note == "" {
 		return false
@@ -355,8 +428,8 @@ func (s *IncidentStore) RecordNote(alertID, incidentID, note, user string) bool 
 	var incident *Incident
 	if incidentID != "" {
 		incident = s.findIncidentByIDLocked(incidentID)
-	} else if alertID != "" {
-		incident = s.findLatestIncidentByAlertIDLocked(alertID)
+	} else if alertIdentifier != "" {
+		incident = s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	}
 	if incident == nil {
 		return false
@@ -377,16 +450,16 @@ func (s *IncidentStore) RecordNote(alertID, incidentID, note, user string) bool 
 	return true
 }
 
-// GetTimelineByAlertID returns the most recent incident for the alert.
-func (s *IncidentStore) GetTimelineByAlertID(alertID string) *Incident {
-	if alertID == "" {
+// GetTimelineByAlertIdentifier returns the most recent incident for the alert.
+func (s *IncidentStore) GetTimelineByAlertIdentifier(alertIdentifier string) *Incident {
+	if alertIdentifier == "" {
 		return nil
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	incident := s.findLatestIncidentByAlertIDLocked(alertID)
+	incident := s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	if incident == nil {
 		return nil
 	}
@@ -394,12 +467,12 @@ func (s *IncidentStore) GetTimelineByAlertID(alertID string) *Incident {
 }
 
 // GetTimelineByAlertAt returns the incident closest to the provided start time for an alert.
-func (s *IncidentStore) GetTimelineByAlertAt(alertID string, startedAt time.Time) *Incident {
-	if alertID == "" {
+func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt time.Time) *Incident {
+	if alertIdentifier == "" {
 		return nil
 	}
 	if startedAt.IsZero() {
-		return s.GetTimelineByAlertID(alertID)
+		return s.GetTimelineByAlertIdentifier(alertIdentifier)
 	}
 
 	s.mu.RLock()
@@ -408,7 +481,7 @@ func (s *IncidentStore) GetTimelineByAlertAt(alertID string, startedAt time.Time
 	var best *Incident
 	var bestDelta time.Duration
 	for _, incident := range s.incidents {
-		if incident == nil || incident.AlertID != alertID {
+		if incident == nil || incident.AlertIdentifier != alertIdentifier {
 			continue
 		}
 		delta := incident.OpenedAt.Sub(startedAt)
@@ -450,8 +523,8 @@ func (s *IncidentStore) ListIncidentsByResource(resourceID string, limit int) []
 }
 
 // FormatForAlert returns a condensed incident timeline for prompt injection.
-func (s *IncidentStore) FormatForAlert(alertID string, maxEvents int) string {
-	incident := s.GetTimelineByAlertID(alertID)
+func (s *IncidentStore) FormatForAlert(alertIdentifier string, maxEvents int) string {
+	incident := s.GetTimelineByAlertIdentifier(alertIdentifier)
 	if incident == nil {
 		return ""
 	}
@@ -578,21 +651,21 @@ func newIncidentFromAlert(alert *alerts.Alert) *Incident {
 	}
 
 	return &Incident{
-		ID:           generateIncidentID(),
-		AlertID:      alert.ID,
-		AlertType:    alert.Type,
-		Level:        string(alert.Level),
-		ResourceID:   alert.ResourceID,
-		ResourceName: alert.ResourceName,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Status:       IncidentStatusOpen,
-		OpenedAt:     openedAt,
-		Acknowledged: alert.Acknowledged,
-		AckUser:      alert.AckUser,
-		AckTime:      alert.AckTime,
-		Events:       make([]IncidentEvent, 0),
+		ID:              generateIncidentID(),
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		Level:           string(alert.Level),
+		ResourceID:      alert.ResourceID,
+		ResourceName:    alert.ResourceName,
+		Node:            alert.Node,
+		Instance:        alert.Instance,
+		Message:         alert.Message,
+		Status:          IncidentStatusOpen,
+		OpenedAt:        openedAt,
+		Acknowledged:    alert.Acknowledged,
+		AckUser:         alert.AckUser,
+		AckTime:         alert.AckTime,
+		Events:          make([]IncidentEvent, 0),
 	}
 }
 
@@ -613,7 +686,7 @@ func updateIncidentFromAlert(incident *Incident, alert *alerts.Alert) {
 }
 
 func (s *IncidentStore) ensureIncidentForAlertLocked(alert *alerts.Alert) *Incident {
-	incident := s.findLatestIncidentByAlertIDLocked(alert.ID)
+	incident := s.findLatestIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
 		incident = newIncidentFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
@@ -643,26 +716,26 @@ func (s *IncidentStore) addEventLocked(incident *Incident, eventType IncidentEve
 	}
 }
 
-func (s *IncidentStore) findOpenIncidentByAlertIDLocked(alertID string) *Incident {
-	if alertID == "" {
+func (s *IncidentStore) findOpenIncidentByAlertIdentifierLocked(alertIdentifier string) *Incident {
+	if alertIdentifier == "" {
 		return nil
 	}
 	for i := len(s.incidents) - 1; i >= 0; i-- {
 		incident := s.incidents[i]
-		if incident != nil && incident.AlertID == alertID && incident.Status == IncidentStatusOpen {
+		if incident != nil && incident.AlertIdentifier == alertIdentifier && incident.Status == IncidentStatusOpen {
 			return incident
 		}
 	}
 	return nil
 }
 
-func (s *IncidentStore) findLatestIncidentByAlertIDLocked(alertID string) *Incident {
-	if alertID == "" {
+func (s *IncidentStore) findLatestIncidentByAlertIdentifierLocked(alertIdentifier string) *Incident {
+	if alertIdentifier == "" {
 		return nil
 	}
 	for i := len(s.incidents) - 1; i >= 0; i-- {
 		incident := s.incidents[i]
-		if incident != nil && incident.AlertID == alertID {
+		if incident != nil && incident.AlertIdentifier == alertIdentifier {
 			return incident
 		}
 	}
@@ -717,7 +790,7 @@ func (s *IncidentStore) saveAsync() {
 	}
 	go func() {
 		if err := s.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident history")
+			log.Warn().Err(err).Msg("failed to save incident history")
 		}
 	}()
 }
@@ -729,7 +802,7 @@ func (s *IncidentStore) saveToDisk() error {
 	if s.dataDir == "" || s.filePath == "" {
 		return nil
 	}
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return err
 	}
 
@@ -746,7 +819,7 @@ func (s *IncidentStore) saveToDisk() error {
 	}
 
 	tmpFile := s.filePath + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmpFile, s.filePath); err != nil {

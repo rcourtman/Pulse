@@ -1,5 +1,10 @@
 import { Component, Show, For, createSignal, onCleanup, createEffect } from 'solid-js';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import {
+  FilterActionButton,
+  FilterToolbarPanel,
+  filterUtilityBadgeClass,
+} from '@/components/shared/FilterToolbar';
 
 interface ColumnPickerProps {
   /** Columns that can be toggled */
@@ -36,40 +41,36 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
   });
 
   // Count how many are hidden
-  const hiddenCount = () => props.columns.filter(c => props.isHidden(c.id)).length;
-
+  const hiddenCount = () => props.columns.filter((c) => props.isHidden(c.id)).length;
   return (
-    <div ref={containerRef} class="relative">
-      <button
-        type="button"
+    <div ref={containerRef} class="relative shrink-0">
+      <FilterActionButton
         onClick={() => setIsOpen(!isOpen())}
-        class={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all
-          ${isOpen()
-            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-          }`}
+        active={isOpen()}
+        class="whitespace-nowrap"
         title="Choose which columns to display"
       >
         {/* Columns icon */}
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg
+          class="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16M15 4v16M4 9h16M4 15h16" />
         </svg>
         <span>Columns</span>
         <Show when={hiddenCount() > 0}>
-          <span class="ml-0.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">
-            {hiddenCount()} hidden
-          </span>
+          <span class={filterUtilityBadgeClass}>{hiddenCount()}</span>
         </Show>
-      </button>
+      </FilterActionButton>
 
       <Show when={isOpen()}>
-        <div
-          class="absolute right-0 mt-1 w-56 rounded-lg border border-gray-200 bg-white shadow-xl z-50
-                 dark:border-gray-700 dark:bg-gray-800"
-        >
-          <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+        <FilterToolbarPanel class="top-[calc(100%+0.25rem)] z-50 w-56 p-0">
+          <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-gray-700 dark:text-gray-200">Show Columns</span>
+              <span class="text-xs font-medium text-base-content">Show Columns</span>
               <Show when={props.onReset && hiddenCount() > 0}>
                 <button
                   type="button"
@@ -87,28 +88,16 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
               {(col) => {
                 const isChecked = () => !props.isHidden(col.id);
                 return (
-                  <label
-                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer
-                           hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                  >
+                  <label class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-hover transition-colors">
                     <input
                       type="checkbox"
                       checked={isChecked()}
                       onChange={() => props.onToggle(col.id)}
-                      class="w-3.5 h-3.5 rounded border-gray-300 text-blue-600
-                             focus:ring-blue-500 focus:ring-offset-0
-                             dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-blue-600"
+                      class="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:checked:bg-blue-600"
                     />
-                    <span class={`text-sm ${isChecked() ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span class={`text-sm ${isChecked() ? 'text-base-content' : 'text-muted'}`}>
                       {col.label}
                     </span>
-                    <Show when={col.priority !== 'essential'}>
-                      <span class="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
-                        {col.priority === 'secondary' && 'md+'}
-                        {col.priority === 'supplementary' && 'lg+'}
-                        {col.priority === 'detailed' && 'xl+'}
-                      </span>
-                    </Show>
                   </label>
                 );
               }}
@@ -116,11 +105,11 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
           </div>
 
           <Show when={props.columns.length === 0}>
-            <div class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400 text-center">
-              No columns available to toggle at this screen size
+            <div class="px-3 py-4 text-xs text-muted text-center">
+              No columns available to toggle
             </div>
           </Show>
-        </div>
+        </FilterToolbarPanel>
       </Show>
     </div>
   );

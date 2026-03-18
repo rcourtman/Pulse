@@ -3,6 +3,9 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +32,8 @@ type Service struct {
 	history        []historyEntry
 	historyLimit   int
 	scannerFactory scannerFactory
+	stopCancel     context.CancelFunc
+	stopOnce       sync.Once
 }
 
 // DiscoveryCache stores the latest discovery results
@@ -46,7 +51,7 @@ type historyEntry struct {
 	errorCount      int
 	duration        time.Duration
 	blocklistLength int
-	status          string
+	status          scanResultStatus
 }
 
 func (h historyEntry) StartedAt() time.Time {
@@ -78,16 +83,85 @@ func (h historyEntry) BlocklistLength() int {
 }
 
 func (h historyEntry) Status() string {
-	return h.status
+	return string(h.status)
 }
 
-const defaultHistoryLimit = 20
+const (
+	defaultHistoryLimit        = 20
+	defaultScanInterval        = 5 * time.Minute
+	defaultSubnet              = "auto"
+	maxManualSubnetInputLength = 4096
+	maxManualSubnetCount       = 50
+)
+
+type scanResultStatus string
+
+const (
+	scanResultStatusSuccess scanResultStatus = "success"
+	scanResultStatusFailure scanResultStatus = "failure"
+	scanResultStatusPartial scanResultStatus = "partial"
+)
+
+type discoveryStartedPayload struct {
+	Scanning  bool   `json:"scanning"`
+	Subnet    string `json:"subnet"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type discoveryServerFoundPayload struct {
+	Server    pkgdiscovery.DiscoveredServer `json:"server"`
+	Phase     string                        `json:"phase"`
+	Timestamp int64                         `json:"timestamp"`
+}
+
+type discoveryProgressPayload struct {
+	Progress  pkgdiscovery.ScanProgress `json:"progress"`
+	Timestamp int64                     `json:"timestamp"`
+}
+
+type discoveryCompletePayload struct {
+	Scanning    bool                          `json:"scanning"`
+	Timestamp   int64                         `json:"timestamp"`
+	Environment *pkgdiscovery.EnvironmentInfo `json:"environment,omitempty"`
+}
+
+type discoveryUpdatePayload struct {
+	Servers          []pkgdiscovery.DiscoveredServer `json:"servers"`
+	Errors           []string                        `json:"errors"`
+	StructuredErrors []pkgdiscovery.DiscoveryError   `json:"structured_errors"`
+	Scanning         bool                            `json:"scanning"`
+	Timestamp        int64                           `json:"timestamp"`
+	Environment      *pkgdiscovery.EnvironmentInfo   `json:"environment,omitempty"`
+}
+
+type ServiceStatus struct {
+	IsScanning bool
+	LastScan   time.Time
+	Interval   time.Duration
+	Subnet     string
+}
+
+func (s ServiceStatus) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"is_scanning": s.IsScanning,
+		"last_scan":   s.LastScan,
+		"interval":    s.Interval.String(),
+		"subnet":      s.Subnet,
+	}
+}
 
 type discoveryScanner interface {
 	DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error)
 }
 
 type scannerFactory func(config.DiscoveryConfig) (discoveryScanner, error)
+
+func discoveryErrorCount(result *pkgdiscovery.DiscoveryResult) int {
+	if result == nil {
+		return 0
+	}
+	return len(result.StructuredErrors)
+}
 
 var (
 	newScannerFn = func() discoveryScanner {
@@ -135,12 +209,22 @@ func init() {
 
 // NewService creates a new discovery service
 func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfgProvider func() config.DiscoveryConfig) *Service {
-	if interval == 0 {
-		interval = 5 * time.Minute // Default to 5 minutes
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval; using default")
 	}
-	if subnet == "" {
-		subnet = "auto"
+	normalizedSubnet, err := normalizeDiscoverySubnet(subnet)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("subnet", subnet).
+			Msg("Invalid discovery subnet configuration; defaulting to auto")
+		normalizedSubnet = "auto"
 	}
+	subnet = normalizedSubnet
 
 	if cfgProvider == nil {
 		cfgProvider = func() config.DiscoveryConfig { return config.DefaultDiscoveryConfig() }
@@ -150,8 +234,8 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 		scanner:      newScannerFn(),
 		wsHub:        wsHub,
 		cache:        &DiscoveryCache{},
-		interval:     interval,
-		subnet:       subnet,
+		interval:     normalizedInterval,
+		subnet:       normalizedSubnet,
 		stopChan:     make(chan struct{}),
 		cfgProvider:  cfgProvider,
 		history:      make([]historyEntry, 0, defaultHistoryLimit),
@@ -162,27 +246,69 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	}
 }
 
+func normalizeDiscoverySubnet(subnet string) (string, error) {
+	trimmed := strings.TrimSpace(subnet)
+	if trimmed == "" || strings.EqualFold(trimmed, "auto") {
+		return "auto", nil
+	}
+	if len(trimmed) > maxManualSubnetInputLength {
+		return "", fmt.Errorf("subnet input exceeds max length (%d)", maxManualSubnetInputLength)
+	}
+
+	tokens := strings.Split(trimmed, ",")
+	normalized := make([]string, 0, len(tokens))
+	seen := make(map[string]struct{}, len(tokens))
+
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		_, parsedSubnet, err := net.ParseCIDR(token)
+		if err != nil {
+			log.Warn().Str("token", token).Err(err).Msg("Skipping invalid subnet token")
+			continue
+		}
+
+		canonical := parsedSubnet.String()
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+
+		if len(normalized) > maxManualSubnetCount {
+			return "", fmt.Errorf("subnet input exceeds max subnet count (%d)", maxManualSubnetCount)
+		}
+	}
+
+	if len(normalized) == 0 {
+		return "", fmt.Errorf("no valid subnets provided")
+	}
+
+	return strings.Join(normalized, ","), nil
+}
+
 // Start begins the background discovery service
 func (s *Service) Start(ctx context.Context) {
-	s.ctx = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	serviceCtx, cancel := context.WithCancel(ctx)
+
+	s.mu.Lock()
+	s.ctx = serviceCtx
+	s.stopCancel = cancel
+	s.mu.Unlock()
+
 	log.Info().
 		Dur("interval", s.interval).
 		Str("subnet", s.subnet).
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
-	// Initial scan with panic recovery
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in initial discovery scan")
-			}
-		}()
-		s.performScan()
-	}()
+	goRecover("initial discovery scan", s.performScan)
 
 	// Start background scanning loop with panic recovery
 	go func() {
@@ -194,18 +320,51 @@ func (s *Service) Start(ctx context.Context) {
 					Msg("Recovered from panic in discovery scan loop")
 			}
 		}()
-		s.scanLoop()
+		s.scanLoop(ctx)
 	}()
 }
 
 // Stop stops the background discovery service
 func (s *Service) Stop() {
-	close(s.stopChan)
+	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		cancel := s.stopCancel
+		s.stopCancel = nil
+		s.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		close(s.stopChan)
+	})
+}
+
+func (s *Service) isStopped() bool {
+	select {
+	case <-s.stopChan:
+		return true
+	default:
+		return false
+	}
 }
 
 // scanLoop runs periodic scans
-func (s *Service) scanLoop() {
-	ticker := time.NewTicker(s.interval)
+func (s *Service) scanLoop(ctx context.Context) {
+	s.mu.RLock()
+	interval := s.interval
+	s.mu.RUnlock()
+
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval detected in scan loop; using default")
+		s.mu.Lock()
+		s.interval = normalizedInterval
+		s.mu.Unlock()
+	}
+
+	ticker := time.NewTicker(normalizedInterval)
 	defer ticker.Stop()
 
 	for {
@@ -215,7 +374,7 @@ func (s *Service) scanLoop() {
 		case <-s.stopChan:
 			log.Info().Msg("Stopping background discovery service")
 			return
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			log.Info().Msg("Background discovery service context cancelled")
 			return
 		}
@@ -258,6 +417,11 @@ func (s *Service) GetHistory(limit int) []historyEntry {
 
 // performScan executes a network scan
 func (s *Service) performScan() {
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping scan")
+		return
+	}
+
 	startTime := time.Now()
 	var scanErr error
 	var blocklistLength int
@@ -271,6 +435,8 @@ func (s *Service) performScan() {
 	s.isScanning = true
 	s.mu.Unlock()
 
+	scanSubnet := s.getSubnet()
+
 	var result *pkgdiscovery.DiscoveryResult
 
 	defer func() {
@@ -278,33 +444,29 @@ func (s *Service) performScan() {
 		completedAt := time.Now()
 		serverCount := 0
 		errorCount := 0
-		status := "success"
+		status := scanResultStatusSuccess
 		if result != nil {
 			serverCount = len(result.Servers)
-			if len(result.StructuredErrors) > 0 {
-				errorCount = len(result.StructuredErrors)
-			} else {
-				errorCount = len(result.Errors)
-			}
+			errorCount = discoveryErrorCount(result)
 		}
 
 		if scanErr != nil {
 			if result == nil || serverCount == 0 {
-				status = "failure"
+				status = scanResultStatusFailure
 			} else {
-				status = "partial"
+				status = scanResultStatusPartial
 			}
 		}
 
 		discoveryScanDuration.Observe(duration.Seconds())
 		discoveryScanServers.Set(float64(serverCount))
 		discoveryScanErrors.Set(float64(errorCount))
-		discoveryScanResults.WithLabelValues(status).Inc()
+		discoveryScanResults.WithLabelValues(string(status)).Inc()
 
 		s.appendHistory(historyEntry{
 			startedAt:       startTime,
 			completedAt:     completedAt,
-			subnet:          s.subnet,
+			subnet:          scanSubnet,
 			serverCount:     serverCount,
 			errorCount:      errorCount,
 			duration:        duration,
@@ -319,21 +481,21 @@ func (s *Service) performScan() {
 
 		// Send scan complete notification
 		if s.wsHub != nil {
-			data := map[string]interface{}{
-				"scanning":  false,
-				"timestamp": completedAt.Unix(),
+			payload := discoveryCompletePayload{
+				Scanning:  false,
+				Timestamp: completedAt.Unix(),
 			}
 			if result != nil && result.Environment != nil {
-				data["environment"] = result.Environment
+				payload.Environment = result.Environment
 			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_complete",
-				Data: data,
+				Data: payload,
 			})
 		}
 	}()
 
-	log.Info().Str("subnet", s.subnet).Msg("Starting background discovery scan")
+	log.Info().Str("subnet", scanSubnet).Msg("Starting background discovery scan")
 
 	// Send scan started notification
 	if s.wsHub != nil {
@@ -341,7 +503,7 @@ func (s *Service) performScan() {
 			Type: "discovery_started",
 			Data: map[string]interface{}{
 				"scanning":  true,
-				"subnet":    s.subnet,
+				"subnet":    scanSubnet,
 				"timestamp": time.Now().Unix(),
 			},
 		})
@@ -349,7 +511,13 @@ func (s *Service) performScan() {
 
 	// Create a context with timeout for the scan
 	// Scanning multiple subnets takes longer, allow 2 minutes
-	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+	s.mu.RLock()
+	scanParentCtx := s.ctx
+	s.mu.RUnlock()
+	if scanParentCtx == nil {
+		scanParentCtx = context.Background()
+	}
+	scanCtx, cancel := context.WithTimeout(scanParentCtx, 2*time.Minute)
 	defer cancel()
 
 	cfg := config.NormalizeDiscoveryConfig(config.DefaultDiscoveryConfig())
@@ -368,11 +536,18 @@ func (s *Service) performScan() {
 		newScanner, err = BuildScanner(cfg)
 	}
 	if err != nil {
-		log.Warn().Err(err).Msg("Environment detection failed during discovery; falling back to default scanner configuration")
+		log.Warn().
+			Err(err).
+			Str("subnet", s.subnet).
+			Int("subnet_blocklist_entries", blocklistLength).
+			Msg("Environment detection failed during discovery; falling back to default scanner configuration")
 		newScanner = newScannerFn()
 	}
 	if newScanner == nil {
-		log.Warn().Msg("Discovery scanner factory returned nil; using default scanner configuration")
+		log.Warn().
+			Str("subnet", s.subnet).
+			Int("subnet_blocklist_entries", blocklistLength).
+			Msg("Discovery scanner factory returned nil; using default scanner configuration")
 		newScanner = newScannerFn()
 	}
 	s.mu.Lock()
@@ -385,10 +560,10 @@ func (s *Service) performScan() {
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_server_found",
-				Data: map[string]interface{}{
-					"server":    server,
-					"phase":     phase,
-					"timestamp": time.Now().Unix(),
+				Data: discoveryServerFoundPayload{
+					Server:    server,
+					Phase:     phase,
+					Timestamp: time.Now().Unix(),
 				},
 			})
 			log.Debug().
@@ -404,25 +579,31 @@ func (s *Service) performScan() {
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_progress",
-				Data: map[string]interface{}{
-					"progress":  progress,
-					"timestamp": time.Now().Unix(),
+				Data: discoveryProgressPayload{
+					Progress:  progress,
+					Timestamp: time.Now().Unix(),
 				},
 			})
 		}
 	}
 
-	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, s.subnet, serverCallback, progressCallback)
+	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, scanSubnet, serverCallback, progressCallback)
 	scanErr = err
 	if err != nil {
 		// Even if scan timed out, we might have partial results
 		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
-			log.Error().Err(err).Msg("Background discovery scan failed")
+			log.Error().
+				Err(err).
+				Str("subnet", s.subnet).
+				Msg("Background discovery scan failed")
 			return
 		}
 		log.Warn().
 			Err(err).
+			Str("subnet", s.subnet).
 			Int("servers_found", len(result.Servers)).
+			Int("errors", discoveryErrorCount(result)).
+			Str("subnet", s.subnet).
 			Msg("Discovery scan incomplete but found some servers")
 	}
 
@@ -442,25 +623,26 @@ func (s *Service) performScan() {
 		}
 
 		log.Info().
+			Str("subnet", s.subnet).
 			Int("servers", len(result.Servers)).
-			Int("errors", len(result.Errors)).
+			Int("errors", discoveryErrorCount(result)).
+			Int("structured_errors", len(result.StructuredErrors)).
+			Str("subnet", s.subnet).
 			Msg("Background discovery scan completed")
 
 		// Send final update via WebSocket with all servers
 		if s.wsHub != nil {
-			data := map[string]interface{}{
-				"servers":           result.Servers,
-				"errors":            result.Errors,           // Legacy format (deprecated)
-				"structured_errors": result.StructuredErrors, // New structured format
-				"scanning":          false,
-				"timestamp":         time.Now().Unix(),
-			}
-			if result.Environment != nil {
-				data["environment"] = result.Environment
+			payload := discoveryUpdatePayload{
+				Servers:          result.Servers,
+				Errors:           result.LegacyErrors(),
+				StructuredErrors: result.StructuredErrors,
+				Scanning:         false,
+				Timestamp:        time.Now().Unix(),
+				Environment:      result.Environment,
 			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_update",
-				Data: data,
+				Data: payload,
 			})
 		}
 	}
@@ -473,23 +655,21 @@ func (s *Service) GetCachedResult() (*pkgdiscovery.DiscoveryResult, time.Time) {
 
 	if s.cache.result == nil {
 		return &pkgdiscovery.DiscoveryResult{
-			Servers: []pkgdiscovery.DiscoveredServer{},
-			Errors:  []string{},
+			Servers:          []pkgdiscovery.DiscoveredServer{},
+			StructuredErrors: []pkgdiscovery.DiscoveryError{},
 		}, time.Time{}
 	}
 
 	return s.cache.result, s.cache.updated
 }
 
-// IsScanning returns whether a scan is currently in progress
-func (s *Service) IsScanning() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.isScanning
-}
-
 // ForceRefresh triggers an immediate scan
 func (s *Service) ForceRefresh() {
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping ForceRefresh")
+		return
+	}
+
 	// Check if scan is already in progress to prevent goroutine leak
 	s.mu.RLock()
 	if s.isScanning {
@@ -499,50 +679,57 @@ func (s *Service) ForceRefresh() {
 	}
 	s.mu.RUnlock()
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in ForceRefresh scan")
-			}
-		}()
-		s.performScan()
-	}()
+	goRecover("ForceRefresh scan", s.performScan)
 }
 
 // SetInterval updates the scan interval
 func (s *Service) SetInterval(interval time.Duration) {
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval update; using default")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.interval = interval
-	log.Info().Dur("interval", interval).Msg("Updated discovery scan interval")
+	s.interval = normalizedInterval
+	log.Info().Dur("interval", normalizedInterval).Msg("Updated discovery scan interval")
 }
 
 // SetSubnet updates the subnet to scan
 func (s *Service) SetSubnet(subnet string) {
+	normalizedSubnet, err := normalizeDiscoverySubnet(subnet)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("subnet", subnet).
+			Msg("Rejected discovery subnet update")
+		return
+	}
+
 	s.mu.Lock()
-	s.subnet = subnet
+	if s.subnet == normalizedSubnet {
+		s.mu.Unlock()
+		log.Debug().Str("subnet", normalizedSubnet).Msg("Discovery subnet unchanged; skipping rescan")
+		return
+	}
+	s.subnet = normalizedSubnet
 	// Check if scan is already in progress to prevent goroutine leak
 	alreadyScanning := s.isScanning
 	s.mu.Unlock()
 
-	log.Info().Str("subnet", subnet).Msg("Updated discovery subnet")
+	log.Info().Str("subnet", normalizedSubnet).Msg("Updated discovery subnet")
+
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping subnet-triggered scan")
+		return
+	}
 
 	// Trigger immediate rescan with new subnet if not already scanning
 	if !alreadyScanning {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().
-						Interface("panic", r).
-						Stack().
-						Msg("Recovered from panic in SetSubnet scan")
-				}
-			}()
-			s.performScan()
-		}()
+		goRecover("SetSubnet scan", s.performScan)
 	} else {
 		log.Debug().Msg("Scan already in progress, new subnet will be used in next scan")
 	}
@@ -550,13 +737,48 @@ func (s *Service) SetSubnet(subnet string) {
 
 // GetStatus returns the current service status
 func (s *Service) GetStatus() map[string]interface{} {
+	return s.GetStatusSnapshot().ToMap()
+}
+
+// GetStatusSnapshot returns the current service status using strong typing.
+func (s *Service) GetStatusSnapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return map[string]interface{}{
-		"is_scanning": s.isScanning,
-		"last_scan":   s.lastScan,
-		"interval":    s.interval.String(),
-		"subnet":      s.subnet,
+	return ServiceStatus{
+		IsScanning: s.isScanning,
+		LastScan:   s.lastScan,
+		Interval:   s.interval,
+		Subnet:     s.subnet,
 	}
+}
+
+func normalizeScanInterval(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		return defaultScanInterval
+	}
+	return interval
+}
+
+// getSubnet returns the current subnet under lock.
+func (s *Service) getSubnet() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.subnet
+}
+
+// goRecover runs fn in a new goroutine with panic recovery.
+func goRecover(label string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("label", label).
+					Stack().
+					Msg("Recovered from panic in goroutine")
+			}
+		}()
+		fn()
+	}()
 }

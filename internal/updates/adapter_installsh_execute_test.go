@@ -63,6 +63,27 @@ func setupBashStub(t *testing.T) string {
 	return dir
 }
 
+func setupBashArgCaptureStub(t *testing.T, argsFile string) string {
+	t.Helper()
+	dir := t.TempDir()
+	bash := filepath.Join(dir, "bash")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		`printf '%s\n' "$@" > "$BASH_ARGS_FILE"`,
+		"cat >/dev/null",
+		"echo \"Backup: /tmp/backup\"",
+		"echo \"Installing\"",
+		"echo \"Success\"",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(bash, []byte(script), 0755); err != nil {
+		t.Fatalf("write bash stub: %v", err)
+	}
+	t.Setenv("BASH_ARGS_FILE", argsFile)
+	return dir
+}
+
 func TestInstallShAdapterExecuteSuccess(t *testing.T) {
 	scriptContent := "echo ok"
 	curlDir := setupInstallShCurlStub(t, scriptContent)
@@ -115,5 +136,40 @@ func TestInstallShAdapterExecuteInvalidVersion(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid version format") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInstallShAdapterExecuteForceDoesNotPassUnsupportedFlag(t *testing.T) {
+	scriptContent := "echo ok"
+	curlDir := setupInstallShCurlStub(t, scriptContent)
+	argsFile := filepath.Join(t.TempDir(), "bash-args.txt")
+	bashDir := setupBashArgCaptureStub(t, argsFile)
+
+	t.Setenv("PATH", strings.Join([]string{curlDir, bashDir, os.Getenv("PATH")}, string(os.PathListSeparator)))
+
+	adapter := &InstallShAdapter{
+		installScriptURL: "http://example/install.sh",
+		logDir:           t.TempDir(),
+	}
+
+	err := adapter.Execute(context.Background(), UpdateRequest{
+		Version: "v1.2.3",
+		Force:   true,
+	}, func(UpdateProgress) {})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+
+	argsBytes, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	args := strings.Fields(string(argsBytes))
+	if strings.Contains(strings.Join(args, " "), "--force") {
+		t.Fatalf("install.sh adapter passed unsupported --force flag: %v", args)
+	}
+	want := []string{"-s", "--", "--version", "v1.2.3"}
+	if strings.Join(args, " ") != strings.Join(want, " ") {
+		t.Fatalf("bash args = %v, want %v", args, want)
 	}
 }

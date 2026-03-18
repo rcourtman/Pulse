@@ -59,7 +59,7 @@ func TestRouteAISessions_Messages(t *testing.T) {
 	mockSvc.On("GetMessages", mock.Anything, "session-1").Return([]chat.Message{}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/messages", nil)
@@ -86,7 +86,7 @@ func TestRouteAISessions_DeleteSession(t *testing.T) {
 	mockSvc.On("DeleteSession", mock.Anything, "session-1").Return(nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodDelete, "/api/ai/sessions/session-1", nil)
@@ -106,7 +106,7 @@ func TestRouteAISessions_Abort(t *testing.T) {
 	mockSvc.On("AbortSession", mock.Anything, "session-1").Return(nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/abort", nil)
@@ -126,7 +126,7 @@ func TestRouteAISessions_Summarize(t *testing.T) {
 	mockSvc.On("SummarizeSession", mock.Anything, "session-1").Return(map[string]interface{}{"summary": "ok"}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/summarize", nil)
@@ -146,7 +146,7 @@ func TestRouteAISessions_Diff(t *testing.T) {
 	mockSvc.On("GetSessionDiff", mock.Anything, "session-1").Return(map[string]interface{}{"diff": "ok"}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/diff", nil)
@@ -166,7 +166,7 @@ func TestRouteAISessions_Fork(t *testing.T) {
 	mockSvc.On("ForkSession", mock.Anything, "session-1").Return(&chat.Session{ID: "forked-1"}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/fork", nil)
@@ -186,7 +186,7 @@ func TestRouteAISessions_Revert(t *testing.T) {
 	mockSvc.On("RevertSession", mock.Anything, "session-1").Return(map[string]interface{}{"reverted": true}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/revert", nil)
@@ -206,7 +206,7 @@ func TestRouteAISessions_Unrevert(t *testing.T) {
 	mockSvc.On("UnrevertSession", mock.Anything, "session-1").Return(map[string]interface{}{"unreverted": true}, nil)
 
 	handler := &AIHandler{}
-	setUnexportedField(t, handler, "legacyService", mockSvc)
+	setUnexportedField(t, handler, "defaultService", mockSvc)
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/unrevert", nil)
@@ -390,7 +390,7 @@ func TestRouterAIChatControl(t *testing.T) {
 		mockSvc.On("Restart", mock.Anything, mock.Anything).Return(nil)
 
 		handler := &AIHandler{}
-		setUnexportedField(t, handler, "legacyService", mockSvc)
+		setUnexportedField(t, handler, "defaultService", mockSvc)
 
 		router := &Router{aiHandler: handler}
 		router.StopAIChat(context.Background())
@@ -401,7 +401,7 @@ func TestRouterAIChatControl(t *testing.T) {
 }
 
 func TestSetDiscoveryService(t *testing.T) {
-	service := servicediscovery.NewService(nil, nil, nil, servicediscovery.Config{})
+	service := servicediscovery.NewService(nil, nil, servicediscovery.Config{})
 	handlers := &DiscoveryHandlers{}
 
 	router := &Router{

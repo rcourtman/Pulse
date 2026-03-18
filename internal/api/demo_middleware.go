@@ -35,14 +35,21 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 		// Allow authentication endpoints (login is read-only - verifies credentials)
 		authPaths := []string{
 			"/api/login",
-			"/api/oidc/login",
-			"/api/oidc/callback",
 			"/api/logout",
 			// Allow AI chat interaction (mocked in backend if key missing)
 			"/api/ai/execute",
 		}
 		for _, path := range authPaths {
 			if r.URL.Path == path {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		// Allow per-provider OIDC auth flow endpoints:
+		// /api/oidc/{providerID}/login and /api/oidc/{providerID}/callback
+		if strings.HasPrefix(r.URL.Path, "/api/oidc/") {
+			parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+			if len(parts) >= 4 && (parts[3] == "login" || parts[3] == "callback") {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -76,6 +78,8 @@ func (h *DiscoveryHandlers) getAIProviderInfo() *servicediscovery.AIProviderInfo
 		label = "Cloud (Anthropic)"
 	case config.AIProviderOpenAI:
 		label = "Cloud (OpenAI)"
+	case config.AIProviderOpenRouter:
+		label = "Cloud (OpenRouter)"
 	case config.AIProviderDeepSeek:
 		label = "Cloud (DeepSeek)"
 	case config.AIProviderGemini:
@@ -108,9 +112,37 @@ func writeDiscoveryError(w http.ResponseWriter, statusCode int, message string) 
 	})
 }
 
-// isAdminRequest checks if the current request is from an admin user.
-// In Pulse, all authenticated users have admin privileges except non-admin
-// proxy auth users. This method checks all authentication methods.
+func parseDiscoveryResourceType(raw string) (servicediscovery.ResourceType, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	if trimmed == "" {
+		return "", fmt.Errorf("resource type is required")
+	}
+	normalized := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(trimmed))
+	if !isSupportedDiscoveryResourceType(normalized) {
+		return "", fmt.Errorf("unsupported resource type %q", trimmed)
+	}
+	return normalized, nil
+}
+
+func isSupportedDiscoveryResourceType(resourceType servicediscovery.ResourceType) bool {
+	switch resourceType {
+	case servicediscovery.ResourceTypeVM,
+		servicediscovery.ResourceTypeSystemContainer,
+		servicediscovery.ResourceTypeDocker,
+		servicediscovery.ResourceTypeK8s,
+		servicediscovery.ResourceTypeAgent,
+		servicediscovery.ResourceTypeDockerVM,
+		servicediscovery.ResourceTypeDockerSystemContainer:
+		return true
+	default:
+		return false
+	}
+}
+
+// isAdminRequest checks whether the request has privileged admin access for
+// discovery secret operations. This is intentionally stricter than general
+// authentication: session users must match configured admin identity and
+// API tokens must include settings:write.
 func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	// Dev mode bypass - treat all requests as admin when enabled
 	if adminBypassEnabled() {
@@ -130,24 +162,50 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	}
 
 	// 2. Check for basic auth (Pulse single-user admin credential)
-	if _, _, ok := r.BasicAuth(); ok {
-		return true
-	}
-
-	// 3. Check for valid session cookie (OIDC/SAML sessions)
-	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-		if ValidateSession(cookie.Value) {
-			return true // Valid session = admin
+	if username, password, ok := r.BasicAuth(); ok {
+		configuredUser := strings.TrimSpace(h.config.AuthUser)
+		configuredHash := strings.TrimSpace(h.config.AuthPass)
+		if configuredUser != "" && configuredHash != "" &&
+			username == configuredUser &&
+			internalauth.CheckPasswordHash(password, configuredHash) {
+			return true
 		}
 	}
 
-	// 4. Check for valid API token (read-only check, safe under RLock)
-	if token := r.Header.Get("X-API-Token"); token != "" {
-		config.Mu.RLock()
-		ok := h.config.IsValidAPIToken(token)
-		config.Mu.RUnlock()
-		if ok {
-			return true // Valid API token = admin
+	// 3. Check for configured admin session (OIDC/SAML/local session)
+	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
+		if ValidateSession(cookie.Value) {
+			configuredAdmin := strings.TrimSpace(h.config.AuthUser)
+			if configuredAdmin != "" {
+				sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+				if strings.EqualFold(sessionUser, configuredAdmin) {
+					return true
+				}
+			}
+		}
+	}
+
+	// 4. Check API tokens; only settings:write tokens are admin-capable here.
+	if tokenRecord := getAPITokenRecordFromRequest(r); tokenRecord != nil {
+		return tokenRecord.HasScope(config.ScopeSettingsWrite)
+	}
+	validateTokenAsAdmin := func(raw string) bool {
+		if strings.TrimSpace(raw) == "" {
+			return false
+		}
+		config.Mu.Lock()
+		record, ok := h.config.ValidateAPIToken(raw)
+		config.Mu.Unlock()
+		return ok && record != nil && record.HasScope(config.ScopeSettingsWrite)
+	}
+	if token := strings.TrimSpace(r.Header.Get("X-API-Token")); token != "" {
+		if validateTokenAsAdmin(token) {
+			return true
+		}
+	}
+	if bearer := extractBearerToken(r.Header.Get("Authorization")); bearer != "" {
+		if validateTokenAsAdmin(bearer) {
+			return true
 		}
 	}
 
@@ -168,6 +226,17 @@ func redactSensitiveFields(d *servicediscovery.ResourceDiscovery) *servicediscov
 	return &redacted
 }
 
+func discoverySummaryResponse(d *servicediscovery.ResourceDiscovery) servicediscovery.DiscoverySummary {
+	if d == nil {
+		return servicediscovery.DiscoverySummary{}
+	}
+	return d.ToSummary()
+}
+
+func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
+	return d
+}
+
 // HandleListDiscoveries handles GET /api/discovery
 func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
@@ -185,7 +254,10 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 	// Convert to summaries for list view
 	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		if d == nil {
+			continue
+		}
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
@@ -194,28 +266,32 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 	})
 }
 
-// HandleGetDiscovery handles GET /api/discovery/{type}/{host}/{id}
+// HandleGetDiscovery handles GET /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
-	// Parse path: /api/discovery/{type}/{host}/{id}
+	// Parse path: /api/discovery/{type}/{target}/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 3 {
-		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{host}/{id}")
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{target}/{id}")
 		return
 	}
 
-	resourceType := servicediscovery.ResourceType(parts[0])
-	hostID := parts[1]
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	discovery, err := h.service.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	discovery, err := h.service.GetDiscoveryByResource(resourceType, targetID, resourceID)
 	if err != nil {
-		log.Error().Err(err).Str("type", string(resourceType)).Str("host", hostID).Str("id", resourceID).Msg("Failed to get discovery")
+		log.Error().Err(err).Str("type", string(resourceType)).Str("target", targetID).Str("id", resourceID).Msg("Failed to get discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to get discovery")
 		return
 	}
@@ -229,11 +305,10 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
-// HandleTriggerDiscovery handles POST /api/discovery/{type}/{host}/{id}
+// HandleTriggerDiscovery handles POST /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -244,12 +319,16 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 3 {
-		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{host}/{id}")
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{target}/{id}")
 		return
 	}
 
-	resourceType := servicediscovery.ResourceType(parts[0])
-	hostID := parts[1]
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	targetID := parts[1]
 	resourceID := parts[2]
 
 	// Parse optional request body for force flag and hostname
@@ -265,21 +344,21 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	req := servicediscovery.DiscoveryRequest{
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     reqBody.Hostname,
 		Force:        reqBody.Force,
 	}
 
-	// If hostname not provided, try to use hostID
+	// If hostname not provided, use target ID as a fallback.
 	if req.Hostname == "" {
-		req.Hostname = hostID
+		req.Hostname = targetID
 	}
 
 	discovery, err := h.service.DiscoverResource(r.Context(), req)
 	if err != nil {
 		log.Error().Err(err).
 			Str("type", string(resourceType)).
-			Str("host", hostID).
+			Str("target", targetID).
 			Str("id", resourceID).
 			Msg("Failed to trigger discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Discovery failed: "+err.Error())
@@ -290,11 +369,10 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
-// HandleUpdateNotes handles PUT /api/discovery/{type}/{host}/{id}/notes
+// HandleUpdateNotes handles PUT /api/discovery/{type}/{target}/{id}/notes
 func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -310,12 +388,16 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	resourceType := servicediscovery.ResourceType(parts[0])
-	hostID := parts[1]
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	targetID := parts[1]
 	resourceID := parts[2]
 
 	// Build the full ID
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
 	// Parse request body
 	var req servicediscovery.UpdateNotesRequest
@@ -331,14 +413,14 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.service.UpdateNotes(id, req.UserNotes, req.UserSecrets); err != nil {
-		log.Error().Err(err).Str("id", id).Msg("Failed to update notes")
+	if err := h.service.UpdateNotes(discoveryID, req.UserNotes, req.UserSecrets); err != nil {
+		log.Error().Err(err).Str("id", discoveryID).Msg("Failed to update notes")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to update notes: "+err.Error())
 		return
 	}
 
 	// Return updated discovery
-	discovery, err := h.service.GetDiscovery(id)
+	discovery, err := h.service.GetDiscovery(discoveryID)
 	if err != nil {
 		writeDiscoveryError(w, http.StatusInternalServerError, "Notes updated but failed to fetch result")
 		return
@@ -348,11 +430,10 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 	if !isAdmin {
 		discovery = redactSensitiveFields(discovery)
 	}
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
-// HandleDeleteDiscovery handles DELETE /api/discovery/{type}/{host}/{id}
+// HandleDeleteDiscovery handles DELETE /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -367,22 +448,26 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 		return
 	}
 
-	resourceType := servicediscovery.ResourceType(parts[0])
-	hostID := parts[1]
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
-	if err := h.service.DeleteDiscovery(id); err != nil {
-		log.Error().Err(err).Str("id", id).Msg("Failed to delete discovery")
+	if err := h.service.DeleteDiscovery(discoveryID); err != nil {
+		log.Error().Err(err).Str("id", discoveryID).Msg("Failed to delete discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to delete discovery")
 		return
 	}
 
-	writeDiscoveryJSON(w, map[string]any{"success": true, "id": id})
+	writeDiscoveryJSON(w, map[string]any{"success": true, "id": discoveryID})
 }
 
-// HandleGetProgress handles GET /api/discovery/{type}/{host}/{id}/progress
+// HandleGetProgress handles GET /api/discovery/{type}/{target}/{id}/progress
 func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -398,20 +483,24 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	resourceType := servicediscovery.ResourceType(parts[0])
-	hostID := parts[1]
+	resourceType, err := parseDiscoveryResourceType(parts[0])
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
-	progress := h.service.GetProgress(id)
+	progress := h.service.GetProgress(discoveryID)
 	if progress == nil {
 		// Not currently scanning - check if we have a discovery
-		discovery, err := h.service.GetDiscovery(id)
+		discovery, err := h.service.GetDiscovery(discoveryID)
 		if err == nil && discovery != nil {
 			// Return completed status with all fields for frontend compatibility
 			writeDiscoveryJSON(w, map[string]any{
-				"resource_id":     id,
+				"resource_id":     discoveryID,
 				"status":          "completed",
 				"current_step":    "",
 				"total_steps":     0,
@@ -424,7 +513,7 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 
 		// Return not_started status with all fields for frontend compatibility
 		writeDiscoveryJSON(w, map[string]any{
-			"resource_id":     id,
+			"resource_id":     discoveryID,
 			"status":          "not_started",
 			"current_step":    "",
 			"total_steps":     0,
@@ -503,7 +592,11 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 
 	// Parse path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/type/")
-	resourceType := servicediscovery.ResourceType(path)
+	resourceType, err := parseDiscoveryResourceType(path)
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	discoveries, err := h.service.ListDiscoveriesByType(resourceType)
 	if err != nil {
@@ -514,7 +607,10 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 
 	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		if d == nil {
+			continue
+		}
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
@@ -524,32 +620,35 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// HandleListByHost handles GET /api/discovery/host/{host}
-func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Request) {
+// HandleListByAgent handles GET /api/discovery/agent/{agentId}
+func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
 	// Parse path
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/discovery/host/")
+	agentID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
 
-	discoveries, err := h.service.ListDiscoveriesByHost(hostID)
+	discoveries, err := h.service.ListDiscoveriesByTarget(agentID)
 	if err != nil {
-		log.Error().Err(err).Str("host", hostID).Msg("Failed to list discoveries by host")
+		log.Error().Err(err).Str("agentId", agentID).Msg("Failed to list discoveries by agent")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")
 		return
 	}
 
 	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		if d == nil {
+			continue
+		}
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
 		"discoveries": summaries,
 		"total":       len(summaries),
-		"host":        hostID,
+		"agentId":     agentID,
 	})
 }
 
@@ -558,7 +657,11 @@ func (h *DiscoveryHandlers) HandleListByHost(w http.ResponseWriter, r *http.Requ
 func (h *DiscoveryHandlers) HandleGetInfo(w http.ResponseWriter, r *http.Request) {
 	// Parse resource type from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/info/")
-	resourceType := servicediscovery.ResourceType(path)
+	resourceType, err := parseDiscoveryResourceType(path)
+	if err != nil {
+		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Get commands for this resource type
 	commands := servicediscovery.GetCommandsForResource(resourceType)

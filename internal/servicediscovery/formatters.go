@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // FormatForAIContext formats discoveries for inclusion in AI prompts.
@@ -45,7 +47,7 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 	// Header with service info
 	sb.WriteString(fmt.Sprintf("### %s (%s)\n", d.ServiceName, d.ID))
 	sb.WriteString(fmt.Sprintf("- **Type:** %s\n", d.ResourceType))
-	sb.WriteString(fmt.Sprintf("- **Host:** %s\n", d.Hostname))
+	sb.WriteString(fmt.Sprintf("- **Target:** %s\n", firstNonEmpty(d.Hostname, d.TargetID)))
 
 	if d.ServiceVersion != "" {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
@@ -188,13 +190,13 @@ func formatScopeDiscoverySummary(d *ResourceDiscovery) string {
 		base = fmt.Sprintf("%s %s", base, version)
 	}
 
-	host := firstNonEmpty(d.Hostname, d.HostID)
+	target := firstNonEmpty(d.Hostname, d.TargetID)
 	meta := strings.TrimSpace(string(d.ResourceType))
-	if host != "" {
+	if target != "" {
 		if meta != "" {
-			meta = fmt.Sprintf("%s on %s", meta, host)
+			meta = fmt.Sprintf("%s on %s", meta, target)
 		} else {
-			meta = host
+			meta = target
 		}
 	}
 	if meta != "" {
@@ -273,7 +275,7 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 	sb.WriteString("## Resource Context for Remediation\n\n")
 
 	sb.WriteString(fmt.Sprintf("**Resource:** %s (%s)\n", d.ServiceName, d.ID))
-	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, d.Hostname))
+	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, firstNonEmpty(d.Hostname, d.TargetID)))
 
 	// CLI access is most critical
 	if d.CLIAccess != "" {
@@ -394,29 +396,29 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 		return
 	}
 
-	addToken(tokens, trimmed)
+	utils.AddToken(tokens, trimmed)
 
-	if last := lastSegment(trimmed, '/'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, '/'); last != "" {
+		utils.AddToken(tokens, last)
 	}
-	if last := lastSegment(trimmed, ':'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, ':'); last != "" {
+		utils.AddToken(tokens, last)
 	}
 
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "vm-") {
-		addToken(tokens, trimmed[3:])
+		utils.AddToken(tokens, trimmed[3:])
 	}
 	if strings.HasPrefix(lower, "ct-") {
-		addToken(tokens, trimmed[3:])
+		utils.AddToken(tokens, trimmed[3:])
 	}
 	if strings.HasPrefix(lower, "lxc-") {
-		addToken(tokens, trimmed[4:])
+		utils.AddToken(tokens, trimmed[4:])
 	}
 
 	if strings.Contains(lower, "qemu/") || strings.Contains(lower, "lxc/") || strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
-		if digits := trailingDigits(trimmed); digits != "" {
-			addToken(tokens, digits)
+		if digits := utils.TrailingDigits(trimmed); digits != "" {
+			utils.AddToken(tokens, digits)
 		}
 	}
 
@@ -428,8 +430,8 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 			if slash := strings.Index(rest, "/"); slash >= 0 {
 				host := strings.TrimSpace(rest[:slash])
 				container := strings.TrimSpace(rest[slash+1:])
-				addToken(tokens, host)
-				addToken(tokens, container)
+				utils.AddToken(tokens, host)
+				utils.AddToken(tokens, container)
 			}
 		}
 	}
@@ -451,6 +453,8 @@ func discoveryMatchesTokens(d *ResourceDiscovery, tokens map[string]struct{}) bo
 
 func discoveryTokens(d *ResourceDiscovery) []string {
 	var tokens []string
+	targetID := strings.TrimSpace(d.TargetID)
+
 	add := func(value string) {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
@@ -461,9 +465,9 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 
 	add(d.ResourceID)
 	add(d.ID)
-	add(d.HostID)
-	if d.HostID != "" {
-		add("host:" + d.HostID)
+	add(targetID)
+	if targetID != "" {
+		add("agent:" + targetID)
 	}
 
 	switch d.ResourceType {
@@ -471,60 +475,24 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 		add("qemu/" + d.ResourceID)
 		add("vm/" + d.ResourceID)
 		add("vm-" + d.ResourceID)
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		add("lxc/" + d.ResourceID)
 		add("ct/" + d.ResourceID)
 		add("ct-" + d.ResourceID)
+		add("system-container/" + d.ResourceID)
 	case ResourceTypeDocker:
-		if d.HostID != "" {
-			add("docker:" + d.HostID)
-			add("docker:" + d.HostID + "/" + d.ResourceID)
+		if targetID != "" {
+			add("docker:" + targetID)
+			add("docker:" + targetID + "/" + d.ResourceID)
 		}
-	case ResourceTypeHost:
-		add("host:" + d.ResourceID)
+	case ResourceTypeAgent:
+		add("agent:" + d.ResourceID)
 	case ResourceTypeK8s:
 		add("k8s/" + d.ResourceID)
 		add("kubernetes/" + d.ResourceID)
 	}
 
 	return tokens
-}
-
-func addToken(tokens map[string]struct{}, value string) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return
-	}
-	tokens[strings.ToLower(trimmed)] = struct{}{}
-}
-
-func lastSegment(value string, sep byte) string {
-	if value == "" {
-		return ""
-	}
-	idx := strings.LastIndexByte(value, sep)
-	if idx == -1 || idx+1 >= len(value) {
-		return ""
-	}
-	return value[idx+1:]
-}
-
-func trailingDigits(value string) string {
-	if value == "" {
-		return ""
-	}
-	i := len(value)
-	for i > 0 {
-		c := value[i-1]
-		if c < '0' || c > '9' {
-			break
-		}
-		i--
-	}
-	if i == len(value) {
-		return ""
-	}
-	return value[i:]
 }
 
 // GetCLIExample returns an example CLI command for the resource.
@@ -604,26 +572,31 @@ func ToJSON(d *ResourceDiscovery) map[string]any {
 	}
 
 	return map[string]any{
-		"id":              d.ID,
-		"resource_type":   d.ResourceType,
-		"resource_id":     d.ResourceID,
-		"host_id":         d.HostID,
-		"hostname":        d.Hostname,
-		"service_type":    d.ServiceType,
-		"service_name":    d.ServiceName,
-		"service_version": d.ServiceVersion,
-		"category":        d.Category,
-		"cli_access":      d.CLIAccess,
-		"facts":           facts,
-		"config_paths":    d.ConfigPaths,
-		"data_paths":      d.DataPaths,
-		"log_paths":       d.LogPaths,
-		"ports":           ports,
-		"user_notes":      d.UserNotes,
-		"confidence":      d.Confidence,
-		"ai_reasoning":    d.AIReasoning,
-		"discovered_at":   d.DiscoveredAt,
-		"updated_at":      d.UpdatedAt,
-		"scan_duration":   d.ScanDuration,
+		"id":                          d.ID,
+		"resource_type":               d.ResourceType,
+		"resource_id":                 d.ResourceID,
+		"target_id":                   strings.TrimSpace(d.TargetID),
+		"agent_id":                    d.AgentID,
+		"hostname":                    d.Hostname,
+		"service_type":                d.ServiceType,
+		"service_name":                d.ServiceName,
+		"service_version":             d.ServiceVersion,
+		"category":                    d.Category,
+		"cli_access":                  d.CLIAccess,
+		"facts":                       facts,
+		"config_paths":                d.ConfigPaths,
+		"data_paths":                  d.DataPaths,
+		"log_paths":                   d.LogPaths,
+		"ports":                       ports,
+		"user_notes":                  d.UserNotes,
+		"confidence":                  d.Confidence,
+		"ai_reasoning":                d.AIReasoning,
+		"discovered_at":               d.DiscoveredAt,
+		"updated_at":                  d.UpdatedAt,
+		"scan_duration":               d.ScanDuration,
+		"suggested_url":               d.SuggestedURL,
+		"suggested_url_source_code":   d.SuggestedURLSourceCode,
+		"suggested_url_source_detail": d.SuggestedURLSourceDetail,
+		"suggested_url_diagnostic":    d.SuggestedURLDiagnostic,
 	}
 }

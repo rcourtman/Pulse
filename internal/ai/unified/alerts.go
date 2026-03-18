@@ -3,6 +3,7 @@
 package unified
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -53,6 +54,15 @@ const (
 	CategoryGeneral       UnifiedCategory = "general"
 )
 
+type UnifiedFindingLifecycleEvent struct {
+	At       time.Time         `json:"at"`
+	Type     string            `json:"type"`
+	Message  string            `json:"message,omitempty"`
+	From     string            `json:"from,omitempty"`
+	To       string            `json:"to,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
 // UnifiedFinding represents a unified finding that can originate from
 // threshold alerts, AI analysis, or other detection methods
 type UnifiedFinding struct {
@@ -70,11 +80,11 @@ type UnifiedFinding struct {
 	Evidence       string          `json:"evidence,omitempty"`
 
 	// Threshold-specific fields (when Source == "threshold")
-	AlertID     string  `json:"alert_id,omitempty"`
-	AlertType   string  `json:"alert_type,omitempty"` // cpu, memory, disk, etc.
-	Value       float64 `json:"value,omitempty"`
-	Threshold   float64 `json:"threshold,omitempty"`
-	IsThreshold bool    `json:"is_threshold"`
+	AlertIdentifier string  `json:"-"`
+	AlertType       string  `json:"alert_type,omitempty"` // cpu, memory, disk, etc.
+	Value           float64 `json:"value,omitempty"`
+	Threshold       float64 `json:"threshold,omitempty"`
+	IsThreshold     bool    `json:"is_threshold"`
 
 	// AI enhancement fields
 	AIContext     string     `json:"ai_context,omitempty"`     // AI-added context/explanation
@@ -86,11 +96,15 @@ type UnifiedFinding struct {
 	AIEnhancedAt  *time.Time `json:"ai_enhanced_at,omitempty"` // When AI analyzed
 
 	// Investigation fields (autonomous patrol investigation)
-	InvestigationSessionID string     `json:"investigation_session_id,omitempty"`
-	InvestigationStatus    string     `json:"investigation_status,omitempty"`
-	InvestigationOutcome   string     `json:"investigation_outcome,omitempty"`
-	LastInvestigatedAt     *time.Time `json:"last_investigated_at,omitempty"`
-	InvestigationAttempts  int        `json:"investigation_attempts,omitempty"`
+	InvestigationSessionID string                         `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                         `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                         `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                     `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                            `json:"investigation_attempts,omitempty"`
+	LoopState              string                         `json:"loop_state,omitempty"`
+	Lifecycle              []UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
+	RegressionCount        int                            `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                     `json:"last_regression_at,omitempty"`
 
 	// Timestamps
 	DetectedAt time.Time  `json:"detected_at"`
@@ -104,6 +118,152 @@ type UnifiedFinding struct {
 	UserNote        string     `json:"user_note,omitempty"`
 	Suppressed      bool       `json:"suppressed"`
 	TimesRaised     int        `json:"times_raised"`
+}
+
+type unifiedFindingJSON struct {
+	ID                     string                         `json:"id"`
+	Source                 FindingSource                  `json:"source"`
+	Severity               UnifiedSeverity                `json:"severity"`
+	Category               UnifiedCategory                `json:"category"`
+	ResourceID             string                         `json:"resource_id"`
+	ResourceName           string                         `json:"resource_name"`
+	ResourceType           string                         `json:"resource_type"`
+	Node                   string                         `json:"node,omitempty"`
+	Title                  string                         `json:"title"`
+	Description            string                         `json:"description"`
+	Recommendation         string                         `json:"recommendation,omitempty"`
+	Evidence               string                         `json:"evidence,omitempty"`
+	AlertIdentifier        string                         `json:"alert_identifier,omitempty"`
+	AlertType              string                         `json:"alert_type,omitempty"`
+	Value                  float64                        `json:"value,omitempty"`
+	Threshold              float64                        `json:"threshold,omitempty"`
+	IsThreshold            bool                           `json:"is_threshold"`
+	AIContext              string                         `json:"ai_context,omitempty"`
+	RootCauseID            string                         `json:"root_cause_id,omitempty"`
+	CorrelatedIDs          []string                       `json:"correlated_ids,omitempty"`
+	RemediationID          string                         `json:"remediation_id,omitempty"`
+	AIConfidence           float64                        `json:"ai_confidence,omitempty"`
+	EnhancedByAI           bool                           `json:"enhanced_by_ai"`
+	AIEnhancedAt           *time.Time                     `json:"ai_enhanced_at,omitempty"`
+	InvestigationSessionID string                         `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                         `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                         `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time                     `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                            `json:"investigation_attempts,omitempty"`
+	LoopState              string                         `json:"loop_state,omitempty"`
+	Lifecycle              []UnifiedFindingLifecycleEvent `json:"lifecycle,omitempty"`
+	RegressionCount        int                            `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time                     `json:"last_regression_at,omitempty"`
+	DetectedAt             time.Time                      `json:"detected_at"`
+	LastSeenAt             time.Time                      `json:"last_seen_at"`
+	ResolvedAt             *time.Time                     `json:"resolved_at,omitempty"`
+	AcknowledgedAt         *time.Time                     `json:"acknowledged_at,omitempty"`
+	SnoozedUntil           *time.Time                     `json:"snoozed_until,omitempty"`
+	DismissedReason        string                         `json:"dismissed_reason,omitempty"`
+	UserNote               string                         `json:"user_note,omitempty"`
+	Suppressed             bool                           `json:"suppressed"`
+	TimesRaised            int                            `json:"times_raised"`
+}
+
+func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
+	alertIdentifier := strings.TrimSpace(f.AlertIdentifier)
+	return json.Marshal(unifiedFindingJSON{
+		ID:                     f.ID,
+		Source:                 f.Source,
+		Severity:               f.Severity,
+		Category:               f.Category,
+		ResourceID:             f.ResourceID,
+		ResourceName:           f.ResourceName,
+		ResourceType:           f.ResourceType,
+		Node:                   f.Node,
+		Title:                  f.Title,
+		Description:            f.Description,
+		Recommendation:         f.Recommendation,
+		Evidence:               f.Evidence,
+		AlertIdentifier:        alertIdentifier,
+		AlertType:              f.AlertType,
+		Value:                  f.Value,
+		Threshold:              f.Threshold,
+		IsThreshold:            f.IsThreshold,
+		AIContext:              f.AIContext,
+		RootCauseID:            f.RootCauseID,
+		CorrelatedIDs:          f.CorrelatedIDs,
+		RemediationID:          f.RemediationID,
+		AIConfidence:           f.AIConfidence,
+		EnhancedByAI:           f.EnhancedByAI,
+		AIEnhancedAt:           f.AIEnhancedAt,
+		InvestigationSessionID: f.InvestigationSessionID,
+		InvestigationStatus:    f.InvestigationStatus,
+		InvestigationOutcome:   f.InvestigationOutcome,
+		LastInvestigatedAt:     f.LastInvestigatedAt,
+		InvestigationAttempts:  f.InvestigationAttempts,
+		LoopState:              f.LoopState,
+		Lifecycle:              f.Lifecycle,
+		RegressionCount:        f.RegressionCount,
+		LastRegressionAt:       f.LastRegressionAt,
+		DetectedAt:             f.DetectedAt,
+		LastSeenAt:             f.LastSeenAt,
+		ResolvedAt:             f.ResolvedAt,
+		AcknowledgedAt:         f.AcknowledgedAt,
+		SnoozedUntil:           f.SnoozedUntil,
+		DismissedReason:        f.DismissedReason,
+		UserNote:               f.UserNote,
+		Suppressed:             f.Suppressed,
+		TimesRaised:            f.TimesRaised,
+	})
+}
+
+func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
+	var payload unifiedFindingJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	*f = UnifiedFinding{
+		ID:                     payload.ID,
+		Source:                 payload.Source,
+		Severity:               payload.Severity,
+		Category:               payload.Category,
+		ResourceID:             payload.ResourceID,
+		ResourceName:           payload.ResourceName,
+		ResourceType:           payload.ResourceType,
+		Node:                   payload.Node,
+		Title:                  payload.Title,
+		Description:            payload.Description,
+		Recommendation:         payload.Recommendation,
+		Evidence:               payload.Evidence,
+		AlertIdentifier:        strings.TrimSpace(payload.AlertIdentifier),
+		AlertType:              payload.AlertType,
+		Value:                  payload.Value,
+		Threshold:              payload.Threshold,
+		IsThreshold:            payload.IsThreshold,
+		AIContext:              payload.AIContext,
+		RootCauseID:            payload.RootCauseID,
+		CorrelatedIDs:          payload.CorrelatedIDs,
+		RemediationID:          payload.RemediationID,
+		AIConfidence:           payload.AIConfidence,
+		EnhancedByAI:           payload.EnhancedByAI,
+		AIEnhancedAt:           payload.AIEnhancedAt,
+		InvestigationSessionID: payload.InvestigationSessionID,
+		InvestigationStatus:    payload.InvestigationStatus,
+		InvestigationOutcome:   payload.InvestigationOutcome,
+		LastInvestigatedAt:     payload.LastInvestigatedAt,
+		InvestigationAttempts:  payload.InvestigationAttempts,
+		LoopState:              payload.LoopState,
+		Lifecycle:              payload.Lifecycle,
+		RegressionCount:        payload.RegressionCount,
+		LastRegressionAt:       payload.LastRegressionAt,
+		DetectedAt:             payload.DetectedAt,
+		LastSeenAt:             payload.LastSeenAt,
+		ResolvedAt:             payload.ResolvedAt,
+		AcknowledgedAt:         payload.AcknowledgedAt,
+		SnoozedUntil:           payload.SnoozedUntil,
+		DismissedReason:        payload.DismissedReason,
+		UserNote:               payload.UserNote,
+		Suppressed:             payload.Suppressed,
+		TimesRaised:            payload.TimesRaised,
+	}
+	return nil
 }
 
 // IsActive returns true if the finding is active (not resolved, snoozed, or suppressed)
@@ -161,8 +321,8 @@ func DefaultAlertToFindingConfig() AlertToFindingConfig {
 
 // AlertAdapter provides the interface for reading alert data
 type AlertAdapter interface {
-	// GetAlertID returns the alert's unique identifier
-	GetAlertID() string
+	// GetAlertIdentifier returns the alert's unique identifier
+	GetAlertIdentifier() string
 	// GetAlertType returns the type of alert (cpu, memory, etc.)
 	GetAlertType() string
 	// GetAlertLevel returns the severity level
@@ -191,10 +351,10 @@ type AlertAdapter interface {
 type UnifiedStore struct {
 	mu sync.RWMutex
 
-	findings   map[string]*UnifiedFinding
-	byResource map[string][]string // resource_id -> []finding_id
-	byAlert    map[string]string   // alert_id -> finding_id
-	bySource   map[FindingSource][]string
+	findings          map[string]*UnifiedFinding
+	byResource        map[string][]string // resource_id -> []finding_id
+	byAlertIdentifier map[string]string   // alert_identifier -> finding_id
+	bySource          map[FindingSource][]string
 
 	config AlertToFindingConfig
 
@@ -218,11 +378,11 @@ type UnifiedPersistence interface {
 // NewUnifiedStore creates a new unified store
 func NewUnifiedStore(config AlertToFindingConfig) *UnifiedStore {
 	return &UnifiedStore{
-		findings:   make(map[string]*UnifiedFinding),
-		byResource: make(map[string][]string),
-		byAlert:    make(map[string]string),
-		bySource:   make(map[FindingSource][]string),
-		config:     config,
+		findings:          make(map[string]*UnifiedFinding),
+		byResource:        make(map[string][]string),
+		byAlertIdentifier: make(map[string]string),
+		bySource:          make(map[FindingSource][]string),
+		config:            config,
 	}
 }
 
@@ -242,8 +402,8 @@ func (s *UnifiedStore) SetPersistence(p UnifiedPersistence) error {
 			for id, f := range findings {
 				s.findings[id] = f
 				s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
-				if f.AlertID != "" {
-					s.byAlert[f.AlertID] = id
+				if f.AlertIdentifier != "" {
+					s.byAlertIdentifier[f.AlertIdentifier] = id
 				}
 				s.bySource[f.Source] = append(s.bySource[f.Source], id)
 			}
@@ -276,7 +436,7 @@ func (s *UnifiedStore) SetOnFindingEnhanced(cb func(f *UnifiedFinding)) {
 
 // ConvertAlert converts a threshold alert to a unified finding
 func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
-	alertID := alert.GetAlertID()
+	alertIdentifier := alert.GetAlertIdentifier()
 	alertType := alert.GetAlertType()
 
 	// Determine category
@@ -295,28 +455,28 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 	resourceType := determineResourceType(alertType, alert.GetMetadata())
 
 	// Generate finding ID
-	findingID := fmt.Sprintf("alert-%s-%d", alertID, time.Now().UnixNano()%1000000)
+	findingID := fmt.Sprintf("alert-%s-%d", alertIdentifier, time.Now().UnixNano()%1000000)
 
 	// Create the finding
 	finding := &UnifiedFinding{
-		ID:           findingID,
-		Source:       SourceThreshold,
-		Severity:     severity,
-		Category:     category,
-		ResourceID:   alert.GetResourceID(),
-		ResourceName: alert.GetResourceName(),
-		ResourceType: resourceType,
-		Node:         alert.GetNode(),
-		Title:        generateTitle(alertType, alert.GetResourceName(), alert.GetValue(), alert.GetThreshold()),
-		Description:  alert.GetMessage(),
-		AlertID:      alertID,
-		AlertType:    alertType,
-		Value:        alert.GetValue(),
-		Threshold:    alert.GetThreshold(),
-		IsThreshold:  true,
-		DetectedAt:   alert.GetStartTime(),
-		LastSeenAt:   alert.GetLastSeen(),
-		TimesRaised:  1,
+		ID:              findingID,
+		Source:          SourceThreshold,
+		Severity:        severity,
+		Category:        category,
+		ResourceID:      alert.GetResourceID(),
+		ResourceName:    alert.GetResourceName(),
+		ResourceType:    resourceType,
+		Node:            alert.GetNode(),
+		Title:           generateTitle(alertType, alert.GetResourceName(), alert.GetValue(), alert.GetThreshold()),
+		Description:     alert.GetMessage(),
+		AlertIdentifier: alertIdentifier,
+		AlertType:       alertType,
+		Value:           alert.GetValue(),
+		Threshold:       alert.GetThreshold(),
+		IsThreshold:     true,
+		DetectedAt:      alert.GetStartTime(),
+		LastSeenAt:      alert.GetLastSeen(),
+		TimesRaised:     1,
 	}
 
 	// Generate evidence
@@ -333,12 +493,12 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 
 // AddFromAlert creates a unified finding from an alert
 func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) {
-	alertID := alert.GetAlertID()
+	alertIdentifier := alert.GetAlertIdentifier()
 
 	s.mu.Lock()
 
 	// Check if we already have a finding for this alert
-	if existingID, ok := s.byAlert[alertID]; ok {
+	if existingID, ok := s.byAlertIdentifier[alertIdentifier]; ok {
 		if existing := s.findings[existingID]; existing != nil {
 			// Update existing finding
 			existing.LastSeenAt = alert.GetLastSeen()
@@ -350,7 +510,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 				existing.ResolvedAt = nil
 				log.Debug().
 					Str("finding_id", existing.ID).
-					Str("alert_id", alertID).
+					Str("alert_identifier", alertIdentifier).
 					Msg("Re-opened resolved finding due to alert re-firing")
 			}
 
@@ -373,7 +533,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 	finding := s.ConvertAlert(alert)
 	s.findings[finding.ID] = finding
 	s.byResource[finding.ResourceID] = append(s.byResource[finding.ResourceID], finding.ID)
-	s.byAlert[alertID] = finding.ID
+	s.byAlertIdentifier[alertIdentifier] = finding.ID
 	s.bySource[SourceThreshold] = append(s.bySource[SourceThreshold], finding.ID)
 
 	callback := s.onNewFinding
@@ -388,7 +548,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 	log.Debug().
 		Str("finding_id", finding.ID).
-		Str("alert_id", alertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("resource", finding.ResourceName).
 		Str("category", string(finding.Category)).
 		Msg("Created unified finding from alert")
@@ -398,38 +558,108 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 // AddFromAI creates a unified finding from AI analysis
 func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool) {
+	if finding == nil {
+		return nil, false
+	}
+
+	now := time.Now()
 	if finding.Source == "" {
 		finding.Source = SourceAIPatrol
 	}
 	if finding.DetectedAt.IsZero() {
-		finding.DetectedAt = time.Now()
+		finding.DetectedAt = now
 	}
-	finding.LastSeenAt = time.Now()
-	finding.TimesRaised = 1
+	if finding.LastSeenAt.IsZero() {
+		finding.LastSeenAt = now
+	}
 
 	s.mu.Lock()
 
-	// Check for existing finding BY ID (not by resource+category)
-	// Each AI patrol finding is unique and should be preserved
-	if existing, exists := s.findings[finding.ID]; exists && existing.IsActive() {
-		// Update existing finding with same ID
-		existing.LastSeenAt = time.Now()
-		existing.TimesRaised++
+	// For AI patrol findings, the ID is stable and should be treated as the canonical key.
+	// Always merge into the existing record to avoid duplicating index entries.
+	if existing, exists := s.findings[finding.ID]; exists && existing != nil {
+		// Basic fields
+		existing.Source = finding.Source
+		existing.ResourceID = finding.ResourceID
+		existing.ResourceName = finding.ResourceName
+		existing.ResourceType = finding.ResourceType
+		existing.Node = finding.Node
+		existing.Title = finding.Title
 		if severityOrder(finding.Severity) > severityOrder(existing.Severity) {
 			existing.Severity = finding.Severity
 		}
+		existing.Category = finding.Category
+
 		if finding.Description != "" {
 			existing.Description = finding.Description
 		}
 		if finding.Recommendation != "" {
 			existing.Recommendation = finding.Recommendation
 		}
+		if finding.Evidence != "" {
+			existing.Evidence = finding.Evidence
+		}
+
+		// Timestamps and counters
+		if finding.LastSeenAt.After(existing.LastSeenAt) {
+			existing.LastSeenAt = finding.LastSeenAt
+		}
+		if finding.TimesRaised > 0 {
+			existing.TimesRaised = finding.TimesRaised
+		} else {
+			existing.TimesRaised++
+		}
+		// Allow reopening by clearing ResolvedAt if the incoming finding is active again.
+		existing.ResolvedAt = finding.ResolvedAt
+
+		// Investigation fields (allow clearing)
+		existing.InvestigationSessionID = finding.InvestigationSessionID
+		existing.InvestigationStatus = finding.InvestigationStatus
+		existing.InvestigationOutcome = finding.InvestigationOutcome
+		existing.LastInvestigatedAt = finding.LastInvestigatedAt
+		existing.InvestigationAttempts = finding.InvestigationAttempts
+		existing.LoopState = finding.LoopState
+		existing.Lifecycle = finding.Lifecycle
+		existing.RegressionCount = finding.RegressionCount
+		existing.LastRegressionAt = finding.LastRegressionAt
+
+		// User feedback (allow clearing)
+		existing.AcknowledgedAt = finding.AcknowledgedAt
+		existing.SnoozedUntil = finding.SnoozedUntil
+		existing.DismissedReason = finding.DismissedReason
+		existing.UserNote = finding.UserNote
+		existing.Suppressed = finding.Suppressed
+
+		// AI enhancement fields (best-effort merge)
+		if finding.AIContext != "" {
+			existing.AIContext = finding.AIContext
+		}
+		if finding.RootCauseID != "" {
+			existing.RootCauseID = finding.RootCauseID
+		}
+		if len(finding.CorrelatedIDs) > 0 {
+			existing.CorrelatedIDs = finding.CorrelatedIDs
+		}
+		if finding.RemediationID != "" {
+			existing.RemediationID = finding.RemediationID
+		}
+		if finding.AIConfidence != 0 {
+			existing.AIConfidence = finding.AIConfidence
+		}
+		if finding.EnhancedByAI {
+			existing.EnhancedByAI = true
+			existing.AIEnhancedAt = finding.AIEnhancedAt
+		}
+
 		s.mu.Unlock()
 		s.scheduleSave()
 		return existing, false
 	}
 
-	// Add new finding
+	// New finding
+	if finding.TimesRaised <= 0 {
+		finding.TimesRaised = 1
+	}
 	s.findings[finding.ID] = finding
 	s.byResource[finding.ResourceID] = append(s.byResource[finding.ResourceID], finding.ID)
 	s.bySource[finding.Source] = append(s.bySource[finding.Source], finding.ID)
@@ -446,11 +676,11 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 	return finding, true
 }
 
-// ResolveByAlert resolves a finding by its alert ID
-func (s *UnifiedStore) ResolveByAlert(alertID string) bool {
+// ResolveByAlertIdentifier resolves a finding by its canonical alert identifier.
+func (s *UnifiedStore) ResolveByAlertIdentifier(alertID string) bool {
 	s.mu.Lock()
 
-	findingID, ok := s.byAlert[alertID]
+	findingID, ok := s.byAlertIdentifier[alertID]
 	if !ok {
 		s.mu.Unlock()
 		return false
@@ -476,7 +706,7 @@ func (s *UnifiedStore) ResolveByAlert(alertID string) bool {
 
 	log.Debug().
 		Str("finding_id", findingID).
-		Str("alert_id", alertID).
+		Str("alert_identifier", alertID).
 		Msg("Resolved unified finding from alert")
 
 	return true
@@ -520,14 +750,14 @@ func (s *UnifiedStore) EnhanceWithAI(findingID string, context string, confidenc
 // LinkRemediation links a remediation plan to a finding
 func (s *UnifiedStore) LinkRemediation(findingID, remediationID string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	finding, ok := s.findings[findingID]
 	if !ok {
+		s.mu.Unlock()
 		return false
 	}
 
 	finding.RemediationID = remediationID
+	s.mu.Unlock()
 	s.scheduleSave()
 	return true
 }
@@ -544,12 +774,12 @@ func (s *UnifiedStore) Get(findingID string) *UnifiedFinding {
 	return nil
 }
 
-// GetByAlert returns a finding by its alert ID
-func (s *UnifiedStore) GetByAlert(alertID string) *UnifiedFinding {
+// GetByAlertIdentifier returns a finding by its canonical alert identifier.
+func (s *UnifiedStore) GetByAlertIdentifier(alertID string) *UnifiedFinding {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if findingID, ok := s.byAlert[alertID]; ok {
+	if findingID, ok := s.byAlertIdentifier[alertID]; ok {
 		if f, ok := s.findings[findingID]; ok {
 			copy := *f
 			return &copy
@@ -671,30 +901,6 @@ func (s *UnifiedStore) Dismiss(findingID, reason, note string) bool {
 	if reason == "not_an_issue" {
 		f.Suppressed = true
 	}
-
-	s.mu.Unlock()
-	s.scheduleSave()
-	return true
-}
-
-// Undismiss reverts a dismissed finding back to active state
-func (s *UnifiedStore) Undismiss(findingID string) bool {
-	s.mu.Lock()
-
-	f, ok := s.findings[findingID]
-	if !ok {
-		s.mu.Unlock()
-		return false
-	}
-
-	if f.DismissedReason == "" && !f.Suppressed {
-		s.mu.Unlock()
-		return false
-	}
-
-	f.DismissedReason = ""
-	f.Suppressed = false
-	f.AcknowledgedAt = nil
 
 	s.mu.Unlock()
 	s.scheduleSave()
@@ -877,11 +1083,14 @@ func (s *UnifiedStore) FormatForContext() string {
 
 // scheduleSave schedules a debounced save operation
 func (s *UnifiedStore) scheduleSave() {
+	s.mu.Lock()
 	if s.persistence == nil {
+		s.mu.Unlock()
 		return
 	}
 
 	if s.savePending {
+		s.mu.Unlock()
 		return
 	}
 
@@ -899,10 +1108,11 @@ func (s *UnifiedStore) scheduleSave() {
 
 		if persistence != nil {
 			if err := persistence.SaveFindings(findingsCopy); err != nil {
-				log.Error().Err(err).Msg("Failed to save unified findings")
+				log.Error().Err(err).Msg("failed to save unified findings")
 			}
 		}
 	})
+	s.mu.Unlock()
 }
 
 // ForceSave immediately saves findings
@@ -963,9 +1173,9 @@ func determineResourceType(alertType string, metadata map[string]interface{}) st
 	case "snapshot", "snapshotAge", "snapshotSize":
 		return "snapshot"
 	case "restartLoop", "oom", "imageUpdateAvail":
-		return "docker"
+		return "app-container"
 	default:
-		return "guest"
+		return "agent"
 	}
 }
 

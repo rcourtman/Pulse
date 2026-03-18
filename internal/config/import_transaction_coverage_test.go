@@ -47,8 +47,8 @@ func TestImportTransaction_StageFile_Branches(t *testing.T) {
 	// Actually stagingDir is already created by newImportTransaction.
 	// But we can try to make it unreachable?
 	// If we remove stagingDir and make it a file...
-	os.RemoveAll(tx.stagingDir)
-	os.WriteFile(tx.stagingDir, []byte("blocker"), 0644)
+	_ = os.RemoveAll(tx.stagingDir)
+	_ = os.WriteFile(tx.stagingDir, []byte("blocker"), 0644)
 	err = tx.StageFile("blocked", []byte("data"), 0644)
 	assert.Error(t, err)
 }
@@ -85,13 +85,13 @@ func TestImportTransaction_Rollback_Branches(t *testing.T) {
 	require.NoError(t, err)
 
 	targetFile := filepath.Join(tempDir, "roll.txt")
-	os.WriteFile(targetFile, []byte("old"), 0644)
+	_ = os.WriteFile(targetFile, []byte("old"), 0644)
 
-	tx.StageFile(targetFile, []byte("new"), 0644)
+	_ = tx.StageFile(targetFile, []byte("new"), 0644)
 
 	// Mock a backup for rollback coverage
 	backupFile := targetFile + ".bak"
-	os.WriteFile(backupFile, []byte("backup"), 0644)
+	_ = os.WriteFile(backupFile, []byte("backup"), 0644)
 	tx.backups[targetFile] = backupFile
 
 	tx.Rollback()

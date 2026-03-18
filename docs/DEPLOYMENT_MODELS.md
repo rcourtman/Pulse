@@ -24,14 +24,13 @@ Pulse uses a split config model:
 
 - **Local auth and secrets**: `.env` (managed by Quick Security Setup or environment overrides, not shown in the UI)
 - **Encryption key**: `.encryption.key` (required to decrypt `.enc` files)
-- **Audit signing key**: `.audit-signing.key` (Pulse Pro, encrypted)
+- **Audit signing key**: `.audit-signing.key` (Pro/Pro+/Cloud, encrypted)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
 - **OIDC config**: `oidc.enc` (encrypted)
 - **SSO config**: `sso.enc` (encrypted)
 - **API tokens**: `api_tokens.json`
-- **Legacy token suppressions**: `env_token_suppressions.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
 - **AI chat sessions**: `ai_chat_sessions.json` (legacy UI sync)
@@ -40,8 +39,8 @@ Pulse uses a split config model:
 - **AI pattern data**: `ai_patterns.json`
 - **AI remediation data**: `ai_remediations.json`
 - **AI incident tracking**: `ai_incidents.json`
-- **Audit log database**: `audit.db` (Pulse Pro, SQLite)
-- **Pulse Pro license**: `license.enc` (encrypted)
+- **Audit log database**: `audit.db` (Pro/Pro+/Cloud, SQLite)
+- **Relay/Pro/Pro+/Cloud license**: `license.enc` (encrypted)
 - **Host metadata**: `host_metadata.json`
 - **Docker metadata**: `docker_metadata.json`
 - **Guest metadata**: `guest_metadata.json`
@@ -55,6 +54,9 @@ Pulse uses a split config model:
 - **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
 - **Organization metadata**: `org.json` (multi-tenant)
+- **TrueNAS connections**: `truenas.enc` (encrypted)
+- **Relay config**: `relay.enc` (encrypted, Relay and above)
+- **RBAC roles**: `rbac_roles.json` (Pro/Pro+/Cloud)
 
 Path mapping:
 

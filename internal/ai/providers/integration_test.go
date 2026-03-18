@@ -18,13 +18,13 @@ import (
 // Run with: go test -tags=integration ./internal/ai/providers/...
 //
 // These tests require a running Ollama instance.
-// Set OLLAMA_URL environment variable or default to http://192.168.0.124:11434
+// Set OLLAMA_URL environment variable or default to http://127.0.0.1:11434
 
 func getOllamaURL() string {
 	if url := os.Getenv("OLLAMA_URL"); url != "" {
 		return url
 	}
-	return "http://192.168.0.124:11434"
+	return "http://127.0.0.1:11434"
 }
 
 func TestIntegration_Ollama_TestConnection(t *testing.T) {

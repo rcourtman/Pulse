@@ -43,13 +43,13 @@ func TestWrapCommand_TargetWrapping(t *testing.T) {
 			want: "qm guest exec 900 -- sh -c 'echo ok'",
 		},
 		{
-			name: "missing target id does not wrap",
+			name: "missing target id fails closed",
 			payload: executeCommandPayload{
 				Command:    "echo ok",
 				TargetType: "container",
 				TargetID:   "",
 			},
-			want: "echo ok",
+			want: `sh -c 'echo "Error: missing target ID" >&2; exit 1'`,
 		},
 	}
 
@@ -148,5 +148,27 @@ func TestCommandClient_executeCommand_TruncatesLargeOutput(t *testing.T) {
 	}
 	if len(result.Stdout) > 1024*1024+64 {
 		t.Fatalf("stdout len=%d, expected <= %d", len(result.Stdout), 1024*1024+64)
+	}
+}
+
+func TestCommandClient_executeCommand_TruncatesLargeStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("executeCommand uses different shell on windows")
+	}
+
+	c := &CommandClient{}
+	result := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID: "r1",
+		Command:   "head -c 1048580 /dev/zero | tr '\\0' 'b' 1>&2",
+		Timeout:   5,
+	})
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if !strings.Contains(result.Stderr, "(output truncated)") {
+		t.Fatalf("expected truncation marker, got stderr len=%d", len(result.Stderr))
+	}
+	if len(result.Stderr) > 1024*1024+64 {
+		t.Fatalf("stderr len=%d, expected <= %d", len(result.Stderr), 1024*1024+64)
 	}
 }

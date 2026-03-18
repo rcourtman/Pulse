@@ -14,7 +14,7 @@ func TestResolveDockerContainer(t *testing.T) {
 		exec := NewPulseToolExecutor(ExecutorConfig{})
 		_, _, err := exec.resolveDockerContainer("web", "")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "state provider not available")
+		assert.Contains(t, err.Error(), "read state not available")
 	})
 
 	t.Run("HostMatch", func(t *testing.T) {
@@ -100,6 +100,33 @@ func TestResolveDockerContainer(t *testing.T) {
 		container, _, err := exec.resolveDockerContainer("abc", "")
 		require.NoError(t, err)
 		assert.Equal(t, "abcdef", container.ID)
+	})
+
+	t.Run("PreservesAgentID", func(t *testing.T) {
+		state := models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					ID:       "host1",
+					AgentID:  "agent1",
+					Hostname: "dock1",
+					Containers: []models.DockerContainer{
+						{ID: "abc123", Name: "web"},
+					},
+				},
+			},
+		}
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent1", Hostname: "node1"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+			AgentServer:   agentSrv,
+		})
+
+		_, host, err := exec.resolveDockerContainer("web", "dock1")
+		require.NoError(t, err)
+		assert.Equal(t, "agent1", host.AgentID)
+		assert.Equal(t, "node1", exec.getAgentHostnameForDockerHost(host))
 	})
 }
 

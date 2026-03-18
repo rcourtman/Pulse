@@ -3,9 +3,12 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,11 +16,22 @@ import (
 
 // mockCommandRunner implements CommandRunner for testing
 type mockCommandRunner struct {
-	outputs map[string]string // map command substring to output
-	errs    map[string]error  // map command substring to error
+	outputs       map[string]string // map command substring to output
+	errs          map[string]error  // map command substring to error
+	callCount     int
+	sawDeadline   bool
+	lastDeadline  time.Time
+	lastHasDeadln bool
 }
 
 func (m *mockCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	m.callCount++
+	if deadline, ok := ctx.Deadline(); ok {
+		m.sawDeadline = true
+		m.lastHasDeadln = true
+		m.lastDeadline = deadline
+	}
+
 	fullCmd := name + " " + strings.Join(args, " ")
 
 	// Check for errors first
@@ -40,7 +54,7 @@ func (m *mockCommandRunner) Run(ctx context.Context, name string, args ...string
 func TestTemperatureCollector_Parsing(t *testing.T) {
 	// Create dummy key file
 	tmpKey := t.TempDir() + "/id_rsa"
-	os.WriteFile(tmpKey, []byte("dummy key"), 0600)
+	_ = os.WriteFile(tmpKey, []byte("dummy key"), 0600)
 
 	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
 	tc.hostKeys = nil // Disable real network calls for host key verification
@@ -162,4 +176,84 @@ func TestTemperatureCollector_HelperMethods(t *testing.T) {
 	// but since we are in `monitoring`, we can access if same package.
 	// But usually tests are `monitoring_test` package.
 	// I will assume same package for now based on file declaration.
+}
+
+func TestDefaultCommandRunner_RejectsOversizedStdout(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
+}
+
+func TestDefaultCommandRunner_RejectsOversizedStderr(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero 1>&2; exit 1", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
+}
+
+func TestTemperatureCollector_RunSSHCommand_OversizedOutput(t *testing.T) {
+	tmpKey := t.TempDir() + "/id_rsa"
+	require.NoError(t, os.WriteFile(tmpKey, []byte("dummy key"), 0600))
+
+	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
+	tc.hostKeys = nil
+	runner := &mockCommandRunner{
+		outputs: make(map[string]string),
+		errs:    make(map[string]error),
+	}
+
+	exitErr := buildExitErrorWithStderr(t, "Permission denied (publickey) from 10.0.0.2 using /home/pulse/.ssh/id_ed25519_sensors")
+	runner.errs[""] = exitErr
+	tc.runner = runner
+
+	_, err := tc.runSSHCommand(context.Background(), "node1", "sensors -j")
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(err.Error()), "authentication failed")
+	assert.NotContains(t, err.Error(), "10.0.0.2")
+	assert.NotContains(t, err.Error(), "id_ed25519_sensors")
+}
+
+func TestRunSSHCommand_AppliesDefaultTimeout(t *testing.T) {
+	tmpKey := t.TempDir() + "/id_rsa"
+	require.NoError(t, os.WriteFile(tmpKey, []byte("dummy key"), 0600))
+
+	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
+	tc.hostKeys = nil
+	runner := &mockCommandRunner{
+		outputs: map[string]string{"": "{}"},
+		errs:    make(map[string]error),
+	}
+	tc.runner = runner
+
+	_, err := tc.runSSHCommand(context.Background(), "node1", "sensors -j")
+	require.NoError(t, err)
+	require.True(t, runner.sawDeadline, "runSSHCommand should enforce a timeout when caller context has no deadline")
+	require.True(t, runner.lastHasDeadln)
+
+	timeoutRemaining := time.Until(runner.lastDeadline)
+	assert.Greater(t, timeoutRemaining, 0*time.Second)
+	assert.LessOrEqual(t, timeoutRemaining, defaultSSHCommandTimeout+time.Second)
+}
+
+func buildExitErrorWithStderr(t *testing.T, stderr string) error {
+	t.Helper()
+
+	cmd := exec.Command("sh", "-c", "printf '%s' \"$PULSE_TEST_STDERR\" >&2; exit 255")
+	cmd.Env = append(os.Environ(), "PULSE_TEST_STDERR="+stderr)
+	_, err := cmd.Output()
+	require.Error(t, err)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+
+	return err
 }

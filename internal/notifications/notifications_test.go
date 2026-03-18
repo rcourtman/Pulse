@@ -3,10 +3,9 @@ package notifications
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +13,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+const legacySnakeAlertIdentifierField = "alert_id"
 
 func flushPending(n *NotificationManager) {
 	n.mu.Lock()
@@ -28,57 +29,6 @@ func flushPending(n *NotificationManager) {
 	}
 	n.mu.Unlock()
 	n.sendGroupedAlerts()
-}
-
-func testQueuedAlert() *alerts.Alert {
-	return &alerts.Alert{
-		ID:           "queued-alert",
-		Type:         "cpu",
-		Level:        alerts.AlertLevelWarning,
-		ResourceID:   "vm-100",
-		ResourceName: "vm-100",
-		Message:      "CPU usage high",
-		Value:        95,
-		Threshold:    90,
-		StartTime:    time.Now().Add(-time.Minute),
-		LastSeen:     time.Now(),
-	}
-}
-
-func queuedNotificationStatus(t *testing.T, queue *NotificationQueue, id string) NotificationQueueStatus {
-	t.Helper()
-
-	var status string
-	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, id).Scan(&status); err != nil {
-		t.Fatalf("failed to read notification status: %v", err)
-	}
-
-	return NotificationQueueStatus(status)
-}
-
-func insertPendingQueuedNotification(t *testing.T, queue *NotificationQueue, notif *QueuedNotification) {
-	t.Helper()
-
-	alertsJSON, err := json.Marshal(notif.Alerts)
-	if err != nil {
-		t.Fatalf("marshal alerts: %v", err)
-	}
-
-	if notif.CreatedAt.IsZero() {
-		notif.CreatedAt = time.Now()
-	}
-	if notif.MaxAttempts == 0 {
-		notif.MaxAttempts = 3
-	}
-
-	_, err = queue.db.Exec(`
-		INSERT INTO notification_queue
-		(id, type, method, status, alerts, config, attempts, max_attempts, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, notif.ID, notif.Type, notif.Method, QueueStatusPending, string(alertsJSON), string(notif.Config), notif.Attempts, notif.MaxAttempts, notif.CreatedAt.Unix())
-	if err != nil {
-		t.Fatalf("insert queued notification: %v", err)
-	}
 }
 
 func TestNormalizeAppriseConfig(t *testing.T) {
@@ -309,7 +259,7 @@ func TestSendGroupedAppriseHTTP(t *testing.T) {
 	requests := make(chan capturedRequest, 1)
 	errs := make(chan error, 1)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
@@ -528,8 +478,8 @@ func TestConvertWebhookCustomFields(t *testing.T) {
 	}
 
 	original := map[string]string{
-		"app_token":  "abc123",
-		"user_token": "user456",
+		"token": "abc123",
+		"user":  "user456",
 	}
 
 	converted := convertWebhookCustomFields(original)
@@ -839,7 +789,7 @@ func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 
 	requests := make(chan apprisePayload, 1)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
@@ -1483,6 +1433,61 @@ func TestGetEmailConfig(t *testing.T) {
 	}
 }
 
+func TestSetEmailConfig_NormalizesInvalidValues(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	nm.SetEmailConfig(EmailConfig{
+		Enabled:   true,
+		Provider:  "  Custom SMTP  ",
+		SMTPHost:  " smtp.example.com ",
+		SMTPPort:  70000,
+		Username:  " user@example.com ",
+		Password:  "secret",
+		From:      " alerts@example.com ",
+		To:        []string{" admin@example.com ", "", "ADMIN@example.com", "ops@example.com"},
+		StartTLS:  true,
+		RateLimit: -5,
+	})
+
+	got := nm.GetEmailConfig()
+	if got.Provider != "Custom SMTP" {
+		t.Fatalf("expected provider to be trimmed, got %q", got.Provider)
+	}
+	if got.SMTPHost != "smtp.example.com" {
+		t.Fatalf("expected SMTP host to be trimmed, got %q", got.SMTPHost)
+	}
+	if got.SMTPPort != defaultSMTPPort {
+		t.Fatalf("expected invalid SMTP port to default to %d, got %d", defaultSMTPPort, got.SMTPPort)
+	}
+	if got.Username != "user@example.com" {
+		t.Fatalf("expected username to be trimmed, got %q", got.Username)
+	}
+	if got.From != "alerts@example.com" {
+		t.Fatalf("expected from address to be trimmed, got %q", got.From)
+	}
+	if len(got.To) != 2 {
+		t.Fatalf("expected deduplicated recipient list of length 2, got %d (%v)", len(got.To), got.To)
+	}
+	if got.To[0] != "admin@example.com" {
+		t.Fatalf("expected first recipient to be normalized, got %q", got.To[0])
+	}
+	if got.To[1] != "ops@example.com" {
+		t.Fatalf("expected second recipient to be preserved, got %q", got.To[1])
+	}
+	if got.RateLimit != 0 {
+		t.Fatalf("expected invalid negative rate limit to normalize to default behavior (0), got %d", got.RateLimit)
+	}
+
+	if nm.emailManager == nil {
+		t.Fatalf("expected email manager to be initialized")
+	}
+	if nm.emailManager.config.RateLimit != defaultEmailRateLimit {
+		t.Fatalf("expected effective email rate limit to default to %d, got %d", defaultEmailRateLimit, nm.emailManager.config.RateLimit)
+	}
+}
+
 func TestBuildApprisePayload(t *testing.T) {
 	t.Run("nil alerts filtered out", func(t *testing.T) {
 		alertList := []*alerts.Alert{
@@ -2065,7 +2070,7 @@ func TestPrepareWebhookData(t *testing.T) {
 			StartTime: time.Now(),
 		}
 		customFields := map[string]interface{}{
-			"app_token":  "token123",
+			"token":      "token123",
 			"user_key":   "user456",
 			"priority":   1,
 			"is_enabled": true,
@@ -2076,8 +2081,8 @@ func TestPrepareWebhookData(t *testing.T) {
 		if result.CustomFields == nil {
 			t.Fatalf("expected CustomFields to be set")
 		}
-		if result.CustomFields["app_token"] != "token123" {
-			t.Fatalf("expected app_token to be 'token123', got %v", result.CustomFields["app_token"])
+		if result.CustomFields["token"] != "token123" {
+			t.Fatalf("expected token to be 'token123', got %v", result.CustomFields["token"])
 		}
 		if result.CustomFields["user_key"] != "user456" {
 			t.Fatalf("expected user_key to be 'user456', got %v", result.CustomFields["user_key"])
@@ -2353,6 +2358,41 @@ func TestCheckWebhookRateLimit(t *testing.T) {
 		}
 		if count2 != 1 {
 			t.Fatalf("expected url2 sentCount to be 1, got %d", count2)
+		}
+	})
+
+	t.Run("stale webhook rate limit entries are cleaned up", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		staleURL := "https://example.com/stale"
+		freshURL := "https://example.com/fresh"
+
+		nm.webhookRateMu.Lock()
+		now := time.Now()
+		nm.webhookRateLimits[staleURL] = &webhookRateLimit{
+			lastSent:  now.Add(-WebhookRateLimitWindow - time.Second),
+			sentCount: WebhookRateLimitMax,
+		}
+		nm.webhookRateLimits[freshURL] = &webhookRateLimit{
+			lastSent:  now.Add(-WebhookRateLimitWindow + 2*time.Second),
+			sentCount: 1,
+		}
+		nm.webhookRateCleanup = now.Add(-WebhookRateLimitWindow - time.Second)
+		nm.webhookRateMu.Unlock()
+
+		if !nm.checkWebhookRateLimit("https://example.com/current") {
+			t.Fatalf("expected current webhook request to pass rate limit check")
+		}
+
+		nm.webhookRateMu.Lock()
+		_, staleExists := nm.webhookRateLimits[staleURL]
+		_, freshExists := nm.webhookRateLimits[freshURL]
+		nm.webhookRateMu.Unlock()
+
+		if staleExists {
+			t.Fatalf("expected stale webhook limiter entry to be cleaned up")
+		}
+		if !freshExists {
+			t.Fatalf("expected fresh webhook limiter entry to remain")
 		}
 	})
 }
@@ -2763,33 +2803,11 @@ func TestSendHTMLEmailWithError_ExistingEmailManager(t *testing.T) {
 	}
 }
 
-func TestSendNotificationsDirect_AllDisabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should complete without panic - all notification channels disabled
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-}
-
-func TestSendNotificationsDirect_WebhookDisabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{
-		{Name: "test", Enabled: false, URL: "http://example.com"},
-	}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should skip disabled webhook without panic
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-}
-
 func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
+	origSpawn := spawnAsync
+	spawnAsync = func(func()) {}
+	t.Cleanup(func() { spawnAsync = origSpawn })
+
 	nm := &NotificationManager{}
 
 	emailConfig := EmailConfig{Enabled: false}
@@ -2803,64 +2821,52 @@ func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
 
 	// Should iterate all webhooks, launching goroutines for enabled ones
 	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Goroutines will fail but shouldn't panic
-}
-
-func TestSendNotificationsDirect_EmailEnabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	// Enable email with invalid host - will fail send but covers code path
-	emailConfig := EmailConfig{
-		Enabled:  true,
-		SMTPHost: "invalid.localhost.test",
-		SMTPPort: 25,
-		To:       []string{"test@example.com"},
-	}
-	webhooks := []WebhookConfig{}
-	appriseConfig := AppriseConfig{Enabled: false}
-	alertList := []*alerts.Alert{}
-
-	// Should enter the email enabled branch and log, goroutine will fail silently
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Allow goroutine to start
-	time.Sleep(10 * time.Millisecond)
-}
-
-func TestSendNotificationsDirect_AppriseEnabled(t *testing.T) {
-	nm := &NotificationManager{}
-
-	emailConfig := EmailConfig{Enabled: false}
-	webhooks := []WebhookConfig{}
-	// Enable apprise with invalid config - will fail send but covers code path
-	appriseConfig := AppriseConfig{
-		Enabled:   true,
-		ServerURL: "http://invalid.localhost.test/apprise",
-		Targets:   []string{"mailto://test@example.com"},
-	}
-	alertList := []*alerts.Alert{}
-
-	// Should enter the apprise enabled branch
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
-	// Allow goroutine to start
-	time.Sleep(10 * time.Millisecond)
 }
 
 func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	nm := NewNotificationManager("")
-	defer nm.Stop()
-
+	nm := &NotificationManager{}
 	notif := &QueuedNotification{
 		ID:     "test-1",
 		Type:   "email",
 		Config: json.RawMessage(`{invalid json`),
-		Alerts: []*alerts.Alert{testQueuedAlert()},
+		Alerts: []*alerts.Alert{},
 	}
 
 	err := nm.ProcessQueuedNotification(notif)
-	if !errors.Is(err, ErrNotificationCancelled) {
-		t.Fatalf("expected queued email to be cancelled when live config is disabled, got: %v", err)
+	if err == nil {
+		t.Error("expected error for invalid email config JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to unmarshal email config") {
+		t.Errorf("expected 'failed to unmarshal email config' error, got: %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_SkipsDisabledEmailDelivery(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	configJSON, err := json.Marshal(EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		From:     "alerts@example.com",
+		To:       []string{"admin@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal email config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "test-email-disabled",
+		Type:   "email",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}},
+	}
+
+	if err := nm.ProcessQueuedNotification(notif); err != nil {
+		t.Fatalf("expected queued email notification to be skipped without error, got %v", err)
 	}
 }
 
@@ -2882,179 +2888,50 @@ func TestProcessQueuedNotification_InvalidWebhookConfig(t *testing.T) {
 	}
 }
 
-func TestProcessQueuedNotification_InvalidAppriseConfig(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	nm := NewNotificationManager("")
+func TestProcessQueuedNotification_SkipsWhenNotificationsDisabled(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
 	defer nm.Stop()
 
+	nm.SetEnabled(false)
+
+	configJSON, err := json.Marshal(WebhookConfig{
+		ID:      "webhook-1",
+		Name:    "ops",
+		URL:     "https://example.com/webhook",
+		Method:  http.MethodPost,
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal webhook config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "test-webhook-disabled",
+		Type:   "webhook",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}},
+	}
+
+	if err := nm.ProcessQueuedNotification(notif); err != nil {
+		t.Fatalf("expected queued webhook notification to be skipped without error, got %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_InvalidAppriseConfig(t *testing.T) {
+	nm := &NotificationManager{}
 	notif := &QueuedNotification{
 		ID:     "test-3",
 		Type:   "apprise",
 		Config: json.RawMessage(`broken json`),
-		Alerts: []*alerts.Alert{testQueuedAlert()},
+		Alerts: []*alerts.Alert{},
 	}
 
 	err := nm.ProcessQueuedNotification(notif)
-	if !errors.Is(err, ErrNotificationCancelled) {
-		t.Fatalf("expected queued Apprise notification to be cancelled when live config is disabled, got: %v", err)
+	if err == nil {
+		t.Error("expected error for invalid apprise config JSON")
 	}
-}
-
-func TestProcessQueuedNotification_WebhookUsesCurrentConfig(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	hits := make(chan struct{}, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case hits <- struct{}{}:
-		default:
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	nm := NewNotificationManager("https://pulse.local")
-	defer nm.Stop()
-	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
-		t.Fatalf("failed to allowlist localhost: %v", err)
-	}
-
-	currentWebhook := WebhookConfig{
-		ID:      "wh-live",
-		Name:    "live",
-		URL:     server.URL,
-		Method:  http.MethodPost,
-		Enabled: true,
-	}
-	nm.AddWebhook(currentWebhook)
-
-	queuedWebhook := currentWebhook
-	queuedWebhook.URL = "https://example.invalid/should-not-be-used"
-
-	configJSON, err := json.Marshal(queuedWebhook)
-	if err != nil {
-		t.Fatalf("marshal queued webhook: %v", err)
-	}
-
-	err = nm.ProcessQueuedNotification(&QueuedNotification{
-		ID:     "test-webhook-live",
-		Type:   "webhook",
-		Config: configJSON,
-		Alerts: []*alerts.Alert{testQueuedAlert()},
-	})
-	if err != nil {
-		t.Fatalf("expected queued webhook to use live config, got: %v", err)
-	}
-
-	select {
-	case <-hits:
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected webhook request to hit the live webhook URL")
-	}
-}
-
-func TestProcessQueuedNotification_CancelledWhenNotificationsDisabled(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	nm := NewNotificationManager("")
-	defer nm.Stop()
-	nm.SetEnabled(false)
-
-	currentWebhook := WebhookConfig{
-		ID:      "wh-disabled",
-		Name:    "disabled",
-		URL:     "https://example.invalid/webhook",
-		Method:  http.MethodPost,
-		Enabled: true,
-	}
-	nm.AddWebhook(currentWebhook)
-
-	configJSON, err := json.Marshal(currentWebhook)
-	if err != nil {
-		t.Fatalf("marshal queued webhook: %v", err)
-	}
-
-	err = nm.ProcessQueuedNotification(&QueuedNotification{
-		ID:     "test-webhook-global-disabled",
-		Type:   "webhook",
-		Config: configJSON,
-		Alerts: []*alerts.Alert{testQueuedAlert()},
-	})
-	if !errors.Is(err, ErrNotificationCancelled) {
-		t.Fatalf("expected queued webhook to be cancelled when notifications are globally disabled, got: %v", err)
-	}
-}
-
-func TestSetEmailConfig_DisableCancelsQueuedEmailNotifications(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	nm := NewNotificationManager("")
-	defer nm.Stop()
-	nm.queue.processorTicker.Stop()
-
-	emailConfigJSON, err := json.Marshal(EmailConfig{
-		Enabled:  true,
-		SMTPHost: "smtp.example.com",
-		SMTPPort: 587,
-		From:     "pulse@example.com",
-		To:       []string{"ops@example.com"},
-	})
-	if err != nil {
-		t.Fatalf("marshal email config: %v", err)
-	}
-
-	notif := &QueuedNotification{
-		ID:     "queued-email-disable",
-		Type:   "email",
-		Config: emailConfigJSON,
-		Alerts: []*alerts.Alert{testQueuedAlert()},
-	}
-	insertPendingQueuedNotification(t, nm.queue, notif)
-
-	nm.SetEmailConfig(EmailConfig{Enabled: false})
-
-	if got := queuedNotificationStatus(t, nm.queue, notif.ID); got != QueueStatusCancelled {
-		t.Fatalf("expected queued email to be cancelled, got %s", got)
-	}
-}
-
-func TestUpdateWebhook_DisableCancelsQueuedWebhookNotifications(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-
-	nm := NewNotificationManager("")
-	defer nm.Stop()
-	nm.queue.processorTicker.Stop()
-
-	webhook := WebhookConfig{
-		ID:      "queued-webhook",
-		Name:    "queued",
-		URL:     "https://example.com/webhook",
-		Method:  http.MethodPost,
-		Enabled: true,
-	}
-	nm.AddWebhook(webhook)
-
-	configJSON, err := json.Marshal(webhook)
-	if err != nil {
-		t.Fatalf("marshal webhook config: %v", err)
-	}
-
-	notif := &QueuedNotification{
-		ID:     "queued-webhook-disable",
-		Type:   "webhook",
-		Config: configJSON,
-		Alerts: []*alerts.Alert{testQueuedAlert()},
-	}
-	insertPendingQueuedNotification(t, nm.queue, notif)
-
-	webhook.Enabled = false
-	if err := nm.UpdateWebhook(webhook.ID, webhook); err != nil {
-		t.Fatalf("disable webhook: %v", err)
-	}
-
-	if got := queuedNotificationStatus(t, nm.queue, notif.ID); got != QueueStatusCancelled {
-		t.Fatalf("expected queued webhook to be cancelled, got %s", got)
+	if !strings.Contains(err.Error(), "failed to unmarshal apprise config") {
+		t.Errorf("expected 'failed to unmarshal apprise config' error, got: %v", err)
 	}
 }
 
@@ -3091,13 +2968,99 @@ func TestGetQueue_WithQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
 	}
-	defer queue.Stop()
+	defer func() { _ = queue.Stop() }()
 
 	nm := &NotificationManager{queue: queue}
 
 	got := nm.GetQueue()
 	if got != queue {
 		t.Error("GetQueue should return the assigned queue")
+	}
+}
+
+func TestSetEnabled_CancelsQueuedNotifications(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Fatal("expected notification queue to be initialized")
+	}
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	for _, notifType := range []string{"email", "webhook", "apprise"} {
+		err := queue.Enqueue(&QueuedNotification{
+			ID:          "queued-" + notifType,
+			Type:        notifType,
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-" + notifType}},
+		})
+		if err != nil {
+			t.Fatalf("failed to enqueue %s notification: %v", notifType, err)
+		}
+	}
+
+	nm.SetEnabled(false)
+
+	stats, err := queue.GetQueueStats()
+	if err != nil {
+		t.Fatalf("failed to get queue stats: %v", err)
+	}
+	if stats["cancelled"] != 3 {
+		t.Fatalf("expected 3 cancelled notifications, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 0 {
+		t.Fatalf("expected 0 pending notifications after disable, got %d", stats["pending"])
+	}
+}
+
+func TestSetEmailConfig_CancelsQueuedEmailNotifications(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Fatal("expected notification queue to be initialized")
+	}
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	if err := queue.Enqueue(&QueuedNotification{
+		ID:          "queued-email",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-email"}},
+	}); err != nil {
+		t.Fatalf("failed to enqueue email notification: %v", err)
+	}
+	if err := queue.Enqueue(&QueuedNotification{
+		ID:          "queued-webhook",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-webhook"}},
+	}); err != nil {
+		t.Fatalf("failed to enqueue webhook notification: %v", err)
+	}
+
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	stats, err := queue.GetQueueStats()
+	if err != nil {
+		t.Fatalf("failed to get queue stats: %v", err)
+	}
+	if stats["cancelled"] != 1 {
+		t.Fatalf("expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 1 {
+		t.Fatalf("expected 1 pending webhook notification to remain, got %d (stats: %v)", stats["pending"], stats)
 	}
 }
 
@@ -3121,6 +3084,33 @@ func TestAddWebhookDelivery(t *testing.T) {
 	}
 	if nm.webhookHistory[0].WebhookName != "test-webhook" {
 		t.Errorf("expected webhook name 'test-webhook', got %s", nm.webhookHistory[0].WebhookName)
+	}
+}
+
+func TestAddWebhookDelivery_PreservesCanonicalAlertIdentifier(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: make([]WebhookDelivery, 0),
+	}
+
+	delivery := WebhookDelivery{
+		WebhookName:     "enhanced-webhook",
+		WebhookURL:      "https://example.com/enhanced",
+		AlertIdentifier: "resource:vm:100::service-gap",
+		Timestamp:       time.Now(),
+		Success:         true,
+		StatusCode:      200,
+	}
+
+	nm.addWebhookDelivery(delivery)
+
+	if len(nm.webhookHistory) != 1 {
+		t.Fatalf("expected 1 delivery in history, got %d", len(nm.webhookHistory))
+	}
+	if nm.webhookHistory[0].AlertIdentifier != "resource:vm:100::service-gap" {
+		t.Fatalf(
+			"expected canonical alertIdentifier to be preserved, got %q",
+			nm.webhookHistory[0].AlertIdentifier,
+		)
 	}
 }
 
@@ -3370,14 +3360,14 @@ func TestSendResolvedAlert(t *testing.T) {
 
 	// Use a mock captured channel for webhooks
 	webhookHits := make(chan string, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		webhookHits <- string(body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 	nm.AddWebhook(WebhookConfig{
 		ID:      "test-webhook",
 		Name:    "Test",
@@ -3419,9 +3409,9 @@ func TestSendResolvedAlert(t *testing.T) {
 
 func TestSendResolvedWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -3442,6 +3432,456 @@ func TestSendResolvedWebhook(t *testing.T) {
 	}
 }
 
+func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
+	// Regression test for #1259: recovery webhook notifications must use
+	// service-specific templates that each platform accepts.
+	testAlert := &alerts.Alert{
+		ID:           "resolve-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceName: "web-vm-01",
+		ResourceID:   "100",
+		Node:         "pve1",
+		Instance:     "https://pve.local:8006",
+		Message:      "CPU high on web-vm-01",
+		Value:        85.0,
+		Threshold:    80.0,
+		StartTime:    time.Now().Add(-10 * time.Minute),
+	}
+	resolvedAt := time.Now()
+
+	t.Run("telegram resolved includes chat_id and text", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "tg-test",
+			URL:     server.URL + "/bot123/sendMessage?chat_id=-1001234",
+			Enabled: true,
+			Service: "telegram",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook telegram: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal telegram payload: %v", err)
+		}
+		if payload["chat_id"] != "-1001234" {
+			t.Errorf("expected chat_id '-1001234', got %v", payload["chat_id"])
+		}
+		text, _ := payload["text"].(string)
+		if !strings.Contains(text, "Resolved") {
+			t.Errorf("expected 'Resolved' in text, got %q", text)
+		}
+	})
+
+	t.Run("discord resolved uses green embed color", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "discord-test",
+			URL:     server.URL + "/webhooks/123/token",
+			Enabled: true,
+			Service: "discord",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook discord: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal discord payload: %v", err)
+		}
+		embeds, _ := payload["embeds"].([]any)
+		if len(embeds) == 0 {
+			t.Fatal("expected at least one embed")
+		}
+		embed := embeds[0].(map[string]any)
+		// Green color = 3066993
+		if embed["color"] != float64(3066993) {
+			t.Errorf("expected green embed color 3066993, got %v", embed["color"])
+		}
+		title, _ := embed["title"].(string)
+		if !strings.Contains(title, "Resolved") {
+			t.Errorf("expected 'Resolved' in title, got %q", title)
+		}
+	})
+
+	t.Run("pagerduty resolved uses resolve action", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusAccepted)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "pd-test",
+			URL:     server.URL + "/v2/enqueue",
+			Enabled: true,
+			Service: "pagerduty",
+			Headers: map[string]string{"routing_key": "test-routing-key"},
+			CustomFields: map[string]string{
+				"routing_key": "test-routing-key",
+			},
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook pagerduty: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal pagerduty payload: %v", err)
+		}
+		if payload["event_action"] != "resolve" {
+			t.Errorf("expected event_action 'resolve', got %v", payload["event_action"])
+		}
+		if payload["dedup_key"] != testAlert.ID {
+			t.Errorf("expected dedup_key %q, got %v", testAlert.ID, payload["dedup_key"])
+		}
+	})
+
+	t.Run("slack resolved uses header block", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "slack-test",
+			URL:     server.URL + "/services/T123/B456/xyz",
+			Enabled: true,
+			Service: "slack",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook slack: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal slack payload: %v", err)
+		}
+		blocks, _ := payload["blocks"].([]any)
+		if len(blocks) == 0 {
+			t.Fatal("expected blocks in slack payload")
+		}
+		header := blocks[0].(map[string]any)
+		if header["type"] != "header" {
+			t.Errorf("expected first block to be header, got %v", header["type"])
+		}
+		text := header["text"].(map[string]any)["text"].(string)
+		if !strings.Contains(text, "Resolved") {
+			t.Errorf("expected 'Resolved' in header text, got %q", text)
+		}
+	})
+
+	t.Run("generic fallback uses canonical alert identifier with no service", func(t *testing.T) {
+		// When no service is set, the generic JSON fallback should still work.
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "generic-test",
+			URL:     server.URL + "/hook",
+			Enabled: true,
+			// No service set — triggers generic fallback
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook generic: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal generic payload: %v", err)
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+		if payload["alertIdentifier"] != testAlert.ID {
+			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
+		}
+		if _, ok := payload[legacyCamelAlertIdentifierField]; ok {
+			t.Errorf(
+				"did not expect legacy %s in generic payload, got %v",
+				legacyCamelAlertIdentifierField,
+				payload[legacyCamelAlertIdentifierField],
+			)
+		}
+	})
+
+	t.Run("generic service also uses canonical alert identifier fallback", func(t *testing.T) {
+		// When service is explicitly "generic", it should use the same generic payload shape.
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:    "generic-explicit-test",
+			URL:     server.URL + "/hook",
+			Enabled: true,
+			Service: "generic",
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook generic explicit: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal generic explicit payload: %v", err)
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+		if payload["alertIdentifier"] != testAlert.ID {
+			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
+		}
+		if _, ok := payload[legacyCamelAlertIdentifierField]; ok {
+			t.Errorf(
+				"did not expect legacy %s in generic explicit payload, got %v",
+				legacyCamelAlertIdentifierField,
+				payload[legacyCamelAlertIdentifierField],
+			)
+		}
+	})
+
+	t.Run("custom template overrides service template", func(t *testing.T) {
+		var gotBody []byte
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		nm := NewNotificationManager("https://pulse.local")
+		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+		webhook := WebhookConfig{
+			Name:     "custom-test",
+			URL:      server.URL + "/custom",
+			Enabled:  true,
+			Service:  "discord",
+			Template: `{"custom": true, "event": "{{.Event}}", "` + "alert_identifier" + `": "{{.ID}}"}`,
+		}
+
+		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)
+		if err != nil {
+			t.Fatalf("sendResolvedWebhook custom template: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(gotBody, &payload); err != nil {
+			t.Fatalf("unmarshal custom payload: %v", err)
+		}
+		if payload["custom"] != true {
+			t.Errorf("expected custom=true, got %v", payload["custom"])
+		}
+		if payload["event"] != "resolved" {
+			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+	})
+}
+
+func TestSendResolvedWebhookSkipsNilLeadingAlerts(t *testing.T) {
+	// Regression: sendResolvedWebhook should find the first non-nil alert
+	// even if leading entries are nil.
+	var gotBody []byte
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManager("https://pulse.local")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	validAlert := &alerts.Alert{
+		ID:        "sparse-1",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		Node:      "pve1",
+		StartTime: time.Now().Add(-5 * time.Minute),
+	}
+
+	webhook := WebhookConfig{
+		Name:    "sparse-test",
+		URL:     server.URL + "/hook",
+		Enabled: true,
+	}
+
+	// Leading nil entries — should still work
+	err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{nil, nil, validAlert}, time.Now())
+	if err != nil {
+		t.Fatalf("sendResolvedWebhook with nil-leading list: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["event"] != "resolved" {
+		t.Errorf("expected event 'resolved', got %v", payload["event"])
+	}
+
+	// All-nil list should return error
+	err = nm.sendResolvedWebhook(webhook, []*alerts.Alert{nil, nil}, time.Now())
+	if err == nil {
+		t.Fatal("expected error for all-nil alert list")
+	}
+}
+
+func TestPrepareWebhookDataSetsEventField(t *testing.T) {
+	nm := &NotificationManager{publicURL: "http://example.com"}
+	alert := &alerts.Alert{
+		ID:        "test-1",
+		StartTime: time.Now(),
+	}
+
+	data := nm.prepareWebhookData(alert, nil)
+	if data.Event != "alert" {
+		t.Fatalf("expected Event to be 'alert', got %q", data.Event)
+	}
+}
+
+func TestPrepareWebhookDeliveryContext_ServiceEnrichment(t *testing.T) {
+	nm := &NotificationManager{}
+
+	t.Run("pagerduty copies routing key into custom fields", func(t *testing.T) {
+		webhook := WebhookConfig{
+			Name:    "pd",
+			URL:     "https://example.com/hook",
+			Service: "pagerduty",
+			Headers: map[string]string{"routing_key": "route-123"},
+		}
+		data := WebhookPayloadData{}
+
+		_, enriched, err := nm.prepareWebhookDeliveryContext(webhook, data)
+		if err != nil {
+			t.Fatalf("prepareWebhookDeliveryContext error = %v", err)
+		}
+		if enriched.CustomFields["routing_key"] != "route-123" {
+			t.Fatalf("expected routing_key to be copied, got %#v", enriched.CustomFields)
+		}
+	})
+
+	t.Run("pushover leaves canonical custom fields untouched at service boundary", func(t *testing.T) {
+		webhook := WebhookConfig{
+			Name:    "po",
+			URL:     "https://example.com/hook",
+			Service: "pushover",
+		}
+		data := WebhookPayloadData{
+			CustomFields: map[string]interface{}{
+				"token": "canonical-app",
+				"user":  "canonical-user",
+			},
+		}
+
+		_, enriched, err := nm.prepareWebhookDeliveryContext(webhook, data)
+		if err != nil {
+			t.Fatalf("prepareWebhookDeliveryContext error = %v", err)
+		}
+		if enriched.CustomFields["token"] != "canonical-app" {
+			t.Fatalf("expected canonical token to be preserved, got %#v", enriched.CustomFields)
+		}
+		if enriched.CustomFields["user"] != "canonical-user" {
+			t.Fatalf("expected canonical user to be preserved, got %#v", enriched.CustomFields)
+		}
+	})
+}
+
+func TestRenderWebhookPayloadJSON_UsesResolvedServiceTemplate(t *testing.T) {
+	nm := &NotificationManager{}
+	webhook := WebhookConfig{
+		Name:    "slack",
+		URL:     "https://example.com/hook",
+		Service: "slack",
+	}
+	data := WebhookPayloadData{
+		ID:           "alert-1",
+		Event:        "resolved",
+		ResourceName: "vm-100",
+		Node:         "pve-1",
+		Type:         "cpu",
+		Duration:     "5m",
+		ResolvedAt:   time.Now().Format(time.RFC3339),
+		Message:      "vm-100 on pve-1 is now healthy",
+	}
+
+	payload, err := nm.renderWebhookPayloadJSON(webhook, data, webhookRenderModeResolved, func() ([]byte, error) {
+		t.Fatal("expected resolved service template before fallback")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("renderWebhookPayloadJSON error = %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if decoded["text"] == nil {
+		t.Fatalf("expected slack resolved template payload, got %#v", decoded)
+	}
+}
+
 func TestGetQueueStatsNotifications(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
@@ -3456,11 +3896,38 @@ func TestGetQueueStatsNotifications(t *testing.T) {
 	}
 }
 
+func TestNewNotificationManagerWithDataDir_FallsBackToInMemoryQueue(t *testing.T) {
+	tempDir := t.TempDir()
+	blockingFile := tempDir + "/blocked"
+	if err := os.WriteFile(blockingFile, []byte("blocking"), 0644); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	nm := NewNotificationManagerWithDataDir("", blockingFile+"/subdir")
+	defer nm.Stop()
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Fatal("expected in-memory queue fallback, got nil queue")
+	}
+	if queue.dbPath != ":memory:" {
+		t.Fatalf("expected in-memory queue dbPath, got %q", queue.dbPath)
+	}
+
+	stats, err := nm.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats == nil {
+		t.Fatal("expected non-nil queue stats from in-memory fallback")
+	}
+}
+
 func TestSendTestWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -3477,16 +3944,60 @@ func TestSendTestWebhook(t *testing.T) {
 	}
 }
 
-func TestSendEmail(t *testing.T) {
-	nm := NewNotificationManager("")
-	// Void function, just ensure no panic
-	nm.sendEmail(&alerts.Alert{ID: "test"})
+func TestSendTestWebhook_UsesEnhancedWebhookTestOwnership(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	var (
+		contentType string
+		body        string
+	)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		body = string(payload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := WebhookConfig{
+		Name:    "Discord Test",
+		URL:     server.URL,
+		Service: "discord",
+		Enabled: true,
+	}
+
+	if err := nm.SendTestWebhook(webhook); err != nil {
+		t.Fatalf("SendTestWebhook failed: %v", err)
+	}
+
+	if contentType != "application/json" {
+		t.Fatalf("expected content type application/json, got %q", contentType)
+	}
+	if !strings.Contains(body, `"username": "Pulse Monitoring"`) {
+		t.Fatalf("expected discord service template payload, got %s", body)
+	}
 }
 
-func TestSendHTMLEmail(t *testing.T) {
-	nm := NewNotificationManager("")
-	// Void function, just ensure no panic
-	nm.sendHTMLEmail("subject", "html", "text", EmailConfig{Enabled: false})
+func TestSendTestWebhook_ReturnsDeliveryError(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+
+	webhook := WebhookConfig{
+		Name:    "Broken",
+		URL:     "http://127.0.0.1/webhook",
+		Enabled: true,
+	}
+
+	err := nm.SendTestWebhook(webhook)
+	if err == nil {
+		t.Fatal("expected webhook delivery error")
+	}
+	if !strings.Contains(err.Error(), "webhook URL validation failed") {
+		t.Fatalf("expected validation failure, got %v", err)
+	}
 }
 
 func TestSendTestNotificationWithConfig(t *testing.T) {
@@ -3496,5 +4007,326 @@ func TestSendTestNotificationWithConfig(t *testing.T) {
 	err := nm.SendTestNotificationWithConfig("email", &EmailConfig{Enabled: false}, nil)
 	if err == nil {
 		t.Fatal("expected error for disabled email config")
+	}
+}
+
+func TestSendTestNotification_EmailReturnsDeliveryError(t *testing.T) {
+	nm := &NotificationManager{
+		emailConfig: EmailConfig{
+			Enabled:  true,
+			SMTPHost: "invalid.localhost.test",
+			SMTPPort: 25,
+			From:     "alerts@example.com",
+			To:       []string{"ops@example.com"},
+		},
+	}
+
+	err := nm.SendTestNotification("email")
+	if err == nil {
+		t.Fatal("expected email delivery error")
+	}
+	if !strings.Contains(err.Error(), "failed to send email") {
+		t.Fatalf("expected delivery error, got %v", err)
+	}
+}
+
+func TestSendTestNotification_WebhookReturnsDeliveryError(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	nm.webhooks = []WebhookConfig{
+		{
+			Name:    "Broken",
+			URL:     "http://127.0.0.1/webhook",
+			Enabled: true,
+		},
+	}
+
+	err := nm.SendTestNotification("webhook")
+	if err == nil {
+		t.Fatal("expected webhook delivery error")
+	}
+	if !strings.Contains(err.Error(), "webhook URL validation failed") {
+		t.Fatalf("expected validation failure, got %v", err)
+	}
+}
+
+func TestSendTestNotification_WebhookUsesCanonicalTestExecutor(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	var (
+		contentType string
+		body        string
+	)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		body = string(payload)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm.webhooks = []WebhookConfig{
+		{
+			Name:    "Discord Saved",
+			URL:     server.URL,
+			Service: "discord",
+			Enabled: true,
+		},
+	}
+
+	if err := nm.SendTestNotification("webhook"); err != nil {
+		t.Fatalf("SendTestNotification webhook failed: %v", err)
+	}
+
+	if contentType != "application/json" {
+		t.Fatalf("expected content type application/json, got %q", contentType)
+	}
+	if !strings.Contains(body, `"username": "Pulse Monitoring"`) {
+		t.Fatalf("expected discord service template payload, got %s", body)
+	}
+}
+
+func TestGetEmailConfigReturnsDefensiveCopy(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	initial := EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		From:     "alerts@example.com",
+		To:       []string{"ops@example.com", "admin@example.com"},
+	}
+	nm.SetEmailConfig(initial)
+
+	initial.To[0] = "mutated@example.com"
+
+	cfg := nm.GetEmailConfig()
+	if cfg.To[0] != "ops@example.com" {
+		t.Fatalf("expected manager to copy caller input, got %q", cfg.To[0])
+	}
+
+	cfg.To[0] = "another-change@example.com"
+	cfgAgain := nm.GetEmailConfig()
+	if cfgAgain.To[0] != "ops@example.com" {
+		t.Fatalf("expected manager to return defensive copy, got %q", cfgAgain.To[0])
+	}
+}
+
+func TestGetWebhooksReturnsDeepCopies(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	original := WebhookConfig{
+		ID:      "hook-1",
+		Name:    "Primary",
+		URL:     "https://example.com/hook",
+		Enabled: true,
+		Headers: map[string]string{
+			"X-Test": "value-1",
+		},
+		CustomFields: map[string]string{
+			"severity": "critical",
+		},
+	}
+
+	nm.AddWebhook(original)
+
+	original.Headers["X-Test"] = "mutated"
+	original.CustomFields["severity"] = "mutated"
+
+	webhooks := nm.GetWebhooks()
+	if webhooks[0].Headers["X-Test"] != "value-1" {
+		t.Fatalf("expected AddWebhook to copy header map, got %q", webhooks[0].Headers["X-Test"])
+	}
+	if webhooks[0].CustomFields["severity"] != "critical" {
+		t.Fatalf("expected AddWebhook to copy custom field map, got %q", webhooks[0].CustomFields["severity"])
+	}
+
+	webhooks[0].Headers["X-Test"] = "caller-changed"
+	webhooks[0].CustomFields["severity"] = "caller-changed"
+
+	again := nm.GetWebhooks()
+	if again[0].Headers["X-Test"] != "value-1" {
+		t.Fatalf("expected GetWebhooks to return defensive copies, got %q", again[0].Headers["X-Test"])
+	}
+	if again[0].CustomFields["severity"] != "critical" {
+		t.Fatalf("expected GetWebhooks to return defensive copies, got %q", again[0].CustomFields["severity"])
+	}
+}
+
+func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
+	origSpawn := spawnAsync
+	spawnAsync = func(func()) {}
+	t.Cleanup(func() { spawnAsync = origSpawn })
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.SetGroupingWindow(3600)
+	nm.SetCooldown(0)
+	nm.SetEmailConfig(EmailConfig{
+		Enabled:  true,
+		SMTPHost: "localhost",
+		SMTPPort: 25,
+		From:     "alerts@example.com",
+		To:       []string{"ops@example.com"},
+	})
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Skip("queue unavailable in this environment")
+	}
+	_ = queue.Stop()
+
+	alert := &alerts.Alert{
+		ID:           "deadlock-check",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Node:         "node-1",
+		Instance:     "instance-1",
+		Message:      "cpu threshold crossed",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    time.Now(),
+	}
+	nm.SendAlert(alert)
+
+	done := make(chan struct{})
+	go func() {
+		nm.sendGroupedAlerts()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sendGroupedAlerts deadlocked when queue enqueue failed")
+	}
+
+	nm.mu.RLock()
+	_, notified := nm.lastNotified[alert.ID]
+	nm.mu.RUnlock()
+	if !notified {
+		t.Fatal("expected cooldown record to be marked for fallback direct send")
+	}
+}
+
+func TestNormalizeWebhookConfig_CanonicalizesPushoverCustomFields(t *testing.T) {
+	webhook := NormalizeWebhookConfig(WebhookConfig{
+		ID:      "hook-pushover",
+		Name:    "Pushover",
+		URL:     "https://api.pushover.net/1/messages.json",
+		Service: "pushover",
+		CustomFields: map[string]string{
+			"app_token":  "legacy-app",
+			"user_token": "legacy-user",
+		},
+	})
+	if got := webhook.CustomFields["token"]; got != "legacy-app" {
+		t.Fatalf("expected canonical token custom field, got %q", got)
+	}
+	if got := webhook.CustomFields["user"]; got != "legacy-user" {
+		t.Fatalf("expected canonical user custom field, got %q", got)
+	}
+	if _, ok := webhook.CustomFields["app_token"]; ok {
+		t.Fatalf("expected legacy app_token field to be removed")
+	}
+	if _, ok := webhook.CustomFields["user_token"]; ok {
+		t.Fatalf("expected legacy user_token field to be removed")
+	}
+}
+
+func TestSendResolvedAlertQueueEnqueueFailureFallsBackToSharedDeliveryExecutor(t *testing.T) {
+	origSpawn := spawnAsync
+	spawnAsync = func(f func()) { f() }
+	t.Cleanup(func() { spawnAsync = origSpawn })
+
+	requests := make(chan map[string]any, 1)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var payload map[string]any
+		_ = json.Unmarshal(body, &payload)
+		requests <- payload
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManager("https://pulse.local")
+	defer nm.Stop()
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	nm.AddWebhook(WebhookConfig{
+		ID:      "resolved-fallback-hook",
+		Name:    "resolved-fallback",
+		URL:     server.URL + "/hook",
+		Enabled: true,
+	})
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Skip("queue unavailable in this environment")
+	}
+	_ = queue.Stop()
+
+	alert := &alerts.Alert{
+		ID:           "resolved-fallback-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Node:         "node-1",
+		Instance:     "instance-1",
+		Message:      "cpu back to normal",
+		StartTime:    time.Now().Add(-5 * time.Minute),
+	}
+	resolvedAt := time.Now()
+
+	nm.SendResolvedAlert(&alerts.ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: resolvedAt,
+	})
+
+	select {
+	case payload := <-requests:
+		if payload["event"] != "resolved" {
+			t.Fatalf("expected resolved event, got %v", payload["event"])
+		}
+		if payload["alertIdentifier"] != alert.ID {
+			t.Fatalf("expected canonical alertIdentifier %q, got %v", alert.ID, payload["alertIdentifier"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected resolved notification fallback delivery after queue enqueue failure")
+	}
+}
+
+func TestNotificationManagerStopIdempotentConcurrent(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	const callers = 16
+	var wg sync.WaitGroup
+	wg.Add(callers)
+
+	panicCh := make(chan interface{}, callers)
+	for i := 0; i < callers; i++ {
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicCh <- r
+				}
+			}()
+			nm.Stop()
+		}()
+	}
+
+	wg.Wait()
+	close(panicCh)
+
+	if len(panicCh) > 0 {
+		t.Fatalf("Stop panicked under concurrent calls: %v", <-panicCh)
 	}
 }

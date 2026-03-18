@@ -219,8 +219,8 @@ func TestGetRateLimiterForEndpoint(t *testing.T) {
 			name:           "validate bootstrap token",
 			path:           "/api/security/validate-bootstrap-token",
 			method:         http.MethodPost,
-			wantLimiterPtr: &globalRateLimitConfig.PublicEndpoints,
-			wantLimiterNm:  "PublicEndpoints",
+			wantLimiterPtr: &globalRateLimitConfig.AuthEndpoints,
+			wantLimiterNm:  "AuthEndpoints",
 		},
 		{
 			name:           "metrics endpoint",

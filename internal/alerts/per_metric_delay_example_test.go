@@ -21,16 +21,16 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 			name: "CPU alert with longer delay than memory",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60, // 60 second default for guests
+					"vm": 60, // 60 second default for virtual machines
 				},
 				MetricTimeThresholds: map[string]map[string]int{
-					"guest": {
+					"vm": {
 						"cpu":    300, // 5 minutes for CPU (transient spikes)
 						"memory": 30,  // 30 seconds for memory (persistent issues)
 					},
 				},
 			},
-			resourceType:  "guest",
+			resourceType:  "vm",
 			metricType:    "cpu",
 			expectedDelay: 300,
 			description:   "CPU alerts should wait 5 minutes due to transient spikes",
@@ -39,16 +39,16 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 			name: "Memory alert with shorter delay",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60,
+					"vm": 60,
 				},
 				MetricTimeThresholds: map[string]map[string]int{
-					"guest": {
+					"vm": {
 						"cpu":    300,
 						"memory": 30,
 					},
 				},
 			},
-			resourceType:  "guest",
+			resourceType:  "vm",
 			metricType:    "memory",
 			expectedDelay: 30,
 			description:   "Memory alerts should trigger quickly as they're persistent",
@@ -57,25 +57,25 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 			name: "Disk alert falls back to resource type default",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60,
+					"vm": 60,
 				},
 				MetricTimeThresholds: map[string]map[string]int{
-					"guest": {
+					"vm": {
 						"cpu":    300,
 						"memory": 30,
 					},
 				},
 			},
-			resourceType:  "guest",
+			resourceType:  "vm",
 			metricType:    "disk",
 			expectedDelay: 60,
-			description:   "Disk has no specific override, uses guest default (60s)",
+			description:   "Disk has no specific override, uses vm default (60s)",
 		},
 		{
 			name: "Global metric delay when no type-specific base exists",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60,
+					"vm": 60,
 					// Note: no "storage" entry, so storage uses global metric delays
 				},
 				MetricTimeThresholds: map[string]map[string]int{
@@ -93,36 +93,36 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 			name: "Specific override beats global override",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60,
+					"vm": 60,
 				},
 				MetricTimeThresholds: map[string]map[string]int{
 					"all": {
 						"cpu": 180, // 3 minutes globally
 					},
-					"guest": {
-						"cpu": 300, // 5 minutes for guests specifically
+					"vm": {
+						"cpu": 300, // 5 minutes for VMs specifically
 					},
 				},
 			},
-			resourceType:  "guest",
+			resourceType:  "vm",
 			metricType:    "cpu",
 			expectedDelay: 300,
-			description:   "Guest-specific CPU delay (300s) overrides global CPU delay (180s)",
+			description:   "VM-specific CPU delay (300s) overrides global CPU delay (180s)",
 		},
 		{
 			name: "Docker container with restart count alert",
 			config: AlertConfig{
 				TimeThresholds: map[string]int{
-					"guest": 60,
+					"app-container": 60,
 				},
 				MetricTimeThresholds: map[string]map[string]int{
-					"docker": {
+					"app-container": {
 						"restartcount": 10,  // Quick notification for container restarts
 						"cpu":          120, // Longer for CPU
 					},
 				},
 			},
-			resourceType:  "docker",
+			resourceType:  "app-container",
 			metricType:    "restartcount",
 			expectedDelay: 10,
 			description:   "Restart count alerts trigger quickly (10s) for immediate attention",
@@ -154,11 +154,11 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 func TestPerMetricDelayJSON(t *testing.T) {
 	config := AlertConfig{
 		TimeThresholds: map[string]int{
-			"guest": 60,
-			"node":  30,
+			"vm":   60,
+			"node": 30,
 		},
 		MetricTimeThresholds: map[string]map[string]int{
-			"guest": {
+			"vm": {
 				"cpu":    300,
 				"memory": 30,
 				"disk":   90,
@@ -188,10 +188,10 @@ func TestPerMetricDelayJSON(t *testing.T) {
 	}
 
 	// Verify the data round-trips correctly
-	if decoded.TimeThresholds["guest"] != 60 {
+	if decoded.TimeThresholds["vm"] != 60 {
 		t.Errorf("TimeThresholds not preserved")
 	}
-	if decoded.MetricTimeThresholds["guest"]["cpu"] != 300 {
+	if decoded.MetricTimeThresholds["vm"]["cpu"] != 300 {
 		t.Errorf("MetricTimeThresholds not preserved")
 	}
 
@@ -211,10 +211,10 @@ func TestPerMetricDelayUseCases(t *testing.T) {
 			scenario: "Production VMs: Different delays for different metrics",
 			config: `{
   "timeThresholds": {
-    "guest": 60
+    "vm": 60
   },
   "metricTimeThresholds": {
-    "guest": {
+    "vm": {
       "cpu": 300,
       "memory": 60,
       "disk": 120,
@@ -252,10 +252,10 @@ func TestPerMetricDelayUseCases(t *testing.T) {
 			scenario: "Docker Containers: Fast alerts for restart issues",
 			config: `{
   "timeThresholds": {
-    "guest": 60
+    "app-container": 60
   },
   "metricTimeThresholds": {
-    "docker": {
+    "app-container": {
       "restartcount": 10,
       "cpu": 120,
       "memory": 60

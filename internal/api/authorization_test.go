@@ -44,9 +44,10 @@ func TestDefaultAuthorizationChecker_TokenCanAccessOrg(t *testing.T) {
 		assert.False(t, checker.TokenCanAccessOrg(token, "acme"))
 	})
 
-	t.Run("wildcard legacy access", func(t *testing.T) {
-		token := &config.APITokenRecord{} // empty orgs = legacy
-		assert.True(t, checker.TokenCanAccessOrg(token, "tenant1"))
+	t.Run("wildcard legacy access denied", func(t *testing.T) {
+		token := &config.APITokenRecord{} // empty orgs = legacy/unbound
+		assert.False(t, checker.TokenCanAccessOrg(token, "tenant1"))
+		assert.False(t, checker.TokenCanAccessOrg(token, "default"))
 	})
 }
 
@@ -54,12 +55,22 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 	ml := new(mockOrgLoader)
 	checker := NewAuthorizationChecker(ml)
 
-	t.Run("default org", func(t *testing.T) {
+	t.Run("default org allowed without metadata", func(t *testing.T) {
+		// Default org is always accessible to any authenticated user.
 		assert.True(t, checker.UserCanAccessOrg("user1", "default"))
+	})
+
+	t.Run("default org accessible regardless of membership", func(t *testing.T) {
+		// Default org is always accessible, even if membership data exists.
+		assert.True(t, checker.UserCanAccessOrg("user1", "default"))
+		assert.True(t, checker.UserCanAccessOrg("other", "default"))
 	})
 
 	t.Run("missing loader", func(t *testing.T) {
 		badChecker := NewAuthorizationChecker(nil)
+		// Default org is always accessible, even without a loader.
+		assert.True(t, badChecker.UserCanAccessOrg("user1", "default"))
+		// Non-default orgs are denied without a loader (fail closed).
 		assert.False(t, badChecker.UserCanAccessOrg("user1", "acme"))
 	})
 
@@ -78,7 +89,7 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 		org := &models.Organization{
 			ID: "acme",
 			Members: []models.OrganizationMember{
-				{UserID: "other", Role: models.OrgRoleMember},
+				{UserID: "other", Role: models.OrgRoleViewer},
 			},
 		}
 		ml.On("GetOrganization", "acme").Return(org, nil).Once()
@@ -104,12 +115,10 @@ func TestDefaultAuthorizationChecker_CheckAccess(t *testing.T) {
 		token := &config.APITokenRecord{OrgID: "acme"}
 		res := checker.CheckAccess(token, "user1", "acme")
 		assert.True(t, res.Allowed)
-		assert.False(t, res.IsLegacyToken)
 
-		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Wildcard
+		tokenLegacy := &config.APITokenRecord{OrgID: ""} // Legacy/unbound
 		res = checker.CheckAccess(tokenLegacy, "user1", "acme")
-		assert.True(t, res.Allowed)
-		assert.True(t, res.IsLegacyToken)
+		assert.False(t, res.Allowed)
 
 		tokenDenied := &config.APITokenRecord{OrgID: "other"}
 		res = checker.CheckAccess(tokenDenied, "user1", "acme")

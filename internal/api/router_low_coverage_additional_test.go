@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -114,9 +112,9 @@ func TestHandleDiagnosticsDockerPrepareToken_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandleDiagnosticsDockerPrepareToken_MissingHostID(t *testing.T) {
+func TestHandleDiagnosticsDockerPrepareToken_MissingAgentID(t *testing.T) {
 	router := &Router{monitor: &monitoring.Monitor{}, config: &config.Config{}}
-	body := bytes.NewBufferString(`{"hostId":""}`)
+	body := bytes.NewBufferString(`{"agentId":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -127,10 +125,10 @@ func TestHandleDiagnosticsDockerPrepareToken_MissingHostID(t *testing.T) {
 	}
 }
 
-func TestHandleDiagnosticsDockerPrepareToken_HostNotFound(t *testing.T) {
+func TestHandleDiagnosticsDockerPrepareToken_AgentNotFound(t *testing.T) {
 	monitor, _, _ := newTestMonitor(t)
 	router := &Router{monitor: monitor, config: &config.Config{}}
-	body := bytes.NewBufferString(`{"hostId":"missing"}`)
+	body := bytes.NewBufferString(`{"agentId":"missing"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -146,7 +144,7 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
 
 	router := &Router{monitor: monitor, config: &config.Config{PublicURL: "https://pulse.example.com"}}
-	body := bytes.NewBufferString(`{"hostId":"host-1","tokenName":""}`)
+	body := bytes.NewBufferString(`{"agentId":"host-1","tokenName":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -165,51 +163,70 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if payload["token"] == "" {
 		t.Fatalf("expected token in response")
 	}
-	host, _ := payload["host"].(map[string]interface{})
-	if host["id"] != "host-1" {
-		t.Fatalf("unexpected host id: %#v", host["id"])
+	agent, _ := payload["agent"].(map[string]interface{})
+	if agent["id"] != "host-1" {
+		t.Fatalf("unexpected agent id: %#v", agent["id"])
 	}
 	if !strings.Contains(payload["installCommand"].(string), "https://pulse.example.com") {
 		t.Fatalf("expected install command to include base URL")
+	}
+	if !strings.Contains(payload["installCommand"].(string), "--enable-host=false") {
+		t.Fatalf("expected install command to disable host metrics with the canonical lifecycle flag: %q", payload["installCommand"])
+	}
+	if !strings.Contains(payload["installCommand"].(string), "--enable-docker") {
+		t.Fatalf("expected install command to enable docker metrics: %q", payload["installCommand"])
+	}
+	if !strings.Contains(payload["installCommand"].(string), `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`) {
+		t.Fatalf("expected install command to use lifecycle privilege wrapper: %q", payload["installCommand"])
+	}
+	if strings.Contains(payload["installCommand"].(string), "| sudo bash -s -- --url") {
+		t.Fatalf("expected install command to preserve the governed root-or-sudo wrapper instead of a raw sudo pipe: %q", payload["installCommand"])
+	}
+	if !strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host=false") {
+		t.Fatalf("expected systemd snippet to disable host metrics: %q", payload["systemdServiceSnippet"])
 	}
 	if len(router.config.APITokens) == 0 {
 		t.Fatalf("expected API token to be recorded")
 	}
 }
 
-func TestHandleDownloadDockerInstallerScript_MethodNotAllowed(t *testing.T) {
-	router := &Router{}
-	req := httptest.NewRequest(http.MethodPost, "/download/install-docker.sh", nil)
+func TestHandleDiagnosticsDockerPrepareToken_NormalizesTrailingSlashPublicURL(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
+
+	router := &Router{monitor: monitor, config: &config.Config{PublicURL: "https://pulse.example.com/base///"}}
+	body := bytes.NewBufferString(`{"agentId":"host-1","tokenName":""}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
-	router.handleDownloadDockerInstallerScript(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
-	}
-}
-
-func TestHandleDownloadDockerInstallerScript_ServesFile(t *testing.T) {
-	root := t.TempDir()
-	scriptPath := filepath.Join(root, "scripts", "install-docker.sh")
-	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
-		t.Fatalf("mkdir scripts dir: %v", err)
-	}
-	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho docker\n"), 0o644); err != nil {
-		t.Fatalf("write script: %v", err)
-	}
-
-	router := &Router{projectRoot: root}
-	req := httptest.NewRequest(http.MethodGet, "/download/install-docker.sh", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleDownloadDockerInstallerScript(rec, req)
+	router.handleDiagnosticsDockerPrepareToken(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "text/x-shellscript" {
-		t.Fatalf("expected text/x-shellscript, got %q", ct)
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	installCommand, _ := payload["installCommand"].(string)
+	if !strings.Contains(installCommand, posixShellQuote("https://pulse.example.com/base/install.sh")) {
+		t.Fatalf("expected normalized install script URL, got %q", installCommand)
+	}
+	if strings.Contains(installCommand, "//install.sh") {
+		t.Fatalf("expected normalized install script URL without double slash, got %q", installCommand)
+	}
+
+	systemdSnippet, _ := payload["systemdServiceSnippet"].(string)
+	if !strings.Contains(systemdSnippet, `Environment="PULSE_URL=https://pulse.example.com/base"`) {
+		t.Fatalf("expected normalized Pulse URL in systemd snippet, got %q", systemdSnippet)
+	}
+	if strings.Contains(systemdSnippet, `Environment="PULSE_URL=https://pulse.example.com/base/"`) {
+		t.Fatalf("expected trailing slash to be trimmed from systemd snippet, got %q", systemdSnippet)
+	}
+
+	if pulseURL, _ := payload["pulseURL"].(string); pulseURL != "https://pulse.example.com/base" {
+		t.Fatalf("expected normalized pulseURL, got %q", pulseURL)
 	}
 }
 

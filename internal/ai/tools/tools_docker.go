@@ -4,10 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
+
+const (
+	// dockerUpdateQueueMaxAttempts bounds retries for queuing update-related commands.
+	dockerUpdateQueueMaxAttempts = 3
+
+	// dockerUpdateQueueRetryBaseDelay is the initial exponential-backoff delay for retryable queue errors.
+	dockerUpdateQueueRetryBaseDelay = 25 * time.Millisecond
+
+	// dockerUpdateQueueRetryMaxDelay caps exponential backoff for queue retries.
+	dockerUpdateQueueRetryMaxDelay = 250 * time.Millisecond
+)
+
+var dockerUpdateQueueSleepFn = sleepWithContext
 
 // registerDockerTools registers the pulse_docker tool
 func (e *PulseToolExecutor) registerDockerTools() {
@@ -100,15 +116,19 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		return NewTextResult("Docker control actions are not available in read-only mode."), nil
 	}
 
-	// Check if this is a pre-approved execution
-	preApproved := isPreApproved(args)
-
 	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
 	}
 
 	command := fmt.Sprintf("docker %s %s", operation, container.Name)
+	approvalTargetID := fmt.Sprintf("%s:%s", dockerHost.ID, container.Name)
+	if dockerHost.ID == "" {
+		approvalTargetID = fmt.Sprintf("%s:%s", dockerHost.Hostname, container.Name)
+	}
+
+	// Check if this is a pre-approved execution (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "docker", approvalTargetID)
 
 	// Get the agent hostname for approval records
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
@@ -120,14 +140,14 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+			approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 		}
 	}
 
 	// Check control level
 	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 	}
 
@@ -169,14 +189,196 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		output += "\n" + result.Stderr
 	}
 
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("Successfully executed 'docker %s' on container '%s' (host: %s). State updates in ~10s.\n%s", operation, container.Name, dockerHost.Hostname, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	verify := e.verifyDockerContainerState(ctx, routing, container.ID, operation)
+	verify["ok"] = result.ExitCode == 0
+
+	response := map[string]interface{}{
+		"success":      result.ExitCode == 0,
+		"action":       "control",
+		"operation":    operation,
+		"container":    container.Name,
+		"container_id": container.ID,
+		"host":         dockerHost.Hostname,
+		"command":      command,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"verification": verify,
+	}
+
+	return NewJSONResultWithIsError(response, result.ExitCode != 0), nil
 }
 
 // ========== Docker Updates Handler Implementations ==========
+
+func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, routing CommandRoutingResult, containerID, operation string) map[string]interface{} {
+	expectRunning := false
+	switch operation {
+	case "start", "restart":
+		expectRunning = true
+	case "stop":
+		expectRunning = false
+	}
+
+	inspectCmd := fmt.Sprintf("docker inspect -f '{{.State.Status}} {{.State.Running}}' %s", shellEscape(containerID))
+
+	var lastOut string
+	var lastExit int
+	for attempt := 1; attempt <= 3; attempt++ {
+		res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+			Command:    inspectCmd,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		})
+		if err != nil {
+			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": err.Error()}
+		}
+		lastExit = res.ExitCode
+		lastOut = strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+
+		fields := strings.Fields(strings.ToLower(lastOut))
+		observedRunning := false
+		observedStatus := ""
+		if len(fields) >= 1 {
+			observedStatus = fields[0]
+		}
+		if len(fields) >= 2 {
+			observedRunning = fields[1] == "true"
+		}
+
+		if res.ExitCode == 0 && observedStatus != "" && observedRunning == expectRunning {
+			return map[string]interface{}{
+				"confirmed": true,
+				"method":    "docker_inspect",
+				"command":   inspectCmd,
+				"expected":  map[string]interface{}{"running": expectRunning},
+				"observed":  map[string]interface{}{"status": observedStatus, "running": observedRunning},
+			}
+		}
+
+		// Allow a brief settle window for restart/start/stop to propagate.
+		waitTimer := time.NewTimer(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
+			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
+		case <-waitTimer.C:
+		}
+	}
+
+	return map[string]interface{}{
+		"confirmed": false,
+		"method":    "docker_inspect",
+		"command":   inspectCmd,
+		"expected":  map[string]interface{}{"running": expectRunning},
+		"raw":       lastOut,
+		"exit_code": lastExit,
+	}
+}
+
+func sleepWithContext(ctx context.Context, duration time.Duration) error {
+	if ctx == nil {
+		time.Sleep(duration)
+		return nil
+	}
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func dockerUpdateQueueRetryDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return dockerUpdateQueueRetryBaseDelay
+	}
+
+	delay := dockerUpdateQueueRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > dockerUpdateQueueRetryMaxDelay {
+		return dockerUpdateQueueRetryMaxDelay
+	}
+	return delay
+}
+
+func isTransientUpdateQueueError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if isTransientError(err) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	transientPatterns := []string{
+		"temporary failure",
+		"queue full",
+		"resource busy",
+		"database is locked",
+		"deadlock",
+		"unexpected eof",
+		"eof",
+		"try again",
+	}
+
+	for _, pattern := range transientPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (e *PulseToolExecutor) queueDockerUpdateCommandWithRetry(ctx context.Context, operation string, run func() (DockerCommandStatus, error)) (DockerCommandStatus, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= dockerUpdateQueueMaxAttempts; attempt++ {
+		status, err := run()
+		if err == nil {
+			return status, nil
+		}
+
+		lastErr = err
+		if !isTransientUpdateQueueError(err) {
+			return DockerCommandStatus{}, err
+		}
+		if attempt == dockerUpdateQueueMaxAttempts {
+			break
+		}
+
+		backoff := dockerUpdateQueueRetryDelay(attempt)
+		log.Warn().
+			Err(err).
+			Str("operation", operation).
+			Int("attempt", attempt).
+			Dur("retry_in", backoff).
+			Msg("[pulse_docker] transient update queue failure, retrying")
+
+		if sleepErr := dockerUpdateQueueSleepFn(ctx, backoff); sleepErr != nil {
+			return DockerCommandStatus{}, fmt.Errorf("%s canceled while waiting to retry: %w", operation, sleepErr)
+		}
+	}
+
+	if lastErr == nil {
+		return DockerCommandStatus{}, fmt.Errorf("%s failed without an error", operation)
+	}
+
+	return DockerCommandStatus{}, fmt.Errorf("%s failed after %d attempts: %w", operation, dockerUpdateQueueMaxAttempts, lastErr)
+}
 
 func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.updatesProvider == nil {
@@ -195,16 +397,15 @@ func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map
 		updates = []ContainerUpdateInfo{}
 	}
 
-	response := DockerUpdatesResponse{
-		Updates: updates,
-		Total:   len(updates),
-		HostID:  hostID,
-	}
+	response := EmptyDockerUpdatesResponse()
+	response.Updates = updates
+	response.Total = len(updates)
+	response.TargetID = hostID
 
-	return NewJSONResult(response), nil
+	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
-func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+func (e *PulseToolExecutor) executeCheckDockerUpdates(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.updatesProvider == nil {
 		return NewTextResult("Docker update checking not available. Ensure updates provider is configured."), nil
 	}
@@ -223,14 +424,16 @@ func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args ma
 	hostName := e.getDockerHostName(hostID)
 
 	// Trigger the update check
-	cmdStatus, err := e.updatesProvider.TriggerUpdateCheck(hostID)
+	cmdStatus, err := e.queueDockerUpdateCommandWithRetry(ctx, "trigger update check", func() (DockerCommandStatus, error) {
+		return e.updatesProvider.TriggerUpdateCheck(hostID)
+	})
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Failed to trigger update check: %v", err)), nil
 	}
 
 	response := DockerCheckUpdatesResponse{
 		Success:   true,
-		HostID:    hostID,
+		TargetID:  hostID,
 		HostName:  hostName,
 		CommandID: cmdStatus.ID,
 		Message:   "Update check command queued. Results will be available after the next agent report cycle (~30 seconds).",
@@ -272,19 +475,21 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 	if e.controlLevel == ControlLevelControlled {
 		command := fmt.Sprintf("docker update %s", containerName)
 		agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
-		approvalID := createApprovalRecord(command, "docker", container.ID, agentHostname, fmt.Sprintf("Update container %s to latest image", containerName))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", container.ID, agentHostname, fmt.Sprintf("Update container %s to latest image", containerName))
 		return NewTextResult(formatDockerUpdateApprovalNeeded(containerName, dockerHost.Hostname, approvalID)), nil
 	}
 
 	// Autonomous mode - execute directly
-	cmdStatus, err := e.updatesProvider.UpdateContainer(dockerHost.ID, container.ID, containerName)
+	cmdStatus, err := e.queueDockerUpdateCommandWithRetry(ctx, "queue container update", func() (DockerCommandStatus, error) {
+		return e.updatesProvider.UpdateContainer(dockerHost.ID, container.ID, containerName)
+	})
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Failed to queue update command: %v", err)), nil
 	}
 
 	response := DockerUpdateContainerResponse{
 		Success:       true,
-		HostID:        dockerHost.ID,
+		TargetID:      dockerHost.ID,
 		ContainerID:   container.ID,
 		ContainerName: containerName,
 		CommandID:     cmdStatus.ID,
@@ -301,31 +506,37 @@ func (e *PulseToolExecutor) resolveDockerHostID(hostArg string) string {
 	if hostArg == "" {
 		return ""
 	}
-	if e.stateProvider == nil {
+
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return hostArg
 	}
-
-	state := e.stateProvider.GetState()
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg {
-			return host.ID
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.HostSourceID() == hostArg || host.Hostname() == hostArg || host.Name() == hostArg {
+			// Return source ID when available (updates provider uses raw model IDs)
+			if sid := host.HostSourceID(); sid != "" {
+				return sid
+			}
+			return host.ID()
 		}
 	}
-	return hostArg // Return as-is if not found (provider will handle error)
+	return hostArg // Return as-is if not found
 }
 
 func (e *PulseToolExecutor) getDockerHostName(hostID string) string {
-	if e.stateProvider == nil {
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return hostID
 	}
-
-	state := e.stateProvider.GetState()
-	for _, host := range state.DockerHosts {
-		if host.ID == hostID {
-			if host.DisplayName != "" {
-				return host.DisplayName
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostID || host.HostSourceID() == hostID {
+			if host.Name() != "" {
+				return host.Name()
 			}
-			return host.Hostname
+			if host.Hostname() != "" {
+				return host.Hostname()
+			}
+			return host.ID()
 		}
 	}
 	return hostID
@@ -356,33 +567,33 @@ func trimLeadingSlash(name string) string {
 // ========== Docker Swarm Handler Implementations ==========
 
 func (e *PulseToolExecutor) executeGetSwarmStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
 	}
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if host.Swarm == nil {
-				return NewTextResult(fmt.Sprintf("Docker host '%s' is not part of a Swarm cluster.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			swarm := host.Swarm()
+			if swarm == nil {
+				return NewTextResult(fmt.Sprintf("Docker host '%s' is not part of a Swarm cluster.", host.Hostname())), nil
 			}
 
 			response := SwarmStatusResponse{
-				Host: host.Hostname,
+				Host: host.Hostname(),
 				Status: DockerSwarmSummary{
-					NodeID:           host.Swarm.NodeID,
-					NodeRole:         host.Swarm.NodeRole,
-					LocalState:       host.Swarm.LocalState,
-					ControlAvailable: host.Swarm.ControlAvailable,
-					ClusterID:        host.Swarm.ClusterID,
-					ClusterName:      host.Swarm.ClusterName,
-					Error:            host.Swarm.Error,
+					NodeID:           swarm.NodeID,
+					NodeRole:         swarm.NodeRole,
+					LocalState:       swarm.LocalState,
+					ControlAvailable: swarm.ControlAvailable,
+					ClusterID:        swarm.ClusterID,
+					ClusterName:      swarm.ClusterName,
+					Error:            swarm.Error,
 				},
 			}
 
@@ -394,10 +605,6 @@ func (e *PulseToolExecutor) executeGetSwarmStatus(_ context.Context, args map[st
 }
 
 func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
@@ -405,18 +612,22 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 
 	stackFilter, _ := args["stack"].(string)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if len(host.Services) == 0 {
-				return NewTextResult(fmt.Sprintf("No Docker services found on host '%s'. The host may not be a Swarm manager.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			services := host.Services()
+			if len(services) == 0 {
+				return NewTextResult(fmt.Sprintf("No Docker services found on host '%s'. The host may not be a Swarm manager.", host.Hostname())), nil
 			}
 
-			var services []DockerServiceSummary
+			var summaries []DockerServiceSummary
 			filteredCount := 0
 
-			for _, svc := range host.Services {
+			for _, svc := range services {
 				if stackFilter != "" && svc.Stack != stackFilter {
 					continue
 				}
@@ -428,7 +639,7 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 					updateStatus = svc.UpdateStatus.State
 				}
 
-				services = append(services, DockerServiceSummary{
+				summaries = append(summaries, DockerServiceSummary{
 					ID:           svc.ID,
 					Name:         svc.Name,
 					Stack:        svc.Stack,
@@ -440,18 +651,13 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 				})
 			}
 
-			if services == nil {
-				services = []DockerServiceSummary{}
-			}
+			response := EmptyDockerServicesResponse()
+			response.Host = host.Hostname()
+			response.Services = summaries
+			response.Total = len(services)
+			response.Filtered = filteredCount
 
-			response := DockerServicesResponse{
-				Host:     host.Hostname,
-				Services: services,
-				Total:    len(host.Services),
-				Filtered: filteredCount,
-			}
-
-			return NewJSONResult(response), nil
+			return NewJSONResult(response.NormalizeCollections()), nil
 		}
 	}
 
@@ -459,10 +665,6 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 }
 
 func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
@@ -470,22 +672,26 @@ func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[s
 
 	serviceFilter, _ := args["service"].(string)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if len(host.Tasks) == 0 {
-				return NewTextResult(fmt.Sprintf("No Docker tasks found on host '%s'. The host may not be a Swarm manager.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			tasks := host.Tasks()
+			if len(tasks) == 0 {
+				return NewTextResult(fmt.Sprintf("No Docker tasks found on host '%s'. The host may not be a Swarm manager.", host.Hostname())), nil
 			}
 
-			var tasks []DockerTaskSummary
+			var summaries []DockerTaskSummary
 
-			for _, task := range host.Tasks {
+			for _, task := range tasks {
 				if serviceFilter != "" && task.ServiceID != serviceFilter && task.ServiceName != serviceFilter {
 					continue
 				}
 
-				tasks = append(tasks, DockerTaskSummary{
+				summaries = append(summaries, DockerTaskSummary{
 					ID:           task.ID,
 					ServiceName:  task.ServiceName,
 					NodeName:     task.NodeName,
@@ -496,18 +702,13 @@ func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[s
 				})
 			}
 
-			if tasks == nil {
-				tasks = []DockerTaskSummary{}
-			}
+			response := EmptyDockerTasksResponse()
+			response.Host = host.Hostname()
+			response.Service = serviceFilter
+			response.Tasks = summaries
+			response.Total = len(summaries)
 
-			response := DockerTasksResponse{
-				Host:    host.Hostname,
-				Service: serviceFilter,
-				Tasks:   tasks,
-				Total:   len(tasks),
-			}
-
-			return NewJSONResult(response), nil
+			return NewJSONResult(response.NormalizeCollections()), nil
 		}
 	}
 

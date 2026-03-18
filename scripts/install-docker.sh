@@ -4,7 +4,9 @@
 
 set -euo pipefail
 
-PULSE_IMAGE="${PULSE_IMAGE:-rcourtman/pulse:latest}"
+DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
+DEFAULT_PULSE_IMAGE="${DOCKER_IMAGE_REPO}:latest"
+PULSE_IMAGE="${PULSE_IMAGE:-${DEFAULT_PULSE_IMAGE}}"
 PULSE_PORT="${PULSE_PORT:-7655}"
 
 # ============================================
@@ -61,23 +63,23 @@ if [ -f "$COMPOSE_FILE" ]; then
     cp "$COMPOSE_FILE" "${COMPOSE_FILE}.backup"
 fi
 
-cat > "$COMPOSE_FILE" << 'COMPOSE_EOF'
+cat > "$COMPOSE_FILE" << COMPOSE_EOF
 version: '3.8'
 
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:latest}
+    image: \${PULSE_IMAGE:-${DEFAULT_PULSE_IMAGE}}
     container_name: pulse
     restart: unless-stopped
     user: "1000:1000"
     security_opt:
       - apparmor=unconfined
     ports:
-      - "${PULSE_PORT:-7655}:7655"
+      - "\${PULSE_PORT:-7655}:7655"
     volumes:
       - pulse-data:/data
     environment:
-      - TZ=${TZ:-UTC}
+      - TZ=\${TZ:-UTC}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7655/api/health"]
       interval: 30s

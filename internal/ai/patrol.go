@@ -5,10 +5,10 @@
 //	Scheduled/Event Trigger
 //	        │
 //	        ▼
-//	buildSeedContext()  ── infrastructure snapshot
+//	buildSeedContextState()  ── patrol runtime state
 //	        │
 //	        ▼
-//	runAIAnalysis()     ── agentic LLM loop with tools
+//	runAIAnalysisState() ── agentic LLM loop with tools
 //	        │
 //	        ▼
 //	recordFinding()     ── dedup, threshold validation
@@ -38,7 +38,7 @@
 package ai
 
 import (
-	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,12 +46,13 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/finding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // ThresholdProvider provides user-configured alert thresholds for patrol to use
@@ -90,23 +91,28 @@ type PatrolStatus struct {
 	IntervalMs       int64         `json:"interval_ms"` // Patrol interval in milliseconds
 	BlockedReason    string        `json:"blocked_reason,omitempty"`
 	BlockedAt        *time.Time    `json:"blocked_at,omitempty"`
+	// Quickstart credit info for the frontend
+	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
+	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`
+	UsingQuickstart            bool `json:"using_quickstart"`
 }
 
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
-	ID                 string        `json:"id"`
-	StartedAt          time.Time     `json:"started_at"`
-	CompletedAt        time.Time     `json:"completed_at"`
-	Duration           time.Duration `json:"-"`
-	DurationMs         int64         `json:"duration_ms"`
-	Type               string        `json:"type"` // Always "patrol" now (kept for backwards compat)
-	TriggerReason      string        `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs   []string      `json:"scope_resource_ids,omitempty"`
-	ScopeResourceTypes []string      `json:"scope_resource_types,omitempty"`
-	ScopeContext       string        `json:"scope_context,omitempty"`
-	AlertID            string        `json:"alert_id,omitempty"`
-	FindingID          string        `json:"finding_id,omitempty"`
-	ResourcesChecked   int           `json:"resources_checked"`
+	ID                        string        `json:"id"`
+	StartedAt                 time.Time     `json:"started_at"`
+	CompletedAt               time.Time     `json:"completed_at"`
+	Duration                  time.Duration `json:"-"`
+	DurationMs                int64         `json:"duration_ms"`
+	Type                      string        `json:"type"` // Always "patrol" now (kept for backwards compat)
+	TriggerReason             string        `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          []string      `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs []string      `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        []string      `json:"scope_resource_types,omitempty"`
+	ScopeContext              string        `json:"scope_context,omitempty"`
+	AlertIdentifier           string        `json:"alert_identifier,omitempty"`
+	FindingID                 string        `json:"finding_id,omitempty"`
+	ResourcesChecked          int           `json:"resources_checked"`
 	// Breakdown by resource type
 	NodesChecked      int `json:"nodes_checked"`
 	GuestsChecked     int `json:"guests_checked"`
@@ -126,15 +132,180 @@ type PatrolRunRecord struct {
 	FindingIDs       []string `json:"finding_ids"`      // IDs of findings from this run
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "error"
+	// Triage stats
+	TriageFlags      int  `json:"triage_flags"`                 // Number of deterministic flags found
+	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"` // True if LLM was skipped (quiet infra)
 	// AI Analysis details
-	AIAnalysis           string `json:"ai_analysis,omitempty"`            // The AI's raw response/analysis
-	InputTokens          int    `json:"input_tokens,omitempty"`           // Tokens sent to AI
-	OutputTokens         int    `json:"output_tokens,omitempty"`          // Tokens received from AI
-	AnalysisStopReason   string `json:"analysis_stop_reason,omitempty"`   // Why analysis stopped early, if applicable
-	AnalysisStoppedEarly bool   `json:"analysis_stopped_early,omitempty"` // True when patrol hit a hard per-run guardrail
+	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
+	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
+	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`
+}
+
+type patrolRunRecordJSON struct {
+	ID                        string           `json:"id"`
+	StartedAt                 time.Time        `json:"started_at"`
+	CompletedAt               time.Time        `json:"completed_at"`
+	DurationMs                int64            `json:"duration_ms"`
+	Type                      string           `json:"type"`
+	TriggerReason             string           `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          *[]string        `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string        `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string        `json:"scope_resource_types,omitempty"`
+	ScopeContext              string           `json:"scope_context,omitempty"`
+	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
+	FindingID                 string           `json:"finding_id,omitempty"`
+	ResourcesChecked          int              `json:"resources_checked"`
+	NodesChecked              int              `json:"nodes_checked"`
+	GuestsChecked             int              `json:"guests_checked"`
+	DockerChecked             int              `json:"docker_checked"`
+	StorageChecked            int              `json:"storage_checked"`
+	HostsChecked              int              `json:"hosts_checked"`
+	PBSChecked                int              `json:"pbs_checked"`
+	PMGChecked                int              `json:"pmg_checked"`
+	KubernetesChecked         int              `json:"kubernetes_checked"`
+	NewFindings               int              `json:"new_findings"`
+	ExistingFindings          int              `json:"existing_findings"`
+	RejectedFindings          int              `json:"rejected_findings"`
+	ResolvedFindings          int              `json:"resolved_findings"`
+	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
+	FindingsSummary           string           `json:"findings_summary"`
+	FindingIDs                []string         `json:"finding_ids"`
+	ErrorCount                int              `json:"error_count"`
+	Status                    string           `json:"status"`
+	TriageFlags               int              `json:"triage_flags"`
+	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
+	AIAnalysis                string           `json:"ai_analysis,omitempty"`
+	InputTokens               int              `json:"input_tokens,omitempty"`
+	OutputTokens              int              `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord `json:"tool_calls,omitempty"`
+	ToolCallCount             int              `json:"tool_call_count"`
+}
+
+func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
+	return strings.TrimSpace(alertIdentifier)
+}
+
+func marshalOptionalPatrolStringSlice(values []string) *[]string {
+	if values == nil {
+		return nil
+	}
+	cloned := append([]string{}, values...)
+	return &cloned
+}
+
+func unmarshalOptionalPatrolStringSlice(values *[]string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string{}, (*values)...)
+}
+
+func canonicalPatrolFindingIDs(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return append([]string{}, ids...)
+}
+
+func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
+	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
+	return record
+}
+
+func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
+	normalized := normalizePatrolRunRecord(r)
+	return json.Marshal(patrolRunRecordJSON{
+		ID:                        normalized.ID,
+		StartedAt:                 normalized.StartedAt,
+		CompletedAt:               normalized.CompletedAt,
+		DurationMs:                normalized.DurationMs,
+		Type:                      normalized.Type,
+		TriggerReason:             normalized.TriggerReason,
+		ScopeResourceIDs:          marshalOptionalPatrolStringSlice(normalized.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: marshalOptionalPatrolStringSlice(normalized.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        marshalOptionalPatrolStringSlice(normalized.ScopeResourceTypes),
+		ScopeContext:              normalized.ScopeContext,
+		AlertIdentifier:           normalized.AlertIdentifier,
+		FindingID:                 normalized.FindingID,
+		ResourcesChecked:          normalized.ResourcesChecked,
+		NodesChecked:              normalized.NodesChecked,
+		GuestsChecked:             normalized.GuestsChecked,
+		DockerChecked:             normalized.DockerChecked,
+		StorageChecked:            normalized.StorageChecked,
+		HostsChecked:              normalized.HostsChecked,
+		PBSChecked:                normalized.PBSChecked,
+		PMGChecked:                normalized.PMGChecked,
+		KubernetesChecked:         normalized.KubernetesChecked,
+		NewFindings:               normalized.NewFindings,
+		ExistingFindings:          normalized.ExistingFindings,
+		RejectedFindings:          normalized.RejectedFindings,
+		ResolvedFindings:          normalized.ResolvedFindings,
+		AutoFixCount:              normalized.AutoFixCount,
+		FindingsSummary:           normalized.FindingsSummary,
+		FindingIDs:                normalized.FindingIDs,
+		ErrorCount:                normalized.ErrorCount,
+		Status:                    normalized.Status,
+		TriageFlags:               normalized.TriageFlags,
+		TriageSkippedLLM:          normalized.TriageSkippedLLM,
+		AIAnalysis:                normalized.AIAnalysis,
+		InputTokens:               normalized.InputTokens,
+		OutputTokens:              normalized.OutputTokens,
+		ToolCalls:                 normalized.ToolCalls,
+		ToolCallCount:             normalized.ToolCallCount,
+	})
+}
+
+func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
+	var payload patrolRunRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	*r = normalizePatrolRunRecord(PatrolRunRecord{
+		ID:                        payload.ID,
+		StartedAt:                 payload.StartedAt,
+		CompletedAt:               payload.CompletedAt,
+		Duration:                  time.Duration(payload.DurationMs) * time.Millisecond,
+		DurationMs:                payload.DurationMs,
+		Type:                      payload.Type,
+		TriggerReason:             payload.TriggerReason,
+		ScopeResourceIDs:          unmarshalOptionalPatrolStringSlice(payload.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: unmarshalOptionalPatrolStringSlice(payload.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        unmarshalOptionalPatrolStringSlice(payload.ScopeResourceTypes),
+		ScopeContext:              payload.ScopeContext,
+		AlertIdentifier:           canonicalPatrolAlertIdentifier(payload.AlertIdentifier),
+		FindingID:                 payload.FindingID,
+		ResourcesChecked:          payload.ResourcesChecked,
+		NodesChecked:              payload.NodesChecked,
+		GuestsChecked:             payload.GuestsChecked,
+		DockerChecked:             payload.DockerChecked,
+		StorageChecked:            payload.StorageChecked,
+		HostsChecked:              payload.HostsChecked,
+		PBSChecked:                payload.PBSChecked,
+		PMGChecked:                payload.PMGChecked,
+		KubernetesChecked:         payload.KubernetesChecked,
+		NewFindings:               payload.NewFindings,
+		ExistingFindings:          payload.ExistingFindings,
+		RejectedFindings:          payload.RejectedFindings,
+		ResolvedFindings:          payload.ResolvedFindings,
+		AutoFixCount:              payload.AutoFixCount,
+		FindingsSummary:           payload.FindingsSummary,
+		FindingIDs:                payload.FindingIDs,
+		ErrorCount:                payload.ErrorCount,
+		Status:                    payload.Status,
+		TriageFlags:               payload.TriageFlags,
+		TriageSkippedLLM:          payload.TriageSkippedLLM,
+		AIAnalysis:                payload.AIAnalysis,
+		InputTokens:               payload.InputTokens,
+		OutputTokens:              payload.OutputTokens,
+		ToolCalls:                 payload.ToolCalls,
+		ToolCallCount:             payload.ToolCallCount,
+	})
+	return nil
 }
 
 // MaxPatrolRunHistory is the maximum number of patrol runs to keep in history
@@ -168,65 +339,28 @@ type ForecastProvider interface {
 // It allows the unified store to receive patrol findings in addition to alerts
 type UnifiedFindingCallback func(f *Finding) bool
 
-// InvestigationOrchestrator defines the interface for autonomous investigation of findings
-type InvestigationOrchestrator interface {
-	// InvestigateFinding starts an investigation for a finding
-	InvestigateFinding(ctx context.Context, finding *InvestigationFinding, autonomyLevel string) error
-	// GetInvestigationByFinding returns the latest investigation for a finding
-	GetInvestigationByFinding(findingID string) *InvestigationSession
-	// GetRunningCount returns the number of running investigations
-	GetRunningCount() int
-	// GetFixedCount returns the number of issues auto-fixed by Patrol
-	GetFixedCount() int
-	// CanStartInvestigation returns true if a new investigation can be started
-	CanStartInvestigation() bool
-	// ReinvestigateFinding triggers a re-investigation of a finding
-	ReinvestigateFinding(ctx context.Context, findingID, autonomyLevel string) error
-	// Shutdown signals all running investigations to stop, persists state,
-	// and waits for them to finish (up to the context deadline).
-	Shutdown(ctx context.Context) error
-}
+// PushNotifyCallback is called to send a push notification through the relay.
+type PushNotifyCallback func(notification relay.PushNotificationPayload)
+
+// InvestigationOrchestrator is the interface for autonomous investigation of findings.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationOrchestrator = aicontracts.InvestigationOrchestrator
 
 // InvestigationStoreMaintainer is an optional interface for orchestrators that
 // expose their investigation store for periodic maintenance.
-type InvestigationStoreMaintainer interface {
-	CleanupInvestigationStore(maxAge time.Duration, maxSessions int)
-}
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationStoreMaintainer = aicontracts.InvestigationStoreMaintainer
 
-// InvestigationFinding is the shared finding type used by the investigation
-// orchestrator. Type alias so *InvestigationFinding and *finding.Finding
-// are interchangeable, eliminating field-by-field copies at the adapter layer.
-type InvestigationFinding = finding.Finding
+// InvestigationFinding is the shared type used by patrol and investigation orchestration.
+type InvestigationFinding = aicontracts.Finding
 
-// InvestigationSession represents the result of an investigation (minimal interface)
-type InvestigationSession struct {
-	ID             string            `json:"id"`
-	FindingID      string            `json:"finding_id"`
-	SessionID      string            `json:"session_id"`
-	Status         string            `json:"status"`
-	StartedAt      time.Time         `json:"started_at"`
-	CompletedAt    *time.Time        `json:"completed_at,omitempty"`
-	TurnCount      int               `json:"turn_count"`
-	Outcome        string            `json:"outcome,omitempty"`
-	ToolsAvailable []string          `json:"tools_available,omitempty"`
-	ToolsUsed      []string          `json:"tools_used,omitempty"`
-	EvidenceIDs    []string          `json:"evidence_ids,omitempty"`
-	Summary        string            `json:"summary,omitempty"`
-	Error          string            `json:"error,omitempty"`
-	ProposedFix    *InvestigationFix `json:"proposed_fix,omitempty"`
-	ApprovalID     string            `json:"approval_id,omitempty"`
-}
+// InvestigationSession represents the result of an investigation.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationSession = aicontracts.InvestigationSession
 
-// InvestigationFix represents a proposed remediation action
-type InvestigationFix struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Commands    []string `json:"commands,omitempty"`
-	RiskLevel   string   `json:"risk_level,omitempty"`
-	Destructive bool     `json:"destructive"`
-	TargetHost  string   `json:"target_host,omitempty"`
-	Rationale   string   `json:"rationale,omitempty"`
-}
+// InvestigationFix represents a proposed remediation action.
+// Re-exported from pkg/aicontracts for backwards compatibility.
+type InvestigationFix = aicontracts.Fix
 
 // PatrolService runs background AI analysis of infrastructure
 type PatrolService struct {
@@ -249,13 +383,21 @@ type PatrolService struct {
 	incidentStore       *memory.IncidentStore   // For incident timeline capture
 	alertResolver       AlertResolver           // For AI-based alert resolution
 
+	// Unified resource provider — reads physical disks, Ceph, etc. from canonical model
+	unifiedResourceProvider UnifiedResourceProvider
+	// ReadState provides typed read-only views over resource state (VMs, nodes, hosts, etc.).
+	// This is injected separately from stateProvider since stateProvider also contains
+	// non-resource telemetry (alerts, backups, connection health) that isn't modeled as resources yet.
+	readState unifiedresources.ReadState
+
 	// New AI intelligence providers (Phase 6)
 	learningProvider     LearningProvider     // For learned preferences from user feedback
 	proxmoxEventProvider ProxmoxEventProvider // For recent Proxmox operations
 	forecastProvider     ForecastProvider     // For trend forecasts
 
 	// Event-driven patrol triggers (Phase 7)
-	triggerManager *TriggerManager // For event-driven patrol scheduling
+	triggerManager       *TriggerManager // For event-driven patrol scheduling
+	eventTriggersEnabled bool            // When false, event-driven triggers (alerts, anomalies) are rejected
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
@@ -264,7 +406,7 @@ type PatrolService struct {
 	circuitBreaker *circuit.Breaker
 
 	// Remediation engine for generating fix plans from findings
-	remediationEngine *remediation.Engine
+	remediationEngine aicontracts.RemediationEngine
 
 	// Investigation orchestrator for autonomous investigation of findings
 	investigationOrchestrator InvestigationOrchestrator
@@ -274,6 +416,9 @@ type PatrolService struct {
 	unifiedFindingCallback UnifiedFindingCallback
 	// Unified resolver callback - marks findings resolved in unified store
 	unifiedFindingResolver func(findingID string)
+
+	// Push notification callback - sends push via relay to mobile devices
+	pushNotifyCallback PushNotifyCallback
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
@@ -296,14 +441,93 @@ type PatrolService struct {
 	// Patrol run history with persistence support
 	runHistoryStore *PatrolRunHistoryStore
 
+	// Quickstart credit manager for free hosted patrol runs
+	quickstartCredits QuickstartCreditManager
+
 	// Ad-hoc trigger channel for event-driven patrols (alert driven)
 	adHocTrigger chan *alerts.Alert
 
 	// Live streaming support
 	streamMu          sync.RWMutex
 	streamSubscribers map[chan PatrolStreamEvent]*streamSubscriber
-	currentOutput     strings.Builder // Buffer for current streaming output
-	streamPhase       string          // "idle", "analyzing", "complete"
+	currentOutput     streamOutputBuffer // Tail buffer for current streaming output
+	streamPhase       string             // "idle", "analyzing", "complete"
+	streamRunID       string             // Identifies the current streamed run (best-effort)
+	streamSeq         int64              // Monotonic sequence for SSE events within streamRunID
+	streamCurrentTool string             // Last observed tool name (best-effort)
+	streamEvents      []PatrolStreamEvent
+}
+
+const patrolStreamMaxOutputBytes = 64 * 1024
+
+// streamOutputBuffer retains only the most recent bytes written, to cap memory usage
+// while still allowing late joiners to get a useful snapshot.
+type streamOutputBuffer struct {
+	buf       []byte
+	truncated bool
+}
+
+func (b *streamOutputBuffer) Reset() {
+	// Keep capacity bounded so long-running streams can't retain a large backing array.
+	if cap(b.buf) > patrolStreamMaxOutputBytes {
+		b.buf = make([]byte, 0, patrolStreamMaxOutputBytes)
+	} else {
+		b.buf = b.buf[:0]
+	}
+	b.truncated = false
+}
+
+func (b *streamOutputBuffer) Len() int             { return len(b.buf) }
+func (b *streamOutputBuffer) String() string       { return string(b.buf) }
+func (b *streamOutputBuffer) Truncated() bool      { return b.truncated }
+func (b *streamOutputBuffer) WriteString(s string) { b.appendString(s) }
+
+func (b *streamOutputBuffer) appendString(s string) {
+	if len(s) == 0 {
+		return
+	}
+
+	max := patrolStreamMaxOutputBytes
+	if len(s) >= max {
+		// Keep only the tail of the incoming chunk.
+		b.buf = append(b.buf[:0], s[len(s)-max:]...)
+		b.truncated = true
+		b.normalizeUTF8Start()
+		b.shrinkCapIfNeeded()
+		return
+	}
+
+	// Keep as much of existing tail as possible.
+	needKeep := max - len(s)
+	if len(b.buf) > needKeep {
+		b.buf = append(b.buf[:0], b.buf[len(b.buf)-needKeep:]...)
+		b.truncated = true
+	}
+	b.buf = append(b.buf, s...)
+	if len(b.buf) > max {
+		b.buf = b.buf[len(b.buf)-max:]
+		b.truncated = true
+	}
+	b.normalizeUTF8Start()
+	b.shrinkCapIfNeeded()
+}
+
+func (b *streamOutputBuffer) normalizeUTF8Start() {
+	// If we truncated by bytes, we may have cut in the middle of a UTF-8 rune.
+	// Drop leading continuation bytes so the string starts on a rune boundary.
+	for len(b.buf) > 0 && (b.buf[0]&0xC0) == 0x80 {
+		b.buf = b.buf[1:]
+		b.truncated = true
+	}
+}
+
+func (b *streamOutputBuffer) shrinkCapIfNeeded() {
+	if cap(b.buf) <= patrolStreamMaxOutputBytes {
+		return
+	}
+	tmp := make([]byte, len(b.buf), patrolStreamMaxOutputBytes)
+	copy(tmp, b.buf)
+	b.buf = tmp
 }
 
 // ToolCallRecord captures a single tool invocation during a patrol run.
@@ -323,11 +547,30 @@ type ToolCallRecord struct {
 type streamSubscriber struct {
 	ch     chan PatrolStreamEvent
 	closed atomic.Bool
+	// Consecutive times we couldn't deliver to this subscriber because its channel
+	// was full. Used to tolerate short bursts without immediately disconnecting.
+	fullCount int
 }
 
 // PatrolStreamEvent represents a streaming update from the patrol
 type PatrolStreamEvent struct {
-	Type    string `json:"type"` // "start", "content", "phase", "complete", "error", "tool_start", "tool_end"
+	// Meta
+	// Seq is suitable to be used as an SSE "id:" for Last-Event-ID, but replay is best-effort.
+	RunID string `json:"run_id,omitempty"`
+	Seq   int64  `json:"seq,omitempty"`
+	TsMs  int64  `json:"ts_ms,omitempty"`
+	// If this is a synthetic snapshot/resync event, why it was emitted.
+	// Examples: "late_joiner", "stale_last_event_id".
+	ResyncReason string `json:"resync_reason,omitempty"`
+	BufferStart  int64  `json:"buffer_start_seq,omitempty"`
+	BufferEnd    int64  `json:"buffer_end_seq,omitempty"`
+	// True when the snapshot content has been truncated due to the tail buffer.
+	ContentTruncated *bool `json:"content_truncated,omitempty"`
+
+	// Payload
+	// Known types include: "snapshot", "start", "content", "phase", "thinking",
+	// "complete", "error", "tool_start", "tool_end".
+	Type    string `json:"type"`
 	Content string `json:"content,omitempty"`
 	Phase   string `json:"phase,omitempty"`  // Current phase description
 	Tokens  int    `json:"tokens,omitempty"` // Token count so far
@@ -343,15 +586,16 @@ type PatrolStreamEvent struct {
 // NewPatrolService creates a new patrol service
 func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolService {
 	return &PatrolService{
-		aiService:         aiService,
-		stateProvider:     stateProvider,
-		config:            DefaultPatrolConfig(),
-		findings:          NewFindingsStore(),
-		thresholds:        DefaultPatrolThresholds(),
-		stopCh:            make(chan struct{}),
-		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
-		streamSubscribers: make(map[chan PatrolStreamEvent]*streamSubscriber),
-		streamPhase:       "idle",
-		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
+		aiService:            aiService,
+		stateProvider:        stateProvider,
+		config:               DefaultPatrolConfig(),
+		findings:             NewFindingsStore(),
+		thresholds:           DefaultPatrolThresholds(),
+		eventTriggersEnabled: true,
+		stopCh:               make(chan struct{}),
+		runHistoryStore:      NewPatrolRunHistoryStore(MaxPatrolRunHistory),
+		streamSubscribers:    make(map[chan PatrolStreamEvent]*streamSubscriber),
+		streamPhase:          "idle",
+		adHocTrigger:         make(chan *alerts.Alert, 10), // Buffer triggers
 	}
 }

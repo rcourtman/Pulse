@@ -56,6 +56,33 @@ func TestUpdateQueue_MarkRunning(t *testing.T) {
 	}
 }
 
+func TestUpdateQueue_GetCurrentJobReturnsDefensiveCopy(t *testing.T) {
+	queue := NewUpdateQueue()
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted || job == nil {
+		t.Fatal("expected enqueue to succeed")
+	}
+
+	snapshot := queue.GetCurrentJob()
+	if snapshot == nil {
+		t.Fatal("expected current job snapshot")
+	}
+
+	snapshot.State = JobStateFailed
+	snapshot.DownloadURL = "tampered"
+
+	current := queue.GetCurrentJob()
+	if current == nil {
+		t.Fatal("expected current job")
+	}
+	if current.State != JobStateQueued {
+		t.Fatalf("expected queued state to remain unchanged, got %s", current.State)
+	}
+	if current.DownloadURL != "https://example.com/update.tar.gz" {
+		t.Fatalf("expected original download URL, got %q", current.DownloadURL)
+	}
+}
+
 func TestUpdateQueue_MarkCompleted(t *testing.T) {
 	queue := NewUpdateQueue()
 
@@ -148,6 +175,49 @@ func TestUpdateQueue_IsRunning(t *testing.T) {
 	// This is by design to allow status polling
 }
 
+func TestUpdateQueue_MarkCompletedClearsAfterDelay(t *testing.T) {
+	queue := NewUpdateQueue()
+	queue.clearDelay = 20 * time.Millisecond
+
+	job, _ := queue.Enqueue("https://example.com/update.tar.gz")
+	queue.MarkRunning(job.ID)
+	queue.MarkCompleted(job.ID, nil)
+
+	if queue.GetCurrentJob() == nil {
+		t.Fatal("current job should be visible immediately after completion")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if queue.GetCurrentJob() != nil {
+		t.Fatal("current job should be cleared after delay")
+	}
+}
+
+func TestUpdateQueue_CancelAddsHistoryAndClearsAfterDelay(t *testing.T) {
+	queue := NewUpdateQueue()
+	queue.clearDelay = 20 * time.Millisecond
+
+	job, _ := queue.Enqueue("https://example.com/update.tar.gz")
+	queue.MarkRunning(job.ID)
+
+	if ok := queue.Cancel(job.ID); !ok {
+		t.Fatal("Cancel should succeed")
+	}
+
+	history := queue.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("History should contain 1 cancelled job, got %d", len(history))
+	}
+	if history[0].State != JobStateCancelled {
+		t.Fatalf("history state = %s, want %s", history[0].State, JobStateCancelled)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if queue.GetCurrentJob() != nil {
+		t.Fatal("current job should be cleared after cancellation delay")
+	}
+}
+
 func TestUpdateQueue_History(t *testing.T) {
 	queue := NewUpdateQueue()
 
@@ -191,6 +261,55 @@ func TestUpdateQueue_MaxHistory(t *testing.T) {
 	history := queue.GetHistory()
 	if len(history) > queue.maxHistory {
 		t.Errorf("History should be limited to %d jobs, got %d", queue.maxHistory, len(history))
+	}
+}
+
+func TestUpdateQueue_GetCurrentJobReturnsCopy(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted {
+		t.Fatal("job should be accepted")
+	}
+	queue.MarkRunning(job.ID)
+
+	current := queue.GetCurrentJob()
+	if current == nil {
+		t.Fatal("expected current job")
+	}
+	current.State = JobStateFailed
+
+	again := queue.GetCurrentJob()
+	if again == nil {
+		t.Fatal("expected current job")
+	}
+	if again.State != JobStateRunning {
+		t.Fatalf("internal state mutated through returned job pointer: %s", again.State)
+	}
+}
+
+func TestUpdateQueue_GetHistoryReturnsCopies(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted {
+		t.Fatal("job should be accepted")
+	}
+	queue.MarkRunning(job.ID)
+	queue.MarkCompleted(job.ID, nil)
+
+	history := queue.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(history))
+	}
+	history[0].State = JobStateFailed
+
+	again := queue.GetHistory()
+	if len(again) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(again))
+	}
+	if again[0].State != JobStateCompleted {
+		t.Fatalf("internal history mutated through returned pointer: %s", again[0].State)
 	}
 }
 

@@ -43,8 +43,7 @@ type DiscoveryError struct {
 // DiscoveryResult contains all discovered servers
 type DiscoveryResult struct {
 	Servers          []DiscoveredServer `json:"servers"`
-	Errors           []string           `json:"errors,omitempty"`            // Deprecated: kept for backward compatibility
-	StructuredErrors []DiscoveryError   `json:"structured_errors,omitempty"` // New structured error format
+	StructuredErrors []DiscoveryError   `json:"structured_errors,omitempty"`
 	Environment      *EnvironmentInfo   `json:"environment,omitempty"`
 }
 
@@ -66,7 +65,30 @@ func friendlyPhaseName(phase string) string {
 	return phase
 }
 
-// AddError adds a structured error to the result (also maintains backward-compatible error list)
+func formatLegacyDiscoveryError(err DiscoveryError) string {
+	friendlyPhase := friendlyPhaseName(err.Phase)
+	if err.IP != "" && err.Port > 0 {
+		return fmt.Sprintf("%s [%s:%d]: %s", friendlyPhase, err.IP, err.Port, err.Message)
+	}
+	if err.IP != "" {
+		return fmt.Sprintf("%s [%s]: %s", friendlyPhase, err.IP, err.Message)
+	}
+	return fmt.Sprintf("%s: %s", friendlyPhase, err.Message)
+}
+
+// LegacyErrors derives the deprecated string error list for compatibility boundaries.
+func (r *DiscoveryResult) LegacyErrors() []string {
+	if r == nil || len(r.StructuredErrors) == 0 {
+		return []string{}
+	}
+	legacy := make([]string, 0, len(r.StructuredErrors))
+	for _, err := range r.StructuredErrors {
+		legacy = append(legacy, formatLegacyDiscoveryError(err))
+	}
+	return legacy
+}
+
+// AddError adds a structured error to the result.
 func (r *DiscoveryResult) AddError(phase, errorType, message, ip string, port int) {
 	structuredErr := DiscoveryError{
 		IP:        ip,
@@ -77,16 +99,6 @@ func (r *DiscoveryResult) AddError(phase, errorType, message, ip string, port in
 		Timestamp: time.Now(),
 	}
 	r.StructuredErrors = append(r.StructuredErrors, structuredErr)
-
-	// Also add to legacy errors for backward compatibility (use friendly phase name for display)
-	friendlyPhase := friendlyPhaseName(phase)
-	if ip != "" && port > 0 {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s:%d]: %s", friendlyPhase, ip, port, message))
-	} else if ip != "" {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s]: %s", friendlyPhase, ip, message))
-	} else {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s: %s", friendlyPhase, message))
-	}
 }
 
 // EnvironmentInfo captures metadata about the environment scan.
@@ -227,7 +239,6 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 
 	result := &DiscoveryResult{
 		Servers:          []DiscoveredServer{},
-		Errors:           []string{},
 		StructuredErrors: []DiscoveryError{},
 		Environment:      buildEnvironmentInfo(activeProfile),
 	}
@@ -368,7 +379,7 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 
 	log.Info().
 		Int("servers_found", len(result.Servers)).
-		Int("errors", len(result.Errors)).
+		Int("errors", len(result.StructuredErrors)).
 		Msg("Discovery completed")
 
 	return result, nil

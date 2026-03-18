@@ -49,6 +49,14 @@ jobs:
         working-directory: frontend-modern
         run: npm run lint
 
+      - name: Audit header composition
+        working-directory: frontend-modern
+        run: npm run lint:headers
+
+      - name: Check frontend copy-paste duplication
+        working-directory: frontend-modern
+        run: npm run lint:cpd
+
       - name: Frontend unit tests
         working-directory: frontend-modern
         run: npm run test
@@ -60,16 +68,83 @@ jobs:
       - name: Build frontend bundle (with embed copy)
         run: make frontend
 
+      - name: Check frontend bundle size budget
+        working-directory: frontend-modern
+        run: npm run check:bundlesize
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
+      - name: Script smoke tests
+        run: scripts/tests/run.sh
+
       - name: Go unit tests
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        run: go test ./...
+        run: go test -race -timeout 10m ./...
+
+      - name: Go benchmarks
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-bench-data
+        run: |
+          set -o pipefail
+          go test -bench=. -benchmem -count=5 -run=^$ -timeout=10m \
+            ./pkg/metrics/ \
+            ./pkg/auth/ \
+            ./internal/api/ \
+            ./internal/monitoring/ \
+            ./internal/unifiedresources/ \
+            ./internal/dockeragent/ \
+            ./cmd/pulse-agent/ \
+            ./internal/hostagent/ \
+            ./internal/hostmetrics/ \
+            | tee bench-results.txt
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench-results.txt
+          retention-days: 90
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260211190930-8161c38c6cdc
+
+      - name: Save benchmark baseline (main branch)
+        if: github.ref == 'refs/heads/main'
+        run: cp bench-results.txt bench-baseline.txt
+
+      - name: Cache benchmark baseline (main branch)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: bench-baseline.txt
+          key: go-bench-baseline-${{ github.sha }}
+
+      - name: Restore benchmark baseline (PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: bench-baseline.txt
+          key: go-bench-baseline-
+          restore-keys: go-bench-baseline-
+
+      - name: Compare benchmarks against baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eo pipefail
+          if [ ! -f bench-baseline.txt ]; then
+            echo "No benchmark baseline found (first PR against main?). Skipping comparison."
+            exit 0
+          fi
+          echo "=== Benchmark comparison (baseline vs current) ==="
+          benchstat bench-baseline.txt bench-results.txt | tee bench-comparison.txt
+          echo ""
+          bash scripts/check-bench-regression.sh bench-comparison.txt
 
       - name: Build Pulse backend
         run: go build ./cmd/pulse

@@ -46,6 +46,35 @@ func TestPersistence_AIFindings(t *testing.T) {
 	assert.Empty(t, loaded.Findings)
 }
 
+func TestAIFindingRecordJSONCanonicalOutput(t *testing.T) {
+	record := AIFindingRecord{
+		ID:              "finding-1",
+		Description:     "analysis",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		DetectedAt:      time.Now(),
+		LastSeenAt:      time.Now(),
+	}
+
+	raw, err := json.Marshal(record)
+	require.NoError(t, err)
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	assert.Equal(t, "instance:node:100::metric/cpu", payload["alert_identifier"])
+	_, hasLegacy := payload["alert_id"]
+	assert.False(t, hasLegacy)
+
+	var decoded AIFindingRecord
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"id":"finding-1",
+		"description":"analysis",
+		"detected_at":"2026-03-11T00:00:00Z",
+		"last_seen_at":"2026-03-11T00:00:00Z",
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded))
+	assert.Equal(t, "instance:node:100::metric/cpu", decoded.AlertIdentifier)
+}
+
 func TestPersistence_AIUsageHistory(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)
@@ -94,14 +123,14 @@ func TestPersistence_AIConfig(t *testing.T) {
 
 	// Save
 	cfg := NewDefaultAIConfig()
-	cfg.APIKey = "testkey"
+	cfg.AnthropicAPIKey = "testkey"
 	err = p.SaveAIConfig(*cfg)
 	require.NoError(t, err)
 
 	// Reload
 	loaded, err = p.LoadAIConfig()
 	require.NoError(t, err)
-	assert.Equal(t, "testkey", loaded.APIKey)
+	assert.Equal(t, "testkey", loaded.AnthropicAPIKey)
 
 	// Corrupt file
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), []byte("{invalid"), 0644))
@@ -139,6 +168,49 @@ func TestPersistence_AIConfig_MigratesSuggestControlLevel(t *testing.T) {
 	var saved AIConfig
 	require.NoError(t, json.Unmarshal(updatedRaw, &saved))
 	assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
+}
+
+func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	legacy := map[string]interface{}{
+		"enabled":              true,
+		"provider":             "anthropic",
+		"api_key":              "sk-ant-legacy",
+		"model":                "anthropic:claude-3-5-sonnet-20241022",
+		"autonomous_mode":      true,
+		"custom_context":       "legacy config",
+		"patrol_enabled":       true,
+		"patrol_analyze_nodes": true,
+	}
+
+	data, err := json.Marshal(legacy)
+	require.NoError(t, err)
+	if p.crypto != nil {
+		data, err = p.crypto.Encrypt(data)
+		require.NoError(t, err)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), data, 0o600))
+
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", loaded.Model)
+	assert.Equal(t, "sk-ant-legacy", loaded.AnthropicAPIKey)
+	assert.Equal(t, ControlLevelAutonomous, loaded.ControlLevel)
+	assert.Equal(t, "legacy config", loaded.CustomContext)
+
+	savedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
+	require.NoError(t, err)
+	if p.crypto != nil {
+		savedRaw, err = p.crypto.Decrypt(savedRaw)
+		require.NoError(t, err)
+	}
+
+	var saved AIConfig
+	require.NoError(t, json.Unmarshal(savedRaw, &saved))
+	assert.Equal(t, "sk-ant-legacy", saved.AnthropicAPIKey)
+	assert.Equal(t, ControlLevelAutonomous, saved.ControlLevel)
 }
 
 func TestPersistence_PatrolRunHistory(t *testing.T) {

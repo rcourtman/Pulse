@@ -7,17 +7,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
-func resetRecoveryStore() {
-	recoveryStore = nil
-	recoveryStoreOnce = sync.Once{}
+func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	var matched *http.Cookie
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			matched = cookie
+		}
+	}
+	return matched
 }
 
 func TestQuickSecuritySetupRejectsUnauthenticatedForce(t *testing.T) {
@@ -72,13 +77,9 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	router.initializeBootstrapToken()
 
 	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
-	content, err := os.ReadFile(tokenPath)
+	bootstrapToken, _, _, err := bootstrap.Load(cfg.DataPath)
 	if err != nil {
-		t.Fatalf("read bootstrap token: %v", err)
-	}
-	bootstrapToken := strings.TrimSpace(string(content))
-	if bootstrapToken == "" {
-		t.Fatalf("bootstrap token is empty")
+		t.Fatalf("load bootstrap token: %v", err)
 	}
 
 	handler := handleQuickSecuritySetupFixed(router)
@@ -107,6 +108,23 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 		t.Fatalf("expected 200 OK with valid bootstrap token, got %d (%s)", rrWith.Code, rrWith.Body.String())
 	}
 
+	cookies := rrWith.Result().Cookies()
+	sessionCookie := findCookie(cookies, sessionCookieName(false))
+	if sessionCookie == nil || strings.TrimSpace(sessionCookie.Value) == "" {
+		t.Fatalf("expected quick setup to establish a browser session cookie")
+	}
+	if !ValidateSession(sessionCookie.Value) {
+		t.Fatalf("expected established session to validate")
+	}
+	if got := GetSessionUsername(sessionCookie.Value); got != "bootstrap" {
+		t.Fatalf("session username=%q, want %q", got, "bootstrap")
+	}
+
+	csrfCookie := findCookie(cookies, CookieNameCSRF)
+	if csrfCookie == nil || strings.TrimSpace(csrfCookie.Value) == "" {
+		t.Fatalf("expected quick setup to issue a CSRF cookie")
+	}
+
 	if _, err := os.Stat(tokenPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected bootstrap token file to be removed after successful setup, got err=%v", err)
 	}
@@ -129,13 +147,9 @@ func TestValidateBootstrapTokenEndpoint(t *testing.T) {
 	router.initializeBootstrapToken()
 
 	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
-	content, err := os.ReadFile(tokenPath)
+	token, _, _, err := bootstrap.Load(cfg.DataPath)
 	if err != nil {
-		t.Fatalf("read bootstrap token: %v", err)
-	}
-	token := strings.TrimSpace(string(content))
-	if token == "" {
-		t.Fatalf("bootstrap token should not be empty")
+		t.Fatalf("load bootstrap token: %v", err)
 	}
 
 	handler := http.HandlerFunc(router.handleValidateBootstrapToken)
@@ -256,7 +270,7 @@ func TestQuickSecuritySetupRequiresSettingsScopeForTokens(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("ab", 32) // 64 hex chars
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -299,7 +313,7 @@ func TestRegenerateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("cd", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -339,7 +353,7 @@ func TestValidateAPITokenRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("ef", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -381,7 +395,7 @@ func TestResetLockoutRequiresSettingsScope(t *testing.T) {
 	}
 
 	rawToken := strings.Repeat("12", 32)
-	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeHostReport})
+	record, err := config.NewAPITokenRecord(rawToken, "limited", []string{config.ScopeAgentReport})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
 	}
@@ -434,13 +448,60 @@ func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
 	attachAPITokenRecord(req, record)
 
 	rr := httptest.NewRecorder()
-	result := ensureSettingsWriteScope(rr, req)
+	result := ensureSettingsWriteScope(cfg, rr, req)
 
 	if !result {
 		t.Error("ensureSettingsWriteScope should return true when token has settings:write scope")
 	}
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected no error response, got status %d", rr.Code)
+	}
+}
+
+func TestEnsureSettingsWriteScopeRejectsNonAdminSession(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "admin",
+	}
+
+	sessionToken := "settings-write-member-" + time.Now().Format("150405.000000000")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(cfg, rr, req)
+
+	if result {
+		t.Fatal("ensureSettingsWriteScope should reject non-admin session users")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin session, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privileges error, got %q", rr.Body.String())
+	}
+}
+
+func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "admin",
+	}
+
+	sessionToken := "settings-write-admin-" + time.Now().Format("150405.000000001")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(cfg, rr, req)
+
+	if !result {
+		t.Fatal("ensureSettingsWriteScope should allow configured admin session users")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin session, got %d", rr.Code)
 	}
 }
 

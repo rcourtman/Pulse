@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +42,53 @@ func TestResolveChannel(t *testing.T) {
 	}
 	if got := manager.resolveChannel("", nil); got != "stable" {
 		t.Fatalf("expected default channel, got %s", got)
+	}
+
+	manager.config.UpdateChannel = "beta"
+	if got := manager.resolveChannel("", &VersionInfo{Channel: "rc"}); got != "rc" {
+		t.Fatalf("expected invalid config channel to fall back to version channel, got %s", got)
+	}
+	if got := manager.resolveChannel("beta", &VersionInfo{Channel: "rc"}); got != "rc" {
+		t.Fatalf("expected invalid requested channel to fall back to version channel, got %s", got)
+	}
+}
+
+func TestValidateApplyTargetVersion(t *testing.T) {
+	target, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz")
+	if err != nil {
+		t.Fatalf("stable release should be accepted, got %v", err)
+	}
+	if target != "v6.0.0" {
+		t.Fatalf("unexpected target version %q", target)
+	}
+
+	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err == nil {
+		t.Fatal("expected stable channel to reject prerelease target")
+	}
+
+	if _, err := validateApplyTargetVersion("rc", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err != nil {
+		t.Fatalf("rc channel should accept prerelease target, got %v", err)
+	}
+
+	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/latest/install.sh"); err == nil {
+		t.Fatal("expected invalid download URL to be rejected")
+	}
+}
+
+func TestUpdateReleaseHelpersUseConfiguredRepo(t *testing.T) {
+	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
+
+	if got := updateReleaseDownloadPrefix(); got != "https://github.com/example/pulse-fork/releases/download/" {
+		t.Fatalf("updateReleaseDownloadPrefix() = %q", got)
+	}
+	if got := updateReleaseAPIPath(); got != "/repos/example/pulse-fork/releases" {
+		t.Fatalf("updateReleaseAPIPath() = %q", got)
+	}
+	if got := updateReleaseFeedURL(); got != "https://github.com/example/pulse-fork/releases.atom" {
+		t.Fatalf("updateReleaseFeedURL() = %q", got)
+	}
+	if got := updateReleaseMigrationURL(); got != "https://github.com/example/pulse-fork/releases/v4.0.0" {
+		t.Fatalf("updateReleaseMigrationURL() = %q", got)
 	}
 }
 
@@ -101,6 +149,24 @@ func TestConfiguredStageDelay(t *testing.T) {
 	}
 }
 
+func TestManagerCloseIsIdempotentAndUpdateStatusAfterCloseIsSafe(t *testing.T) {
+	manager := NewManager(&config.Config{})
+
+	manager.Close()
+	manager.Close()
+
+	manager.updateStatus("idle", 0, "after close")
+
+	select {
+	case _, ok := <-manager.GetProgressChannel():
+		if ok {
+			t.Fatal("expected progress channel to remain closed")
+		}
+	default:
+		t.Fatal("expected progress channel to be closed")
+	}
+}
+
 func TestGetLatestReleaseFromFeedMocked(t *testing.T) {
 	feed := `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -145,6 +211,30 @@ func TestGetLatestReleaseFromFeedMocked(t *testing.T) {
 	}
 }
 
+func TestGetLatestReleaseFromFeedMocked_OversizedFeed(t *testing.T) {
+	oversizedFeed := strings.Repeat("a", int(maxReleaseFeedBytes)+1)
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		body := io.NopCloser(strings.NewReader(oversizedFeed))
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Body:          body,
+			ContentLength: int64(len(oversizedFeed)),
+			Header:        http.Header{"Content-Type": []string{"application/atom+xml"}},
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{})
+	_, err := manager.getLatestReleaseFromFeed(context.Background(), "stable")
+	if err == nil || !strings.Contains(err.Error(), "feed response exceeds") {
+		t.Fatalf("expected oversized feed error, got: %v", err)
+	}
+}
+
 func TestManagerDownloadFile(t *testing.T) {
 	content := "payload"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,5 +259,24 @@ func TestManagerDownloadFile(t *testing.T) {
 	}
 	if string(data) != content {
 		t.Fatalf("unexpected file content: %s", string(data))
+	}
+}
+
+func TestManagerDownloadFileRejectsOversizedContentLength(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.FormatInt(maxUpdateDownloadBytes+1, 10))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	manager := NewManager(&config.Config{})
+	dest := filepath.Join(t.TempDir(), "file.bin")
+
+	_, err := manager.downloadFile(context.Background(), server.URL, dest)
+	if err == nil || !strings.Contains(err.Error(), "download exceeds maximum size") {
+		t.Fatalf("expected oversized download error, got: %v", err)
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no destination file to be created, stat err: %v", statErr)
 	}
 }

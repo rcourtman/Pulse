@@ -4,17 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
-// HostMetadataHandler handles host metadata operations
+const (
+	hostMetadataAgentBasePath = "/api/agents/metadata"
+)
+
+func hostMetadataPathParts(path string) (agentID string, isCollection bool, ok bool) {
+	switch {
+	case path == hostMetadataAgentBasePath || path == hostMetadataAgentBasePath+"/":
+		return "", true, true
+	case strings.HasPrefix(path, hostMetadataAgentBasePath+"/"):
+		return strings.TrimPrefix(path, hostMetadataAgentBasePath+"/"), false, true
+	default:
+		return "", false, false
+	}
+}
+
+// HostMetadataHandler handles agent metadata operations.
 type HostMetadataHandler struct {
-	mtPersistence     *config.MultiTenantPersistence
-	legacyPersistence *config.ConfigPersistence
+	mtPersistence *config.MultiTenantPersistence
 }
 
 // NewHostMetadataHandler creates a new host metadata handler
@@ -24,26 +37,15 @@ func NewHostMetadataHandler(mtPersistence *config.MultiTenantPersistence) *HostM
 	}
 }
 
-func (h *HostMetadataHandler) SetLegacyPersistence(persistence *config.ConfigPersistence) {
-	h.legacyPersistence = persistence
-}
-
 func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadataStore {
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
-	if h.mtPersistence != nil {
-		if p, err := h.mtPersistence.GetPersistence(orgID); err == nil && p != nil {
-			return p.GetHostMetadataStore()
-		}
-	}
-	if h.legacyPersistence != nil {
-		return h.legacyPersistence.GetHostMetadataStore()
-	}
-	return nil
+	p, _ := h.mtPersistence.GetPersistence(orgID)
+	return p.GetHostMetadataStore()
 }
 
 // Store returns the underlying metadata store for default tenant
@@ -51,18 +53,21 @@ func (h *HostMetadataHandler) Store() *config.HostMetadataStore {
 	return h.getStore(context.Background())
 }
 
-// HandleGetMetadata retrieves metadata for a specific host or all hosts
+// HandleGetMetadata retrieves metadata for a specific agent or all agents.
 func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Check if requesting specific host
-	path := r.URL.Path
-	// Handle both /api/hosts/metadata and /api/hosts/metadata/
-	if path == "/api/hosts/metadata" || path == "/api/hosts/metadata/" {
-		// Get all metadata
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok {
+		http.Error(w, "Invalid request path", http.StatusBadRequest)
+		return
+	}
+
+	if isCollection {
+		// Get all metadata.
 		w.Header().Set("Content-Type", "application/json")
 		store := h.getStore(r.Context())
 		allMeta := store.GetAll()
@@ -75,13 +80,10 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get specific host ID from path
-	hostID := strings.TrimPrefix(path, "/api/hosts/metadata/")
-
 	w.Header().Set("Content-Type", "application/json")
 
 	if hostID != "" {
-		// Get specific host metadata
+		// Get specific agent metadata.
 		store := h.getStore(r.Context())
 		meta := store.Get(hostID)
 		if meta == nil {
@@ -96,16 +98,16 @@ func (h *HostMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.R
 	}
 }
 
-// HandleUpdateMetadata updates metadata for a host
+// HandleUpdateMetadata updates metadata for an agent.
 func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok || isCollection || hostID == "" || hostID == "metadata" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -119,43 +121,15 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 	}
 
 	// Validate URL if provided
-	if meta.CustomURL != "" {
-		// Parse and validate the URL
-		parsedURL, err := url.Parse(meta.CustomURL)
-		if err != nil {
-			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Check scheme
-		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
-			return
-		}
-
-		// Check host is present and valid
-		if parsedURL.Host == "" {
-			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:8006 or https://myhost.local)", http.StatusBadRequest)
-			return
-		}
-
-		// Check for incomplete URLs like "https://host."
-		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
-			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
-			return
-		}
+	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
 	}
+
 	store := h.getStore(r.Context())
 	if err := store.Set(hostID, &meta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save host metadata")
-		// Provide more specific error message
-		errMsg := "Failed to save metadata"
-		if strings.Contains(err.Error(), "permission") {
-			errMsg = "Permission denied - check file permissions"
-		} else if strings.Contains(err.Error(), "no space") {
-			errMsg = "Disk full - cannot save metadata"
-		}
-		http.Error(w, errMsg, http.StatusInternalServerError)
+		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 
@@ -165,16 +139,16 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(&meta)
 }
 
-// HandleDeleteMetadata removes metadata for a host
+// HandleDeleteMetadata removes metadata for an agent.
 func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	hostID := strings.TrimPrefix(r.URL.Path, "/api/hosts/metadata/")
-	if hostID == "" || hostID == "metadata" {
-		http.Error(w, "Host ID required", http.StatusBadRequest)
+	hostID, isCollection, ok := hostMetadataPathParts(r.URL.Path)
+	if !ok || isCollection || hostID == "" || hostID == "metadata" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 	store := h.getStore(r.Context())

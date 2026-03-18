@@ -2,21 +2,23 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type patrolTestStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (p *patrolTestStateProvider) GetState() models.StateSnapshot {
+func (p *patrolTestStateProvider) ReadSnapshot() models.StateSnapshot {
 	return p.state
 }
 
@@ -101,7 +103,7 @@ func TestPatrolFindingCreatorAdapter_IsActionable(t *testing.T) {
 			},
 		},
 	}
-	lowAdapter := newPatrolFindingCreatorAdapter(ps, lowState)
+	lowAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, lowState))
 	_, _, err := lowAdapter.CreateFinding(tools.PatrolFindingInput{
 		Key:          "cpu-high",
 		Severity:     "warning",
@@ -128,7 +130,7 @@ func TestPatrolFindingCreatorAdapter_IsActionable(t *testing.T) {
 			},
 		},
 	}
-	highAdapter := newPatrolFindingCreatorAdapter(ps, highState)
+	highAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, highState))
 	_, _, err = highAdapter.CreateFinding(tools.PatrolFindingInput{
 		Key:          "cpu-high",
 		Severity:     "warning",
@@ -207,6 +209,48 @@ func TestPatrolService_ForcePatrol_RecordsRun(t *testing.T) {
 	t.Fatalf("expected ForcePatrol to record a run (count stayed at %d)", before)
 }
 
+func TestVerifyFixResolved_UsesReadStateWithoutSnapshotProvider(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.thresholds = PatrolThresholds{NodeCPUWarning: 90}
+
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName: "node-1",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 20},
+		},
+	})
+	ps.SetReadState(&mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}})
+
+	verified, err := ps.VerifyFixResolved(context.Background(), "node-1", "node", "cpu-high", "")
+	if err != nil {
+		t.Fatalf("expected read-state-backed verification to run, got %v", err)
+	}
+	if !verified {
+		t.Fatalf("expected read-state-backed verification to resolve healthy node")
+	}
+}
+
+func TestVerifyFixResolved_WithoutRuntimeStateFailsClosed(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	verified, err := ps.VerifyFixResolved(context.Background(), "node-1", "node", "cpu-high", "")
+	if err == nil {
+		t.Fatal("expected verification to fail without runtime state")
+	}
+	if verified {
+		t.Fatal("expected verification result to be false on failure")
+	}
+	if err != nil && !errors.Is(err, aicontracts.ErrVerificationUnknown) {
+		t.Fatalf("expected verification unknown error, got %v", err)
+	}
+}
+
 // --- Configurable threshold tests ---
 
 func TestActionabilityThreshold_DefaultFallback(t *testing.T) {
@@ -214,7 +258,7 @@ func TestActionabilityThreshold_DefaultFallback(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.thresholds = PatrolThresholds{} // all zero
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if got := adapter.actionabilityThreshold("cpu", "node"); got != 50.0 {
 		t.Errorf("cpu threshold = %v, want 50.0", got)
@@ -243,7 +287,7 @@ func TestActionabilityThreshold_CustomThresholds(t *testing.T) {
 		StorageWatch:   75,
 	}
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if got := adapter.actionabilityThreshold("cpu", "node"); got != 65.0 {
 		t.Errorf("cpu threshold = %v, want 65.0", got)
@@ -275,7 +319,7 @@ func TestIsActionable_CustomThresholdsRespected(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.60, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:          "cpu-high",
@@ -292,7 +336,7 @@ func TestIsActionable_CustomThresholdsRespected(t *testing.T) {
 
 	// Now set lower threshold (40%) - same 60% value should pass
 	ps.thresholds = PatrolThresholds{NodeCPUWatch: 40}
-	adapter2 := newPatrolFindingCreatorAdapter(ps, state)
+	adapter2 := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	if !adapter2.isActionable(finding) {
 		t.Fatal("finding at 60% CPU should be accepted with 40% threshold")
@@ -313,7 +357,7 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.40, Memory: models.Memory{Used: 78, Total: 100}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	nodeFinding := &Finding{
 		Key:          "memory-high",
@@ -335,7 +379,7 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 			{ID: "vm-1", Name: "vm-1", CPU: 0.40, Memory: models.Memory{Usage: 78}},
 		},
 	}
-	vmAdapter := newPatrolFindingCreatorAdapter(ps, vmState)
+	vmAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, vmState))
 
 	vmFinding := &Finding{
 		Key:          "memory-high",
@@ -352,10 +396,267 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 	}
 }
 
+func TestVerifyBackupFreshState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	now := time.Now()
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	vmResource := &unifiedresources.Resource{
+		ID:     "reg-qemu/101",
+		Name:   "vm-1",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			SourceID:   "qemu/101",
+			VMID:       101,
+			NodeName:   "pve1",
+			LastBackup: now.Add(-24 * time.Hour),
+		},
+	}
+	vm := unifiedresources.NewVMView(vmResource)
+	vmView := &vm
+	state.readState = &mockReadState{vms: []*unifiedresources.VMView{vmView}}
+
+	ok, err := verifyBackupFreshState(state, "101")
+	if err != nil {
+		t.Fatalf("expected readState-backed backup verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected recent backup to verify via readState")
+	}
+}
+
+func TestVerifyMetricRecoveredState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "n1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName: "node-1",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{NodeCPUWarning: 90}, "cpu-high", "n1", "node")
+	if err != nil {
+		t.Fatalf("expected readState-backed metric verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected CPU metric to verify as recovered via readState")
+	}
+}
+
+func TestVerifyMetricRecoveredState_UsesTypedLookupWhenIDsCollide(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "shared-id",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	storageView := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+		ID:     "shared-id",
+		Name:   "local",
+		Type:   unifiedresources.ResourceTypeStorage,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 55},
+		},
+	})
+	state.readState = &mockReadState{
+		nodes:   []*unifiedresources.NodeView{&nodeView},
+		storage: []*unifiedresources.StoragePoolView{&storageView},
+	}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{StorageWarning: 90}, "disk-high", "shared-id", "storage")
+	if err != nil {
+		t.Fatalf("expected typed storage lookup to succeed despite colliding IDs, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected storage metric to verify as recovered via typed lookup")
+	}
+}
+
+func TestVerifyMetricRecoveredState_UsesPhysicalDiskVerification(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	state.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					ID:   "disk-1",
+					Name: "disk-1",
+					Type: unifiedresources.ResourceTypePhysicalDisk,
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Health:      "PASSED",
+						Wearout:     90,
+						Temperature: 40,
+					},
+				},
+			}
+		},
+	}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", "disk-1", "physical_disk")
+	if err != nil {
+		t.Fatalf("expected physical disk verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected healthy physical disk to verify as recovered")
+	}
+}
+
+func TestIsActionable_ReadStateWithPhysicalDiskInventoryDoesNotRejectDiskFinding(t *testing.T) {
+	patrol := NewPatrolService(nil, nil)
+	adapter := patrolFindingCreatorAdapter{
+		patrol: patrol,
+		snap: patrolRuntimeState{
+			readState: &mockReadState{
+				nodes: []*unifiedresources.NodeView{
+					func() *unifiedresources.NodeView {
+						v := unifiedresources.NewNodeView(&unifiedresources.Resource{
+							ID:   "node-1",
+							Name: "node-1",
+							Type: unifiedresources.ResourceTypeAgent,
+						})
+						return &v
+					}(),
+				},
+			},
+			unifiedResourceProvider: &mockUnifiedResourceProvider{
+				getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+					if t != unifiedresources.ResourceTypePhysicalDisk {
+						return nil
+					}
+					return []unifiedresources.Resource{
+						{
+							ID:   "disk-1",
+							Name: "disk-1",
+							Type: unifiedresources.ResourceTypePhysicalDisk,
+							PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+								DevPath: "/dev/sda",
+								Health:  "FAILED",
+							},
+						},
+					}
+				},
+			},
+		},
+	}
+
+	if !adapter.isActionable(&Finding{
+		ResourceID:   "disk-1",
+		ResourceName: "/dev/sda",
+		ResourceType: "physical_disk",
+		Severity:     FindingSeverityWarning,
+		Key:          "disk-high",
+		Title:        "Disk health warning",
+	}) {
+		t.Fatal("expected physical disk finding to remain actionable when disk inventory exists")
+	}
+}
+
+func TestVerifyGuestReachabilityState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.SetGuestProber(&mockGuestProber{
+		agents: map[string]string{"pve1": "agent-1"},
+		results: map[string]map[string]PingResult{
+			"agent-1": {
+				"10.0.0.1": {Reachable: true},
+			},
+		},
+	})
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	state.readState = &mockReadState{
+		vms: []*unifiedresources.VMView{
+			newTestVMView("qemu/100", "vm-1", 100, "pve1", "", unifiedresources.StatusOnline, false, []string{"10.0.0.1"}),
+		},
+	}
+
+	ok, err := ps.verifyGuestReachabilityState(context.Background(), state, "100")
+	if err != nil {
+		t.Fatalf("expected readState-backed reachability verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected guest to verify as reachable via readState")
+	}
+}
+
+func TestIsActionable_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.thresholds = PatrolThresholds{NodeCPUWatch: 40}
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 60},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	finding := &Finding{
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "node-1",
+		ResourceType: "node",
+		Title:        "High CPU usage",
+	}
+
+	if !adapter.isActionable(finding) {
+		t.Fatal("expected finding to remain actionable via readState metrics")
+	}
+}
+
+func TestIsActionable_ReadStateRejectsMissingResource(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 80},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	finding := &Finding{
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "missing-node",
+		ResourceType: "node",
+		Title:        "High CPU usage",
+	}
+
+	if adapter.isActionable(finding) {
+		t.Fatal("expected missing resource to be rejected when readState inventory is available")
+	}
+}
+
 func TestIsBaselineAnomaly_NoStore(t *testing.T) {
 	// No baseline store → always returns false (safe fallback)
 	ps := NewPatrolService(nil, nil)
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if adapter.isBaselineAnomaly("node-1", "cpu", 45.0) {
 		t.Fatal("expected false when no baseline store is set")
@@ -386,7 +687,7 @@ func TestIsActionable_AnomalyBypass(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.45, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:        "cpu-high",
@@ -424,7 +725,7 @@ func TestIsActionable_BelowThresholdNoAnomaly(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.45, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:        "cpu-high",
@@ -446,7 +747,7 @@ func TestIsActionable_EscapeHatchesPreserved(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.10, Memory: models.Memory{Usage: 10}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	// Critical severity always passes
 	critical := &Finding{
@@ -528,7 +829,7 @@ func TestPatrolService_GenerateRemediationSteps(t *testing.T) {
 }
 
 func TestPatrolService_GenerateRemediationPlan(t *testing.T) {
-	engine := remediation.NewEngine(remediation.DefaultEngineConfig())
+	engine := newTestRemediationEngine()
 	ps := NewPatrolService(nil, nil)
 	ps.SetRemediationEngine(engine)
 
@@ -578,7 +879,7 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 		resolvedID = id
 	}
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 	if err := adapter.ResolveFinding(finding.ID, "resolved in test"); err != nil {
 		t.Fatalf("ResolveFinding failed: %v", err)
 	}
@@ -595,5 +896,108 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 	_ = adapter.GetActiveFindings("", "warning")
 	if !adapter.HasCheckedFindings() {
 		t.Fatal("expected HasCheckedFindings to be true after GetActiveFindings")
+	}
+}
+
+func TestPatrolFindingCreatorAdapter_GetActiveFindings_UsesScopedRuntimeState(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	inScope := &Finding{
+		ID:           "scope-in",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-1",
+		ResourceName: "web",
+		ResourceType: "app-container",
+		Title:        "Scoped app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	outOfScope := &Finding{
+		ID:           "scope-out",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-2",
+		ResourceName: "db",
+		ResourceType: "app-container",
+		Title:        "Global app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(inScope)
+	ps.findings.Add(outOfScope)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID: "docker-host-1",
+				Containers: []models.DockerContainer{
+					{ID: "app-1", Name: "web"},
+				},
+			},
+		},
+	})
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	active := adapter.GetActiveFindings("", "warning")
+	if len(active) != 1 {
+		t.Fatalf("expected 1 scoped active finding, got %+v", active)
+	}
+	if active[0].ID != inScope.ID {
+		t.Fatalf("expected in-scope finding %s, got %+v", inScope.ID, active)
+	}
+}
+
+func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsOutOfScopeFinding(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	inScope := &Finding{
+		ID:           "scope-in",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-1",
+		ResourceName: "web",
+		ResourceType: "app-container",
+		Title:        "Scoped app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	outOfScope := &Finding{
+		ID:           "scope-out",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-2",
+		ResourceName: "db",
+		ResourceType: "app-container",
+		Title:        "Global app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(inScope)
+	ps.findings.Add(outOfScope)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID: "docker-host-1",
+				Containers: []models.DockerContainer{
+					{ID: "app-1", Name: "web"},
+				},
+			},
+		},
+	})
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	if err := adapter.ResolveFinding(outOfScope.ID, "resolved in test"); err == nil {
+		t.Fatal("expected out-of-scope resolve to fail")
+	}
+	stored := ps.findings.Get(outOfScope.ID)
+	if stored == nil || stored.ResolvedAt != nil {
+		t.Fatalf("expected out-of-scope finding to remain unresolved, got %+v", stored)
+	}
+	if err := adapter.ResolveFinding(inScope.ID, "resolved in test"); err != nil {
+		t.Fatalf("expected in-scope resolve to succeed, got %v", err)
 	}
 }

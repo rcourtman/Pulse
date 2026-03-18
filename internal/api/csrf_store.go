@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ type CSRFTokenStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	stopOnce   sync.Once
 }
 
 func csrfSessionKey(sessionID string) string {
@@ -53,35 +55,116 @@ type legacyCSRFTokenData struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+func (c *CSRFTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, error) {
+	var legacy map[string]*legacyCSRFTokenData
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return false, err
+	}
+
+	loaded := 0
+	for rawSessionID, record := range legacy {
+		if record == nil || now.After(record.ExpiresAt) || record.Token == "" {
+			continue
+		}
+
+		sessionID := rawSessionID
+		if sessionID == "" {
+			sessionID = record.SessionID
+		}
+		if sessionID == "" {
+			continue
+		}
+
+		c.tokens[csrfSessionKey(sessionID)] = &CSRFToken{
+			Hash:    csrfTokenHash(record.Token),
+			Expires: record.ExpiresAt,
+		}
+		loaded++
+	}
+
+	log.Info().
+		Int("loaded", loaded).
+		Int("total", len(legacy)).
+		Msg("CSRF tokens loaded from disk (legacy raw-token format)")
+	c.saveUnsafe()
+	return true, nil
+}
+
 var (
-	csrfStore     *CSRFTokenStore
-	csrfStoreOnce sync.Once
+	csrfStore         *CSRFTokenStore
+	csrfStoreDataPath string
+	csrfStoreMu       sync.Mutex
 )
 
 // InitCSRFStore initializes the persistent CSRF token store
 func InitCSRFStore(dataPath string) {
-	csrfStoreOnce.Do(func() {
-		csrfStore = &CSRFTokenStore{
-			tokens:   make(map[string]*CSRFToken),
-			dataPath: dataPath,
-			stopChan: make(chan bool),
-		}
+	newDataPath := strings.TrimSpace(dataPath)
+	if newDataPath == "" {
+		return
+	}
 
-		// Load existing tokens from disk
-		csrfStore.load()
+	csrfStoreMu.Lock()
+	defer csrfStoreMu.Unlock()
 
-		// Start periodic save and cleanup
-		csrfStore.saveTicker = time.NewTicker(5 * time.Minute)
-		go csrfStore.backgroundWorker()
-	})
+	if csrfStore != nil && csrfStoreDataPath == newDataPath {
+		return
+	}
+
+	oldStore := csrfStore
+	csrfStore = &CSRFTokenStore{
+		tokens:   make(map[string]*CSRFToken),
+		dataPath: newDataPath,
+		stopChan: make(chan bool),
+	}
+	csrfStoreDataPath = newDataPath
+
+	// Load existing tokens from disk
+	csrfStore.load()
+
+	// Start periodic save and cleanup
+	csrfStore.saveTicker = time.NewTicker(5 * time.Minute)
+	go csrfStore.backgroundWorker()
+
+	if oldStore != nil {
+		oldStore.Shutdown()
+	}
 }
 
 // GetCSRFStore returns the global CSRF token store
 func GetCSRFStore() *CSRFTokenStore {
-	if csrfStore == nil {
-		InitCSRFStore("/etc/pulse")
+	csrfStoreMu.Lock()
+	store := csrfStore
+	csrfStoreMu.Unlock()
+	if store == nil {
+		panic("csrf store not initialized; call InitCSRFStore with the configured data path first")
 	}
-	return csrfStore
+	return store
+}
+
+func (c *CSRFTokenStore) Shutdown() {
+	if c == nil {
+		return
+	}
+	c.stopOnce.Do(func() {
+		if c.saveTicker != nil {
+			c.saveTicker.Stop()
+		}
+		select {
+		case c.stopChan <- true:
+		default:
+		}
+	})
+}
+
+func resetCSRFStoreForTests() {
+	csrfStoreMu.Lock()
+	oldStore := csrfStore
+	csrfStore = nil
+	csrfStoreDataPath = ""
+	csrfStoreMu.Unlock()
+	if oldStore != nil {
+		oldStore.Shutdown()
+	}
 }
 
 // backgroundWorker handles periodic saves and cleanup
@@ -250,27 +333,8 @@ func (c *CSRFTokenStore) load() {
 		return
 	}
 
-	var legacy map[string]*legacyCSRFTokenData
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal CSRF tokens")
+	if migrated, err := c.migrateLegacyTokens(data, time.Now()); err == nil && migrated {
 		return
 	}
-
-	now := time.Now()
-	loaded := 0
-	for sessionID, tokenData := range legacy {
-		if now.Before(tokenData.ExpiresAt) {
-			key := csrfSessionKey(sessionID)
-			c.tokens[key] = &CSRFToken{
-				Hash:    csrfTokenHash(tokenData.Token),
-				Expires: tokenData.ExpiresAt,
-			}
-			loaded++
-		}
-	}
-
-	log.Info().
-		Int("loaded", loaded).
-		Int("total", len(legacy)).
-		Msg("CSRF tokens loaded from disk (legacy format migrated)")
+	log.Error().Msg("Failed to decode CSRF tokens file; unsupported format")
 }

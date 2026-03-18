@@ -34,7 +34,7 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 	InitCSRFStore(dataPath)
 
 	// Create a router with a real monitor
-	// Since monitor.GetState() checks IsMockEnabled(), it will return mock data.
+	// Since monitor.ReadSnapshot() checks IsMockEnabled(), it will return mock data.
 	monitor, _ := monitoring.New(cfg)
 	router := &Router{
 		config:      cfg,
@@ -52,13 +52,45 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var state models.StateFrontend
-		err := json.Unmarshal(w.Body.Bytes(), &state)
+		var payload map[string]any
+		err := json.Unmarshal(w.Body.Bytes(), &payload)
 		assert.NoError(t, err)
 
-		// Verify we got the mock state
-		assert.NotEmpty(t, state.Nodes)
+		// Verify v6 contract: legacy per-type arrays are omitted from /api/state.
+		for _, key := range []string{"nodes", "vms", "containers", "dockerHosts", "hosts", "storage"} {
+			if _, ok := payload[key]; ok {
+				t.Fatalf("expected %q to be omitted from /api/state payload", key)
+			}
+		}
+
+		var state models.StateFrontend
+		err = json.Unmarshal(w.Body.Bytes(), &state)
+		assert.NoError(t, err)
 		assert.Greater(t, state.LastUpdate, int64(0))
+		assert.NotNil(t, state.RecentlyResolved)
+		assert.NotNil(t, state.Metrics)
+		assert.NotNil(t, state.ConnectionHealth)
+
+		metricsPayload, ok := payload["metrics"].([]any)
+		if !ok {
+			t.Fatalf("expected metrics payload to be an array, got %T", payload["metrics"])
+		}
+		if metricsPayload == nil {
+			t.Fatal("expected metrics payload array to be non-nil")
+		}
+
+		if _, ok := payload["performance"].(map[string]any); !ok {
+			t.Fatalf("expected performance payload to be an object, got %T", payload["performance"])
+		}
+		if _, ok := payload["stats"].(map[string]any); !ok {
+			t.Fatalf("expected stats payload to be an object, got %T", payload["stats"])
+		}
+		if _, ok := payload["resources"].([]any); !ok {
+			t.Fatalf("expected resources payload to be an array, got %T", payload["resources"])
+		}
+		if _, ok := payload["connectedInfrastructure"].([]any); !ok {
+			t.Fatalf("expected connectedInfrastructure payload to be an array, got %T", payload["connectedInfrastructure"])
+		}
 	})
 
 	t.Run("invalid method", func(t *testing.T) {

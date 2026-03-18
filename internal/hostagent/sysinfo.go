@@ -8,11 +8,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -26,8 +23,9 @@ type SystemCollector interface {
 	SensorsParse(jsonStr string) (*sensors.TemperatureData, error)
 	SensorsPower(ctx context.Context) (*sensors.PowerData, error)
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
-	CephStatus(ctx context.Context) (*ceph.ClusterStatus, error)
-	SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
+	UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error)
+	CephStatus(ctx context.Context) (*CephClusterStatus, error)
+	SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	Now() time.Time
 	GOOS() string
 	ReadFile(name string) ([]byte, error)
@@ -37,6 +35,7 @@ type SystemCollector interface {
 	DialTimeout(network, address string, timeout time.Duration) (net.Conn, error)
 	Stat(name string) (os.FileInfo, error)
 	MkdirAll(path string, perm os.FileMode) error
+	Chmod(name string, mode os.FileMode) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	CommandCombinedOutput(ctx context.Context, name string, arg ...string) (string, error)
 	LookPath(file string) (string, error)
@@ -74,15 +73,19 @@ func (c *defaultCollector) SensorsPower(ctx context.Context) (*sensors.PowerData
 }
 
 func (c *defaultCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
-	return mdadm.CollectArrays(ctx)
+	return CollectRAIDArrays(ctx)
 }
 
-func (c *defaultCollector) CephStatus(ctx context.Context) (*ceph.ClusterStatus, error) {
-	return ceph.Collect(ctx)
+func (c *defaultCollector) UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error) {
+	return CollectUnraidStorage(ctx, c)
 }
 
-func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error) {
-	return smartctl.CollectLocal(ctx, exclude)
+func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
+	return CollectCeph(ctx)
+}
+
+func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
+	return CollectSMARTLocal(ctx, exclude)
 }
 
 func (c *defaultCollector) Now() time.Time {
@@ -119,6 +122,10 @@ func (c *defaultCollector) Stat(name string) (os.FileInfo, error) {
 
 func (c *defaultCollector) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
+}
+
+func (c *defaultCollector) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
 }
 
 func (c *defaultCollector) WriteFile(filename string, data []byte, perm os.FileMode) error {

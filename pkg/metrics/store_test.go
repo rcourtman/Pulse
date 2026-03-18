@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -191,6 +192,139 @@ func TestStoreRollupTier(t *testing.T) {
 	}
 }
 
+// TestStoreRollupTierMultiResource verifies that the batched rollup produces
+// correct aggregations when multiple resources and metric types exist in the
+// same time window. This exercises the GROUP BY partitioning that replaced
+// the previous per-candidate N+1 loop.
+func TestStoreRollupTierMultiResource(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-multi.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	base := time.Now().Add(-2 * time.Minute).Truncate(time.Minute)
+	ts := base.Unix()
+
+	// Insert data for 3 resources × 2 metric types, all in the same minute bucket.
+	_, err = store.db.Exec(`
+		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-1','cpu', 10.0, ?, 'raw'),
+		('vm','vm-1','cpu', 20.0, ?, 'raw'),
+		('vm','vm-1','mem', 50.0, ?, 'raw'),
+		('vm','vm-1','mem', 70.0, ?, 'raw'),
+		('vm','vm-2','cpu', 30.0, ?, 'raw'),
+		('vm','vm-2','cpu', 40.0, ?, 'raw'),
+		('node','node-1','cpu', 80.0, ?, 'raw'),
+		('node','node-1','cpu', 90.0, ?, 'raw')
+	`, ts, ts+10, ts, ts+10, ts, ts+10, ts, ts+10)
+	if err != nil {
+		t.Fatalf("insert metrics returned error: %v", err)
+	}
+
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	// Verify each resource/metric produced correct aggregations.
+	type rollupResult struct {
+		resourceType, resourceID, metricType string
+		value, minVal, maxVal                float64
+	}
+	rows, err := store.db.Query(`
+		SELECT resource_type, resource_id, metric_type, value, min_value, max_value
+		FROM metrics WHERE tier = 'minute'
+		ORDER BY resource_type, resource_id, metric_type
+	`)
+	if err != nil {
+		t.Fatalf("query minute tier: %v", err)
+	}
+	defer rows.Close()
+
+	var results []rollupResult
+	for rows.Next() {
+		var r rollupResult
+		if err := rows.Scan(&r.resourceType, &r.resourceID, &r.metricType, &r.value, &r.minVal, &r.maxVal); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		results = append(results, r)
+	}
+
+	expected := []rollupResult{
+		{"node", "node-1", "cpu", 85.0, 80.0, 90.0},
+		{"vm", "vm-1", "cpu", 15.0, 10.0, 20.0},
+		{"vm", "vm-1", "mem", 60.0, 50.0, 70.0},
+		{"vm", "vm-2", "cpu", 35.0, 30.0, 40.0},
+	}
+
+	if len(results) != len(expected) {
+		t.Fatalf("expected %d rollup rows, got %d", len(expected), len(results))
+	}
+	for i, e := range expected {
+		r := results[i]
+		if r.resourceType != e.resourceType || r.resourceID != e.resourceID || r.metricType != e.metricType {
+			t.Fatalf("row %d: expected (%s,%s,%s), got (%s,%s,%s)", i, e.resourceType, e.resourceID, e.metricType, r.resourceType, r.resourceID, r.metricType)
+		}
+		if r.value != e.value || r.minVal != e.minVal || r.maxVal != e.maxVal {
+			t.Fatalf("row %d (%s/%s/%s): expected value=%.1f min=%.1f max=%.1f, got value=%.1f min=%.1f max=%.1f",
+				i, e.resourceType, e.resourceID, e.metricType, e.value, e.minVal, e.maxVal, r.value, r.minVal, r.maxVal)
+		}
+	}
+}
+
+// TestStoreRollupTierEmptyWindowPreservesCheckpoint verifies that rollupTier
+// does not advance the checkpoint when no source rows exist in the rollup
+// window. This ensures late or backfilled samples are still rolled up when
+// they arrive after an empty rollup cycle.
+func TestStoreRollupTierEmptyWindowPreservesCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-empty.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	// Run rollup on an empty store — checkpoint should NOT be set.
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	metaKey := "rollup:raw:minute"
+	if _, ok := store.getMetaInt(metaKey); ok {
+		t.Fatal("expected rollup checkpoint to remain unset after empty rollup")
+	}
+
+	// Now backfill a sample into the window that would have been skipped.
+	base := time.Now().Add(-2 * time.Minute).Truncate(time.Minute)
+	ts := base.Unix()
+	_, err = store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-late','cpu', 42.0, ?, 'raw')`, ts,
+	)
+	if err != nil {
+		t.Fatalf("insert backfilled metric: %v", err)
+	}
+
+	// Run rollup again — should now process the backfilled sample.
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var value float64
+	err = store.db.QueryRow(
+		`SELECT value FROM metrics WHERE tier = 'minute' AND resource_id = 'vm-late'`,
+	).Scan(&value)
+	if err != nil {
+		t.Fatalf("expected minute-tier row for backfilled sample, got error: %v", err)
+	}
+	if value != 42.0 {
+		t.Fatalf("expected rollup value 42.0, got %v", value)
+	}
+}
+
 func TestStoreRetentionPrunesOldData(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)
@@ -298,4 +432,197 @@ func TestStoreQueryDownsampling(t *testing.T) {
 	if len(points) != 3 {
 		t.Fatalf("expected 3 bucketed points, got %d", len(points))
 	}
+}
+
+func TestQueryAllBatch(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-batch.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Unix(1000, 0)
+	store.writeBatch([]bufferedMetric{
+		// disk-1: smart_temp with 2 points
+		{resourceType: "disk", resourceID: "disk-1", metricType: "smart_temp", value: 35, timestamp: ts, tier: TierRaw},
+		{resourceType: "disk", resourceID: "disk-1", metricType: "smart_temp", value: 36, timestamp: ts.Add(time.Second), tier: TierRaw},
+		// disk-2: smart_temp with 1 point, power_on_hours with 1 point
+		{resourceType: "disk", resourceID: "disk-2", metricType: "smart_temp", value: 40, timestamp: ts, tier: TierRaw},
+		{resourceType: "disk", resourceID: "disk-2", metricType: "smart_power_on_hours", value: 1000, timestamp: ts, tier: TierRaw},
+		// disk-3: no data (will not appear in results)
+	})
+
+	start := ts.Add(-time.Second)
+	end := ts.Add(2 * time.Second)
+
+	t.Run("returns data grouped by resource and metric", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", []string{"disk-1", "disk-2", "disk-3"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+
+		// disk-1 should have smart_temp with 2 points
+		if got := len(result["disk-1"]["smart_temp"]); got != 2 {
+			t.Fatalf("disk-1 smart_temp: expected 2 points, got %d", got)
+		}
+		if result["disk-1"]["smart_temp"][0].Value != 35 || result["disk-1"]["smart_temp"][1].Value != 36 {
+			t.Fatalf("disk-1 smart_temp unexpected values: %+v", result["disk-1"]["smart_temp"])
+		}
+
+		// disk-2 should have smart_temp with 1 point and power_on_hours with 1 point
+		if got := len(result["disk-2"]["smart_temp"]); got != 1 {
+			t.Fatalf("disk-2 smart_temp: expected 1 point, got %d", got)
+		}
+		if got := len(result["disk-2"]["smart_power_on_hours"]); got != 1 {
+			t.Fatalf("disk-2 power_on_hours: expected 1 point, got %d", got)
+		}
+
+		// disk-3 should have no entry
+		if _, ok := result["disk-3"]; ok {
+			t.Fatalf("disk-3 should not appear in results: %+v", result["disk-3"])
+		}
+	})
+
+	t.Run("empty resource IDs returns empty map", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", nil, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		if len(result) != 0 {
+			t.Fatalf("expected empty map, got %d entries", len(result))
+		}
+	})
+
+	t.Run("single resource ID matches QueryAll", func(t *testing.T) {
+		batch, err := store.QueryAllBatch("disk", []string{"disk-1"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		single, err := store.QueryAll("disk", "disk-1", start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAll: %v", err)
+		}
+
+		if len(batch["disk-1"]["smart_temp"]) != len(single["smart_temp"]) {
+			t.Fatalf("batch (%d points) != single (%d points)",
+				len(batch["disk-1"]["smart_temp"]), len(single["smart_temp"]))
+		}
+	})
+
+	t.Run("duplicate resource IDs are deduplicated", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", []string{"disk-1", "disk-1", "disk-2", "disk-1"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		// Should still return correct results despite dupes
+		if got := len(result["disk-1"]["smart_temp"]); got != 2 {
+			t.Fatalf("disk-1 smart_temp: expected 2 points after dedup, got %d", got)
+		}
+		if got := len(result["disk-2"]["smart_temp"]); got != 1 {
+			t.Fatalf("disk-2 smart_temp: expected 1 point after dedup, got %d", got)
+		}
+	})
+
+	t.Run("per-resource fallback stops at first non-empty tier like QueryAll", func(t *testing.T) {
+		tsMinute := ts.Add(-24 * time.Hour)
+		store.writeBatch([]bufferedMetric{
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_temp", value: 41, timestamp: ts, tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_temp", value: 39, timestamp: tsMinute, tier: TierMinute},
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_power_on_hours", value: 1234, timestamp: tsMinute, tier: TierMinute},
+			{resourceType: "disk", resourceID: "disk-minute", metricType: "smart_temp", value: 37, timestamp: tsMinute, tier: TierMinute},
+		})
+
+		rangeStart := ts.Add(-90 * time.Minute)
+		rangeEnd := ts.Add(time.Minute)
+
+		batch, err := store.QueryAllBatch("disk", []string{"disk-raw", "disk-minute"}, rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+
+		singleRaw, err := store.QueryAll("disk", "disk-raw", rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAll(disk-raw): %v", err)
+		}
+		singleMinute, err := store.QueryAll("disk", "disk-minute", rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAll(disk-minute): %v", err)
+		}
+
+		if got := len(batch["disk-raw"]["smart_temp"]); got != len(singleRaw["smart_temp"]) {
+			t.Fatalf("disk-raw smart_temp points = %d, want %d", got, len(singleRaw["smart_temp"]))
+		}
+		if _, exists := batch["disk-raw"]["smart_power_on_hours"]; exists {
+			t.Fatalf("disk-raw unexpectedly merged minute-tier metrics: %+v", batch["disk-raw"])
+		}
+		if got := len(batch["disk-minute"]["smart_temp"]); got != len(singleMinute["smart_temp"]) {
+			t.Fatalf("disk-minute smart_temp points = %d, want %d", got, len(singleMinute["smart_temp"]))
+		}
+	})
+
+	t.Run("chunked resource lists return complete results beyond sqlite parameter threshold", func(t *testing.T) {
+		chunkedStoreDir := t.TempDir()
+		chunkedCfg := DefaultConfig(chunkedStoreDir)
+		chunkedCfg.DBPath = filepath.Join(chunkedStoreDir, "metrics-batch-chunked.db")
+		chunkedCfg.FlushInterval = time.Hour
+
+		chunkedStore, err := NewStore(chunkedCfg)
+		if err != nil {
+			t.Fatalf("NewStore(chunked): %v", err)
+		}
+		defer chunkedStore.Close()
+
+		resourceCount := queryAllBatchChunkSize + 25
+		metricsBatch := make([]WriteMetric, 0, resourceCount*2)
+		resourceIDs := make([]string, 0, resourceCount+3)
+		for i := 0; i < resourceCount; i++ {
+			id := fmt.Sprintf("disk-chunk-%03d", i)
+			resourceIDs = append(resourceIDs, id)
+			metricsBatch = append(metricsBatch,
+				WriteMetric{
+					ResourceType: "disk",
+					ResourceID:   id,
+					MetricType:   "smart_temp",
+					Value:        float64(30 + (i % 10)),
+					Timestamp:    ts,
+					Tier:         TierRaw,
+				},
+				WriteMetric{
+					ResourceType: "disk",
+					ResourceID:   id,
+					MetricType:   "smart_power_on_hours",
+					Value:        float64(1000 + i),
+					Timestamp:    ts.Add(time.Second),
+					Tier:         TierRaw,
+				},
+			)
+		}
+		chunkedStore.WriteBatchSync(metricsBatch)
+
+		// Add duplicates spanning chunk boundaries to verify dedup remains correct.
+		resourceIDs = append(resourceIDs, "disk-chunk-000", fmt.Sprintf("disk-chunk-%03d", queryAllBatchChunkSize-1), fmt.Sprintf("disk-chunk-%03d", resourceCount-1))
+
+		result, err := chunkedStore.QueryAllBatch("disk", resourceIDs, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch(chunked): %v", err)
+		}
+		if len(result) != resourceCount {
+			t.Fatalf("expected %d unique chunked resources, got %d", resourceCount, len(result))
+		}
+
+		for i := 0; i < resourceCount; i++ {
+			id := fmt.Sprintf("disk-chunk-%03d", i)
+			if got := len(result[id]["smart_temp"]); got != 1 {
+				t.Fatalf("%s smart_temp: expected 1 point, got %d", id, got)
+			}
+			if got := len(result[id]["smart_power_on_hours"]); got != 1 {
+				t.Fatalf("%s smart_power_on_hours: expected 1 point, got %d", id, got)
+			}
+		}
+	})
 }

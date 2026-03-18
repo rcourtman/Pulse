@@ -1,9 +1,6 @@
 package api
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,14 +8,95 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
-	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
-const aiIntelligenceUpgradeURL = "https://pulserelay.pro/"
+type proxmoxWorkload interface {
+	ID() string
+	Name() string
+	Status() unifiedresources.ResourceStatus
+	Template() bool
+	MemoryPercent() float64
+	CPUPercent() float64
+	DiskPercent() float64
+}
+
+func checkWorkloadAnomalies(
+	workload proxmoxWorkload,
+	resourceID string,
+	resourceMetrics map[string]map[string]float64,
+	baselineStore *baseline.Store,
+	result *[]map[string]interface{},
+	resourceInfo map[string]struct{ name, rtype string },
+	resourceType string,
+) {
+	if workload == nil {
+		return
+	}
+	if workload.Template() {
+		return
+	}
+	if workload.Status() != unifiedresources.StatusOnline {
+		return
+	}
+
+	if _, ok := resourceMetrics[workload.ID()]; !ok {
+		if resourceID == "" {
+			return
+		}
+		if workload.ID() != resourceID {
+			return
+		}
+	}
+
+	metrics := map[string]float64{
+		"memory": workload.MemoryPercent(),
+	}
+	if cpu := workload.CPUPercent(); cpu > 0 {
+		metrics["cpu"] = cpu
+	}
+	if disk := workload.DiskPercent(); disk > 0 {
+		metrics["disk"] = disk
+	}
+
+	anomalies := baselineStore.CheckResourceAnomaliesReadOnly(workload.ID(), metrics)
+	for _, anomaly := range anomalies {
+		*result = append(*result, map[string]interface{}{
+			"resource_id":      anomaly.ResourceID,
+			"resource_name":    workload.Name(),
+			"resource_type":    resourceType,
+			"metric":           anomaly.Metric,
+			"current_value":    anomaly.CurrentValue,
+			"baseline_mean":    anomaly.BaselineMean,
+			"baseline_std_dev": anomaly.BaselineStdDev,
+			"z_score":          anomaly.ZScore,
+			"severity":         anomaly.Severity,
+			"description":      anomaly.Description,
+		})
+	}
+
+	resourceInfo[workload.ID()] = struct{ name, rtype string }{workload.Name(), resourceType}
+}
+
+func aiIntelligenceUpgradeURL() string {
+	return upgradeURLForFeatureFromLicensing(featureAIPatrolValue)
+}
+
+func writeIncidentDataUnavailableResponse(w http.ResponseWriter, resourceID, message string) {
+	w.WriteHeader(http.StatusServiceUnavailable)
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"resource_id":       resourceID,
+		"incidents":         []interface{}{},
+		"formatted_context": "",
+		"message":           message,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write incident data unavailable response")
+	}
+}
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +171,7 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		"patterns":         result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write patterns response")
 	}
@@ -175,7 +253,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		"predictions":      result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write predictions response")
 	}
@@ -261,7 +339,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		"correlations":     result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write correlations response")
 	}
@@ -347,7 +425,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		"count":            count,
 		"hours":            hours,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write changes response")
 	}
@@ -428,7 +506,7 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		"baselines":        result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write baselines response")
 	}
@@ -443,10 +521,10 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 
 	aiService := h.GetAIService(r.Context())
 	// Check for Pulse Pro license (soft-lock)
-	locked := aiService == nil || !aiService.HasLicenseFeature(license.FeatureAIAutoFix)
+	locked := aiService == nil || !aiService.HasLicenseFeature(featureAIAutoFixValue)
 	if locked {
 		w.Header().Set("X-License-Required", "true")
-		w.Header().Set("X-License-Feature", license.FeatureAIAutoFix)
+		w.Header().Set("X-License-Feature", featureAIAutoFixValue)
 	}
 
 	// AI must be enabled to return intelligence data
@@ -455,7 +533,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Pulse Patrol is not enabled",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -468,7 +546,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Patrol service not initialized",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -481,7 +559,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Remediation log not initialized",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -550,6 +628,8 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 	count := len(result)
 	if locked {
 		result = []map[string]interface{}{}
+		count = 0
+		stats = remediationStatsFromRecords(nil)
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
@@ -557,7 +637,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 		"count":            count,
 		"stats":            stats,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write remediations response")
 	}
@@ -638,12 +718,13 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get current metrics from state provider
-	stateProvider := aiService.GetStateProvider()
-	if stateProvider == nil {
+	// ReadState is the canonical resource read surface for AI intelligence endpoints.
+	// If this isn't wired, we can't reliably join baselines to live resources.
+	rs := h.readState
+	if rs == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},
-			"message":   "State provider not available",
+			"message":   "ReadState not available",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write anomalies response")
 		}
@@ -672,110 +753,22 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Get current state to extract live metrics
-	state := stateProvider.GetState()
-
 	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.Template {
-			continue // Skip templates
-		}
-
-		// Skip VMs that aren't running - stopped VMs with 0% usage is expected, not an anomaly
-		if vm.Status != "running" {
-			continue
-		}
-
-		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[vm.ID]; !ok {
-			if resourceID == "" {
-				continue
-			}
-			if vm.ID != resourceID {
-				continue
-			}
-		}
-
-		metrics := map[string]float64{
-			"cpu":    vm.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": vm.Memory.Usage, // Memory.Usage is already in percentage
-		}
-		if vm.Disk.Usage > 0 {
-			metrics["disk"] = vm.Disk.Usage
-		}
-
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(vm.ID, metrics)
-		for _, anomaly := range anomalies {
-			result = append(result, map[string]interface{}{
-				"resource_id":      anomaly.ResourceID,
-				"resource_name":    vm.Name,
-				"resource_type":    "vm",
-				"metric":           anomaly.Metric,
-				"current_value":    anomaly.CurrentValue,
-				"baseline_mean":    anomaly.BaselineMean,
-				"baseline_std_dev": anomaly.BaselineStdDev,
-				"z_score":          anomaly.ZScore,
-				"severity":         anomaly.Severity,
-				"description":      anomaly.Description,
-			})
-		}
-
-		// Store info for any additional processing
-		resourceInfo[vm.ID] = struct{ name, rtype string }{vm.Name, "vm"}
+	for _, vm := range rs.VMs() {
+		checkWorkloadAnomalies(vm, resourceID, resourceMetrics, baselineStore, &result, resourceInfo, "vm")
 	}
 
 	// Check Containers
-	for _, ct := range state.Containers {
-		if ct.Template {
-			continue // Skip templates
-		}
-
-		// Skip containers that aren't running - stopped containers with 0% usage is expected, not an anomaly
-		if ct.Status != "running" {
-			continue
-		}
-
-		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[ct.ID]; !ok {
-			if resourceID == "" {
-				continue
-			}
-			if ct.ID != resourceID {
-				continue
-			}
-		}
-
-		metrics := map[string]float64{
-			"cpu":    ct.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": ct.Memory.Usage, // Memory.Usage is already in percentage
-		}
-		if ct.Disk.Usage > 0 {
-			metrics["disk"] = ct.Disk.Usage
-		}
-
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(ct.ID, metrics)
-		for _, anomaly := range anomalies {
-			result = append(result, map[string]interface{}{
-				"resource_id":      anomaly.ResourceID,
-				"resource_name":    ct.Name,
-				"resource_type":    "container",
-				"metric":           anomaly.Metric,
-				"current_value":    anomaly.CurrentValue,
-				"baseline_mean":    anomaly.BaselineMean,
-				"baseline_std_dev": anomaly.BaselineStdDev,
-				"z_score":          anomaly.ZScore,
-				"severity":         anomaly.Severity,
-				"description":      anomaly.Description,
-			})
-		}
-
-		// Store info for any additional processing
-		resourceInfo[ct.ID] = struct{ name, rtype string }{ct.Name, "container"}
+	for _, ct := range rs.Containers() {
+		checkWorkloadAnomalies(ct, resourceID, resourceMetrics, baselineStore, &result, resourceInfo, "container")
 	}
 
 	// Check nodes
-	for _, node := range state.Nodes {
-		nodeID := node.ID
+	for _, node := range rs.Nodes() {
+		if node == nil {
+			continue
+		}
+		nodeID := node.ID()
 
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[nodeID]; !ok {
@@ -788,15 +781,15 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 
 		metrics := map[string]float64{
-			"cpu":    node.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": node.Memory.Usage, // Memory.Usage is already in percentage
+			"cpu":    node.CPUPercent(),
+			"memory": node.MemoryPercent(),
 		}
 
 		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(nodeID, metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
 				"resource_id":      anomaly.ResourceID,
-				"resource_name":    node.Name,
+				"resource_name":    node.Name(),
 				"resource_type":    "node",
 				"metric":           anomaly.Metric,
 				"current_value":    anomaly.CurrentValue,
@@ -937,7 +930,7 @@ func (h *AISettingsHandler) HandleGetForecast(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	forecastSvc := h.GetForecastService()
+	forecastSvc := h.GetForecastServiceForOrg(GetOrgID(r.Context()))
 	if forecastSvc == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecast": nil,
@@ -978,9 +971,10 @@ func (h *AISettingsHandler) HandleGetForecast(w http.ResponseWriter, r *http.Req
 
 	forecast, err := forecastSvc.Forecast(resourceID, resourceName, metric, horizon, threshold)
 	if err != nil {
+		log.Error().Err(err).Str("resource_id", resourceID).Str("metric", metric).Msg("Forecast failed")
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecast": nil,
-			"error":    err.Error(),
+			"error":    "Forecast generation failed",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write forecast error response")
 		}
@@ -1001,7 +995,7 @@ func (h *AISettingsHandler) HandleGetForecastOverview(w http.ResponseWriter, r *
 		return
 	}
 
-	forecastSvc := h.GetForecastService()
+	forecastSvc := h.GetForecastServiceForOrg(GetOrgID(r.Context()))
 	if forecastSvc == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecasts":     []interface{}{},
@@ -1042,9 +1036,10 @@ func (h *AISettingsHandler) HandleGetForecastOverview(w http.ResponseWriter, r *
 
 	overview, err := forecastSvc.ForecastAll(metric, horizon, threshold)
 	if err != nil {
+		log.Error().Err(err).Str("metric", metric).Msg("Forecast overview failed")
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"forecasts":     []interface{}{},
-			"error":         err.Error(),
+			"error":         "Forecast generation failed",
 			"metric":        metric,
 			"threshold":     threshold,
 			"horizon_hours": int(horizon.Hours()),
@@ -1066,7 +1061,7 @@ func (h *AISettingsHandler) HandleGetLearningPreferences(w http.ResponseWriter, 
 		return
 	}
 
-	learningStore := h.GetLearningStore()
+	learningStore := h.GetLearningStoreForOrg(GetOrgID(r.Context()))
 	if learningStore == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"preferences": nil,
@@ -1109,7 +1104,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		return
 	}
 
-	store := h.GetUnifiedStore()
+	store := h.GetUnifiedStoreForOrg(GetOrgID(r.Context()))
 	if store == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"findings": []interface{}{},
@@ -1138,36 +1133,40 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 	}
 
 	type findingView struct {
-		ID             string     `json:"id"`
-		Source         string     `json:"source"`
-		Severity       string     `json:"severity"`
-		Category       string     `json:"category"`
-		ResourceID     string     `json:"resource_id"`
-		ResourceName   string     `json:"resource_name"`
-		ResourceType   string     `json:"resource_type"`
-		Node           string     `json:"node,omitempty"`
-		Title          string     `json:"title"`
-		Description    string     `json:"description"`
-		Recommendation string     `json:"recommendation,omitempty"`
-		Evidence       string     `json:"evidence,omitempty"`
-		AlertID        string     `json:"alert_id,omitempty"`
-		AlertType      string     `json:"alert_type,omitempty"`
-		Value          float64    `json:"value,omitempty"`
-		Threshold      float64    `json:"threshold,omitempty"`
-		IsThreshold    bool       `json:"is_threshold,omitempty"`
-		AIContext      string     `json:"ai_context,omitempty"`
-		RootCauseID    string     `json:"root_cause_id,omitempty"`
-		CorrelatedIDs  []string   `json:"correlated_ids,omitempty"`
-		RemediationID  string     `json:"remediation_id,omitempty"`
-		AIConfidence   float64    `json:"ai_confidence,omitempty"`
-		EnhancedByAI   bool       `json:"enhanced_by_ai,omitempty"`
-		AIEnhancedAt   *time.Time `json:"ai_enhanced_at,omitempty"`
+		ID              string     `json:"id"`
+		Source          string     `json:"source"`
+		Severity        string     `json:"severity"`
+		Category        string     `json:"category"`
+		ResourceID      string     `json:"resource_id"`
+		ResourceName    string     `json:"resource_name"`
+		ResourceType    string     `json:"resource_type"`
+		Node            string     `json:"node,omitempty"`
+		Title           string     `json:"title"`
+		Description     string     `json:"description"`
+		Recommendation  string     `json:"recommendation,omitempty"`
+		Evidence        string     `json:"evidence,omitempty"`
+		AlertIdentifier string     `json:"alert_identifier,omitempty"`
+		AlertType       string     `json:"alert_type,omitempty"`
+		Value           float64    `json:"value,omitempty"`
+		Threshold       float64    `json:"threshold,omitempty"`
+		IsThreshold     bool       `json:"is_threshold,omitempty"`
+		AIContext       string     `json:"ai_context,omitempty"`
+		RootCauseID     string     `json:"root_cause_id,omitempty"`
+		CorrelatedIDs   []string   `json:"correlated_ids"`
+		RemediationID   string     `json:"remediation_id,omitempty"`
+		AIConfidence    float64    `json:"ai_confidence,omitempty"`
+		EnhancedByAI    bool       `json:"enhanced_by_ai,omitempty"`
+		AIEnhancedAt    *time.Time `json:"ai_enhanced_at,omitempty"`
 		// Investigation fields
-		InvestigationSessionID string     `json:"investigationSessionId,omitempty"`
-		InvestigationStatus    string     `json:"investigationStatus,omitempty"`
-		InvestigationOutcome   string     `json:"investigationOutcome,omitempty"`
-		LastInvestigatedAt     *time.Time `json:"lastInvestigatedAt,omitempty"`
-		InvestigationAttempts  int        `json:"investigationAttempts,omitempty"`
+		InvestigationSessionID string                                 `json:"investigation_session_id,omitempty"`
+		InvestigationStatus    string                                 `json:"investigation_status,omitempty"`
+		InvestigationOutcome   string                                 `json:"investigation_outcome,omitempty"`
+		LastInvestigatedAt     *time.Time                             `json:"last_investigated_at,omitempty"`
+		InvestigationAttempts  int                                    `json:"investigation_attempts,omitempty"`
+		LoopState              string                                 `json:"loop_state,omitempty"`
+		Lifecycle              []unified.UnifiedFindingLifecycleEvent `json:"lifecycle"`
+		RegressionCount        int                                    `json:"regression_count,omitempty"`
+		LastRegressionAt       *time.Time                             `json:"last_regression_at,omitempty"`
 		// Timestamps and user feedback
 		DetectedAt      time.Time  `json:"detected_at"`
 		LastSeenAt      time.Time  `json:"last_seen_at"`
@@ -1184,6 +1183,15 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 	now := time.Now()
 	result := make([]findingView, 0, len(findings))
 	activeCount := 0
+	normalizeFindingView := func(view findingView) findingView {
+		if view.CorrelatedIDs == nil {
+			view.CorrelatedIDs = []string{}
+		}
+		if view.Lifecycle == nil {
+			view.Lifecycle = []unified.UnifiedFindingLifecycleEvent{}
+		}
+		return view
+	}
 
 	for _, f := range findings {
 		if f == nil {
@@ -1210,7 +1218,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			activeCount++
 		}
 
-		result = append(result, findingView{
+		result = append(result, normalizeFindingView(findingView{
 			ID:                     f.ID,
 			Source:                 string(f.Source),
 			Severity:               string(f.Severity),
@@ -1223,7 +1231,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Description:            f.Description,
 			Recommendation:         f.Recommendation,
 			Evidence:               f.Evidence,
-			AlertID:                f.AlertID,
+			AlertIdentifier:        f.AlertIdentifier,
 			AlertType:              f.AlertType,
 			Value:                  f.Value,
 			Threshold:              f.Threshold,
@@ -1240,6 +1248,10 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			InvestigationOutcome:   f.InvestigationOutcome,
 			LastInvestigatedAt:     f.LastInvestigatedAt,
 			InvestigationAttempts:  f.InvestigationAttempts,
+			LoopState:              f.LoopState,
+			Lifecycle:              f.Lifecycle,
+			RegressionCount:        f.RegressionCount,
+			LastRegressionAt:       f.LastRegressionAt,
 			DetectedAt:             f.DetectedAt,
 			LastSeenAt:             f.LastSeenAt,
 			ResolvedAt:             f.ResolvedAt,
@@ -1250,7 +1262,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Suppressed:             f.Suppressed,
 			TimesRaised:            f.TimesRaised,
 			Status:                 status,
-		})
+		}))
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
@@ -1269,7 +1281,7 @@ func (h *AISettingsHandler) HandleGetProxmoxEvents(w http.ResponseWriter, r *htt
 		return
 	}
 
-	correlator := h.GetProxmoxCorrelator()
+	correlator := h.GetProxmoxCorrelatorForOrg(GetOrgID(r.Context()))
 	if correlator == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"events":  []interface{}{},
@@ -1320,7 +1332,7 @@ func (h *AISettingsHandler) HandleGetProxmoxCorrelations(w http.ResponseWriter, 
 		return
 	}
 
-	correlator := h.GetProxmoxCorrelator()
+	correlator := h.GetProxmoxCorrelatorForOrg(GetOrgID(r.Context()))
 	if correlator == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"correlations": []interface{}{},
@@ -1355,329 +1367,6 @@ func (h *AISettingsHandler) HandleGetProxmoxCorrelations(w http.ResponseWriter, 
 	}
 }
 
-// HandleGetRemediationPlans returns remediation plans with status (GET /api/ai/remediation/plans)
-// Note: Plans are transient and stored in memory with their executions
-func (h *AISettingsHandler) HandleGetRemediationPlans(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	engine := h.GetRemediationEngine()
-	if engine == nil {
-		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"plans":   []interface{}{},
-			"message": "Remediation engine not available",
-		}); err != nil {
-			log.Error().Err(err).Msg("Failed to write remediation plans response")
-		}
-		return
-	}
-
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	plans := engine.ListPlans(limit)
-
-	type stepView struct {
-		Order           int    `json:"order"`
-		Action          string `json:"action"`
-		Command         string `json:"command,omitempty"`
-		RollbackCommand string `json:"rollback_command,omitempty"`
-		RiskLevel       string `json:"risk_level"`
-	}
-
-	type planView struct {
-		ID          string     `json:"id"`
-		FindingID   string     `json:"finding_id"`
-		ResourceID  string     `json:"resource_id"`
-		Title       string     `json:"title"`
-		Description string     `json:"description"`
-		Steps       []stepView `json:"steps"`
-		RiskLevel   string     `json:"risk_level"`
-		Status      string     `json:"status"`
-		CreatedAt   time.Time  `json:"created_at"`
-	}
-
-	result := make([]planView, 0, len(plans))
-	for _, plan := range plans {
-		if plan == nil {
-			continue
-		}
-
-		riskLevel := string(plan.RiskLevel)
-		if plan.RiskLevel == remediation.RiskCritical {
-			riskLevel = string(remediation.RiskHigh)
-		}
-
-		status := "pending"
-		if exec := engine.GetLatestExecutionForPlan(plan.ID); exec != nil {
-			switch exec.Status {
-			case remediation.StatusApproved:
-				status = "approved"
-			case remediation.StatusRunning:
-				status = "executing"
-			case remediation.StatusCompleted:
-				status = "completed"
-			case remediation.StatusFailed:
-				status = "failed"
-			case remediation.StatusRolledBack:
-				status = "rolled_back"
-			default:
-				status = "pending"
-			}
-		}
-
-		steps := make([]stepView, 0, len(plan.Steps))
-		for _, step := range plan.Steps {
-			action := step.Description
-			if action == "" {
-				action = step.Command
-			}
-			steps = append(steps, stepView{
-				Order:           step.Order,
-				Action:          action,
-				Command:         step.Command,
-				RollbackCommand: step.Rollback,
-				RiskLevel:       riskLevel,
-			})
-		}
-
-		result = append(result, planView{
-			ID:          plan.ID,
-			FindingID:   plan.FindingID,
-			ResourceID:  plan.ResourceID,
-			Title:       plan.Title,
-			Description: plan.Description,
-			Steps:       steps,
-			RiskLevel:   riskLevel,
-			Status:      status,
-			CreatedAt:   plan.CreatedAt,
-		})
-	}
-
-	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"plans": result,
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to write remediation plans response")
-	}
-}
-
-// HandleGetRemediationPlan returns a specific remediation plan (GET /api/ai/remediation/plans/{id})
-func (h *AISettingsHandler) HandleGetRemediationPlan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	engine := h.GetRemediationEngine()
-	if engine == nil {
-		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	planID := r.URL.Query().Get("plan_id")
-	if planID == "" {
-		http.Error(w, "plan_id is required", http.StatusBadRequest)
-		return
-	}
-
-	plan := engine.GetPlan(planID)
-	if plan == nil {
-		http.Error(w, "Plan not found", http.StatusNotFound)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, plan); err != nil {
-		log.Error().Err(err).Msg("Failed to write remediation plan response")
-	}
-}
-
-// HandleApproveRemediationPlan approves a remediation plan (POST /api/ai/remediation/plans/{id}/approve)
-func (h *AISettingsHandler) HandleApproveRemediationPlan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	engine := h.GetRemediationEngine()
-	if engine == nil {
-		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var req struct {
-		PlanID     string `json:"plan_id"`
-		ApprovedBy string `json:"approved_by"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.PlanID == "" {
-		http.Error(w, "plan_id is required", http.StatusBadRequest)
-		return
-	}
-
-	if req.ApprovedBy == "" {
-		req.ApprovedBy = "api"
-	}
-
-	execution, err := engine.ApprovePlan(req.PlanID, req.ApprovedBy)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"success":   true,
-		"message":   "Plan approved",
-		"execution": execution,
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to write remediation approval response")
-	}
-}
-
-// HandleExecuteRemediationPlan executes an approved remediation plan (POST /api/ai/remediation/plans/{id}/execute)
-func (h *AISettingsHandler) HandleExecuteRemediationPlan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	engine := h.GetRemediationEngine()
-	if engine == nil {
-		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var req struct {
-		ExecutionID string `json:"execution_id"`
-		PlanID      string `json:"plan_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.ExecutionID == "" {
-		if req.PlanID == "" {
-			http.Error(w, "execution_id or plan_id is required", http.StatusBadRequest)
-			return
-		}
-		// Auto-approve the plan if only plan_id is provided
-		exec, err := engine.ApprovePlan(req.PlanID, "api")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		req.ExecutionID = exec.ID
-	}
-
-	if err := engine.Execute(r.Context(), req.ExecutionID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	execution := engine.GetExecution(req.ExecutionID)
-
-	// Launch background verification if execution completed successfully
-	if execution != nil && execution.Status == remediation.StatusCompleted {
-		plan := engine.GetPlan(execution.PlanID)
-		aiSvc := h.GetAIService(r.Context())
-		if plan != nil && plan.FindingID != "" && aiSvc != nil {
-			go func() {
-				time.Sleep(30 * time.Second)
-
-				patrol := aiSvc.GetPatrolService()
-				if patrol == nil {
-					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification skipped: no patrol service")
-					return
-				}
-
-				finding := patrol.GetFindings().Get(plan.FindingID)
-				if finding == nil {
-					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification skipped: finding not found")
-					return
-				}
-
-				bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				defer cancel()
-
-				verified, verifyErr := patrol.VerifyFixResolved(bgCtx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
-				if verifyErr != nil {
-					log.Error().Err(verifyErr).Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification failed with error")
-				} else if !verified {
-					log.Warn().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification: issue persists")
-				} else {
-					log.Info().Str("findingID", plan.FindingID).Msg("[Remediation] Post-fix verification: issue resolved")
-				}
-
-				// Update execution status based on verification result
-				if verifyErr != nil {
-					engine.SetExecutionVerification(execution.ID, false, fmt.Sprintf("Verification error: %v", verifyErr))
-				} else if !verified {
-					engine.SetExecutionVerification(execution.ID, false, "Issue persists after fix")
-				} else {
-					engine.SetExecutionVerification(execution.ID, true, "Issue resolved")
-				}
-			}()
-		}
-	}
-
-	if err := utils.WriteJSONResponse(w, execution); err != nil {
-		log.Error().Err(err).Msg("Failed to write remediation execution response")
-	}
-}
-
-// HandleRollbackRemediationPlan rolls back an executed remediation (POST /api/ai/remediation/plans/{id}/rollback)
-func (h *AISettingsHandler) HandleRollbackRemediationPlan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	engine := h.GetRemediationEngine()
-	if engine == nil {
-		http.Error(w, "Remediation engine not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var req struct {
-		ExecutionID string `json:"execution_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.ExecutionID == "" {
-		http.Error(w, "execution_id is required", http.StatusBadRequest)
-		return
-	}
-
-	if err := engine.Rollback(r.Context(), req.ExecutionID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"success": true,
-		"message": "Rollback initiated",
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to write remediation rollback response")
-	}
-}
-
 // HandleGetCircuitBreakerStatus returns the circuit breaker status (GET /api/ai/circuit/status)
 func (h *AISettingsHandler) HandleGetCircuitBreakerStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1685,7 +1374,7 @@ func (h *AISettingsHandler) HandleGetCircuitBreakerStatus(w http.ResponseWriter,
 		return
 	}
 
-	breaker := h.GetCircuitBreaker()
+	breaker := h.GetCircuitBreakerForOrg(GetOrgID(r.Context()))
 	if breaker == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"status":  "unknown",
@@ -1729,7 +1418,7 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	}
 
 	// Get coordinator status
-	coordinator := h.GetIncidentCoordinator()
+	coordinator := h.GetIncidentCoordinatorForOrg(GetOrgID(r.Context()))
 	var activeCount int
 	if coordinator != nil {
 		activeCount = coordinator.GetActiveIncidentCount()
@@ -1837,20 +1526,20 @@ func (h *AISettingsHandler) HandleGetIncidentData(w http.ResponseWriter, r *http
 	// Get incident data from patrol service
 	svc := h.GetAIService(r.Context())
 	if svc == nil {
-		http.Error(w, "Pulse Patrol service not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Pulse Patrol service not available")
 		return
 	}
 
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Patrol service not available")
 		return
 	}
 
 	// Get incidents from incident store
 	incidentStore := patrol.GetIncidentStore()
 	if incidentStore == nil {
-		http.Error(w, "Incident store not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Incident store not available")
 		return
 	}
 

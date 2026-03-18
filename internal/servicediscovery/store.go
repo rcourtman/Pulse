@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,15 +36,143 @@ type Store struct {
 	lastFingerprintScan time.Time
 }
 
+func cloneResourceDiscovery(src *ResourceDiscovery) *ResourceDiscovery {
+	if src == nil {
+		return nil
+	}
+
+	cloned := *src
+	if src.Facts != nil {
+		cloned.Facts = append([]DiscoveryFact(nil), src.Facts...)
+	}
+	if src.ConfigPaths != nil {
+		cloned.ConfigPaths = append([]string(nil), src.ConfigPaths...)
+	}
+	if src.DataPaths != nil {
+		cloned.DataPaths = append([]string(nil), src.DataPaths...)
+	}
+	if src.LogPaths != nil {
+		cloned.LogPaths = append([]string(nil), src.LogPaths...)
+	}
+	if src.Ports != nil {
+		cloned.Ports = append([]PortInfo(nil), src.Ports...)
+	}
+	if src.DockerMounts != nil {
+		cloned.DockerMounts = append([]DockerBindMount(nil), src.DockerMounts...)
+	}
+	if src.UserSecrets != nil {
+		cloned.UserSecrets = make(map[string]string, len(src.UserSecrets))
+		for k, v := range src.UserSecrets {
+			cloned.UserSecrets[k] = v
+		}
+	}
+	if src.RawCommandOutput != nil {
+		cloned.RawCommandOutput = make(map[string]string, len(src.RawCommandOutput))
+		for k, v := range src.RawCommandOutput {
+			cloned.RawCommandOutput[k] = v
+		}
+	}
+
+	return &cloned
+}
+
+func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint {
+	if src == nil {
+		return nil
+	}
+
+	cloned := *src
+	if src.Ports != nil {
+		cloned.Ports = append([]string(nil), src.Ports...)
+	}
+	if src.MountPaths != nil {
+		cloned.MountPaths = append([]string(nil), src.MountPaths...)
+	}
+	if src.EnvKeys != nil {
+		cloned.EnvKeys = append([]string(nil), src.EnvKeys...)
+	}
+
+	return &cloned
+}
+
+func canonicalStoredResourceType(rt ResourceType) ResourceType {
+	return NormalizeResourceType(rt)
+}
+
+// normalizeResourceID keeps persisted resource IDs strict/canonical for v6.
+func normalizeResourceID(id string) string {
+	return id
+}
+
+func canonicalStoredResourceID(id string) string {
+	return normalizeResourceID(id)
+}
+
+// normalizeDiscovery canonicalizes persisted fields on load.
+func normalizeDiscovery(d *ResourceDiscovery) {
+	if d == nil {
+		return
+	}
+	d.ResourceType = canonicalStoredResourceType(d.ResourceType)
+	d.ID = canonicalStoredResourceID(d.ID)
+	if strings.TrimSpace(d.TargetID) == "" {
+		_, targetID, _, err := ParseResourceID(d.ID)
+		if err == nil {
+			d.TargetID = strings.TrimSpace(targetID)
+		}
+	}
+	if d.ResourceType == ResourceTypeAgent && strings.TrimSpace(d.AgentID) == "" {
+		d.AgentID = d.TargetID
+	}
+}
+
+func canonicalizeFingerprint(fp *ContainerFingerprint) {
+	if fp == nil {
+		return
+	}
+	fp.ResourceID = canonicalStoredResourceID(fp.ResourceID)
+	if strings.TrimSpace(fp.TargetID) == "" {
+		_, targetID, _, err := ParseResourceID(fp.ResourceID)
+		if err == nil {
+			fp.TargetID = strings.TrimSpace(targetID)
+		}
+	}
+}
+
+func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
+	if discovery == nil {
+		return fmt.Errorf("discovery output is required")
+	}
+	return json.Unmarshal(data, discovery)
+}
+
+func unmarshalStoredFingerprint(data []byte, fp *ContainerFingerprint) error {
+	if fp == nil {
+		return fmt.Errorf("fingerprint output is required")
+	}
+	return json.Unmarshal(data, fp)
+}
+
 // For testing - allows injecting a mock crypto manager
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
 
 // For testing - allows injecting a mock marshaler.
 var marshalDiscovery = json.Marshal
 
+// File read limits for persisted discovery data.
+// These are variables (not constants) so tests can temporarily override them.
+var maxDiscoveryFileReadBytes int64 = 16 * 1024 * 1024  // 16 MiB
+var maxFingerprintFileReadBytes int64 = 1 * 1024 * 1024 // 1 MiB
+
 // NewStore creates a new discovery store with automatic encryption.
 func NewStore(dataDir string) (*Store, error) {
-	discoveryDir := filepath.Join(dataDir, "discovery")
+	trimmedDataDir := strings.TrimSpace(dataDir)
+	if trimmedDataDir == "" {
+		return nil, fmt.Errorf("discovery data directory is required")
+	}
+	normalizedDataDir := filepath.Clean(trimmedDataDir)
+
+	discoveryDir := filepath.Join(normalizedDataDir, "discovery")
 	if err := os.MkdirAll(discoveryDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create discovery directory: %w", err)
 	}
@@ -55,9 +184,9 @@ func NewStore(dataDir string) (*Store, error) {
 	}
 
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
-	cryptoMgr, err := newCryptoManagerAt(dataDir)
+	cryptoMgr, err := newCryptoManagerAt(normalizedDataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize crypto for discovery store, data will be unencrypted")
+		return nil, fmt.Errorf("failed to initialize crypto for discovery store: %w", err)
 	}
 
 	store := &Store{
@@ -84,6 +213,100 @@ func (s *Store) getFilePath(id string) string {
 	return filepath.Join(s.dataDir, safeID+".enc")
 }
 
+// readRegularFileWithLimit reads a file with a strict size cap and rejects non-regular files.
+func readRegularFileWithLimit(path string, maxBytes int64) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a regular file")
+	}
+	if maxBytes > 0 && info.Size() > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	openedInfo, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a regular file")
+	}
+	if maxBytes > 0 && openedInfo.Size() > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+
+	if maxBytes <= 0 {
+		return io.ReadAll(f)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+	return data, nil
+}
+
+func (s *Store) persistDiscoveryBytes(filePath string, data []byte) error {
+	tmpPath := filePath + ".tmp"
+
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write discovery file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp discovery file after rename failure")
+		}
+		return fmt.Errorf("failed to finalize discovery file: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) loadDiscoveryFileData(filePath string, maxBytes int64) ([]byte, bool, error) {
+	data, err := readRegularFileWithLimit(filePath, maxBytes)
+	if err != nil {
+		return nil, false, err
+	}
+
+	migratedPlaintext := false
+	if s.crypto != nil {
+		if decrypted, decErr := s.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			migratedPlaintext = true
+		}
+	}
+
+	return data, migratedPlaintext, nil
+}
+
+func (s *Store) maybeRewritePlaintextDiscovery(filePath string, data []byte, migratedPlaintext bool) error {
+	if !migratedPlaintext || s.crypto == nil {
+		return nil
+	}
+
+	encrypted, err := s.crypto.Encrypt(data)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt migrated discovery: %w", err)
+	}
+	if err := s.persistDiscoveryBytes(filePath, encrypted); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Save persists a discovery to encrypted storage.
 func (s *Store) Save(d *ResourceDiscovery) error {
 	s.mu.Lock()
@@ -99,7 +322,11 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 		d.DiscoveredAt = d.UpdatedAt
 	}
 
-	data, err := marshalDiscovery(d)
+	// Persist/cache a defensive copy so callers cannot mutate shared state after Save.
+	toSave := cloneResourceDiscovery(d)
+	normalizeDiscovery(toSave)
+
+	data, err := marshalDiscovery(toSave)
 	if err != nil {
 		return fmt.Errorf("failed to marshal discovery: %w", err)
 	}
@@ -113,24 +340,16 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 		data = encrypted
 	}
 
-	// Write atomically using tmp file + rename
 	filePath := s.getFilePath(d.ID)
-	tmpPath := filePath + ".tmp"
-
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write discovery file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, filePath); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("failed to finalize discovery file: %w", err)
+	if err := s.persistDiscoveryBytes(filePath, data); err != nil {
+		return err
 	}
 
 	// Update cache
-	s.cache[d.ID] = d
+	s.cache[d.ID] = toSave
 	s.cacheTime[d.ID] = time.Now()
 
-	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("Discovery saved")
+	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("discovery saved")
 	return nil
 }
 
@@ -142,7 +361,7 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 		if cacheTime, hasTime := s.cacheTime[id]; hasTime {
 			if time.Since(cacheTime) < s.cacheTTL {
 				s.mu.RUnlock()
-				return cached, nil
+				return cloneResourceDiscovery(cached), nil
 			}
 		}
 	}
@@ -152,38 +371,36 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	defer s.mu.Unlock()
 
 	filePath := s.getFilePath(id)
-	data, err := os.ReadFile(filePath)
+	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil // Not found is not an error
+		} else {
+			return nil, fmt.Errorf("failed to read discovery file: %w", err)
 		}
-		return nil, fmt.Errorf("failed to read discovery file: %w", err)
-	}
-
-	// Decrypt if crypto is available
-	if s.crypto != nil {
-		decrypted, err := s.crypto.Decrypt(data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt discovery: %w", err)
-		}
-		data = decrypted
 	}
 
 	var discovery ResourceDiscovery
-	if err := json.Unmarshal(data, &discovery); err != nil {
+	if err := unmarshalStoredDiscovery(data, &discovery); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal discovery: %w", err)
 	}
+	if err := s.maybeRewritePlaintextDiscovery(filePath, data, migratedPlaintext); err != nil {
+		return nil, err
+	}
+
+	// Canonicalize stored fields loaded from disk.
+	normalizeDiscovery(&discovery)
 
 	// Update cache
-	s.cache[id] = &discovery
+	s.cache[id] = cloneResourceDiscovery(&discovery)
 	s.cacheTime[id] = time.Now()
 
-	return &discovery, nil
+	return cloneResourceDiscovery(&discovery), nil
 }
 
 // GetByResource retrieves a discovery by resource type and ID.
-func (s *Store) GetByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
-	id := MakeResourceID(resourceType, hostID, resourceID)
+func (s *Store) GetByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
+	id := MakeResourceID(resourceType, targetID, resourceID)
 	return s.Get(id)
 }
 
@@ -204,7 +421,7 @@ func (s *Store) Delete(id string) error {
 	delete(s.cache, id)
 	delete(s.cacheTime, id)
 
-	log.Debug().Str("id", id).Msg("Discovery deleted")
+	log.Debug().Str("id", id).Msg("discovery deleted")
 	return nil
 }
 
@@ -231,39 +448,52 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(s.dataDir, entry.Name()))
+		filePath := filepath.Join(s.dataDir, entry.Name())
+		data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to read discovery file")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read discovery file")
 			continue
-		}
-
-		// Decrypt if crypto is available
-		if s.crypto != nil {
-			decrypted, err := s.crypto.Decrypt(data)
-			if err != nil {
-				log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to decrypt discovery")
-				continue
-			}
-			data = decrypted
 		}
 
 		var discovery ResourceDiscovery
-		if err := json.Unmarshal(data, &discovery); err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to unmarshal discovery")
+		if err := unmarshalStoredDiscovery(data, &discovery); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal discovery")
 			continue
 		}
+		if err := s.maybeRewritePlaintextDiscovery(filePath, data, migratedPlaintext); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to rewrite migrated discovery")
+			continue
+		}
+
+		// Canonicalize stored fields loaded from disk.
+		normalizeDiscovery(&discovery)
 
 		discoveries = append(discoveries, &discovery)
 	}
 
-	return discoveries, nil
+	// Deduplicate by canonical ID in case multiple files decode to the same resource.
+	seen := make(map[string]int, len(discoveries))
+	deduped := make([]*ResourceDiscovery, 0, len(discoveries))
+	for _, d := range discoveries {
+		if idx, exists := seen[d.ID]; exists {
+			// Keep the more recently updated entry
+			if d.UpdatedAt.After(deduped[idx].UpdatedAt) {
+				deduped[idx] = d
+			}
+		} else {
+			seen[d.ID] = len(deduped)
+			deduped = append(deduped, d)
+		}
+	}
+
+	return deduped, nil
 }
 
 // ListByType returns discoveries for a specific resource type.
 func (s *Store) ListByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
 	all, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for type %s: %w", resourceType, err)
 	}
 
 	var filtered []*ResourceDiscovery
@@ -275,16 +505,16 @@ func (s *Store) ListByType(resourceType ResourceType) ([]*ResourceDiscovery, err
 	return filtered, nil
 }
 
-// ListByHost returns discoveries for a specific host.
-func (s *Store) ListByHost(hostID string) ([]*ResourceDiscovery, error) {
+// ListByTarget returns discoveries for a specific target ID.
+func (s *Store) ListByTarget(targetID string) ([]*ResourceDiscovery, error) {
 	all, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for target %s: %w", targetID, err)
 	}
 
 	var filtered []*ResourceDiscovery
 	for _, d := range all {
-		if d.HostID == hostID {
+		if strings.TrimSpace(d.TargetID) == targetID {
 			filtered = append(filtered, d)
 		}
 	}
@@ -295,7 +525,7 @@ func (s *Store) ListByHost(hostID string) ([]*ResourceDiscovery, error) {
 func (s *Store) UpdateNotes(id string, notes string, secrets map[string]string) error {
 	discovery, err := s.Get(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("get discovery %s for note update: %w", id, err)
 	}
 	if discovery == nil {
 		return fmt.Errorf("discovery not found: %s", id)
@@ -306,7 +536,10 @@ func (s *Store) UpdateNotes(id string, notes string, secrets map[string]string) 
 		discovery.UserSecrets = secrets
 	}
 
-	return s.Save(discovery)
+	if err := s.Save(discovery); err != nil {
+		return fmt.Errorf("save updated discovery %s notes: %w", id, err)
+	}
+	return nil
 }
 
 // GetMultiple retrieves multiple discoveries by ID.
@@ -315,7 +548,7 @@ func (s *Store) GetMultiple(ids []string) ([]*ResourceDiscovery, error) {
 	for _, id := range ids {
 		d, err := s.Get(id)
 		if err != nil {
-			log.Warn().Err(err).Str("id", id).Msg("Failed to get discovery")
+			log.Warn().Err(err).Str("id", id).Msg("failed to get discovery")
 			continue
 		}
 		if d != nil {
@@ -344,6 +577,9 @@ func (s *Store) Exists(id string) bool {
 
 	filePath := s.getFilePath(id)
 	_, err := os.Stat(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		log.Warn().Err(err).Str("id", id).Str("file", filePath).Msg("Failed to stat discovery file")
+	}
 	return err == nil
 }
 
@@ -383,7 +619,7 @@ func (s *Store) loadFingerprints() {
 	entries, err := os.ReadDir(s.fingerprintDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Msg("Failed to read fingerprint directory")
+			log.Warn().Err(err).Msg("failed to read fingerprint directory")
 		}
 		return
 	}
@@ -393,22 +629,23 @@ func (s *Store) loadFingerprints() {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(s.fingerprintDir, entry.Name()))
+		data, err := readRegularFileWithLimit(filepath.Join(s.fingerprintDir, entry.Name()), maxFingerprintFileReadBytes)
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to read fingerprint file")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read fingerprint file")
 			continue
 		}
 
 		var fp ContainerFingerprint
-		if err := json.Unmarshal(data, &fp); err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to unmarshal fingerprint")
+		if err := unmarshalStoredFingerprint(data, &fp); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal fingerprint")
 			continue
 		}
+		canonicalizeFingerprint(&fp)
 
 		s.fingerprints[fp.ResourceID] = &fp
 	}
 
-	log.Debug().Int("count", len(s.fingerprints)).Msg("Loaded fingerprints from disk")
+	log.Debug().Int("count", len(s.fingerprints)).Msg("loaded fingerprints from disk")
 }
 
 // SaveFingerprint stores a container fingerprint.
@@ -421,15 +658,17 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 	defer s.fingerprintMu.Unlock()
 
 	// Update in-memory cache
-	s.fingerprints[fp.ResourceID] = fp
+	fpCopy := cloneContainerFingerprint(fp)
+	canonicalizeFingerprint(fpCopy)
+	s.fingerprints[fpCopy.ResourceID] = fpCopy
 
 	// Persist to disk
-	data, err := json.Marshal(fp)
+	data, err := json.Marshal(fpCopy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal fingerprint: %w", err)
 	}
 
-	filePath := s.getFingerprintFilePath(fp.ResourceID)
+	filePath := s.getFingerprintFilePath(fpCopy.ResourceID)
 	tmpPath := filePath + ".tmp"
 
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
@@ -437,7 +676,9 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 	}
 
 	if err := os.Rename(tmpPath, filePath); err != nil {
-		_ = os.Remove(tmpPath)
+		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp fingerprint file after rename failure")
+		}
 		return fmt.Errorf("failed to finalize fingerprint file: %w", err)
 	}
 
@@ -453,7 +694,7 @@ func (s *Store) GetFingerprint(resourceID string) (*ContainerFingerprint, error)
 	if !ok {
 		return nil, nil // Not found is not an error
 	}
-	return fp, nil
+	return cloneContainerFingerprint(fp), nil
 }
 
 // GetAllFingerprints returns all stored fingerprints.
@@ -463,7 +704,7 @@ func (s *Store) GetAllFingerprints() map[string]*ContainerFingerprint {
 
 	result := make(map[string]*ContainerFingerprint, len(s.fingerprints))
 	for k, v := range s.fingerprints {
-		result[k] = v
+		result[k] = cloneContainerFingerprint(v)
 	}
 	return result
 }
@@ -474,16 +715,17 @@ func (s *Store) GetChangedResources() ([]string, error) {
 	s.fingerprintMu.RLock()
 	fingerprints := make(map[string]*ContainerFingerprint, len(s.fingerprints))
 	for k, v := range s.fingerprints {
-		fingerprints[k] = v
+		fingerprints[k] = cloneContainerFingerprint(v)
 	}
 	s.fingerprintMu.RUnlock()
 
 	var changed []string
 	for resourceID, fp := range fingerprints {
-		// The fingerprint key is already in resource ID format (type:host:id)
+		// The fingerprint key is already in resource ID format (type:scope:id)
 		// so use it directly as the discovery ID
 		discovery, err := s.Get(resourceID)
 		if err != nil {
+			log.Warn().Err(err).Str("resource_id", resourceID).Msg("Failed to load discovery while checking fingerprint changes")
 			continue
 		}
 
@@ -506,13 +748,23 @@ func (s *Store) GetChangedResources() ([]string, error) {
 func (s *Store) GetStaleResources(maxAge time.Duration) ([]string, error) {
 	discoveries, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for stale scan: %w", err)
 	}
 
 	var stale []string
 	now := time.Now()
 	for _, d := range discoveries {
-		if now.Sub(d.DiscoveredAt) > maxAge {
+		if d == nil {
+			continue
+		}
+
+		// Staleness should be based on the last successful discovery update.
+		// DiscoveredAt is intentionally preserved as first-seen time.
+		lastSeenAt := d.UpdatedAt
+		if lastSeenAt.IsZero() {
+			lastSeenAt = d.DiscoveredAt
+		}
+		if lastSeenAt.IsZero() || now.Sub(lastSeenAt) > maxAge {
 			stale = append(stale, d.ID)
 		}
 	}
@@ -542,7 +794,7 @@ func (s *Store) GetFingerprintCount() int {
 }
 
 // CleanupOrphanedFingerprints removes fingerprints for resources that no longer exist.
-// Pass in a set of current resource IDs (e.g., "docker:host1:nginx", "lxc:node1:101").
+// Pass in a set of current resource IDs (e.g., "docker:host1:nginx", "system-container:node1:101").
 // Returns the number of fingerprints removed.
 func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) int {
 	s.fingerprintMu.Lock()
@@ -557,9 +809,9 @@ func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) 
 			// Remove from disk
 			filePath := s.getFingerprintFilePath(fpID)
 			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-				log.Warn().Err(err).Str("id", fpID).Msg("Failed to remove orphaned fingerprint file")
+				log.Warn().Err(err).Str("id", fpID).Msg("failed to remove orphaned fingerprint file")
 			} else {
-				log.Debug().Str("id", fpID).Msg("Removed orphaned fingerprint")
+				log.Debug().Str("id", fpID).Msg("removed orphaned fingerprint")
 			}
 			removed++
 		}
@@ -575,7 +827,7 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 	// List all discovery files
 	entries, err := os.ReadDir(s.dataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to read discovery directory for cleanup")
+		log.Warn().Err(err).Msg("failed to read discovery directory for cleanup")
 		return 0
 	}
 
@@ -585,17 +837,21 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 			continue
 		}
 
-		// Convert filename back to resource ID
-		// Filename format: type_host_id.enc (underscores replace colons and slashes)
-		baseName := strings.TrimSuffix(entry.Name(), ".enc")
-		resourceID := filenameToResourceID(baseName)
+		resourceID, err := s.readDiscoveryIDFromFile(entry.Name())
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("file", entry.Name()).
+				Msg("Skipping orphan cleanup for discovery file with unreadable ID")
+			continue
+		}
 
 		if !currentResourceIDs[resourceID] {
 			filePath := filepath.Join(s.dataDir, entry.Name())
 			if err := os.Remove(filePath); err != nil {
-				log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to remove orphaned discovery file")
+				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to remove orphaned discovery file")
 			} else {
-				log.Debug().Str("id", resourceID).Msg("Removed orphaned discovery")
+				log.Debug().Str("id", resourceID).Msg("removed orphaned discovery")
 				removed++
 			}
 		}
@@ -630,6 +886,29 @@ func filenameToResourceID(filename string) string {
 	return resourceType + ":" + host + ":" + resourceID
 }
 
+func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
+	filePath := filepath.Join(s.dataDir, filename)
+	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to read discovery file: %w", err)
+	}
+
+	var discovery struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &discovery); err != nil {
+		return "", fmt.Errorf("failed to unmarshal discovery ID: %w", err)
+	}
+	if err := s.maybeRewritePlaintextDiscovery(filePath, data, migratedPlaintext); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(discovery.ID) == "" {
+		return "", fmt.Errorf("discovery ID is empty")
+	}
+
+	return discovery.ID, nil
+}
+
 // ListDiscoveryIDs returns all discovery IDs currently stored.
 func (s *Store) ListDiscoveryIDs() []string {
 	entries, err := os.ReadDir(s.dataDir)
@@ -642,8 +921,15 @@ func (s *Store) ListDiscoveryIDs() []string {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".enc") {
 			continue
 		}
-		baseName := strings.TrimSuffix(entry.Name(), ".enc")
-		ids = append(ids, filenameToResourceID(baseName))
+		id, err := s.readDiscoveryIDFromFile(entry.Name())
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("file", entry.Name()).
+				Msg("Skipping discovery ID listing for unreadable discovery file")
+			continue
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }

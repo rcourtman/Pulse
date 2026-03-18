@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -31,14 +30,9 @@ func TestCSRFSkippedForValidateBootstrapToken(t *testing.T) {
 		router.configHandlers.SetConfig(cfg)
 	}
 
-	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
-	content, err := os.ReadFile(tokenPath)
+	token, _, _, err := bootstrap.Load(cfg.DataPath)
 	if err != nil {
-		t.Fatalf("read bootstrap token: %v", err)
-	}
-	token := strings.TrimSpace(string(content))
-	if token == "" {
-		t.Fatalf("bootstrap token should not be empty")
+		t.Fatalf("load bootstrap token: %v", err)
 	}
 
 	// Create a session to ensure CSRF would be required if not skipped.

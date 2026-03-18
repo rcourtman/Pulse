@@ -3,7 +3,6 @@ package notifications
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -28,11 +27,36 @@ func TestSendAppriseViaHTTPInvalidScheme(t *testing.T) {
 	}
 }
 
+func TestSendAppriseViaHTTPBlocksRedirectToLinkLocal(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data", http.StatusFound)
+	}))
+	defer server.Close()
+
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("allowlist: %v", err)
+	}
+
+	err := nm.sendAppriseViaHTTP(AppriseConfig{
+		ServerURL:      server.URL,
+		TimeoutSeconds: 2,
+	}, "title", "body", "info")
+	if err == nil {
+		t.Fatalf("expected redirect validation error")
+	}
+	if !strings.Contains(err.Error(), "link-local addresses are not allowed") {
+		t.Fatalf("expected link-local redirect to be blocked, got %v", err)
+	}
+}
+
 func TestSendAppriseViaHTTPSkipTLSVerifyAndDefaultHeader(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-API-KEY"); got != "secret" {
 			t.Fatalf("expected default API key header, got %q", got)
 		}
@@ -67,7 +91,7 @@ func TestSendAppriseViaHTTPIncludesTargetsAndCustomHeader(t *testing.T) {
 		URLs  []string `json:"urls"`
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-Test-Key"); got != "secret" {
 			t.Fatalf("expected custom API key header, got %q", got)
 		}
@@ -110,7 +134,7 @@ func TestSendAppriseViaHTTPStatusErrorWithBody(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("boom"))
 	}))
@@ -133,7 +157,7 @@ func TestSendAppriseViaHTTPStatusErrorWithoutBody(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()

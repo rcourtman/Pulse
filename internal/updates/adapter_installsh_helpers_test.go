@@ -70,11 +70,41 @@ func TestInstallShAdapter_DownloadInstallScript(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	adapter := &InstallShAdapter{installScriptURL: "http://example/install.sh"}
-	out, err := adapter.downloadInstallScript(context.Background())
+	out, err := adapter.downloadInstallScript(context.Background(), "")
 	if err != nil {
 		t.Fatalf("downloadInstallScript error: %v", err)
 	}
 	if out != content {
 		t.Fatalf("unexpected script content: %q", out)
+	}
+}
+
+func TestInstallShAdapter_InstallScriptURLForVersion(t *testing.T) {
+	adapter := NewInstallShAdapter(nil)
+	got := adapter.installScriptURLForVersion("v1.2.3")
+	want := "https://github.com/rcourtman/Pulse/releases/download/v1.2.3/install.sh"
+	if got != want {
+		t.Fatalf("installScriptURLForVersion() = %q, want %q", got, want)
+	}
+
+	custom := &InstallShAdapter{installScriptURL: "http://example/install.sh"}
+	if got := custom.installScriptURLForVersion("v1.2.3"); got != "http://example/install.sh" {
+		t.Fatalf("custom installScriptURLForVersion() = %q, want custom URL", got)
+	}
+}
+
+func TestInstallShReleaseAssetURLUsesConfiguredRepo(t *testing.T) {
+	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
+
+	if got := defaultInstallScriptLatestURL(); got != "https://github.com/example/pulse-fork/releases/latest/download/install.sh" {
+		t.Fatalf("defaultInstallScriptLatestURL() = %q", got)
+	}
+
+	if got := installShReleaseAssetURL("v1.2.3", "install.sh"); got != "https://github.com/example/pulse-fork/releases/download/v1.2.3/install.sh" {
+		t.Fatalf("installShReleaseAssetURL() = %q", got)
+	}
+
+	if got := installShReleaseAssetURL("v1.2.3", "pulse-v1.2.3-linux-amd64.tar.gz"); got != "https://github.com/example/pulse-fork/releases/download/v1.2.3/pulse-v1.2.3-linux-amd64.tar.gz" {
+		t.Fatalf("installShReleaseAssetURL() tarball = %q", got)
 	}
 }

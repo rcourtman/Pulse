@@ -1,4 +1,24 @@
-import { createSignal, createEffect, Signal } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Signal } from 'solid-js';
+
+const LOCAL_STORAGE_SYNC_EVENT = 'pulse-localstorage-sync';
+
+type LocalStorageSyncDetail = {
+  key: string;
+  value: string | null;
+};
+
+function broadcastLocalStorageChange(key: string, value: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(
+      new CustomEvent<LocalStorageSyncDetail>(LOCAL_STORAGE_SYNC_EVENT, {
+        detail: { key, value },
+      }),
+    );
+  } catch {
+    // Ignore event dispatch errors
+  }
+}
 
 /**
  * Creates a signal that syncs with localStorage
@@ -20,13 +40,44 @@ function createLocalStorageSignal<T>(
 
   const [value, setValue] = createSignal<T>(initialValue);
 
+  // Keep multiple instances in sync (and reflect updates performed elsewhere in the same tab).
+  if (typeof window !== 'undefined') {
+    const applyRaw = (raw: string | null) => {
+      const next = raw !== null ? (parse ? parse(raw) : (raw as unknown as T)) : defaultValue;
+      if (Object.is(next, value())) return;
+      setValue(() => next);
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.storageArea !== window.localStorage) return;
+      if (e.key !== key) return;
+      applyRaw(e.newValue);
+    };
+
+    const handleCustom = (e: Event) => {
+      const evt = e as CustomEvent<LocalStorageSyncDetail>;
+      if (!evt.detail || evt.detail.key !== key) return;
+      applyRaw(evt.detail.value);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustom);
+    onCleanup(() => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustom);
+    });
+  }
+
   // Sync to localStorage on changes
   createEffect(() => {
     const val = value();
     if (val === null || val === undefined) {
       localStorage.removeItem(key);
+      broadcastLocalStorageChange(key, null);
     } else {
-      localStorage.setItem(key, stringify ? stringify(val) : String(val));
+      const raw = stringify ? stringify(val) : String(val);
+      localStorage.setItem(key, raw);
+      broadcastLocalStorageChange(key, raw);
     }
   });
 
@@ -96,20 +147,18 @@ export function createLocalStorageStringSignal(
 export const STORAGE_KEYS = {
   // Authentication
   AUTH: 'pulse_auth',
-  LEGACY_TOKEN: 'pulse_api_token',
+  ORG_ID: 'pulse_org_id',
   SETUP_CREDENTIALS: 'pulse_setup_credentials',
+  SETUP_HANDOFF: 'pulse_setup_handoff',
 
   // UI preferences
-  DARK_MODE: 'darkMode',
+  THEME_PREFERENCE: 'pulseThemePreference',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
   FULL_WIDTH_MODE: 'fullWidthMode',
 
   // Metadata
   GUEST_METADATA: 'pulseGuestMetadata',
   DOCKER_METADATA: 'pulseDockerMetadata',
-
-  // Platform tracking
-  PLATFORMS_SEEN: 'pulse-platforms-seen',
 
   // Updates
   UPDATES: 'pulse-updates',
@@ -121,42 +170,35 @@ export const STORAGE_KEYS = {
   // Storage settings
   STORAGE_SHOW_FILTERS: 'storageShowFilters',
   STORAGE_VIEW_MODE: 'storageViewMode',
+  STORAGE_SOURCE_FILTER: 'storageSourceFilter',
 
-  // Backup settings
-  BACKUPS_SHOW_FILTERS: 'backupsShowFilters',
-  BACKUPS_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
-  BACKUPS_SEARCH_HISTORY: 'backupsSearchHistory',
+  // Recovery settings
+  RECOVERY_SHOW_FILTERS: 'backupsShowFilters',
+  RECOVERY_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
+  RECOVERY_SEARCH_HISTORY: 'backupsSearchHistory',
 
   // Dashboard settings
   DASHBOARD_SHOW_FILTERS: 'dashboardShowFilters',
   DASHBOARD_CARD_VIEW: 'dashboardCardView',
   DASHBOARD_AUTO_REFRESH: 'dashboardAutoRefresh',
   DASHBOARD_SEARCH_HISTORY: 'dashboardSearchHistory',
+  WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
+  WORKLOADS_SUMMARY_COLLAPSED: 'workloadsSummaryCollapsed',
+  INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
+  INFRASTRUCTURE_SUMMARY_COLLAPSED: 'infrastructureSummaryCollapsed',
 
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',
 
-  // Docker search
-  DOCKER_SEARCH_HISTORY: 'dockerSearchHistory',
-
-  // Hosts search
-  HOSTS_SEARCH_HISTORY: 'hostsSearchHistory',
-
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
-
-  // Metrics display
-  METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
-  METRICS_TIME_RANGE: 'metricsTimeRange', // '15m' | '1h' | '4h' | '24h'
 
   // Temperature display
   TEMPERATURE_UNIT: 'temperatureUnit', // 'celsius' | 'fahrenheit'
 
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
-  HOSTS_HIDDEN_COLUMNS: 'hostsHiddenColumns',
-  DOCKER_HIDDEN_COLUMNS: 'dockerHiddenColumns',
-  BACKUPS_HIDDEN_COLUMNS: 'backupsHiddenColumns',
+  RECOVERY_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 
   // Resources search
@@ -164,11 +206,16 @@ export const STORAGE_KEYS = {
 
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
+  WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
+  DEBUG_MODE: 'pulse_debug_mode',
 
   // GitHub star prompt
   GITHUB_STAR_DISMISSED: 'pulse-github-star-dismissed',
   GITHUB_STAR_FIRST_SEEN: 'pulse-github-star-first-seen',
   GITHUB_STAR_SNOOZED_UNTIL: 'pulse-github-star-snoozed-until',
+
+  // Billing / migration guidance
+  AGENT_MIGRATION_NOTICE_DISMISSED: 'pulse-agent-migration-notice-dismissed',
 
   // Audit log
   AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',

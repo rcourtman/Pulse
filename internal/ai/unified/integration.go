@@ -64,7 +64,7 @@ func NewIntegration(config IntegrationConfig) *Integration {
 	// Set up persistence
 	persistence := NewVersionedPersistence(config.DataDir)
 	if err := store.SetPersistence(persistence); err != nil {
-		log.Error().Err(err).Msg("Failed to set up unified findings persistence")
+		log.Error().Err(err).Msg("failed to set up unified findings persistence")
 	}
 
 	return &Integration{
@@ -106,16 +106,16 @@ func (i *Integration) SetPatrolTrigger(fn PatrolTriggerFunc) {
 // Start starts the unified system
 func (i *Integration) Start() {
 	i.bridge.Start()
-	log.Info().Msg("Unified alert/finding system started")
+	log.Info().Msg("unified alert/finding system started")
 }
 
 // Stop stops the unified system
 func (i *Integration) Stop() {
 	i.bridge.Stop()
 	if err := i.store.ForceSave(); err != nil {
-		log.Error().Err(err).Msg("Failed to save unified findings on shutdown")
+		log.Error().Err(err).Msg("failed to save unified findings on shutdown")
 	}
-	log.Info().Msg("Unified alert/finding system stopped")
+	log.Info().Msg("unified alert/finding system stopped")
 }
 
 // GetStore returns the unified store
@@ -283,14 +283,32 @@ type FindingsSnapshot struct {
 	BySource  map[FindingSource]int
 }
 
+func EmptyFindingsSnapshot() *FindingsSnapshot {
+	snapshot := &FindingsSnapshot{}
+	snapshot.NormalizeCollections()
+	return snapshot
+}
+
+func (s *FindingsSnapshot) NormalizeCollections() {
+	if s == nil {
+		return
+	}
+	if s.Active == nil {
+		s.Active = []*UnifiedFinding{}
+	}
+	if s.BySource == nil {
+		s.BySource = map[FindingSource]int{}
+	}
+}
+
 // TakeSnapshot captures current state
 func (i *Integration) TakeSnapshot() *FindingsSnapshot {
 	active := i.store.GetActive()
-	snapshot := &FindingsSnapshot{
-		Timestamp: time.Now(),
-		Active:    active,
-		BySource:  make(map[FindingSource]int),
-	}
+	snapshot := EmptyFindingsSnapshot()
+	snapshot.Timestamp = time.Now()
+	snapshot.Active = active
+	snapshot.BySource = make(map[FindingSource]int)
+	snapshot.NormalizeCollections()
 
 	for _, f := range active {
 		snapshot.BySource[f.Source]++
@@ -306,6 +324,15 @@ func (i *Integration) TakeSnapshot() *FindingsSnapshot {
 
 // CompareSnapshots compares two snapshots and returns changes
 func CompareSnapshots(before, after *FindingsSnapshot) *SnapshotDiff {
+	if before == nil {
+		before = EmptyFindingsSnapshot()
+	}
+	if after == nil {
+		after = EmptyFindingsSnapshot()
+	}
+	before.NormalizeCollections()
+	after.NormalizeCollections()
+
 	diff := &SnapshotDiff{
 		NewFindings:      make([]*UnifiedFinding, 0),
 		ResolvedFindings: make([]*UnifiedFinding, 0),

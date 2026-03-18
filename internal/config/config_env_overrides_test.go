@@ -18,9 +18,6 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"ENABLE_TEMPERATURE_MONITORING",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
-		"DISABLE_DOCKER_UPDATE_ACTIONS",
-		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
-		"HIDE_DOCKER_UPDATE_ACTIONS",
 		"ENABLE_BACKUP_POLLING",
 		"ADAPTIVE_POLLING_ENABLED",
 		"ADAPTIVE_POLLING_BASE_INTERVAL",
@@ -142,33 +139,84 @@ func TestLoad_EnvOverrides_PBSAndPMG(t *testing.T) {
 	assert.Equal(t, 120*time.Second, cfg.PMGPollingInterval)
 }
 
-func TestLoad_EnvOverrides_DockerUpdateActionsAliases(t *testing.T) {
-	cases := []struct {
-		name   string
-		envVar string
-		value  string
-		want   bool
-	}{
-		{name: "canonical", envVar: "PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy disable", envVar: "DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy pulse hide", envVar: "PULSE_HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-		{name: "legacy hide", envVar: "HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
-	}
+func TestLoad_EnvOverrides_DockerUpdateActionsCanonicalOnly(t *testing.T) {
+	t.Run("canonical env var", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", tempDir)
+		t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "true")
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			t.Setenv("PULSE_DATA_DIR", tempDir)
-			t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("DISABLE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("PULSE_HIDE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv("HIDE_DOCKER_UPDATE_ACTIONS", "")
-			t.Setenv(tc.envVar, tc.value)
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.True(t, cfg.DisableDockerUpdateActions)
+		assert.True(t, cfg.EnvOverrides["disableDockerUpdateActions"])
+		assert.True(t, cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"])
+	})
 
-			cfg, err := Load()
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, cfg.DisableDockerUpdateActions)
-			assert.True(t, cfg.EnvOverrides["disableDockerUpdateActions"])
-		})
-	}
+	t.Run("legacy aliases ignored", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", tempDir)
+		t.Setenv("DISABLE_DOCKER_UPDATE_ACTIONS", "true")
+		t.Setenv("PULSE_HIDE_DOCKER_UPDATE_ACTIONS", "true")
+		t.Setenv("HIDE_DOCKER_UPDATE_ACTIONS", "true")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.False(t, cfg.DisableDockerUpdateActions)
+		assert.False(t, cfg.EnvOverrides["disableDockerUpdateActions"])
+		assert.False(t, cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"])
+	})
+}
+
+func TestLoad_EnvOverrides_InvalidFrontendPortIgnored(t *testing.T) {
+	t.Run("invalid FRONTEND_PORT", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("FRONTEND_PORT", "-1")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 7655, cfg.FrontendPort)
+	})
+
+	t.Run("legacy PORT ignored", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("PORT", "8080")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 7655, cfg.FrontendPort)
+	})
+}
+
+func TestLoad_EnvOverrides_AdaptivePollingNonPositiveIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "0s")
+	t.Setenv("ADAPTIVE_POLLING_MIN_INTERVAL", "-10s")
+	t.Setenv("ADAPTIVE_POLLING_MAX_INTERVAL", "0s")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 10*time.Second, cfg.AdaptivePollingBaseInterval)
+	assert.Equal(t, 5*time.Second, cfg.AdaptivePollingMinInterval)
+	assert.Equal(t, 5*time.Minute, cfg.AdaptivePollingMaxInterval)
+}
+
+func TestLoad_EnvOverrides_ConnectionTimeoutParsing(t *testing.T) {
+	t.Run("duration value", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("CONNECTION_TIMEOUT", "5m")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 5*time.Minute, cfg.ConnectionTimeout)
+	})
+
+	t.Run("non-positive numeric ignored", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("CONNECTION_TIMEOUT", "0")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 60*time.Second, cfg.ConnectionTimeout)
+	})
 }

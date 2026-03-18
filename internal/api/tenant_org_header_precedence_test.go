@@ -53,7 +53,7 @@ func TestTenantMiddlewarePrefersHeaderOverCookie(t *testing.T) {
 		t.Fatalf("save organization B: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newMultiTenantRouter(t, cfg)
 
 	sessionToken := "header-precedence-token"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")

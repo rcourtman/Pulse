@@ -11,14 +11,23 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+const legacyFindingAlertIDField = "alert_id"
 
 type snapshotStateProvider struct {
 	state models.StateSnapshot
 }
 
-func (s snapshotStateProvider) GetState() models.StateSnapshot {
+func (s snapshotStateProvider) ReadSnapshot() models.StateSnapshot {
 	return s.state
+}
+
+func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState {
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	return rr
 }
 
 func buildBaselineStore(t *testing.T) *ai.BaselineStore {
@@ -48,7 +57,7 @@ func TestHandleGetRecentChanges_WithDetector(t *testing.T) {
 	setUnexportedField(t, detector, "changes", []ai.Change{change})
 	svc.SetChangeDetector(detector)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/changes?hours=1", nil)
 	rec := httptest.NewRecorder()
 
@@ -75,7 +84,7 @@ func TestHandleGetBaselines_WithStore(t *testing.T) {
 	store := buildBaselineStore(t)
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/baselines?resource_id=vm-1", nil)
 	rec := httptest.NewRecorder()
 
@@ -98,7 +107,7 @@ func TestHandleGetLearningStatus_WithBaselines(t *testing.T) {
 	store := buildBaselineStore(t)
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 	rec := httptest.NewRecorder()
 
@@ -121,8 +130,6 @@ func TestHandleGetLearningStatus_WithBaselines(t *testing.T) {
 
 func TestHandleGetAnomalies_WithBaseline(t *testing.T) {
 	svc := newEnabledAIService(t)
-	store := buildBaselineStore(t)
-	svc.SetBaselineStore(store)
 
 	state := models.StateSnapshot{
 		VMs: []models.VM{{
@@ -135,8 +142,25 @@ func TestHandleGetAnomalies_WithBaseline(t *testing.T) {
 	}
 	svc.SetStateProvider(snapshotStateProvider{state: state})
 
-	handler := &AISettingsHandler{legacyAIService: svc}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies?resource_id=vm-1", nil)
+	rs := newTestReadState(state)
+	vmID := ""
+	if vms := rs.VMs(); len(vms) > 0 && vms[0] != nil {
+		vmID = vms[0].ID()
+	}
+	if vmID == "" {
+		t.Fatalf("expected ReadState to contain the test VM")
+	}
+
+	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
+	points := []ai.BaselineMetricPoint{{Value: 10, Timestamp: time.Now()}}
+	if err := store.Learn(vmID, "vm", "cpu", points); err != nil {
+		t.Fatalf("baseline Learn error: %v", err)
+	}
+	svc.SetBaselineStore(store)
+
+	handler := &AISettingsHandler{defaultAIService: svc}
+	handler.SetReadState(rs)
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies?resource_id="+vmID, nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetAnomalies(rec, req)
@@ -178,17 +202,18 @@ func TestHandleGetLearningPreferences_WithStore(t *testing.T) {
 func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
 	store.AddFromAI(&unified.UnifiedFinding{
-		ID:           "finding-1",
-		Source:       unified.SourceAIPatrol,
-		Severity:     unified.SeverityCritical,
-		Category:     unified.CategoryPerformance,
-		ResourceID:   "vm-1",
-		ResourceName: "vm-one",
-		ResourceType: "vm",
-		Title:        "CPU high",
-		Description:  "cpu usage high",
-		DetectedAt:   time.Now(),
-		LastSeenAt:   time.Now(),
+		ID:              "finding-1",
+		Source:          unified.SourceAIPatrol,
+		Severity:        unified.SeverityCritical,
+		Category:        unified.CategoryPerformance,
+		ResourceID:      "vm-1",
+		ResourceName:    "vm-one",
+		ResourceType:    "vm",
+		Title:           "CPU high",
+		Description:     "cpu usage high",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		DetectedAt:      time.Now(),
+		LastSeenAt:      time.Now(),
 	})
 
 	handler := &AISettingsHandler{}
@@ -208,5 +233,29 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	}
 	if payload["count"] == float64(0) {
 		t.Fatalf("expected findings in response")
+	}
+	findings, ok := payload["findings"].([]interface{})
+	if !ok || len(findings) != 1 {
+		t.Fatalf("expected one finding in response, got %#v", payload["findings"])
+	}
+	finding, ok := findings[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected object finding, got %#v", findings[0])
+	}
+	if finding["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", finding["alert_identifier"])
+	}
+	if _, ok := finding[legacyFindingAlertIDField]; ok {
+		t.Fatalf(
+			"did not expect %s in findings response, got %#v",
+			legacyFindingAlertIDField,
+			finding[legacyFindingAlertIDField],
+		)
+	}
+	if _, ok := finding["correlated_ids"]; !ok {
+		t.Fatalf("expected correlated_ids to be present, got %#v", finding)
+	}
+	if _, ok := finding["lifecycle"]; !ok {
+		t.Fatalf("expected lifecycle to be present, got %#v", finding)
 	}
 }

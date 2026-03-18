@@ -60,7 +60,6 @@ func (l *MultiTenantOrganizationLoader) GetOrganization(orgID string) (*models.O
 }
 
 // TokenCanAccessOrg checks if an API token is authorized to access the specified organization.
-// It uses the token's CanAccessOrg method and logs warnings for legacy tokens.
 func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRecord, orgID string) bool {
 	if token == nil {
 		// No token means session-based auth - defer to user membership check
@@ -69,15 +68,6 @@ func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRe
 
 	// Check if token can access the org
 	canAccess := token.CanAccessOrg(orgID)
-
-	// Log warning for legacy tokens with wildcard access
-	if token.IsLegacyToken() && orgID != "default" {
-		log.Warn().
-			Str("token_id", token.ID).
-			Str("token_name", token.Name).
-			Str("org_id", orgID).
-			Msg("Legacy token with wildcard access used for non-default org - consider binding to specific org")
-	}
 
 	if !canAccess {
 		log.Debug().
@@ -93,17 +83,22 @@ func (c *DefaultAuthorizationChecker) TokenCanAccessOrg(token *config.APITokenRe
 
 // UserCanAccessOrg checks if a user is a member of the specified organization.
 func (c *DefaultAuthorizationChecker) UserCanAccessOrg(userID, orgID string) bool {
-	// Default org is always accessible
+	if userID == "" {
+		return false
+	}
+
+	// The default organization is always accessible to any authenticated user.
+	// This ensures single-tenant deployments work without org membership data.
 	if orgID == "default" {
 		return true
 	}
 
-	// If no org loader is configured, deny access to non-default orgs
+	// Fail closed when membership data cannot be resolved.
 	if c.orgLoader == nil {
 		log.Warn().
 			Str("user_id", userID).
 			Str("org_id", orgID).
-			Msg("No organization loader configured, denying access to non-default org")
+			Msg("No organization loader configured, denying access")
 		return false
 	}
 
@@ -143,13 +138,18 @@ type AuthorizationResult struct {
 
 	// Reason provides a human-readable reason for the decision.
 	Reason string
-
-	// IsLegacyToken indicates if the access was granted via a legacy wildcard token.
-	IsLegacyToken bool
 }
 
 // CheckAccess performs a comprehensive authorization check for a request.
 func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, userID, orgID string) AuthorizationResult {
+	// The default organization is always accessible to any authenticated principal.
+	if orgID == "default" && (token != nil || userID != "") {
+		return AuthorizationResult{
+			Allowed: true,
+			Reason:  "Default organization is accessible to all authenticated users",
+		}
+	}
+
 	// Check token-based access first
 	if token != nil {
 		if !token.CanAccessOrg(orgID) {
@@ -159,9 +159,8 @@ func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, 
 			}
 		}
 		return AuthorizationResult{
-			Allowed:       true,
-			Reason:        "Token authorized for organization",
-			IsLegacyToken: token.IsLegacyToken(),
+			Allowed: true,
+			Reason:  "Token authorized for organization",
 		}
 	}
 
@@ -188,11 +187,6 @@ func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, 
 
 // CanAccessOrg implements websocket.OrgAuthChecker for use with the WebSocket hub.
 func (c *DefaultAuthorizationChecker) CanAccessOrg(userID string, tokenInterface interface{}, orgID string) bool {
-	// Default org is always accessible
-	if orgID == "default" {
-		return true
-	}
-
 	// Convert token interface to APITokenRecord
 	var token *config.APITokenRecord
 	if tokenInterface != nil {

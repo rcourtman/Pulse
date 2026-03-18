@@ -101,7 +101,7 @@ func TestAgenticLoop(t *testing.T) {
 		assert.Len(t, events, 1) // Only "content" is forwarded by the loop closure switch
 
 		var eventContent ContentData
-		json.Unmarshal(events[0].Data, &eventContent)
+		_ = json.Unmarshal(events[0].Data, &eventContent)
 		assert.Equal(t, "Hi there!", eventContent.Text)
 	})
 
@@ -318,7 +318,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
-		_, err := waitForApprovalDecision(ctx, store, "missing")
+		_, err := waitForApprovalDecision(ctx, store, "missing", approval.DefaultOrgID)
 		require.Error(t, err)
 	})
 
@@ -326,7 +326,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		_, err := waitForApprovalDecision(ctx, store, "missing")
+		_, err := waitForApprovalDecision(ctx, store, "missing", approval.DefaultOrgID)
 		require.Error(t, err)
 	})
 
@@ -345,7 +345,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		decision, err := waitForApprovalDecision(ctx, store, "app-1")
+		decision, err := waitForApprovalDecision(ctx, store, "app-1", approval.DefaultOrgID)
 		require.NoError(t, err)
 		assert.Equal(t, approval.StatusApproved, decision.Status)
 	})
@@ -363,7 +363,7 @@ func TestRequiresToolUse(t *testing.T) {
 		{"restart request", "please restart nginx", true},
 		{"status query", "is homepage running?", true},
 		{"logs request", "show me the logs for influxdb", true},
-		{"cpu query", "what's the cpu usage on delly?", true},
+		{"cpu query", "what's the cpu usage on pve-node?", true},
 		{"memory query", "how much memory is traefik using?", true},
 		{"container query", "list my docker containers", true},
 		{"my infrastructure", "what's happening on my server?", true},
@@ -457,7 +457,7 @@ func TestHasPhantomExecution(t *testing.T) {
 
 func TestToolCallKey(t *testing.T) {
 	t.Run("same name and input produce same key", func(t *testing.T) {
-		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "host_id": "node1"}
+		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "target_id": "node1"}
 		k1 := toolCallKey("pulse_discovery", input)
 		k2 := toolCallKey("pulse_discovery", input)
 		assert.Equal(t, k1, k2)
@@ -584,7 +584,7 @@ func TestLoopDetectionIntegration(t *testing.T) {
 							"action":        "get",
 							"resource_type": "lxc",
 							"resource_id":   "100",
-							"host_id":       "node1",
+							"target_id":     "node1",
 						},
 					},
 				},
@@ -808,7 +808,7 @@ func TestParallelToolExecution(t *testing.T) {
 		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
 			if event.Type == "tool_end" {
 				var data ToolEndData
-				json.Unmarshal(event.Data, &data)
+				_ = json.Unmarshal(event.Data, &data)
 				toolEndEvents = append(toolEndEvents, data)
 			}
 		})

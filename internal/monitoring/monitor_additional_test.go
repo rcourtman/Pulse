@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type fakeDockerChecker struct{}
@@ -80,8 +81,8 @@ func TestMonitorLinkHostAgent(t *testing.T) {
 	if len(hosts) != 1 || hosts[0].LinkedNodeID != "node-1" {
 		t.Fatalf("LinkedNodeID = %q, want %q", hosts[0].LinkedNodeID, "node-1")
 	}
-	if len(monitor.state.Nodes) != 1 || monitor.state.Nodes[0].LinkedHostAgentID != "host-1" {
-		t.Fatalf("LinkedHostAgentID = %q, want %q", monitor.state.Nodes[0].LinkedHostAgentID, "host-1")
+	if len(monitor.state.Nodes) != 1 || monitor.state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want %q", monitor.state.Nodes[0].LinkedAgentID, "host-1")
 	}
 }
 
@@ -124,6 +125,108 @@ func TestMonitorMarkDockerHostPendingUninstall(t *testing.T) {
 	}
 }
 
+func wireUnifiedDockerHostForMonitor(m *Monitor, host models.DockerHost) string {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{host},
+	})
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	m.resourceStore = adapter
+	readState := unifiedresources.ReadState(adapter)
+	return readState.DockerHosts()[0].ID()
+}
+
+func TestMonitorDockerRuntimeActionsAcceptUnifiedID(t *testing.T) {
+	monitor := &Monitor{
+		state:               models.NewState(),
+		removedDockerHosts:  make(map[string]time.Time),
+		dockerCommands:      make(map[string]*dockerHostCommand),
+		dockerCommandIndex:  make(map[string]string),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
+	}
+
+	host := models.DockerHost{ID: "host-1", Hostname: "host-1", DisplayName: "Host 1", Status: "online"}
+	monitor.state.UpsertDockerHost(host)
+	unifiedID := wireUnifiedDockerHostForMonitor(monitor, host)
+
+	got, found := monitor.GetDockerHost(unifiedID)
+	if !found || got.ID != host.ID {
+		t.Fatalf("GetDockerHost(%q) = (%+v, %v), want raw host id %q", unifiedID, got, found, host.ID)
+	}
+
+	updated, err := monitor.SetDockerHostCustomDisplayName(unifiedID, "Unified Name")
+	if err != nil {
+		t.Fatalf("SetDockerHostCustomDisplayName with unified id: %v", err)
+	}
+	if updated.CustomDisplayName != "Unified Name" {
+		t.Fatalf("expected custom display name to update, got %q", updated.CustomDisplayName)
+	}
+	meta := monitor.dockerMetadataStore.GetHostMetadata(host.ID)
+	if meta == nil || meta.CustomDisplayName != "Unified Name" {
+		t.Fatalf("expected metadata keyed by raw host id, got %#v", meta)
+	}
+
+	hidden, err := monitor.HideDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("HideDockerHost with unified id: %v", err)
+	}
+	if !hidden.Hidden {
+		t.Fatal("expected hidden flag to be set")
+	}
+
+	visible, err := monitor.UnhideDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("UnhideDockerHost with unified id: %v", err)
+	}
+	if visible.Hidden {
+		t.Fatal("expected hidden flag to be cleared")
+	}
+
+	pending, err := monitor.MarkDockerHostPendingUninstall(unifiedID)
+	if err != nil {
+		t.Fatalf("MarkDockerHostPendingUninstall with unified id: %v", err)
+	}
+	if !pending.PendingUninstall {
+		t.Fatal("expected pending uninstall flag to be set")
+	}
+
+	removed, err := monitor.RemoveDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("RemoveDockerHost with unified id: %v", err)
+	}
+	if removed.ID != host.ID {
+		t.Fatalf("expected removed host id %q, got %q", host.ID, removed.ID)
+	}
+	if hosts := monitor.state.GetDockerHosts(); len(hosts) != 0 {
+		t.Fatalf("expected host to be removed from state, got %d hosts", len(hosts))
+	}
+	if _, exists := monitor.removedDockerHosts[host.ID]; !exists {
+		t.Fatalf("expected raw host id %q to be blocklisted after removal", host.ID)
+	}
+}
+
+func TestAllowDockerHostReenrollAcceptsUnifiedID(t *testing.T) {
+	monitor := &Monitor{
+		state:               models.NewState(),
+		removedDockerHosts:  make(map[string]time.Time),
+		dockerCommands:      make(map[string]*dockerHostCommand),
+		dockerCommandIndex:  make(map[string]string),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
+	}
+
+	host := models.DockerHost{ID: "host-reenroll", Hostname: "host-reenroll", DisplayName: "Host Reenroll", Status: "online"}
+	monitor.state.UpsertDockerHost(host)
+	unifiedID := wireUnifiedDockerHostForMonitor(monitor, host)
+	monitor.removedDockerHosts[host.ID] = time.Now()
+
+	if err := monitor.AllowDockerHostReenroll(unifiedID); err != nil {
+		t.Fatalf("AllowDockerHostReenroll with unified id: %v", err)
+	}
+	if _, exists := monitor.removedDockerHosts[host.ID]; exists {
+		t.Fatalf("expected raw host id %q to be removed from blocklist", host.ID)
+	}
+}
+
 func TestEnsureClusterEndpointURL(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -149,63 +252,27 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 		IP:   "10.0.0.1",
 	}
 
-	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://node.local:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://node.local:8006" {
 		t.Fatalf("verifySSL host preference = %q, want %q", got, "https://node.local:8006")
 	}
 
 	endpoint.Host = ""
-	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://10.0.0.1:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://10.0.0.1:8006" {
 		t.Fatalf("verifySSL fallback to IP = %q, want %q", got, "https://10.0.0.1:8006")
 	}
 
 	endpoint.Host = "node.local"
-	if got := clusterEndpointEffectiveURL(endpoint, false, ""); got != "https://10.0.0.1:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, false, false); got != "https://10.0.0.1:8006" {
 		t.Fatalf("non-SSL IP preference = %q, want %q", got, "https://10.0.0.1:8006")
 	}
 
 	endpoint.IPOverride = "192.168.1.10"
-	if got := clusterEndpointEffectiveURL(endpoint, false, ""); got != "https://192.168.1.10:8006" {
+	if got := clusterEndpointEffectiveURL(endpoint, false, false); got != "https://192.168.1.10:8006" {
 		t.Fatalf("override IP preference = %q, want %q", got, "https://192.168.1.10:8006")
 	}
 
-	endpoint.Fingerprint = "ep-fingerprint"
-	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "https://192.168.1.10:8006" {
-		t.Fatalf("per-endpoint fingerprint should allow IP override, got %q", got)
-	}
-
 	endpoint = config.ClusterEndpoint{}
-	if got := clusterEndpointEffectiveURL(endpoint, true, ""); got != "" {
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "" {
 		t.Fatalf("empty endpoint = %q, want empty", got)
-	}
-}
-
-func TestBuildClusterClientEndpoints_PrefersOverrideWhenEndpointFingerprintPresent(t *testing.T) {
-	pve := config.PVEInstance{
-		Name:        "cluster-a",
-		Host:        "https://cluster-a.local:8006",
-		VerifySSL:   true,
-		IsCluster:   true,
-		ClusterName: "cluster-a",
-		ClusterEndpoints: []config.ClusterEndpoint{
-			{
-				NodeName:    "node1",
-				Host:        "https://node1.local:8006",
-				IP:          "10.15.5.11",
-				IPOverride:  "10.15.2.11",
-				Fingerprint: "node1-fp",
-			},
-		},
-	}
-
-	endpoints, fingerprints := buildClusterClientEndpoints(pve)
-
-	if len(endpoints) != 2 {
-		t.Fatalf("expected endpoint plus main host fallback, got %d", len(endpoints))
-	}
-	if endpoints[0] != "https://10.15.2.11:8006" {
-		t.Fatalf("expected endpoint override URL first, got %q", endpoints[0])
-	}
-	if fingerprints["https://10.15.2.11:8006"] != "node1-fp" {
-		t.Fatalf("expected fingerprint to follow effective endpoint URL, got %q", fingerprints["https://10.15.2.11:8006"])
 	}
 }

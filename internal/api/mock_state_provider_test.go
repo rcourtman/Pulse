@@ -9,6 +9,6 @@ type MockStateProvider struct {
 	State models.StateSnapshot
 }
 
-func (m *MockStateProvider) GetState() models.StateSnapshot {
+func (m *MockStateProvider) ReadSnapshot() models.StateSnapshot {
 	return m.State
 }

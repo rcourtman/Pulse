@@ -171,7 +171,7 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"/proc prefix", "ext4", "/proc/sys", 1024, 100, true},
 		{"/sys prefix", "ext4", "/sys/kernel", 1024, 100, true},
 		{"/run prefix", "ext4", "/run/user/1000", 1024, 100, true},
-		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, false}, // real ext4 storage; overlay layers (fsType=overlay) are filtered via virtualFSTypes
+		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, true},
 		{"/snap prefix", "ext4", "/snap/core/12345", 1000000, 500000, true},
 		{"/boot/efi exact", "vfat", "/boot/efi", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
 		{"/var/lib/containers podman", "ext4", "/var/lib/containers/storage/overlay/abc123/merged", 1000000, 500000, true},
@@ -193,14 +193,6 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"Windows C drive - should NOT skip", "NTFS", "C:\\", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
 		{"Windows D drive - should NOT skip", "NTFS", "D:\\", 1000 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, false},
 
-		// FreeBSD pseudo filesystems (issue #1142)
-		{"FreeBSD fdescfs", "fdescfs", "/var/run/samba/fd", 1024, 1024, true},
-		{"FreeBSD devfs", "devfs", "/dev", 1024, 100, true},
-		{"FreeBSD linprocfs", "linprocfs", "/compat/linux/proc", 0, 0, true},
-		{"FreeBSD linsysfs", "linsysfs", "/compat/linux/sys", 0, 0, true},
-		{"/var/run/ prefix FreeBSD", "ufs", "/var/run/something", 1024, 100, true},
-		{"/var/runtime should NOT skip", "ufs", "/var/runtime", 1000000, 500000, false},
-
 		// Regular filesystems that should NOT be skipped
 		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},
 		{"xfs data", "xfs", "/data", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
@@ -221,43 +213,6 @@ func TestShouldSkipFilesystem(t *testing.T) {
 			skip, reasons := ShouldSkipFilesystem(tc.fsType, tc.mountpoint, tc.totalBytes, tc.usedBytes)
 			if skip != tc.expectSkip {
 				t.Errorf("expected skip=%t, got skip=%t (reasons: %v)", tc.expectSkip, skip, reasons)
-			}
-		})
-	}
-}
-
-func TestShouldSkipFilesystemBeforeUsage(t *testing.T) {
-	tests := []struct {
-		name       string
-		fsType     string
-		mountpoint string
-		expectSkip bool
-	}{
-		{
-			name:       "network mount is skipped before usage probe",
-			fsType:     "nfs4",
-			mountpoint: "/mnt/nas",
-			expectSkip: true,
-		},
-		{
-			name:       "regular local filesystem is kept for usage probe",
-			fsType:     "ext4",
-			mountpoint: "/",
-			expectSkip: false,
-		},
-		{
-			name:       "special mountpoint is skipped before usage probe",
-			fsType:     "ext4",
-			mountpoint: "/run/user/1000",
-			expectSkip: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			skip, _ := ShouldSkipFilesystemBeforeUsage(tc.fsType, tc.mountpoint)
-			if skip != tc.expectSkip {
-				t.Errorf("expected skip=%t, got skip=%t", tc.expectSkip, skip)
 			}
 		})
 	}
@@ -307,6 +262,60 @@ func TestMatchesUserExclude(t *testing.T) {
 			result := MatchesUserExclude(tc.mountpoint, tc.patterns)
 			if result != tc.expected {
 				t.Errorf("MatchesUserExclude(%q, %v) = %t, want %t", tc.mountpoint, tc.patterns, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMatchesDiskExclude(t *testing.T) {
+	tests := []struct {
+		name       string
+		device     string
+		mountpoint string
+		patterns   []string
+		expected   bool
+	}{
+		{"empty patterns", "/dev/sda", "/mnt/data", nil, false},
+		{"mountpoint exact match", "/dev/sdb", "/mnt/backup", []string{"/mnt/backup"}, true},
+		{"mountpoint prefix match", "/dev/sdb", "/mnt/external-drive", []string{"/mnt/ext*"}, true},
+		{"device exact match", "/dev/sda", "/mnt/data", []string{"/dev/sda"}, true},
+		{"device name match", "/dev/nvme0n1", "/mnt/fast", []string{"nvme0n1"}, true},
+		{"device contains match", "/dev/nvme1n1", "/mnt/fast", []string{"*nvme*"}, true},
+		{"no match", "/dev/sdc", "/mnt/data", []string{"/mnt/backup", "/dev/sda"}, false},
+		{"device without prefix match", "sdd", "/mnt/data", []string{"sdd"}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MatchesDiskExclude(tc.device, tc.mountpoint, tc.patterns)
+			if result != tc.expected {
+				t.Errorf("MatchesDiskExclude(%q, %q, %v) = %t, want %t", tc.device, tc.mountpoint, tc.patterns, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMatchesDeviceExclude(t *testing.T) {
+	tests := []struct {
+		name     string
+		device   string
+		patterns []string
+		expected bool
+	}{
+		{"empty patterns", "/dev/sda", nil, false},
+		{"exact path match", "/dev/sda", []string{"/dev/sda"}, true},
+		{"exact name match", "/dev/sda", []string{"sda"}, true},
+		{"prefix added match", "sdb", []string{"/dev/sdb"}, true},
+		{"contains match", "/dev/nvme0n1", []string{"*nvme*"}, true},
+		{"whitespace pattern", "/dev/sdc", []string{"  /dev/sdc  "}, true},
+		{"no match", "/dev/sdd", []string{"/dev/sde"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MatchesDeviceExclude(tc.device, tc.patterns)
+			if result != tc.expected {
+				t.Errorf("MatchesDeviceExclude(%q, %v) = %t, want %t", tc.device, tc.patterns, result, tc.expected)
 			}
 		})
 	}

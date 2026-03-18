@@ -86,6 +86,35 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
+			name: "Schedule missing defaults notifyOnResolve to true",
+			input: map[string]interface{}{
+				"enabled": true,
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.True(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
+			name: "Schedule present without notifyOnResolve defaults to true",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.True(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
+			name: "Schedule explicit notifyOnResolve false is preserved",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{
+					"notifyOnResolve": false,
+				},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.False(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
 			name: "NodeDefaults Temperature nil",
 			input: map[string]interface{}{
 				"nodeDefaults": map[string]interface{}{},
@@ -96,26 +125,26 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
-			name: "HostDefaults CPU negative",
+			name: "AgentDefaults CPU negative",
 			input: map[string]interface{}{
-				"hostDefaults": map[string]interface{}{"cpu": map[string]interface{}{"trigger": -1}},
+				"agentDefaults": map[string]interface{}{"cpu": map[string]interface{}{"trigger": -1}},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
-				assert.Equal(t, 80.0, cfg.HostDefaults.CPU.Trigger)
+				assert.Equal(t, 80.0, cfg.AgentDefaults.CPU.Trigger)
 			},
 		},
 		{
-			name: "HostDefaults CPU zero",
+			name: "AgentDefaults CPU zero",
 			input: map[string]interface{}{
-				"hostDefaults": map[string]interface{}{"cpu": map[string]interface{}{"trigger": 0}},
+				"agentDefaults": map[string]interface{}{"cpu": map[string]interface{}{"trigger": 0}},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
-				assert.Equal(t, 0.0, cfg.HostDefaults.CPU.Trigger)
-				assert.Equal(t, 0.0, cfg.HostDefaults.CPU.Clear)
+				assert.Equal(t, 0.0, cfg.AgentDefaults.CPU.Trigger)
+				assert.Equal(t, 0.0, cfg.AgentDefaults.CPU.Clear)
 			},
 		},
 		{
-			name: "TimeThreshold and TimeThresholds",
+			name: "TimeThresholds defaults",
 			input: map[string]interface{}{
 				"timeThreshold": 0,
 				"timeThresholds": map[string]interface{}{
@@ -124,7 +153,6 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 				},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
-				assert.Equal(t, 5, cfg.TimeThreshold)
 				assert.Equal(t, 5, cfg.TimeThresholds["guest"])
 				assert.Equal(t, 5, cfg.TimeThresholds["all"])
 			},

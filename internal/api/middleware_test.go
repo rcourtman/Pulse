@@ -1,10 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"bufio"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -48,8 +50,14 @@ func TestAPIError_Error(t *testing.T) {
 	}
 }
 
-func TestAPIError_ImplementsError(t *testing.T) {
-	var _ error = &APIError{}
+func TestAPIError_UsesCanonicalEmptyDetails(t *testing.T) {
+	payload, err := json.Marshal(EmptyAPIError())
+	if err != nil {
+		t.Fatalf("marshal empty API error: %v", err)
+	}
+	if !strings.Contains(string(payload), `"details":{}`) {
+		t.Fatalf("expected empty API error to retain details map, got %s", payload)
+	}
 }
 
 func TestResponseWriter_WriteHeader(t *testing.T) {
@@ -320,14 +328,6 @@ func (m *mockFlusher) Flush() {
 	m.flushed = true
 }
 
-func TestResponseWriter_Flush_NotSupported(t *testing.T) {
-	rec := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
-
-	// This should not panic even though underlying doesn't support Flush
-	rw.Flush()
-}
-
 func TestResponseWriter_Flush_Supported(t *testing.T) {
 	flusher := &mockFlusher{ResponseWriter: httptest.NewRecorder()}
 	rw := &responseWriter{ResponseWriter: flusher, statusCode: http.StatusOK}
@@ -341,20 +341,6 @@ func TestResponseWriter_Flush_Supported(t *testing.T) {
 	if !flusher.flushed {
 		t.Error("Flush() should call underlying Flusher.Flush()")
 	}
-}
-
-// Note: httptest.ResponseRecorder implements http.Flusher
-func TestResponseWriter_Flush_WithRecorder(t *testing.T) {
-	rec := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
-
-	// Write some data
-	rw.Write([]byte("test"))
-
-	// Flush should work with httptest.ResponseRecorder (it implements Flusher)
-	rw.Flush()
-
-	// If we got here without panic, the test passes
 }
 
 func TestResponseWriter_Header(t *testing.T) {
@@ -417,12 +403,16 @@ func TestResponseWriter_EdgeCases(t *testing.T) {
 		rec := httptest.NewRecorder()
 		rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
 
-		rw.Write([]byte("a"))
+		if _, err := rw.Write([]byte("a")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		if !rw.written {
 			t.Error("written should be true after first Write")
 		}
 
-		rw.Write([]byte("b"))
+		if _, err := rw.Write([]byte("b")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		if !rw.written {
 			t.Error("written should remain true after second Write")
 		}
@@ -432,7 +422,9 @@ func TestResponseWriter_EdgeCases(t *testing.T) {
 		rec := httptest.NewRecorder()
 		rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
 
-		rw.Write([]byte("data"))
+		if _, err := rw.Write([]byte("data")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		rw.WriteHeader(http.StatusNotFound)
 
 		// Status should remain 200 since Write triggered implicit WriteHeader

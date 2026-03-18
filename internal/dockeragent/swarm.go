@@ -93,7 +93,7 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 	if info.Swarm.ControlAvailable && (includeServices || includeTasks) {
 		managerServices, managerTasks, err := a.collectSwarmDataFromManager(ctx, info, scope, containerIndex, includeServices, includeTasks)
 		if err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to collect swarm data from manager; falling back to local inference")
+			a.logger.Warn().Err(err).Msg("failed to collect swarm data from manager; falling back to local inference")
 		} else {
 			if includeServices {
 				services = managerServices
@@ -152,9 +152,11 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 }
 
 func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtypes.Info, scope string, containers map[string]agentsdocker.Container, includeServices, includeTasks bool) ([]agentsdocker.Service, []agentsdocker.Task, error) {
-	serviceList, err := a.docker.ServiceList(ctx, swarmtypes.ServiceListOptions{Status: true})
+	serviceList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Service, error) {
+		return a.docker.ServiceList(callCtx, swarmtypes.ServiceListOptions{Status: true})
+	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, annotateDockerConnectionError(err)
 	}
 
 	servicePointers := make(map[string]*swarmtypes.Service, len(serviceList))
@@ -177,9 +179,11 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 			taskFilters.Add("node", info.Swarm.NodeID)
 		}
 
-		taskList, err := a.docker.TaskList(ctx, swarmtypes.TaskListOptions{Filters: taskFilters})
+		taskList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Task, error) {
+			return a.docker.TaskList(callCtx, swarmtypes.TaskListOptions{Filters: taskFilters})
+		})
 		if err != nil {
-			return services, nil, err
+			return services, nil, annotateDockerConnectionError(err)
 		}
 
 		tasks = make([]agentsdocker.Task, 0, len(taskList))

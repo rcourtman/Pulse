@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -72,9 +73,8 @@ func isVMSpecificError(errStr string) bool {
 }
 
 // isEndpointConnectivityError reports whether an error indicates the endpoint
-// itself is unreachable (TCP/DNS/TLS failure). Any error that carries an HTTP
-// response — even a 500 — proves the endpoint is reachable, so those are NOT
-// connectivity errors.
+// itself is unreachable (TCP, DNS, TLS failures). Application-level errors
+// (HTTP responses, parsing errors) mean the endpoint IS reachable.
 func isEndpointConnectivityError(err error) bool {
 	if err == nil {
 		return false
@@ -201,10 +201,70 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string, endp
 // getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
 // It prefers the per-endpoint fingerprint (TOFU) over the base config fingerprint.
 func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.getEndpointFingerprintLocked(endpoint)
+}
+
+func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) string {
 	if fp, ok := cc.endpointFingerprints[endpoint]; ok && fp != "" {
 		return fp
 	}
 	return cc.config.Fingerprint
+}
+
+func isFingerprintMismatchError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "fingerprint mismatch")
+}
+
+// refreshTOFUFingerprintAndRetry refreshes a per-endpoint TOFU fingerprint after a mismatch and retries connectivity.
+// Returns (client, err, refreshed) where refreshed indicates whether TOFU refresh logic was applied.
+func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, endpoint string, timeout time.Duration, lastErr error) (*Client, error, bool) {
+	if !isFingerprintMismatchError(lastErr) {
+		return nil, lastErr, false
+	}
+
+	cc.mu.RLock()
+	_, hasTOFU := cc.endpointFingerprints[endpoint]
+	cc.mu.RUnlock()
+	if !hasTOFU {
+		return nil, lastErr, false
+	}
+
+	newFingerprint, err := tlsutil.FetchFingerprint(endpoint)
+	if err != nil {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("endpoint", endpoint).
+			Err(err).
+			Msg("Failed to refresh TOFU fingerprint after mismatch")
+		return nil, lastErr, false
+	}
+
+	cc.mu.Lock()
+	cc.endpointFingerprints[endpoint] = newFingerprint
+	cc.mu.Unlock()
+
+	log.Warn().
+		Str("cluster", cc.name).
+		Str("endpoint", endpoint).
+		Msg("Detected TLS certificate change; refreshed TOFU fingerprint")
+
+	cfg := cc.config
+	cfg.Host = endpoint
+	cfg.Fingerprint = newFingerprint
+	cfg.Timeout = timeout
+
+	retryClient, err := NewClient(cfg)
+	if err != nil {
+		return nil, err, true
+	}
+
+	retryCtx, cancel := context.WithTimeout(ctx, timeout)
+	_, err = retryClient.GetNodes(retryCtx)
+	cancel()
+
+	return retryClient, err, true
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
@@ -254,7 +314,9 @@ func (cc *ClusterClient) initialHealthCheck() {
 			_, err = testClient.GetNodes(ctx)
 			cancel()
 
-			cc.mu.Lock()
+			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), ep, 5*time.Second, err); refreshed {
+				err = retryErr
+			}
 
 			// Check if error is VM-specific (shouldn't affect health)
 			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
@@ -265,10 +327,13 @@ func (cc *ClusterClient) initialHealthCheck() {
 				fullCfg.Host = ep
 				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
 				fullClient, clientErr := NewClient(fullCfg)
+
+				cc.mu.Lock()
 				if clientErr != nil {
 					cc.nodeHealth[ep] = false
 					cc.lastError[ep] = sanitizeEndpointError(clientErr.Error())
 					cc.lastHealthCheck[ep] = time.Now()
+					cc.mu.Unlock()
 					log.Warn().
 						Str("cluster", cc.name).
 						Str("endpoint", ep).
@@ -279,6 +344,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 					delete(cc.lastError, ep)
 					cc.lastHealthCheck[ep] = time.Now()
 					cc.clients[ep] = fullClient // Store the full client, not test client
+					cc.mu.Unlock()
 					if vmSpecificErr {
 						log.Debug().
 							Str("cluster", cc.name).
@@ -293,16 +359,17 @@ func (cc *ClusterClient) initialHealthCheck() {
 				}
 			} else {
 				// Real connectivity issue
+				cc.mu.Lock()
 				cc.nodeHealth[ep] = false
 				cc.lastError[ep] = sanitizeEndpointError(err.Error())
 				cc.lastHealthCheck[ep] = time.Now()
+				cc.mu.Unlock()
 				log.Info().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
 					Err(err).
 					Msg("Cluster endpoint failed initial health check")
 			}
-			cc.mu.Unlock()
 		}(endpoint)
 	}
 
@@ -438,7 +505,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
-		cfg.Fingerprint = cc.getEndpointFingerprint(selectedEndpoint)
+		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
 
 		// First try with a short timeout to quickly detect offline nodes
 		testCfg := cfg
@@ -546,6 +613,7 @@ func (cc *ClusterClient) clearEndpointError(endpoint string) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	delete(cc.lastError, endpoint)
+	delete(cc.rateLimitUntil, endpoint)
 	// Mark endpoint healthy since operation succeeded - this ensures degraded
 	// clusters recover once endpoints start responding again
 	cc.nodeHealth[endpoint] = true
@@ -625,6 +693,11 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			_, err = testClient.GetNodes(testCtx)
 			cancel()
 
+			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(ctx, ep, 5*time.Second, err); refreshed {
+				err = retryErr
+				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
+			}
+
 			// Check if error is VM-specific (shouldn't prevent recovery)
 			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
 
@@ -633,6 +706,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
+				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 				fullClient, _ := NewClient(cfg)
 
 				cc.mu.Lock()
@@ -733,7 +807,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		}
 		lastErr = err
 
-		// Rate limit - retry with backoff (check before connectivity classification)
+		// Rate limit - retry with backoff (must check first)
 		if isRateLimited, statusCode := isTransientRateLimitError(err); isRateLimited {
 			backoff := calculateRateLimitBackoff(i)
 			cc.applyRateLimitCooldown(clientEndpoint, backoff)
@@ -762,13 +836,15 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			continue
 		}
 
-		// Auth errors - return immediately without marking endpoint unhealthy
+		// Auth errors - return immediately without retry
 		if isAuthError(err) {
 			return err
 		}
 
-		// Only mark endpoint unhealthy for actual connectivity failures (TCP/DNS/TLS).
-		// Any HTTP response — even 500 — proves the endpoint is reachable.
+		// Only mark endpoint unhealthy for actual connectivity failures
+		// (connection refused, TLS errors, DNS failures, etc.).
+		// Any HTTP response from Proxmox - even a 500 - means the endpoint
+		// is reachable and the request just failed at the application level.
 		if isEndpointConnectivityError(err) {
 			cc.markUnhealthyWithError(clientEndpoint, err.Error())
 			log.Warn().
@@ -776,12 +852,12 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 				Str("endpoint", clientEndpoint).
 				Err(err).
 				Int("attempt", i+1).
-				Msg("Connectivity failure on cluster node, trying next")
+				Msg("Connectivity error, trying next cluster endpoint")
 			continue
 		}
 
-		// Endpoint is reachable but this specific request failed (API error, permission
-		// issue, VM-specific error, etc.). Return without marking endpoint unhealthy.
+		// Endpoint is reachable but the specific request failed
+		// (HTTP 4xx/5xx, parsing error, VM-specific error, etc.)
 		log.Debug().
 			Str("cluster", cc.name).
 			Str("endpoint", clientEndpoint).
@@ -1245,20 +1321,6 @@ func (cc *ClusterClient) GetVMNetworkInterfaces(ctx context.Context, node string
 	return result, err
 }
 
-// GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent to get MemAvailable.
-func (cc *ClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	var result uint64
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
-		available, err := client.GetVMMemAvailableFromAgent(ctx, node, vmid)
-		if err != nil {
-			return err
-		}
-		result = available
-		return nil
-	})
-	return result, err
-}
-
 // GetClusterResources returns all resources (VMs, containers) across the cluster in a single call
 func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
 	var result []ClusterResource
@@ -1442,20 +1504,6 @@ func (cc *ClusterClient) IsQuorate(ctx context.Context) (bool, error) {
 
 	// If no cluster entry found, this might be a standalone node - consider it healthy
 	return true, nil
-}
-
-// GetClusterOptions fetches datacenter options (e.g. tag colour map) via the first healthy node.
-func (cc *ClusterClient) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
-	var result *ClusterOptions
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
-		opts, err := client.GetClusterOptions(ctx)
-		if err != nil {
-			return err
-		}
-		result = opts
-		return nil
-	})
-	return result, err
 }
 
 // isAuthError checks if an error is an authentication error

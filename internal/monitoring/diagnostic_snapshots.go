@@ -50,8 +50,6 @@ type VMMemoryRaw struct {
 	StatusMem             uint64 `json:"statusMem,omitempty"`
 	StatusFreeMem         uint64 `json:"statusFreemem,omitempty"`
 	StatusMaxMem          uint64 `json:"statusMaxmem,omitempty"`
-	RRDAvailable          uint64 `json:"rrdAvailable,omitempty"`
-	RRDUsed               uint64 `json:"rrdUsed,omitempty"`
 	Balloon               uint64 `json:"balloon,omitempty"`
 	BalloonMin            uint64 `json:"balloonMin,omitempty"`
 	MemInfoUsed           uint64 `json:"meminfoUsed,omitempty"`
@@ -62,25 +60,26 @@ type VMMemoryRaw struct {
 	MemInfoCached         uint64 `json:"meminfoCached,omitempty"`
 	MemInfoShared         uint64 `json:"meminfoShared,omitempty"`
 	MemInfoTotalMinusUsed uint64 `json:"meminfoTotalMinusUsed,omitempty"`
-	Agent                 int    `json:"agent,omitempty"`
-	DerivedFromBall       bool   `json:"derivedFromBalloon,omitempty"`
 	HostAgentTotal        uint64 `json:"hostAgentTotal,omitempty"`
 	HostAgentUsed         uint64 `json:"hostAgentUsed,omitempty"`
+	Agent                 int    `json:"agent,omitempty"`
+	DerivedFromBall       bool   `json:"derivedFromBalloon,omitempty"`
 }
 
 // GuestMemorySnapshot records the memory calculation for a guest (VM/LXC).
 type GuestMemorySnapshot struct {
-	GuestType    string        `json:"guestType"`
-	Instance     string        `json:"instance"`
-	Node         string        `json:"node"`
-	Name         string        `json:"name"`
-	VMID         int           `json:"vmid"`
-	Status       string        `json:"status"`
-	RetrievedAt  time.Time     `json:"retrievedAt"`
-	MemorySource string        `json:"memorySource"`
-	Memory       models.Memory `json:"memory"`
-	Raw          VMMemoryRaw   `json:"raw"`
-	Notes        []string      `json:"notes,omitempty"`
+	GuestType      string        `json:"guestType"`
+	Instance       string        `json:"instance"`
+	Node           string        `json:"node"`
+	Name           string        `json:"name"`
+	VMID           int           `json:"vmid"`
+	Status         string        `json:"status"`
+	RetrievedAt    time.Time     `json:"retrievedAt"`
+	MemorySource   string        `json:"memorySource"`
+	FallbackReason string        `json:"fallbackReason,omitempty"`
+	Memory         models.Memory `json:"memory"`
+	Raw            VMMemoryRaw   `json:"raw"`
+	Notes          []string      `json:"notes"`
 }
 
 // DiagnosticSnapshotSet aggregates the latest node and guest snapshots.
@@ -95,6 +94,25 @@ func makeNodeSnapshotKey(instance, node string) string {
 
 func makeGuestSnapshotKey(instance, guestType, node string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%s|%d", instance, guestType, node, vmid)
+}
+
+func normalizeNodeMemorySnapshot(snapshot NodeMemorySnapshot) NodeMemorySnapshot {
+	snapshot.MemorySource = CanonicalMemorySource(snapshot.MemorySource)
+	if snapshot.FallbackReason == "" {
+		snapshot.FallbackReason = MemorySourceFallbackReason(snapshot.MemorySource)
+	}
+	return snapshot
+}
+
+func normalizeGuestMemorySnapshot(snapshot GuestMemorySnapshot) GuestMemorySnapshot {
+	snapshot.MemorySource = CanonicalMemorySource(snapshot.MemorySource)
+	if snapshot.FallbackReason == "" {
+		snapshot.FallbackReason = MemorySourceFallbackReason(snapshot.MemorySource)
+	}
+	if snapshot.Notes == nil {
+		snapshot.Notes = []string{}
+	}
+	return snapshot
 }
 
 func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemorySnapshot) {
@@ -117,10 +135,9 @@ func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemory
 	}
 
 	var evt *zerolog.Event
-	switch source {
-	case "", "nodes-endpoint", "node-status-used", "previous-snapshot":
+	if MemorySourceIsFallback(source) {
 		evt = log.Warn()
-	default:
+	} else {
 		evt = log.Debug()
 	}
 
@@ -167,7 +184,94 @@ func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemory
 		evt = evt.Float64("usage", snapshot.Memory.Usage)
 	}
 
-	evt.Msg("Node memory source updated")
+	evt.Msg("node memory source updated")
+}
+
+func (m *Monitor) logGuestMemorySource(instance, guestType, node string, vmid int, snapshot GuestMemorySnapshot) {
+	if m == nil {
+		return
+	}
+
+	key := makeGuestSnapshotKey(instance, guestType, node, vmid)
+
+	var prevSource string
+	m.diagMu.RLock()
+	if existing, ok := m.guestSnapshots[key]; ok {
+		prevSource = existing.MemorySource
+	}
+	m.diagMu.RUnlock()
+
+	if prevSource == snapshot.MemorySource {
+		return
+	}
+
+	source := snapshot.MemorySource
+	var evt *zerolog.Event
+	if MemorySourceIsFallback(source) {
+		evt = log.Warn()
+	} else {
+		evt = log.Debug()
+	}
+
+	evt = evt.
+		Str("instance", instance).
+		Str("guestType", guestType).
+		Str("node", node).
+		Int("vmid", vmid).
+		Str("name", snapshot.Name).
+		Str("status", snapshot.Status).
+		Str("memorySource", source)
+
+	if snapshot.FallbackReason != "" {
+		evt = evt.Str("fallbackReason", snapshot.FallbackReason)
+	}
+	if snapshot.Raw.ListingMem > 0 {
+		evt = evt.Uint64("listingMem", snapshot.Raw.ListingMem)
+	}
+	if snapshot.Raw.ListingMaxMem > 0 {
+		evt = evt.Uint64("listingMaxMem", snapshot.Raw.ListingMaxMem)
+	}
+	if snapshot.Raw.StatusMem > 0 {
+		evt = evt.Uint64("statusMem", snapshot.Raw.StatusMem)
+	}
+	if snapshot.Raw.StatusFreeMem > 0 {
+		evt = evt.Uint64("statusFreeMem", snapshot.Raw.StatusFreeMem)
+	}
+	if snapshot.Raw.StatusMaxMem > 0 {
+		evt = evt.Uint64("statusMaxMem", snapshot.Raw.StatusMaxMem)
+	}
+	if snapshot.Raw.MemInfoAvailable > 0 {
+		evt = evt.Uint64("memInfoAvailable", snapshot.Raw.MemInfoAvailable)
+	}
+	if snapshot.Raw.MemInfoBuffers > 0 {
+		evt = evt.Uint64("memInfoBuffers", snapshot.Raw.MemInfoBuffers)
+	}
+	if snapshot.Raw.MemInfoCached > 0 {
+		evt = evt.Uint64("memInfoCached", snapshot.Raw.MemInfoCached)
+	}
+	if snapshot.Raw.MemInfoTotalMinusUsed > 0 {
+		evt = evt.Uint64("memInfoTotalMinusUsed", snapshot.Raw.MemInfoTotalMinusUsed)
+	}
+	if snapshot.Raw.HostAgentTotal > 0 {
+		evt = evt.Uint64("hostAgentTotal", snapshot.Raw.HostAgentTotal)
+	}
+	if snapshot.Raw.HostAgentUsed > 0 {
+		evt = evt.Uint64("hostAgentUsed", snapshot.Raw.HostAgentUsed)
+	}
+	if snapshot.Memory.Total > 0 {
+		evt = evt.Int64("total", snapshot.Memory.Total)
+	}
+	if snapshot.Memory.Used > 0 {
+		evt = evt.Int64("used", snapshot.Memory.Used)
+	}
+	if snapshot.Memory.Free > 0 {
+		evt = evt.Int64("free", snapshot.Memory.Free)
+	}
+	if snapshot.Memory.Usage > 0 {
+		evt = evt.Float64("usage", snapshot.Memory.Usage)
+	}
+
+	evt.Msg("guest memory source updated")
 }
 
 func (m *Monitor) recordNodeSnapshot(instance, node string, snapshot NodeMemorySnapshot) {
@@ -175,6 +279,7 @@ func (m *Monitor) recordNodeSnapshot(instance, node string, snapshot NodeMemoryS
 		return
 	}
 
+	snapshot = normalizeNodeMemorySnapshot(snapshot)
 	snapshot.Instance = instance
 	snapshot.Node = node
 	if snapshot.RetrievedAt.IsZero() {
@@ -196,6 +301,7 @@ func (m *Monitor) recordGuestSnapshot(instance, guestType, node string, vmid int
 		return
 	}
 
+	snapshot = normalizeGuestMemorySnapshot(snapshot)
 	snapshot.Instance = instance
 	snapshot.GuestType = guestType
 	snapshot.Node = node
@@ -203,6 +309,8 @@ func (m *Monitor) recordGuestSnapshot(instance, guestType, node string, vmid int
 	if snapshot.RetrievedAt.IsZero() {
 		snapshot.RetrievedAt = time.Now()
 	}
+
+	m.logGuestMemorySource(instance, guestType, node, vmid, snapshot)
 
 	m.diagMu.Lock()
 	defer m.diagMu.Unlock()
@@ -229,7 +337,7 @@ func (m *Monitor) GetDiagnosticSnapshots() DiagnosticSnapshotSet {
 	if len(m.nodeSnapshots) > 0 {
 		result.Nodes = make([]NodeMemorySnapshot, 0, len(m.nodeSnapshots))
 		for _, snapshot := range m.nodeSnapshots {
-			result.Nodes = append(result.Nodes, snapshot)
+			result.Nodes = append(result.Nodes, normalizeNodeMemorySnapshot(snapshot))
 		}
 		sort.Slice(result.Nodes, func(i, j int) bool {
 			if result.Nodes[i].Instance == result.Nodes[j].Instance {
@@ -242,7 +350,7 @@ func (m *Monitor) GetDiagnosticSnapshots() DiagnosticSnapshotSet {
 	if len(m.guestSnapshots) > 0 {
 		result.Guests = make([]GuestMemorySnapshot, 0, len(m.guestSnapshots))
 		for _, snapshot := range m.guestSnapshots {
-			result.Guests = append(result.Guests, snapshot)
+			result.Guests = append(result.Guests, normalizeGuestMemorySnapshot(snapshot))
 		}
 		sort.Slice(result.Guests, func(i, j int) bool {
 			if result.Guests[i].Instance == result.Guests[j].Instance {

@@ -1,6 +1,7 @@
-import { Component, createSignal, For, Show } from 'solid-js';
+import { Component, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { POLLING_INTERVALS } from '@/constants';
+import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -9,6 +10,7 @@ export interface ToastMessage {
   type: ToastType;
   title: string;
   message?: string;
+  detail?: string;
   duration?: number;
 }
 
@@ -17,114 +19,126 @@ interface ToastProps {
   onRemove: (id: string) => void;
 }
 
-const Toast: Component<ToastProps> = (props) => {
+export const Toast: Component<ToastProps> = (props) => {
   const [show, setShow] = createSignal(true);
+  let autoRemoveTimer: number | undefined;
+  let closeAnimationTimer: number | undefined;
 
   const icons = {
     success: (
-      <div class="relative">
-        <div class="absolute inset-0 bg-green-400 rounded-full blur-xl opacity-50 animate-pulse"></div>
-        <svg class="w-6 h-6 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      </div>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2.5"
+          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
     ),
     error: (
-      <div class="relative">
-        <div class="absolute inset-0 bg-red-400 rounded-full blur-xl opacity-50 animate-pulse"></div>
-        <svg class="w-6 h-6 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      </div>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2.5"
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
     ),
     warning: (
-      <div class="relative">
-        <div class="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-50 animate-pulse"></div>
-        <svg class="w-6 h-6 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
-        </svg>
-      </div>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2.5"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        />
+      </svg>
     ),
     info: (
-      <div class="relative">
-        <div class="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-50 animate-pulse"></div>
-        <svg class="w-6 h-6 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      </div>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2.5"
+          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
     ),
   };
 
-  const iconColors = {
-    success: 'text-green-400',
-    error: 'text-red-400',
-    warning: 'text-yellow-400',
-    info: 'text-blue-400',
-  };
+  const iconTone = () => getSemanticTonePresentation(props.toast.type);
 
   const handleClose = () => {
+    if (!show()) {
+      return;
+    }
     setShow(false);
-    window.setTimeout(() => props.onRemove(props.toast.id), 300);
+    if (autoRemoveTimer !== undefined) {
+      window.clearTimeout(autoRemoveTimer);
+      autoRemoveTimer = undefined;
+    }
+    if (closeAnimationTimer !== undefined) {
+      window.clearTimeout(closeAnimationTimer);
+    }
+    closeAnimationTimer = window.setTimeout(() => props.onRemove(props.toast.id), 300);
   };
 
-  // Auto-remove after duration
-  window.setTimeout(() => {
-    handleClose();
-  }, props.toast.duration || POLLING_INTERVALS.TOAST_DURATION);
+  onMount(() => {
+    // Auto-remove after duration.
+    autoRemoveTimer = window.setTimeout(
+      () => handleClose(),
+      props.toast.duration || POLLING_INTERVALS.TOAST_DURATION,
+    );
+  });
+
+  onCleanup(() => {
+    if (autoRemoveTimer !== undefined) {
+      window.clearTimeout(autoRemoveTimer);
+    }
+    if (closeAnimationTimer !== undefined) {
+      window.clearTimeout(closeAnimationTimer);
+    }
+  });
 
   return (
     <div
       class={`transform transition-all duration-500 ease-out ${
         show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
-      } animate-slide-in-glass`}
+      } animate-slide-in-card`}
     >
       <div
         class={`
-          backdrop-blur-xl bg-white/10 dark:bg-gray-900/30
-          border border-white/20 dark:border-gray-700/30
-          px-5 py-4 rounded-2xl shadow-2xl 
-          flex items-center gap-4 
-          min-w-[320px] max-w-[500px]
+           bg-surface
+          border border-border
+          px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm 
+          flex items-center gap-3 sm:gap-4 
+          min-w-[300px] max-w-[400px] sm:min-w-[320px] sm:max-w-[500px]
         `}
-        style={{
-          background: 'rgba(255,255,255,0.1)',
-          'box-shadow':
-            '0 8px 32px 0 rgba(31, 38, 135, 0.37), inset 0 0 0 1px rgba(255,255,255,0.1)',
-        }}
       >
-        <div class={`flex-shrink-0 ${iconColors[props.toast.type]}`}>{icons[props.toast.type]}</div>
+        <div
+          class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md border bg-surface ${iconTone().iconClass} ${iconTone().panelClass}`}
+        >
+          {icons[props.toast.type]}
+        </div>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-gray-800 dark:text-gray-100">{props.toast.title}</h3>
+          <h3 class="text-sm font-medium text-base-content">{props.toast.title}</h3>
           <Show when={props.toast.message}>
-            <p class="mt-1 text-xs text-gray-700 dark:text-gray-300 opacity-90">
-              {props.toast.message}
-            </p>
+            <p class="mt-1 text-xs text-base-content opacity-90">{props.toast.message}</p>
+          </Show>
+          <Show when={props.toast.detail}>
+            <details class="mt-1">
+              <summary class="text-xs text-muted cursor-pointer select-none hover:text-base-content">
+                Details
+              </summary>
+              <p class="mt-1 text-xs text-base-content/70 break-all">{props.toast.detail}</p>
+            </details>
           </Show>
         </div>
         <button
           type="button"
           onClick={handleClose}
-          class="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/10 rounded-lg p-1.5 transition-all duration-200"
+          class="flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -144,7 +158,13 @@ const Toast: Component<ToastProps> = (props) => {
 // Declare global interface extension
 declare global {
   interface Window {
-    showToast: (type: ToastType, title: string, message?: string, duration?: number) => string;
+    showToast: (
+      type: ToastType,
+      title: string,
+      message?: string,
+      duration?: number,
+      detail?: string,
+    ) => string;
   }
 }
 
@@ -152,13 +172,22 @@ export const ToastContainer: Component = () => {
   const [toasts, setToasts] = createSignal<ToastMessage[]>([]);
 
   const removeToast = (id: string) => {
-    setToasts(toasts().filter((t) => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   // Expose global toast function
-  window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
-    const id = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
-    setToasts([...toasts(), { id, type, title, message, duration }]);
+  window.showToast = (
+    type: ToastType,
+    title: string,
+    message?: string,
+    duration?: number,
+    detail?: string,
+  ) => {
+    const id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString();
+    setToasts((prev) => [...prev, { id, type, title, message, detail, duration }]);
     return id;
   };
 

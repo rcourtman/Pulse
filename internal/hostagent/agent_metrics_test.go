@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -154,15 +152,15 @@ func TestBuildReport(t *testing.T) {
 
 	// Test case 4: Ceph collection
 	t.Run("Ceph collection", func(t *testing.T) {
-		mc.cephStatusFn = func(ctx context.Context) (*ceph.ClusterStatus, error) {
-			return &ceph.ClusterStatus{
+		mc.cephStatusFn = func(ctx context.Context) (*CephClusterStatus, error) {
+			return &CephClusterStatus{
 				FSID: "ceph-fsid-123",
-				Health: ceph.HealthStatus{
+				Health: CephHealthStatus{
 					Status: "HEALTH_OK",
 				},
-				MonMap: ceph.MonitorMap{
+				MonMap: CephMonitorMap{
 					NumMons: 1,
-					Monitors: []ceph.Monitor{
+					Monitors: []CephMonitor{
 						{Name: "a"},
 					},
 				},
@@ -185,10 +183,42 @@ func TestBuildReport(t *testing.T) {
 		mc.cephStatusFn = nil
 	})
 
-	// Test case 5: SMART collection
+	// Test case 5: Unraid collection
+	t.Run("Unraid collection", func(t *testing.T) {
+		mc.unraidStorageFn = func(ctx context.Context) (*agentshost.UnraidStorage, error) {
+			return &agentshost.UnraidStorage{
+				ArrayStarted: true,
+				ArrayState:   "STARTED",
+				SyncAction:   "check",
+				Disks: []agentshost.UnraidDisk{
+					{Name: "parity", Role: "parity", Status: "online"},
+					{Name: "disk1", Role: "data", Status: "online"},
+				},
+			}, nil
+		}
+		mc.goos = "linux"
+
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("buildReport failed: %v", err)
+		}
+
+		if report.Unraid == nil {
+			t.Fatal("Unraid report is nil")
+		}
+		if !report.Unraid.ArrayStarted {
+			t.Fatal("expected Unraid array to be started")
+		}
+		if len(report.Unraid.Disks) != 2 {
+			t.Fatalf("expected 2 Unraid disks, got %d", len(report.Unraid.Disks))
+		}
+		mc.unraidStorageFn = nil
+	})
+
+	// Test case 6: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
-		mc.smartLocalFn = func(_ context.Context, _ []string) ([]smartctl.DiskSMART, error) {
-			return []smartctl.DiskSMART{
+		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+			return []DiskSMART{
 				{
 					Device:      "/dev/sda",
 					Model:       "TestDisk",

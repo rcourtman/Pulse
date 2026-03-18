@@ -10,16 +10,18 @@ export type TemperatureTransport =
 // Node configuration types
 
 export interface ClusterEndpoint {
-  NodeID: string;
-  NodeName: string;
-  Host: string;
-  GuestURL?: string;
-  IP: string;
-  Online: boolean; // Proxmox's view: is the node online in the cluster?
-  LastSeen: string;
-  PulseReachable?: boolean | null; // Pulse's view: can Pulse reach this endpoint? null/undefined = not yet checked
-  LastPulseCheck?: string | null;
-  PulseError?: string; // Last error Pulse encountered connecting to this endpoint
+  nodeId: string;
+  nodeName: string;
+  host: string;
+  guestURL?: string;
+  ip: string;
+  ipOverride?: string;
+  fingerprint?: string;
+  online: boolean; // Proxmox's view: is the node online in the cluster?
+  lastSeen: string;
+  pulseReachable?: boolean | null; // Pulse's view: can Pulse reach this endpoint? null/undefined = not yet checked
+  lastPulseCheck?: string | null;
+  pulseError?: string; // Last error Pulse encountered connecting to this endpoint
 }
 
 export interface PVENodeConfig {

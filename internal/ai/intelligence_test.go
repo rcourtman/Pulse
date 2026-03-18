@@ -176,15 +176,6 @@ func TestIntelligence_CheckBaselinesForResource(t *testing.T) {
 
 // Note: mockStateProvider is already defined in alert_triggered_test.go
 
-func TestIntelligence_SetStateProvider(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	mockSP := &mockStateProvider{}
-	intel.SetStateProvider(mockSP)
-
-	// State provider should be set (we can't directly access it, but no panic = success)
-}
-
 func TestIntelligence_FormatGlobalContext(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 
@@ -204,25 +195,6 @@ func TestIntelligence_FormatGlobalContext(t *testing.T) {
 	// Should still be empty (no knowledge saved)
 	ctx = intel.FormatGlobalContext()
 	// Empty or with headers only is fine
-}
-
-func TestIntelligence_FormatGlobalContext_WithSubsystems(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	// Set up incident store with some data
-	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{
-		MaxIncidents: 10,
-	})
-
-	// Create some incidents to format
-	incidentStore.RecordAnalysis("alert-1", "Test analysis", nil)
-
-	intel.SetSubsystems(nil, nil, nil, nil, incidentStore, nil, nil, nil)
-
-	ctx := intel.FormatGlobalContext()
-	// Having set incidents, there should be some context
-	// (may be empty if no actual incidents, but shouldn't panic)
-	_ = ctx
 }
 
 func TestIntelligence_RecordLearning(t *testing.T) {
@@ -278,7 +250,7 @@ func TestIntelligence_CheckBaselinesForResource_WithBaselines(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = baseline.MetricPoint{Value: 20 + float64(i%3) - 1} // 19-21
 	}
-	baselineStore.Learn("vm-100", "vm", "cpu", points)
+	_ = baselineStore.Learn("vm-100", "vm", "cpu", points)
 
 	intel.SetSubsystems(nil, nil, nil, baselineStore, nil, nil, nil, nil)
 
@@ -346,7 +318,7 @@ func TestIntelligence_FormatContext_WithKnowledge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create knowledge store: %v", err)
 	}
-	knowledgeStore.SaveNote("vm-300", "test-vm", "vm", "general", "Test Note", "This is test content")
+	_ = knowledgeStore.SaveNote("vm-300", "test-vm", "vm", "general", "Test Note", "This is test content")
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)
 
@@ -486,8 +458,8 @@ func TestIntelligence_GetResourceIntelligence_WithBaselines(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = baseline.MetricPoint{Value: 30 + float64(i%5) - 2}
 	}
-	baselineStore.Learn("vm-with-baseline", "vm", "cpu", points)
-	baselineStore.Learn("vm-with-baseline", "vm", "memory", points)
+	_ = baselineStore.Learn("vm-with-baseline", "vm", "cpu", points)
+	_ = baselineStore.Learn("vm-with-baseline", "vm", "memory", points)
 
 	intel.SetSubsystems(nil, nil, nil, baselineStore, nil, nil, nil, nil)
 
@@ -652,7 +624,7 @@ func TestIntelligence_GetSummary_WithLearningBonus(t *testing.T) {
 	// Add knowledge for 6+ resources to trigger learning bonus
 	for i := 0; i < 7; i++ {
 		resourceID := "vm-" + string(rune('A'+i))
-		knowledgeStore.SaveNote(resourceID, "VM "+string(rune('A'+i)), "vm", "general", "Note", "Content")
+		_ = knowledgeStore.SaveNote(resourceID, "VM "+string(rune('A'+i)), "vm", "general", "Note", "Content")
 	}
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)
@@ -670,62 +642,6 @@ func TestIntelligence_GetSummary_WithLearningBonus(t *testing.T) {
 	if !hasLearningFactor {
 		t.Error("Expected learning factor with 6+ resources learned")
 	}
-}
-
-func TestIntelligence_FormatContext_WithCorrelation(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	// Create correlation detector
-	correlationDetector := correlation.NewDetector(correlation.DefaultConfig())
-
-	intel.SetSubsystems(nil, nil, correlationDetector, nil, nil, nil, nil, nil)
-
-	// Should not panic even without correlations
-	ctx := intel.FormatContext("vm-test")
-	_ = ctx
-}
-
-func TestIntelligence_FormatContext_WithPatterns(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	// Create pattern detector
-	patternDetector := patterns.NewDetector(patterns.DefaultConfig())
-
-	intel.SetSubsystems(nil, patternDetector, nil, nil, nil, nil, nil, nil)
-
-	// Should not panic
-	ctx := intel.FormatContext("vm-test")
-	_ = ctx
-}
-
-func TestIntelligence_FormatContext_WithIncidents(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	// Create incident store
-	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{
-		MaxIncidents: 10,
-	})
-
-	intel.SetSubsystems(nil, nil, nil, nil, incidentStore, nil, nil, nil)
-
-	ctx := intel.FormatContext("vm-test")
-	_ = ctx
-}
-
-func TestIntelligence_FormatGlobalContext_Full(t *testing.T) {
-	intel := NewIntelligence(IntelligenceConfig{})
-
-	// Set up all context-contributing subsystems
-	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
-	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{MaxIncidents: 10})
-	correlationDetector := correlation.NewDetector(correlation.DefaultConfig())
-	patternDetector := patterns.NewDetector(patterns.DefaultConfig())
-
-	intel.SetSubsystems(nil, patternDetector, correlationDetector, nil, incidentStore, knowledgeStore, nil, nil)
-
-	ctx := intel.FormatGlobalContext()
-	// May be empty if no data, but shouldn't panic
-	_ = ctx
 }
 
 func TestIntelligence_generateHealthPrediction_Warnings(t *testing.T) {

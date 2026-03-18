@@ -8,12 +8,14 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type fakeStateProvider struct{}
 
-func (f fakeStateProvider) GetState() models.StateSnapshot {
+func (f fakeStateProvider) ReadSnapshot() models.StateSnapshot {
 	return models.StateSnapshot{}
 }
 
@@ -27,6 +29,25 @@ func (f fakeAgentServer) ExecuteCommand(ctx context.Context, agentID string, cmd
 	return &agentexec.CommandResultPayload{Stdout: "ok", ExitCode: 0}, nil
 }
 
+type fakeCanonicalReadState struct{}
+
+func (f *fakeCanonicalReadState) VMs() []*ur.VMView                           { return nil }
+func (f *fakeCanonicalReadState) Containers() []*ur.ContainerView             { return nil }
+func (f *fakeCanonicalReadState) Nodes() []*ur.NodeView                       { return nil }
+func (f *fakeCanonicalReadState) Hosts() []*ur.HostView                       { return nil }
+func (f *fakeCanonicalReadState) DockerHosts() []*ur.DockerHostView           { return nil }
+func (f *fakeCanonicalReadState) DockerContainers() []*ur.DockerContainerView { return nil }
+func (f *fakeCanonicalReadState) StoragePools() []*ur.StoragePoolView         { return nil }
+func (f *fakeCanonicalReadState) PhysicalDisks() []*ur.PhysicalDiskView       { return nil }
+func (f *fakeCanonicalReadState) PBSInstances() []*ur.PBSInstanceView         { return nil }
+func (f *fakeCanonicalReadState) PMGInstances() []*ur.PMGInstanceView         { return nil }
+func (f *fakeCanonicalReadState) K8sClusters() []*ur.K8sClusterView           { return nil }
+func (f *fakeCanonicalReadState) K8sNodes() []*ur.K8sNodeView                 { return nil }
+func (f *fakeCanonicalReadState) Pods() []*ur.PodView                         { return nil }
+func (f *fakeCanonicalReadState) K8sDeployments() []*ur.K8sDeploymentView     { return nil }
+func (f *fakeCanonicalReadState) Workloads() []*ur.WorkloadView               { return nil }
+func (f *fakeCanonicalReadState) Infrastructure() []*ur.InfrastructureView    { return nil }
+
 func toolNameSet(list []providers.Tool) map[string]bool {
 	set := make(map[string]bool, len(list))
 	for _, tool := range list {
@@ -39,12 +60,19 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
 		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
 		ControlLevel:  tools.ControlLevelControlled,
 	})
 
-	svc := &Service{executor: exec}
+	svc := &Service{
+		executor: exec,
+		cfg: &config.AIConfig{
+			PatrolAnalyzeDocker:  true,
+			PatrolAnalyzeStorage: true,
+		},
+	}
 
-	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status")
+	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", true, false)
 	readOnlySet := toolNameSet(readOnlyTools)
 	if readOnlySet["pulse_control"] || readOnlySet["pulse_file_edit"] || readOnlySet["pulse_docker"] {
 		t.Fatalf("expected write tools to be filtered for read-only prompt")
@@ -53,7 +81,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		t.Fatalf("expected specialty tools to remain when no specialty keyword detected")
 	}
 
-	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods")
+	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false, false)
 	k8sSet := toolNameSet(k8sTools)
 	if !k8sSet["pulse_kubernetes"] {
 		t.Fatalf("expected kubernetes tool to be included")
@@ -71,13 +99,40 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview")
+	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", false, false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept for broad infrastructure prompt")
 	}
-	if set["pulse_control"] || set["pulse_file_edit"] || set["pulse_docker"] {
-		t.Fatalf("expected write tools to be filtered for read-only prompt")
+	if !set["pulse_control"] || !set["pulse_file_edit"] || !set["pulse_docker"] {
+		t.Fatalf("expected interactive mode to keep write tools")
+	}
+}
+
+func TestFilterToolsForPrompt_AutonomousNonPatrol(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+
+	svc := &Service{
+		executor: exec,
+		cfg: &config.AIConfig{
+			PatrolAnalyzeDocker:  false,
+			PatrolAnalyzeStorage: false,
+		},
+	}
+
+	// Use write intent so read-only write-tool gating does not hide docker.
+	filtered := svc.filterToolsForPrompt(context.Background(), "restart docker containers and check storage pools", true, false)
+	set := toolNameSet(filtered)
+
+	if !set["pulse_docker"] {
+		t.Fatalf("expected pulse_docker to be included for autonomous non-patrol runs")
+	}
+	if !set["pulse_storage"] {
+		t.Fatalf("expected pulse_storage to be included for autonomous non-patrol runs")
 	}
 }
 

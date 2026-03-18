@@ -11,7 +11,7 @@ Manage Pulse auto-updates on host-mode installations.
 | `pulse-update.service` | Runs the update script. |
 | `pulse-auto-update.sh` | Fetches release & restarts Pulse (`/opt/pulse/scripts/pulse-auto-update.sh`). |
 
-**Release channel note:** the systemd timer script tracks GitHub `releases/latest` (stable). RC channel settings only affect the in-app update checker.
+**Release channel note:** the systemd timer script tracks GitHub `releases/latest` (stable). RC channel settings only affect manual and in-app update selection. `stable` is the only recommended channel for paid or production environments.
 
 ## 🚀 Enable/Disable
 
@@ -49,4 +49,4 @@ If an update fails:
     curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
       sudo bash -s -- --version vX.Y.Z
     ```
-    This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
+    This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.

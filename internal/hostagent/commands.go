@@ -3,10 +3,11 @@ package hostagent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
+	"math/rand"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,14 +18,66 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
-// safeTargetIDPattern validates target IDs to prevent shell injection.
-// Allows alphanumeric, dash, underscore, period (no colons or special chars).
-var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+// safeTargetIDPattern validates Proxmox VM/LXC IDs used by pct/qm exec wrappers.
+// These must be numeric to avoid option injection or shell metacharacter abuse.
+var safeTargetIDPattern = regexp.MustCompile(`^[0-9]{1,9}$`)
 
 var execCommandContext = exec.CommandContext
+
+// How long the command client waits before retrying after a connection failure.
+// Package var so tests can override to avoid long sleeps.
+var reconnectDelay = 10 * time.Second
+
+const (
+	maxCommandOutputSize = 1024 * 1024
+	outputTruncatedMsg   = "\n... (output truncated)"
+)
+
+var (
+	reconnectMaxDelay    = 5 * time.Minute
+	reconnectJitterRatio = 0.1
+	reconnectRandFloat64 = rand.Float64
+)
+
+type cappedBuffer struct {
+	maxBytes  int
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func newCappedBuffer(maxBytes int) *cappedBuffer {
+	return &cappedBuffer{maxBytes: maxBytes}
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+
+	if len(p) <= remaining {
+		_, _ = b.buf.Write(p)
+		return len(p), nil
+	}
+
+	_, _ = b.buf.Write(p[:remaining])
+	b.truncated = true
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string {
+	out := b.buf.String()
+	if b.truncated {
+		return out + outputTruncatedMsg
+	}
+	return out
+}
 
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
@@ -35,6 +88,7 @@ type CommandClient struct {
 	platform           string
 	version            string
 	insecureSkipVerify bool
+	caCertPath         string
 	logger             zerolog.Logger
 
 	conn   *websocket.Conn
@@ -54,22 +108,38 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		platform:           platform,
 		version:            version,
 		insecureSkipVerify: cfg.InsecureSkipVerify,
+		caCertPath:         cfg.CACertPath,
 		logger:             logger,
 		done:               make(chan struct{}),
 	}
+}
+
+func (c *CommandClient) stopChan() <-chan struct{} {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	if c.done == nil {
+		c.done = make(chan struct{})
+	}
+
+	return c.done
 }
 
 // Message types matching agentexec package
 type messageType string
 
 const (
-	msgTypeAgentRegister messageType = "agent_register"
-	msgTypeAgentPing     messageType = "agent_ping"
-	msgTypeCommandResult messageType = "command_result"
-	msgTypeRegistered    messageType = "registered"
-	msgTypePong          messageType = "pong"
-	msgTypeExecuteCmd    messageType = "execute_command"
-	msgTypeReadFile      messageType = "read_file"
+	msgTypeAgentRegister   messageType = "agent_register"
+	msgTypeAgentPing       messageType = "agent_ping"
+	msgTypeCommandResult   messageType = "command_result"
+	msgTypeRegistered      messageType = "registered"
+	msgTypePong            messageType = "pong"
+	msgTypeExecuteCmd      messageType = "execute_command"
+	msgTypeReadFile        messageType = "read_file"
+	msgTypeDeployPreflight messageType = "deploy_preflight"
+	msgTypeDeployInstall   messageType = "deploy_install"
+	msgTypeDeployCancel    messageType = "deploy_cancel"
+	msgTypeDeployProgress  messageType = "deploy_progress"
 )
 
 type wsMessage struct {
@@ -113,11 +183,14 @@ type commandResultPayload struct {
 
 // Run starts the command client and maintains the WebSocket connection
 func (c *CommandClient) Run(ctx context.Context) error {
+	stopCh := c.stopChan()
 	consecutiveFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-stopCh:
+			return nil
 		default:
 		}
 
@@ -128,6 +201,7 @@ func (c *CommandClient) Run(ctx context.Context) error {
 			}
 
 			consecutiveFailures++
+			delay := computeReconnectDelay(consecutiveFailures)
 
 			// Distinguish between transient issues and persistent failures
 			// Normal close errors (server restart, reconnection) are expected and logged at debug
@@ -138,17 +212,32 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				strings.Contains(errStr, "connection reset by peer")
 
 			if isNormalClose {
-				c.logger.Debug().Err(err).Msg("WebSocket closed, reconnecting in 10s")
+				c.logger.Debug().Err(err).Dur("retry_in", delay).Msg("WebSocket closed, reconnecting")
 			} else if consecutiveFailures >= 3 {
-				c.logger.Warn().Err(err).Int("failures", consecutiveFailures).Msg("WebSocket connection failed repeatedly, reconnecting in 10s")
+				c.logger.Warn().Err(err).Int("failures", consecutiveFailures).Dur("retry_in", delay).Msg("WebSocket connection failed repeatedly, reconnecting")
 			} else {
-				c.logger.Debug().Err(err).Msg("WebSocket connection interrupted, reconnecting in 10s")
+				c.logger.Debug().Err(err).Dur("retry_in", delay).Msg("WebSocket connection interrupted, reconnecting")
 			}
 
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return ctx.Err()
-			case <-time.After(10 * time.Second):
+			case <-stopCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return nil
+			case <-timer.C:
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)
@@ -167,17 +256,18 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
 	// Create dialer with TLS config
+	tlsConfig, err := agenttls.NewClientTLSConfig(c.caCertPath, c.insecureSkipVerify)
+	if err != nil {
+		return fmt.Errorf("build websocket TLS config: %w", err)
+	}
+
 	dialer := websocket.Dialer{
-		TLSClientConfig: &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: c.insecureSkipVerify,
-		},
+		TLSClientConfig:  tlsConfig,
 		HandshakeTimeout: 45 * time.Second,
 	}
 
 	// Connect
-	headers := make(http.Header)
-	conn, _, err := dialer.DialContext(ctx, wsURL, headers)
+	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial websocket: %w", err)
 	}
@@ -190,8 +280,20 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		c.connMu.Lock()
 		c.conn = nil
 		c.connMu.Unlock()
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+			c.logger.Debug().Err(closeErr).Msg("Failed to close websocket connection")
+		}
 	}()
+
+	cancelCloseDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-cancelCloseDone:
+		}
+	}()
+	defer close(cancelCloseDone)
 
 	// Send registration
 	if err := c.sendRegistration(conn); err != nil {
@@ -207,11 +309,19 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 
 	// Clear any deadlines that may have been set during handshake
 	// The HandshakeTimeout in the Dialer may have set a deadline on the underlying connection
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to clear websocket read deadline")
+	}
+	if err := conn.SetWriteDeadline(time.Time{}); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to clear websocket write deadline")
+	}
 	if netConn := conn.NetConn(); netConn != nil {
-		netConn.SetReadDeadline(time.Time{})
-		netConn.SetWriteDeadline(time.Time{})
+		if err := netConn.SetReadDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear network read deadline")
+		}
+		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear network write deadline")
+		}
 	}
 
 	// Start ping loop
@@ -226,33 +336,67 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed, err := url.Parse(c.pulseURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("pulse URL is invalid: %w", err)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("missing host in pulse URL")
 	}
 
-	// Convert http(s) to ws(s)
-	switch parsed.Scheme {
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme", c.pulseURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", c.pulseURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", c.pulseURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", c.pulseURL)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
 	case "https":
 		parsed.Scheme = "wss"
 	case "http":
+		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback or private network", c.pulseURL)
+		}
 		parsed.Scheme = "ws"
-	case "wss", "ws":
-		// Already WebSocket scheme
+	case "wss":
+		parsed.Scheme = "wss"
+	case "ws":
+		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback or private network", c.pulseURL)
+		}
+		parsed.Scheme = "ws"
 	default:
-		parsed.Scheme = "ws"
+		return "", fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
 	}
 
-	parsed.Path = "/api/agent/ws"
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if basePath == "" {
+		parsed.Path = "/api/agent/ws"
+	} else {
+		parsed.Path = basePath + "/api/agent/ws"
+	}
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
 	return parsed.String(), nil
 }
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
-	payload, _ := json.Marshal(registerPayload{
+	payload, err := json.Marshal(registerPayload{
 		AgentID:  c.agentID,
 		Hostname: c.hostname,
 		Version:  c.version,
 		Platform: c.platform,
 		Token:    c.apiToken,
 	})
+	if err != nil {
+		return fmt.Errorf("marshal registration payload: %w", err)
+	}
 
 	msg := wsMessage{
 		Type:      msgTypeAgentRegister,
@@ -264,8 +408,14 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 }
 
 func (c *CommandClient) waitForRegistration(conn *websocket.Conn) error {
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	defer conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return fmt.Errorf("set registration read deadline: %w", err)
+	}
+	defer func() {
+		if err := conn.SetReadDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear registration read deadline")
+		}
+	}()
 
 	var msg wsMessage
 	if err := conn.ReadJSON(&msg); err != nil {
@@ -306,12 +456,19 @@ func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done
 					Timestamp: time.Now(),
 				}
 				if err := conn.WriteJSON(msg); err != nil {
-					c.logger.Debug().Err(err).Msg("Failed to send ping")
+					c.logger.Debug().Err(err).Msg("Failed to send ping, closing connection for reconnect")
+					_ = conn.Close()
+					c.connMu.Unlock()
+					return
 				}
 			}
 			c.connMu.Unlock()
 		}
 	}
+}
+
+func computeReconnectDelay(failures int) time.Duration {
+	return utils.ExponentialBackoff(reconnectDelay, reconnectMaxDelay, failures, reconnectJitterRatio, reconnectRandFloat64)
 }
 
 func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn) error {
@@ -350,6 +507,30 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleExecuteCommand(ctx, conn, payload)
 
+		case msgTypeDeployPreflight:
+			var payload deployPreflightPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_preflight payload")
+				continue
+			}
+			go c.handleDeployPreflight(ctx, conn, payload)
+
+		case msgTypeDeployInstall:
+			var payload deployInstallPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_install payload")
+				continue
+			}
+			go c.handleDeployInstall(ctx, conn, payload)
+
+		case msgTypeDeployCancel:
+			var payload deployCancelPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse deploy_cancel payload")
+				continue
+			}
+			c.handleDeployCancel(payload)
+
 		default:
 			c.logger.Debug().Str("type", string(msg.Type)).Msg("Unknown message type")
 		}
@@ -370,7 +551,11 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	result.Duration = time.Since(startTime).Milliseconds()
 
 	// Send result back
-	resultPayload, _ := json.Marshal(result)
+	resultPayload, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal command result")
+		return
+	}
 	msg := wsMessage{
 		Type:      msgTypeCommandResult,
 		ID:        payload.RequestID,
@@ -379,11 +564,11 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 
 	c.connMu.Lock()
-	err := conn.WriteJSON(msg)
+	writeErr := conn.WriteJSON(msg)
 	c.connMu.Unlock()
 
-	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send command result")
+	if writeErr != nil {
+		c.logger.Error().Err(writeErr).Str("request_id", payload.RequestID).Msg("Failed to send command result")
 	} else {
 		c.logger.Info().
 			Str("request_id", payload.RequestID).
@@ -395,13 +580,19 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 }
 
 func wrapCommand(payload executeCommandPayload) string {
+	targetType := strings.ToLower(strings.TrimSpace(payload.TargetType))
+	targetID := strings.TrimSpace(payload.TargetID)
+
 	// Only validate TargetID when it will be interpolated into the command
 	// (container and vm types). Host type doesn't use TargetID in the command.
-	needsTargetID := (payload.TargetType == "container" || payload.TargetType == "vm") && payload.TargetID != ""
+	needsTargetID := targetType == "container" || targetType == "vm"
 
 	if needsTargetID {
+		if targetID == "" {
+			return "sh -c 'echo \"Error: missing target ID\" >&2; exit 1'"
+		}
 		// Validate TargetID to prevent shell injection - defense in depth
-		if !safeTargetIDPattern.MatchString(payload.TargetID) {
+		if !safeTargetIDPattern.MatchString(targetID) {
 			// Return a command that fails with non-zero exit and error message
 			return "sh -c 'echo \"Error: invalid target ID\" >&2; exit 1'"
 		}
@@ -412,11 +603,11 @@ func wrapCommand(payload executeCommandPayload) string {
 		// expand the glob on the host (where /var/log/*.log doesn't exist).
 		quotedCmd := shellQuote(payload.Command)
 
-		if payload.TargetType == "container" {
-			return fmt.Sprintf("pct exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		if targetType == "container" {
+			return fmt.Sprintf("pct exec %s -- sh -c %s", targetID, quotedCmd)
 		}
-		if payload.TargetType == "vm" {
-			return fmt.Sprintf("qm guest exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		if targetType == "vm" {
+			return fmt.Sprintf("qm guest exec %s -- sh -c %s", targetID, quotedCmd)
 		}
 	}
 
@@ -456,9 +647,10 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := newCappedBuffer(maxCommandOutputSize)
+	stderr := newCappedBuffer(maxCommandOutputSize)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 
@@ -483,15 +675,6 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		result.Success = true
 	}
 
-	// Truncate output if too large (1MB limit)
-	const maxOutputSize = 1024 * 1024
-	if len(result.Stdout) > maxOutputSize {
-		result.Stdout = result.Stdout[:maxOutputSize] + "\n... (output truncated)"
-	}
-	if len(result.Stderr) > maxOutputSize {
-		result.Stderr = result.Stderr[:maxOutputSize] + "\n... (output truncated)"
-	}
-
 	return result
 }
 
@@ -500,8 +683,19 @@ func (c *CommandClient) Close() error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
+	if c.done == nil {
+		c.done = make(chan struct{})
+	}
+	select {
+	case <-c.done:
+	default:
+		close(c.done)
+	}
+
 	if c.conn != nil {
-		return c.conn.Close()
+		err := c.conn.Close()
+		c.conn = nil
+		return err
 	}
 	return nil
 }

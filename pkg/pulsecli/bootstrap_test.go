@@ -1,0 +1,73 @@
+package pulsecli
+
+import (
+	"bytes"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
+)
+
+func TestShowBootstrapTokenUsesBootstrapExitOnMissingToken(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+
+	exitCode := 0
+	exitFn := func(code int) { exitCode = code }
+	bootstrap := &BootstrapDeps{Exit: exitFn}
+
+	output := captureOutput(t, func() {
+		ShowBootstrapToken(bootstrap)
+	})
+
+	if exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1", exitCode)
+	}
+	if !strings.Contains(output, "NO BOOTSTRAP TOKEN FOUND") {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestShowBootstrapTokenPrintsToken(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	if _, err := bootstrap.Persist(dir, "test-token", time.Now().UTC()); err != nil {
+		t.Fatalf("Persist: %v", err)
+	}
+
+	output := captureOutput(t, func() {
+		ShowBootstrapToken(&BootstrapDeps{})
+	})
+
+	if !strings.Contains(output, "test-token") {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func captureOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+	os.Stderr = w
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	fn()
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatalf("ReadFrom: %v", err)
+	}
+	return buf.String()
+}

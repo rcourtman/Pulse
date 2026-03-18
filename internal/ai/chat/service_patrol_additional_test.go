@@ -20,7 +20,6 @@ func (m mockKnowledgeStore) GetKnowledge(resourceID, category string) []tools.Kn
 type mockStreamingProvider struct {
 	chatStreamFunc func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 	lastRequest    providers.ChatRequest
-	requests       []providers.ChatRequest
 }
 
 func (m *mockStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -29,7 +28,6 @@ func (m *mockStreamingProvider) Chat(ctx context.Context, req providers.ChatRequ
 
 func (m *mockStreamingProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 	m.lastRequest = req
-	m.requests = append(m.requests, req)
 	if m.chatStreamFunc != nil {
 		return m.chatStreamFunc(ctx, req, callback)
 	}
@@ -52,30 +50,16 @@ func TestService_CreateProviderForModel(t *testing.T) {
 	}
 
 	svc.cfg = &config.AIConfig{}
-	// "bad" auto-detects as ollama, which should succeed (no API key needed)
-	if _, err := svc.createProviderForModel("bad"); err != nil {
-		t.Fatalf("expected ollama fallback for unrecognized model: %v", err)
+	if _, err := svc.createProviderForModel("bad"); err == nil {
+		t.Fatalf("expected invalid model format error")
 	}
 
-	// "unknown:model" has no known provider prefix, so ParseModelString falls through
-	// to ollama (default for unrecognized models), which succeeds
-	if _, err := svc.createProviderForModel("unknown:model"); err != nil {
-		t.Fatalf("expected ollama fallback for unknown prefix: %v", err)
+	if _, err := svc.createProviderForModel("unknown:model"); err == nil {
+		t.Fatalf("expected unsupported provider error")
 	}
 
 	if _, err := svc.createProviderForModel("ollama:llama3"); err != nil {
 		t.Fatalf("expected ollama provider to be created: %v", err)
-	}
-
-	// Slash-delimited OpenRouter models should auto-detect as openai
-	svc.cfg.OpenAIAPIKey = "sk-test"
-	if _, err := svc.createProviderForModel("google/gemini-2.5-flash"); err != nil {
-		t.Fatalf("expected openai provider for slash-delimited model: %v", err)
-	}
-
-	// OpenRouter models with :free suffix should also route to openai
-	if _, err := svc.createProviderForModel("google/gemini-2.0-flash:free"); err != nil {
-		t.Fatalf("expected openai provider for slash-delimited model with suffix: %v", err)
 	}
 
 	svc.cfg = &config.AIConfig{
@@ -162,94 +146,6 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 }
 
-func TestService_ExecutePatrolStream_ResetsSessionHistoryEachRun(t *testing.T) {
-	store, err := NewSessionStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to create session store: %v", err)
-	}
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-
-	service := &Service{
-		started:  true,
-		sessions: store,
-		executor: executor,
-		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
-	}
-
-	mockProvider := &mockStreamingProvider{
-		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "ok"}})
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
-			return nil
-		},
-	}
-	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
-		return mockProvider, nil
-	}
-
-	for i := 0; i < 2; i++ {
-		if _, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
-			Prompt:    "check status",
-			MaxTurns:  1,
-			SessionID: "patrol-main",
-		}, func(StreamEvent) {}); err != nil {
-			t.Fatalf("patrol run %d failed: %v", i+1, err)
-		}
-	}
-
-	if len(mockProvider.requests) != 2 {
-		t.Fatalf("expected 2 patrol requests, got %d", len(mockProvider.requests))
-	}
-	if len(mockProvider.requests[0].Messages) != 1 {
-		t.Fatalf("expected first run to include only current prompt message, got %d", len(mockProvider.requests[0].Messages))
-	}
-	if len(mockProvider.requests[1].Messages) != 1 {
-		t.Fatalf("expected second run to reset history and include only current prompt message, got %d", len(mockProvider.requests[1].Messages))
-	}
-}
-
-func TestService_ExecutePatrolStream_TokenCapStopsGracefully(t *testing.T) {
-	store, err := NewSessionStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to create session store: %v", err)
-	}
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-
-	service := &Service{
-		started:  true,
-		sessions: store,
-		executor: executor,
-		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
-	}
-
-	mockProvider := &mockStreamingProvider{
-		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "initial analysis"}})
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 2, OutputTokens: 1}})
-			return nil
-		},
-	}
-	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
-		return mockProvider, nil
-	}
-
-	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
-		Prompt:         "check status",
-		MaxTurns:       5,
-		MaxTotalTokens: 1,
-		SessionID:      "patrol-main",
-	}, func(StreamEvent) {})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp == nil {
-		t.Fatalf("expected response")
-	}
-	if resp.StopReason != "token_limit" {
-		t.Fatalf("expected token_limit stop reason, got %q", resp.StopReason)
-	}
-}
-
 func TestService_ExecutePatrolStream_Errors(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
@@ -283,7 +179,8 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 	stateProvider := &mockStateProvider{state: models.StateSnapshot{}}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: stateProvider})
 
-	service := &Service{executor: executor, stateProvider: stateProvider}
+	rs := newTestReadState(models.StateSnapshot{})
+	service := &Service{executor: executor, stateProvider: stateProvider, readState: rs}
 	service.SetGuestConfigProvider(nil)
 	service.SetBudgetChecker(func() error { return nil })
 

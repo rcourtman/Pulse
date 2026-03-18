@@ -37,6 +37,9 @@ const (
 
 	// ToolKindWrite - mutating tools (restart, stop, start, delete, file write)
 	ToolKindWrite
+
+	// ToolKindUserInput - interactive tools that request user input (does not advance FSM state)
+	ToolKindUserInput
 )
 
 func (k ToolKind) String() string {
@@ -47,6 +50,8 @@ func (k ToolKind) String() string {
 		return "read"
 	case ToolKindWrite:
 		return "write"
+	case ToolKindUserInput:
+		return "user_input"
 	default:
 		return "unknown"
 	}
@@ -62,6 +67,10 @@ type SessionFSM struct {
 
 	// ReadAfterWrite tracks whether we performed a read *after* the last write
 	ReadAfterWrite bool `json:"read_after_write"`
+
+	// ConsecutiveVerifyBlocks counts consecutive write attempts blocked in VERIFYING.
+	// After 3 blocks without a successful read, verification is waived to prevent stuck models.
+	ConsecutiveVerifyBlocks int `json:"consecutive_verify_blocks,omitempty"`
 
 	// LastWriteTool records the last write tool for debugging/telemetry
 	LastWriteTool string `json:"last_write_tool,omitempty"`
@@ -158,7 +167,7 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 				State:       fsm.State,
 				ToolName:    toolName,
 				ToolKind:    kind,
-				Reason:      "No resources have been discovered yet. Use pulse_query to discover resources before performing write operations.",
+				Reason:      "BLOCKED: Call pulse_query first to discover resources, then retry this action.",
 				Recoverable: true,
 			}
 		}
@@ -175,11 +184,20 @@ func (fsm *SessionFSM) CanExecuteTool(kind ToolKind, toolName string) error {
 	case StateVerifying:
 		// In VERIFYING, only allow read/resolve tools until verification is complete
 		if kind == ToolKindWrite {
+			fsm.ConsecutiveVerifyBlocks++
+			if fsm.ConsecutiveVerifyBlocks >= 3 {
+				// Model is stuck - waive verification to prevent infinite blocking.
+				// Transition back to READING so the write can proceed normally.
+				fsm.State = StateReading
+				fsm.ConsecutiveVerifyBlocks = 0
+				fsm.ReadAfterWrite = false
+				return nil // Allow this write to proceed
+			}
 			return &FSMBlockedError{
 				State:       fsm.State,
 				ToolName:    toolName,
 				ToolKind:    kind,
-				Reason:      "Must verify the previous write operation before performing another write. Use a read tool (logs, status, query) to check the result first.",
+				Reason:      "BLOCKED: Call pulse_query or pulse_read NEXT to verify your last action, then retry.",
 				Recoverable: true,
 			}
 		}
@@ -195,7 +213,7 @@ func (fsm *SessionFSM) CanFinalAnswer() error {
 	if fsm.State == StateVerifying && !fsm.ReadAfterWrite {
 		return &FSMBlockedError{
 			State:       fsm.State,
-			Reason:      "Must verify the write operation before providing a final answer. Use a read tool to check the result.",
+			Reason:      "BLOCKED: Call pulse_query or pulse_read to verify your last action before responding.",
 			Recoverable: true,
 		}
 	}
@@ -218,6 +236,7 @@ func (fsm *SessionFSM) OnToolSuccess(kind ToolKind, toolName string) {
 		// Resolve also counts as "read after write" for verification
 		if fsm.State == StateVerifying {
 			fsm.ReadAfterWrite = true
+			fsm.ConsecutiveVerifyBlocks = 0
 		}
 
 	case ToolKindRead:
@@ -230,6 +249,7 @@ func (fsm *SessionFSM) OnToolSuccess(kind ToolKind, toolName string) {
 		// Read after write clears the verification requirement
 		if fsm.State == StateVerifying {
 			fsm.ReadAfterWrite = true
+			fsm.ConsecutiveVerifyBlocks = 0
 		}
 
 	case ToolKindWrite:
@@ -239,6 +259,10 @@ func (fsm *SessionFSM) OnToolSuccess(kind ToolKind, toolName string) {
 		fsm.ReadAfterWrite = false
 		fsm.LastWriteTool = toolName
 		fsm.LastWriteAt = now
+
+	case ToolKindUserInput:
+		// Interactive user input does not advance state (it is neither discovery nor verification).
+		return
 	}
 }
 
@@ -248,6 +272,7 @@ func (fsm *SessionFSM) CompleteVerification() {
 	if fsm.State == StateVerifying && fsm.ReadAfterWrite {
 		fsm.State = StateReading
 		fsm.ReadAfterWrite = false // Reset for next verification cycle
+		fsm.ConsecutiveVerifyBlocks = 0
 		// Note: WroteThisEpisode stays true - it tracks "wrote at all this session"
 		// not "wrote in current verification cycle"
 	}
@@ -258,6 +283,7 @@ func (fsm *SessionFSM) Reset() {
 	fsm.State = StateResolving
 	fsm.WroteThisEpisode = false
 	fsm.ReadAfterWrite = false
+	fsm.ConsecutiveVerifyBlocks = 0
 	fsm.LastWriteTool = ""
 	fsm.LastWriteAt = time.Time{}
 	fsm.LastReadTool = ""
@@ -272,6 +298,7 @@ func (fsm *SessionFSM) ResetKeepProgress() {
 	}
 	fsm.WroteThisEpisode = false
 	fsm.ReadAfterWrite = false
+	fsm.ConsecutiveVerifyBlocks = 0
 }
 
 // FSMBlockedError is returned when the FSM blocks an action
@@ -305,6 +332,9 @@ func classifyToolByName(toolName string, args map[string]interface{}) ToolKind {
 	operationLower := strings.ToLower(operation)
 
 	switch toolName {
+	case "pulse_question":
+		return ToolKindUserInput
+
 	// === Query/Discovery tools (Resolve) ===
 	case "pulse_query":
 		// query actions: search, get, config, topology, list, health

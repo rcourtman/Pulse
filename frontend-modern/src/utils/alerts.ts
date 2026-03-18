@@ -38,7 +38,10 @@ export const getAlertStyles = (
   let hasNonPoweredOffAlert = false;
 
   unacknowledgedAlerts.forEach((alert) => {
-    if (alert.level === 'critical' || (alert.level === 'warning' && highestSeverity !== 'critical')) {
+    if (
+      alert.level === 'critical' ||
+      (alert.level === 'warning' && highestSeverity !== 'critical')
+    ) {
       highestSeverity = alert.level;
     }
 
@@ -57,7 +60,7 @@ export const getAlertStyles = (
 
   if (highestSeverity === 'critical') {
     return {
-      rowClass: 'bg-red-50 dark:bg-red-950/30 border-l-4 border-red-500 dark:border-red-400',
+      rowClass: 'bg-red-50 dark:bg-red-950 border-l-4 border-red-500 dark:border-red-400',
       indicatorClass: 'bg-red-500',
       badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
       hasAlert,
@@ -75,7 +78,7 @@ export const getAlertStyles = (
   if (highestSeverity === 'warning') {
     return {
       rowClass:
-        'bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500 dark:border-yellow-400',
+        'bg-yellow-50 dark:bg-yellow-950 border-l-4 border-yellow-500 dark:border-yellow-400',
       indicatorClass: 'bg-yellow-500',
       badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
       hasAlert,
@@ -105,4 +108,3 @@ export const getAlertStyles = (
     hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
 };
-

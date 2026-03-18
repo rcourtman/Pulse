@@ -12,26 +12,51 @@ import (
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	// This test requires write access to /etc/pulse (the default data path)
-	// Skip in CI environments where /etc/pulse doesn't exist or isn't writable
-	if _, err := os.Stat("/etc/pulse"); os.IsNotExist(err) {
-		t.Skip("Skipping test: /etc/pulse does not exist (likely CI environment)")
-	}
+	// Avoid relying on /etc/pulse existing on the machine running tests.
+	// We still want to verify "defaults" behavior when PULSE_DATA_DIR is unset.
+	tmpDefault := t.TempDir()
+	prevDefault := defaultDataDir
+	defaultDataDir = tmpDefault
+	t.Cleanup(func() { defaultDataDir = prevDefault })
 
 	// Clear env vars that might affect defaults
 	os.Unsetenv("PULSE_DATA_DIR")
-	os.Unsetenv("PORT")
+	os.Unsetenv("FRONTEND_PORT")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 
 	assert.Equal(t, 7655, cfg.FrontendPort)
-	assert.Equal(t, "/etc/pulse", cfg.DataPath)
+	assert.Equal(t, tmpDefault, cfg.DataPath)
+}
+
+func TestResolveRuntimeDataDir(t *testing.T) {
+	tmpDefault := t.TempDir()
+	prevDefault := defaultDataDir
+	defaultDataDir = tmpDefault
+	t.Cleanup(func() { defaultDataDir = prevDefault })
+
+	t.Run("explicit_path_wins", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		explicit := t.TempDir()
+		assert.Equal(t, explicit, ResolveRuntimeDataDir(explicit))
+	})
+
+	t.Run("env_path_fallback", func(t *testing.T) {
+		envDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", envDir)
+		assert.Equal(t, envDir, ResolveRuntimeDataDir(""))
+	})
+
+	t.Run("default_fallback", func(t *testing.T) {
+		os.Unsetenv("PULSE_DATA_DIR")
+		assert.Equal(t, tmpDefault, ResolveRuntimeDataDir(""))
+	})
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
 	// Set some env vars
-	t.Setenv("PORT", "8080")
+	t.Setenv("FRONTEND_PORT", "8080")
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 	t.Setenv("HTTPS_ENABLED", "true")
@@ -68,51 +93,96 @@ func TestLoad_DotEnv(t *testing.T) {
 	assert.Equal(t, "dotenvuser", cfg.AuthUser)
 }
 
-func TestLoad_APITokens_Migration(t *testing.T) {
-	// Ensure clean state
+func TestLoad_APITokensEnvIgnored(t *testing.T) {
 	os.Unsetenv("API_TOKEN")
 	t.Setenv("API_TOKENS", "token1,token2")
-
-	// Create temp dir to allow persistence
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
 	cfg, err := Load()
 	require.NoError(t, err)
 
-	// We might get duplicates if token hashing is non-deterministic and we process same token twice?
-	// But we only have token1, token2 in list.
-	// If getting 3, something is weird. We assert >= 2.
-	assert.GreaterOrEqual(t, len(cfg.APITokens), 2)
-	assert.True(t, cfg.HasAPITokens())
-
-	// Verify hashed
-	assert.NotEqual(t, "token1", cfg.APITokens[0].Hash)
+	assert.Len(t, cfg.APITokens, 0)
+	assert.False(t, cfg.HasAPITokens())
 }
 
-func TestLoad_LegacyAPIToken(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
+func TestLoad_LegacyAPITokenEnvIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("API_TOKEN", "legacytoken")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 
-	assert.GreaterOrEqual(t, len(cfg.APITokens), 1)
+	assert.Len(t, cfg.APITokens, 0)
+	assert.False(t, cfg.HasAPITokens())
+}
+
+func TestLoad_APITokens_LegacyOrgBindingMigrated(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	os.Unsetenv("API_TOKEN")
+	os.Unsetenv("API_TOKENS")
+
+	p := NewConfigPersistence(tempDir)
+	legacy := []APITokenRecord{
+		{
+			ID:        "legacy-token",
+			Name:      "Legacy",
+			Hash:      "legacy-hash",
+			Prefix:    "legacy",
+			Suffix:    "hash",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{ScopeWildcard},
+		},
+	}
+	require.NoError(t, p.SaveAPITokens(legacy))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Len(t, cfg.APITokens, 1)
+	assert.Equal(t, "default", cfg.APITokens[0].OrgID)
+
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.Equal(t, "default", persisted[0].OrgID)
+}
+
+func TestLoad_APITokens_MissingIDMigrated(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+	os.Unsetenv("API_TOKEN")
+	os.Unsetenv("API_TOKENS")
+
+	p := NewConfigPersistence(tempDir)
+	legacy := []APITokenRecord{
+		{
+			ID:        "",
+			Name:      "Legacy Missing ID",
+			Hash:      "legacy-hash",
+			Prefix:    "legacy",
+			Suffix:    "hash",
+			CreatedAt: time.Now().UTC(),
+			Scopes:    []string{ScopeWildcard},
+			OrgID:     "default",
+		},
+	}
+	require.NoError(t, p.SaveAPITokens(legacy))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Len(t, cfg.APITokens, 1)
+	assert.NotEmpty(t, cfg.APITokens[0].ID)
+
+	persisted, err := p.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, persisted, 1)
+	assert.NotEmpty(t, persisted[0].ID)
 }
 
 func TestLoad_MockEnv(t *testing.T) {
-	// Look for mock.env in current directory (default behavior if not found elsewhere?)
-	// Load() checks "mock.env" in current dir (line 537).
-
-	// We need to work in a temp dir
-	cwd, _ := os.Getwd()
 	tempDir := t.TempDir()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
-
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-	os.WriteFile("mock.env", []byte(`PULSE_MOCK_TEST="true"`), 0644)
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, ".env"), []byte(`PULSE_MOCK_TEST="true"`), 0644))
 
 	t.Cleanup(func() {
 		os.Unsetenv("PULSE_MOCK_TEST")
@@ -136,7 +206,7 @@ func TestLoad_ProxyAuth(t *testing.T) {
 	assert.Equal(t, "X-User", cfg.ProxyAuthUserHeader)
 }
 
-func TestLoad_OIDC(t *testing.T) {
+func TestLoad_OIDCEnvIgnored(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("OIDC_ENABLED", "true")
 	t.Setenv("OIDC_ISSUER_URL", "https://issuer.com")
@@ -145,10 +215,7 @@ func TestLoad_OIDC(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-
-	require.NotNil(t, cfg.OIDC)
-	assert.True(t, cfg.OIDC.Enabled)
-	assert.Equal(t, "https://issuer.com", cfg.OIDC.IssuerURL)
+	require.NotNil(t, cfg)
 }
 
 func TestLoad_AuthPass_AutoHash(t *testing.T) {
@@ -206,6 +273,23 @@ func TestLoad_Persistence(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 }
 
+func TestLoad_DisablesAutoUpdatesForRCChannel(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	p := NewConfigPersistence(tempDir)
+	require.NoError(t, p.SaveSystemSettings(SystemSettings{
+		UpdateChannel:     "rc",
+		AutoUpdateEnabled: true,
+	}))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, "rc", cfg.UpdateChannel)
+	assert.False(t, cfg.AutoUpdateEnabled)
+}
+
 func TestLoad_ReadErrors(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("Skipping permission tests as root")
@@ -217,13 +301,6 @@ func TestLoad_ReadErrors(t *testing.T) {
 	// Create unreadable .env
 	envFile := filepath.Join(tempDir, ".env")
 	require.NoError(t, os.WriteFile(envFile, []byte("FOO=bar"), 0000))
-
-	// Create unreadable mock.env
-	mockEnv := "mock.env" // Load looks in current dir
-	cwd, _ := os.Getwd()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
-	require.NoError(t, os.WriteFile(mockEnv, []byte("MOCK=true"), 0000))
 
 	// Create encryption key first (required before creating .enc files)
 	key := make([]byte, 32)

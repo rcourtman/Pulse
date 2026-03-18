@@ -5,13 +5,13 @@ Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and A
 ## 🚀 Quick Start
 
 1.  **Configure Provider**: Create an OIDC application in your IdP.
-    - **Redirect URI**: `https://<your-pulse-domain>/api/oidc/callback`
+    - **Redirect URI**: `https://<your-pulse-domain>/api/oidc/<provider-id>/callback`
     - **Scopes**: `openid`, `profile`, `email`
 2.  **Enable in Pulse**: Go to **Settings → Security → Single Sign-On**.
 3.  **Enter Details**:
     - **Issuer URL**: The base URL of your IdP (e.g., `https://auth.example.com/application/o/pulse/`).
     - **Client ID & Secret**: From your IdP.
-4.  **Save**: The login page will now show a "Continue with Single Sign-On" button.
+4.  **Save**: The login page will now show your configured SSO provider button(s).
 
 > **Tip**: To hide the username/password form and only show the SSO button, set `PULSE_AUTH_HIDE_LOCAL_LOGIN=true` in your environment. You can still access the local login by appending `?show_local=true` to the URL (e.g., `https://your-pulse-instance/?show_local=true`).
 
@@ -34,7 +34,7 @@ Restrict access to specific users or groups:
 - **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
 - **Allowed Emails**: Allow specific email addresses.
 
-### Group-to-Role Mapping (Pro)
+### Group-to-Role Mapping (Pro and Above)
 
 Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles.
 
@@ -87,18 +87,18 @@ For persistent sessions that don't require frequent re-authentication:
 
 ### Authentik
 - **Type**: OAuth2/OpenID (Confidential)
-- **Redirect URI**: `https://pulse.example.com/api/oidc/callback`
+- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback`
 - **Signing Key**: Must use **RS256** (create a certificate/key pair if needed).
 - **Issuer URL**: `https://auth.example.com/application/o/pulse/`
 
 ### Keycloak
 - **Client ID**: `pulse`
 - **Access Type**: Confidential
-- **Valid Redirect URIs**: `https://pulse.example.com/api/oidc/callback`
+- **Valid Redirect URIs**: `https://pulse.example.com/api/oidc/<provider-id>/callback`
 - **Issuer URL**: `https://keycloak.example.com/realms/myrealm`
 
 ### Azure AD
-- **Redirect URI**: `https://pulse.example.com/api/oidc/callback` (Web)
+- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback` (Web)
 - **Issuer URL**: `https://login.microsoftonline.com/<tenant-id>/v2.0`
 - **Note**: Enable "ID tokens" in Authentication settings.
 

@@ -84,7 +84,7 @@ func TestHostMetadataHandler(t *testing.T) {
 	mtp := config.NewMultiTenantPersistence(t.TempDir())
 	handler := NewHostMetadataHandler(mtp)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/hosts/metadata", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/metadata", nil)
 	resp := httptest.NewRecorder()
 	handler.HandleGetMetadata(resp, req)
 	if resp.Code != http.StatusOK {
@@ -98,7 +98,7 @@ func TestHostMetadataHandler(t *testing.T) {
 		t.Fatalf("expected empty metadata, got %v", all)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/api/hosts/metadata/host1", strings.NewReader(`{"customUrl":"http://host.local"}`))
+	req = httptest.NewRequest(http.MethodPut, "/api/agents/metadata/host1", strings.NewReader(`{"customUrl":"http://host.local"}`))
 	resp = httptest.NewRecorder()
 	handler.HandleUpdateMetadata(resp, req)
 	if resp.Code != http.StatusOK {
@@ -112,32 +112,37 @@ func TestHostMetadataHandler(t *testing.T) {
 		t.Fatalf("unexpected metadata: %+v", meta)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/api/hosts/metadata/host1", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/agents/metadata/host1", nil)
 	resp = httptest.NewRecorder()
 	handler.HandleDeleteMetadata(resp, req)
 	if resp.Code != http.StatusNoContent {
 		t.Fatalf("unexpected status: %d", resp.Code)
 	}
-}
 
-func TestMetadataHandlers_FallbackToLegacyPersistence(t *testing.T) {
-	persistence := config.NewConfigPersistence(t.TempDir())
-
-	guestHandler := NewGuestMetadataHandler(nil)
-	guestHandler.SetLegacyPersistence(persistence)
-	if guestHandler.Store() == nil {
-		t.Fatal("expected guest metadata store from legacy persistence")
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/metadata", nil)
+	resp = httptest.NewRecorder()
+	handler.HandleGetMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias list: %d", resp.Code)
 	}
 
-	dockerHandler := NewDockerMetadataHandler(nil)
-	dockerHandler.SetLegacyPersistence(persistence)
-	if dockerHandler.Store() == nil {
-		t.Fatal("expected docker metadata store from legacy persistence")
+	req = httptest.NewRequest(http.MethodPut, "/api/agents/metadata/agent1", strings.NewReader(`{"customUrl":"https://agent.local"}`))
+	resp = httptest.NewRecorder()
+	handler.HandleUpdateMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias update: %d", resp.Code)
 	}
 
-	hostHandler := NewHostMetadataHandler(nil)
-	hostHandler.SetLegacyPersistence(persistence)
-	if hostHandler.Store() == nil {
-		t.Fatal("expected host metadata store from legacy persistence")
+	req = httptest.NewRequest(http.MethodGet, "/api/agents/metadata/agent1", nil)
+	resp = httptest.NewRecorder()
+	handler.HandleGetMetadata(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("unexpected status for agent alias get: %d", resp.Code)
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decode host metadata via agent alias: %v", err)
+	}
+	if meta.CustomURL != "https://agent.local" {
+		t.Fatalf("unexpected metadata via agent alias: %+v", meta)
 	}
 }

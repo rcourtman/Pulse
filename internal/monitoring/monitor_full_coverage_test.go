@@ -15,7 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/resources"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -26,10 +26,6 @@ type mockPVEClient struct {
 }
 
 func (m *mockPVEClient) GetNodes(ctx context.Context) ([]proxmox.Node, error) { return nil, nil }
-
-func (m *mockPVEClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
 
 func TestMonitor_GetConnectionStatuses(t *testing.T) {
 	// Real Mode
@@ -81,18 +77,6 @@ func TestMonitor_GetConnectionStatuses(t *testing.T) {
 	if statuses["pbs-pbs2"] {
 		t.Error("pbs2 should be disconnected")
 	}
-}
-
-func TestMonitor_Stop(t *testing.T) {
-	// Initialize a monitor with mostly nil dependencies, but enough to pass Stop()
-	// This ensures Stop is safe to call even if initialization was partial
-	m := &Monitor{
-		config: &config.Config{},
-		state:  models.NewState(),
-	}
-
-	// Should not panic
-	m.Stop()
 }
 
 func TestPollPBSInstance(t *testing.T) {
@@ -313,6 +297,11 @@ func TestMonitor_GettersAndSetters(t *testing.T) {
 }
 
 func TestMonitor_DiscoveryService(t *testing.T) {
+	// Use a canceled context so service startup logic is exercised without
+	// running a real discovery scan against the host network.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
 	m := &Monitor{
 		config:                  &config.Config{},
 		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
@@ -320,7 +309,7 @@ func TestMonitor_DiscoveryService(t *testing.T) {
 
 	// StartDiscoveryService
 	// It creates a new service if nil.
-	m.StartDiscoveryService(context.Background(), nil, "auto")
+	m.StartDiscoveryService(ctx, nil, "127.0.0.1/32")
 	if m.discoveryService == nil {
 		t.Error("StartDiscoveryService failed to create service")
 	}
@@ -422,7 +411,7 @@ func (m *mockResourceStore) ShouldSkipAPIPolling(hostname string) bool {
 	return hostname == "ignored-node"
 }
 func (m *mockResourceStore) GetPollingRecommendations() map[string]float64      { return nil }
-func (m *mockResourceStore) GetAll() []resources.Resource                       { return nil }
+func (m *mockResourceStore) GetAll() []unifiedresources.Resource                { return nil }
 func (m *mockResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {}
 
 func TestMonitor_ShouldSkipNodeMetrics(t *testing.T) {
@@ -700,10 +689,6 @@ func (m *mockPVEClientExtended) GetVMAgentInfo(ctx context.Context, node string,
 
 func (m *mockPVEClientExtended) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	return "", nil
-}
-
-func (m *mockPVEClientExtended) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
 }
 
 func (m *mockPVEClientExtended) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {

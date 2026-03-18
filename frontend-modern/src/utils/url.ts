@@ -1,12 +1,13 @@
 const FALLBACK_BASE_URL = 'http://localhost:7655';
 const KIOSK_MODE_KEY = 'pulse_kiosk_mode';
+const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
 
 // Reactive kiosk mode tracking - listeners are notified when kiosk mode changes
 type KioskListener = (enabled: boolean) => void;
 const kioskListeners = new Set<KioskListener>();
 
 function notifyKioskListeners(enabled: boolean): void {
-  kioskListeners.forEach(listener => listener(enabled));
+  kioskListeners.forEach((listener) => listener(enabled));
 }
 
 /**
@@ -139,6 +140,19 @@ export function isPulseHttps(): boolean {
   return origin?.protocol === 'https:';
 }
 
+function sanitizeApiToken(token: string): string {
+  // Reject tokens containing control characters (potential injection)
+  // eslint-disable-next-line no-control-regex -- intentional sanitization
+  if (/[\x00-\x1f\x7f]/.test(token)) {
+    return '';
+  }
+  const trimmed = token.trim();
+  if (trimmed.length > 256) {
+    return '';
+  }
+  return trimmed;
+}
+
 export function getPulseWebSocketUrl(path = '/ws'): string {
   const origin = getPulseOriginUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -156,10 +170,12 @@ export function getPulseWebSocketUrl(path = '/ws'): string {
     const storage = typeof window !== 'undefined' ? window.sessionStorage : null;
     if (storage) {
       const stored = storage.getItem('pulse_auth');
-      if (stored) {
+      if (stored && stored.length <= MAX_AUTH_STORAGE_CHARS) {
         const parsed = JSON.parse(stored);
-        if (parsed?.type === 'token' && parsed.value) {
-          url += `?token=${encodeURIComponent(parsed.value)}`;
+        const token = parsed?.type === 'token' ? sanitizeApiToken(parsed.value) : null;
+        if (token) {
+          const separator = url.includes('?') ? '&' : '?';
+          url += `${separator}token=${encodeURIComponent(token)}`;
         }
       }
     }

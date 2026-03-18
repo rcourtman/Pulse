@@ -79,14 +79,14 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			want:     "wss://example.invalid/api/agent/ws",
 		},
 		{
-			name:     "http becomes ws",
-			pulseURL: "http://example.invalid",
-			want:     "ws://example.invalid/api/agent/ws",
+			name:     "loopback http becomes ws",
+			pulseURL: "http://localhost:7655",
+			want:     "ws://localhost:7655/api/agent/ws",
 		},
 		{
-			name:     "ws preserved",
-			pulseURL: "ws://example.invalid",
-			want:     "ws://example.invalid/api/agent/ws",
+			name:     "preserves path prefix",
+			pulseURL: "https://example.invalid/pulse/",
+			want:     "wss://example.invalid/pulse/api/agent/ws",
 		},
 		{
 			name:     "wss preserved",
@@ -94,8 +94,33 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			want:     "wss://example.invalid/api/agent/ws",
 		},
 		{
+			name:     "non-loopback http rejected",
+			pulseURL: "http://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "non-loopback ws rejected",
+			pulseURL: "ws://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "query rejected",
+			pulseURL: "https://example.invalid?x=1",
+			wantErr:  true,
+		},
+		{
 			name:     "invalid url returns error",
 			pulseURL: "http://[::1",
+			wantErr:  true,
+		},
+		{
+			name:     "unsupported scheme returns error",
+			pulseURL: "ftp://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "missing host returns error",
+			pulseURL: "/relative/path",
 			wantErr:  true,
 		},
 	}

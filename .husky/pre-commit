@@ -1,5 +1,6 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 # Pre-commit hook to prevent committing restricted or sensitive data
 RESTRICTED_FILES="active_subs.json charges.json customers.json subscriptions.json"
@@ -60,10 +61,63 @@ else
 fi
 echo "Sensitivity check passed."
 
+# Governance checks — only run when governance files are present (skipped on fresh clones).
+# Governance files live in docs/release-control/v6/internal/ which is not tracked in the
+# public repo; contributors without that directory get standard linting only.
+if [ -f "docs/release-control/v6/internal/status.json" ]; then
+
+echo "Running governance stage guard..."
+python3 scripts/release_control/governance_stage_guard.py
+
+echo "Running staged commit shape guard..."
+python3 scripts/release_control/staged_commit_shape_guard.py
+
+echo "Running control plane audit..."
+python3 scripts/release_control/control_plane_audit.py --check --staged
+
+echo "Running canonical completion guard..."
+python3 scripts/release_control/canonical_completion_guard.py
+
+echo "Running status audit..."
+python3 scripts/release_control/status_audit.py --check --staged
+
+echo "Running registry audit..."
+python3 scripts/release_control/registry_audit.py --check --staged
+
+echo "Running contract audit..."
+python3 scripts/release_control/contract_audit.py --check --staged
+
+echo "Running governance guardrail tests..."
+export PULSE_READ_STAGED_GOVERNANCE=1
+go test ./internal/repoctl -count=1
+
+echo "Running readiness assertion guard..."
+python3 scripts/release_control/readiness_assertion_guard.py --staged --active-target --proof-type automated
+
+echo "Running release-control helper unit tests..."
+python3 scripts/release_control/canonical_completion_guard_test.py
+python3 scripts/release_control/control_plane_audit_test.py
+python3 scripts/release_control/contract_audit_test.py
+python3 scripts/release_control/format_staged_go_test.py
+python3 scripts/release_control/governance_stage_guard_test.py
+python3 scripts/release_control/release_promotion_policy_support_test.py
+python3 scripts/release_control/registry_audit_test.py
+python3 scripts/release_control/readiness_assertion_guard_test.py
+(cd scripts/release_control && git -C ../.. show :scripts/release_control/release_promotion_policy_test.py | python3 -)
+python3 scripts/release_control/repo_file_io_test.py
+python3 scripts/release_control/staged_commit_shape_guard_test.py
+python3 scripts/release_control/status_audit_test.py
+python3 scripts/release_control/subsystem_contracts_test.py
+python3 scripts/release_control/subsystem_lookup_test.py
+unset PULSE_READ_STAGED_GOVERNANCE
+
+else
+echo "Governance files not present — skipping governance checks."
+fi
+
 
 # Run Go formatting
-echo "Running Go formatter..."
-gofmt -w -s .
+python3 scripts/release_control/format_staged_go.py
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
@@ -73,14 +127,14 @@ fi
 
 # Run frontend linting (if package.json has lint script)
 if [ -f frontend-modern/package.json ]; then
-    echo "Running frontend linter..."
-    cd frontend-modern
-    npm run lint --if-present || true
-    cd ..
+    if git diff --cached --name-only | grep -q "^frontend-modern/"; then
+        echo "Running frontend linter..."
+        cd frontend-modern
+        npm run lint
+        cd ..
+    else
+        echo "Skipping frontend lint (no staged frontend changes)."
+    fi
 fi
-
-# Re-stage only files that were already staged (to pick up formatter changes)
-# This avoids accidentally committing unrelated work-in-progress files
-git diff --cached --name-only -z | xargs -0 -r git add
 
 echo "Pre-commit checks passed!"

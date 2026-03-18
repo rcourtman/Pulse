@@ -16,5 +16,11 @@ while read local_ref local_sha remote_ref remote_sha; do
     fi
 done
 
-# TypeScript type-check before push to prevent CI failures
-cd frontend-modern && npm run type-check
+# Frontend quality gates before push to prevent regressions in solo workflow.
+# This includes ESLint + theme audit + TypeScript checks.
+if [ -f frontend-modern/package.json ]; then
+    cd frontend-modern
+    npm run lint
+    npm run type-check
+    cd ..
+fi

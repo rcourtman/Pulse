@@ -52,11 +52,8 @@ func parseAuthBypassPaths(t *testing.T) []string {
 	}
 	block := src[start : start+end]
 
-	reExact := regexp.MustCompile(`normalizedPath == "([^"]+)"`)
-	rePrefix := regexp.MustCompile(`HasPrefix\(normalizedPath, "([^"]+)"\)`)
-
-	matches := reExact.FindAllStringSubmatch(block, -1)
-	matches = append(matches, rePrefix.FindAllStringSubmatch(block, -1)...)
+	re := regexp.MustCompile(`normalizedPath == "([^"]+)"`)
+	matches := re.FindAllStringSubmatch(block, -1)
 	if len(matches) == 0 {
 		t.Fatalf("no auth bypass paths found in router.go")
 	}
@@ -77,7 +74,6 @@ func parseAuthBypassPaths(t *testing.T) []string {
 
 var authBypassAllowlist = []string{
 	"/api/auto-register",
-	"/api/saml/",
 	"/api/setup-script",
 	"/api/system/ssh-config",
 	"/api/system/verify-temperature-ssh",

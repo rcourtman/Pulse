@@ -42,10 +42,6 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 			t.Fatalf("expected PatrolIntervalMinutes=15, got %d. Did the migration logic override the user setting?", resp.PatrolIntervalMinutes)
 		}
 
-		// Check that the preset is cleared as expected when setting explicit minutes
-		if resp.PatrolSchedulePreset != "" {
-			t.Fatalf("expected PatrolSchedulePreset to be empty, got %q", resp.PatrolSchedulePreset)
-		}
 	}
 
 	// Step 2: Verify persistence by fetching settings again
@@ -65,6 +61,58 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 
 		if resp.PatrolIntervalMinutes != 15 {
 			t.Fatalf("expected persisted PatrolIntervalMinutes=15, got %d", resp.PatrolIntervalMinutes)
+		}
+	}
+}
+
+func TestAISettingsHandler_PatrolEnabled_ResponseReflectsToggleImmediately(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	// First disable patrol explicitly.
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			PatrolEnabled: ptr(false),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("disable PUT status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("disable decode: %v", err)
+		}
+		if resp.PatrolEnabled {
+			t.Fatalf("expected PatrolEnabled=false after disable, got true")
+		}
+	}
+
+	// Then enable patrol; response must immediately reflect enabled=true.
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			PatrolEnabled: ptr(true),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("enable PUT status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("enable decode: %v", err)
+		}
+		if !resp.PatrolEnabled {
+			t.Fatalf("expected PatrolEnabled=true in update response, got false (would cause UI desync)")
+		}
+		if resp.PatrolIntervalMinutes <= 0 {
+			t.Fatalf("expected patrol interval to be set when enabling, got %d", resp.PatrolIntervalMinutes)
 		}
 	}
 }

@@ -15,6 +15,7 @@ var (
 	apiRequestDuration *prometheus.HistogramVec
 	apiRequestTotal    *prometheus.CounterVec
 	apiRequestErrors   *prometheus.CounterVec
+	deprecatedAPIUsage *prometheus.CounterVec
 )
 
 func initHTTPMetrics() {
@@ -49,7 +50,17 @@ func initHTTPMetrics() {
 		[]string{"method", "route", "status_class"},
 	)
 
-	prometheus.MustRegister(apiRequestDuration, apiRequestTotal, apiRequestErrors)
+	deprecatedAPIUsage = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "pulse",
+			Subsystem: "http",
+			Name:      "deprecated_api_usage_total",
+			Help:      "Total number of requests routed through deprecated API compatibility paths.",
+		},
+		[]string{"feature", "route"},
+	)
+
+	prometheus.MustRegister(apiRequestDuration, apiRequestTotal, apiRequestErrors, deprecatedAPIUsage)
 }
 
 func recordAPIRequest(method, route string, status int, elapsed time.Duration) {
@@ -63,6 +74,11 @@ func recordAPIRequest(method, route string, status int, elapsed time.Duration) {
 	if status >= 400 {
 		apiRequestErrors.WithLabelValues(method, route, classifyStatus(status)).Inc()
 	}
+}
+
+func recordDeprecatedAPIUsage(feature, route string) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+	deprecatedAPIUsage.WithLabelValues(feature, route).Inc()
 }
 
 func classifyStatus(status int) string {

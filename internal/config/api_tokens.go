@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,14 +19,15 @@ const (
 	ScopeDockerManage     = "docker:manage"
 	ScopeKubernetesReport = "kubernetes:report"
 	ScopeKubernetesManage = "kubernetes:manage"
-	ScopeHostReport       = "host-agent:report"
-	ScopeHostConfigRead   = "host-agent:config:read"
-	ScopeHostManage       = "host-agent:manage"
+	ScopeAgentReport      = "agent:report"
+	ScopeAgentConfigRead  = "agent:config:read"
+	ScopeAgentManage      = "agent:manage"
 	ScopeSettingsRead     = "settings:read"
 	ScopeSettingsWrite    = "settings:write"
-	ScopeAIExecute        = "ai:execute" // Allows executing AI commands and remediation plans
-	ScopeAIChat           = "ai:chat"    // Allows AI chat participation
-	ScopeAgentExec        = "agent:exec" // Allows agent execution WebSocket connections
+	ScopeAIExecute        = "ai:execute"   // Allows executing AI commands and remediation plans
+	ScopeAIChat           = "ai:chat"      // Allows AI chat participation
+	ScopeAgentExec        = "agent:exec"   // Allows agent execution WebSocket connections
+	ScopeAgentEnroll      = "agent:enroll" // Bootstrap enrollment only
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
@@ -36,14 +38,15 @@ var AllKnownScopes = []string{
 	ScopeDockerManage,
 	ScopeKubernetesReport,
 	ScopeKubernetesManage,
-	ScopeHostReport,
-	ScopeHostConfigRead,
-	ScopeHostManage,
+	ScopeAgentReport,
+	ScopeAgentConfigRead,
+	ScopeAgentManage,
 	ScopeSettingsRead,
 	ScopeSettingsWrite,
 	ScopeAIExecute,
 	ScopeAIChat,
 	ScopeAgentExec,
+	ScopeAgentEnroll,
 }
 
 var scopeLookup = func() map[string]struct{} {
@@ -53,6 +56,13 @@ var scopeLookup = func() map[string]struct{} {
 	}
 	return lookup
 }()
+
+var legacyScopeAliases = map[string]string{
+	"host-agent:report":      ScopeAgentReport,
+	"host-agent:config:read": ScopeAgentConfigRead,
+	"host-agent:manage":      ScopeAgentManage,
+	"host-agent:enroll":      ScopeAgentEnroll,
+}
 
 // ErrInvalidToken is returned when a token value is empty or malformed.
 var ErrInvalidToken = errors.New("invalid API token")
@@ -66,11 +76,11 @@ type APITokenRecord struct {
 	Suffix     string     `json:"suffix,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
 	Scopes     []string   `json:"scopes,omitempty"`
 
 	// OrgID binds this token to a single organization.
 	// If set, the token can only access resources within this organization.
-	// Empty string means the token is not org-bound (legacy behavior with wildcard access).
 	OrgID string `json:"orgId,omitempty"`
 
 	// OrgIDs allows multi-org access for MSP tokens.
@@ -83,17 +93,29 @@ type APITokenRecord struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// ensureScopes normalizes the scope slice, applying legacy defaults.
+func (r *APITokenRecord) ensureID() {
+	if strings.TrimSpace(r.ID) == "" {
+		r.ID = uuid.NewString()
+	}
+}
+
+// ensureScopes normalizes stored/runtime scopes, applying defaults and
+// rewriting any legacy aliases into canonical scope identifiers.
 func (r *APITokenRecord) ensureScopes() {
 	if len(r.Scopes) == 0 {
 		r.Scopes = []string{ScopeWildcard}
 		return
 	}
 
-	// Copy to avoid shared underlying slice if this record is reused.
-	scopes := make([]string, len(r.Scopes))
-	copy(scopes, r.Scopes)
-	r.Scopes = scopes
+	r.Scopes = normalizeScopes(r.Scopes)
+}
+
+// IsExpired reports whether the token has passed its expiration time.
+func (r *APITokenRecord) IsExpired() bool {
+	if r.ExpiresAt == nil {
+		return false // No expiration set — token never expires.
+	}
+	return time.Now().UTC().After(*r.ExpiresAt)
 }
 
 // Clone returns a copy of the record with duplicated pointer fields.
@@ -103,6 +125,10 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		t := *r.LastUsedAt
 		clone.LastUsedAt = &t
 	}
+	if r.ExpiresAt != nil {
+		t := *r.ExpiresAt
+		clone.ExpiresAt = &t
+	}
 	clone.ensureScopes()
 
 	// Deep copy OrgIDs slice
@@ -110,31 +136,26 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		clone.OrgIDs = make([]string, len(r.OrgIDs))
 		copy(clone.OrgIDs, r.OrgIDs)
 	}
+	clone.ensureID()
 
 	return clone
 }
 
 // CanAccessOrg checks if this token is authorized to access the specified organization.
 // Returns true if:
-// - Token has no org binding (legacy wildcard access)
 // - Token's OrgID matches the requested orgID
 // - Token's OrgIDs contains the requested orgID
-// - Requested orgID is "default" (backward compatibility)
+// Tokens without org binding are denied.
 func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
-	// Legacy tokens (no org binding) have wildcard access during migration period
+	// Unbound legacy tokens are denied everywhere.
 	if r.OrgID == "" && len(r.OrgIDs) == 0 {
-		return true
-	}
-
-	// Default org is always accessible for backward compatibility
-	if orgID == "default" {
-		return true
+		return false
 	}
 
 	// Check multi-org binding first (takes precedence)
 	if len(r.OrgIDs) > 0 {
-		for _, id := range r.OrgIDs {
-			if id == orgID {
+		for _, boundOrgID := range r.OrgIDs {
+			if boundOrgID == orgID {
 				return true
 			}
 		}
@@ -145,13 +166,13 @@ func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 	return r.OrgID == orgID
 }
 
-// IsLegacyToken returns true if this token has no org binding (wildcard access).
+// IsLegacyToken returns true if this token has no org binding (deprecated/unbound).
 func (r *APITokenRecord) IsLegacyToken() bool {
 	return r.OrgID == "" && len(r.OrgIDs) == 0
 }
 
 // GetBoundOrgs returns all organizations this token is bound to.
-// Returns nil for legacy tokens with wildcard access.
+// Returns nil for unbound legacy tokens.
 func (r *APITokenRecord) GetBoundOrgs() []string {
 	if len(r.OrgIDs) > 0 {
 		return r.OrgIDs
@@ -177,6 +198,7 @@ func NewAPITokenRecord(rawToken, name string, scopes []string) (*APITokenRecord,
 		Suffix:    tokenSuffix(rawToken),
 		CreatedAt: now,
 		Scopes:    normalizeScopes(scopes),
+		OrgID:     "default",
 	}
 	return record, nil
 }
@@ -198,7 +220,30 @@ func NewHashedAPITokenRecord(hashedToken, name string, createdAt time.Time, scop
 		Suffix:    tokenSuffix(hashedToken),
 		CreatedAt: createdAt,
 		Scopes:    normalizeScopes(scopes),
+		OrgID:     "default",
 	}, nil
+}
+
+func bindLegacyAPITokensToDefault(tokens []APITokenRecord) int {
+	migrated := 0
+	for i := range tokens {
+		if strings.TrimSpace(tokens[i].OrgID) == "" && len(tokens[i].OrgIDs) == 0 {
+			tokens[i].OrgID = "default"
+			migrated++
+		}
+	}
+	return migrated
+}
+
+func bindMissingAPITokenIDs(tokens []APITokenRecord) int {
+	migrated := 0
+	for i := range tokens {
+		if strings.TrimSpace(tokens[i].ID) == "" {
+			tokens[i].ID = uuid.NewString()
+			migrated++
+		}
+	}
+	return migrated
 }
 
 // tokenPrefix returns the first six characters suitable for hints.
@@ -248,25 +293,6 @@ func (c *Config) HasAPITokenHash(hash string) bool {
 	return false
 }
 
-// IsEnvMigrationSuppressed returns true if the given hash was a migrated env token
-// that the user explicitly deleted (and should not be re-migrated on restart).
-func (c *Config) IsEnvMigrationSuppressed(hash string) bool {
-	for _, h := range c.SuppressedEnvMigrations {
-		if h == hash {
-			return true
-		}
-	}
-	return false
-}
-
-// SuppressEnvMigration adds a hash to the suppression list to prevent re-migration.
-func (c *Config) SuppressEnvMigration(hash string) {
-	if c.IsEnvMigrationSuppressed(hash) {
-		return
-	}
-	c.SuppressedEnvMigrations = append(c.SuppressedEnvMigrations, hash)
-}
-
 // PrimaryAPITokenHash returns the newest token hash, if any.
 func (c *Config) PrimaryAPITokenHash() string {
 	if len(c.APITokens) == 0 {
@@ -298,6 +324,10 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 
 	for idx, record := range c.APITokens {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
+			if c.APITokens[idx].IsExpired() {
+				return nil, false
+			}
+			c.APITokens[idx].ensureID()
 			now := time.Now().UTC()
 			c.APITokens[idx].LastUsedAt = &now
 			c.APITokens[idx].ensureScopes()
@@ -317,6 +347,9 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 
 	for _, record := range c.APITokens {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
+			if record.IsExpired() {
+				return false
+			}
 			return true
 		}
 	}
@@ -325,6 +358,7 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 
 // UpsertAPIToken inserts or replaces a record by ID.
 func (c *Config) UpsertAPIToken(record APITokenRecord) {
+	record.ensureID()
 	record.ensureScopes()
 	for idx, existing := range c.APITokens {
 		if existing.ID == record.ID {
@@ -338,9 +372,9 @@ func (c *Config) UpsertAPIToken(record APITokenRecord) {
 }
 
 // RemoveAPIToken removes a token by ID and returns the removed record (if any).
-func (c *Config) RemoveAPIToken(id string) *APITokenRecord {
+func (c *Config) RemoveAPIToken(tokenID string) *APITokenRecord {
 	for idx, record := range c.APITokens {
-		if record.ID == id {
+		if record.ID == tokenID {
 			removed := record
 			c.APITokens = append(c.APITokens[:idx], c.APITokens[idx+1:]...)
 			return &removed
@@ -352,6 +386,7 @@ func (c *Config) RemoveAPIToken(id string) *APITokenRecord {
 // SortAPITokens keeps tokens ordered newest-first and syncs the legacy APIToken field.
 func (c *Config) SortAPITokens() {
 	for i := range c.APITokens {
+		c.APITokens[i].ensureID()
 		c.APITokens[i].ensureScopes()
 	}
 	sort.SliceStable(c.APITokens, func(i, j int) bool {
@@ -365,13 +400,22 @@ func (c *Config) SortAPITokens() {
 	}
 }
 
-// normalizeScopes applies defaults and returns a safe copy of the input slice.
+// normalizeScopes applies defaults and returns a canonical safe copy of the
+// input slice for persistence and runtime storage.
 func normalizeScopes(scopes []string) []string {
 	if len(scopes) == 0 {
 		return []string{ScopeWildcard}
 	}
-	result := make([]string, len(scopes))
-	copy(result, scopes)
+	seen := make(map[string]struct{}, len(scopes))
+	result := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scope = canonicalizeScopeAlias(scope)
+		if _, exists := seen[scope]; exists {
+			continue
+		}
+		seen[scope] = struct{}{}
+		result = append(result, scope)
+	}
 	return result
 }
 
@@ -380,6 +424,7 @@ func (r *APITokenRecord) HasScope(scope string) bool {
 	if scope == "" {
 		return true
 	}
+	scope = strings.TrimSpace(scope)
 	r.ensureScopes()
 	for _, candidate := range r.Scopes {
 		if candidate == ScopeWildcard || candidate == scope {
@@ -391,9 +436,18 @@ func (r *APITokenRecord) HasScope(scope string) bool {
 
 // IsKnownScope reports whether the provided string matches a supported scope identifier.
 func IsKnownScope(scope string) bool {
+	scope = strings.TrimSpace(scope)
 	if scope == ScopeWildcard {
 		return true
 	}
 	_, ok := scopeLookup[scope]
 	return ok
+}
+
+func canonicalizeScopeAlias(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if alias, ok := legacyScopeAliases[scope]; ok {
+		return alias
+	}
+	return scope
 }

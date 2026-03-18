@@ -9,17 +9,17 @@ func TestUnifiedStore_AddFromAlert(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Node:         "pve1",
-		Message:      "CPU usage is high",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now().Add(-5 * time.Minute),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Node:            "pve1",
+		Message:         "CPU usage is high",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now().Add(-5 * time.Minute),
+		LastSeen:        time.Now(),
 	}
 
 	finding, isNew := store.AddFromAlert(alert)
@@ -36,8 +36,8 @@ func TestUnifiedStore_AddFromAlert(t *testing.T) {
 		t.Errorf("Expected source %s, got %s", SourceThreshold, finding.Source)
 	}
 
-	if finding.AlertID != "alert-1" {
-		t.Errorf("Expected alert ID alert-1, got %s", finding.AlertID)
+	if finding.AlertIdentifier != "alert-1" {
+		t.Errorf("Expected alert identifier alert-1, got %s", finding.AlertIdentifier)
 	}
 
 	if finding.Category != CategoryPerformance {
@@ -57,15 +57,15 @@ func TestUnifiedStore_AddFromAlert_Update(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now().Add(-5 * time.Minute),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now().Add(-5 * time.Minute),
+		LastSeen:        time.Now(),
 	}
 
 	// First add
@@ -97,33 +97,33 @@ func TestUnifiedStore_ResolveByAlert(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 
 	store.AddFromAlert(alert)
 
 	// Resolve the alert
-	resolved := store.ResolveByAlert("alert-1")
+	resolved := store.ResolveByAlertIdentifier("alert-1")
 	if !resolved {
 		t.Error("Expected resolve to succeed")
 	}
 
 	// Check finding is resolved
-	finding := store.GetByAlert("alert-1")
+	finding := store.GetByAlertIdentifier("alert-1")
 	if finding.ResolvedAt == nil {
 		t.Error("Expected finding to be resolved")
 	}
 
 	// Resolving again should return false
-	resolved2 := store.ResolveByAlert("alert-1")
+	resolved2 := store.ResolveByAlertIdentifier("alert-1")
 	if resolved2 {
 		t.Error("Expected resolve to fail on already resolved finding")
 	}
@@ -166,15 +166,15 @@ func TestUnifiedStore_GetBySource(t *testing.T) {
 
 	// Add threshold alert
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	store.AddFromAlert(alert)
 
@@ -206,15 +206,15 @@ func TestUnifiedStore_EnhanceWithAI(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 
@@ -254,15 +254,15 @@ func TestUnifiedStore_Dismiss(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 
@@ -293,15 +293,15 @@ func TestUnifiedStore_Snooze(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-101",
-		ResourceName: "web-server",
-		Value:        85.5,
-		Threshold:    80.0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 
@@ -329,25 +329,25 @@ func TestUnifiedStore_GetSummary(t *testing.T) {
 
 	// Add some findings
 	store.AddFromAlert(&SimpleAlertAdapter{
-		AlertID:    "alert-1",
-		AlertType:  "cpu",
-		AlertLevel: "critical",
-		ResourceID: "vm-101",
-		Value:      95.0,
-		Threshold:  80.0,
-		StartTime:  time.Now(),
-		LastSeen:   time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "critical",
+		ResourceID:      "vm-101",
+		Value:           95.0,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	})
 
 	store.AddFromAlert(&SimpleAlertAdapter{
-		AlertID:    "alert-2",
-		AlertType:  "memory",
-		AlertLevel: "warning",
-		ResourceID: "vm-102",
-		Value:      88.0,
-		Threshold:  85.0,
-		StartTime:  time.Now(),
-		LastSeen:   time.Now(),
+		AlertIdentifier: "alert-2",
+		AlertType:       "memory",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-102",
+		Value:           88.0,
+		Threshold:       85.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	})
 
 	store.AddFromAI(&UnifiedFinding{

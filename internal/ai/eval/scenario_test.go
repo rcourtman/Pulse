@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -163,4 +164,49 @@ func TestRunner_RunScenario_PreflightFail(t *testing.T) {
 	assert.Len(t, result.Steps, 1) // Only preflight step captured
 	assert.Equal(t, "Preflight", result.Steps[0].StepName)
 	assert.False(t, result.Steps[0].Success)
+}
+
+func TestRunner_RunScenario_SendsAutonomousOverride(t *testing.T) {
+	var sawAutonomousOverride *bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if raw, ok := req["autonomous_mode"]; ok {
+				if v, ok := raw.(bool); ok {
+					sawAutonomousOverride = &v
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"type\":\"content\",\"data\":{\"text\":\"ok\"}}\n\n")
+		fmt.Fprintf(w, "data: {\"type\":\"done\",\"data\":{\"session_id\":\"session-1\"}}\n\n")
+	}))
+	defer server.Close()
+
+	runner := NewRunner(DefaultConfig())
+	runner.config.BaseURL = server.URL
+	runner.config.Preflight = false
+	runner.config.Verbose = false
+
+	autonomous := false
+	scenario := Scenario{
+		Name: "Autonomous override",
+		Steps: []Step{
+			{
+				Name:           "step",
+				Prompt:         "hello",
+				AutonomousMode: &autonomous,
+				Assertions: []Assertion{
+					AssertContentContains("ok"),
+				},
+			},
+		},
+	}
+
+	result := runner.RunScenario(scenario)
+	assert.True(t, result.Passed)
+	if assert.NotNil(t, sawAutonomousOverride) {
+		assert.False(t, *sawAutonomousOverride)
+	}
 }

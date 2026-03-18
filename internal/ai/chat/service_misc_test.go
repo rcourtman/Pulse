@@ -14,6 +14,7 @@ func TestAbortSession(t *testing.T) {
 
 	loop := &AgenticLoop{aborted: make(map[string]bool)}
 	svc.agenticLoop = loop
+	svc.started = true
 	if err := svc.AbortSession(context.Background(), "sess-2"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

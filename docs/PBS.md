@@ -29,7 +29,7 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 - ❌ Can be slow for encrypted PBS storage
 - ❌ Limited metadata per backup
 
-**Recommendation:** If you see a banner in the Backups page suggesting you add PBS directly, following this guide will significantly improve your monitoring experience.
+**Recommendation:** If you see a banner in the Recovery page (formerly Backups) suggesting you add PBS directly, following this guide will significantly improve your monitoring experience.
 
 ---
 
@@ -56,21 +56,25 @@ The agent will:
 Use this when you can run a command on the PBS host but do not want to install the agent.
 
 From Pulse's Settings page:
-1. Go to **Settings → Proxmox**
+1. Go to **Settings → Unified Agents**
 2. Click **Add Node**
-3. Select **API Only** tab
+3. Open **Advanced** and select **API Only**
 4. Enter your PBS server's URL
 5. Click copy to get the setup command
 6. Run the command on your PBS server
 
 Example (what the UI generates):
 ```bash
-curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash
+curl -fsSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN="<setup-token>" bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN="<setup-token>" bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }
 ```
 
-The script creates a `pulse-monitor@pbs` user, generates a scoped API token, and registers the server with Pulse.
+Pulse generates that full command for you from **Settings → Nodes**, including
+the one-time setup token. The script creates a `pulse-monitor@pbs` user,
+generates a scoped API token, and registers the server with Pulse.
 
 > **Note**: API-only mode does not include temperature monitoring or AI command execution. Use **Agent Install** for full functionality.
+
+> **Tip**: The installer now auto-detects Proxmox mode (`pve` or `pbs`) when possible, but keeping `--proxmox-type pbs` explicit is recommended for predictable PBS onboarding.
 
 ### Method 3: Manual Token Creation
 
@@ -120,7 +124,7 @@ It does **not** allow:
 
 If you have multiple PBS servers, add each one separately in Settings. Pulse will:
 - Monitor each server independently
-- Show backups from all servers in the unified Backups view
+- Show backups from all servers in the unified Recovery view
 - Deduplicate if the same backup appears via both PVE passthrough and direct PBS
 
 ---
@@ -160,7 +164,7 @@ If you see the same backup twice:
 
 ## Data Source Indicator
 
-In the Backups view, PBS backups show a data source indicator:
+In the Recovery view, PBS backups show a data source indicator:
 
 - **"PBS"** badge alone = Direct PBS connection (full data)
 - **"PBS via PVE"** = Passthrough via PVE storage (limited data)

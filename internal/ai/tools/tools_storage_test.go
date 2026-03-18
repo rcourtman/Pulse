@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubBackupProvider struct {
@@ -23,24 +24,11 @@ func (s *stubBackupProvider) GetPBSInstances() []models.PBSInstance {
 	return s.pbs
 }
 
-type stubStorageProvider struct {
-	storage []models.Storage
-	ceph    []models.CephCluster
-}
-
-func (s *stubStorageProvider) GetStorage() []models.Storage {
-	return s.storage
-}
-
-func (s *stubStorageProvider) GetCephClusters() []models.CephCluster {
-	return s.ceph
-}
-
 type stubDiskHealthProvider struct {
-	hosts []models.Host
+	hosts []*unifiedresources.HostView
 }
 
-func (s *stubDiskHealthProvider) GetHosts() []models.Host {
+func (s *stubDiskHealthProvider) GetHosts() []*unifiedresources.HostView {
 	return s.hosts
 }
 
@@ -150,42 +138,54 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 		t.Fatalf("unexpected recent tasks: %+v", backupsResp.RecentTasks)
 	}
 
-	executor.storageProvider = &stubStorageProvider{
-		storage: []models.Storage{
+	// Storage pools and Ceph data come from the unified resource provider.
+	storageUsedBytes := int64(1024 * 1024 * 1024)
+	storageTotalBytes := int64(4 * 1024 * 1024 * 1024)
+	cephUsedBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
+	cephTotalBytes := int64(4 * 1024 * 1024 * 1024 * 1024)
+	executor.unifiedResourceProvider = &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				ID:      "store1",
-				Name:    "store1",
-				Type:    "zfs",
-				Status:  "active",
-				Usage:   25.0,
-				Used:    1024 * 1024 * 1024,
-				Total:   4 * 1024 * 1024 * 1024,
-				Free:    3 * 1024 * 1024 * 1024,
-				Content: "images",
-				Shared:  false,
-				ZFSPool: &models.ZFSPool{
-					Name:           "tank",
-					State:          "ONLINE",
-					ReadErrors:     0,
-					WriteErrors:    0,
-					ChecksumErrors: 0,
-					Scan:           "scrub",
+				ID:     "store1",
+				Name:   "store1",
+				Type:   unifiedresources.ResourceTypeStorage,
+				Status: unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "pve1",
+				},
+				Storage: &unifiedresources.StorageMeta{
+					Type:    "zfs",
+					Content: "images",
+					Shared:  false,
+					IsZFS:   true,
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:    &storageUsedBytes,
+						Total:   &storageTotalBytes,
+						Percent: 25.0,
+					},
 				},
 			},
-		},
-		ceph: []models.CephCluster{
 			{
-				Name:          "ceph1",
-				Health:        "HEALTH_OK",
-				HealthMessage: "ok",
-				UsagePercent:  12.5,
-				UsedBytes:     2 * 1024 * 1024 * 1024 * 1024,
-				TotalBytes:    4 * 1024 * 1024 * 1024 * 1024,
-				NumOSDs:       3,
-				NumOSDsUp:     3,
-				NumOSDsIn:     3,
-				NumMons:       1,
-				NumMgrs:       1,
+				Name: "ceph1",
+				Type: unifiedresources.ResourceTypeCeph,
+				Ceph: &unifiedresources.CephMeta{
+					HealthStatus:  "HEALTH_OK",
+					HealthMessage: "ok",
+					NumOSDs:       3,
+					NumOSDsUp:     3,
+					NumOSDsIn:     3,
+					NumMons:       1,
+					NumMgrs:       1,
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:  &cephUsedBytes,
+						Total: &cephTotalBytes,
+					},
+				},
 			},
 		},
 	}
@@ -195,11 +195,10 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &storageResp); err != nil {
 		t.Fatalf("decode storage response: %v", err)
 	}
-	if len(storageResp.Pools) != 1 || storageResp.Pools[0].ZFS == nil {
+	if len(storageResp.Pools) != 1 {
 		t.Fatalf("unexpected storage pools: %+v", storageResp.Pools)
 	}
 	// Verify UsagePercent is passed through directly (not double-multiplied).
-	// Storage.Usage is already in 0-100 range from safePercentage().
 	if storageResp.Pools[0].UsagePercent != 25.0 {
 		t.Errorf("storage pool UsagePercent = %v, want 25.0 (was double-multiplied before fix)", storageResp.Pools[0].UsagePercent)
 	}
@@ -240,12 +239,26 @@ func TestStorageUsagePercentNotDoubled(t *testing.T) {
 	}
 
 	// Storage pool path
-	executor.storageProvider = &stubStorageProvider{
-		storage: []models.Storage{
+	storageUsedBytes := int64(1024 * 1024 * 1024)
+	storageTotalBytes := int64(4 * 1024 * 1024 * 1024)
+	executor.unifiedResourceProvider = &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				ID: "s1", Name: "s1", Type: "dir", Status: "active",
-				Usage: 45.7,
-				Used:  1024 * 1024 * 1024, Total: 4 * 1024 * 1024 * 1024, Free: 3 * 1024 * 1024 * 1024,
+				ID:     "s1",
+				Name:   "s1",
+				Type:   unifiedresources.ResourceTypeStorage,
+				Status: unifiedresources.StatusOnline,
+				Storage: &unifiedresources.StorageMeta{
+					Type:    "dir",
+					Content: "images",
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:    &storageUsedBytes,
+						Total:   &storageTotalBytes,
+						Percent: 45.7,
+					},
+				},
 			},
 		},
 	}
@@ -260,6 +273,71 @@ func TestStorageUsagePercentNotDoubled(t *testing.T) {
 	got2 := storageResp.Pools[0].UsagePercent
 	if got2 != 45.7 {
 		t.Errorf("storage pool UsagePercent = %v, want 45.7 (double-multiplied = %v)", got2, 45.7*100)
+	}
+}
+
+func TestStorageResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	backupsPayload, err := json.Marshal(EmptyBackupsResponse())
+	if err != nil {
+		t.Fatalf("marshal empty backups response: %v", err)
+	}
+	var backupsMap map[string]any
+	if err := json.Unmarshal(backupsPayload, &backupsMap); err != nil {
+		t.Fatalf("decode empty backups response: %v", err)
+	}
+	for _, key := range []string{"pbs", "pve", "pbs_servers", "recent_tasks"} {
+		values, ok := backupsMap[key].([]any)
+		if !ok || len(values) != 0 {
+			t.Fatalf("expected %s to serialize as an empty array, got %T (%v)", key, backupsMap[key], backupsMap[key])
+		}
+	}
+
+	storagePayload, err := json.Marshal(EmptyStorageResponse())
+	if err != nil {
+		t.Fatalf("marshal empty storage response: %v", err)
+	}
+	var storageMap map[string]any
+	if err := json.Unmarshal(storagePayload, &storageMap); err != nil {
+		t.Fatalf("decode empty storage response: %v", err)
+	}
+	for _, key := range []string{"pools", "ceph_clusters"} {
+		values, ok := storageMap[key].([]any)
+		if !ok || len(values) != 0 {
+			t.Fatalf("expected %s to serialize as an empty array, got %T (%v)", key, storageMap[key], storageMap[key])
+		}
+	}
+}
+
+func TestStorageDiagnosticsResponsesUseCanonicalEmptyCollections(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  any
+		keys []string
+	}{
+		{name: "host_raid", raw: EmptyHostRAIDStatusResponse(), keys: []string{"hosts"}},
+		{name: "host_ceph", raw: EmptyHostCephDetailsResponse(), keys: []string{"hosts"}},
+		{name: "resource_disks", raw: EmptyResourceDisksResponse(), keys: []string{"resources"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := json.Marshal(tc.raw)
+			if err != nil {
+				t.Fatalf("marshal %s response: %v", tc.name, err)
+			}
+
+			var decoded map[string]any
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				t.Fatalf("decode %s response: %v", tc.name, err)
+			}
+
+			for _, key := range tc.keys {
+				values, ok := decoded[key].([]any)
+				if !ok || len(values) != 0 {
+					t.Fatalf("expected %s.%s to be an empty array, got %T (%v)", tc.name, key, decoded[key], decoded[key])
+				}
+			}
+		})
 	}
 }
 
@@ -278,14 +356,14 @@ func TestDockerUpdateTools(t *testing.T) {
 	}
 
 	stateProv := &mockStateProvider{}
-	stateProv.On("GetState").Return(state)
+	stateProv.On("ReadSnapshot").Return(state)
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: stateProv,
 		ControlLevel:  ControlLevelControlled,
 	})
 	updates := &stubUpdatesProvider{
 		pending: []ContainerUpdateInfo{
-			{HostID: "host1", ContainerID: "c1", ContainerName: "nginx", UpdateAvailable: true},
+			{TargetID: "host1", ContainerID: "c1", ContainerName: "nginx", UpdateAvailable: true},
 		},
 		enabled: true,
 		triggerStatus: DockerCommandStatus{
@@ -306,7 +384,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &listResp); err != nil {
 		t.Fatalf("decode docker updates: %v", err)
 	}
-	if listResp.HostID != "host1" || listResp.Total != 1 {
+	if listResp.TargetID != "host1" || listResp.Total != 1 {
 		t.Fatalf("unexpected docker updates response: %+v", listResp)
 	}
 
@@ -315,7 +393,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &checkResp); err != nil {
 		t.Fatalf("decode docker check response: %v", err)
 	}
-	if checkResp.CommandID != "cmd1" || checkResp.HostID != "host1" {
+	if checkResp.CommandID != "cmd1" || checkResp.TargetID != "host1" {
 		t.Fatalf("unexpected check response: %+v", checkResp)
 	}
 
@@ -339,5 +417,22 @@ func TestDockerUpdateTools(t *testing.T) {
 	})
 	if !strings.Contains(result.Content[0].Text, "updates are disabled") {
 		t.Fatalf("unexpected disabled response: %s", result.Content[0].Text)
+	}
+}
+
+func TestDockerUpdatesResponseUsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(EmptyDockerUpdatesResponse())
+	if err != nil {
+		t.Fatalf("marshal docker updates response: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode docker updates response: %v", err)
+	}
+
+	updates, ok := decoded["updates"].([]any)
+	if !ok || len(updates) != 0 {
+		t.Fatalf("expected updates to be an empty array, got %T (%v)", decoded["updates"], decoded["updates"])
 	}
 }

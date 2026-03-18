@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
+import sri from 'vite-plugin-sri-gen';
 import path from 'path';
 import { URL } from 'node:url';
+import { configDefaults } from 'vitest/config';
 
 const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '0.0.0.0';
 const frontendDevPort = Number(
@@ -34,11 +36,13 @@ const backendWsUrl =
     }
   })();
 
+const srcAlias = path.resolve(__dirname, './src');
+
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), sri({ algorithm: 'sha384' })],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': srcAlias,
     },
     conditions: ['import', 'browser', 'default'],
   },
@@ -196,19 +200,7 @@ export default defineConfig({
         changeOrigin: true,
         cookieDomainRewrite: '',
       },
-      '/install-docker-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
       '/install-container-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-      '/install-host-agent.sh': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-      '/install-host-agent.ps1': {
         target: backendUrl,
         changeOrigin: true,
       },
@@ -228,10 +220,56 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('solid-js') || id.includes('@solidjs/router')) return 'vendor-solid';
+            if (id.includes('lucide-solid')) return 'vendor-icons';
+            if (id.includes('marked') || id.includes('dompurify')) return 'vendor-ai';
+            return 'vendor';
+          }
+
+          if (id.includes('/src/components/Settings/')) {
+            if (
+              /NodeModal|SSOProvidersPanel|OIDCPanel|ConfiguredNodeTables|AISettings|ReportingPanel|DiagnosticsPanel|SystemLogsPanel/.test(
+                id,
+              )
+            ) {
+              return 'settings-heavy';
+            }
+            if (/Security|RolesPanel|UserAssignmentsPanel|APIAccessPanel|APITokenManager|ChangePasswordModal|QuickSecuritySetup/.test(id)) {
+              return 'settings-auth';
+            }
+            if (/Audit|ProLicensePanel|GeneralSettingsPanel|NetworkSettingsPanel|UpdatesSettingsPanel|RecoverySettingsPanel|UnifiedAgents/.test(id)) {
+              return 'settings-admin';
+            }
+            if (/Settings\.tsx|SettingsSectionNav|ResourcePicker|SuggestProfileModal/.test(id)) {
+              return 'settings-shell';
+            }
+            return 'settings-core';
+          }
+
+          if (id.includes('/src/components/AI/')) {
+            return 'ai-ui';
+          }
+
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    alias: {
+      '@': srcAlias,
+    },
+    exclude: [
+      ...configDefaults.exclude,
+      'tests/integration/**',
+      '**/tests/integration/**',
+    ],
   },
 });

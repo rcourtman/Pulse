@@ -51,6 +51,13 @@ type Store struct {
 	onSaveError   func(err error)
 }
 
+func normalizeUsageEvents(events []UsageEvent) []UsageEvent {
+	if events == nil {
+		return []UsageEvent{}
+	}
+	return events
+}
+
 // NewStore creates a new usage store.
 func NewStore(maxDays int) *Store {
 	if maxDays <= 0 {
@@ -61,6 +68,26 @@ func NewStore(maxDays int) *Store {
 		maxDays:      maxDays,
 		saveDebounce: 5 * time.Second,
 	}
+}
+
+func emptySummary(days, retentionDays, effectiveDays int, truncated bool) Summary {
+	return Summary{
+		Days:           days,
+		RetentionDays:  retentionDays,
+		EffectiveDays:  effectiveDays,
+		Truncated:      truncated,
+		PricingAsOf:    PricingAsOf(),
+		ProviderModels: []ProviderModelSummary{},
+		UseCases:       []UseCaseSummary{},
+		Targets:        []TargetSummary{},
+		DailyTotals:    []DailySummary{},
+	}
+}
+
+// EmptySummary returns a canonical empty summary for outward-facing cost
+// responses when no backing store is available.
+func EmptySummary(days, retentionDays, effectiveDays int, truncated bool) Summary {
+	return emptySummary(days, retentionDays, effectiveDays, truncated)
 }
 
 // SetPersistence sets persistence and loads any existing history.
@@ -79,7 +106,7 @@ func (s *Store) SetPersistence(p Persistence) error {
 	}
 
 	s.mu.Lock()
-	s.events = events
+	s.events = normalizeUsageEvents(events)
 	s.trimLocked(time.Now())
 	s.mu.Unlock()
 	return nil
@@ -237,18 +264,13 @@ func (s *Store) GetSummary(days int) Summary {
 		}
 	}
 
-	return Summary{
-		Days:           days,
-		RetentionDays:  retentionDays,
-		EffectiveDays:  effectiveDays,
-		Truncated:      truncated,
-		PricingAsOf:    PricingAsOf(),
-		ProviderModels: providerModels,
-		UseCases:       summarizeUseCases(events),
-		Targets:        summarizeTargets(events),
-		DailyTotals:    daily,
-		Totals:         totals,
-	}
+	summary := emptySummary(days, retentionDays, effectiveDays, truncated)
+	summary.ProviderModels = providerModels
+	summary.UseCases = summarizeUseCases(events)
+	summary.Targets = summarizeTargets(events)
+	summary.DailyTotals = daily
+	summary.Totals = totals
+	return summary
 }
 
 // Flush immediately writes any pending changes to persistence.
@@ -308,7 +330,7 @@ func (s *Store) scheduleSaveLocked() {
 
 		if p != nil {
 			if err := p.SaveUsageHistory(events); err != nil {
-				log.Error().Err(err).Msg("Failed to save AI usage history")
+				log.Error().Err(err).Msg("failed to save AI usage history")
 				s.mu.Lock()
 				s.lastSaveError = err
 				s.mu.Unlock()

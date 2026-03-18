@@ -134,6 +134,15 @@ func TestInstallShAdapter_RestoreConfig(t *testing.T) {
 	}
 }
 
+func TestResolveRollbackConfigDirUsesCanonicalRuntimeDataDir(t *testing.T) {
+	envDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", envDir)
+
+	if got := resolveRollbackConfigDir(); got != envDir {
+		t.Fatalf("resolveRollbackConfigDir() = %q, want %q", got, envDir)
+	}
+}
+
 func TestInstallShAdapter_InstallBinary(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source")

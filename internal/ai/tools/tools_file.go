@@ -2,11 +2,15 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,8 +22,8 @@ type ExecutionProvenance struct {
 	RequestedTargetHost string `json:"requested_target_host"`
 
 	// What we resolved it to
-	ResolvedKind string `json:"resolved_kind"` // "host", "lxc", "vm", "docker"
-	ResolvedNode string `json:"resolved_node"` // Proxmox node name (if applicable)
+	ResolvedKind string `json:"resolved_kind"` // "host", "system-container", "vm", "docker"
+	ResolvedNode string `json:"resolved_node"` // Hypervisor node name (if applicable)
 	ResolvedUID  string `json:"resolved_uid"`  // VMID or container ID
 
 	// How we executed it
@@ -32,7 +36,7 @@ func (e *PulseToolExecutor) registerFileTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name: "pulse_file_edit",
-			Description: `Read and edit files on remote hosts, LXC containers, VMs, and Docker containers safely.
+			Description: `Read and edit files on remote hosts, containers, VMs, and Docker containers safely.
 
 Actions:
 - read: Read the contents of a file
@@ -42,15 +46,15 @@ Actions:
 This tool handles escaping automatically - just provide the content as-is.
 Use this instead of shell commands for editing config files (YAML, JSON, etc.)
 
-Routing: target_host can be a Proxmox host (delly), an LXC name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
+Routing: target_host can be a node (pve-node), a container name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
 
-Docker container support: Use docker_container to access files INSIDE a Docker container. The target_host specifies where Docker is running.
+Docker container support: Use container to access files INSIDE a Docker container. The target_host specifies where Docker runs.
 
 Examples:
-- Read from LXC: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
-- Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="delly"
-- Read from Docker: action="read", path="/config/settings.json", target_host="tower", docker_container="jellyfin"
-- Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", docker_container="nginx"`,
+- Read from container: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
+- Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="pve-node"
+- Read from Docker: action="read", path="/config/settings.json", target_host="tower", container="jellyfin"
+- Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", container="nginx"`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -71,7 +75,7 @@ Examples:
 						Type:        "string",
 						Description: "Hostname where the file exists (or where Docker is running)",
 					},
-					"docker_container": {
+					"container": {
 						Type:        "string",
 						Description: "Docker container name (for files inside containers)",
 					},
@@ -92,7 +96,7 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["docker_container"].(string)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required")), nil
@@ -100,17 +104,20 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
+	}
 
 	// Validate path - must be absolute
 	if !strings.HasPrefix(path, "/") {
 		return NewErrorResult(fmt.Errorf("path must be absolute (start with /)")), nil
 	}
 
-	// Validate docker_container if provided (simple alphanumeric + _ + -)
+	// Validate container if provided (simple alphanumeric + _ + -)
 	if dockerContainer != "" {
 		for _, c := range dockerContainer {
 			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
-				return NewErrorResult(fmt.Errorf("invalid character '%c' in docker_container name", c)), nil
+				return NewErrorResult(fmt.Errorf("invalid character '%c' in container name", c)), nil
 			}
 		}
 	}
@@ -144,8 +151,20 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally reading files from the host when user meant to read from an LXC/VM
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to read sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid reading credential files. If you need a value, provide it manually or scope the request to non-sensitive config/log files.",
+			},
+		)), nil
+	}
+
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally reading files from the host when user meant to read from an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -155,7 +174,7 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
@@ -189,16 +208,18 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		return NewTextResult(fmt.Sprintf("Failed to read file (exit code %d): %s", result.ExitCode, errMsg)), nil
 	}
 
+	redacted, redactionCount := safety.RedactSensitiveText(result.Stdout)
+
 	response := map[string]interface{}{
-		"success": true,
-		"path":    path,
-		"content": result.Stdout,
-		"host":    targetHost,
-		"size":    len(result.Stdout),
+		"success":    true,
+		"path":       path,
+		"content":    redacted,
+		"host":       targetHost,
+		"size":       len(redacted),
+		"redacted":   redactionCount > 0,
+		"redactions": redactionCount,
 	}
-	if dockerContainer != "" {
-		response["docker_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
@@ -210,8 +231,20 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally writing files to the host when user meant to write to an LXC/VM
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+			},
+		)), nil
+	}
+
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally writing files to the host when user meant to write to an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -230,19 +263,22 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
 
-	// INVARIANT: If the target resolves to a child resource (LXC/VM), writes MUST execute
+	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute
 	// inside that context via pct_exec/qm_guest_exec. No silent node fallback.
 	if err := e.validateWriteExecutionContext(targetHost, routing); err != nil {
 		return NewToolResponseResult(err.ToToolResponse()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
+	approvalCommand := fmt.Sprintf("Append to file: %s", path)
+	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -250,10 +286,11 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecord(
-			fmt.Sprintf("Append to file: %s", path),
+		approvalID := createApprovalRecordForOrg(
+			e.orgID,
+			approvalCommand,
 			"file",
-			path,
+			approvalTargetID,
 			target,
 			fmt.Sprintf("Append %d bytes to %s", len(content), path),
 		)
@@ -264,12 +301,12 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	var command string
 	if dockerContainer != "" {
-		// Append inside Docker container - docker exec needs its own sh -c
-		command = fmt.Sprintf("docker exec %s sh -c 'echo %s | base64 -d >> %s'",
-			shellEscape(dockerContainer), encoded, shellEscape(path))
+		// Append inside Docker container - escape the full inner command to avoid nested quote breakage.
+		innerCommand := fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
+		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
-		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
-		command = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellEscape(path))
+		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
+		command = fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
@@ -287,10 +324,28 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewTextResult(fmt.Sprintf("Failed to append to file in container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
+			response := map[string]interface{}{
+				"success":   false,
+				"action":    "append",
+				"path":      path,
+				"host":      targetHost,
+				"exit_code": result.ExitCode,
+				"error":     errMsg,
+			}
+			setContainerResponseFields(response, dockerContainer)
+			return NewJSONResultWithIsError(response, true), nil
 		}
-		return NewTextResult(fmt.Sprintf("Failed to append to file (exit code %d): %s", result.ExitCode, errMsg)), nil
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"success":   false,
+			"action":    "append",
+			"path":      path,
+			"host":      targetHost,
+			"exit_code": result.ExitCode,
+			"error":     errMsg,
+		}, true), nil
 	}
+
+	verify := e.verifyFileTailHash(ctx, routing, path, dockerContainer, content)
 
 	response := map[string]interface{}{
 		"success":       true,
@@ -298,10 +353,9 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		"path":          path,
 		"host":          targetHost,
 		"bytes_written": len(content),
+		"verification":  verify,
 	}
-	if dockerContainer != "" {
-		response["docker_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
@@ -313,8 +367,20 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally writing files to the host when user meant to write to an LXC/VM
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+			},
+		)), nil
+	}
+
+	// Validate routing context - block if targeting a host node when child resources exist
+	// This prevents accidentally writing files to the host when user meant to write to an container/VM
 	routingResult := e.validateRoutingContext(targetHost)
 	if routingResult.IsBlocked() {
 		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -333,19 +399,22 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
+			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
 		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
 
-	// INVARIANT: If the target resolves to a child resource (LXC/VM), writes MUST execute
+	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute
 	// inside that context via pct_exec/qm_guest_exec. No silent node fallback.
 	if err := e.validateWriteExecutionContext(targetHost, routing); err != nil {
 		return NewToolResponseResult(err.ToToolResponse()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
+	approvalCommand := fmt.Sprintf("Write file: %s", path)
+	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -353,10 +422,11 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecord(
-			fmt.Sprintf("Write file: %s", path),
+		approvalID := createApprovalRecordForOrg(
+			e.orgID,
+			approvalCommand,
 			"file",
-			path,
+			approvalTargetID,
 			target,
 			fmt.Sprintf("Write %d bytes to %s", len(content), path),
 		)
@@ -367,12 +437,12 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	var command string
 	if dockerContainer != "" {
-		// Write inside Docker container - docker exec needs its own sh -c
-		command = fmt.Sprintf("docker exec %s sh -c 'echo %s | base64 -d > %s'",
-			shellEscape(dockerContainer), encoded, shellEscape(path))
+		// Write inside Docker container - escape the full inner command to avoid nested quote breakage.
+		innerCommand := fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
+		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
-		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
-		command = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellEscape(path))
+		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
+		command = fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
@@ -390,10 +460,28 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewTextResult(fmt.Sprintf("Failed to write file in container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
+			response := map[string]interface{}{
+				"success":   false,
+				"action":    "write",
+				"path":      path,
+				"host":      targetHost,
+				"exit_code": result.ExitCode,
+				"error":     errMsg,
+			}
+			setContainerResponseFields(response, dockerContainer)
+			return NewJSONResultWithIsError(response, true), nil
 		}
-		return NewTextResult(fmt.Sprintf("Failed to write file (exit code %d): %s", result.ExitCode, errMsg)), nil
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"success":   false,
+			"action":    "write",
+			"path":      path,
+			"host":      targetHost,
+			"exit_code": result.ExitCode,
+			"error":     errMsg,
+		}, true), nil
 	}
+
+	verify := e.verifyFileSHA256(ctx, routing, path, dockerContainer, content)
 
 	response := map[string]interface{}{
 		"success":       true,
@@ -401,23 +489,104 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		"path":          path,
 		"host":          targetHost,
 		"bytes_written": len(content),
+		"verification":  verify,
 	}
-	if dockerContainer != "" {
-		response["docker_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
 }
 
+func (e *PulseToolExecutor) verifyFileSHA256(ctx context.Context, routing CommandRoutingResult, path, dockerContainer, content string) map[string]interface{} {
+	expected := sha256.Sum256([]byte(content))
+	expectedHex := hex.EncodeToString(expected[:])
+
+	// Use a portable command chain; not all systems have sha256sum.
+	hashCmd := fmt.Sprintf("sha256sum %s 2>/dev/null || shasum -a 256 %s 2>/dev/null || openssl dgst -sha256 %s 2>/dev/null", shellEscape(path), shellEscape(path), shellEscape(path))
+	if dockerContainer != "" {
+		hashCmd = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(hashCmd))
+	}
+
+	res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+		Command:    hashCmd,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
+	})
+	if err != nil {
+		return map[string]interface{}{
+			"ok":     true,
+			"method": "exit_code",
+			"note":   fmt.Sprintf("sha256 verification unavailable: %v", err),
+		}
+	}
+	combined := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	actualHex := ""
+	if fields := strings.Fields(combined); len(fields) > 0 {
+		actualHex = fields[0]
+	}
+	if res.ExitCode != 0 || actualHex == "" {
+		return map[string]interface{}{
+			"ok":     true,
+			"method": "exit_code",
+			"note":   "sha256 verification unavailable on target (missing tools or non-zero exit)",
+		}
+	}
+	ok := strings.EqualFold(actualHex, expectedHex)
+	return map[string]interface{}{
+		"ok":       ok,
+		"method":   "sha256",
+		"expected": expectedHex,
+		"actual":   actualHex,
+	}
+}
+
+func (e *PulseToolExecutor) verifyFileTailHash(ctx context.Context, routing CommandRoutingResult, path, dockerContainer, appended string) map[string]interface{} {
+	// Verify that the file's trailing bytes match what we appended, without re-reading the full file.
+	n := len(appended)
+	if n <= 0 {
+		return map[string]interface{}{"ok": true, "method": "tail_sha256", "note": "no appended content"}
+	}
+	expected := sha256.Sum256([]byte(appended))
+	expectedHex := hex.EncodeToString(expected[:])
+
+	tailCmd := fmt.Sprintf("tail -c %d %s 2>/dev/null | (sha256sum 2>/dev/null || shasum -a 256 2>/dev/null)", n, shellEscape(path))
+	if dockerContainer != "" {
+		tailCmd = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(tailCmd))
+	}
+
+	res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+		Command:    tailCmd,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
+	})
+	if err != nil {
+		return map[string]interface{}{"ok": true, "method": "exit_code", "note": fmt.Sprintf("tail sha256 verification unavailable: %v", err)}
+	}
+	combined := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	actualHex := ""
+	if fields := strings.Fields(combined); len(fields) > 0 {
+		actualHex = fields[0]
+	}
+	if res.ExitCode != 0 || actualHex == "" {
+		return map[string]interface{}{"ok": true, "method": "exit_code", "note": "tail sha256 verification unavailable on target (missing tools or non-zero exit)"}
+	}
+	ok := strings.EqualFold(actualHex, expectedHex)
+	return map[string]interface{}{
+		"ok":       ok,
+		"method":   "tail_sha256",
+		"expected": expectedHex,
+		"actual":   actualHex,
+	}
+}
+
 // ErrExecutionContextUnavailable is returned when a write operation targets a child resource
-// (LXC/VM) but the execution cannot be properly routed into that resource context.
+// (container/VM) but the execution cannot be properly routed into that resource context.
 // This prevents silent fallback to node-level execution, which would write files on the
-// Proxmox host instead of inside the LXC/VM.
+// host node instead of inside the container/VM.
 type ErrExecutionContextUnavailable struct {
 	TargetHost   string // What the model requested
-	ResolvedKind string // What the state says it is (lxc, vm)
-	ResolvedNode string // Which Proxmox node it's on
+	ResolvedKind string // What the state says it is (system-container, vm)
+	ResolvedNode string // Which hypervisor node it's on
 	Transport    string // What transport we got (should be pct_exec but might be "direct")
 	Message      string
 }
@@ -433,40 +602,39 @@ func (e *ErrExecutionContextUnavailable) ToToolResponse() ToolResponse {
 		"resolved_node":    e.ResolvedNode,
 		"transport":        e.Transport,
 		"auto_recoverable": false,
-		"recovery_hint":    "Cannot write files to this target. The execution context (LXC/VM) is not reachable via pct exec/qm guest exec. Verify the agent is installed on the Proxmox node and the target is running.",
+		"recovery_hint":    "Cannot write files to this target. The execution context (container/VM) is not reachable via pct exec/qm guest exec. Verify the agent is installed on the host node and the target is running.",
 	})
 }
 
 // validateWriteExecutionContext ensures write operations execute inside the correct context.
 //
-// INVARIANT: If state.ResolveResource says the target is an LXC/VM, writes MUST use
+// INVARIANT: If state.ResolveResource says the target is an container/VM, writes MUST use
 // pct_exec/qm_guest_exec to run inside that container. A "direct" transport on a child
-// resource means we'd write to the Proxmox host's filesystem instead — which is always wrong.
+// resource means we'd write to the host node's filesystem instead — which is always wrong.
 //
 // This catches the scenario where:
-// 1. target_host="homepage-docker" (an LXC)
+// 1. target_host="homepage-docker" (a system container)
 // 2. An agent on the node matches "homepage-docker" as a direct hostname
 // 3. Command runs on the node without pct exec → writes to node filesystem
 func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, routing CommandRoutingResult) *ErrExecutionContextUnavailable {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return nil // Can't validate without state
 	}
 
-	state := e.stateProvider.GetState()
-	loc := state.ResolveResource(targetHost)
+	loc := e.resolveResourceLocation(targetHost)
 	if !loc.Found {
 		return nil // Unknown resource, nothing to validate
 	}
 
-	// Only validate for child resources (LXC/VM)
-	isChildResource := loc.ResourceType == "lxc" || loc.ResourceType == "vm"
+	// Only validate for child resources (system containers / VMs)
+	isChildResource := loc.ResourceType == "system-container" || loc.ResourceType == "vm"
 	if !isChildResource {
 		return nil
 	}
 
 	// For child resources, the routing MUST use pct_exec or qm_guest_exec
-	// If it resolved as "direct" (host type), that means we'd execute on the node, not inside the LXC/VM
-	if routing.Transport == "direct" && routing.TargetType == "host" {
+	// If it resolved as "direct" (agent-level type), that means we'd execute on the node, not inside the container/VM
+	if routing.Transport == "direct" && routing.TargetType == "agent" {
 		log.Warn().
 			Str("target_host", targetHost).
 			Str("resolved_kind", loc.ResourceType).
@@ -474,7 +642,7 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			Str("agent_hostname", routing.AgentHostname).
 			Str("transport", routing.Transport).
 			Msg("[FileWrite] BLOCKED: Write would execute on node, not inside child resource. " +
-				"Agent matched target hostname directly, but state says target is LXC/VM.")
+				"Agent matched target hostname directly, but state says target is container/VM.")
 
 		return &ErrExecutionContextUnavailable{
 			TargetHost:   targetHost,
@@ -482,14 +650,14 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			ResolvedNode: loc.Node,
 			Transport:    routing.Transport,
 			Message: fmt.Sprintf(
-				"'%s' is a %s on node '%s', but the write would execute on the Proxmox node instead of inside the %s. "+
+				"'%s' is a %s on node '%s', but the write would execute on the host node instead of inside the %s. "+
 					"This happens when an agent matches the hostname directly instead of routing via pct exec. "+
 					"The file would be written to the node's filesystem, not the %s's filesystem.",
 				targetHost, loc.ResourceType, loc.Node, loc.ResourceType, loc.ResourceType),
 		}
 	}
 
-	// Also validate: if resolved as LXC but no agent found for the node
+	// Also validate: if resolved as a guest but no agent found for the node
 	if routing.AgentID == "" {
 		return &ErrExecutionContextUnavailable{
 			TargetHost:   targetHost,
@@ -497,7 +665,7 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 			ResolvedNode: loc.Node,
 			Transport:    "none",
 			Message: fmt.Sprintf(
-				"'%s' is a %s on node '%s', but no agent is available on that Proxmox node. "+
+				"'%s' is a %s on node '%s', but no agent is available on that node. "+
 					"Install the Pulse Unified Agent on '%s' to enable file operations inside the %s.",
 				targetHost, loc.ResourceType, loc.Node, loc.Node, loc.ResourceType),
 		}
@@ -520,24 +688,6 @@ func buildExecutionProvenance(targetHost string, routing CommandRoutingResult) m
 	}
 }
 
-// findAgentByHostname finds an agent ID by hostname
-func (e *PulseToolExecutor) findAgentByHostname(hostname string) string {
-	if e.agentServer == nil {
-		return ""
-	}
-
-	agents := e.agentServer.GetConnectedAgents()
-	hostnameLower := strings.ToLower(hostname)
-
-	for _, agent := range agents {
-		// Match by hostname (case-insensitive) or by agentID (case-sensitive)
-		if strings.ToLower(agent.Hostname) == hostnameLower || agent.AgentID == hostname {
-			return agent.AgentID
-		}
-	}
-	return ""
-}
-
 // shellEscape escapes a string for safe use in shell commands
 func shellEscape(s string) string {
 	// Use single quotes and escape any existing single quotes
@@ -546,6 +696,15 @@ func shellEscape(s string) string {
 
 // formatFileApprovalNeeded formats an approval-required response for file operations
 func formatFileApprovalNeeded(path, host, action string, size int, approvalID string) string {
-	return fmt.Sprintf(`APPROVAL_REQUIRED: {"type":"approval_required","approval_id":"%s","action":"file_%s","path":"%s","host":"%s","size":%d,"message":"File %s operation requires approval"}`,
-		approvalID, action, path, host, size, action)
+	payload := map[string]interface{}{
+		"type":        "approval_required",
+		"approval_id": approvalID,
+		"action":      "file_" + action,
+		"path":        path,
+		"host":        host,
+		"size":        size,
+		"message":     fmt.Sprintf("File %s operation requires approval", action),
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
 }

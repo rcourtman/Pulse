@@ -31,29 +31,29 @@ export function SectionHeader(props: SectionHeaderProps) {
   const sizeClass = () => {
     switch (local.size) {
       case 'sm':
-        return 'text-base sm:text-lg';
+        return 'text-sm sm:text-base tracking-tight';
       case 'lg':
-        return 'text-xl sm:text-2xl lg:text-3xl';
+        return 'text-lg sm:text-xl tracking-tight';
       default:
-        return 'text-lg sm:text-xl';
+        return 'text-base sm:text-lg tracking-tight';
     }
   };
 
   return (
     <div class={`flex flex-col gap-1 ${alignmentClass} ${local.class ?? ''}`.trim()} {...rest}>
       <Show when={local.label}>
-        <span class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+        <span class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted dark:text-slate-300">
           {local.label}
         </span>
       </Show>
       <h2
-        class={`${sizeClass()} font-semibold leading-snug text-gray-900 dark:text-gray-100 ${local.titleClass ?? ''}`.trim()}
+        class={`${sizeClass()} font-semibold text-base-content dark:text-slate-100 ${local.titleClass ?? ''}`.trim()}
       >
         {local.title}
       </h2>
       <Show when={local.description}>
         <p
-          class={`text-sm sm:text-base text-gray-600 dark:text-gray-400 ${local.descriptionClass ?? ''}`.trim()}
+          class={`text-xs sm:text-sm text-muted dark:text-slate-200 ${local.descriptionClass ?? ''}`.trim()}
         >
           {local.description}
         </p>

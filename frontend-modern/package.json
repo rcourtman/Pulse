@@ -15,23 +15,30 @@
   "homepage": "https://github.com/rcourtman/Pulse",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/build-embed-assets.mjs",
     "preview": "vite preview",
     "generate-types": "cd ../scripts && go run generate-types.go",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.include=src/**/*.ts --coverage.include=src/**/*.tsx --coverage.exclude=src/index.tsx",
     "test:coverage:ai": "vitest run --coverage --coverage.provider=v8 --coverage.thresholds.100 --coverage.thresholds.perFile --coverage.include=src/components/AI/aiChatUtils.ts",
     "type-check": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint": "npm run lint:eslint && npm run lint:theme && npm run lint:canonical-platforms",
+    "lint:canonical-platforms": "node scripts/canonical-platform-audit.mjs",
+    "lint:eslint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:theme": "node scripts/theme-audit.mjs",
+    "lint:headers": "node scripts/header-audit.mjs",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
+    "lint:cpd": "jscpd",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "check:bundlesize": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
     "@solidjs/router": "^0.10.10",
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.3.1",
     "lucide-solid": "^0.545.0",
     "marked": "^17.0.1",
+    "qrcode": "^1.5.4",
     "solid-js": "^1.8.0"
   },
   "overrides": {
@@ -44,6 +51,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.5.0",
     "@types/node": "^20.10.0",
+    "@types/qrcode": "^1.5.6",
     "@typescript-eslint/eslint-plugin": "^8.24.0",
     "@typescript-eslint/parser": "^8.24.0",
     "@vitest/coverage-v8": "^3.2.4",
@@ -52,6 +60,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-solid": "^0.14.5",
     "globals": "^17.3.0",
+    "jscpd": "^4.0.8",
     "jsdom": "^24.1.0",
     "postcss": "^8.4.0",
     "prettier": "^3.3.0",
@@ -60,6 +69,7 @@
     "typescript-eslint": "^8.54.0",
     "vite": "^6.4.1",
     "vite-plugin-solid": "^2.8.0",
+    "vite-plugin-sri-gen": "^1.3.2",
     "vitest": "^3.2.4"
   }
 }

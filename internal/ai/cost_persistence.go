@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"fmt"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -17,6 +19,9 @@ func NewCostPersistenceAdapter(cfg *config.ConfigPersistence) *CostPersistenceAd
 
 // SaveUsageHistory saves usage events to disk via ConfigPersistence.
 func (a *CostPersistenceAdapter) SaveUsageHistory(events []cost.UsageEvent) error {
+	if a == nil || a.config == nil {
+		return fmt.Errorf("cost persistence adapter is not configured")
+	}
 	records := make([]config.AIUsageEventRecord, len(events))
 	for i, e := range events {
 		records[i] = config.AIUsageEventRecord{
@@ -37,6 +42,9 @@ func (a *CostPersistenceAdapter) SaveUsageHistory(events []cost.UsageEvent) erro
 
 // LoadUsageHistory loads usage events from disk via ConfigPersistence.
 func (a *CostPersistenceAdapter) LoadUsageHistory() ([]cost.UsageEvent, error) {
+	if a == nil || a.config == nil {
+		return []cost.UsageEvent{}, fmt.Errorf("cost persistence adapter is not configured")
+	}
 	data, err := a.config.LoadAIUsageHistory()
 	if err != nil {
 		return nil, err

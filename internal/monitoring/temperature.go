@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,10 +16,14 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rs/zerolog/log"
 )
+
+const maxTemperatureCommandOutputSize = 1 << 20 // 1 MiB
+const defaultSSHCommandTimeout = 15 * time.Second
+
+var errTemperatureCommandOutputTooLarge = errors.New("temperature command output exceeded limit")
 
 // CommandRunner abstracts command execution for testing
 type CommandRunner interface {
@@ -27,9 +32,50 @@ type CommandRunner interface {
 
 type defaultCommandRunner struct{}
 
+type limitedTemperatureBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedTemperatureBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errTemperatureCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errTemperatureCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedTemperatureBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
 func (r *defaultCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	return cmd.Output()
+	stdout := limitedTemperatureBuffer{maxBytes: maxTemperatureCommandOutputSize}
+	stderr := limitedTemperatureBuffer{maxBytes: maxTemperatureCommandOutputSize}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return nil, errTemperatureCommandOutputTooLarge
+	}
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Preserve bounded stderr details for upstream error wrapping.
+			exitErr.Stderr = append([]byte(nil), stderr.Bytes()...)
+		}
+		return stdout.Bytes(), err
+	}
+
+	return stdout.Bytes(), nil
 }
 
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
@@ -37,7 +83,7 @@ type TemperatureCollector struct {
 	sshUser          string // SSH user (typically "root" or "pulse-monitor")
 	sshKeyPath       string // Path to SSH private key
 	sshPort          int    // SSH port (default 22)
-	hostKeys         knownhosts.Manager
+	hostKeys         KnownHostsManager
 	missingKeyWarned atomic.Bool
 	runner           CommandRunner
 }
@@ -60,8 +106,8 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 		homeDir = "/home/pulse"
 	}
 	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts_sensors")
-	if manager, err := knownhosts.NewManager(knownHostsPath); err != nil {
-		log.Warn().Err(err).Str("path", knownHostsPath).Msg("Failed to initialize temperature known_hosts manager")
+	if manager, err := NewKnownHostsManager(knownHostsPath); err != nil {
+		log.Warn().Err(err).Str("path", knownHostsPath).Msg("failed to initialize temperature known_hosts manager")
 	} else {
 		tc.hostKeys = manager
 	}
@@ -99,7 +145,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
-	if _, keyErr := os.Stat(tc.sshKeyPath); keyErr != nil {
+	if keyErr := tc.validateSSHKeyPath(); keyErr != nil {
 		tc.logMissingSSHKey(keyErr)
 		return &models.Temperature{Available: false}, nil
 	}
@@ -155,13 +201,14 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 }
 
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
-	if strings.TrimSpace(tc.sshKeyPath) != "" {
-		if _, err := os.Stat(tc.sshKeyPath); err != nil {
-			return "", fmt.Errorf("temperature SSH key unavailable: %w", err)
-		}
+	if err := tc.validateSSHKeyPath(); err != nil {
+		return "", err
 	}
 
-	if err := tc.ensureHostKey(ctx, host); err != nil {
+	runCtx, cancel := withDefaultTimeout(ctx, defaultSSHCommandTimeout)
+	defer cancel()
+
+	if err := tc.ensureHostKey(runCtx, host); err != nil {
 		return "", err
 	}
 
@@ -199,13 +246,12 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	// Add user@host and command
 	sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", tc.sshUser, host), command)
 
-	output, err := tc.runner.Run(ctx, "ssh", sshArgs...)
+	output, err := tc.runner.Run(runCtx, "ssh", sshArgs...)
 	if err != nil {
-		// On error, try to get stderr for debugging
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("ssh command failed: %w (stderr: %s)", err, string(exitErr.Stderr))
+		if errors.Is(err, errTemperatureCommandOutputTooLarge) {
+			return "", fmt.Errorf("ssh command output exceeded %d bytes", maxTemperatureCommandOutputSize)
 		}
-		return "", fmt.Errorf("ssh command failed: %w", err)
+		return "", sanitizeSSHCommandError(err)
 	}
 
 	outputStr := strings.TrimSpace(string(output))
@@ -221,6 +267,72 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	return outputStr, nil
 }
 
+func withDefaultTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		return context.WithTimeout(context.Background(), timeout)
+	}
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func sanitizeSSHCommandError(err error) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		stderrLower := strings.ToLower(string(exitErr.Stderr))
+		switch {
+		case strings.Contains(stderrLower, "permission denied"),
+			strings.Contains(stderrLower, "publickey"),
+			strings.Contains(stderrLower, "authentication failed"):
+			return errors.New("ssh command failed: authentication failed")
+		case strings.Contains(stderrLower, "host key verification failed"):
+			return errors.New("ssh command failed: host key verification failed")
+		case strings.Contains(stderrLower, "connection timed out"),
+			strings.Contains(stderrLower, "operation timed out"),
+			strings.Contains(stderrLower, "connection timeout"):
+			return errors.New("ssh command failed: timeout")
+		default:
+			if code := exitErr.ExitCode(); code >= 0 {
+				return fmt.Errorf("ssh command failed with exit status %d", code)
+			}
+			return errors.New("ssh command failed")
+		}
+	}
+
+	return fmt.Errorf("ssh command failed: %w", err)
+}
+
+func (tc *TemperatureCollector) validateSSHKeyPath() error {
+	keyPath := strings.TrimSpace(tc.sshKeyPath)
+	if keyPath == "" {
+		return errors.New("temperature SSH key unavailable")
+	}
+
+	info, err := os.Stat(keyPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return os.ErrNotExist
+		}
+		return errors.New("temperature SSH key unavailable")
+	}
+	if info.IsDir() {
+		return errors.New("temperature SSH key path is not a file")
+	}
+	if err := validatePrivateKeyPermissions(info.Mode().Perm()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePrivateKeyPermissions(mode os.FileMode) error {
+	perm := mode.Perm()
+	if perm&0o077 != 0 {
+		return fmt.Errorf("temperature SSH key has insecure permissions (%03o): expected no group/other access", perm)
+	}
+	return nil
+}
+
 func (tc *TemperatureCollector) logMissingSSHKey(cause error) {
 	if tc.missingKeyWarned.Load() {
 		return
@@ -231,7 +343,7 @@ func (tc *TemperatureCollector) logMissingSSHKey(cause error) {
 		if cause != nil && !errors.Is(cause, os.ErrNotExist) {
 			event = event.Err(cause)
 		}
-		event.Msg("Temperature SSH key not available; skipping legacy SSH collection")
+		event.Msg("temperature SSH key not available; skipping legacy SSH collection")
 	}
 }
 
@@ -336,7 +448,7 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		if err := json.Unmarshal([]byte(jsonStr), &sensorsData); err != nil {
 			return nil, fmt.Errorf("failed to parse sensors JSON: %w", err)
 		}
-		log.Debug().Msg("Parsed legacy sensors format (no SMART data)")
+		log.Debug().Msg("parsed legacy sensors format (no SMART data)")
 	}
 
 	smartData := normalizeSMARTEntries(smartRaw)

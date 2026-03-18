@@ -245,24 +245,6 @@ func TestGetDNSResolver(t *testing.T) {
 	}
 }
 
-func TestSetDNSCacheTTL_DefaultValue(t *testing.T) {
-	// Setting TTL to 0 should use default
-	SetDNSCacheTTL(0)
-	// No panic means success - we can't easily verify the internal state
-}
-
-func TestSetDNSCacheTTL_NegativeValue(t *testing.T) {
-	// Setting TTL to negative should use default
-	SetDNSCacheTTL(-5 * time.Minute)
-	// No panic means success
-}
-
-func TestSetDNSCacheTTL_CustomValue(t *testing.T) {
-	// Setting custom TTL
-	SetDNSCacheTTL(10 * time.Minute)
-	// No panic means success
-}
-
 func TestFingerprintVerifier_ColonSeparatedFingerprint(t *testing.T) {
 	mockCert := []byte("test cert with colons")
 	fingerprint := sha256.Sum256(mockCert)

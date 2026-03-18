@@ -1,0 +1,25 @@
+# Intentional standalone scripts.
+# Format:
+#   <repo-relative-script-path> | <why this script is intentionally standalone>
+# Notes:
+# - Only include tracked `scripts/**/*.sh` files.
+# - Keep reasons short and concrete.
+
+scripts/clean-mock-alerts.sh | Operator recovery utility for removing mock-alert contamination from live alert history.
+scripts/cloud-backup.sh | Hosted backup orchestration helper for cloud deployment operators.
+scripts/conformance-smoke.sh | Runtime conformance harness preserved for release ratification replay.
+scripts/dev-check.sh | Local development runtime/process sanity checker and cleanup helper.
+scripts/dev-deploy-agent.sh | Developer utility to rebuild and push agent binaries to test hosts.
+scripts/dev-launchd-setup.sh | macOS helper to install/uninstall the local launchd hot-dev agent.
+scripts/dev-launchd-wrapper.sh | launchd trampoline invoked by scripts/dev-launchd-setup.sh-generated plist.
+scripts/dev/start-oidc-mock.sh | Local Dex OIDC helper for development and auth-flow testing.
+scripts/docker-build.sh | Developer convenience wrapper enforcing BuildKit for manual docker builds.
+scripts/hot-dev-bg.sh | Managed background launcher for hot-dev with pid/log lifecycle controls.
+scripts/install-go-toolchain.sh | Host bootstrap helper for pinned Go toolchain installation.
+scripts/lint-fixer/run.sh | Autonomous lint-remediation runner for errcheck/dupl campaigns.
+scripts/lint-fixer/setup.sh | Lint-fixer dependency and configuration validation helper.
+scripts/lint-fixer/watch.sh | Live dashboard for lint-fixer execution progress.
+scripts/patrol_e2e_matrix.sh | Manual e2e model-matrix exercise utility for patrol behavior validation.
+scripts/remerge-parallel.sh | Operator script for branch remerge operations across multiple refs.
+scripts/trigger-release.sh | Manual workflow-dispatch helper for release orchestration.
+scripts/validate-published-release.sh | Post-publish GitHub release checksum verifier.

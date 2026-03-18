@@ -1,8 +1,8 @@
-# Centralized Agent Management (Pulse Pro)
+# Centralized Agent Management (Pro/Pro+/Cloud)
 
-Pulse Pro supports centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
+Pro, Pro+, and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
 
-Profiles are managed in the UI: **Settings → Agents → Agent Profiles**.
+Profiles are managed in the UI: **Settings → Unified Agents → Agent Profiles**.
 
 ## Concepts
 
@@ -33,12 +33,12 @@ The following settings can be controlled remotely via profiles:
 
 Notes:
 - `interval` accepts a duration string. If you send a JSON number, it is interpreted as seconds.
-- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--disable-docker`.
-- `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Agents → Unified Agents** and is applied live on report. It is not part of profile settings.
+- Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--enable-docker=false` on the host.
+- `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Unified Agents** and is applied live on report. It is not part of profile settings.
 
 ## API Usage
 
-All endpoints require **Admin** authentication and a **Pulse Pro** license.
+All endpoints require **Admin** authentication and a Pro, Pro+, or Cloud license.
 
 ### 1. Create a Profile
 
@@ -98,11 +98,11 @@ Authorization: Bearer <admin-token>
 To see what configuration an agent receives:
 
 ```http
-GET /api/agents/host/{agent_id}/config
+GET /api/agents/agent/{agent_id}/config
 Authorization: Bearer <agent-or-admin-token>
 ```
 
-Requires `host-agent:config:read` (or admin tokens with management scopes).
+Requires `agent:config:read` (or admin tokens with management scopes).
 
 ### 7. Schema, Validation, and Suggestions
 

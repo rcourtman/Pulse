@@ -187,6 +187,17 @@ func TestSQLiteLoggerQuery(t *testing.T) {
 			t.Errorf("Expected 2 events with limit, got %d", len(results))
 		}
 	})
+
+	// SQLite requires LIMIT when using OFFSET; OFFSET-only should still work.
+	t.Run("OffsetWithoutLimit", func(t *testing.T) {
+		results, err := logger.Query(QueryFilter{Offset: 1})
+		if err != nil {
+			t.Fatalf("Query failed: %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("Expected 3 events with offset-only query, got %d", len(results))
+		}
+	})
 }
 
 func TestSQLiteLoggerCount(t *testing.T) {
@@ -402,6 +413,64 @@ func TestSQLiteLoggerSetRetentionDays(t *testing.T) {
 	}
 }
 
+func TestSQLiteLoggerCloseIsIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+	if err := logger.Close(); err != nil {
+		t.Fatalf("second Close failed: %v", err)
+	}
+}
+
+func TestSQLiteLoggerCloseCancelsStartupRetentionCleanup(t *testing.T) {
+	origDelay := retentionStartupCleanupDelay
+	origStartupCleanup := retentionStartupCleanup
+	retentionStartupCleanupDelay = 25 * time.Millisecond
+	startupCleanupCalled := make(chan struct{}, 1)
+	retentionStartupCleanup = func(l *SQLiteLogger) {
+		select {
+		case startupCleanupCalled <- struct{}{}:
+		default:
+		}
+	}
+	t.Cleanup(func() {
+		retentionStartupCleanupDelay = origDelay
+		retentionStartupCleanup = origStartupCleanup
+	})
+
+	tempDir := t.TempDir()
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	time.Sleep(75 * time.Millisecond)
+	select {
+	case <-startupCleanupCalled:
+		t.Fatal("startup retention cleanup should not run after logger shutdown")
+	default:
+	}
+}
+
 func TestSQLiteLoggerPersistence(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -500,5 +569,25 @@ func TestSQLiteLoggerConcurrentAccess(t *testing.T) {
 	}
 	if count != 100 {
 		t.Errorf("Expected 100 events, got %d", count)
+	}
+}
+
+func TestSQLiteLoggerCloseIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+	if err := logger.Close(); err != nil {
+		t.Fatalf("second Close failed: %v", err)
 	}
 }

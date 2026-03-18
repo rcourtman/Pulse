@@ -29,7 +29,7 @@ func TestTenantMiddlewareAllowsOrgIDsToken(t *testing.T) {
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newMultiTenantRouter(t, cfg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-b")

@@ -1,0 +1,609 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rs/zerolog/log"
+)
+
+const featureAgentProfilesKey = "agent_profiles"
+
+func (r *Router) registerPublicAndAuthRoutes() {
+	r.registerAuthSecurityInstallRoutes()
+}
+
+func (r *Router) registerMonitoringRoutes(
+	guestMetadataHandler *GuestMetadataHandler,
+	dockerMetadataHandler *DockerMetadataHandler,
+	hostMetadataHandler *HostMetadataHandler,
+	infraUpdateHandlers *UpdateDetectionHandlers,
+) {
+	r.registerMonitoringResourceRoutes(
+		guestMetadataHandler,
+		dockerMetadataHandler,
+		hostMetadataHandler,
+		infraUpdateHandlers,
+	)
+}
+
+func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
+	wrapLegacyHostAlias := func(aliasPath string, next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, req *http.Request) {
+			noteLegacyHostAliasUsage(aliasPath)
+			next(w, req)
+		}
+	}
+
+	// Log management routes
+	r.mux.HandleFunc("/api/logs/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleStreamLogs)))
+	r.mux.HandleFunc("/api/logs/download", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleDownloadBundle)))
+	r.mux.HandleFunc("/api/logs/level", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleGetLevel))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.logHandlers.HandleSetLevel))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/agent/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/host/report", wrapLegacyHostAlias("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport))))
+	r.mux.HandleFunc("/api/agents/agent/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup)))
+	r.mux.HandleFunc("/api/agents/host/lookup", wrapLegacyHostAlias("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup))))
+	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall)))
+	r.mux.HandleFunc("/api/agents/host/uninstall", wrapLegacyHostAlias("/api/agents/host/uninstall", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))))
+	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
+	r.mux.HandleFunc("/api/agents/agent/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink)))
+	r.mux.HandleFunc("/api/agents/host/unlink", wrapLegacyHostAlias("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink))))
+	r.mux.HandleFunc("/api/agents/agent/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink)))
+	r.mux.HandleFunc("/api/agents/host/link", wrapLegacyHostAlias("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink))))
+	// Unified Agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
+	unifiedAgentManagementCore := func(w http.ResponseWriter, req *http.Request) {
+		// Route /api/agents/agent/{id}/config to HandleConfig
+		if strings.HasSuffix(req.URL.Path, "/config") {
+			// GET is for agents to fetch config (agent config scope)
+			// PATCH is for UI to update config (agent_manage scope, admin only)
+			if req.Method == http.MethodPatch {
+				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+					if !ensureScope(w, req, config.ScopeAgentManage) {
+						return
+					}
+					r.unifiedAgentHandlers.HandleConfig(w, req)
+				})(w, req)
+				return
+			}
+			r.unifiedAgentHandlers.HandleConfig(w, req)
+			return
+		}
+		// Route POST /api/agents/agent/{id}/allow-reenroll to HandleAllowReenroll
+		if strings.HasSuffix(req.URL.Path, "/allow-reenroll") {
+			if req.Method == http.MethodPost {
+				RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+					if !ensureScope(w, req, config.ScopeSettingsWrite) {
+						return
+					}
+					r.unifiedAgentHandlers.HandleAllowReenroll(w, req)
+				})(w, req)
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		// Route DELETE /api/agents/agent/{id} to HandleDeleteHost
+		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
+		if req.Method == http.MethodDelete {
+			RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+				if !ensureScope(w, req, config.ScopeSettingsWrite) {
+					return
+				}
+				r.unifiedAgentHandlers.HandleDeleteHost(w, req)
+			})(w, req)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+	r.mux.HandleFunc("/api/agents/agent/", RequireAuth(r.config, unifiedAgentManagementCore))
+	r.mux.HandleFunc("/api/agents/host/", wrapLegacyHostAlias("/api/agents/host/", RequireAuth(r.config, unifiedAgentManagementCore)))
+	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
+	r.mux.HandleFunc("/api/agents/docker/runtimes/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
+	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))
+	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
+	r.mux.HandleFunc("/api/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleDiagnostics)))
+	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
+	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
+	// Update routes
+	r.mux.HandleFunc("/api/updates/check", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleCheckUpdates)))
+	r.mux.HandleFunc("/api/updates/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleApplyUpdate)))
+	r.mux.HandleFunc("/api/updates/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStatus)))
+	r.mux.HandleFunc("/api/updates/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStream)))
+	r.mux.HandleFunc("/api/updates/plan", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdatePlan)))
+	r.mux.HandleFunc("/api/updates/history", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleListUpdateHistory)))
+	r.mux.HandleFunc("/api/updates/history/entry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdateHistoryEntry)))
+	// Config management routes
+	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetNodes))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAddNode))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	// Test node configuration endpoint (for new nodes)
+	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNodeConfig))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Test connection endpoint
+	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodPut:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateNode))(w, req)
+		case http.MethodDelete:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
+		case http.MethodPost:
+			// Handle test endpoint and refresh-cluster endpoint
+			if strings.HasSuffix(req.URL.Path, "/test") {
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
+			} else if strings.HasSuffix(req.URL.Path, "/refresh-cluster") {
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleRefreshClusterNodes))(w, req)
+			} else {
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// TrueNAS connection management
+	r.mux.HandleFunc("/api/truenas/connections", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.trueNASHandlers.HandleList))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleAdd))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/truenas/connections/test", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/truenas/connections/", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodDelete {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleDelete))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
+	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles
+	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it
+	r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, featureAgentProfilesKey, func(w http.ResponseWriter, req *http.Request) {
+		http.StripPrefix("/api/admin/profiles", r.configProfileHandler).ServeHTTP(w, req)
+	}))))
+
+	// System settings routes
+	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			handler := r.configHandlers.HandleGetSystemSettings
+			if r.systemSettingsHandler != nil {
+				handler = r.systemSettingsHandler.HandleGetSystemSettings
+			}
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, handler))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Mock mode toggle routes
+	r.mux.HandleFunc("/api/system/mock-mode", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetMockMode))(w, req)
+		case http.MethodPost, http.MethodPut:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateMockMode))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	// Config export/import routes (requires authentication)
+	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Check proxy auth first
+			hasValidProxyAuth := false
+			proxyAuthIsAdmin := false
+			if r.config.ProxyAuthSecret != "" {
+				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
+					hasValidProxyAuth = true
+					proxyAuthIsAdmin = isAdmin
+				}
+			}
+
+			// Check authentication - accept proxy auth, session auth or API token
+			hasValidSession := false
+			sessionUsername := ""
+			sessionIsAdmin := false
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
+				hasValidSession = ValidateSession(cookie.Value)
+				if hasValidSession {
+					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
+					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
+					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+				}
+			}
+
+			validateAPIToken := func(token string) bool {
+				if token == "" || !r.config.HasAPITokens() {
+					return false
+				}
+				_, ok := r.config.ValidateAPIToken(token)
+				return ok
+			}
+
+			token := req.Header.Get("X-API-Token")
+			if token == "" {
+				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+					token = strings.TrimPrefix(authHeader, "Bearer ")
+				}
+			}
+			hasValidAPIToken := validateAPIToken(token)
+
+			// Check if any valid auth method is present
+			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
+
+			// Determine if auth is required
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
+				r.config.HasAPITokens() ||
+				r.config.ProxyAuthSecret != ""
+
+			// Check admin privileges for proxy auth users
+			if hasValidProxyAuth && !proxyAuthIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Msg("Non-admin proxy auth user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
+			if authRequired && hasValidSession && !sessionIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Str("user", sessionUsername).
+					Msg("Non-admin session user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
+
+			if authRequired && !hasValidAuth {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Bool("proxyAuth", hasValidProxyAuth).
+					Bool("session", sessionIsAdmin).
+					Bool("apiToken", hasValidAPIToken).
+					Msg("Unauthorized export attempt")
+				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+				return
+			} else if !authRequired {
+				// No auth configured - check if this is a homelab/private network
+				clientIP := GetClientIP(req)
+
+				isPrivate := isPrivateIP(clientIP)
+				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
+
+				if !isPrivate && !allowUnprotected {
+					// Public network access without auth - definitely block
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Bool("private_network", isPrivate).
+						Msg("Export blocked - public network requires authentication")
+					http.Error(w, "Export requires authentication on public networks", http.StatusForbidden)
+					return
+				} else if isPrivate && !allowUnprotected {
+					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
+					log.Info().
+						Str("ip", req.RemoteAddr).
+						Msg("Export allowed - private network with no auth")
+					// Continue - allow export on private networks for homelab users
+				}
+			}
+
+			// SECURITY: Check settings:read scope for API token auth
+			if hasValidAPIToken && token != "" {
+				record, _ := r.config.ValidateAPIToken(token)
+				if record != nil && !record.HasScope(config.ScopeSettingsRead) {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Str("token_id", record.ID).
+						Msg("API token missing settings:read scope for export")
+					http.Error(w, "API token missing required scope: settings:read", http.StatusForbidden)
+					return
+				}
+			}
+
+			// Log successful export attempt
+			log.Info().
+				Str("ip", req.RemoteAddr).
+				Bool("proxy_auth", hasValidProxyAuth).
+				Bool("session_auth", sessionIsAdmin).
+				Bool("api_token_auth", hasValidAPIToken).
+				Msg("Configuration export initiated")
+
+			r.configHandlers.HandleExportConfig(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Check proxy auth first
+			hasValidProxyAuth := false
+			proxyAuthIsAdmin := false
+			if r.config.ProxyAuthSecret != "" {
+				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
+					hasValidProxyAuth = true
+					proxyAuthIsAdmin = isAdmin
+				}
+			}
+
+			// Check authentication - accept proxy auth, session auth or API token
+			hasValidSession := false
+			sessionUsername := ""
+			sessionIsAdmin := false
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
+				hasValidSession = ValidateSession(cookie.Value)
+				if hasValidSession {
+					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
+					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
+					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+				}
+			}
+
+			validateAPIToken := func(token string) bool {
+				if token == "" || !r.config.HasAPITokens() {
+					return false
+				}
+				_, ok := r.config.ValidateAPIToken(token)
+				return ok
+			}
+
+			token := req.Header.Get("X-API-Token")
+			if token == "" {
+				if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+					token = strings.TrimPrefix(authHeader, "Bearer ")
+				}
+			}
+			hasValidAPIToken := validateAPIToken(token)
+
+			// Check if any valid auth method is present
+			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
+
+			// Determine if auth is required
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
+				r.config.HasAPITokens() ||
+				r.config.ProxyAuthSecret != ""
+
+			// Check admin privileges for proxy auth users
+			if hasValidProxyAuth && !proxyAuthIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Msg("Non-admin proxy auth user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
+			if authRequired && hasValidSession && !sessionIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Str("user", sessionUsername).
+					Msg("Non-admin session user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
+
+			if authRequired && !hasValidAuth {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Bool("proxyAuth", hasValidProxyAuth).
+					Bool("session", sessionIsAdmin).
+					Bool("apiToken", hasValidAPIToken).
+					Msg("Unauthorized import attempt")
+				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+				return
+			} else if !authRequired {
+				// No auth configured - check if this is a homelab/private network
+				clientIP := GetClientIP(req)
+
+				isPrivate := isPrivateIP(clientIP)
+				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
+
+				if !isPrivate && !allowUnprotected {
+					// Public network access without auth - definitely block
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Bool("private_network", isPrivate).
+						Msg("Import blocked - public network requires authentication")
+					http.Error(w, "Import requires authentication on public networks", http.StatusForbidden)
+					return
+				} else if isPrivate && !allowUnprotected {
+					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
+					log.Info().
+						Str("ip", req.RemoteAddr).
+						Msg("Import allowed - private network with no auth")
+					// Continue - allow import on private networks for homelab users
+				}
+			}
+
+			// SECURITY: Check settings:write scope for API token auth
+			if hasValidAPIToken && token != "" {
+				record, _ := r.config.ValidateAPIToken(token)
+				if record != nil && !record.HasScope(config.ScopeSettingsWrite) {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Str("token_id", record.ID).
+						Msg("API token missing settings:write scope for import")
+					http.Error(w, "API token missing required scope: settings:write", http.StatusForbidden)
+					return
+				}
+			}
+
+			// Log successful import attempt
+			log.Info().
+				Str("ip", req.RemoteAddr).
+				Bool("session_auth", sessionIsAdmin).
+				Bool("api_token_auth", hasValidAPIToken).
+				Msg("Configuration import initiated")
+
+			r.configHandlers.HandleImportConfig(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Discovery route
+
+	// Setup script route
+	r.mux.HandleFunc("/api/setup-script", r.configHandlers.HandleSetupScript)
+
+	// Generate setup script URL with temporary token (for authenticated users)
+	r.mux.HandleFunc("/api/setup-script-url", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleSetupScriptURL)))
+
+	// Generate agent install command with API token (for authenticated users)
+	r.mux.HandleFunc("/api/agent-install-command", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAgentInstallCommand)))
+
+	// Auto-register route for setup scripts
+	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
+	// Discovery endpoint
+	// Test endpoint for WebSocket notifications
+	// SECURITY: Require settings:write scope for test notifications to prevent unauthenticated broadcasting
+	r.mux.HandleFunc("/api/test-notification", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Send a test auto-registration notification
+		r.wsHub.BroadcastMessage(websocket.Message{
+			Type: "node_auto_registered",
+			Data: map[string]interface{}{
+				"type":     "pve",
+				"host":     "test-node.example.com",
+				"name":     "Test Node",
+				"tokenId":  "test-token",
+				"hasToken": true,
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
+	})))
+	r.mux.HandleFunc("/api/system/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.systemSettingsHandler.HandleGetSystemSettings)))
+	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
+	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
+	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
+
+	// Cluster agent deployment routes
+	if r.deployHandlers != nil {
+		r.mux.HandleFunc("/api/clusters/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/agent-deploy/candidates"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleCandidates))(w, req)
+			case strings.HasSuffix(path, "/agent-deploy/preflights"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCreatePreflight))(w, req)
+			case strings.HasSuffix(path, "/agent-deploy/jobs"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCreateJob))(w, req)
+			default:
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		})
+		r.mux.HandleFunc("/api/agents/agent/enroll",
+			RequireAuth(r.config, RequireScope(config.ScopeAgentEnroll, r.deployHandlers.HandleEnroll)))
+		r.mux.HandleFunc("/api/agents/host/enroll",
+			wrapLegacyHostAlias("/api/agents/host/enroll", RequireAuth(r.config, RequireScope(config.ScopeAgentEnroll, r.deployHandlers.HandleEnroll))))
+
+		r.mux.HandleFunc("/api/agent-deploy/preflights/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/events"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
+			default:
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
+			}
+		})
+
+		r.mux.HandleFunc("/api/agent-deploy/jobs/", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/events"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleJobEvents))(w, req)
+			case strings.HasSuffix(path, "/cancel"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCancelJob))(w, req)
+			case strings.HasSuffix(path, "/retry"):
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleRetryJob))(w, req)
+			default:
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetJob))(w, req)
+			}
+		})
+	}
+}
+
+func (r *Router) registerAIRelayRoutes() {
+	r.registerAIRelayRoutesGroup()
+}
+
+func (r *Router) registerOrgLicenseRoutes(orgHandlers *OrgHandlers, rbacHandlers *RBACHandlers, auditHandlers *AuditHandlers) {
+	r.registerOrgLicenseRoutesGroup(orgHandlers, rbacHandlers, auditHandlers)
+}

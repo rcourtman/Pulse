@@ -8,32 +8,22 @@ describe('aiChatUtils', () => {
   describe('getProviderFromModelId', () => {
     it('uses explicit provider prefix when present', () => {
       expect(utils.getProviderFromModelId('openai:gpt-4o')).toBe('openai');
+      expect(utils.getProviderFromModelId('openrouter:openai/gpt-4o-mini')).toBe('openrouter');
       expect(utils.getProviderFromModelId('anthropic:claude-3-5-sonnet')).toBe('anthropic');
     });
 
     it('detects provider from known model naming', () => {
       expect(utils.getProviderFromModelId('claude-3-5-sonnet')).toBe('anthropic');
       expect(utils.getProviderFromModelId('o3-mini')).toBe('openai');
+      expect(utils.getProviderFromModelId('anthropic/claude-sonnet-4.5')).toBe('openrouter');
       expect(utils.getProviderFromModelId('deepseek-r1')).toBe('deepseek');
       expect(utils.getProviderFromModelId('llama3.1')).toBe('ollama');
     });
 
-    it('routes vendor-prefixed OpenRouter model names to openai', () => {
-      expect(utils.getProviderFromModelId('google/gemini-2.5-flash-lite-preview-09-2025')).toBe('openai');
-      expect(utils.getProviderFromModelId('meta-llama/llama-3-70b-instruct')).toBe('openai');
-      expect(utils.getProviderFromModelId('anthropic/claude-3-opus')).toBe('openai');
-      // OpenRouter free-tier suffix with colon
-      expect(utils.getProviderFromModelId('google/gemini-2.0-flash:free')).toBe('openai');
-    });
-
-    it('does not misinterpret colons in model names as provider prefix', () => {
-      // Ollama convention: "model:tag"
-      expect(utils.getProviderFromModelId('llama3.2:latest')).toBe('ollama');
-      expect(utils.getProviderFromModelId('deepseek:latest')).toBe('deepseek');
-    });
-
-    it('explicit provider prefix wins over slash detection', () => {
-      expect(utils.getProviderFromModelId('ollama:hf.co/some/model')).toBe('ollama');
+    it('handles odd strings without a provider prefix', () => {
+      // colon at index 0 should not be treated as a provider prefix
+      expect(utils.getProviderFromModelId(':gpt-4o')).toBe('openai');
+      expect(utils.getProviderFromModelId(':unknown-model')).toBe('ollama');
     });
   });
 
@@ -47,7 +37,12 @@ describe('aiChatUtils', () => {
       ];
 
       const grouped = utils.groupModelsByProvider(models);
-      expect(Array.from(grouped.keys()).sort()).toEqual(['anthropic', 'deepseek', 'ollama', 'openai']);
+      expect(Array.from(grouped.keys()).sort()).toEqual([
+        'anthropic',
+        'deepseek',
+        'ollama',
+        'openai',
+      ]);
       expect(grouped.get('openai')?.map((m) => m.id)).toEqual(['openai:gpt-4o']);
       expect(grouped.get('anthropic')?.map((m) => m.id)).toEqual(['claude-3-5-sonnet']);
     });
@@ -56,17 +51,17 @@ describe('aiChatUtils', () => {
   describe('sanitizeThinking', () => {
     it('replaces raw tcp timeout and connection errors', () => {
       const input = [
-        'write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout',
+        'write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout',
         'read tcp 10.0.0.1: i/o timeout',
         'dial tcp 127.0.0.1: connection refused',
-        'failed to send command: write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout',
+        'failed to send command: write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout',
       ].join('\n');
 
       const output = utils.sanitizeThinking(input);
       expect(output).toContain('connection timed out');
       expect(output).toContain('connection refused');
       expect(output).toContain('failed to send command: connection error');
-      expect(output).not.toContain('192.168.0.123');
+      expect(output).not.toContain('192.0.2.10');
       expect(output).not.toContain('10.0.0.1');
       expect(output).not.toContain('127.0.0.1');
     });
@@ -77,20 +72,18 @@ describe('aiChatUtils', () => {
       expect(utils.getGuestName(undefined)).toBeUndefined();
       expect(utils.getGuestName({})).toBeUndefined();
       expect(utils.getGuestName({ name: 'vm-101' })).toBe('vm-101');
-      expect(utils.getGuestName({ guestName: 'container-202', name: 'ignored' })).toBe('container-202');
+      expect(utils.getGuestName({ guestName: 'container-202', name: 'ignored' })).toBe(
+        'container-202',
+      );
     });
   });
 
   describe('renderMarkdown', () => {
     it('sanitizes HTML and forces safe link attributes', () => {
       const output = utils.renderMarkdown(
-        [
-          'Hello',
-          '',
-          '[link](https://example.com)',
-          '',
-          '<script>alert("xss")</script>',
-        ].join('\n')
+        ['Hello', '', '[link](https://example.com)', '', '<script>alert("xss")</script>'].join(
+          '\n',
+        ),
       );
 
       expect(output).toContain('Hello');
@@ -111,6 +104,33 @@ describe('aiChatUtils', () => {
       expect(output).toBe('a&amp;b &lt;c&gt; &quot;d&quot; &#39;e&#39;');
 
       spy.mockRestore();
+    });
+  });
+
+  describe('Mention ID format contracts', () => {
+    it('VM mention IDs follow vm:node:vmid format', () => {
+      const id = 'vm:pve1:100';
+      expect(id).toMatch(/^vm:[^:]+:\d+$/);
+    });
+
+    it('container mention IDs follow lxc:node:vmid format', () => {
+      const id = 'lxc:pve1:200';
+      expect(id).toMatch(/^lxc:[^:]+:\d+$/);
+    });
+
+    it('docker mention IDs follow docker:agentId:containerId format', () => {
+      const id = 'docker:agent-1:abc123';
+      expect(id).toMatch(/^docker:[^:]+:[^:]+$/);
+    });
+
+    it('node mention IDs follow node:instance:name format', () => {
+      const id = 'node:pve1/pve:pve1';
+      expect(id).toMatch(/^node:[^:]+:[^:]+$/);
+    });
+
+    it('agent mention IDs follow agent:id format', () => {
+      const id = 'agent:agent-123';
+      expect(id).toMatch(/^agent:[^:]+$/);
     });
   });
 });

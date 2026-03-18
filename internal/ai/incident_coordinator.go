@@ -94,7 +94,7 @@ func (c *IncidentCoordinator) Start() {
 		return
 	}
 	c.running = true
-	log.Info().Msg("Incident coordinator started")
+	log.Info().Msg("incident coordinator started")
 }
 
 // Stop stops the incident coordinator
@@ -114,7 +114,7 @@ func (c *IncidentCoordinator) Stop() {
 	}
 	c.activeIncidents = make(map[string]activeIncident)
 
-	log.Info().Msg("Incident coordinator stopped")
+	log.Info().Msg("incident coordinator stopped")
 }
 
 // OnAlertFired is called when an alert fires - starts incident recording
@@ -133,7 +133,7 @@ func (c *IncidentCoordinator) OnAlertFired(alert *alerts.Alert) {
 	// Check if we already have an active incident for this alert
 	if _, exists := c.activeIncidents[alert.ID]; exists {
 		log.Debug().
-			Str("alert_id", alert.ID).
+			Str("alert_identifier", alert.ID).
 			Msg("Incident already being recorded for this alert")
 		return
 	}
@@ -141,7 +141,7 @@ func (c *IncidentCoordinator) OnAlertFired(alert *alerts.Alert) {
 	// Check concurrent limit
 	if len(c.activeIncidents) >= c.config.MaxConcurrent {
 		log.Warn().
-			Str("alert_id", alert.ID).
+			Str("alert_identifier", alert.ID).
 			Int("active_count", len(c.activeIncidents)).
 			Msg("Incident coordinator at capacity, skipping new incident")
 		return
@@ -174,7 +174,7 @@ func (c *IncidentCoordinator) OnAlertFired(alert *alerts.Alert) {
 	c.activeIncidents[alert.ID] = inc
 
 	log.Info().
-		Str("alert_id", alert.ID).
+		Str("alert_identifier", alert.ID).
 		Str("resource_id", alert.ResourceID).
 		Str("window_id", windowID).
 		Msg("Incident coordinator: Started incident recording")
@@ -217,7 +217,7 @@ func (c *IncidentCoordinator) OnAlertCleared(alert *alerts.Alert) {
 	c.mu.Unlock()
 
 	log.Info().
-		Str("alert_id", alert.ID).
+		Str("alert_identifier", alert.ID).
 		Str("window_id", inc.windowID).
 		Dur("post_duration", c.config.PostDuration).
 		Msg("Incident coordinator: Alert cleared, scheduled recording stop")
@@ -245,7 +245,7 @@ func (c *IncidentCoordinator) stopIncidentRecording(alertID string) {
 	delete(c.activeIncidents, alertID)
 
 	log.Info().
-		Str("alert_id", alertID).
+		Str("alert_identifier", alertID).
 		Str("window_id", inc.windowID).
 		Msg("Incident coordinator: Stopped incident recording")
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestService_GetToolInputDisplay(t *testing.T) {
@@ -63,11 +64,11 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 			tc: providers.ToolCall{
 				Name: "set_resource_url",
 				Input: map[string]interface{}{
-					"resource_type": "guest",
+					"resource_type": "vm",
 					"url":           "http://1.2.3.4",
 				},
 			},
-			expected: "Set guest URL: http://1.2.3.4",
+			expected: "Set vm URL: http://1.2.3.4",
 		},
 		{
 			name: "unknown tool",
@@ -113,13 +114,6 @@ func TestService_GetTools(t *testing.T) {
 	}
 }
 
-func TestService_LogRemediation_Nil(t *testing.T) {
-	svc := NewService(nil, nil)
-	// Should not panic even if remediation log is nil
-	req := ExecuteRequest{Prompt: "Fix it"}
-	svc.logRemediation(req, "ls", "output", true)
-}
-
 func TestService_AcquireExecutionSlot_Blocked(t *testing.T) {
 	svc := NewService(nil, nil)
 
@@ -158,17 +152,17 @@ func TestService_SetResourceURL(t *testing.T) {
 	mockMP := &mockMetadataProvider{}
 	svc.SetMetadataProvider(mockMP)
 
-	// Valid guest URL
-	err := svc.SetResourceURL("guest", "delly-150", "http://192.168.1.10")
+	// Valid VM URL
+	err := svc.SetResourceURL("vm", "pve-node-150", "http://192.168.1.10")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
-	if mockMP.lastGuestID != "delly-150" || mockMP.lastGuestURL != "http://192.168.1.10" {
+	if mockMP.lastGuestID != "pve-node-150" || mockMP.lastGuestURL != "http://192.168.1.10" {
 		t.Error("Mock did not receive correct guest data")
 	}
 
 	// URL without scheme (should auto-add http://)
-	err = svc.SetResourceURL("docker", "host:ct:123", "192.168.1.20:8080")
+	err = svc.SetResourceURL("app-container", "host:ct:123", "192.168.1.20:8080")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -177,7 +171,7 @@ func TestService_SetResourceURL(t *testing.T) {
 	}
 
 	// Invalid URL
-	err = svc.SetResourceURL("host", "host-1", "not a url")
+	err = svc.SetResourceURL("agent", "host-1", "not a url")
 	if err == nil {
 		t.Error("Expected error for invalid URL")
 	}
@@ -225,13 +219,13 @@ func TestService_HasAgentForTarget(t *testing.T) {
 	svc := NewService(nil, mockServer)
 
 	// Host target with no context (should match any agent)
-	if !svc.hasAgentForTarget(ExecuteRequest{TargetType: "host"}) {
+	if !svc.hasAgentForTarget(ExecuteRequest{TargetType: "agent"}) {
 		t.Error("Should have agent for host with no context")
 	}
 
 	// Target matching agent hostname
 	if !svc.hasAgentForTarget(ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}) {
 		t.Error("Should have agent for matching hostname")
@@ -239,7 +233,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 
 	// Target not matching
 	if svc.hasAgentForTarget(ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "other-node"},
 	}) {
 		t.Error("Should not have agent for non-matching node")
@@ -247,7 +241,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 
 	// Empty agents
 	svc.agentServer = &mockAgentServer{agents: []agentexec.ConnectedAgent{}}
-	if svc.hasAgentForTarget(ExecuteRequest{TargetType: "host"}) {
+	if svc.hasAgentForTarget(ExecuteRequest{TargetType: "agent"}) {
 		t.Error("Should not have agent when none connected")
 	}
 }
@@ -273,7 +267,7 @@ func TestService_ExecuteOnAgent(t *testing.T) {
 
 	// Basic execution
 	output, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}, "uptime")
 	if err != nil {
@@ -285,7 +279,7 @@ func TestService_ExecuteOnAgent(t *testing.T) {
 
 	// Routing failure
 	_, err = svc.executeOnAgent(context.Background(), ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "unknown"},
 	}, "uptime")
 	if err == nil {
@@ -306,7 +300,7 @@ func TestService_RunCommandExtended(t *testing.T) {
 	// Successful run
 	resp, err := svc.RunCommand(context.Background(), RunCommandRequest{
 		Command:    "uptime",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetHost: "node-1",
 	})
 	if err != nil {
@@ -322,7 +316,7 @@ func TestService_RunCommandExtended(t *testing.T) {
 	// Failure (routing)
 	resp, err = svc.RunCommand(context.Background(), RunCommandRequest{
 		Command:    "uptime",
-		TargetType: "host",
+		TargetType: "agent",
 		TargetHost: "unknown",
 	})
 	if err != nil {
@@ -390,7 +384,7 @@ func TestService_ExecuteStreamExtended(t *testing.T) {
 	req := ExecuteRequest{
 		Prompt:     "Check status",
 		Model:      "anthropic:test-model",
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -496,7 +490,7 @@ func TestFormatContextKey(t *testing.T) {
 	}{
 		{"guestName", "Guest Name"},
 		{"vmid", "VMID"},
-		{"node", "PVE Node (host)"},
+		{"node", "Host Node"},
 		{"unknown_key", "unknown_key"},
 	}
 
@@ -514,6 +508,7 @@ func TestProviderDisplayName(t *testing.T) {
 	}{
 		{config.AIProviderAnthropic, "Anthropic"},
 		{config.AIProviderOpenAI, "OpenAI"},
+		{config.AIProviderOpenRouter, "OpenRouter"},
 		{"unknown", "unknown"},
 	}
 
@@ -536,12 +531,15 @@ func TestService_GetDebugContext(t *testing.T) {
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true, CustomContext: "Test context"}
 
-	stateProvider := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{{Name: "vm-1", VMID: 100, Node: "node-1"}},
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node-1", Name: "node-1", Instance: "node-1", Status: "online"},
 		},
+		VMs: []models.VM{{Name: "vm-1", VMID: 100, Node: "node-1", Instance: "node-1"}},
 	}
-	svc.SetStateProvider(stateProvider)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	req := ExecuteRequest{Prompt: "test"}
 	debug := svc.GetDebugContext(req)
@@ -573,7 +571,7 @@ func TestService_LoadConfig(t *testing.T) {
 
 	// 2. Disabled config
 	cfgV := config.AIConfig{Enabled: false}
-	persistence.SaveAIConfig(cfgV)
+	_ = persistence.SaveAIConfig(cfgV)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
@@ -588,7 +586,7 @@ func TestService_LoadConfig(t *testing.T) {
 		Model:        "anthropic:claude-3-opus-20240229",
 		OpenAIAPIKey: "sk-test",
 	}
-	persistence.SaveAIConfig(cfgV)
+	_ = persistence.SaveAIConfig(cfgV)
 	err = svc.LoadConfig()
 	if svc.provider == nil {
 		t.Fatal("Expected non-nil provider after smart fallback")
@@ -705,7 +703,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 
 	// 3. Approval required (non-autonomous)
 	mockPolicy.decision = agentexec.PolicyRequireApproval
-	svc.cfg = &config.AIConfig{AutonomousMode: false}
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelReadOnly}
 	result, exec = svc.executeTool(ctx, req, tc)
 	if !exec.Success {
 		t.Errorf("Expected success (not an error to need approval), got: %s", result)
@@ -725,7 +723,7 @@ func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
 	tc := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"resource_id":   "instance-101",
 			"url":           "http://example.com:8080",
 		},
@@ -750,7 +748,7 @@ func TestService_PatrolManagement(t *testing.T) {
 	patrol := NewPatrolService(svc, nil)
 	svc.patrolService = patrol
 
-	alertAnalyzer := NewAlertTriggeredAnalyzer(patrol, nil)
+	alertAnalyzer := &mockAlertAnalyzer{}
 	svc.alertTriggeredAnalyzer = alertAnalyzer
 
 	mockLicense := &mockLicenseStore{
@@ -773,7 +771,12 @@ func TestService_PatrolManagement(t *testing.T) {
 	// 1. Start Patrol
 	svc.StartPatrol(ctx)
 
-	if patrol.GetConfig().Interval != 30*time.Minute {
+	// Community installs enforce a minimum patrol interval unless licensed for auto-fix.
+	expectedInterval := 30 * time.Minute
+	if !mockLicense.features[FeatureAIAutoFix] && expectedInterval < minCommunityPatrolInterval {
+		expectedInterval = minCommunityPatrolInterval
+	}
+	if patrol.GetConfig().Interval != expectedInterval {
 		t.Errorf("Patrol interval not set correctly: %v", patrol.GetConfig().Interval)
 	}
 	if !alertAnalyzer.IsEnabled() {
@@ -803,27 +806,32 @@ func TestService_PatrolManagement(t *testing.T) {
 
 func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 	svc := NewService(nil, nil)
-	mockState := &mockStateProvider{
-		state: models.StateSnapshot{
-			VMs: []models.VM{
-				{VMID: 101, Node: "node-1", Name: "vm-101", Instance: "pve-1"},
-			},
-			Containers: []models.Container{
-				{VMID: 201, Node: "node-2", Name: "ct-201", Instance: "pve-1"},
-			},
+
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node-1", Name: "node-1", Instance: "pve-1", Status: "online"},
+			{ID: "node/node-2", Name: "node-2", Instance: "pve-1", Status: "online"},
+		},
+		VMs: []models.VM{
+			{ID: "qemu/101", VMID: 101, Node: "node-1", Name: "vm-101", Instance: "pve-1"},
+		},
+		Containers: []models.Container{
+			{ID: "lxc/201", VMID: 201, Node: "node-2", Name: "ct-201", Instance: "pve-1"},
 		},
 	}
-	svc.stateProvider = mockState
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	// 1. Find VM
 	node, name, gType := svc.lookupNodeForVMID(101)
-	if node != "node-1" || name != "vm-101" || gType != "qemu" {
+	if node != "node-1" || name != "vm-101" || gType != "vm" {
 		t.Errorf("VM lookup failed: %s, %s, %s", node, name, gType)
 	}
 
 	// 2. Find Container
 	node, name, gType = svc.lookupNodeForVMID(201)
-	if node != "node-2" || name != "ct-201" || gType != "lxc" {
+	if node != "node-2" || name != "ct-201" || gType != "system-container" {
 		t.Errorf("Container lookup failed: %s, %s, %s", node, name, gType)
 	}
 
@@ -833,10 +841,17 @@ func TestService_LookupNodeForVMID_Extended(t *testing.T) {
 		t.Error("Should not have found non-existent VMID")
 	}
 
-	// 4. Collision
-	mockState.state.VMs = append(mockState.state.VMs, models.VM{
-		VMID: 101, Node: "node-3", Name: "vm-101-dup", Instance: "pve-2",
+	// 4. Collision — re-ingest with duplicate VMID across instances
+	snapshot.Nodes = append(snapshot.Nodes, models.Node{
+		ID: "node/node-3", Name: "node-3", Instance: "pve-2", Status: "online",
 	})
+	snapshot.VMs = append(snapshot.VMs, models.VM{
+		ID: "qemu/101-dup", VMID: 101, Node: "node-3", Name: "vm-101-dup", Instance: "pve-2",
+	})
+	registry2 := unifiedresources.NewRegistry(nil)
+	registry2.IngestSnapshot(snapshot)
+	svc.SetReadState(registry2)
+
 	node, _, _ = svc.lookupNodeForVMID(101)
 	if node == "" {
 		t.Error("Should return first match on collision")
@@ -862,7 +877,7 @@ func TestService_BuildUserAnnotationsContext(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(guestMeta)
-	os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
 
 	// 3. Docker metadata
 	dockerMeta := map[string]*config.DockerMetadata{
@@ -872,7 +887,7 @@ func TestService_BuildUserAnnotationsContext(t *testing.T) {
 		},
 	}
 	data, _ = json.Marshal(dockerMeta)
-	os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
 
 	ctx := svc.buildUserAnnotationsContext()
 	if !strings.Contains(ctx, "ServerA") || !strings.Contains(ctx, "Primary database") {
@@ -1036,7 +1051,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	tc2 := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"url":           "http://example.com:8080",
 		},
 	}
@@ -1053,7 +1068,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	tc3 := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"url":           "http://example.com",
 		},
 	}
@@ -1141,7 +1156,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 }
 
-func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
+func TestService_HasAgentForTarget_WithUnifiedResourceProvider(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",
 		Hostname: "host-from-provider",
@@ -1151,10 +1166,9 @@ func TestService_HasAgentForTarget_WithResourceProvider(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 
-	// Mock resource provider that returns host for container
-	mockRP := &mockResourceProvider{}
-	mockRP.ResourceProvider = mockRP
-	svc.resourceProvider = mockRP
+	// Mock unified resource provider that returns host for container
+	mockURP := &mockUnifiedResourceProvider{}
+	svc.unifiedResourceProvider = mockURP
 
 	// Overwrite FindContainerHost behavior
 	// The mock by default returns empty string, so this should fail
@@ -1232,7 +1246,7 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	// Get the cache key that persistence would generate
 	loadedCfg, _ := persistence.LoadAIConfig()
@@ -1273,6 +1287,7 @@ func TestProviderDisplayName_AllProviders(t *testing.T) {
 	}{
 		{config.AIProviderAnthropic, "Anthropic"},
 		{config.AIProviderOpenAI, "OpenAI"},
+		{config.AIProviderOpenRouter, "OpenRouter"},
 		{config.AIProviderDeepSeek, "DeepSeek"},
 		{config.AIProviderGemini, "Google Gemini"},
 		{config.AIProviderOllama, "Ollama"},
@@ -1310,7 +1325,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 
 	// Test with VMID in context as float64 (common from JSON)
 	req := ExecuteRequest{
-		TargetType: "container",
+		TargetType: "system-container",
 		TargetID:   "instance-123",
 		Context: map[string]interface{}{
 			"node": "node-1",
@@ -1347,6 +1362,150 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteOnAgent_RejectsLegacyContainerTargetTypeAlias(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			return &agentexec.CommandResultPayload{
+				Success: true,
+				Stdout:  "ok",
+			}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	req := ExecuteRequest{
+		TargetType: "CONTAINER",
+		TargetID:   "pve-node:minipc:112",
+		Context: map[string]interface{}{
+			"node": "node-1",
+		},
+	}
+
+	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
+	if err == nil {
+		t.Fatal("expected error for legacy container target type alias")
+	}
+	if !strings.Contains(err.Error(), "unsupported target_type") {
+		t.Fatalf("expected unsupported target_type error, got %v", err)
+	}
+}
+
+func TestService_ExecuteOnAgent_AcceptsSystemContainerTargetType(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	var capturedCmd agentexec.ExecuteCommandPayload
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			capturedCmd = cmd
+			return &agentexec.CommandResultPayload{
+				Success: true,
+				Stdout:  "ok",
+			}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	req := ExecuteRequest{
+		TargetType: "system-container",
+		TargetID:   "pve-node:minipc:113",
+		Context: map[string]interface{}{
+			"node": "node-1",
+		},
+	}
+
+	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
+	if err != nil {
+		t.Fatalf("executeOnAgent failed: %v", err)
+	}
+
+	if capturedCmd.TargetType != "container" {
+		t.Fatalf("Expected normalized TargetType 'container', got '%s'", capturedCmd.TargetType)
+	}
+	if capturedCmd.TargetID != "113" {
+		t.Fatalf("Expected extracted TargetID '113', got '%s'", capturedCmd.TargetID)
+	}
+}
+
+func TestService_ExecuteOnAgent_RejectsLegacyGuestTargetType(t *testing.T) {
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "node-1"},
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+		TargetType: "guest",
+		TargetID:   "pve-node:minipc:101",
+		Context:    map[string]interface{}{"node": "node-1"},
+	}, "uptime")
+	if err == nil || !strings.Contains(err.Error(), "unsupported target_type") {
+		t.Fatalf("expected unsupported target_type error, got: %v", err)
+	}
+}
+
+func TestService_ExecuteOnAgent_RejectsLegacyTargetTypeAliases(t *testing.T) {
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "node-1"},
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	for _, legacyType := range []string{"lxc", "ct", "qemu", "container", "system_container", "guest", "node", "docker-host", "k8s"} {
+		_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+			TargetType: legacyType,
+			TargetID:   "101",
+			Context:    map[string]interface{}{"node": "node-1"},
+		}, "uptime")
+		if err == nil || !strings.Contains(err.Error(), "unsupported target_type") {
+			t.Fatalf("expected unsupported target_type error for %q, got %v", legacyType, err)
+		}
+	}
+}
+
+func TestService_ExecuteOnAgent_RejectsContainerWithoutNumericVMID(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	executeCalls := 0
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			executeCalls++
+			return &agentexec.CommandResultPayload{Success: true, Stdout: "ok"}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+		TargetType: "system-container",
+		TargetID:   "mycontainer",
+		Context:    map[string]interface{}{"node": "node-1"},
+	}, "uptime")
+	if err == nil {
+		t.Fatal("expected error for missing numeric VMID")
+	}
+	if !strings.Contains(err.Error(), "requires numeric VMID") {
+		t.Fatalf("expected numeric VMID error, got: %v", err)
+	}
+	if executeCalls != 0 {
+		t.Fatalf("expected command dispatch to be blocked, executeCalls=%d", executeCalls)
+	}
+}
+
 func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",
@@ -1364,7 +1523,7 @@ func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	svc := NewService(nil, mockServer)
 
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -1404,7 +1563,7 @@ func TestService_ExecuteOnAgent_ResultHandling(t *testing.T) {
 
 	svc := NewService(nil, nil)
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}
 
@@ -1472,7 +1631,7 @@ func TestService_ExecuteOnAgent_RoutingClarification(t *testing.T) {
 
 	// No target node in context, multiple agents available -> clarification needed
 	req := ExecuteRequest{
-		TargetType: "host",
+		TargetType: "agent",
 	}
 
 	output, err := svc.executeOnAgent(context.Background(), req, "hostname")
@@ -1499,8 +1658,8 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 
 	// No vmid in context, but TargetID has a number
 	req := ExecuteRequest{
-		TargetType: "container",
-		TargetID:   "delly-135",
+		TargetType: "system-container",
+		TargetID:   "pve-node-135",
 		Context: map[string]interface{}{
 			"node": "host-1", // Force routing
 		},
@@ -1511,7 +1670,7 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 		t.Fatalf("executeOnAgent failed: %v", err)
 	}
 
-	// Should have extracted 135 from delly-135
+	// Should have extracted 135 from pve-node-135
 	if capturedCmd.TargetID != "135" {
 		t.Errorf("Expected extracted TargetID '135', got '%s'", capturedCmd.TargetID)
 	}
@@ -1752,7 +1911,7 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 			}, nil
 		},
 	})
-	svc.cfg = &config.AIConfig{Enabled: true, AutonomousMode: true, Model: "anthropic:test"}
+	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelAutonomous, Model: "anthropic:test"}
 
 	iteration := 0
 	mock := &mockProvider{
@@ -1780,7 +1939,7 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 	}
 	svc.provider = mock
 
-	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "guest"}, func(StreamEvent) {})
+	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(StreamEvent) {})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
@@ -1814,26 +1973,6 @@ func TestService_PatrolManagement_NilPatrol(t *testing.T) {
 	svc.StopPatrol()
 	svc.SetMetricsHistoryProvider(nil)
 	svc.SetBaselineStore(nil)
-}
-
-func TestService_StartPatrol_EdgeCases(t *testing.T) {
-	// Case 1: Patrol service is nil
-	svc := &Service{}
-	svc.StartPatrol(context.Background()) // Should not panic
-
-	// Case 2: Config is nil
-	svc.patrolService = &PatrolService{}
-	svc.StartPatrol(context.Background())
-
-	// Case 3: Patrol disabled in config
-	svc.cfg = &config.AIConfig{Enabled: true, PatrolSchedulePreset: "disabled"}
-	svc.StartPatrol(context.Background())
-
-	// Case 4: License feature missing
-	svc.cfg = &config.AIConfig{Enabled: true, PatrolEnabled: true}
-	svc.licenseChecker = &mockLicenseStore{features: map[string]bool{FeatureAIPatrol: false}}
-	// This will still call Start but log info.
-	svc.patrolService = &PatrolService{}
 }
 
 func TestSanitizeError_Extended(t *testing.T) {
@@ -2021,7 +2160,7 @@ func TestService_LoadConfig_WithDisabledAI(t *testing.T) {
 	cfg := config.AIConfig{
 		Enabled: false,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2050,7 +2189,7 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 		Model:        "anthropic:claude-3-opus",
 		OpenAIAPIKey: "test-openai-key",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2066,8 +2205,8 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 	}
 }
 
-func TestService_LoadConfig_LegacyMigration(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-legacy-*")
+func TestService_LoadConfig_WithoutConfiguredProviderLeavesNil(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-unconfigured-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -2075,44 +2214,12 @@ func TestService_LoadConfig_LegacyMigration(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Config with legacy fields but no provider credentials in new format
+	// Config selects Anthropic model but has no provider credentials.
 	cfg := config.AIConfig{
-		Enabled:  true,
-		Provider: "openai",
-		APIKey:   "legacy-key",
-		Model:    "anthropic:claude-3-5-sonnet",
+		Enabled: true,
+		Model:   "anthropic:claude-3-5-sonnet",
 	}
-	persistence.SaveAIConfig(cfg)
-
-	svc := NewService(persistence, nil)
-	err = svc.LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig failed: %v", err)
-	}
-
-	// Should initialize via migration path
-	if svc.provider == nil {
-		t.Error("Expected provider to be initialized via legacy config")
-	}
-}
-
-func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-legacy-fail-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	persistence := config.NewConfigPersistence(tmpDir)
-
-	// Legacy config with unknown provider to force NewFromConfig to fail
-	cfg := config.AIConfig{
-		Enabled:  true,
-		Provider: "unknown-provider",
-		APIKey:   "key",
-		Model:    "anthropic:claude-opus",
-	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2121,7 +2228,38 @@ func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
 	}
 
 	if svc.provider != nil {
-		t.Error("Expected provider to be nil on migration failure")
+		t.Error("Expected provider to remain nil when no provider credentials are configured")
+	}
+}
+
+func TestService_LoadConfig_UnknownModelWithOllamaConfigured(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-unknown-model-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	persistence := config.NewConfigPersistence(tmpDir)
+
+	// Unknown model names should resolve to ollama when ollama is configured.
+	cfg := config.AIConfig{
+		Enabled:       true,
+		Model:         "totally-unknown-model",
+		OllamaBaseURL: "http://localhost:11434",
+	}
+	_ = persistence.SaveAIConfig(cfg)
+
+	svc := NewService(persistence, nil)
+	err = svc.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if svc.provider == nil {
+		t.Fatal("Expected provider to be initialized")
+	}
+	if svc.provider.Name() != "ollama" {
+		t.Errorf("Expected ollama provider for unknown model, got %s", svc.provider.Name())
 	}
 }
 
@@ -2140,6 +2278,7 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 		expect string
 	}{
 		{"anthropic", "AnthropicAPIKey", "anthropic"},
+		{"openrouter", "OpenRouterAPIKey", "openai"}, // OpenRouter uses OpenAI client
 		{"gemini", "GeminiAPIKey", "gemini"},
 		{"deepseek", "DeepSeekAPIKey", "openai"}, // DeepSeek uses OpenAI client
 		{"ollama", "OllamaBaseURL", "ollama"},
@@ -2156,6 +2295,8 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 			switch p.name {
 			case "anthropic":
 				cfg.AnthropicAPIKey = "key"
+			case "openrouter":
+				cfg.OpenRouterAPIKey = "key"
 			case "gemini":
 				cfg.GeminiAPIKey = "key"
 			case "deepseek":
@@ -2164,7 +2305,7 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 				cfg.OllamaBaseURL = "http://localhost:11434"
 			}
 
-			persistence.SaveAIConfig(cfg)
+			_ = persistence.SaveAIConfig(cfg)
 			svc := NewService(persistence, nil)
 			err = svc.LoadConfig()
 			if err != nil {
@@ -2191,7 +2332,7 @@ func TestService_LoadConfig_NoProviders(t *testing.T) {
 	cfg := config.AIConfig{
 		Enabled: true,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2211,7 +2352,7 @@ func TestService_LoadConfig_PersistenceError(t *testing.T) {
 	// Write invalid JSON to ai.enc (this is tricky because it's encrypted)
 	// Actually, we can just make the directory unreadable or use a non-directory for the path
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
-	os.MkdirAll(aiFilePath, 0755) // Create directory where file should be
+	_ = os.MkdirAll(aiFilePath, 0755) // Create directory where file should be
 
 	svc := NewService(persistence, nil)
 	err := svc.LoadConfig()
@@ -2235,7 +2376,7 @@ func TestService_LoadConfig_FallbackFailure(t *testing.T) {
 		Model:         "unknown:model",
 		OllamaBaseURL: "http://localhost:11434",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	// We need providers.NewForModel to fail for Ollama fallback model?
@@ -2273,13 +2414,13 @@ func TestService_GetConfig_ReturnsCopy(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	persistence := config.NewConfigPersistence(tmpDir)
-	persistence.SaveAIConfig(config.AIConfig{
+	_ = persistence.SaveAIConfig(config.AIConfig{
 		Enabled: true,
 		Model:   "test:model",
 	})
 
 	svc := NewService(persistence, nil)
-	svc.LoadConfig()
+	_ = svc.LoadConfig()
 
 	cfg := svc.GetConfig()
 	if cfg == nil {
@@ -2304,24 +2445,24 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Test with AutonomousMode = false
+	// Test with read_only control level
 	cfg := config.AIConfig{
-		Enabled:        true,
-		AutonomousMode: false,
+		Enabled:      true,
+		ControlLevel: config.ControlLevelReadOnly,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
-	svc.LoadConfig()
+	_ = svc.LoadConfig()
 
 	if svc.IsAutonomous() {
 		t.Error("Expected not autonomous when mode is false")
 	}
 
-	// Test with AutonomousMode = true
-	cfg.AutonomousMode = true
-	persistence.SaveAIConfig(cfg)
-	svc.LoadConfig()
+	// Test with autonomous control level
+	cfg.ControlLevel = config.ControlLevelAutonomous
+	_ = persistence.SaveAIConfig(cfg)
+	_ = svc.LoadConfig()
 
 	if !svc.IsAutonomous() {
 		t.Error("Expected autonomous when mode is true")
@@ -2367,7 +2508,7 @@ func TestService_ListModelsWithCache_ProviderErrors(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	persistence := config.NewConfigPersistence(tmpDir)
-	persistence.SaveAIConfig(config.AIConfig{
+	_ = persistence.SaveAIConfig(config.AIConfig{
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	})
@@ -2398,16 +2539,19 @@ func TestService_GetDebugContext_Truncation(t *testing.T) {
 		CustomContext: strings.Repeat("x", 300),
 	}
 
-	stateProvider := &mockStateProvider{}
-	svc.stateProvider = stateProvider
-
-	// Add many VMs to trigger truncation
-	state := models.StateSnapshot{}
-	for i := 0; i < 15; i++ {
-		state.VMs = append(state.VMs, models.VM{VMID: i, Name: fmt.Sprintf("vm-%d", i), Node: "node"})
-		state.Containers = append(state.Containers, models.Container{VMID: i + 100, Name: fmt.Sprintf("ct-%d", i), Node: "node"})
+	// Add many VMs to trigger truncation (unique IDs required for registry)
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node", Name: "node", Instance: "node", Status: "online"},
+		},
 	}
-	stateProvider.state = state
+	for i := 0; i < 15; i++ {
+		snapshot.VMs = append(snapshot.VMs, models.VM{ID: fmt.Sprintf("qemu/%d", i), VMID: i, Name: fmt.Sprintf("vm-%d", i), Node: "node", Instance: "node"})
+		snapshot.Containers = append(snapshot.Containers, models.Container{ID: fmt.Sprintf("lxc/%d", i+100), VMID: i + 100, Name: fmt.Sprintf("ct-%d", i), Node: "node", Instance: "node"})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	result := svc.GetDebugContext(ExecuteRequest{})
 
@@ -2447,7 +2591,7 @@ func TestService_ListModelsWithCache_ConfigErrors(t *testing.T) {
 
 	// Force LoadAIConfig failure
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
-	os.MkdirAll(aiFilePath, 0755)
+	_ = os.MkdirAll(aiFilePath, 0755)
 
 	svc := NewService(persistence, nil)
 	_, _, err := svc.ListModelsWithCache(context.Background())
@@ -2460,12 +2604,12 @@ func TestService_ListModelsWithCache_ConfigErrors(t *testing.T) {
 // SetResourceURL Tests - Extended
 // ============================================================================
 
-func TestService_SetResourceURL_DockerType(t *testing.T) {
+func TestService_SetResourceURL_AppContainerType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
 
-	err := svc.SetResourceURL("docker", "host:container:abc123", "http://example.com:8080")
+	err := svc.SetResourceURL("app-container", "host:container:abc123", "http://example.com:8080")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -2474,12 +2618,12 @@ func TestService_SetResourceURL_DockerType(t *testing.T) {
 	}
 }
 
-func TestService_SetResourceURL_HostType(t *testing.T) {
+func TestService_SetResourceURL_AgentType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
 
-	err := svc.SetResourceURL("host", "my-host", "http://host.local:9090")
+	err := svc.SetResourceURL("agent", "my-host", "http://host.local:9090")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -2503,7 +2647,7 @@ func TestService_SetResourceURL_NoMetadataProvider(t *testing.T) {
 	svc := NewService(nil, nil)
 	svc.metadataProvider = nil
 
-	err := svc.SetResourceURL("guest", "vm-100", "http://example.com")
+	err := svc.SetResourceURL("vm", "vm-100", "http://example.com")
 	if err == nil {
 		t.Error("Expected error when metadata provider not available")
 	}
@@ -2522,7 +2666,7 @@ func TestService_BuildUserAnnotationsContext_Variants(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(guestMeta)
-	os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
 
 	// Docker metadata with long ID and simple ID (no host part)
 	dockerMeta := map[string]*config.DockerMetadata{
@@ -2536,7 +2680,7 @@ func TestService_BuildUserAnnotationsContext_Variants(t *testing.T) {
 		},
 	}
 	data, _ = json.Marshal(dockerMeta)
-	os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
 
 	ctx := svc.buildUserAnnotationsContext()
 
@@ -2561,15 +2705,19 @@ func TestService_GetDebugContext_Extended(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 
-	// Mock state provider
-	stateProvider := &mockStateProvider{}
-	state := models.StateSnapshot{}
-	for i := 0; i < 15; i++ {
-		state.VMs = append(state.VMs, models.VM{Name: fmt.Sprintf("VM-%d", i), VMID: i, Node: "node"})
-		state.Containers = append(state.Containers, models.Container{Name: fmt.Sprintf("CT-%d", i), VMID: i + 100, Node: "node"})
+	// Build snapshot with many VMs/containers (unique IDs required for registry)
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node/node", Name: "node", Instance: "node", Status: "online"},
+		},
 	}
-	stateProvider.state = state
-	svc.SetStateProvider(stateProvider)
+	for i := 0; i < 15; i++ {
+		snapshot.VMs = append(snapshot.VMs, models.VM{ID: fmt.Sprintf("qemu/%d", i), Name: fmt.Sprintf("VM-%d", i), VMID: i, Node: "node", Instance: "node"})
+		snapshot.Containers = append(snapshot.Containers, models.Container{ID: fmt.Sprintf("lxc/%d", i+100), Name: fmt.Sprintf("CT-%d", i), VMID: i + 100, Node: "node", Instance: "node"})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	svc.SetReadState(registry)
 
 	svc.cfg = &config.AIConfig{
 		Enabled:       true,
@@ -2603,9 +2751,9 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 	finding := &Finding{
 		ID:           "test-finding-123",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 		Title:        "Test Finding",
 		Description:  "Test description",
 		Severity:     FindingSeverityWarning,
@@ -2626,11 +2774,11 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 	if req.Context["guestName"] != "debian-go" {
 		t.Errorf("Expected guestName 'debian-go', got %v", req.Context["guestName"])
 	}
-	if req.TargetID != "delly:minipc:112" {
-		t.Errorf("Expected TargetID 'delly:minipc:112', got %s", req.TargetID)
+	if req.TargetID != "pve-node:minipc:112" {
+		t.Errorf("Expected TargetID 'pve-node:minipc:112', got %s", req.TargetID)
 	}
-	if req.TargetType != "container" {
-		t.Errorf("Expected TargetType 'container', got %s", req.TargetType)
+	if req.TargetType != "system-container" {
+		t.Errorf("Expected TargetType 'system-container', got %s", req.TargetType)
 	}
 	if req.Context["finding_node"] != "minipc" {
 		t.Errorf("Expected finding_node 'minipc', got %v", req.Context["finding_node"])
@@ -2695,7 +2843,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	mockState := &mockStateProvider{
 		state: models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "pve-node"},
 			},
 		},
 	}
@@ -2706,9 +2854,9 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	finding := &Finding{
 		ID:           "disk-growth-finding",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 		Title:        "Container disk usage growing",
 		Description:  "Disk growing at 4% per day",
 		Severity:     FindingSeverityWarning,
@@ -2748,7 +2896,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 
 	mockAgentServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-delly", Hostname: "delly"},
+			{AgentID: "agent-pve-node", Hostname: "pve-node"},
 			{AgentID: "agent-minipc", Hostname: "minipc"},
 		},
 		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
@@ -2774,7 +2922,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	mockState := &mockStateProvider{
 		state: models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "pve-node"},
 			},
 		},
 	}
@@ -2785,9 +2933,9 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	finding := &Finding{
 		ID:           "test-routing-finding",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 	}
 	svc.patrolService.GetFindings().Add(finding)
 
@@ -2814,7 +2962,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 		t.Errorf("Command execution failed: %s", result)
 	}
 
-	// Verify it routed to the correct agent (minipc, not delly)
+	// Verify it routed to the correct agent (minipc, not pve-node)
 	if routedToAgent != "agent-minipc" {
 		t.Errorf("Expected command to route to agent-minipc, but went to: %s", routedToAgent)
 	}

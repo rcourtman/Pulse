@@ -1,4 +1,11 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  arrayOrEmpty,
+  finiteNumberOrUndefined,
+  strictBoolean,
+  strictString,
+  stringArray,
+} from './responseUtils';
 
 export interface EmailProvider {
   id?: string;
@@ -43,6 +50,7 @@ export interface EmailConfig {
   to: string[];
   tls: boolean;
   startTLS: boolean;
+  rateLimit?: number;
 }
 
 export interface Webhook {
@@ -94,25 +102,27 @@ export class NotificationsAPI {
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
     const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+    const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
     return {
-      enabled: (backendConfig.enabled as boolean) || false,
-      provider: (backendConfig.provider as string) || '',
-      server: (backendConfig.server as string) || '',
-      port: (backendConfig.port as number) || 587,
-      username: (backendConfig.username as string) || '',
-      password: (backendConfig.password as string) || '',
-      from: (backendConfig.from as string) || '',
-      to: (backendConfig.to as string[]) || [],
-      tls: (backendConfig.tls as boolean) || false,
-      startTLS: (backendConfig.startTLS as boolean) || false,
+      enabled: strictBoolean(backendConfig.enabled),
+      provider: strictString(backendConfig.provider),
+      server: strictString(backendConfig.server),
+      port: port ?? 587,
+      username: strictString(backendConfig.username),
+      password: strictString(backendConfig.password),
+      from: strictString(backendConfig.from),
+      to: stringArray(backendConfig.to),
+      tls: strictBoolean(backendConfig.tls),
+      startTLS: strictBoolean(backendConfig.startTLS),
+      rateLimit: finiteNumberOrUndefined(backendConfig.rateLimit),
     };
   }
 
   static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
     // Backend expects fields with these names (server, port)
-    const backendConfig = {
+    const backendConfig: Record<string, unknown> = {
       enabled: config.enabled,
       server: config.server,
       port: config.port,
@@ -120,10 +130,15 @@ export class NotificationsAPI {
       password: config.password,
       from: config.from,
       to: config.to,
-      tls: config.tls || false,
-      startTLS: config.startTLS || false,
-      provider: config.provider || '',
+      tls: config.tls,
+      startTLS: config.startTLS,
+      provider: config.provider,
     };
+
+    // Only include rateLimit if it's explicitly set
+    if (config.rateLimit !== undefined) {
+      backendConfig.rateLimit = config.rateLimit;
+    }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {
       method: 'PUT',
@@ -134,7 +149,7 @@ export class NotificationsAPI {
   // Webhook management
   static async getWebhooks(): Promise<Webhook[]> {
     const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
-    return Array.isArray(data) ? data : [];
+    return arrayOrEmpty<Webhook>(data);
   }
 
   static async createWebhook(webhook: Omit<Webhook, 'id'>): Promise<Webhook> {
@@ -145,14 +160,14 @@ export class NotificationsAPI {
   }
 
   static async updateWebhook(id: string, webhook: Partial<Webhook>): Promise<Webhook> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(webhook),
     });
   }
 
   static async deleteWebhook(id: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }
@@ -170,7 +185,11 @@ export class NotificationsAPI {
   static async testNotification(
     request: NotificationTestRequest,
   ): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: Record<string, unknown> | AppriseConfig; webhookId?: string } = {
+    const body: {
+      method: string;
+      config?: Record<string, unknown> | AppriseConfig;
+      webhookId?: string;
+    } = {
       method: request.type,
     };
 

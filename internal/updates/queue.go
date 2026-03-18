@@ -20,6 +20,8 @@ const (
 	JobStateCancelled JobState = "cancelled"
 )
 
+const updatesQueueComponent = "updates_queue"
+
 // UpdateJob represents a single update job
 type UpdateJob struct {
 	ID          string
@@ -38,6 +40,8 @@ type UpdateQueue struct {
 	currentJob *UpdateJob
 	jobHistory []*UpdateJob
 	maxHistory int
+	clearTimer *time.Timer
+	clearDelay time.Duration
 }
 
 // NewUpdateQueue creates a new update queue
@@ -45,6 +49,7 @@ func NewUpdateQueue() *UpdateQueue {
 	return &UpdateQueue{
 		maxHistory: 10,
 		jobHistory: make([]*UpdateJob, 0, 10),
+		clearDelay: 30 * time.Second,
 	}
 }
 
@@ -57,11 +62,17 @@ func (q *UpdateQueue) Enqueue(downloadURL string) (*UpdateJob, bool) {
 	// Check if there's already a job running
 	if q.currentJob != nil && (q.currentJob.State == JobStateQueued || q.currentJob.State == JobStateRunning) {
 		log.Warn().
+			Str("component", updatesQueueComponent).
+			Str("action", "enqueue_rejected").
 			Str("current_job_id", q.currentJob.ID).
 			Str("current_state", string(q.currentJob.State)).
+			Str("requested_download_url", downloadURL).
 			Msg("Update job rejected: another job is already running")
 		return nil, false
 	}
+
+	// A new job supersedes any pending clear of a previous completed job.
+	q.stopClearTimerLocked()
 
 	// Create new job
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,7 +87,10 @@ func (q *UpdateQueue) Enqueue(downloadURL string) (*UpdateJob, bool) {
 
 	q.currentJob = job
 	log.Info().
+		Str("component", updatesQueueComponent).
+		Str("action", "enqueue").
 		Str("job_id", job.ID).
+		Str("job_state", string(job.State)).
 		Str("download_url", downloadURL).
 		Msg("Update job enqueued")
 
@@ -92,8 +106,15 @@ func (q *UpdateQueue) MarkRunning(jobID string) bool {
 		return false
 	}
 
+	previousState := q.currentJob.State
 	q.currentJob.State = JobStateRunning
-	log.Info().Str("job_id", jobID).Msg("Update job started")
+	log.Info().
+		Str("component", updatesQueueComponent).
+		Str("action", "mark_running").
+		Str("job_id", jobID).
+		Str("previous_state", string(previousState)).
+		Str("job_state", string(q.currentJob.State)).
+		Msg("Update job started")
 	return true
 }
 
@@ -106,19 +127,28 @@ func (q *UpdateQueue) MarkCompleted(jobID string, err error) {
 		return
 	}
 
+	// Ensure resources tied to the job context are released.
+	q.currentJob.Cancel()
+
 	q.currentJob.CompletedAt = time.Now()
 	if err != nil {
 		q.currentJob.State = JobStateFailed
 		q.currentJob.Error = err
 		log.Error().
+			Str("component", updatesQueueComponent).
+			Str("action", "complete_failed").
 			Err(err).
 			Str("job_id", jobID).
+			Str("job_state", string(q.currentJob.State)).
 			Dur("duration", q.currentJob.CompletedAt.Sub(q.currentJob.StartedAt)).
 			Msg("Update job failed")
 	} else {
 		q.currentJob.State = JobStateCompleted
 		log.Info().
+			Str("component", updatesQueueComponent).
+			Str("action", "complete_succeeded").
 			Str("job_id", jobID).
+			Str("job_state", string(q.currentJob.State)).
 			Dur("duration", q.currentJob.CompletedAt.Sub(q.currentJob.StartedAt)).
 			Msg("Update job completed")
 	}
@@ -126,15 +156,8 @@ func (q *UpdateQueue) MarkCompleted(jobID string, err error) {
 	// Add to history
 	q.addToHistory(q.currentJob)
 
-	// Clear current job after a short delay (allow status polling to see completion)
-	go func() {
-		time.Sleep(30 * time.Second)
-		q.mu.Lock()
-		if q.currentJob != nil && q.currentJob.ID == jobID {
-			q.currentJob = nil
-		}
-		q.mu.Unlock()
-	}()
+	// Clear current job after a short delay (allow status polling to see completion).
+	q.scheduleClearCurrentJobLocked(jobID)
 }
 
 // Cancel cancels the current job if it matches the given ID
@@ -147,10 +170,24 @@ func (q *UpdateQueue) Cancel(jobID string) bool {
 	}
 
 	if q.currentJob.State == JobStateQueued || q.currentJob.State == JobStateRunning {
+		previousState := q.currentJob.State
 		q.currentJob.Cancel()
 		q.currentJob.State = JobStateCancelled
 		q.currentJob.CompletedAt = time.Now()
-		log.Info().Str("job_id", jobID).Msg("Update job cancelled")
+		log.Info().
+			Str("component", updatesQueueComponent).
+			Str("action", "cancel").
+			Str("job_id", jobID).
+			Str("previous_state", string(previousState)).
+			Str("job_state", string(q.currentJob.State)).
+			Msg("Update job cancelled")
+
+		// Add to history
+		q.addToHistory(q.currentJob)
+
+		// Clear current job after a short delay (allow status polling to see cancellation).
+		q.scheduleClearCurrentJobLocked(jobID)
+
 		return true
 	}
 
@@ -161,7 +198,7 @@ func (q *UpdateQueue) Cancel(jobID string) bool {
 func (q *UpdateQueue) GetCurrentJob() *UpdateJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	return q.currentJob
+	return cloneUpdateJob(q.currentJob)
 }
 
 // IsRunning returns true if there's a job currently running or queued
@@ -176,9 +213,11 @@ func (q *UpdateQueue) GetHistory() []*UpdateJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
-	// Return a copy to avoid concurrent access issues
+	// Return a deep copy of job structs to avoid exposing mutable internal state.
 	history := make([]*UpdateJob, len(q.jobHistory))
-	copy(history, q.jobHistory)
+	for i, job := range q.jobHistory {
+		history[i] = cloneUpdateJob(job)
+	}
 	return history
 }
 
@@ -192,7 +231,52 @@ func (q *UpdateQueue) addToHistory(job *UpdateJob) {
 	}
 }
 
+// stopClearTimerLocked stops and clears the delayed current-job cleanup timer.
+// Caller must hold q.mu.
+func (q *UpdateQueue) stopClearTimerLocked() {
+	if q.clearTimer == nil {
+		return
+	}
+	q.clearTimer.Stop()
+	q.clearTimer = nil
+}
+
+// scheduleClearCurrentJobLocked schedules delayed cleanup for the provided job ID.
+// Caller must hold q.mu.
+func (q *UpdateQueue) scheduleClearCurrentJobLocked(jobID string) {
+	q.stopClearTimerLocked()
+
+	delay := q.clearDelay
+	if delay <= 0 {
+		delay = 30 * time.Second
+	}
+
+	var timer *time.Timer
+	timer = time.AfterFunc(delay, func() {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+
+		// Only clear the job when the timer still corresponds to the active cleanup schedule.
+		if q.clearTimer == timer {
+			q.clearTimer = nil
+		}
+		if q.currentJob != nil && q.currentJob.ID == jobID {
+			q.currentJob = nil
+		}
+	})
+	q.clearTimer = timer
+}
+
 // generateJobID generates a unique job ID
 func generateJobID() string {
 	return time.Now().Format("20060102-150405.000")
+}
+
+func cloneUpdateJob(job *UpdateJob) *UpdateJob {
+	if job == nil {
+		return nil
+	}
+
+	jobCopy := *job
+	return &jobCopy
 }

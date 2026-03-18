@@ -1,0 +1,386 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { LicenseAPI, type LicenseEntitlements } from '@/api/license';
+import {
+  loadLicenseStatus,
+  startProTrial,
+  isPro,
+  hasFeature,
+  hasMigrationGap,
+  isMultiTenantEnabled,
+  isHostedModeEnabled,
+  getUpgradeReason,
+  getUpgradeActionUrl,
+  getFirstUpgradeActionUrl,
+  getUpgradeActionUrlOrFallback,
+  getLimit,
+  isRangeLocked,
+  legacyConnections,
+  maxHistoryDays,
+  entitlements,
+  licenseLoaded,
+  licenseLoadError,
+} from '@/stores/license';
+
+vi.mock('@/api/license');
+vi.mock('@/stores/events', () => ({
+  eventBus: { on: vi.fn() },
+}));
+
+describe('license store', () => {
+  const mockProEntitlements: LicenseEntitlements = {
+    tier: 'pro' as const,
+    subscription_state: 'active',
+    capabilities: ['feature1', 'feature2', 'multi_tenant'],
+    limits: [{ key: 'limit1', limit: 100, current: 25, state: 'ok' }],
+    upgrade_reasons: [
+      { key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' },
+      { key: 'reason2', reason: 'Reason 2', action_url: '/upgrade/reason2' },
+    ],
+    hosted_mode: false,
+    legacy_connections: {
+      proxmox_nodes: 2,
+      docker_hosts: 1,
+      kubernetes_clusters: 0,
+    },
+    has_migration_gap: true,
+  };
+
+  const mockFreeEntitlements: LicenseEntitlements = {
+    tier: 'free' as const,
+    subscription_state: 'expired',
+    capabilities: [] as string[],
+    limits: [],
+    upgrade_reasons: [],
+    hosted_mode: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('loads entitlements from API', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+
+    await loadLicenseStatus();
+
+    expect(LicenseAPI.getEntitlements).toHaveBeenCalled();
+    expect(entitlements()).toEqual(mockProEntitlements);
+    expect(licenseLoaded()).toBe(true);
+  });
+
+  it('returns early if already loaded without force', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+
+    await loadLicenseStatus(true);
+    await loadLicenseStatus();
+
+    expect(LicenseAPI.getEntitlements).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets fallback entitlements on error', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockRejectedValue(new Error('API error'));
+
+    await loadLicenseStatus(true);
+
+    expect(entitlements()).toEqual({
+      capabilities: ['update_alerts', 'sso', 'ai_patrol'],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      hosted_mode: false,
+      trial_eligible: true,
+      legacy_connections: {
+        proxmox_nodes: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+      },
+      has_migration_gap: false,
+      commercial_migration: undefined,
+    });
+  });
+
+  it('sets loadError on API failure', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockRejectedValue(new Error('Network timeout'));
+
+    await loadLicenseStatus(true);
+
+    expect(licenseLoadError()).toBeInstanceOf(Error);
+    expect(licenseLoadError()?.message).toBe('Network timeout');
+  });
+
+  it('clears loadError on successful load after failure', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockRejectedValue(new Error('Network timeout'));
+    await loadLicenseStatus(true);
+    expect(licenseLoadError()).toBeInstanceOf(Error);
+
+    vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+    await loadLicenseStatus(true);
+    expect(licenseLoadError()).toBeNull();
+  });
+
+  it('startProTrial throws error if trial start fails', async () => {
+    vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: vi.fn().mockResolvedValue({ code: 'trial_failed' }),
+    } as unknown as Response);
+
+    await expect(startProTrial()).rejects.toThrow('Failed to start trial');
+  });
+
+  it('startProTrial preserves backend error details for trial-not-available responses', async () => {
+    vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: vi.fn().mockResolvedValue({
+        code: 'trial_not_available',
+        error: 'Trial cannot be started while a paid v5 license migration is pending',
+        details: { org_id: 'default' },
+      }),
+    } as unknown as Response);
+
+    await expect(startProTrial()).rejects.toMatchObject({
+      status: 409,
+      code: 'trial_not_available',
+      message: 'Trial cannot be started while a paid v5 license migration is pending',
+      details: { org_id: 'default' },
+    });
+  });
+
+  it('startProTrial returns redirect action when hosted signup is required', async () => {
+    vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: vi.fn().mockResolvedValue({
+        code: 'trial_signup_required',
+        details: { action_url: 'https://pulserelay.pro/pricing?intent=pro_trial' },
+      }),
+    } as unknown as Response);
+
+    await expect(startProTrial()).resolves.toEqual({
+      outcome: 'redirect',
+      actionUrl: 'https://pulserelay.pro/pricing?intent=pro_trial',
+    });
+  });
+
+  it('startProTrial refreshes entitlements when local activation succeeds', async () => {
+    vi.mocked(LicenseAPI.startTrial).mockResolvedValue({ ok: true } as Response);
+    vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+
+    await expect(startProTrial()).resolves.toEqual({ outcome: 'activated' });
+    expect(LicenseAPI.getEntitlements).toHaveBeenCalled();
+  });
+
+  describe('isPro', () => {
+    it('returns true for pro tier', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(true);
+    });
+
+    it('returns true for pro_plus tier', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        tier: 'pro_plus',
+      });
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(true);
+    });
+
+    it('returns false for relay tier (paid but not Pro)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        tier: 'relay',
+      });
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(false);
+    });
+
+    it('returns false for free tier', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(isPro()).toBe(false);
+    });
+
+    it('returns false when entitlements is null', () => {
+      expect(isPro()).toBe(false);
+    });
+  });
+
+  describe('hasFeature', () => {
+    it('returns true when feature is in capabilities', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(hasFeature('feature1')).toBe(true);
+    });
+
+    it('returns false when feature is not in capabilities', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(hasFeature('missing_feature')).toBe(false);
+    });
+  });
+
+  describe('isMultiTenantEnabled', () => {
+    it('returns true when multi_tenant feature exists', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(isMultiTenantEnabled()).toBe(true);
+    });
+
+    it('returns false when feature does not exist', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(isMultiTenantEnabled()).toBe(false);
+    });
+  });
+
+  describe('isHostedModeEnabled', () => {
+    it('returns true when hosted_mode is true', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        hosted_mode: true,
+      });
+      await loadLicenseStatus(true);
+      expect(isHostedModeEnabled()).toBe(true);
+    });
+  });
+
+  describe('getUpgradeReason', () => {
+    it('returns upgrade reason by key', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeReason('reason2')?.key).toBe('reason2');
+    });
+
+    it('returns undefined for unknown key', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeReason('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('migration helpers', () => {
+    it('returns legacy connection counts from entitlements', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+
+      expect(legacyConnections()).toEqual({
+        proxmox_nodes: 2,
+        docker_hosts: 1,
+        kubernetes_clusters: 0,
+      });
+      expect(hasMigrationGap()).toBe(true);
+    });
+
+    it('falls back to zero legacy counts when absent', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        legacy_connections: undefined,
+        has_migration_gap: undefined,
+      });
+      await loadLicenseStatus(true);
+
+      expect(legacyConnections()).toEqual({
+        proxmox_nodes: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+      });
+      expect(hasMigrationGap()).toBe(false);
+    });
+  });
+
+  describe('getUpgradeActionUrl', () => {
+    it('returns action URL for upgrade reason', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrl('reason1')).toBe('/upgrade/reason1');
+    });
+  });
+
+  describe('getFirstUpgradeActionUrl', () => {
+    it('returns first upgrade reason URL', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(getFirstUpgradeActionUrl()).toBe('/upgrade/reason1');
+    });
+  });
+
+  describe('getUpgradeActionUrlOrFallback', () => {
+    it('returns pricing fallback when no upgrade reasons', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('feature1')).toBe('/pricing?feature=feature1');
+    });
+  });
+
+  describe('getLimit', () => {
+    it('returns limit by key', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+      expect(getLimit('limit1')?.limit).toBe(100);
+    });
+  });
+
+  describe('isRangeLocked', () => {
+    it('returns false for ranges within free limit (7d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        max_history_days: 7,
+      });
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('1h')).toBe(false);
+      expect(isRangeLocked('7d')).toBe(false);
+      expect(isRangeLocked('168h')).toBe(false); // exactly 7 days
+    });
+
+    it('returns true for ranges exceeding free limit (7d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        max_history_days: 7,
+      });
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('8d')).toBe(true);
+      expect(isRangeLocked('200h')).toBe(true); // 8.3 days
+    });
+
+    it('uses tier-specific max_history_days (relay = 14d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        tier: 'relay',
+        max_history_days: 14,
+      });
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('14d')).toBe(false);
+      expect(isRangeLocked('15d')).toBe(true);
+      expect(maxHistoryDays()).toBe(14);
+    });
+
+    it('uses tier-specific max_history_days (pro = 90d)', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        max_history_days: 90,
+      });
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('90d')).toBe(false);
+      expect(isRangeLocked('91d')).toBe(true);
+      expect(maxHistoryDays()).toBe(90);
+    });
+
+    it('defaults to 7 days when max_history_days is not set', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+      });
+      await loadLicenseStatus(true);
+      expect(maxHistoryDays()).toBe(7);
+      expect(isRangeLocked('8d')).toBe(true);
+    });
+
+    it('handles invalid range strings', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(isRangeLocked('invalid')).toBe(false);
+    });
+  });
+});

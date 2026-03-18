@@ -1,0 +1,1002 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+func TestOrgHandlersRequireMultiTenantGate_HostedModeBypassesFeatureLicense(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(false)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
+
+	h := NewOrgHandlers(config.NewMultiTenantPersistence(t.TempDir()), nil)
+	h.SetHostedMode(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/orgs/t-tenant/members", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-tenant"))
+	rec := httptest.NewRecorder()
+
+	if !h.requireMultiTenantGate(rec, req) {
+		t.Fatalf("expected hosted org gate to allow active hosted subscription, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOrgHandlersRequireMultiTenantGate_HostedModeBlocksInactiveSubscription(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
+
+	h := NewOrgHandlers(config.NewMultiTenantPersistence(t.TempDir()), nil)
+	h.SetHostedMode(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/orgs/t-tenant/members", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-tenant"))
+	rec := httptest.NewRecorder()
+
+	if h.requireMultiTenantGate(rec, req) {
+		t.Fatalf("expected hosted org gate to block expired subscription")
+	}
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOrgHandlersDeleteInvokesOnDeleteCallback(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	var callbackOrgID string
+	h.SetOnDelete(func(_ context.Context, orgID string) error {
+		callbackOrgID = orgID
+		return nil
+	})
+
+	createBody := bytes.NewBufferString(`{"id":"acme","displayName":"Acme Corp"}`)
+	createReq := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", createBody), "alice")
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from create, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "alice")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if callbackOrgID != "acme" {
+		t.Fatalf("expected delete callback org ID acme, got %q", callbackOrgID)
+	}
+}
+
+func TestOrgHandlersDeleteStopsTenantMonitorBeforeDeletingOrgDir(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	var logOutput bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&logOutput).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{DataPath: baseDir}, persistence, nil)
+	t.Cleanup(mtm.Stop)
+
+	h := NewOrgHandlers(persistence, mtm)
+
+	createBody := bytes.NewBufferString(`{"id":"acme","displayName":"Acme Corp"}`)
+	createReq := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", createBody), "alice")
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from create, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	if _, err := mtm.GetMonitor("acme"); err != nil {
+		t.Fatalf("GetMonitor(acme) failed: %v", err)
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "alice")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	if strings.Contains(logOutput.String(), "Failed to save alert history on shutdown") {
+		t.Fatalf("expected org deletion to stop tenant monitor before removing history dir, got logs: %s", logOutput.String())
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "acme")
+	if _, err := os.Stat(orgDir); !os.IsNotExist(err) {
+		t.Fatalf("expected deleted org dir %s to be removed, stat err = %v", orgDir, err)
+	}
+}
+
+func TestOrgHandlersCRUDLifecycle(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createBody := bytes.NewBufferString(`{"id":"acme","displayName":"Acme Corp"}`)
+	createReq := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", createBody), "alice")
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from create, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	listReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs", nil), "alice")
+	listRec := httptest.NewRecorder()
+	h.HandleListOrgs(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listed []models.Organization
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("expected 2 orgs (default + acme), got %d", len(listed))
+	}
+
+	getReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "alice")
+	getReq.SetPathValue("id", "acme")
+	getRec := httptest.NewRecorder()
+	h.HandleGetOrg(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from get, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	updateReq := withUser(
+		httptest.NewRequest(http.MethodPut, "/api/orgs/acme", bytes.NewBufferString(`{"displayName":"Acme Updated"}`)),
+		"alice",
+	)
+	updateReq.SetPathValue("id", "acme")
+	updateRec := httptest.NewRecorder()
+	h.HandleUpdateOrg(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from update, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	inviteReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"admin"}`)),
+		"alice",
+	)
+	inviteReq.SetPathValue("id", "acme")
+	inviteRec := httptest.NewRecorder()
+	h.HandleInviteMember(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from invite, got %d: %s", inviteRec.Code, inviteRec.Body.String())
+	}
+
+	membersReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/members", nil), "bob")
+	membersReq.SetPathValue("id", "acme")
+	membersRec := httptest.NewRecorder()
+	h.HandleListMembers(membersRec, membersReq)
+	if membersRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from member list, got %d: %s", membersRec.Code, membersRec.Body.String())
+	}
+	var members []models.OrganizationMember
+	if err := json.Unmarshal(membersRec.Body.Bytes(), &members); err != nil {
+		t.Fatalf("decode members: %v", err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members (alice + bob), got %d", len(members))
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "bob")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	getAfterDeleteReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "alice")
+	getAfterDeleteReq.SetPathValue("id", "acme")
+	getAfterDeleteRec := httptest.NewRecorder()
+	h.HandleGetOrg(getAfterDeleteRec, getAfterDeleteReq)
+	if getAfterDeleteRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after delete, got %d: %s", getAfterDeleteRec.Code, getAfterDeleteRec.Body.String())
+	}
+}
+
+func TestOrgHandlersViewerCannotManageOrg(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"viewer"}`)),
+		"alice",
+	)
+	inviteReq.SetPathValue("id", "acme")
+	inviteRec := httptest.NewRecorder()
+	h.HandleInviteMember(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusOK {
+		t.Fatalf("invite failed: %d %s", inviteRec.Code, inviteRec.Body.String())
+	}
+
+	updateReq := withUser(
+		httptest.NewRequest(http.MethodPut, "/api/orgs/acme", bytes.NewBufferString(`{"displayName":"Nope"}`)),
+		"bob",
+	)
+	updateReq.SetPathValue("id", "acme")
+	updateRec := httptest.NewRecorder()
+	h.HandleUpdateOrg(updateRec, updateReq)
+	if updateRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for member update, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme", nil), "bob")
+	deleteReq.SetPathValue("id", "acme")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for member delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+}
+
+func TestOrgHandlersTokenListAllowedButWriteForbidden(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	token := &config.APITokenRecord{OrgID: "acme"}
+	listReq := httptest.NewRequest(http.MethodGet, "/api/orgs", nil)
+	attachAPITokenRecord(listReq, token)
+	listRec := httptest.NewRecorder()
+	h.HandleListOrgs(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for token list, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listed []models.Organization
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode token list: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 visible org for token scoped to acme, got %d", len(listed))
+	}
+
+	writeReq := httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"x","displayName":"X"}`))
+	attachAPITokenRecord(writeReq, token)
+	writeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(writeRec, writeReq)
+	if writeRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for token write, got %d: %s", writeRec.Code, writeRec.Body.String())
+	}
+}
+
+func TestOrgHandlersMultiTenantGate(t *testing.T) {
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(false)
+
+	req := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs", nil), "alice")
+	rec := httptest.NewRecorder()
+	h.HandleListOrgs(rec, req)
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 when feature disabled, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOrgHandlersRejectsLegacyMemberRole(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"member"}`)),
+		"alice",
+	)
+	inviteReq.SetPathValue("id", "acme")
+	inviteRec := httptest.NewRecorder()
+	h.HandleInviteMember(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for legacy member role, got %d: %s", inviteRec.Code, inviteRec.Body.String())
+	}
+}
+
+func TestOrgHandlersOwnershipTransfer(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	transferReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"owner"}`)),
+		"alice",
+	)
+	transferReq.SetPathValue("id", "acme")
+	transferRec := httptest.NewRecorder()
+	h.HandleInviteMember(transferRec, transferReq)
+	if transferRec.Code != http.StatusOK {
+		t.Fatalf("transfer failed: %d %s", transferRec.Code, transferRec.Body.String())
+	}
+
+	getReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "bob")
+	getReq.SetPathValue("id", "acme")
+	getRec := httptest.NewRecorder()
+	h.HandleGetOrg(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get failed: %d %s", getRec.Code, getRec.Body.String())
+	}
+
+	var org models.Organization
+	if err := json.Unmarshal(getRec.Body.Bytes(), &org); err != nil {
+		t.Fatalf("decode org: %v", err)
+	}
+	if org.OwnerUserID != "bob" {
+		t.Fatalf("expected owner bob, got %q", org.OwnerUserID)
+	}
+	if org.GetMemberRole("alice") != models.OrgRoleAdmin {
+		t.Fatalf("expected previous owner to become admin, got %q", org.GetMemberRole("alice"))
+	}
+}
+
+func TestOrgHandlersRemoveMember(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"editor"}`)),
+		"alice",
+	)
+	inviteReq.SetPathValue("id", "acme")
+	inviteRec := httptest.NewRecorder()
+	h.HandleInviteMember(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusOK {
+		t.Fatalf("invite failed: %d %s", inviteRec.Code, inviteRec.Body.String())
+	}
+
+	removeReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme/members/bob", nil), "alice")
+	removeReq.SetPathValue("id", "acme")
+	removeReq.SetPathValue("userId", "bob")
+	removeRec := httptest.NewRecorder()
+	h.HandleRemoveMember(removeRec, removeReq)
+	if removeRec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 remove, got %d: %s", removeRec.Code, removeRec.Body.String())
+	}
+
+	membersReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/members", nil), "alice")
+	membersReq.SetPathValue("id", "acme")
+	membersRec := httptest.NewRecorder()
+	h.HandleListMembers(membersRec, membersReq)
+	if membersRec.Code != http.StatusOK {
+		t.Fatalf("member list failed: %d %s", membersRec.Code, membersRec.Body.String())
+	}
+	var members []models.OrganizationMember
+	if err := json.Unmarshal(membersRec.Body.Bytes(), &members); err != nil {
+		t.Fatalf("decode members: %v", err)
+	}
+	if len(members) != 1 || members[0].UserID != "alice" {
+		t.Fatalf("expected only alice after removal, got %+v", members)
+	}
+}
+
+func TestOrgHandlersShareLifecycle(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createSourceReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createSourceRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createSourceRec, createSourceReq)
+	if createSourceRec.Code != http.StatusCreated {
+		t.Fatalf("create source failed: %d %s", createSourceRec.Code, createSourceRec.Body.String())
+	}
+
+	createTargetReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"alice",
+	)
+	createTargetRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createTargetRec, createTargetReq)
+	if createTargetRec.Code != http.StatusCreated {
+		t.Fatalf("create target failed: %d %s", createTargetRec.Code, createTargetRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"alerts-high-cpu","resourceName":"High CPU","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
+	}
+	var share models.OrganizationShare
+	if err := json.Unmarshal(createShareRec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode share: %v", err)
+	}
+	if share.ID == "" {
+		t.Fatalf("expected share id")
+	}
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "alice")
+	incomingReq.SetPathValue("id", "beta")
+	incomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(incomingRec, incomingReq)
+	if incomingRec.Code != http.StatusOK {
+		t.Fatalf("list incoming failed: %d %s", incomingRec.Code, incomingRec.Body.String())
+	}
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(incomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].SourceOrgID != "acme" {
+		t.Fatalf("unexpected incoming shares: %+v", incoming)
+	}
+
+	deleteShareReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme/shares/"+share.ID, nil), "alice")
+	deleteShareReq.SetPathValue("id", "acme")
+	deleteShareReq.SetPathValue("shareId", share.ID)
+	deleteShareRec := httptest.NewRecorder()
+	h.HandleDeleteShare(deleteShareRec, deleteShareReq)
+	if deleteShareRec.Code != http.StatusNoContent {
+		t.Fatalf("delete share failed: %d %s", deleteShareRec.Code, deleteShareRec.Body.String())
+	}
+}
+
+func TestOrgHandlersIncomingSharesPreserveAccessRole(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createSourceReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createSourceRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createSourceRec, createSourceReq)
+	if createSourceRec.Code != http.StatusCreated {
+		t.Fatalf("create source failed: %d %s", createSourceRec.Code, createSourceRec.Body.String())
+	}
+
+	createTargetReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createTargetRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createTargetRec, createTargetReq)
+	if createTargetRec.Code != http.StatusCreated {
+		t.Fatalf("create target failed: %d %s", createTargetRec.Code, createTargetRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"shared-view","resourceName":"Shared View","accessRole":"editor"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
+	}
+
+	var share models.OrganizationShare
+	if err := json.Unmarshal(createShareRec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode share: %v", err)
+	}
+	if share.AccessRole != models.OrgRoleEditor {
+		t.Fatalf("share access_role=%q, want %q", share.AccessRole, models.OrgRoleEditor)
+	}
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	incomingReq.SetPathValue("id", "beta")
+	incomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(incomingRec, incomingReq)
+	if incomingRec.Code != http.StatusOK {
+		t.Fatalf("list incoming failed: %d %s", incomingRec.Code, incomingRec.Body.String())
+	}
+
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(incomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming: %v", err)
+	}
+	if len(incoming) != 1 {
+		t.Fatalf("expected one incoming share, got %+v", incoming)
+	}
+	if incoming[0].SourceOrgID != "acme" {
+		t.Fatalf("incoming source_org_id=%q, want %q", incoming[0].SourceOrgID, "acme")
+	}
+	if incoming[0].AccessRole != models.OrgRoleEditor {
+		t.Fatalf("incoming access_role=%q, want %q", incoming[0].AccessRole, models.OrgRoleEditor)
+	}
+}
+
+func TestOrgHandlersCrossOrgIsolation(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	aliceGetBetaReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta", nil), "alice")
+	aliceGetBetaReq.SetPathValue("id", "beta")
+	aliceGetBetaRec := httptest.NewRecorder()
+	h.HandleGetOrg(aliceGetBetaRec, aliceGetBetaReq)
+	if aliceGetBetaRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-org get, got %d: %s", aliceGetBetaRec.Code, aliceGetBetaRec.Body.String())
+	}
+
+	aliceListBetaMembersReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/members", nil), "alice")
+	aliceListBetaMembersReq.SetPathValue("id", "beta")
+	aliceListBetaMembersRec := httptest.NewRecorder()
+	h.HandleListMembers(aliceListBetaMembersRec, aliceListBetaMembersReq)
+	if aliceListBetaMembersRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-org member list, got %d: %s", aliceListBetaMembersRec.Code, aliceListBetaMembersRec.Body.String())
+	}
+
+	bobGetAcmeReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "bob")
+	bobGetAcmeReq.SetPathValue("id", "acme")
+	bobGetAcmeRec := httptest.NewRecorder()
+	h.HandleGetOrg(bobGetAcmeRec, bobGetAcmeReq)
+	if bobGetAcmeRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for reverse cross-org get, got %d: %s", bobGetAcmeRec.Code, bobGetAcmeRec.Body.String())
+	}
+}
+
+func TestOrgHandlersShareIsolationAcrossOrganizations(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"r-1","resourceName":"Shared View","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
+	}
+
+	bobIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	bobIncomingReq.SetPathValue("id", "beta")
+	bobIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(bobIncomingRec, bobIncomingReq)
+	if bobIncomingRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for incoming shares in target org, got %d: %s", bobIncomingRec.Code, bobIncomingRec.Body.String())
+	}
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(bobIncomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].SourceOrgID != "acme" {
+		t.Fatalf("unexpected incoming shares payload: %+v", incoming)
+	}
+
+	bobSourceSharesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/shares", nil), "bob")
+	bobSourceSharesReq.SetPathValue("id", "acme")
+	bobSourceSharesRec := httptest.NewRecorder()
+	h.HandleListShares(bobSourceSharesRec, bobSourceSharesReq)
+	if bobSourceSharesRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when target org user lists source org shares, got %d: %s", bobSourceSharesRec.Code, bobSourceSharesRec.Body.String())
+	}
+
+	charlieIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
+	charlieIncomingReq.SetPathValue("id", "beta")
+	charlieIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(charlieIncomingRec, charlieIncomingReq)
+	if charlieIncomingRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when non-member lists incoming shares, got %d: %s", charlieIncomingRec.Code, charlieIncomingRec.Body.String())
+	}
+}
+
+func TestOrgHandlersShareListsStripLegacyHostResourceTypes(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	sourceOrg, err := h.loadOrganization("acme")
+	if err != nil {
+		t.Fatalf("load acme: %v", err)
+	}
+	sourceOrg.SharedResources = []models.OrganizationShare{
+		{
+			ID:           "legacy-host",
+			TargetOrgID:  "beta",
+			ResourceType: "host",
+			ResourceID:   "agent-1",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "canonical-agent",
+			TargetOrgID:  "beta",
+			ResourceType: "agent",
+			ResourceID:   "agent-2",
+			AccessRole:   models.OrgRoleViewer,
+		},
+	}
+	if err := persistence.SaveOrganization(sourceOrg); err != nil {
+		t.Fatalf("save acme with mixed shares: %v", err)
+	}
+
+	sourceSharesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/shares", nil), "alice")
+	sourceSharesReq.SetPathValue("id", "acme")
+	sourceSharesRec := httptest.NewRecorder()
+	h.HandleListShares(sourceSharesRec, sourceSharesReq)
+	if sourceSharesRec.Code != http.StatusOK {
+		t.Fatalf("list source shares failed: %d %s", sourceSharesRec.Code, sourceSharesRec.Body.String())
+	}
+
+	var sourceShares []models.OrganizationShare
+	if err := json.Unmarshal(sourceSharesRec.Body.Bytes(), &sourceShares); err != nil {
+		t.Fatalf("decode source shares: %v", err)
+	}
+	if len(sourceShares) != 1 || sourceShares[0].ResourceType != "agent" {
+		t.Fatalf("expected only canonical agent share in source payload, got %+v", sourceShares)
+	}
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	incomingReq.SetPathValue("id", "beta")
+	incomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(incomingRec, incomingReq)
+	if incomingRec.Code != http.StatusOK {
+		t.Fatalf("list incoming shares failed: %d %s", incomingRec.Code, incomingRec.Body.String())
+	}
+
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(incomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming shares: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].ResourceType != "agent" {
+		t.Fatalf("expected only canonical agent share in incoming payload, got %+v", incoming)
+	}
+}
+
+func TestNormalizeOrganizationShareResourceType(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "host remains host in strict normalization", in: "host", want: "host"},
+		{name: "host mixed case remains host in strict normalization", in: " HoSt ", want: "host"},
+		{name: "agent", in: "agent", want: "agent"},
+		{name: "node", in: "node", want: "node"},
+		{name: "container", in: "container", want: "container"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeOrganizationShareResourceType(tt.in)
+			if got != tt.want {
+				t.Fatalf("normalizeOrganizationShareResourceType(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsUnsupportedOrganizationShareResourceType(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "host unsupported", in: "host", want: true},
+		{name: "mixed case host unsupported", in: " HoSt ", want: true},
+		{name: "agent supported", in: "agent", want: false},
+		{name: "docker host supported", in: "docker-host", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnsupportedOrganizationShareResourceType(tt.in)
+			if got != tt.want {
+				t.Fatalf("isUnsupportedOrganizationShareResourceType(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeOrganizationShares_DropsLegacyAndUnsupportedResourceTypes(t *testing.T) {
+	shares := []models.OrganizationShare{
+		{
+			ID:           "legacy-host",
+			TargetOrgID:  "beta",
+			ResourceType: "host",
+			ResourceID:   "agent-1",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "unsupported-custom",
+			TargetOrgID:  "beta",
+			ResourceType: "my-custom-type",
+			ResourceID:   "res-1",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "legacy-container",
+			TargetOrgID:  "beta",
+			ResourceType: "container",
+			ResourceID:   "ct-101",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "legacy-docker-container",
+			TargetOrgID:  "beta",
+			ResourceType: "docker-container",
+			ResourceID:   "docker-101",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "v6-agent",
+			TargetOrgID:  "beta",
+			ResourceType: "agent",
+			ResourceID:   "agent-2",
+			AccessRole:   models.OrgRoleViewer,
+		},
+	}
+
+	normalized := normalizeOrganizationShares(shares)
+	if len(normalized) != 1 {
+		t.Fatalf("expected only canonical v6 share to remain, got %d: %+v", len(normalized), normalized)
+	}
+	if normalized[0].ResourceType != "agent" {
+		t.Fatalf("expected canonical agent share to remain, got %+v", normalized[0])
+	}
+}
+
+func TestHandleCreateShareRejectsUnsupportedHostResourceType(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"host","resourceId":"agent-1","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+
+	if createShareRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported host resource type, got %d: %s", createShareRec.Code, createShareRec.Body.String())
+	}
+}
+
+func TestHandleCreateShareRejectsUnsupportedCustomResourceType(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"my-custom-type","resourceId":"res-1","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+
+	if createShareRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported custom resource type, got %d: %s", createShareRec.Code, createShareRec.Body.String())
+	}
+}
+
+func withUser(req *http.Request, username string) *http.Request {
+	return req.WithContext(internalauth.WithUser(req.Context(), username))
+}

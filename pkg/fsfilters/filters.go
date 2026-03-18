@@ -77,10 +77,10 @@ var virtualFSTypes = map[string]bool{
 	"overlay":    true, // Docker/container overlay filesystems (issue #942)
 	"overlayfs":  true, // Alternative overlay name
 	"autofs":     true, // Systemd automount placeholders (issue #942)
-	"fdescfs":    true, // FreeBSD file descriptor filesystem (issue #1142)
+	"fdescfs":    true, // FreeBSD file descriptor filesystem
 	"devfs":      true, // FreeBSD device filesystem
-	"linprocfs":  true, // FreeBSD Linux proc compatibility
-	"linsysfs":   true, // FreeBSD Linux sys compatibility
+	"linprocfs":  true, // FreeBSD Linux proc compatibility layer
+	"linsysfs":   true, // FreeBSD Linux sys compatibility layer
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
@@ -92,7 +92,8 @@ var specialMountPrefixes = []string{
 	"/proc",
 	"/sys",
 	"/run",
-	"/var/run/", // FreeBSD (not a symlink to /run like on Linux)
+	"/var/run/", // FreeBSD: /var/run is not a symlink to /run
+	"/var/lib/docker",
 	"/var/lib/containers",
 	"/snap",
 }
@@ -148,7 +149,7 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	}
 
 	// Check specific special mountpoints
-	if mountpoint == "/boot/efi" {
+	if mountpoint == "/boot/efi" || mountpoint == "/var/run" {
 		reasons = append(reasons, "special-mountpoint")
 	}
 
@@ -189,14 +190,6 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	}
 
 	return len(reasons) > 0, reasons
-}
-
-// ShouldSkipFilesystemBeforeUsage determines whether a filesystem can be skipped
-// using only metadata that is safe to read from mount tables (fstype + mountpoint).
-// This is used before probing usage stats so the caller can avoid statfs/syscalls
-// on mounts known to be excluded (for example stale/unreachable NFS mounts).
-func ShouldSkipFilesystemBeforeUsage(fsType, mountpoint string) (skip bool, reasons []string) {
-	return ShouldSkipFilesystem(fsType, mountpoint, 0, 0)
 }
 
 // MatchesUserExclude checks if a mountpoint matches any user-defined exclusion patterns.

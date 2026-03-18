@@ -145,9 +145,13 @@ func TestRateLimiter_Allow_ZeroLimit(t *testing.T) {
 	rl := NewRateLimiter(0, time.Minute)
 	defer rl.Stop()
 
-	// With limit 0, nothing should be allowed
-	if rl.Allow("192.168.1.1") {
-		t.Error("should deny with limit 0")
+	// Non-positive limits should default to safe values.
+	if rl.limit != defaultRateLimiterLimit {
+		t.Errorf("limit = %d, want %d", rl.limit, defaultRateLimiterLimit)
+	}
+
+	if !rl.Allow("192.168.1.1") {
+		t.Error("request should be allowed after defaulting zero limit")
 	}
 }
 
@@ -416,11 +420,21 @@ func TestRateLimiter_Middleware_XForwardedFor(t *testing.T) {
 }
 
 func TestRateLimiter_Middleware_ResponseBody(t *testing.T) {
-	rl := NewRateLimiter(0, time.Minute) // Immediately rate limit
+	rl := NewRateLimiter(1, time.Minute)
 	defer rl.Stop()
 
 	handler := func(w http.ResponseWriter, r *http.Request) {}
 	wrapped := rl.Middleware(handler)
+
+	// First request consumes the single allowed slot.
+	firstReq := httptest.NewRequest(http.MethodGet, "/test", nil)
+	firstReq.RemoteAddr = "192.168.1.1:12345"
+	firstResp := httptest.NewRecorder()
+	wrapped(firstResp, firstReq)
+
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want %d", firstResp.Code, http.StatusOK)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
@@ -432,5 +446,17 @@ func TestRateLimiter_Middleware_ResponseBody(t *testing.T) {
 	expected := "Rate limit exceeded. Please try again later.\n"
 	if body != expected {
 		t.Errorf("body = %q, want %q", body, expected)
+	}
+}
+
+func TestNewRateLimiter_NormalizesInvalidConfig(t *testing.T) {
+	rl := NewRateLimiter(-10, -5*time.Second)
+	defer rl.Stop()
+
+	if rl.limit != defaultRateLimiterLimit {
+		t.Errorf("limit = %d, want %d", rl.limit, defaultRateLimiterLimit)
+	}
+	if rl.window != defaultRateLimiterWindow {
+		t.Errorf("window = %v, want %v", rl.window, defaultRateLimiterWindow)
 	}
 }

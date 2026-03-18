@@ -10,8 +10,8 @@ interface ErrorBoundaryProps {
 
 const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (props) => {
   return (
-    <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div class="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div class="min-h-screen flex items-center justify-center bg-base p-4">
+      <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
         <div class="flex items-center mb-4">
           <svg
             class="w-12 h-12 text-red-500 mr-3"
@@ -31,15 +31,16 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
               title="Something went wrong"
               description="An unexpected error occurred"
               size="md"
-              titleClass="text-gray-900 dark:text-gray-100"
-              descriptionClass="text-sm text-gray-600 dark:text-gray-400"
+              titleClass="text-base-content"
+              descriptionClass="text-sm text-muted"
             />
           </div>
         </div>
 
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
+        <div class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
           <p class="text-sm text-red-800 dark:text-red-200">
-            Please try again or reload the page. If the problem persists, contact your administrator.
+            Please try again or reload the page. If the problem persists, contact your
+            administrator.
           </p>
         </div>
 
@@ -54,13 +55,13 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           <button
             type="button"
             onClick={() => window.location.reload()}
-            class="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            class="flex-1 px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
           >
             Reload Page
           </button>
         </div>
 
-        <div class="mt-4 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+        <div class="mt-4 text-xs text-muted leading-relaxed">
           Technical details are suppressed in this view. Check server logs for full context.
         </div>
       </div>
@@ -101,7 +102,7 @@ export const ComponentErrorBoundary: Component<{
   return (
     <ErrorBoundary
       fallback={(error, reset) => (
-        <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+        <div class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded">
           <div class="flex items-center mb-2">
             <svg
               class="w-5 h-5 text-red-500 mr-2"

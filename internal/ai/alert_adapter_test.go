@@ -107,7 +107,6 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	if len(gotRecent) != 1 || gotRecent[0].ID != "r1" {
 		t.Fatalf("GetRecentlyResolved = %+v", gotRecent)
 	}
-
 	gotHistory := a.GetAlertHistory("storage:local", 1)
 	if len(gotHistory) != 1 || gotHistory[0].ID != "r1" {
 		t.Fatalf("GetAlertHistory = %+v", gotHistory)
@@ -127,14 +126,14 @@ func TestInferResourceType(t *testing.T) {
 		{"node_temperature", "node_temperature", nil, "node"},
 		{"storage_usage", "storage_usage", nil, "storage"},
 		{"storage", "storage", nil, "storage"},
-		{"docker_cpu", "docker_cpu", nil, "docker"},
-		{"docker_memory", "docker_memory", nil, "docker"},
-		{"docker_restart", "docker_restart", nil, "docker"},
-		{"docker_offline", "docker_offline", nil, "docker"},
-		{"host_cpu", "host_cpu", nil, "host"},
-		{"host_memory", "host_memory", nil, "host"},
-		{"host_offline", "host_offline", nil, "host"},
-		{"host_disk", "host_disk", nil, "host"},
+		{"docker_cpu", "docker_cpu", nil, "app-container"},
+		{"docker_memory", "docker_memory", nil, "app-container"},
+		{"docker_restart", "docker_restart", nil, "app-container"},
+		{"docker_offline", "docker_offline", nil, "app-container"},
+		{"host_cpu", "host_cpu", nil, "agent"},
+		{"host_memory", "host_memory", nil, "agent"},
+		{"host_offline", "host_offline", nil, "agent"},
+		{"host_disk", "host_disk", nil, "agent"},
 		{"pmg", "pmg", nil, "pmg"},
 		{"pmg_queue", "pmg_queue", nil, "pmg"},
 		{"pmg_quarantine", "pmg_quarantine", nil, "pmg"},
@@ -142,8 +141,9 @@ func TestInferResourceType(t *testing.T) {
 		{"backup_missing", "backup_missing", nil, "backup"},
 		{"snapshot", "snapshot", nil, "snapshot"},
 		{"snapshot_age", "snapshot_age", nil, "snapshot"},
-		{"unknown_type", "unknown_type", nil, "guest"},
+		{"unknown_type", "unknown_type", nil, "vm"},
 		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
+		{"with_metadata_host_legacy_ignored", "unknown", map[string]interface{}{"resourceType": "host"}, "vm"},
 	}
 
 	for _, tt := range tests {
@@ -151,6 +151,41 @@ func TestInferResourceType(t *testing.T) {
 			result := inferResourceType(tt.alertType, tt.metadata)
 			if result != tt.expected {
 				t.Errorf("inferResourceType(%q, %v) = %q, want %q", tt.alertType, tt.metadata, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeAlertResourceType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "vm legacy guest rejected", input: "guest", expected: ""},
+		{name: "vm qemu rejected", input: "qemu", expected: ""},
+		{name: "system container lxc rejected", input: "lxc", expected: ""},
+		{name: "system container oci", input: "oci-container", expected: "system-container"},
+		{name: "app container canonical", input: "app-container", expected: "app-container"},
+		{name: "app container docker rejected", input: "docker", expected: ""},
+		{name: "app container docker service rejected", input: "docker-service", expected: ""},
+		{name: "agent host alias rejected", input: "host", expected: ""},
+		{name: "node canonical", input: "node", expected: "node"},
+		{name: "docker host alias rejected", input: "docker_host", expected: ""},
+		{name: "k8s alias", input: "k8s-cluster", expected: "k8s-cluster"},
+		{name: "legacy system_container alias rejected", input: "system_container", expected: ""},
+		{name: "legacy docker_container alias rejected", input: "docker_container", expected: ""},
+		{name: "legacy docker_service alias rejected", input: "docker_service", expected: ""},
+		{name: "legacy kubernetes_cluster alias rejected", input: "kubernetes_cluster", expected: ""},
+		{name: "trim and case normalize rejected", input: "  DOCKER-SERVICE  ", expected: ""},
+		{name: "unknown passthrough", input: "storage", expected: "storage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeAlertResourceType(tt.input)
+			if result != tt.expected {
+				t.Errorf("normalizeAlertResourceType(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

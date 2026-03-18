@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 )
 
 type fakeExecutor struct {

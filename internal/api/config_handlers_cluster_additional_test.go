@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -229,6 +230,52 @@ func TestGetAllNodesForAPI(t *testing.T) {
 	}
 }
 
+func TestHandleGetNodes_ClusterEndpointJSONUsesCanonicalKeys(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve-1",
+				Host:        "https://pve-1.local:8006",
+				TokenValue:  "token",
+				IsCluster:   true,
+				ClusterName: "cluster-1",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{
+						NodeID:     "node-1",
+						NodeName:   "pve-1",
+						Host:       "https://pve-1.local:8006",
+						GuestURL:   "https://guest.local",
+						IP:         "10.0.0.1",
+						IPOverride: "10.0.0.10",
+						Online:     true,
+					},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetNodes(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"nodeId\":\"node-1\"") {
+		t.Fatalf("expected canonical nodeId key in response body: %s", body)
+	}
+	if !strings.Contains(body, "\"guestURL\":\"https://guest.local\"") {
+		t.Fatalf("expected canonical guestURL key in response body: %s", body)
+	}
+	if strings.Contains(body, "\"NodeID\"") || strings.Contains(body, "\"GuestURL\"") {
+		t.Fatalf("unexpected legacy endpoint key casing in response body: %s", body)
+	}
+}
+
 func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	cfg := &config.Config{
 		DataPath: t.TempDir(),
@@ -265,6 +312,20 @@ func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	}
 	if resp["clusterName"] != "cluster-1" {
 		t.Fatalf("expected clusterName to be cluster-1, got %v", resp["clusterName"])
+	}
+	clusterNodes, ok := resp["clusterNodes"].([]interface{})
+	if !ok || len(clusterNodes) == 0 {
+		t.Fatalf("expected non-empty clusterNodes in response")
+	}
+	firstNode, ok := clusterNodes[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected first cluster node to be an object")
+	}
+	if _, exists := firstNode["nodeName"]; !exists {
+		t.Fatalf("expected nodeName key in clusterNodes response, got %v", firstNode)
+	}
+	if _, exists := firstNode["NodeName"]; exists {
+		t.Fatalf("unexpected legacy NodeName key in clusterNodes response, got %v", firstNode)
 	}
 	if cfg.PVEInstances[0].ClusterName != "cluster-1" || !cfg.PVEInstances[0].IsCluster {
 		t.Fatalf("expected instance to be updated as cluster")
@@ -428,7 +489,7 @@ func TestHandleGetMockMode(t *testing.T) {
 }
 
 func TestHandleAgentInstallCommand(t *testing.T) {
-	cfg := &config.Config{DataPath: t.TempDir()}
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
 	handler := newTestConfigHandlers(t, cfg)
 
 	body := []byte(`{"type":"pve"}`)
@@ -451,19 +512,21 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	if !bytes.Contains([]byte(resp.Command), []byte(resp.Token)) {
 		t.Fatalf("expected command to include token")
 	}
+	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pve"))) {
+		t.Fatalf("expected command to include proxmox type")
+	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected API token to be persisted")
 	}
 }
 
-func TestHandleAgentInstallCommandIgnoresOrgID(t *testing.T) {
+func TestHandleAgentInstallCommand_OmitsTokenWhenAuthOptional(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	handler := newTestConfigHandlers(t, cfg)
 
 	body := []byte(`{"type":"pve"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/config/agent-install", bytes.NewReader(body))
 	req.Host = "example.com:8080"
-	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
 	rec := httptest.NewRecorder()
 	handler.HandleAgentInstallCommand(rec, req)
 
@@ -475,13 +538,36 @@ func TestHandleAgentInstallCommandIgnoresOrgID(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if bytes.Contains([]byte(resp.Command), []byte("--org-id")) {
-		t.Fatalf("expected command to remain single-tenant, got %q", resp.Command)
+	if resp.Token != "" {
+		t.Fatalf("expected optional-auth install response to omit token, got %q", resp.Token)
 	}
-	if len(cfg.APITokens) != 1 {
-		t.Fatalf("expected API token to be persisted")
+	if bytes.Contains([]byte(resp.Command), []byte("--token")) {
+		t.Fatalf("expected optional-auth install command to omit token transport, got: %s", resp.Command)
 	}
-	if cfg.APITokens[0].OrgID != "" {
-		t.Fatalf("expected generated token to stay unbound, got %q", cfg.APITokens[0].OrgID)
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected optional-auth install command to avoid persisting API tokens")
+	}
+}
+
+func TestHandleAgentInstallCommand_NormalizesType(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body := []byte(`{"type":" PBS "}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/config/agent-install", bytes.NewReader(body))
+	req.Host = "example.com:8080"
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp AgentInstallCommandResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pbs"))) {
+		t.Fatalf("expected normalized proxmox type in command, got: %s", resp.Command)
 	}
 }

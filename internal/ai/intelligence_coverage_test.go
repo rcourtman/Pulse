@@ -157,11 +157,11 @@ func TestIntelligence_getLearningStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	knowledgeStore.SaveNote("vm-1", "vm-1", "vm", "general", "Note", "Content")
-	knowledgeStore.SaveNote("vm-2", "vm-2", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-1", "vm-1", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-2", "vm-2", "vm", "general", "Note", "Content")
 
 	baselineStore := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
-	baselineStore.Learn("vm-1", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
+	_ = baselineStore.Learn("vm-1", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
 
 	patternDetector := patterns.NewDetector(patterns.DetectorConfig{
 		MinOccurrences:  2,
@@ -357,10 +357,10 @@ func TestIntelligence_generateHealthPrediction_Branches(t *testing.T) {
 func TestIntelligence_FormatContext_AllSubsystems(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
-	knowledgeStore.SaveNote("vm-ctx", "vm-ctx", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-ctx", "vm-ctx", "vm", "general", "Note", "Content")
 
 	baselineStore := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
-	baselineStore.Learn("vm-ctx", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
+	_ = baselineStore.Learn("vm-ctx", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
 
 	patternDetector := patterns.NewDetector(patterns.DetectorConfig{MinOccurrences: 2, PatternWindow: 48 * time.Hour, PredictionLimit: 30 * 24 * time.Hour})
 	patternStart := time.Now().Add(-90 * time.Minute)
@@ -394,7 +394,7 @@ func TestIntelligence_FormatContext_AllSubsystems(t *testing.T) {
 func TestIntelligence_FormatGlobalContext_AllSubsystems(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
-	knowledgeStore.SaveNote("vm-global", "vm-global", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-global", "vm-global", "vm", "general", "Note", "Content")
 
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{MaxIncidents: 10})
 	incidentStore.RecordAlertFired(&alerts.Alert{ID: "alert-global", ResourceID: "vm-global", ResourceName: "vm-global", Type: "cpu", StartTime: time.Now()})
@@ -448,7 +448,7 @@ func TestIntelligence_GetSummary_WithSubsystems(t *testing.T) {
 	changes.DetectChanges([]memory.ResourceSnapshot{{ID: "vm-sum", Name: "vm-sum", Type: "vm", Status: "running", SnapshotTime: time.Now()}})
 
 	remediations := memory.NewRemediationLog(memory.RemediationLogConfig{MaxRecords: 10})
-	remediations.Log(memory.RemediationRecord{ResourceID: "vm-sum", Problem: "cpu", Action: "restart", Outcome: memory.OutcomeResolved})
+	_ = remediations.Log(memory.RemediationRecord{ResourceID: "vm-sum", Problem: "cpu", Action: "restart", Outcome: memory.OutcomeResolved})
 
 	intel.SetSubsystems(findings, patternDetector, nil, nil, nil, nil, changes, remediations)
 
@@ -503,13 +503,13 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	correlationDetector.RecordEvent(correlation.Event{ResourceID: "vm-child", ResourceName: "vm-child", ResourceType: "vm", EventType: correlation.EventRestart, Timestamp: corrBase.Add(3 * time.Minute)})
 
 	baselineStore := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
-	baselineStore.Learn("vm-intel", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
+	_ = baselineStore.Learn("vm-intel", "vm", "cpu", []baseline.MetricPoint{{Value: 10}})
 
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{MaxIncidents: 10})
 	incidentStore.RecordAlertFired(&alerts.Alert{ID: "alert-intel", ResourceID: "vm-intel", ResourceName: "vm-intel", Type: "cpu", StartTime: time.Now()})
 
 	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
-	knowledgeStore.SaveNote("vm-intel", "vm-intel", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-intel", "vm-intel", "vm", "general", "Note", "Content")
 
 	intel.SetSubsystems(findings, patternDetector, correlationDetector, baselineStore, incidentStore, knowledgeStore, nil, nil)
 	res := intel.GetResourceIntelligence("vm-intel")
@@ -539,7 +539,7 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 func TestIntelligence_GetResourceIntelligence_KnowledgeFallback(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, _ := knowledge.NewStore(t.TempDir())
-	knowledgeStore.SaveNote("vm-know", "knowledge-vm", "vm", "general", "Note", "Content")
+	_ = knowledgeStore.SaveNote("vm-know", "knowledge-vm", "vm", "general", "Note", "Content")
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)
 	res := intel.GetResourceIntelligence("vm-know")

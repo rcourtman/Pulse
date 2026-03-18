@@ -1,0 +1,469 @@
+package truenas
+
+import (
+	"math"
+	"strings"
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+)
+
+func TestProviderFeatureFlagGatesFixtureRecords(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(false)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewDefaultProvider()
+	if got := len(provider.Records()); got != 0 {
+		t.Fatalf("expected no records with feature disabled, got %d", got)
+	}
+}
+
+func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	provider := NewProvider(fixtures)
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	resources := registry.List()
+	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks)
+	if len(resources) != wantCount {
+		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
+	}
+
+	system := requireResource(t, resources, unifiedresources.ResourceTypeAgent, fixtures.System.Hostname)
+	assertSourceTracking(t, *system, unifiedresources.SourceTrueNAS)
+	if system.ChildCount != len(fixtures.Pools) {
+		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools), system.ChildCount)
+	}
+	if system.TrueNAS == nil {
+		t.Fatal("expected TrueNAS metadata on system record")
+	}
+	if system.TrueNAS.UptimeSeconds != fixtures.System.UptimeSeconds {
+		t.Fatalf("expected uptime %d, got %d", fixtures.System.UptimeSeconds, system.TrueNAS.UptimeSeconds)
+	}
+	if system.TrueNAS.Version != fixtures.System.Version {
+		t.Fatalf("expected version %q, got %q", fixtures.System.Version, system.TrueNAS.Version)
+	}
+	if system.Status != unifiedresources.StatusWarning {
+		t.Fatalf("expected system status warning due to degraded storage, got %q", system.Status)
+	}
+	if system.TrueNAS.StorageRisk == nil {
+		t.Fatal("expected rolled-up TrueNAS storage risk on system record")
+	}
+	if system.TrueNAS.StorageRisk.Level != "warning" {
+		t.Fatalf("expected warning storage risk on system record, got %+v", system.TrueNAS.StorageRisk)
+	}
+	if system.TrueNAS.StorageRiskSummary == "" {
+		t.Fatal("expected non-empty storage risk summary on system record")
+	}
+	if system.TrueNAS.StoragePostureSummary != system.TrueNAS.StorageRiskSummary {
+		t.Fatalf("expected posture summary to match risk summary, got risk=%q posture=%q", system.TrueNAS.StorageRiskSummary, system.TrueNAS.StoragePostureSummary)
+	}
+	if !system.TrueNAS.ProtectionReduced || system.TrueNAS.ProtectionSummary == "" {
+		t.Fatalf("expected protection semantics on system record, got %+v", system.TrueNAS)
+	}
+	if system.TrueNAS.StorageRiskSummary != system.TrueNAS.ProtectionSummary {
+		t.Fatalf("expected risk summary to prefer protection summary, got risk=%q protection=%q", system.TrueNAS.StorageRiskSummary, system.TrueNAS.ProtectionSummary)
+	}
+	if len(system.Incidents) != 2 {
+		t.Fatalf("expected 2 native incidents on system record, got %+v", system.Incidents)
+	}
+
+	pool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank")
+	assertSourceTracking(t, *pool, unifiedresources.SourceTrueNAS)
+	if pool.ParentID == nil || *pool.ParentID != system.ID {
+		t.Fatalf("expected pool parent %q, got %+v", system.ID, pool.ParentID)
+	}
+	if pool.Storage == nil {
+		t.Fatal("expected pool storage metadata")
+	}
+	if pool.Storage.ZFSPoolState != "ONLINE" {
+		t.Fatalf("expected ZFSPoolState ONLINE, got %q", pool.Storage.ZFSPoolState)
+	}
+	if pool.Storage.Platform != "truenas" || pool.Storage.Topology != "pool" || pool.Storage.Protection != "zfs" {
+		t.Fatalf("expected canonical storage metadata on pool, got %+v", pool.Storage)
+	}
+	assertDiskMetric(t, pool.Metrics, 30*1024*1024*1024*1024, 12*1024*1024*1024*1024)
+
+	archivePool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "archive")
+	if len(archivePool.Incidents) != 2 {
+		t.Fatalf("expected archive pool incidents to include pool + disk alerts, got %+v", archivePool.Incidents)
+	}
+	if !hasIncidentCode(archivePool.Incidents, "truenas_volume_status") || !hasIncidentCode(archivePool.Incidents, "truenas_smart") {
+		t.Fatalf("expected archive pool incidents to include volume and smart alerts, got %+v", archivePool.Incidents)
+	}
+
+	dataset := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank/apps")
+	assertSourceTracking(t, *dataset, unifiedresources.SourceTrueNAS)
+	if dataset.ParentID == nil || *dataset.ParentID != pool.ID {
+		t.Fatalf("expected dataset parent %q, got %+v", pool.ID, dataset.ParentID)
+	}
+	assertDiskMetric(t, dataset.Metrics, 18*1024*1024*1024*1024, 5*1024*1024*1024*1024)
+
+	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
+	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)
+	if disk.ParentID == nil || *disk.ParentID != pool.ID {
+		t.Fatalf("expected disk parent %q, got %+v", pool.ID, disk.ParentID)
+	}
+	if disk.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if disk.PhysicalDisk.DevPath != "/dev/sda" {
+		t.Fatalf("expected dev path /dev/sda, got %q", disk.PhysicalDisk.DevPath)
+	}
+	if disk.PhysicalDisk.Model != "Seagate Exos X18" {
+		t.Fatalf("expected model %q, got %q", "Seagate Exos X18", disk.PhysicalDisk.Model)
+	}
+	if disk.PhysicalDisk.Serial != "ZL0A1234" {
+		t.Fatalf("expected serial %q, got %q", "ZL0A1234", disk.PhysicalDisk.Serial)
+	}
+	if disk.PhysicalDisk.DiskType != "sata" {
+		t.Fatalf("expected disk type %q, got %q", "sata", disk.PhysicalDisk.DiskType)
+	}
+	if disk.PhysicalDisk.SizeBytes != 16*1024*1024*1024*1024 {
+		t.Fatalf("expected size bytes %d, got %d", int64(16*1024*1024*1024*1024), disk.PhysicalDisk.SizeBytes)
+	}
+	if disk.PhysicalDisk.Health != "PASSED" {
+		t.Fatalf("expected health PASSED, got %q", disk.PhysicalDisk.Health)
+	}
+	if disk.PhysicalDisk.Wearout != -1 {
+		t.Fatalf("expected wearout -1, got %d", disk.PhysicalDisk.Wearout)
+	}
+	if disk.PhysicalDisk.RPM != 7200 {
+		t.Fatalf("expected rpm 7200, got %d", disk.PhysicalDisk.RPM)
+	}
+
+	targets := registry.SourceTargets(dataset.ID)
+	if len(targets) == 0 {
+		t.Fatal("expected source targets for dataset")
+	}
+	found := false
+	for _, target := range targets {
+		if target.Source == unifiedresources.SourceTrueNAS && target.SourceID == "dataset:tank/apps" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected truenas source target for dataset, got %+v", targets)
+	}
+}
+
+func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, NewDefaultProvider().Records())
+
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	resources := adapter.GetAll()
+	if len(resources) == 0 {
+		t.Fatal("expected resources from registry")
+	}
+
+	for _, resource := range resources {
+		if string(resource.Type) == "truenas" {
+			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
+		}
+		switch resource.Type {
+		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
+		default:
+			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
+		}
+
+		frontend := models.ConvertResourceToFrontend(toFrontendInput(resource))
+		if frontend.ID == "" {
+			t.Fatalf("expected frontend conversion to preserve ID for %s", resource.ID)
+		}
+	}
+}
+
+func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	provider := NewProvider(fixtures)
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	fixtureByName := make(map[string]Disk, len(fixtures.Disks))
+	for _, disk := range fixtures.Disks {
+		fixtureByName[disk.Name] = disk
+	}
+
+	var diskRecords []unifiedresources.IngestRecord
+	for _, record := range records {
+		if record.Resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			diskRecords = append(diskRecords, record)
+		}
+	}
+	if len(diskRecords) != 4 {
+		t.Fatalf("expected 4 disk records, got %d", len(diskRecords))
+	}
+
+	for _, record := range diskRecords {
+		fixture, ok := fixtureByName[record.Resource.Name]
+		if !ok {
+			t.Fatalf("unexpected disk record %q", record.Resource.Name)
+		}
+		if record.Resource.PhysicalDisk == nil {
+			t.Fatalf("expected PhysicalDiskMeta for %q", record.Resource.Name)
+		}
+
+		meta := record.Resource.PhysicalDisk
+		if meta.DevPath != "/dev/"+fixture.Name {
+			t.Fatalf("expected dev path %q, got %q", "/dev/"+fixture.Name, meta.DevPath)
+		}
+		if meta.Model != fixture.Model {
+			t.Fatalf("expected model %q, got %q", fixture.Model, meta.Model)
+		}
+		if meta.Serial != fixture.Serial {
+			t.Fatalf("expected serial %q, got %q", fixture.Serial, meta.Serial)
+		}
+		if meta.DiskType != fixture.Transport {
+			t.Fatalf("expected disk type %q, got %q", fixture.Transport, meta.DiskType)
+		}
+		if meta.SizeBytes != fixture.SizeBytes {
+			t.Fatalf("expected size bytes %d, got %d", fixture.SizeBytes, meta.SizeBytes)
+		}
+		if meta.Wearout != -1 {
+			t.Fatalf("expected wearout -1, got %d", meta.Wearout)
+		}
+		wantRPM := 0
+		if fixture.Rotational {
+			wantRPM = 7200
+		}
+		if meta.RPM != wantRPM {
+			t.Fatalf("expected rpm %d, got %d", wantRPM, meta.RPM)
+		}
+
+		switch strings.ToUpper(strings.TrimSpace(fixture.Status)) {
+		case "ONLINE":
+			if record.Resource.Status != unifiedresources.StatusOnline {
+				t.Fatalf("expected status online for %q, got %s", fixture.Name, record.Resource.Status)
+			}
+			if meta.Health != "PASSED" {
+				t.Fatalf("expected health PASSED for %q, got %q", fixture.Name, meta.Health)
+			}
+			if meta.Risk != nil {
+				t.Fatalf("expected no risk payload for healthy disk %q, got %+v", fixture.Name, meta.Risk)
+			}
+		case "DEGRADED":
+			if record.Resource.Status != unifiedresources.StatusWarning {
+				t.Fatalf("expected status warning for %q, got %s", fixture.Name, record.Resource.Status)
+			}
+			if meta.Health != "UNKNOWN" {
+				t.Fatalf("expected health UNKNOWN for %q, got %q", fixture.Name, meta.Health)
+			}
+			if meta.Risk == nil {
+				t.Fatalf("expected risk payload for degraded disk %q", fixture.Name)
+			}
+			if meta.Risk.Level != "warning" {
+				t.Fatalf("expected warning risk for degraded disk %q, got %+v", fixture.Name, meta.Risk)
+			}
+			if len(meta.Risk.Reasons) == 0 || meta.Risk.Reasons[0].Code != "truenas_disk_state" {
+				t.Fatalf("expected truenas_disk_state reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
+			}
+			if len(record.Resource.Incidents) != 1 || record.Resource.Incidents[0].Code != "truenas_smart" {
+				t.Fatalf("expected SMART incident on degraded disk %q, got %+v", fixture.Name, record.Resource.Incidents)
+			}
+		default:
+			t.Fatalf("unhandled fixture status %q for %q", fixture.Status, fixture.Name)
+		}
+	}
+}
+
+func hasIncidentCode(incidents []unifiedresources.ResourceIncident, code string) bool {
+	for _, incident := range incidents {
+		if incident.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func requireResource(t *testing.T, resources []unifiedresources.Resource, resourceType unifiedresources.ResourceType, name string) *unifiedresources.Resource {
+	t.Helper()
+	for i := range resources {
+		if resources[i].Type == resourceType && resources[i].Name == name {
+			return &resources[i]
+		}
+	}
+	t.Fatalf("missing resource type=%s name=%s", resourceType, name)
+	return nil
+}
+
+func assertSourceTracking(t *testing.T, resource unifiedresources.Resource, source unifiedresources.DataSource) {
+	t.Helper()
+	if !containsSource(resource.Sources, source) {
+		t.Fatalf("expected source %s in %+v", source, resource.Sources)
+	}
+	if resource.SourceStatus == nil {
+		t.Fatalf("expected source status for %s", resource.ID)
+	}
+	if _, ok := resource.SourceStatus[source]; !ok {
+		t.Fatalf("expected source status entry for %s on %s", source, resource.ID)
+	}
+}
+
+func assertDiskMetric(t *testing.T, metrics *unifiedresources.ResourceMetrics, total int64, used int64) {
+	t.Helper()
+	if metrics == nil || metrics.Disk == nil {
+		t.Fatal("expected disk metric")
+	}
+	if metrics.Disk.Total == nil || *metrics.Disk.Total != total {
+		t.Fatalf("expected total=%d, got %+v", total, metrics.Disk.Total)
+	}
+	if metrics.Disk.Used == nil || *metrics.Disk.Used != used {
+		t.Fatalf("expected used=%d, got %+v", used, metrics.Disk.Used)
+	}
+	free := *metrics.Disk.Total - *metrics.Disk.Used
+	if free <= 0 {
+		t.Fatalf("expected positive free capacity, got %d", free)
+	}
+}
+
+func containsSource(sources []unifiedresources.DataSource, source unifiedresources.DataSource) bool {
+	for _, existing := range sources {
+		if existing == source {
+			return true
+		}
+	}
+	return false
+}
+
+func toFrontendInput(resource unifiedresources.Resource) models.ResourceConvertInput {
+	input := models.ResourceConvertInput{
+		ID:           resource.ID,
+		Type:         string(resource.Type),
+		Name:         resource.Name,
+		DisplayName:  resource.Name,
+		SourceType:   firstSourceType(resource.Sources),
+		ParentID:     stringValue(resource.ParentID),
+		ClusterID:    resource.Identity.ClusterName,
+		Status:       string(resource.Status),
+		Tags:         resource.Tags,
+		LastSeenUnix: resource.LastSeen.UnixMilli(),
+	}
+	input.CPU = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU }))
+	input.Memory = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory }))
+	input.Disk = metricToInput(metricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk }))
+
+	if resource.Metrics != nil && (resource.Metrics.NetIn != nil || resource.Metrics.NetOut != nil) {
+		input.HasNetwork = true
+		if resource.Metrics.NetIn != nil {
+			input.NetworkRX = int64(math.Round(resource.Metrics.NetIn.Value))
+		}
+		if resource.Metrics.NetOut != nil {
+			input.NetworkTX = int64(math.Round(resource.Metrics.NetOut.Value))
+		}
+	}
+	input.Identity = identityToInput(resource.Identity)
+	return input
+}
+
+func firstSourceType(sources []unifiedresources.DataSource) string {
+	if len(sources) == 0 {
+		return ""
+	}
+	return string(sources[0])
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func metricValue(
+	metrics *unifiedresources.ResourceMetrics,
+	pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue,
+) *unifiedresources.MetricValue {
+	if metrics == nil {
+		return nil
+	}
+	return pick(metrics)
+}
+
+func metricToInput(metric *unifiedresources.MetricValue) *models.ResourceMetricInput {
+	if metric == nil {
+		return nil
+	}
+
+	current := metric.Percent
+	if current == 0 {
+		current = metric.Value
+	}
+	if metric.Percent != 0 && metric.Value != 0 {
+		current = math.Max(metric.Percent, metric.Value)
+	}
+
+	result := &models.ResourceMetricInput{Current: current}
+	if metric.Total != nil {
+		total := *metric.Total
+		result.Total = &total
+	}
+	if metric.Used != nil {
+		used := *metric.Used
+		result.Used = &used
+	}
+	if result.Total != nil && result.Used != nil {
+		free := *result.Total - *result.Used
+		result.Free = &free
+	}
+	return result
+}
+
+func identityToInput(identity unifiedresources.ResourceIdentity) *models.ResourceIdentityInput {
+	hostname := ""
+	for _, candidate := range identity.Hostnames {
+		if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+			hostname = trimmed
+			break
+		}
+	}
+
+	ips := make([]string, 0, len(identity.IPAddresses))
+	for _, ip := range identity.IPAddresses {
+		if trimmed := strings.TrimSpace(ip); trimmed != "" {
+			ips = append(ips, trimmed)
+		}
+	}
+
+	machineID := strings.TrimSpace(identity.MachineID)
+	if hostname == "" && machineID == "" && len(ips) == 0 {
+		return nil
+	}
+
+	return &models.ResourceIdentityInput{
+		Hostname:  hostname,
+		MachineID: machineID,
+		IPs:       ips,
+	}
+}

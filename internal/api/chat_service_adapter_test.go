@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,7 @@ import (
 // Mock implementation of chat.StateProvider
 type mockChatStateProvider struct{}
 
-func (m *mockChatStateProvider) GetState() interface{} { return nil } // simplified for test
+func (m *mockChatStateProvider) ReadSnapshot() models.StateSnapshot { return models.StateSnapshot{} }
 
 func TestChatServiceAdapter_CreateSession(t *testing.T) {
 	// Setup real chat service with minimal config
@@ -25,7 +26,7 @@ func TestChatServiceAdapter_CreateSession(t *testing.T) {
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
-	defer realSvc.Stop(context.Background())
+	defer func() { _ = realSvc.Stop(context.Background()) }()
 
 	// Create adapter
 	adapter := &chatServiceAdapter{svc: realSvc}
@@ -46,7 +47,7 @@ func TestChatServiceAdapter_GetMessages(t *testing.T) {
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
-	defer realSvc.Stop(context.Background())
+	defer func() { _ = realSvc.Stop(context.Background()) }()
 
 	// Seed a session and message directly into the real service's store?
 	// Since we can't easily inject into the private store, we'll use the public API of the real service

@@ -47,6 +47,9 @@ func TestNewAPITokenRecord(t *testing.T) {
 	if len(record.Scopes) != 1 || record.Scopes[0] != ScopeWildcard {
 		t.Fatalf("Scopes = %v", record.Scopes)
 	}
+	if record.OrgID != "default" {
+		t.Fatalf("OrgID = %q, want default", record.OrgID)
+	}
 }
 
 func TestNewHashedAPITokenRecord(t *testing.T) {
@@ -72,5 +75,138 @@ func TestNewHashedAPITokenRecord(t *testing.T) {
 	}
 	if record.CreatedAt.IsZero() {
 		t.Fatalf("expected CreatedAt to be set")
+	}
+	if record.OrgID != "default" {
+		t.Fatalf("OrgID = %q, want default", record.OrgID)
+	}
+}
+
+func TestAPITokenRecord_IsExpired(t *testing.T) {
+	record := &APITokenRecord{}
+	if record.IsExpired() {
+		t.Fatalf("expected token with nil ExpiresAt to not be expired")
+	}
+
+	past := time.Now().UTC().Add(-time.Minute)
+	record.ExpiresAt = &past
+	if !record.IsExpired() {
+		t.Fatalf("expected token to be expired when ExpiresAt is in the past")
+	}
+
+	future := time.Now().UTC().Add(time.Minute)
+	record.ExpiresAt = &future
+	if record.IsExpired() {
+		t.Fatalf("expected token to not be expired when ExpiresAt is in the future")
+	}
+}
+
+func TestConfig_APITokenExpiration_Enforced(t *testing.T) {
+	rawToken := "token-abcdef123456"
+	record, err := NewAPITokenRecord(rawToken, "name", nil)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord error: %v", err)
+	}
+
+	expiredAt := time.Now().UTC().Add(-time.Minute)
+	record.ExpiresAt = &expiredAt
+
+	cfg := &Config{
+		APITokens: []APITokenRecord{*record},
+	}
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); ok || got != nil {
+		t.Fatalf("expected expired token to be rejected by ValidateAPIToken")
+	}
+	if cfg.APITokens[0].LastUsedAt != nil {
+		t.Fatalf("expected LastUsedAt to remain nil when token is expired")
+	}
+	if cfg.IsValidAPIToken(rawToken) {
+		t.Fatalf("expected expired token to be rejected by IsValidAPIToken")
+	}
+
+	// Move expiration to the future and ensure the token is accepted.
+	notExpiredAt := time.Now().UTC().Add(time.Minute)
+	cfg.APITokens[0].ExpiresAt = &notExpiredAt
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); !ok || got == nil {
+		t.Fatalf("expected non-expired token to be accepted by ValidateAPIToken")
+	}
+	if cfg.APITokens[0].LastUsedAt == nil {
+		t.Fatalf("expected LastUsedAt to be updated for valid token")
+	}
+	if !cfg.IsValidAPIToken(rawToken) {
+		t.Fatalf("expected non-expired token to be accepted by IsValidAPIToken")
+	}
+}
+
+func TestBindLegacyAPITokensToDefault(t *testing.T) {
+	tokens := []APITokenRecord{
+		{ID: "legacy-1"},
+		{ID: "bound-single", OrgID: "org-a"},
+		{ID: "bound-multi", OrgIDs: []string{"org-a", "org-b"}},
+		{ID: "legacy-2", OrgID: "   "},
+	}
+
+	migrated := bindLegacyAPITokensToDefault(tokens)
+	if migrated != 2 {
+		t.Fatalf("migrated = %d, want 2", migrated)
+	}
+	if tokens[0].OrgID != "default" {
+		t.Fatalf("tokens[0].OrgID = %q, want default", tokens[0].OrgID)
+	}
+	if tokens[1].OrgID != "org-a" {
+		t.Fatalf("tokens[1].OrgID = %q, want org-a", tokens[1].OrgID)
+	}
+	if len(tokens[2].OrgIDs) != 2 {
+		t.Fatalf("tokens[2].OrgIDs = %v, want 2 entries", tokens[2].OrgIDs)
+	}
+	if tokens[3].OrgID != "default" {
+		t.Fatalf("tokens[3].OrgID = %q, want default", tokens[3].OrgID)
+	}
+}
+
+func TestBindMissingAPITokenIDs(t *testing.T) {
+	tokens := []APITokenRecord{
+		{ID: ""},
+		{ID: "token-2"},
+		{ID: "   "},
+	}
+
+	migrated := bindMissingAPITokenIDs(tokens)
+	if migrated != 2 {
+		t.Fatalf("migrated = %d, want 2", migrated)
+	}
+	if tokens[0].ID == "" || tokens[0].ID == "   " {
+		t.Fatalf("tokens[0].ID should be assigned")
+	}
+	if tokens[1].ID != "token-2" {
+		t.Fatalf("tokens[1].ID = %q, want token-2", tokens[1].ID)
+	}
+	if tokens[2].ID == "" || tokens[2].ID == "   " {
+		t.Fatalf("tokens[2].ID should be assigned")
+	}
+}
+
+func TestValidateAPIToken_AssignsMissingTokenID(t *testing.T) {
+	raw := "token-with-missing-id"
+	record, err := NewAPITokenRecord(raw, "name", nil)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord error: %v", err)
+	}
+	record.ID = ""
+
+	cfg := &Config{
+		APITokens: []APITokenRecord{*record},
+	}
+
+	validated, ok := cfg.ValidateAPIToken(raw)
+	if !ok || validated == nil {
+		t.Fatalf("expected token to validate")
+	}
+	if validated.ID == "" || validated.ID == "   " {
+		t.Fatalf("expected ValidateAPIToken to assign a missing token ID")
+	}
+	if cfg.APITokens[0].ID == "" || cfg.APITokens[0].ID == "   " {
+		t.Fatalf("expected in-memory token record to have assigned ID")
 	}
 }

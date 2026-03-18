@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -468,7 +469,7 @@ func TestCSRFTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		t.Fatalf("failed to make dir readonly: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
 	// saveUnsafe should handle error gracefully (logs but doesn't panic)
@@ -559,7 +560,7 @@ func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenStore_Load_LegacyFormat(t *testing.T) {
+func TestCSRFTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create legacy format JSON (map[sessionID]tokenData) with snake_case fields
@@ -580,19 +581,38 @@ func TestCSRFTokenStore_Load_LegacyFormat(t *testing.T) {
 
 	store.load()
 
-	// Should load the two non-expired tokens (session-1 and session-2)
-	// The expired one (session-expired) should be skipped
 	if len(store.tokens) != 2 {
-		t.Errorf("expected 2 tokens from legacy format, got %d", len(store.tokens))
+		t.Fatalf("store should load 2 active legacy tokens, got %d", len(store.tokens))
 	}
 
-	// Verify tokens are hashed and can be validated
-	// The legacy format stores raw tokens, which get hashed during migration
 	if !store.ValidateCSRFToken("session-1", "token-value-1") {
-		t.Error("should validate token for session-1 after legacy migration")
+		t.Fatal("session-1 token should validate after legacy load")
 	}
 	if !store.ValidateCSRFToken("session-2", "token-value-2") {
-		t.Error("should validate token for session-2 after legacy migration")
+		t.Fatal("session-2 token should validate after legacy load")
+	}
+	if store.ValidateCSRFToken("session-expired", "expired-token") {
+		t.Fatal("expired legacy CSRF token should be filtered during load")
+	}
+
+	if _, ok := store.tokens[csrfSessionKey("session-1")]; !ok {
+		t.Fatal("session-1 should be stored under its hashed session key")
+	}
+	if _, ok := store.tokens[csrfSessionKey("session-2")]; !ok {
+		t.Fatal("session-2 should be stored under its hashed session key")
+	}
+
+	savedData, err := os.ReadFile(csrfFile)
+	if err != nil {
+		t.Fatalf("failed to read migrated csrf tokens file: %v", err)
+	}
+
+	var persisted []*CSRFTokenData
+	if err := json.Unmarshal(savedData, &persisted); err != nil {
+		t.Fatalf("migrated csrf tokens file should be hashed array format: %v", err)
+	}
+	if len(persisted) != 2 {
+		t.Fatalf("migrated csrf tokens file should contain 2 active tokens, got %d", len(persisted))
 	}
 }
 
@@ -600,7 +620,7 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create current format JSON with expired and nil entries (snake_case fields)
-	// This tests the nil check and expiration check in lines 238-240
+	// to verify nil records and expired tokens are ignored during load.
 	currentJSON := `[
 		{"token_hash": "hash1", "session_key": "key1", "expires_at": "2099-12-31T23:59:59Z"},
 		null,
@@ -627,5 +647,29 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	// Verify the valid token was loaded
 	if _, exists := store.tokens["key1"]; !exists {
 		t.Error("expected key1 to be loaded")
+	}
+}
+
+func TestCSRFTokenStore_InitReconfiguresDataPath(t *testing.T) {
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+
+	dirOne := t.TempDir()
+	dirTwo := t.TempDir()
+
+	InitCSRFStore(dirOne)
+	token := GetCSRFStore().GenerateCSRFToken("session-one")
+
+	InitCSRFStore(dirTwo)
+	if GetCSRFStore().ValidateCSRFToken("session-one", token) {
+		t.Fatal("reconfigured csrf store should not retain tokens from the previous data path")
+	}
+
+	GetCSRFStore().GenerateCSRFToken("session-two")
+	if _, err := os.Stat(filepath.Join(dirOne, "csrf_tokens.json")); err != nil {
+		t.Fatalf("expected original csrf tokens file to remain readable: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dirTwo, "csrf_tokens.json")); err != nil {
+		t.Fatalf("expected reconfigured csrf tokens file to exist: %v", err)
 	}
 }

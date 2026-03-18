@@ -28,6 +28,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Extract version from release tag
         id: version
@@ -46,6 +48,60 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Publishing Docker images for ${TAG} (prerelease: ${IS_PRERELEASE})"
+
+      - name: Validate release line policy
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.version.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist in repository tags."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing cross-line Docker publish."
+            exit 1
+          fi
+
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            BASE_VERSION="${TAG#v}"
+            BASE_VERSION="${BASE_VERSION%%-*}"
+            mapfile -t RC_TAGS < <(git tag -l "v${BASE_VERSION}-rc.*" --sort=-version:refname)
+            if [ "${#RC_TAGS[@]}" -eq 0 ]; then
+              echo "::error::Stable tag ${TAG} has no matching RC tags for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            MATCHED_RC=""
+            for rc_tag in "${RC_TAGS[@]}"; do
+              rc_commit="$(git rev-list -n1 "refs/tags/${rc_tag}")"
+              if git merge-base --is-ancestor "$rc_commit" "$TAG_COMMIT"; then
+                MATCHED_RC="$rc_tag"
+                break
+              fi
+            done
+
+            if [ -z "$MATCHED_RC" ]; then
+              echo "::error::Stable tag ${TAG} does not descend from any matching RC tag for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            echo "[OK] ${TAG} descends from prerelease ${MATCHED_RC}"
+          fi
+
+          echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -86,7 +142,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
             ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse:latest', github.repository_owner) || '' }}
 
-      - name: Build and push Pulse Docker agent image (multi-arch)
+      - name: Build and push Pulse agent image (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -95,17 +151,17 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
           build-args: |
             PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             VERSION=${{ steps.version.outputs.tag }}
           tags: |
-            rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}
-            rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse-docker-agent:latest' || '' }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-docker-agent:latest', github.repository_owner) || '' }}
+            rcourtman/pulse-agent:${{ steps.version.outputs.tag }}
+            rcourtman/pulse-agent:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse-agent:latest' || '' }}
+            ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-agent:latest', github.repository_owner) || '' }}
 
       - name: Output image information
         run: |
@@ -120,10 +176,10 @@ jobs:
           fi
           echo ""
           echo "Agent images (linux/amd64, linux/arm64):"
-          echo "  - rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}"
-          echo "  - rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}"
+          echo "  - rcourtman/pulse-agent:${{ steps.version.outputs.tag }}"
+          echo "  - rcourtman/pulse-agent:${{ steps.version.outputs.version }}"
           if [ "$IS_PRERELEASE" != "true" ]; then
-            echo "  - rcourtman/pulse-docker-agent:latest"
+            echo "  - rcourtman/pulse-agent:latest"
           fi
           echo ""
           if [ "$IS_PRERELEASE" = "true" ]; then

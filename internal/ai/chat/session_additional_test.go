@@ -1,6 +1,9 @@
 package chat
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -138,5 +141,72 @@ func TestSessionStore_ResetFSMAndCleanupContext(t *testing.T) {
 	store.cleanupResolvedContext(session.ID)
 	if store.GetResolvedContext(session.ID).HasAnyResources() {
 		t.Fatalf("expected cleanupResolvedContext to remove resources")
+	}
+}
+
+func TestSessionStore_RejectsInvalidSessionIDs(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewSessionStore(root)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	type op func(string) error
+	ops := []struct {
+		name string
+		run  op
+	}{
+		{
+			name: "get",
+			run: func(id string) error {
+				_, err := store.Get(id)
+				return err
+			},
+		},
+		{
+			name: "delete",
+			run: func(id string) error {
+				return store.Delete(id)
+			},
+		},
+		{
+			name: "add_message",
+			run: func(id string) error {
+				return store.AddMessage(id, Message{Role: "user", Content: "test"})
+			},
+		},
+		{
+			name: "ensure_session",
+			run: func(id string) error {
+				_, err := store.EnsureSession(id)
+				return err
+			},
+		},
+	}
+
+	badIDs := []string{
+		"../escape",
+		"..\\escape",
+		"nested/session",
+		"contains space",
+		"evil.json",
+		strings.Repeat("a", maxSessionIDLength+1),
+	}
+
+	for _, tc := range ops {
+		for _, id := range badIDs {
+			err := tc.run(id)
+			if err == nil {
+				t.Fatalf("%s should reject invalid id %q", tc.name, id)
+			}
+			if !strings.Contains(err.Error(), "invalid session id") {
+				t.Fatalf("%s returned unexpected error for id %q: %v", tc.name, id, err)
+			}
+		}
+	}
+
+	// Ensure traversal-style IDs never created files outside ai_sessions.
+	if _, err := os.Stat(filepath.Join(root, "escape.json")); !os.IsNotExist(err) {
+		t.Fatalf("expected no escaped session file to be created, stat err=%v", err)
 	}
 }

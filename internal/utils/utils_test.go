@@ -238,6 +238,13 @@ func TestGetDataDir(t *testing.T) {
 		t.Errorf("GetDataDir() with env = %q, want /custom/data/dir", result)
 	}
 
+	// Test with whitespace around env var value
+	os.Setenv(envKey, " \t/custom/trimmed/dir \n")
+	result = GetDataDir()
+	if result != "/custom/trimmed/dir" {
+		t.Errorf("GetDataDir() with whitespace env = %q, want /custom/trimmed/dir", result)
+	}
+
 	// Test with env var unset (default)
 	os.Unsetenv(envKey)
 	result = GetDataDir()
@@ -245,11 +252,28 @@ func TestGetDataDir(t *testing.T) {
 		t.Errorf("GetDataDir() without env = %q, want /etc/pulse", result)
 	}
 
+	result = ResolveDataDir("/explicit/data")
+	if result != "/explicit/data" {
+		t.Errorf("ResolveDataDir(explicit) = %q, want /explicit/data", result)
+	}
+
+	result = ResolveDataDirWithDefault("", "/custom/default")
+	if result != "/custom/default" {
+		t.Errorf("ResolveDataDirWithDefault(default) = %q, want /custom/default", result)
+	}
+
 	// Test with empty env var (should use default)
 	os.Setenv(envKey, "")
 	result = GetDataDir()
 	if result != "/etc/pulse" {
 		t.Errorf("GetDataDir() with empty env = %q, want /etc/pulse", result)
+	}
+
+	// Test with whitespace-only env var (should use default)
+	os.Setenv(envKey, " \t\n ")
+	result = GetDataDir()
+	if result != "/etc/pulse" {
+		t.Errorf("GetDataDir() with whitespace-only env = %q, want /etc/pulse", result)
 	}
 }
 
@@ -367,6 +391,18 @@ func TestCompareVersions(t *testing.T) {
 		{"v4.36.2+build123", "v4.36.2", 0},              // With v prefix
 		{"4.36.3", "4.36.2+git.14.g469307d6.dirty", 1},  // Newer beats dirty
 		{"4.36.2+git.14.g469307d6.dirty", "4.36.3", -1}, // Dirty older than newer
+
+		// Semver prerelease ordering
+		{"4.22.0", "4.22.0-rc.3", 1},         // Stable > prerelease
+		{"4.22.0-rc.3", "4.22.0", -1},        // Prerelease < stable
+		{"4.22.0-rc.10", "4.22.0-rc.3", 1},   // Numeric prerelease comparison
+		{"4.22.0-rc.2", "4.22.0-rc.10", -1},  // Numeric prerelease comparison reverse
+		{"4.22.0-rc.1", "4.22.0-rc.1.1", -1}, // Shorter prerelease is lower precedence
+		{"4.22.0-rc.1.1", "4.22.0-rc.1", 1},  // Longer prerelease is higher when shared prefix equal
+		{"4.22.0-1", "4.22.0-alpha", -1},     // Numeric identifier < non-numeric
+		{"4.22.0-alpha", "4.22.0-1", 1},      // Non-numeric identifier > numeric
+		{"4.22.0-alpha.1", "4.22.0-alpha.2", -1},
+		{"4.22.0-beta", "4.22.0-alpha", 1},
 	}
 
 	for _, tc := range tests {

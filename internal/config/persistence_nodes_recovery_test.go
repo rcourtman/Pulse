@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	cp.crypto = cm
 
 	// 1. Decryption failure (invalid data) with NO backup
-	os.WriteFile(nodesFile, []byte("too short"), 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short"), 0600)
 
 	nodes, err := cp.LoadNodesConfig()
 	assert.NoError(t, err) // Returns empty config on critical failure
@@ -33,8 +34,8 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	assert.NotEmpty(t, matches)
 
 	// 2. Decryption failure (invalid data) with corrupted backup
-	os.WriteFile(nodesFile, []byte("too short data"), 0600)
-	os.WriteFile(backupFile, []byte("too short backup"), 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short data"), 0600)
+	_ = os.WriteFile(backupFile, []byte("too short backup"), 0600)
 
 	nodes, err = cp.LoadNodesConfig()
 	assert.NoError(t, err)
@@ -45,10 +46,57 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	validData, _ := json.Marshal(validConfig)
 	encryptedValid, _ := cm.Encrypt(validData)
 
-	os.WriteFile(nodesFile, []byte("too short again"), 0600)
-	os.WriteFile(backupFile, encryptedValid, 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short again"), 0600)
+	_ = os.WriteFile(backupFile, encryptedValid, 0600)
 
 	nodes, err = cp.LoadNodesConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "https://valid:8006", nodes.PVEInstances[0].Host)
+}
+
+func TestLoadNodesConfig_MigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	nodesFile := filepath.Join(tempDir, "nodes.enc")
+
+	plaintext := NodesConfig{
+		PVEInstances: []PVEInstance{{
+			Name:       "pve-1",
+			Host:       "https://pve.example.com",
+			User:       "root@pam",
+			TokenName:  "pulse-token",
+			TokenValue: "pve-secret",
+		}},
+		PBSInstances: []PBSInstance{{
+			Name:       "pbs-1",
+			Host:       "https://pbs.example.com",
+			TokenName:  "pulse-token",
+			TokenValue: "pbs-secret",
+		}},
+		PMGInstances: []PMGInstance{{
+			Name:       "pmg-1",
+			Host:       "https://pmg.example.com",
+			TokenName:  "pulse-token",
+			TokenValue: "pmg-secret",
+		}},
+	}
+	raw, err := json.Marshal(plaintext)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(nodesFile, raw, 0o600))
+
+	nodes, err := cp.LoadNodesConfig()
+	require.NoError(t, err)
+	require.Len(t, nodes.PVEInstances, 1)
+	require.Len(t, nodes.PBSInstances, 1)
+	require.Len(t, nodes.PMGInstances, 1)
+	assert.Equal(t, "pve-secret", nodes.PVEInstances[0].TokenValue)
+	assert.Equal(t, "pbs-secret", nodes.PBSInstances[0].TokenValue)
+	assert.Equal(t, "pmg-secret", nodes.PMGInstances[0].TokenValue)
+
+	rewritten, err := os.ReadFile(nodesFile)
+	require.NoError(t, err)
+	assert.False(t, bytes.Equal(rewritten, raw), "expected plaintext nodes.enc to be rewritten encrypted")
+	assert.NotContains(t, string(rewritten), "pve-secret")
+	assert.NotContains(t, string(rewritten), "pbs-secret")
+	assert.NotContains(t, string(rewritten), "pmg-secret")
 }

@@ -41,7 +41,7 @@ func TestEncryptDecryptWithPassphrase(t *testing.T) {
 		},
 		{
 			name:       "json data",
-			plaintext:  []byte(`{"version":"4.1","nodes":{"pve":[]}}`),
+			plaintext:  []byte(`{"version":"4.2","nodes":{"pve":[]}}`),
 			passphrase: "json-export-pass",
 		},
 		{
@@ -206,19 +206,19 @@ func TestEncryptedData_MinimumSize(t *testing.T) {
 
 func TestExportData_Fields(t *testing.T) {
 	ed := ExportData{
-		Version: "4.1",
+		Version: "4.2",
 	}
 
-	if ed.Version != "4.1" {
-		t.Errorf("Version = %q, want 4.1", ed.Version)
+	if ed.Version != "4.2" {
+		t.Errorf("Version = %q, want 4.2", ed.Version)
 	}
 
 	if ed.GuestMetadata != nil {
 		t.Error("GuestMetadata should be nil by default")
 	}
 
-	if ed.OIDC != nil {
-		t.Error("OIDC should be nil by default")
+	if ed.SSO != nil {
+		t.Error("SSO should be nil by default")
 	}
 
 	if ed.APITokens != nil {
@@ -228,7 +228,7 @@ func TestExportData_Fields(t *testing.T) {
 
 func TestEncryptDecrypt_Base64Roundtrip(t *testing.T) {
 	// Test the actual export/import flow with base64 encoding
-	plaintext := []byte(`{"version":"4.1","exportedAt":"2024-01-01T00:00:00Z"}`)
+	plaintext := []byte(`{"version":"4.2","exportedAt":"2024-01-01T00:00:00Z"}`)
 	passphrase := "export-password"
 
 	// Encrypt
@@ -307,7 +307,7 @@ func TestImportConfig_WrongPassphrase(t *testing.T) {
 	cp := NewConfigPersistence(tempDir)
 
 	// Create valid encrypted data with one passphrase
-	plaintext := []byte(`{"version":"4.1","nodes":{"pve":[],"pbs":[],"pmg":[]},"alerts":{},"email":{},"apprise":{},"webhooks":[],"system":{}}`)
+	plaintext := []byte(`{"version":"4.2","nodes":{"pve":[],"pbs":[],"pmg":[]},"alerts":{},"email":{},"apprise":{},"webhooks":[],"system":{}}`)
 	encrypted, err := encryptWithPassphrase(plaintext, "correct-pass")
 	if err != nil {
 		t.Fatalf("failed to create test data: %v", err)

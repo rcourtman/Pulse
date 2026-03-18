@@ -4,7 +4,16 @@
  * Central hub for Patrol intelligence - AI-powered findings with investigation support.
  */
 
-import { createSignal, createEffect, onMount, onCleanup, createMemo, createResource, For, Show } from 'solid-js';
+import {
+  createSignal,
+  createEffect,
+  onMount,
+  onCleanup,
+  createMemo,
+  createResource,
+  For,
+  Show,
+} from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import {
@@ -19,6 +28,12 @@ import {
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
+import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
+import { getFindingSeverityToneClasses } from '@/utils/aiFindingPresentation';
+import {
+  getPatrolSummaryPresentation,
+  PATROL_NO_ISSUES_LABEL,
+} from '@/utils/patrolSummaryPresentation';
 
 interface ModelInfo {
   id: string;
@@ -33,6 +48,7 @@ interface AISettings {
   patrol_enabled?: boolean;
   model?: string;
   alert_triggered_analysis?: boolean;
+  patrol_event_triggers_enabled?: boolean;
   patrol_auto_fix?: boolean;
   auto_fix_model?: string;
 }
@@ -48,36 +64,45 @@ import SparklesIcon from 'lucide-solid/icons/sparkles';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { TogglePrimitive, Toggle } from '@/components/shared/Toggle';
-import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel, CountdownTimer } from '@/components/patrol';
-import { usePatrolStream } from '@/hooks/usePatrolStream';
-import { hasFeature } from '@/stores/license';
 import {
-  formatRelativeTime,
+  ApprovalBanner,
+  PatrolStatusBar,
+  RunHistoryPanel,
+  CountdownTimer,
+} from '@/components/patrol';
+import { usePatrolStream } from '@/hooks/usePatrolStream';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  licenseStatus,
+  loadLicenseStatus,
+  startProTrial,
+} from '@/stores/license';
+import { formatRelativeTime } from '@/utils/format';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import {
   formatTriggerReason,
+  getCanonicalScopeResourceIds,
   groupModelsByProvider,
 } from '@/utils/patrolFormat';
-
-
-
-// Schedule presets in minutes
-const SCHEDULE_PRESETS = [
-  { value: 0, label: 'Disabled' },
-  { value: 10, label: '10 min' },
-  { value: 15, label: '15 min' },
-  { value: 30, label: '30 min' },
-  { value: 60, label: '1 hour' },
-  { value: 180, label: '3 hours' },
-  { value: 360, label: '6 hours' },
-  { value: 720, label: '12 hours' },
-  { value: 1440, label: '24 hours' },
-];
+import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
+import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
 
 type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
-  const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined>(undefined);
+  const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
+    'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
+  >(undefined);
   const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
@@ -87,19 +112,46 @@ export function AIIntelligence() {
 
   // Optimistic running state — set immediately on "Run Patrol" click to avoid race with backend
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
+  const [patrolEnabledLocal, setPatrolEnabledLocal] = createSignal<boolean>(true);
+  const [liveRunStartedAt, setLiveRunStartedAt] = createSignal('');
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
+
+  const clearSafetyTimer = () => {
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+  };
+
+  const clearScrollToFindingTimer = () => {
+    if (scrollToFindingTimerRef !== undefined) {
+      clearTimeout(scrollToFindingTimerRef);
+      scrollToFindingTimerRef = undefined;
+    }
+  };
+
+  // Fetch patrol status (license_required reflects auto-fix, not patrol access)
+  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(
+    async () => {
+      try {
+        return await getPatrolStatus();
+      } catch {
+        return null;
+      }
+    },
+  );
 
   // Live patrol streaming
   const patrolStream = usePatrolStream({
-    running: () => (patrolStatus()?.running ?? false) || manualRunRequested(),
+    running: () =>
+      patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
     onStart: () => {
       // SSE connected — clear the safety timeout
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     },
     onComplete: () => {
       setManualRunRequested(false);
@@ -137,6 +189,8 @@ export function AIIntelligence() {
 
   onCleanup(() => {
     document.removeEventListener('mousedown', handleClickOutside);
+    clearSafetyTimer();
+    clearScrollToFindingTimer();
   });
 
   // AI settings state
@@ -144,13 +198,63 @@ export function AIIntelligence() {
   const [patrolModel, setPatrolModel] = createSignal<string>('');
   const [defaultModel, setDefaultModel] = createSignal<string>('');
   const [patrolInterval, setPatrolInterval] = createSignal<number>(360);
-  const [patrolEnabledLocal, setPatrolEnabledLocal] = createSignal<boolean>(true);
   const [isUpdatingSettings, setIsUpdatingSettings] = createSignal(false);
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
+  const [patrolEventTriggers, setPatrolEventTriggers] = createSignal<boolean>(true);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+  const quickstartPresentation = createMemo(() =>
+    getAIQuickstartCreditsPresentation(
+      patrolStatus()?.quickstart_credits_remaining ?? 0,
+      patrolStatus()?.quickstart_credits_total ?? 0,
+    ),
+  );
+  const criticalSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('critical', summaryStats().criticalFindings > 0),
+  );
+  const warningSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('warning', summaryStats().warningFindings > 0),
+  );
+  const fixedSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
+  );
 
+  const canStartTrial = createMemo(() => {
+    const state = licenseStatus()?.subscription_state;
+    if (!state) return false;
+    return state !== 'active' && state !== 'trial';
+  });
 
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      const result = await startProTrial();
+      if (result?.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
+        return;
+      }
+      notificationStore.success(getProTrialStartedMessage());
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error(getTrialAlreadyUsedMessage());
+      } else if (statusCode === 429) {
+        notificationStore.error(getTrialTryAgainLaterMessage());
+      } else {
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   // Re-apply patrol model select value when models load after settings
   // (select value is ignored by the browser if no matching option exists yet)
@@ -167,10 +271,8 @@ export function AIIntelligence() {
     const model = patrolModel();
     const models = availableModels();
     if (!model || models.length === 0) return false;
-    return !models.some(m => m.id === model);
+    return !models.some((m) => m.id === model);
   });
-
-
 
   // License feature gates
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
@@ -178,16 +280,8 @@ export function AIIntelligence() {
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
 
   const scheduleOptions = createMemo(() => {
-    const current = patrolInterval();
-    const options = [...SCHEDULE_PRESETS];
-    if (Number.isFinite(current) && !options.some((opt) => opt.value === current)) {
-      options.push({ value: current, label: `${current} min` });
-      options.sort((a, b) => a.value - b.value);
-    }
-    return options;
+    return buildPatrolScheduleOptions(patrolInterval());
   });
-
-
 
   // Load available models
   async function loadModels() {
@@ -209,7 +303,7 @@ export function AIIntelligence() {
       setPatrolInterval(data.patrol_interval_minutes ?? 360);
       setPatrolEnabledLocal(data.patrol_enabled ?? true);
       setAlertTriggeredAnalysis(!alertAnalysisLocked() && data.alert_triggered_analysis !== false);
-
+      setPatrolEventTriggers(data.patrol_event_triggers_enabled !== false);
     } catch (err) {
       console.error('Failed to load AI settings:', err);
     }
@@ -219,7 +313,13 @@ export function AIIntelligence() {
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
     setIsTogglingPatrol(true);
-    const newValue = !patrolEnabledLocal();
+    const previousValue = patrolEnabledLocal();
+    const newValue = !previousValue;
+    setPatrolEnabledLocal(newValue);
+    if (!newValue) {
+      setManualRunRequested(false);
+      clearSafetyTimer();
+    }
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
         method: 'PUT',
@@ -238,7 +338,7 @@ export function AIIntelligence() {
       }
     } catch (err) {
       console.error('Failed to toggle patrol:', err);
-      setPatrolEnabledLocal(!newValue); // Rollback
+      setPatrolEnabledLocal(previousValue); // Rollback
       notificationStore.error('Failed to toggle patrol');
     } finally {
       setIsTogglingPatrol(false);
@@ -246,13 +346,21 @@ export function AIIntelligence() {
   }
 
   async function handleRunPatrol() {
-    if (isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()) return;
+    if (
+      isTriggeringPatrol() ||
+      !canTriggerPatrol() ||
+      manualRunRequested() ||
+      patrolStream.isStreaming()
+    )
+      return;
     setIsTriggeringPatrol(true);
     setManualRunRequested(true);
 
     // Safety timeout: if SSE never connects within 15s, clear optimistic state.
     // Cleared early via onStart callback when the SSE connection opens.
+    clearSafetyTimer();
     safetyTimerRef = setTimeout(() => {
+      safetyTimerRef = undefined;
       if (manualRunRequested() && !patrolStream.isStreaming()) {
         setManualRunRequested(false);
         notificationStore.error('Patrol run did not start — connection timed out');
@@ -268,10 +376,7 @@ export function AIIntelligence() {
       setManualRunRequested(false);
       notificationStore.error('Failed to start patrol run');
       // Clear safety timer on API error
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     } finally {
       setIsTriggeringPatrol(false);
     }
@@ -336,15 +441,25 @@ export function AIIntelligence() {
     }
   }
 
-
-  // Fetch patrol status (license_required reflects auto-fix, not patrol access)
-  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(async () => {
+  // Toggle event-triggered patrols
+  async function handlePatrolEventTriggersChange(enabled: boolean) {
+    if (isUpdatingSettings()) return;
+    setIsUpdatingSettings(true);
+    const previous = patrolEventTriggers();
+    setPatrolEventTriggers(enabled);
     try {
-      return await getPatrolStatus();
-    } catch {
-      return null;
+      await apiFetchJSON('/api/settings/ai/update', {
+        method: 'PUT',
+        body: JSON.stringify({ patrol_event_triggers_enabled: enabled }),
+      });
+    } catch (err) {
+      console.error('Failed to update event-triggered patrols:', err);
+      setPatrolEventTriggers(previous);
+      notificationStore.error('Failed to update event triggers setting');
+    } finally {
+      setIsUpdatingSettings(false);
     }
-  });
+  }
 
   const [patrolRunHistory] = createResource(
     () => activityRefreshTrigger(),
@@ -355,11 +470,11 @@ export function AIIntelligence() {
         console.error('Failed to load patrol run history:', err);
         return [];
       }
-    }
+    },
   );
 
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
-  const upgradeUrl = createMemo(() => patrolStatus()?.upgrade_url || 'https://pulserelay.pro/');
+  const upgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_autofix'));
   const blockedReason = createMemo(() => patrolStatus()?.blocked_reason?.trim() ?? '');
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
   const showBlockedBanner = createMemo(() => patrolEnabledLocal() && !!blockedReason());
@@ -370,18 +485,64 @@ export function AIIntelligence() {
     return '';
   });
 
+  createEffect((wasAutoFixLocked) => {
+    const isAutoFixLocked = autoFixLocked();
+    if (isAutoFixLocked && !wasAutoFixLocked) {
+      trackPaywallViewed('ai_autofix', 'ai_intelligence');
+    }
+    return isAutoFixLocked;
+  }, false);
+
+  createEffect((wasAlertAnalysisLocked) => {
+    const isAlertAnalysisLocked = alertAnalysisLocked();
+    if (isAlertAnalysisLocked && !wasAlertAnalysisLocked) {
+      trackPaywallViewed('ai_alerts', 'ai_intelligence');
+    }
+    return isAlertAnalysisLocked;
+  }, false);
+
+  createEffect((wasLicenseBannerVisible) => {
+    const isLicenseBannerVisible = licenseRequired() && !showBlockedBanner();
+    if (isLicenseBannerVisible && !wasLicenseBannerVisible) {
+      trackPaywallViewed('ai_autofix', 'ai_intelligence_banner');
+    }
+    return isLicenseBannerVisible;
+  }, false);
+
+  const shouldShowLiveRun = createMemo(
+    () =>
+      patrolEnabledLocal() &&
+      ((patrolStatus()?.running ?? false) || manualRunRequested() || patrolStream.isStreaming()),
+  );
+
+  createEffect(() => {
+    if (shouldShowLiveRun()) {
+      if (!liveRunStartedAt()) {
+        setLiveRunStartedAt(new Date().toISOString());
+      }
+      return;
+    }
+    if (liveRunStartedAt()) {
+      setLiveRunStartedAt('');
+    }
+  });
+
   const selectedRunFindingIds = createMemo(() => {
     const run = selectedRun();
-    if (!run || !run.finding_ids || run.finding_ids.length === 0) return null;
+    if (!run) return undefined;
     return run.finding_ids;
+  });
+
+  const selectedRunScopeResourceIds = createMemo(() => {
+    return getCanonicalScopeResourceIds(selectedRun());
   });
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
-    if (!patrolStream.isStreaming() && !manualRunRequested()) return null;
+    if (!shouldShowLiveRun()) return null;
     return {
       id: '__live__',
-      started_at: new Date().toISOString(),
+      started_at: liveRunStartedAt() || new Date().toISOString(),
       completed_at: '',
       duration_ms: 0,
       type: 'full',
@@ -404,6 +565,7 @@ export function AIIntelligence() {
       finding_ids: [],
       error_count: 0,
       status: 'healthy',
+      triage_flags: 0,
       tool_call_count: 0,
     };
   });
@@ -420,7 +582,14 @@ export function AIIntelligence() {
     try {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
-      setAutonomyLevel(settings.autonomy_level);
+      // Clamp locally in case license state resolves before or after this load.
+      // The GET endpoint also clamps, but this prevents a confusing active+disabled
+      // visual state if the response is stale or the feature flag flips mid-session.
+      const effectiveLevel =
+        autoFixLocked() && settings.autonomy_level !== 'monitor'
+          ? 'monitor'
+          : settings.autonomy_level;
+      setAutonomyLevel(effectiveLevel);
       setFullModeUnlocked(settings.full_mode_unlocked);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
@@ -434,6 +603,7 @@ export function AIIntelligence() {
   // the "auto-fix critical issues" toggle is on — if so, we send 'full', otherwise 'assisted'.
   async function handleAutonomyChange(level: PatrolAutonomyLevel) {
     if (isUpdatingAutonomy()) return;
+    if (autoFixLocked() && (level === 'approval' || level === 'assisted')) return;
 
     const previousLevel = autonomyLevel();
     const effectiveLevel = level === 'assisted' && fullModeUnlocked() ? 'full' : level;
@@ -490,7 +660,13 @@ export function AIIntelligence() {
   }
 
   onMount(async () => {
-    await Promise.all([loadAllData(), loadAutonomySettings(), loadModels(), loadAISettings()]);
+    await Promise.all([
+      loadLicenseStatus(),
+      loadAllData(),
+      loadAutonomySettings(),
+      loadModels(),
+      loadAISettings(),
+    ]);
   });
 
   // Polling intervals — paused when tab is hidden to save resources
@@ -525,7 +701,17 @@ export function AIIntelligence() {
     document.addEventListener('visibilitychange', handleVisibility);
     onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
   });
-  onCleanup(() => stopPolling());
+  onCleanup(() => {
+    stopPolling();
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+    if (findingScrollTimerRef !== undefined) {
+      clearTimeout(findingScrollTimerRef);
+      findingScrollTimerRef = undefined;
+    }
+  });
 
   async function loadAllData() {
     setIsRefreshing(true);
@@ -537,27 +723,28 @@ export function AIIntelligence() {
         refetchPatrolStatus(),
       ]);
       // Trigger refresh of patrol status bar
-      setActivityRefreshTrigger(prev => prev + 1);
+      setActivityRefreshTrigger((prev) => prev + 1);
     } finally {
       setIsRefreshing(false);
     }
   }
 
-  const summaryStats = () => {
+  function summaryStats() {
     const allFindings = aiIntelligenceStore.findings;
     // Only count Patrol findings (exclude threshold alerts)
-    const patrolFindings = allFindings.filter(f =>
-      f.source !== 'threshold' && !f.isThreshold && !f.alertId
+    const patrolFindings = allFindings.filter(
+      (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     );
-    const activeFindings = patrolFindings.filter(f => f.status === 'active');
+    const activeFindings = patrolFindings.filter((f) => f.status === 'active');
 
-    const criticalCount = activeFindings.filter(f => f.severity === 'critical').length;
-    const warningCount = activeFindings.filter(f => f.severity === 'warning').length;
+    const criticalCount = activeFindings.filter((f) => f.severity === 'critical').length;
+    const warningCount = activeFindings.filter((f) => f.severity === 'warning').length;
     const totalActive = activeFindings.length;
-    const fixedCount = patrolFindings.filter(f =>
-      f.investigationOutcome === 'fix_verified' ||
-      f.investigationOutcome === 'fix_executed' ||
-      f.investigationOutcome === 'resolved'
+    const fixedCount = patrolFindings.filter(
+      (f) =>
+        f.investigationOutcome === 'fix_verified' ||
+        f.investigationOutcome === 'fix_executed' ||
+        f.investigationOutcome === 'resolved',
     ).length;
 
     return {
@@ -567,67 +754,84 @@ export function AIIntelligence() {
       fixedCount,
       hasAnyPatrolFindings: patrolFindings.length > 0,
     };
-  };
+  }
 
   return (
-    <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div class="h-full flex flex-col bg-base">
       {/* Header */}
-      <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        {/* Top row: Title and refresh */}
-        <div class="flex items-center justify-between gap-4 mb-3">
-          <div class="flex items-center gap-3">
-            <PulsePatrolLogo class="w-6 h-6 text-gray-700 dark:text-gray-200" />
-            <div title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings.">
-              <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Patrol</h1>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                Pulse Patrol monitoring and analysis
-              </p>
+      <div class="flex-shrink-0 bg-surface border-b border-border px-4 py-3">
+        <PageHeader
+          id="patrol-title"
+          title={
+            <span
+              class="inline-flex items-center gap-3"
+              title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings."
+            >
+              <PulsePatrolLogo class="w-6 h-6 text-base-content" />
+              <span>Patrol</span>
+            </span>
+          }
+          description="Pulse Patrol monitoring and analysis"
+          class="mb-3"
+          actions={
+            <div class="flex flex-wrap items-center justify-end gap-3">
+              <Show when={patrolStatus()?.last_patrol_at}>
+                <div class="hidden sm:flex items-center gap-3 text-xs text-muted">
+                  <span>
+                    Last:{' '}
+                    {formatRelativeTime(patrolStatus()?.last_patrol_at, {
+                      compact: true,
+                      emptyText: 'Never',
+                    })}
+                  </span>
+                  <Show when={patrolStatus()?.next_patrol_at}>
+                    <span class="text-muted">|</span>
+                    <CountdownTimer
+                      targetDate={patrolStatus()!.next_patrol_at!}
+                      prefix="Next run: "
+                      class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
+                    />
+                  </Show>
+                </div>
+              </Show>
+
+              <button
+                onClick={() => handleRunPatrol()}
+                disabled={
+                  isTriggeringPatrol() ||
+                  !canTriggerPatrol() ||
+                  manualRunRequested() ||
+                  patrolStream.isStreaming()
+                }
+                title={triggerPatrolDisabledReason()}
+                class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
+              >
+                <PlayIcon
+                  class={`w-4 h-4 ${isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming() ? 'animate-pulse' : ''}`}
+                />
+                {isTriggeringPatrol()
+                  ? 'Starting…'
+                  : manualRunRequested() || patrolStream.isStreaming()
+                    ? 'Running…'
+                    : 'Run Patrol'}
+              </button>
+
+              <button
+                onClick={() => loadAllData()}
+                disabled={isRefreshing()}
+                class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50 transition-colors"
+              >
+                <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
-          </div>
+          }
+        />
 
-          <div class="flex items-center gap-3">
-            {/* Last/Next patrol timing - only show if patrol has run */}
-            <Show when={patrolStatus()?.last_patrol_at}>
-              <div class="hidden sm:flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at)}</span>
-                <Show when={patrolStatus()?.next_patrol_at}>
-                  <span class="text-gray-300 dark:text-gray-600">|</span>
-                  <CountdownTimer
-                    targetDate={patrolStatus()!.next_patrol_at!}
-                    prefix="Next run: "
-                    class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
-                  />
-                </Show>
-              </div>
-            </Show>
-
-            {/* Run Patrol Button */}
-            <button
-              onClick={() => handleRunPatrol()}
-              disabled={isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()}
-              title={triggerPatrolDisabledReason()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 rounded-md transition-colors"
-            >
-              <PlayIcon class={`w-4 h-4 ${(isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming()) ? 'animate-pulse' : ''}`} />
-              {isTriggeringPatrol() ? 'Starting…' : (manualRunRequested() || patrolStream.isStreaming()) ? 'Running…' : 'Run Patrol'}
-            </button>
-
-            {/* Refresh Button */}
-            <button
-              onClick={() => loadAllData()}
-              disabled={isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* Settings row */}
-        <div class="flex flex-wrap items-center gap-4">
-          {/* Patrol Toggle */}
-          <div class="flex items-center gap-2">
+        {/* Settings row - Simplified for Enterprise Feel */}
+        <div class="flex items-center gap-4 mt-2 mb-1">
+          {/* Global Patrol Toggle */}
+          <div class="flex items-center gap-2 bg-surface-hover px-3 py-1.5 rounded-md border border-border">
             <TogglePrimitive
               checked={patrolEnabledLocal()}
               disabled={isTogglingPatrol()}
@@ -635,225 +839,292 @@ export function AIIntelligence() {
               size="sm"
               ariaLabel="Toggle Patrol"
             />
-            <span class="text-sm text-gray-600 dark:text-gray-400">
-              {patrolEnabledLocal() ? 'On' : 'Off'}
+            <span class="text-sm font-medium text-base-content">
+              {patrolEnabledLocal() ? 'Patrol Active' : 'Patrol Disabled'}
             </span>
           </div>
 
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
-
-          {/* Model Selector */}
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Model:</span>
-            <select
-              ref={patrolModelSelectRef}
-              value={patrolModel()}
-              onChange={(e) => handleModelChange(e.currentTarget.value)}
-              disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class={`text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${patrolModelStale() ? 'ring-1 ring-amber-400' : ''}`}
-              title={patrolModelStale() ? `Model "${patrolModel()}" is no longer available. Select a new model.` : ''}
+          {/* Quickstart Credits Badge */}
+          <Show
+            when={
+              patrolStatus()?.using_quickstart ||
+              (patrolStatus()?.quickstart_credits_total &&
+                patrolStatus()!.quickstart_credits_total! > 0 &&
+                patrolStatus()!.quickstart_credits_remaining !== undefined)
+            }
+          >
+            <div
+              class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${quickstartPresentation().className}`}
+              title={quickstartPresentation().title}
             >
-              <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
-              <Show when={patrolModelStale()}>
-                <option value={patrolModel()} disabled>
-                  {patrolModel().split(':').pop()} (unavailable)
-                </option>
+              <Show
+                when={(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0}
+                fallback={<span>{quickstartPresentation().summary}</span>}
+              >
+                <span>{quickstartPresentation().summary}</span>
               </Show>
-              {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
-                <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                  {models.map((model) => (
-                    <option value={model.id}>
-                      {model.name || model.id.split(':').pop()}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
-
-          {/* Schedule Selector */}
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Every:</span>
-            <select
-              value={patrolInterval()}
-              onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
-              disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class="text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            >
-              <For each={scheduleOptions()}>
-                {(preset) => (
-                  <option value={preset.value}>{preset.label}</option>
-                )}
-              </For>
-            </select>
-          </div>
-
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
-
-          {/* Autonomy Level Selector */}
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Mode:</span>
-            <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
-              <For each={(['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[])}>
-                {(level) => {
-                  const isProLocked = () => autoFixLocked() && level === 'assisted';
-                  const isDisabled = () => !patrolEnabledLocal() || isProLocked();
-                  // Show as active for 'assisted' when actual level is 'assisted' or 'full' (full is assisted + critical toggle)
-                  const isActive = () => level === 'assisted'
-                    ? autonomyLevel() === 'assisted' || autonomyLevel() === 'full'
-                    : autonomyLevel() === level;
-
-                  return (
-                    <button
-                      onClick={() => handleAutonomyChange(level)}
-                      disabled={isDisabled()}
-                      title={isProLocked() ? 'Upgrade to Pulse Pro for automatic fixes' : undefined}
-                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${isActive()
-                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                        : isDisabled()
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                        } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}
-                    </button>
-                  );
-                }}
-              </For>
             </div>
-            <div class="relative group">
-              <CircleHelpIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 cursor-help" />
-              <div class="absolute left-0 top-6 z-50 hidden group-hover:block w-72 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 text-xs">
-                <div class="space-y-2">
-                  <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Monitor</span>
-                    <p class="text-gray-600 dark:text-gray-400">Detect issues only. No investigation or fixes.</p>
+          </Show>
+
+          <div class="flex-1"></div>
+
+          {/* Configuration Popover */}
+          <div class="relative" ref={advancedSettingsRef}>
+            <button
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
+              disabled={!patrolEnabledLocal()}
+              class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${showAdvancedSettings() ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800' : ' text-base-content border border-border hover:bg-surface-alt'} ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+            >
+              <SettingsIcon class="w-4 h-4" />
+              Configure Patrol
+            </button>
+
+            <Show when={showAdvancedSettings()}>
+              <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-surface rounded-md shadow-sm border border-border animate-slide-up transform origin-top-right">
+                <div class="flex items-center justify-between mb-5 pb-3 border-b border-border-subtle">
+                  <h4 class="text-base font-semibold tracking-tight text-base-content">
+                    Patrol Configuration
+                  </h4>
+                  <button
+                    onClick={() => setShowAdvancedSettings(false)}
+                    class="p-1 rounded-md hover:text-base-content hover:bg-surface-hover transition-colors"
+                  >
+                    <XIcon class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div class="space-y-6">
+                  {/* Model & Schedule grouped */}
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-muted">
+                        AI Model
+                      </label>
+                      <select
+                        ref={patrolModelSelectRef}
+                        value={patrolModel()}
+                        onChange={(e) => handleModelChange(e.currentTarget.value)}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                      >
+                        <option value="">
+                          Default ({defaultModel().split(':').pop() || 'not set'})
+                        </option>
+                        <Show when={patrolModelStale()}>
+                          <option value={patrolModel()} disabled>
+                            {patrolModel().split(':').pop()} (unavailable)
+                          </option>
+                        </Show>
+                        {Array.from(groupModelsByProvider(availableModels()).entries()).map(
+                          ([provider, models]) => (
+                            <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
+                              {models.map((model) => (
+                                <option value={model.id}>
+                                  {model.name || model.id.split(':').pop()}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ),
+                        )}
+                      </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-muted">
+                        Run Every
+                      </label>
+                      <select
+                        value={patrolInterval()}
+                        onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                        class="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                      >
+                        <For each={scheduleOptions()}>
+                          {(preset) => <option value={preset.value}>{preset.label}</option>}
+                        </For>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Investigate</span>
-                    <p class="text-gray-600 dark:text-gray-400">Investigates findings and proposes fixes. All fixes require your approval before execution.</p>
+
+                  {/* Operational Mode */}
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                        Operational Mode
+                        <div class="relative group">
+                          <CircleHelpIcon class="w-3.5 h-3.5 cursor-help" />
+                          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-surface text-white rounded-md shadow-md text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+                            <strong>Monitor:</strong> Detect only.
+                            <br />
+                            <strong>Investigate:</strong> Detect & propose fixes.
+                            <br />
+                            <strong>Auto-fix:</strong> Execute safe fixes automatically.
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div class="flex items-center bg-base rounded-md p-1 border shadow-inner">
+                      <For each={['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[]}>
+                        {(level) => {
+                          const isProLocked = () =>
+                            autoFixLocked() && (level === 'approval' || level === 'assisted');
+                          const isDisabled = () => !patrolEnabledLocal() || isProLocked();
+                          const isActive = () =>
+                            level === 'assisted'
+                              ? autonomyLevel() === 'assisted' || autonomyLevel() === 'full'
+                              : autonomyLevel() === level;
+
+                          return (
+                            <button
+                              onClick={() => handleAutonomyChange(level)}
+                              disabled={isDisabled()}
+                              title={
+                                isProLocked()
+                                  ? level === 'approval'
+                                    ? 'Upgrade to Pro to investigate findings'
+                                    : 'Upgrade to Pro for automatic fixes'
+                                  : undefined
+                              }
+                              class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover'} ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {level === 'monitor'
+                                ? 'Monitor'
+                                : level === 'approval'
+                                  ? 'Investigate'
+                                  : 'Auto-fix'}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                    <Show when={autoFixLocked()}>
+                      <div class="pl-1 text-[11px] text-slate-500">
+                        <a
+                          href={getUpgradeActionUrlOrFallback('ai_autofix')}
+                          target="_blank"
+                          class="text-indigo-500 font-medium hover:underline"
+                        >
+                          Upgrade to Pro
+                        </a>{' '}
+                        to unlock investigation and auto-fix.
+                        <Show when={canStartTrial()}>
+                          {' '}
+                          <button
+                            type="button"
+                            onClick={handleStartTrial}
+                            disabled={startingTrial()}
+                            class="text-indigo-500 hover:underline"
+                          >
+                            Start free trial
+                          </button>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
-                  <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Auto-fix</span>
-                    <p class="text-gray-600 dark:text-gray-400">Automatically fixes issues and verifies results. By default, critical findings still require approval — configure in ⚙️ settings.</p>
+
+                  {/* Toggles */}
+                  <div class="space-y-4 pt-4 border-t border-border-subtle">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-base-content">
+                          Alert-Triggered Analysis
+                        </label>
+                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                          Analyze infrastructure automatically when critical alerts fire.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={alertTriggeredAnalysis()}
+                        onChange={(e) =>
+                          handleAlertTriggeredAnalysisChange(e.currentTarget.checked)
+                        }
+                        disabled={isUpdatingSettings() || alertAnalysisLocked()}
+                      />
+                    </div>
+
+                    <Show when={alertAnalysisLocked()}>
+                      <div class="-my-1 pl-1 text-[11px]">
+                        <a
+                          href={getUpgradeActionUrlOrFallback('ai_alerts')}
+                          target="_blank"
+                          class="text-indigo-500 font-medium hover:underline"
+                        >
+                          Upgrade
+                        </a>{' '}
+                        to enable.
+                        <Show when={canStartTrial()}>
+                          <button
+                            type="button"
+                            onClick={handleStartTrial}
+                            disabled={startingTrial()}
+                            class="ml-1 text-indigo-500 hover:underline"
+                          >
+                            Start free trial
+                          </button>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-base-content">
+                          Event-Triggered Patrols
+                        </label>
+                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                          Run extra patrols when alerts fire or anomalies are detected.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={patrolEventTriggers()}
+                        onChange={(e) => handlePatrolEventTriggersChange(e.currentTarget.checked)}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                      />
+                    </div>
+
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-red-600 dark:text-red-400">
+                          Auto-fix critical issues
+                        </label>
+                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                          Permit Patrol to execute critical remediations without approval.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={!autoFixLocked() && fullModeUnlocked()}
+                        onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
+                        disabled={
+                          autoFixLocked() ||
+                          !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save Footer */}
+                  <div class="pt-4 border-t border-border-subtle">
+                    <button
+                      onClick={saveAdvancedSettings}
+                      disabled={isSavingAdvanced()}
+                      class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 flex items-center justify-center gap-2"
+                    >
+                      <Show when={isSavingAdvanced()}>
+                        <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
+                      </Show>
+                      <Show when={!isSavingAdvanced()}>Apply Configuration</Show>
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Advanced Settings Gear — visible to all users with gentle Pro upgrade hints */}
-            <div class="relative" ref={advancedSettingsRef}>
-                <button
-                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
-                  disabled={!patrolEnabledLocal()}
-                  class={`p-1 rounded transition-colors ${showAdvancedSettings()
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-                    } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title="Advanced investigation settings"
-                >
-                  <SettingsIcon class="w-4 h-4" />
-                </button>
-
-                {/* Advanced Settings Popover */}
-                <Show when={showAdvancedSettings()}>
-                  <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between mb-3">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
-                      <button
-                        onClick={() => setShowAdvancedSettings(false)}
-                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      >
-                        <XIcon class="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div class="space-y-4">
-                      {/* Auto-fix critical issues toggle */}
-                      <div>
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              When enabled, Patrol will automatically fix critical issues without requiring your approval.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={!autoFixLocked() && fullModeUnlocked()}
-                            onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
-                            disabled={autoFixLocked() || !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}
-                          />
-                        </div>
-                        <Show when={autoFixLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
-                            {' '}to unlock auto-fix.
-                          </p>
-                        </Show>
-                        <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            Select Auto-fix mode to configure this setting.
-                          </p>
-                        </Show>
-                        <Show when={!autoFixLocked() && fullModeUnlocked() && (autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                          <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-                            <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
-                            Critical issues will be auto-fixed without approval. Click Save to apply.
-                          </p>
-                        </Show>
-                      </div>
-
-                      {/* Alert-Triggered Analysis */}
-                      <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                              Alert-Triggered Analysis
-                            </label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              Analyze infrastructure when alerts fire.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={alertTriggeredAnalysis()}
-                            onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
-                            disabled={isUpdatingSettings() || alertAnalysisLocked()}
-                          />
-                        </div>
-                        <Show when={alertAnalysisLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href="https://pulserelay.pro/" target="_blank" rel="noreferrer">Upgrade to Pro</a>
-                            {' '}to enable alert-triggered analysis.
-                          </p>
-                        </Show>
-                      </div>
-
-
-
-                      {/* Save Button (for investigation limits + full mode unlock) */}
-                      <button
-                        onClick={saveAdvancedSettings}
-                        disabled={isSavingAdvanced()}
-                        class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Show when={isSavingAdvanced()}>
-                          <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                        </Show>
-                        <Show when={!isSavingAdvanced()}>Save</Show>
-                      </button>
-                    </div>
-                  </div>
-                </Show>
-              </div>
+            </Show>
           </div>
         </div>
       </div>
 
       {/* Live patrol streaming status bar */}
       <Show when={patrolStream.isStreaming()}>
-        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
+        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
           <div class="flex items-center gap-3 text-sm">
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -863,7 +1134,7 @@ export function AIIntelligence() {
               <span class="text-blue-700 dark:text-blue-300">{patrolStream.phase()}</span>
             </Show>
             <Show when={patrolStream.currentTool()}>
-              <span class="text-blue-600 dark:text-blue-400 font-mono text-xs bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded">
+              <span class="text-blue-600 dark:text-blue-400 font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">
                 {patrolStream.currentTool()}
               </span>
             </Show>
@@ -877,33 +1148,39 @@ export function AIIntelligence() {
       </Show>
 
       <Show when={licenseRequired() && !showBlockedBanner()}>
-        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
+        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <a class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline" href={upgradeUrl()} target="_blank" rel="noopener noreferrer">Upgrade to Pro</a>
-              {' '}to unlock automatic fixes and alert-triggered analysis.
+              <a
+                class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                href={upgradeUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackUpgradeClicked('ai_intelligence_banner', 'ai_autofix')}
+              >
+                Upgrade to Pro
+              </a>{' '}
+              to unlock automatic fixes and alert-triggered analysis.
             </p>
           </div>
         </div>
       </Show>
 
       <Show when={showBlockedBanner()}>
-        <div class="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
+        <div class="flex-shrink-0 bg-amber-50 dark:bg-amber-900 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+              <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900 rounded-md">
                 <ShieldAlertIcon class="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
                   Patrol paused
                 </p>
-                <p class="text-xs text-amber-700 dark:text-amber-300">
-                  {blockedReason()}
-                </p>
+                <p class="text-xs text-amber-700 dark:text-amber-300">{blockedReason()}</p>
                 <Show when={blockedAt()}>
-                  <p class="text-[10px] text-amber-700/80 dark:text-amber-300/80">
-                    Blocked {formatRelativeTime(blockedAt())}
+                  <p class="text-[10px] text-amber-700 dark:text-amber-300">
+                    Blocked {formatRelativeTime(blockedAt(), { compact: true })}
                   </p>
                 </Show>
               </div>
@@ -911,7 +1188,7 @@ export function AIIntelligence() {
             <div class="flex items-center gap-2">
               <a
                 href="/settings/system-ai"
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-200/70 dark:hover:bg-amber-900/60 transition-colors"
+                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
                 Open AI Settings
@@ -921,7 +1198,7 @@ export function AIIntelligence() {
                   href={upgradeUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+                  class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors"
                 >
                   <SparklesIcon class="w-3.5 h-3.5" />
                   Upgrade
@@ -932,10 +1209,10 @@ export function AIIntelligence() {
         </div>
       </Show>
 
-
-
       {/* Content */}
-      <div class={`flex-1 overflow-auto p-4 transition-opacity ${!patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div
+        class={`flex-1 overflow-auto p-4 transition-opacity ${!patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
+      >
         <div class="space-y-4">
           {/* Approval Banner */}
           <ApprovalBanner
@@ -943,9 +1220,12 @@ export function AIIntelligence() {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
               // Allow SolidJS to re-render with new filter before scrolling
-              setTimeout(() => {
+              clearScrollToFindingTimer();
+              scrollToFindingTimerRef = setTimeout(() => {
+                scrollToFindingTimerRef = undefined;
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                findingScrollTimerRef = undefined;
               }, 100);
             }}
           />
@@ -958,35 +1238,32 @@ export function AIIntelligence() {
 
           {/* Summary Cards */}
           <Show
-            when={summaryStats().criticalFindings > 0 || summaryStats().warningFindings > 0 || summaryStats().fixedCount > 0}
+            when={
+              summaryStats().criticalFindings > 0 ||
+              summaryStats().warningFindings > 0 ||
+              summaryStats().fixedCount > 0
+            }
             fallback={
               <Show when={patrolStatus()?.last_patrol_at}>
-                <div class="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2 px-4 py-3 bg-surface rounded-md border border-border">
                   <CheckCircleIcon class="w-4 h-4 text-green-500 dark:text-green-400" />
-                  <span class="text-sm text-gray-600 dark:text-gray-400">No issues found</span>
+                  <span class="text-sm text-muted">{PATROL_NO_ISSUES_LABEL}</span>
                 </div>
               </Show>
             }
           >
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Critical */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().criticalFindings > 0
-                    ? 'bg-red-100 dark:bg-red-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                    }`}>
-                    <ShieldAlertIcon class={`w-4 h-4 ${summaryStats().criticalFindings > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`} />
+                  <div
+                    class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
+                  >
+                    <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Critical</p>
-                    <p class={`text-lg font-bold ${summaryStats().criticalFindings > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`}>
+                    <p class="text-xs text-muted">Critical</p>
+                    <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
                       {summaryStats().criticalFindings}
                     </p>
                   </div>
@@ -994,23 +1271,16 @@ export function AIIntelligence() {
               </div>
 
               {/* Warnings */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().warningFindings > 0
-                    ? 'bg-amber-100 dark:bg-amber-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                    }`}>
-                    <ActivityIcon class={`w-4 h-4 ${summaryStats().warningFindings > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`} />
+                  <div
+                    class={`p-1.5 rounded-md border ${warningSummaryPresentation().iconContainerClass}`}
+                  >
+                    <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Warnings</p>
-                    <p class={`text-lg font-bold ${summaryStats().warningFindings > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`}>
+                    <p class="text-xs text-muted">Warnings</p>
+                    <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
                       {summaryStats().warningFindings}
                     </p>
                   </div>
@@ -1018,23 +1288,16 @@ export function AIIntelligence() {
               </div>
 
               {/* Fixed (issues resolved by Patrol) */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().fixedCount > 0
-                    ? 'bg-green-100 dark:bg-green-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
-                    }`}>
-                    <CheckCircleIcon class={`w-4 h-4 ${summaryStats().fixedCount > 0
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`} />
+                  <div
+                    class={`p-1.5 rounded-md border ${fixedSummaryPresentation().iconContainerClass}`}
+                  >
+                    <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Fixed</p>
-                    <p class={`text-lg font-bold ${summaryStats().fixedCount > 0
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
-                      }`}>
+                    <p class="text-xs text-muted">Fixed</p>
+                    <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
                       {summaryStats().fixedCount}
                     </p>
                   </div>
@@ -1044,36 +1307,40 @@ export function AIIntelligence() {
           </Show>
 
           {/* Tab Bar */}
-          <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center gap-1 border-b border-border">
             <button
               type="button"
               onClick={() => setActiveTab('findings')}
-              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'findings'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab() === 'findings'
+                  ? 'border-blue-500 text-base-content'
+                  : 'border-transparent text-muted hover:text-base-content hover:border-border'
+              }`}
             >
               Findings
               <Show when={summaryStats().totalActive > 0}>
-                <span class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${summaryStats().criticalFindings > 0
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                  }`}>
+                <span
+                  class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${getFindingSeverityToneClasses(summaryStats().criticalFindings > 0 ? 'critical' : 'warning')}`}
+                >
                   {summaryStats().totalActive}
                 </span>
               </Show>
             </button>
             <button
               type="button"
-              onClick={() => { setActiveTab('history'); setFindingsFilterOverride(undefined); }}
-              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'history'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+              onClick={() => {
+                setActiveTab('history');
+                setFindingsFilterOverride(undefined);
+              }}
+              class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab() === 'history'
+                  ? 'border-blue-500 text-base-content'
+                  : 'border-transparent text-muted hover:text-base-content hover:border-border'
+              }`}
             >
               Run History
               <Show when={displayRunHistory().length > 0}>
-                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-muted">
                   {displayRunHistory().length}
                 </span>
               </Show>
@@ -1084,9 +1351,10 @@ export function AIIntelligence() {
           <Show when={activeTab() === 'findings'}>
             <Show when={selectedRun()}>
               {(run) => (
-                <div class="flex items-center justify-between px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
+                <div class="flex items-center justify-between px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
                   <span>
-                    Filtered to run {formatRelativeTime(run().started_at)} ({formatTriggerReason(run().trigger_reason)})
+                    Filtered to run {formatRelativeTime(run().started_at, { compact: true })} (
+                    {formatTriggerReason(run().trigger_reason)})
                   </span>
                   <button
                     type="button"
@@ -1103,11 +1371,11 @@ export function AIIntelligence() {
               nextPatrolAt={patrolStatus()?.next_patrol_at}
               lastPatrolAt={patrolStatus()?.last_patrol_at}
               patrolIntervalMs={patrolStatus()?.interval_ms}
-              filterOverride={selectedRunFindingIds() ? 'all' : findingsFilterOverride()}
-              filterFindingIds={selectedRunFindingIds() ?? undefined}
-              scopeResourceIds={selectedRun()?.scope_resource_ids}
+              filterOverride={selectedRun() ? 'all' : findingsFilterOverride()}
+              filterFindingIds={selectedRunFindingIds()}
+              scopeResourceIds={selectedRunScopeResourceIds()}
               scopeResourceTypes={selectedRun()?.scope_resource_types}
-              showScopeWarnings={Boolean(selectedRunFindingIds()?.length)}
+              showScopeWarnings={Boolean(selectedRun())}
             />
           </Show>
 
@@ -1122,7 +1390,6 @@ export function AIIntelligence() {
           </Show>
         </div>
       </div>
-
     </div>
   );
 }

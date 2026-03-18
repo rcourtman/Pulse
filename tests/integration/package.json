@@ -4,7 +4,10 @@
   "description": "Integration tests for Pulse (Playwright E2E)",
   "type": "module",
   "scripts": {
-    "test": "playwright test",
+    "test": "node ./scripts/run-playwright.mjs",
+    "evals": "node ./scripts/run-evals.mjs",
+    "test:visual": "npm test -- tests/06-theme-visual.spec.ts --project=chromium",
+    "test:visual:update": "npm test -- tests/06-theme-visual.spec.ts --project=chromium --update-snapshots",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
@@ -12,15 +15,17 @@
     "docker:up": "docker-compose -f docker-compose.test.yml up -d",
     "docker:down": "docker-compose -f docker-compose.test.yml down -v",
     "docker:logs": "docker-compose -f docker-compose.test.yml logs -f",
-    "docker:rebuild": "docker-compose -f docker-compose.test.yml up -d --build",
-    "pretest": "node ./scripts/pretest.mjs",
-    "posttest": "node ./scripts/posttest.mjs"
+    "docker:rebuild": "docker-compose -f docker-compose.test.yml up -d --build"
   },
-  "keywords": ["pulse", "integration", "e2e", "playwright"],
+  "keywords": [
+    "pulse",
+    "integration",
+    "e2e",
+    "playwright"
+  ],
   "author": "rcourtman",
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.0"
   }

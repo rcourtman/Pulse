@@ -1,7 +1,8 @@
 package monitoring
 
 import (
-	"math"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,6 +163,96 @@ func TestParseIntEnv(t *testing.T) {
 	t.Run("number with trailing text returns default", func(t *testing.T) {
 		t.Setenv(testKey, "100abc")
 		result := parseIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %d, got %d", defaultVal, result)
+		}
+	})
+}
+
+func TestParsePositiveDurationEnv(t *testing.T) {
+	const testKey = "TEST_POSITIVE_DURATION_ENV"
+	defaultVal := 30 * time.Second
+
+	t.Run("empty env var returns default", func(t *testing.T) {
+		t.Setenv(testKey, "")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("valid duration returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "45s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != 45*time.Second {
+			t.Errorf("expected %v, got %v", 45*time.Second, result)
+		}
+	})
+
+	t.Run("invalid duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "invalid")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("zero duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "0s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("negative duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "-5s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+}
+
+func TestParseNonNegativeIntEnv(t *testing.T) {
+	const testKey = "TEST_NON_NEGATIVE_INT_ENV"
+	defaultVal := 2
+
+	t.Run("empty env var returns default", func(t *testing.T) {
+		t.Setenv(testKey, "")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected %d, got %d", defaultVal, result)
+		}
+	})
+
+	t.Run("valid positive integer returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "5")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != 5 {
+			t.Errorf("expected 5, got %d", result)
+		}
+	})
+
+	t.Run("zero returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "0")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != 0 {
+			t.Errorf("expected 0, got %d", result)
+		}
+	})
+
+	t.Run("invalid integer returns default", func(t *testing.T) {
+		t.Setenv(testKey, "invalid")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %d, got %d", defaultVal, result)
+		}
+	})
+
+	t.Run("negative integer returns default", func(t *testing.T) {
+		t.Setenv(testKey, "-1")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
 		if result != defaultVal {
 			t.Errorf("expected default %d, got %d", defaultVal, result)
 		}
@@ -1186,43 +1277,6 @@ func TestEffectivePVEPollingInterval(t *testing.T) {
 	}
 }
 
-func TestClampUint64ToInt64(t *testing.T) {
-	t.Run("zero value returns 0", func(t *testing.T) {
-		result := clampUint64ToInt64(0)
-		if result != 0 {
-			t.Errorf("expected 0, got %d", result)
-		}
-	})
-
-	t.Run("small positive value returns same value", func(t *testing.T) {
-		result := clampUint64ToInt64(12345)
-		if result != 12345 {
-			t.Errorf("expected 12345, got %d", result)
-		}
-	})
-
-	t.Run("value at math.MaxInt64 returns math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(uint64(math.MaxInt64))
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
-
-	t.Run("value at math.MaxInt64 + 1 clamps to math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(uint64(math.MaxInt64) + 1)
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
-
-	t.Run("value at math.MaxUint64 clamps to math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(math.MaxUint64)
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
-}
-
 func TestRemoveFailedPBSNode(t *testing.T) {
 	t.Run("removes correct instance from PBSInstances", func(t *testing.T) {
 		state := models.NewState()
@@ -1519,6 +1573,12 @@ func TestSchedulerHealth(t *testing.T) {
 		if resp.Enabled {
 			t.Error("expected Enabled to be false when config is nil")
 		}
+		if resp.Breakers == nil || resp.Staleness == nil || resp.Instances == nil {
+			t.Error("expected scheduler health slices to be normalized")
+		}
+		if resp.Queue.PerType == nil || resp.DeadLetter.Tasks == nil {
+			t.Error("expected scheduler health nested collections to be normalized")
+		}
 	})
 
 	t.Run("config with AdaptivePollingEnabled false returns Enabled false", func(t *testing.T) {
@@ -1731,6 +1791,32 @@ func TestSchedulerHealth(t *testing.T) {
 			t.Errorf("expected UpdatedAt between %v and %v, got %v", before, after, resp.UpdatedAt)
 		}
 	})
+}
+
+func TestSchedulerHealthResponse_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(emptySchedulerHealthResponse(false))
+	if err != nil {
+		t.Fatalf("marshal scheduler health response: %v", err)
+	}
+	if string(payload) == "" {
+		t.Fatal("expected scheduler health payload")
+	}
+	if !strings.Contains(string(payload), `"breakers":[]`) {
+		t.Fatalf("expected breakers array to be retained, got %s", payload)
+	}
+	if !strings.Contains(string(payload), `"staleness":[]`) {
+		t.Fatalf("expected staleness array to be retained, got %s", payload)
+	}
+}
+
+func TestInstanceHealth_UsesCanonicalEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(InstanceHealth{}.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal instance health: %v", err)
+	}
+	if !strings.Contains(string(payload), `"warnings":[]`) {
+		t.Fatalf("expected warnings array to be retained, got %s", payload)
+	}
 }
 
 func TestConvertDockerSwarmInfo(t *testing.T) {
@@ -2408,42 +2494,6 @@ func TestEnsureBreaker(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestUpdateDeadLetterMetrics_NilPollMetrics(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     nil,
-		deadLetterQueue: NewTaskQueue(),
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
-}
-
-func TestUpdateDeadLetterMetrics_NilDeadLetterQueue(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     newTestPollMetrics(t),
-		deadLetterQueue: nil,
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
-}
-
-func TestUpdateDeadLetterMetrics_BothNil(t *testing.T) {
-	t.Parallel()
-
-	m := &Monitor{
-		pollMetrics:     nil,
-		deadLetterQueue: nil,
-	}
-
-	// Should not panic
-	m.updateDeadLetterMetrics()
 }
 
 func TestUpdateDeadLetterMetrics_EmptyQueue(t *testing.T) {

@@ -299,6 +299,19 @@ func TestSetPersistence_LoadsExistingHistory(t *testing.T) {
 	}
 }
 
+func TestSetPersistence_NormalizesNilLoadedHistory(t *testing.T) {
+	store := NewStore(30)
+	mock := &mockPersistence{events: nil}
+
+	if err := store.SetPersistence(mock); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if store.events == nil {
+		t.Fatal("expected loaded event history to be normalized")
+	}
+}
+
 func TestSetPersistence_TrimsOldEventsOnLoad(t *testing.T) {
 	store := NewStore(1) // 1 day retention
 	now := time.Now()

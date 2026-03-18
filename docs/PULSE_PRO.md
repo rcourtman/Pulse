@@ -1,183 +1,159 @@
-# 🚀 Pulse Pro (Technical Overview)
+# Pulse Plans and Entitlements (Community / Relay / Pro / Pro+ / Cloud)
 
-Pulse Pro unlocks advanced AI automation features on top of the free Pulse platform. Pulse Patrol is available to all users with BYOK, while Pro adds auto-fix, autonomy, and deeper analysis.
+This document explains Pulse's user-facing plan structure, the locked self-hosted commercial model, and how those plans map to runtime feature gates.
 
-## What You Get
+For the canonical, code-aligned entitlement table (including internal tier names), see:
+- `docs/architecture/ENTITLEMENT_MATRIX.md`
 
-### Audit Log
-- Persistent audit trail with SQLite storage and HMAC signing.
-- Queryable via `/api/audit` and verified per event in the Security → Audit Log UI.
-- Supports filtering, verification badges, and signature checks for tamper detection.
-- Signing uses an auto-generated HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory.
-- Retention defaults to 90 days (not currently configurable via environment variables).
-- API reference: `docs/API.md`.
-- If signing is disabled (for example, encryption is unavailable), events are stored without signatures and verification will fail.
+## Plan Mapping (User-Facing -> Code Tiers)
 
-### Audit Webhooks
-- real-time delivery of audit events to external endpoints (SIEM, ELK, etc.).
-- Asynchronous dispatch to ensure zero impact on system latency.
-- Signature verification on ingest for secure integration.
-- Configurable via **Settings → Security → Webhooks**.
+Pulse uses capability keys (for example, `ai_autofix`) to gate features at runtime. Those capabilities are bundled into internal tiers in `internal/license/features.go`.
 
-### Advanced Reporting
-- Generate comprehensive PDF/CSV reports for nodes, VMs, containers, and storage.
-- Includes key statistics, trends, and capacity projections.
-- Customizable time ranges and metric aggregation.
-- Access via **Settings → System → Reporting**.
+User-facing plans map to internal tiers as follows:
+- **Community**: `free`
+- **Relay**: `relay`
+- **Pro**: `pro`, `pro_annual`, `lifetime`
+- **Pro+**: `pro_plus`
+- **Cloud**: `msp` or `enterprise`
 
-### Pulse Patrol (BYOK)
-Scheduled background analysis that correlates live state + metrics history to produce actionable findings.
+Notes:
+- `lifetime` keeps the same runtime entitlements as Pro.
+- Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
+- If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
 
-**Inputs:**
-- Nodes, guests, storages, backups, containers, and Kubernetes resources.
-- Metrics history trends and anomaly scores.
-- Alert state and diagnostics.
+## Self-Hosted Commercial Model
 
-**Outputs:**
-- Findings with severity, category, and remediation hints.
-- Trend-aware capacity warnings (e.g., "storage pool will be full in 10 days").
-- Cross-system correlation (e.g., backups failing because a datastore is full).
+Pulse sells monitored coverage. The counted unit is a monitored system, not an installed agent.
 
-### Pro-Only Automations
-- **Alert-triggered analysis**: on-demand deep analysis when alerts fire.
-- **Auto-fix mode**: automatic remediation with verification loops (see Autonomy Levels below).
-- **Full autonomy unlock**: auto-fix for critical findings without requiring approval.
-- **Kubernetes AI analysis**: deep cluster analysis beyond basic monitoring.
-- **Audit-triggered webhooks**: real-time delivery of security events to external systems.
-- **Advanced Reporting**: scheduled or on-demand PDF/CSV infrastructure health reports.
-- **Agent Profiles**: centralized configuration profiles for fleets of agents.
+Self-hosted pricing is locked to:
 
-### Autonomy Levels
+| Plan | Price | Included monitored systems | Metric history | Purpose |
+|---|---:|---:|---:|---|
+| Community | Free | 5 | 7 days | One real small lab end to end |
+| Relay | $4.99/mo or $39/yr | 8 | 14 days | Cheap headroom plus remote access |
+| Pro | $8.99/mo or $79/yr | 15 | 90 days | Automation and operations tier |
+| Pro+ | $14.99/mo or $129/yr | 50 | 90 days | Larger self-hosted labs |
+
+Counted examples:
+- Proxmox PVE node
+- PBS or PMG server
+- Standalone Linux, Windows, or macOS host
+- Docker host
+- TrueNAS or Unraid system
+- Kubernetes cluster
+
+Not counted separately:
+- VMs
+- containers
+- pods
+- disks
+- pools
+- datastores
+- backup jobs
+- other child resources under a counted top-level system
+
+Runtime rules:
+- API-backed monitoring and agent-backed monitoring consume the same cap.
+- If the same system is seen through both paths, it counts once.
+- Deduplication follows canonical unified-resource identity rather than transport-specific state.
+
+Migration policy:
+- Existing paid v5 customers keep their grandfathered recurring continuity until cancellation.
+- Existing free users above the new Community cap are not hard-broken on rollout day.
+- During grace, existing monitoring keeps working.
+- During grace, only new counted-system additions are blocked until the user removes systems or upgrades.
+
+## Feature Matrix
+
+Legend:
+- Included: `Y` / `N`
+- `Y*`: Cloud Enterprise only (`enterprise` tier)
+
+This matrix is derived from the canonical table in `docs/architecture/ENTITLEMENT_MATRIX.md` plus runtime history/limit semantics exposed through entitlements.
+
+| Constant | Capability Key | Display Name | Community | Relay | Pro | Pro+ | Cloud | Primary Gating Mechanism / Notes |
+|---|---|---|:---:|:---:|:---:|:---:|:---:|---|
+| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Higher-autonomy outcomes and fix execution are separately gated. |
+| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
+| `FeatureAIAlerts` | `ai_alerts` | Alert Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
+| `FeatureAIAutoFix` | `ai_autofix` | Pulse Patrol Auto-Fix | N | N | Y | Y | Y | Required for fix execution and higher-autonomy actions. |
+| `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., kubernetes_ai, ...)`. |
+| `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
+| `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
+| `FeatureSSO` | `sso` | Basic SSO (OIDC) | Y | Y | Y | Y | Y | Basic SSO is included in Community tier. |
+| `FeatureAdvancedSSO` | `advanced_sso` | Advanced SSO (SAML/Multi-Provider) | N | N | Y | Y | Y | Used to gate advanced SSO capabilities such as SAML and multi-provider flows. |
+| `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., rbac, ...)`. |
+| `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | Y | API route gating for audit query, verify, and export endpoints. |
+| `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
+| `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro/Pro+ `90`. |
+| `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | N | Y* | Cloud Enterprise only. |
+| `FeatureWhiteLabel` | `white_label` | White-Label Branding | N | N | N | N | Y* | Capability key exists but is still marked not implemented in `internal/license/features.go`. |
+| `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
+| `FeatureUnlimited` | `unlimited` | Unlimited Instances | N | N | N | N | Y | Used for hosted volume and instance limit removal. |
+
+## Autonomy Levels (AI Safety)
 
 Patrol and the Assistant support tiered autonomy:
 
-| Mode | Behavior | License |
-|------|----------|--------|
-| **Monitor** | Detect issues only. No investigation or fixes. | Free (BYOK) |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Free (BYOK) |
-| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | **Pro** |
-| **Full autonomy** | Auto-fix for all findings including critical, without approval. | **Pro** (explicit toggle) |
+| Mode | Behavior | Plan |
+|---|---|---|
+| **Monitor** | Detect issues only. No investigation or fixes. | Community / Relay |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Community / Relay |
+| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | Pro / Pro+ / Cloud |
+| **Full autonomy** | Auto-fix for all findings including critical, without approval (explicit toggle). | Pro / Pro+ / Cloud |
 
-### Investigation Orchestration
+## What You Get (By Plan)
 
-When Patrol creates a finding, the investigation orchestrator can:
+### Community
+- Core monitoring for up to 5 monitored systems.
+- 7-day history.
+- Pulse Patrol with BYOK.
+- Basic SSO and update alerts.
 
-1. **Create a chat session** dedicated to the finding.
-2. **AI analyzes** the issue using available tools (metrics, logs, storage, etc.).
-3. **Propose a fix** with risk assessment (low/medium/high/critical).
-4. **Queue for approval** or **auto-execute** based on autonomy level.
-5. **Verify the fix** with a follow-up read after execution.
+### Relay
+- Everything in Community, plus:
+- 8 monitored systems.
+- 14-day history.
+- Remote access via Relay.
+- Mobile app access and push notifications.
 
-Investigation outcomes include:
-- `resolved` — Issue resolved during investigation
-- `fix_queued` — Fix proposed, awaiting approval
-- `fix_executed` — Fix auto-executed successfully
-- `fix_verified` — Fix worked, issue confirmed resolved
-- `needs_attention` — Requires human intervention
-- `cannot_fix` — Issue cannot be automatically fixed
+### Pro
+- Everything in Relay, plus:
+- 15 monitored systems.
+- AI alert analysis.
+- Auto-fix and higher autonomy.
+- Kubernetes AI analysis.
+- Centralized agent profiles.
+- Advanced SSO, RBAC, audit logging, and advanced reporting.
+- 90-day history.
 
-### What Free Users Still Get
-- **Pulse Patrol (BYOK)**: background findings and investigation proposals with your own provider.
-- **AI Chat (BYOK)**: interactive troubleshooting with your own API keys.
-- **Update alerts**: container/package update signals remain available in the free tier.
+### Pro+
+- Everything in Pro, with 50 monitored systems for larger self-hosted labs.
 
-### What You See In The UI
-- **Patrol findings**: a prioritized list with severity, evidence, and recommended fixes.
-- **Investigation status**: progress indicators showing investigation state and outcome.
-- **Approval cards**: pending fixes await your review with one-click approve/deny.
-- **Alert timelines**: AI analysis events attached to the alert history for auditability.
-- **Remediation controls**: explicit toggles for autonomy mode in Patrol settings.
-- **Agent profiles**: create, edit, and assign profiles in **Settings → Agents → Agent Profiles**.
+### Cloud
+- Hosted Pulse with Pro-level capabilities and hosted lifecycle management.
+- Cloud Enterprise adds multi-tenant orgs, multi-user mode, and future white-labeling where licensed.
 
-## Pro Feature Gates (License-Enforced)
+## License Activation and Introspection
 
-Pulse Pro licenses enable specific server-side features. These are enforced at the API layer and in the UI:
+Pulse plan upgrades are activated locally with a license key.
 
-- `ai_alerts`: alert-triggered analysis runs.
-- `ai_autofix`: autonomous mode and auto-fix workflows.
-- `kubernetes_ai`: AI analysis for Kubernetes clusters (not basic monitoring).
-- `agent_profiles`: centralized agent configuration profiles.
-- `advanced_reporting`: infrastructure health report generation (PDF/CSV).
-- `audit_logging`: persistent audit trail and real-time webhook delivery.
-- `long_term_metrics`: 30-day and 90-day metrics history (7-day history is free).
-
-## Why It Matters (Technical Value)
-
-- **Cross-system correlation**: Patrol combines PVE, PBS, PMG, Docker, and Kubernetes signals into a single model context instead of isolated checks.
-- **Trend-aware analysis**: Uses metrics history to detect slow-burn issues that static thresholds miss.
-- **Noise control**: Suppression and dismissal memory prevent alert fatigue.
-- **Actionable findings**: Each finding includes root-cause clues and next steps.
-- **Auditability**: AI analysis is attached to alerts and stored with finding history, so decisions are traceable.
-- **Fleet consistency**: Agent Profiles keep monitoring settings consistent across large deployments.
-
-## Scheduling and Controls
-
-- **Interval**: 10 minutes to 7 days (default 6 hours). Set to 0 to disable Patrol.
-- **Scope**: Patrol only analyzes resources Pulse is already monitoring.
-- **Safety**: Command execution and auto-fix are disabled by default and require explicit enablement.
-
-## How Licensing Works
-
-Pulse Pro is activated locally with a license key.
-
-1. Go to **Settings → System → Pulse Pro**.
-2. Paste your license key and click **Activate License**.
-3. The key is validated locally (no license server required).
-
-License status, expiry, and feature availability are visible in the same panel.
-
-The license key is stored encrypted in `license.enc` under the Pulse config directory. It is not included in export/import backups, so re-activate after migrations.
+- License key storage: `license.enc` under the Pulse config directory (encrypted; requires `.encryption.key` to decrypt).
+- Export/import note: license files are not included in exports, so you typically re-activate after migrations.
+- Pulse v6 prefers v6 activation keys, but it can migrate valid Pulse v5 Pro or Lifetime JWT-style licenses into the v6 activation model.
+- If a v5 license is already persisted on disk during upgrade and no v6 activation state exists yet, Pulse will try to auto-exchange it on startup.
+- If you are activating manually in v6, paste the v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email. You can also paste a valid v5 Pro or Lifetime license key and Pulse will try to exchange it automatically.
+- If the exchange cannot complete, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key.
 
 ### Feature Status API
 
-You can inspect license feature gates via:
-
+You can inspect active feature gates via:
 - `GET /api/license/features` (authenticated)
 
-This returns a feature map like `ai_alerts`, `ai_autofix`, and `kubernetes_ai` so you can automate Pro-only workflows safely.
+This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix`, `kubernetes_ai`, and `multi_tenant` so you can conditionally enable paid workflows safely.
 
-## Under The Hood (Technical)
+## Deep Dives
 
-- **Patrol context**: patrol runs build a unified snapshot from live state + `metrics.db` history, then correlate alerts, diagnostics, and resource topology.
-- **Findings storage**: findings persist in `ai_findings.json` with run history in `ai_patrol_runs.json`.
-- **Alert-triggered analysis**: runs per alert event and writes analysis into the alert timeline for auditability.
-- **Auto-fix safety**: requires explicit toggles and uses the same agent command scopes you configure for manual runs.
-
-📖 **For complete technical details on the AI subsystems:**
-- [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md) — Baseline learning, pattern detection, forecasting, correlation analysis, incident memory
-- [Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md) — Context prefetching, FSM enforcement, knowledge accumulation, safety gates
-
-## Example Finding Payload (API)
-
-`GET /api/ai/patrol/findings` returns structured findings you can integrate with external tooling:
-
-```json
-{
-  "id": "finding-9f7c2f5e",
-  "key": "storage-high-usage",
-  "severity": "warning",
-  "category": "capacity",
-  "resource_id": "storage:local-lvm",
-  "resource_name": "local-lvm",
-  "resource_type": "storage",
-  "node": "pve-1",
-  "title": "Storage nearing capacity",
-  "description": "local-lvm is at 87% and growing ~4%/day.",
-  "recommendation": "Review VM disks on local-lvm or expand the volume within 7 days.",
-  "evidence": "Used 1.74TB of 2.0TB; +4.1%/day over 7d.",
-  "source": "ai-analysis",
-  "detected_at": "2025-03-04T09:11:12Z",
-  "last_seen_at": "2025-03-04T15:11:12Z",
-  "alert_id": "alert-storage-usage-local-lvm",
-  "times_raised": 2,
-  "suppressed": false
-}
-```
-
-Findings include `source: "ai-analysis"` when AI is enabled (BYOK).
-
-## Privacy and Data Handling
-
-Patrol runs on your Pulse server. When AI is enabled, only the minimal context needed for analysis is sent to the configured AI provider. No telemetry is sent to Pulse by default.
-
-For a deeper AI walkthrough, see [AI.md](AI.md).
+- [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)
+- [Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)
+- [Pulse AI overview](AI.md)

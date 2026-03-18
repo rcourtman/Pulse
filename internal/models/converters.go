@@ -32,12 +32,12 @@ func (n Node) ToFrontend() NodeFrontend {
 		KernelVersion:                n.KernelVersion,
 		PVEVersion:                   n.PVEVersion,
 		CPUInfo:                      n.CPUInfo,
-		LastSeen:                     n.LastSeen.Unix() * 1000,
+		LastSeen:                     timeToUnixMillis(n.LastSeen),
 		ConnectionHealth:             n.ConnectionHealth,
 		IsClusterMember:              n.IsClusterMember,
 		ClusterName:                  n.ClusterName,
 		TemperatureMonitoringEnabled: n.TemperatureMonitoringEnabled,
-		LinkedHostAgentId:            n.LinkedHostAgentID,
+		LinkedAgentID:                n.LinkedAgentID,
 	}
 
 	// Include full Memory object if it has data
@@ -59,7 +59,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		nf.DisplayName = nf.Name
 	}
 
-	return nf
+	return nf.NormalizeCollections()
 }
 
 // ToFrontend converts a VM to VMFrontend
@@ -76,7 +76,6 @@ func (v VM) ToFrontend() VMFrontend {
 		CPUs:             v.CPUs,
 		Mem:              v.Memory.Used,
 		MaxMem:           v.Memory.Total,
-		MemorySource:     v.MemorySource,
 		NetIn:            zeroIfNegative(v.NetworkIn),
 		NetOut:           zeroIfNegative(v.NetworkOut),
 		DiskRead:         zeroIfNegative(v.DiskRead),
@@ -84,7 +83,7 @@ func (v VM) ToFrontend() VMFrontend {
 		Uptime:           v.Uptime,
 		Template:         v.Template,
 		Lock:             v.Lock,
-		LastSeen:         v.LastSeen.Unix() * 1000,
+		LastSeen:         timeToUnixMillis(v.LastSeen),
 		DiskStatusReason: v.DiskStatusReason,
 	}
 
@@ -93,10 +92,7 @@ func (v VM) ToFrontend() VMFrontend {
 		vm.Tags = strings.Join(v.Tags, ",")
 	}
 
-	// Convert last backup time if not zero
-	if !v.LastBackup.IsZero() {
-		vm.LastBackup = v.LastBackup.Unix() * 1000
-	}
+	vm.LastBackup = timeToUnixMillis(v.LastBackup)
 
 	// Include full Memory object if it has data
 	if v.Memory.Total > 0 {
@@ -134,7 +130,7 @@ func (v VM) ToFrontend() VMFrontend {
 		copy(vm.NetworkInterfaces, v.NetworkInterfaces)
 	}
 
-	return vm
+	return vm.NormalizeCollections()
 }
 
 // ToFrontend converts a Container to ContainerFrontend
@@ -158,7 +154,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 		Uptime:    c.Uptime,
 		Template:  c.Template,
 		Lock:      c.Lock,
-		LastSeen:  c.LastSeen.Unix() * 1000,
+		LastSeen:  timeToUnixMillis(c.LastSeen),
 	}
 
 	// OCI containers are classified separately from traditional LXC containers in the UI.
@@ -179,10 +175,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 		ct.Tags = strings.Join(c.Tags, ",")
 	}
 
-	// Convert last backup time if not zero
-	if !c.LastBackup.IsZero() {
-		ct.LastBackup = c.LastBackup.Unix() * 1000
-	}
+	ct.LastBackup = timeToUnixMillis(c.LastBackup)
 
 	// Include full Memory object if it has data
 	if c.Memory.Total > 0 {
@@ -212,7 +205,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 		ct.OSName = c.OSName
 	}
 
-	return ct
+	return ct.NormalizeCollections()
 }
 
 // ToFrontend converts a DockerHost to DockerHostFrontend
@@ -235,7 +228,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		UptimeSeconds:     d.UptimeSeconds,
 		CPUUsagePercent:   d.CPUUsage,
 		Status:            d.Status,
-		LastSeen:          d.LastSeen.Unix() * 1000,
+		LastSeen:          timeToUnixMillis(d.LastSeen),
 		IntervalSeconds:   d.IntervalSeconds,
 		AgentVersion:      d.AgentVersion,
 		Containers:        make([]DockerContainerFrontend, len(d.Containers)),
@@ -251,10 +244,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.TokenID = d.TokenID
 		h.TokenName = d.TokenName
 		h.TokenHint = d.TokenHint
-		if d.TokenLastUsedAt != nil && !d.TokenLastUsedAt.IsZero() {
-			ts := d.TokenLastUsedAt.Unix() * 1000
-			h.TokenLastUsedAt = &ts
-		}
+		h.TokenLastUsedAt = optionalTimeToUnixMillis(d.TokenLastUsedAt)
 	}
 
 	for i, ct := range d.Containers {
@@ -302,17 +292,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.Command = toDockerHostCommandFrontend(*d.Command)
 	}
 
-	return h
-}
-
-// ToFrontend converts a RemovedDockerHost to its frontend representation.
-func (r RemovedDockerHost) ToFrontend() RemovedDockerHostFrontend {
-	return RemovedDockerHostFrontend{
-		ID:          r.ID,
-		Hostname:    r.Hostname,
-		DisplayName: r.DisplayName,
-		RemovedAt:   r.RemovedAt.Unix() * 1000,
-	}
+	return h.NormalizeCollections()
 }
 
 // ToFrontend converts a KubernetesCluster to its frontend representation.
@@ -327,7 +307,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		Context:           c.Context,
 		Version:           c.Version,
 		Status:            c.Status,
-		LastSeen:          c.LastSeen.Unix() * 1000,
+		LastSeen:          timeToUnixMillis(c.LastSeen),
 		IntervalSeconds:   c.IntervalSeconds,
 		AgentVersion:      c.AgentVersion,
 		TokenID:           c.TokenID,
@@ -337,7 +317,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		PendingUninstall:  c.PendingUninstall,
 	}
 
-	if c.TokenLastUsedAt != nil {
+	if c.TokenLastUsedAt != nil && !c.TokenLastUsedAt.IsZero() {
 		ts := c.TokenLastUsedAt.Unix() * 1000
 		cluster.TokenLastUsedAt = &ts
 	}
@@ -361,8 +341,12 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				AllocCPU:                n.AllocCPU,
 				AllocMemoryBytes:        n.AllocMemoryBytes,
 				AllocPods:               n.AllocPods,
+				UsageCPUMilliCores:      n.UsageCPUMilliCores,
+				UsageMemoryBytes:        n.UsageMemoryBytes,
+				UsageCPUPercent:         n.UsageCPUPercent,
+				UsageMemoryPercent:      n.UsageMemoryPercent,
 				Roles:                   append([]string(nil), n.Roles...),
-			}
+			}.NormalizeCollections()
 		}
 	}
 
@@ -386,29 +370,34 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				})
 			}
 
-			var startTime *int64
-			if p.StartTime != nil {
-				ts := p.StartTime.Unix() * 1000
-				startTime = &ts
-			}
-
 			cluster.Pods[i] = KubernetesPodFrontend{
-				UID:        p.UID,
-				Name:       p.Name,
-				Namespace:  p.Namespace,
-				NodeName:   p.NodeName,
-				Phase:      p.Phase,
-				Reason:     p.Reason,
-				Message:    p.Message,
-				QoSClass:   p.QoSClass,
-				CreatedAt:  timeToUnixMillis(p.CreatedAt),
-				StartTime:  startTime,
-				Restarts:   p.Restarts,
-				Labels:     labels,
-				OwnerKind:  p.OwnerKind,
-				OwnerName:  p.OwnerName,
-				Containers: containers,
-			}
+				UID:                           p.UID,
+				Name:                          p.Name,
+				Namespace:                     p.Namespace,
+				NodeName:                      p.NodeName,
+				Phase:                         p.Phase,
+				Reason:                        p.Reason,
+				Message:                       p.Message,
+				QoSClass:                      p.QoSClass,
+				CreatedAt:                     timeToUnixMillis(p.CreatedAt),
+				StartTime:                     optionalTimeToUnixMillis(p.StartTime),
+				Restarts:                      p.Restarts,
+				UsageCPUMilliCores:            p.UsageCPUMilliCores,
+				UsageMemoryBytes:              p.UsageMemoryBytes,
+				UsageCPUPercent:               p.UsageCPUPercent,
+				UsageMemoryPercent:            p.UsageMemoryPercent,
+				NetworkRxBytes:                p.NetworkRxBytes,
+				NetworkTxBytes:                p.NetworkTxBytes,
+				NetInRate:                     p.NetInRate,
+				NetOutRate:                    p.NetOutRate,
+				EphemeralStorageUsedBytes:     p.EphemeralStorageUsedBytes,
+				EphemeralStorageCapacityBytes: p.EphemeralStorageCapacityBytes,
+				DiskUsagePercent:              p.DiskUsagePercent,
+				Labels:                        labels,
+				OwnerKind:                     p.OwnerKind,
+				OwnerName:                     p.OwnerName,
+				Containers:                    containers,
+			}.NormalizeCollections()
 		}
 	}
 
@@ -428,7 +417,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				ReadyReplicas:     d.ReadyReplicas,
 				AvailableReplicas: d.AvailableReplicas,
 				Labels:            labels,
-			}
+			}.NormalizeCollections()
 		}
 	}
 
@@ -440,7 +429,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		cluster.DisplayName = cluster.ID
 	}
 
-	return cluster
+	return cluster.NormalizeCollections()
 }
 
 func timeToUnixMillis(t time.Time) int64 {
@@ -450,53 +439,42 @@ func timeToUnixMillis(t time.Time) int64 {
 	return t.Unix() * 1000
 }
 
-// ToFrontend converts a RemovedKubernetesCluster to its frontend representation.
-func (r RemovedKubernetesCluster) ToFrontend() RemovedKubernetesClusterFrontend {
-	return RemovedKubernetesClusterFrontend{
-		ID:          r.ID,
-		Name:        r.Name,
-		DisplayName: r.DisplayName,
-		RemovedAt:   r.RemovedAt.Unix() * 1000,
+// optionalTimeToUnixMillis converts a *time.Time to *int64 (Unix milliseconds).
+// Returns nil if the pointer is nil or the time is zero.
+func optionalTimeToUnixMillis(t *time.Time) *int64 {
+	if t == nil || t.IsZero() {
+		return nil
 	}
-}
-
-// ToFrontend converts a RemovedHost to its frontend representation.
-func (r RemovedHost) ToFrontend() RemovedHostFrontend {
-	return RemovedHostFrontend{
-		ID:          r.ID,
-		Hostname:    r.Hostname,
-		DisplayName: r.DisplayName,
-		RemovedAt:   r.RemovedAt.Unix() * 1000,
-	}
+	ms := t.Unix() * 1000
+	return &ms
 }
 
 // ToFrontend converts a Host to HostFrontend.
 func (h Host) ToFrontend() HostFrontend {
 	host := HostFrontend{
-		ID:                h.ID,
-		Hostname:          h.Hostname,
-		DisplayName:       h.DisplayName,
-		Platform:          h.Platform,
-		OSName:            h.OSName,
-		OSVersion:         h.OSVersion,
-		KernelVersion:     h.KernelVersion,
-		Architecture:      h.Architecture,
-		CPUCount:          h.CPUCount,
-		CPUUsage:          h.CPUUsage,
-		Status:            h.Status,
-		UptimeSeconds:     h.UptimeSeconds,
-		IntervalSeconds:   h.IntervalSeconds,
-		AgentVersion:      h.AgentVersion,
-		TokenID:           h.TokenID,
-		TokenName:         h.TokenName,
-		TokenHint:         h.TokenHint,
-		Tags:              append([]string(nil), h.Tags...),
-		LastSeen:          h.LastSeen.Unix() * 1000,
-		CommandsEnabled:   h.CommandsEnabled,
-		IsLegacy:          h.IsLegacy,
-		LinkedNodeId:      h.LinkedNodeID,
-		LinkedVmId:        h.LinkedVMID,
-		LinkedContainerId: h.LinkedContainerID,
+		ID:              h.ID,
+		Hostname:        h.Hostname,
+		DisplayName:     h.DisplayName,
+		Platform:        h.Platform,
+		OSName:          h.OSName,
+		OSVersion:       h.OSVersion,
+		KernelVersion:   h.KernelVersion,
+		Architecture:    h.Architecture,
+		CPUCount:        h.CPUCount,
+		CPUUsage:        h.CPUUsage,
+		Status:          h.Status,
+		UptimeSeconds:   h.UptimeSeconds,
+		IntervalSeconds: h.IntervalSeconds,
+		AgentVersion:    h.AgentVersion,
+		MachineID:       h.MachineID,
+		TokenID:         h.TokenID,
+		TokenName:       h.TokenName,
+		TokenHint:       h.TokenHint,
+		Tags:            append([]string(nil), h.Tags...),
+		LastSeen:        timeToUnixMillis(h.LastSeen),
+		CommandsEnabled: h.CommandsEnabled,
+		IsLegacy:        h.IsLegacy,
+		LinkedNodeID:    h.LinkedNodeID,
 	}
 
 	// Fall back to Hostname if DisplayName is empty
@@ -530,12 +508,9 @@ func (h Host) ToFrontend() HostFrontend {
 		host.Sensors = s
 	}
 
-	if h.TokenLastUsedAt != nil && !h.TokenLastUsedAt.IsZero() {
-		ts := h.TokenLastUsedAt.Unix() * 1000
-		host.TokenLastUsedAt = &ts
-	}
+	host.TokenLastUsedAt = optionalTimeToUnixMillis(h.TokenLastUsedAt)
 
-	return host
+	return host.NormalizeCollections()
 }
 
 // ToFrontend converts a DockerContainer to DockerContainerFrontend
@@ -555,7 +530,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 		RestartCount:        c.RestartCount,
 		ExitCode:            c.ExitCode,
 		CreatedAt:           c.CreatedAt.Unix() * 1000,
-		Labels:              c.Labels,
+		Labels:              nil,
 		WritableLayerBytes:  c.WritableLayerBytes,
 		RootFilesystemBytes: c.RootFilesystemBytes,
 	}
@@ -576,6 +551,13 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 			ports[i] = DockerContainerPortFrontend(port)
 		}
 		container.Ports = ports
+	}
+
+	if len(c.Labels) > 0 {
+		container.Labels = make(map[string]string, len(c.Labels))
+		for k, v := range c.Labels {
+			container.Labels[k] = v
+		}
 	}
 
 	if len(c.Networks) > 0 {
@@ -628,7 +610,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 		}
 	}
 
-	return container
+	return container.NormalizeCollections()
 }
 
 // ToFrontend converts a DockerService to DockerServiceFrontend.
@@ -673,7 +655,7 @@ func (s DockerService) ToFrontend() DockerServiceFrontend {
 		service.UpdatedAt = &ts
 	}
 
-	return service
+	return service.NormalizeCollections()
 }
 
 // ToFrontend converts a DockerServicePort to DockerServicePortFrontend.
@@ -767,7 +749,8 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 			}
 		}
 	}
-	return dest
+	normalized := dest.NormalizeCollections()
+	return &normalized
 }
 
 func copyStringFloatMap(src map[string]float64) map[string]float64 {
@@ -826,8 +809,8 @@ func (s Storage) ToFrontend() StorageFrontend {
 		Name:      s.Name,
 		Node:      s.Node,
 		Instance:  s.Instance,
-		Nodes:     s.Nodes,
-		NodeIDs:   s.NodeIDs,
+		Nodes:     append([]string(nil), s.Nodes...),
+		NodeIDs:   append([]string(nil), s.NodeIDs...),
 		NodeCount: s.NodeCount,
 		Type:      s.Type,
 		Status:    s.Status,
@@ -840,40 +823,7 @@ func (s Storage) ToFrontend() StorageFrontend {
 		Shared:    s.Shared,
 		Enabled:   s.Enabled,
 		Active:    s.Active,
-	}
-}
-
-// ToFrontend converts a CephCluster to CephClusterFrontend
-func (c CephCluster) ToFrontend() CephClusterFrontend {
-	frontend := CephClusterFrontend{
-		ID:             c.ID,
-		Instance:       c.Instance,
-		Name:           c.Name,
-		FSID:           c.FSID,
-		Health:         c.Health,
-		HealthMessage:  c.HealthMessage,
-		TotalBytes:     c.TotalBytes,
-		UsedBytes:      c.UsedBytes,
-		AvailableBytes: c.AvailableBytes,
-		UsagePercent:   c.UsagePercent,
-		NumMons:        c.NumMons,
-		NumMgrs:        c.NumMgrs,
-		NumOSDs:        c.NumOSDs,
-		NumOSDsUp:      c.NumOSDsUp,
-		NumOSDsIn:      c.NumOSDsIn,
-		NumPGs:         c.NumPGs,
-		LastUpdated:    c.LastUpdated.Unix() * 1000,
-	}
-
-	if len(c.Pools) > 0 {
-		frontend.Pools = append([]CephPool(nil), c.Pools...)
-	}
-
-	if len(c.Services) > 0 {
-		frontend.Services = append([]CephServiceStatus(nil), c.Services...)
-	}
-
-	return frontend
+	}.NormalizeCollections()
 }
 
 // ToFrontend converts a replication job to a frontend representation.
@@ -1005,10 +955,17 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		Status:       input.Status,
 		Temperature:  input.Temperature,
 		Uptime:       input.Uptime,
-		Tags:         input.Tags,
-		Labels:       input.Labels,
+		Tags:         append([]string(nil), input.Tags...),
+		Labels:       nil,
 		LastSeen:     input.LastSeenUnix,
 		PlatformData: input.PlatformData,
+	}
+
+	if len(input.Labels) > 0 {
+		rf.Labels = make(map[string]string, len(input.Labels))
+		for k, v := range input.Labels {
+			rf.Labels[k] = v
+		}
 	}
 
 	// Convert metrics
@@ -1067,9 +1024,9 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		rf.Identity = &ResourceIdentityFrontend{
 			Hostname:  input.Identity.Hostname,
 			MachineID: input.Identity.MachineID,
-			IPs:       input.Identity.IPs,
+			IPs:       append([]string(nil), input.Identity.IPs...),
 		}
 	}
 
-	return rf
+	return rf.NormalizeCollections()
 }

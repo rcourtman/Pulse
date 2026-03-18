@@ -448,5 +448,8 @@ func (noopPVEClient) GetZFSPoolsWithDetails(ctx context.Context, node string) ([
 func (noopPVEClient) GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error) {
 	return nil, nil
 }
+func (noopPVEClient) GetNodePendingUpdates(ctx context.Context, node string) ([]proxmox.AptPackage, error) {
+	return nil, nil
+}
 func (noopPVEClient) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error) { return nil, nil }
 func (noopPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error)         { return nil, nil }

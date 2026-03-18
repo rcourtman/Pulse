@@ -7,13 +7,13 @@ import (
 
 func TestCommandsAndTemplates(t *testing.T) {
 	resourceTypes := []ResourceType{
-		ResourceTypeLXC,
+		ResourceTypeSystemContainer,
 		ResourceTypeVM,
 		ResourceTypeDocker,
 		ResourceTypeDockerVM,
-		ResourceTypeDockerLXC,
+		ResourceTypeDockerSystemContainer,
 		ResourceTypeK8s,
-		ResourceTypeHost,
+		ResourceTypeAgent,
 	}
 
 	for _, rt := range resourceTypes {
@@ -77,5 +77,61 @@ func TestCommandsAndTemplates(t *testing.T) {
 	formatted := FormatCLIAccess(ResourceTypeK8s, "101", "container", "default", "pod")
 	if !strings.Contains(formatted, "default") || !strings.Contains(formatted, "pod") {
 		t.Fatalf("unexpected formatted access: %s", formatted)
+	}
+}
+
+func TestDockerMountsCommandAvoidsExtraTextUtilities(t *testing.T) {
+	lxcCmds := GetCommandsForResource(ResourceTypeSystemContainer)
+	vmCmds := GetCommandsForResource(ResourceTypeVM)
+
+	findByName := func(cmds []DiscoveryCommand, name string) string {
+		for _, cmd := range cmds {
+			if cmd.Name == name {
+				return cmd.Command
+			}
+		}
+		return ""
+	}
+
+	lxcMounts := findByName(lxcCmds, "docker_mounts")
+	vmMounts := findByName(vmCmds, "docker_mounts")
+
+	if lxcMounts == "" || vmMounts == "" {
+		t.Fatalf("expected docker_mounts command for both LXC and VM")
+	}
+	if lxcMounts != vmMounts {
+		t.Fatalf("expected shared docker_mounts command, got lxc=%q vm=%q", lxcMounts, vmMounts)
+	}
+	if strings.Contains(lxcMounts, "sed ") || strings.Contains(lxcMounts, "grep ") {
+		t.Fatalf("docker_mounts should not depend on sed/grep: %s", lxcMounts)
+	}
+	if !strings.Contains(lxcMounts, "name=${name#/}") {
+		t.Fatalf("expected shell-native container name trimming, got: %s", lxcMounts)
+	}
+}
+
+func TestValidateResourceID_RejectsOptionLikeIDs(t *testing.T) {
+	cases := []string{
+		"-bad",
+		"--help",
+		"-1",
+	}
+
+	for _, tc := range cases {
+		if err := ValidateResourceID(tc); err == nil {
+			t.Fatalf("expected error for option-like resource ID %q", tc)
+		}
+	}
+}
+
+func TestBuildCommands_RejectOptionLikeIdentifiers(t *testing.T) {
+	if cmd := BuildDockerCommand("-bad", "echo hi"); !strings.Contains(cmd, "invalid container name") {
+		t.Fatalf("expected invalid container name error command, got %q", cmd)
+	}
+	if cmd := BuildK8sCommand("-ns", "pod", "", "echo hi"); !strings.Contains(cmd, "invalid namespace") {
+		t.Fatalf("expected invalid namespace error command, got %q", cmd)
+	}
+	if cmd := BuildVMCommand("-1", "echo hi"); !strings.Contains(cmd, "invalid VM ID") {
+		t.Fatalf("expected invalid VM ID error command, got %q", cmd)
 	}
 }

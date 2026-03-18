@@ -22,20 +22,32 @@ interface BaseToggleProps {
   ariaLabel?: string;
 }
 
-const sizeConfig: Record<ToggleSize, { track: string; knob: string; translate: string }> = {
-  xs: { track: 'h-4 w-7', knob: 'h-3 w-3', translate: '12px' },
-  sm: { track: 'h-5 w-9', knob: 'h-4 w-4', translate: '16px' },
-  md: { track: 'h-6 w-11', knob: 'h-5 w-5', translate: '20px' },
+const sizeConfig: Record<ToggleSize, { track: string; knob: string; translateOn: string }> = {
+  xs: {
+    track: 'h-6 w-10 sm:h-5 sm:w-9',
+    knob: 'h-5 w-5 sm:h-4 sm:w-4',
+    translateOn: 'translate-x-4',
+  },
+  sm: {
+    track: 'h-7 w-11 sm:h-6 sm:w-10',
+    knob: 'h-6 w-6 sm:h-5 sm:w-5',
+    translateOn: 'translate-x-4',
+  },
+  md: {
+    track: 'h-8 w-12 sm:h-7 sm:w-12',
+    knob: 'h-7 w-7 sm:h-6 sm:w-6',
+    translateOn: 'translate-x-4 sm:translate-x-5',
+  },
 };
 
 export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const size = props.size ?? 'sm';
   const config = sizeConfig[size];
   const isDisabled = () => Boolean(props.disabled);
-  const checkedClass = 'bg-blue-500 dark:bg-blue-500';
-  const uncheckedClass = 'bg-gray-300 dark:bg-gray-600';
-  const disabledClass = 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-60';
-  const knobBase = 'bg-white shadow-md';
+  const checkedClass = 'bg-blue-500';
+  const uncheckedClass = 'bg-border';
+  const disabledClass = 'bg-base cursor-not-allowed opacity-50';
+  const knobBase = 'bg-surface border border-border-subtle';
 
   const handleClick = () => {
     if (isDisabled()) return;
@@ -64,7 +76,7 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   return (
     <button
       type="button"
-      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
+      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus:outline-none focus:ring-0 ${
         isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
       } ${props.class ?? ''}`.trim()}
       onClick={handleClick}
@@ -74,10 +86,9 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
       aria-label={props.ariaLabel}
     >
       <span
-        class={`inline-block ${config.knob} rounded-full transition-transform duration-200 ease-in-out ${knobBase} ${
-          isDisabled() ? 'opacity-60' : ''
-        }`}
-        style={{ transform: props.checked ? `translateX(${config.translate})` : 'translateX(0)' }}
+        class={`inline-block ${config.knob} rounded-full transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${knobBase} ${
+          props.checked ? config.translateOn : 'translate-x-0'
+        } ${isDisabled() ? 'opacity-60' : ''}`}
       />
     </button>
   );
@@ -97,11 +108,9 @@ export function Toggle(props: LabeledToggleProps) {
     <div class={`flex items-center gap-3 ${props.containerClass ?? ''}`.trim()}>
       <TogglePrimitive {...props} size={size} />
       {(props.label || props.description) && (
-        <span class="flex flex-col text-sm text-gray-700 dark:text-gray-300">
+        <span class="flex flex-col text-sm text-base-content">
           {props.label}
-          {props.description && (
-            <span class="text-xs text-gray-500 dark:text-gray-400">{props.description}</span>
-          )}
+          {props.description && <span class="text-xs text-muted">{props.description}</span>}
         </span>
       )}
     </div>

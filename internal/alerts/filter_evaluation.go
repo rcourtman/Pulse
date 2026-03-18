@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,15 +10,12 @@ import (
 )
 
 // evaluateFilterCondition evaluates a single filter condition against a guest
-func (m *Manager) evaluateFilterCondition(guest interface{}, condition FilterCondition) bool {
-	switch g := guest.(type) {
-	case models.VM:
-		return m.evaluateVMCondition(g, condition)
-	case models.Container:
-		return m.evaluateContainerCondition(g, condition)
-	default:
+func (m *Manager) evaluateFilterCondition(guest any, condition FilterCondition) bool {
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		return false
 	}
+	return evaluateGuestCondition(snapshot.metrics(), condition)
 }
 
 // guestMetrics holds common metrics for filter evaluation
@@ -36,39 +34,12 @@ type guestMetrics struct {
 }
 
 // extractGuestMetrics extracts common metrics from a VM or Container
-func extractGuestMetrics(guest interface{}) (guestMetrics, bool) {
-	switch g := guest.(type) {
-	case models.VM:
-		return guestMetrics{
-			CPU:        g.CPU * 100,
-			MemUsage:   g.Memory.Usage,
-			DiskUsage:  g.Disk.Usage,
-			DiskRead:   g.DiskRead,
-			DiskWrite:  g.DiskWrite,
-			NetworkIn:  g.NetworkIn,
-			NetworkOut: g.NetworkOut,
-			Name:       g.Name,
-			Node:       g.Node,
-			ID:         g.ID,
-			Status:     g.Status,
-		}, true
-	case models.Container:
-		return guestMetrics{
-			CPU:        g.CPU * 100,
-			MemUsage:   g.Memory.Usage,
-			DiskUsage:  g.Disk.Usage,
-			DiskRead:   g.DiskRead,
-			DiskWrite:  g.DiskWrite,
-			NetworkIn:  g.NetworkIn,
-			NetworkOut: g.NetworkOut,
-			Name:       g.Name,
-			Node:       g.Node,
-			ID:         g.ID,
-			Status:     g.Status,
-		}, true
-	default:
+func extractGuestMetrics(guest any) (guestMetrics, bool) {
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		return guestMetrics{}, false
 	}
+	return snapshot.metrics(), true
 }
 
 // evaluateGuestCondition evaluates a filter condition against guest metrics
@@ -122,14 +93,9 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 
 // evaluateNumericCondition evaluates a numeric comparison
 func evaluateNumericCondition(value float64, condition FilterCondition) bool {
-	condValue, ok := condition.Value.(float64)
+	condValue, ok := numericConditionValue(condition.Value)
 	if !ok {
-		// Try to convert from int
-		if intVal, ok := condition.Value.(int); ok {
-			condValue = float64(intVal)
-		} else {
-			return false
-		}
+		return false
 	}
 
 	switch condition.Operator {
@@ -147,20 +113,55 @@ func evaluateNumericCondition(value float64, condition FilterCondition) bool {
 	return false
 }
 
+func numericConditionValue(raw any) (float64, bool) {
+	switch value := raw.(type) {
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int8:
+		return float64(value), true
+	case int16:
+		return float64(value), true
+	case int32:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case uint:
+		return float64(value), true
+	case uint8:
+		return float64(value), true
+	case uint16:
+		return float64(value), true
+	case uint32:
+		return float64(value), true
+	case uint64:
+		return float64(value), true
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
 // evaluateVMCondition evaluates a filter condition against a VM
 func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) bool {
-	metrics, _ := extractGuestMetrics(vm)
-	return evaluateGuestCondition(metrics, condition)
+	return evaluateGuestCondition(guestSnapshotFromVM(vm).metrics(), condition)
 }
 
 // evaluateContainerCondition evaluates a filter condition against a Container
 func (m *Manager) evaluateContainerCondition(ct models.Container, condition FilterCondition) bool {
-	metrics, _ := extractGuestMetrics(ct)
-	return evaluateGuestCondition(metrics, condition)
+	return evaluateGuestCondition(guestSnapshotFromContainer(ct).metrics(), condition)
 }
 
 // evaluateFilterStack evaluates a filter stack against a guest
-func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool {
+func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
 	if len(stack.Filters) == 0 {
 		return true
 	}
@@ -190,9 +191,8 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 
 // getGuestThresholds returns the appropriate thresholds for a guest
 // Priority: Guest-specific overrides > Custom rules (by priority) > Global defaults
-func (m *Manager) getGuestThresholds(guest interface{}, guestID string) ThresholdConfig {
-	// Start with defaults
-	thresholds := m.config.GuestDefaults
+func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig {
+	thresholds := cloneThresholdConfig(m.config.GuestDefaults)
 
 	// Check custom rules (sorted by priority, highest first)
 	var applicableRule *CustomAlertRule
@@ -215,50 +215,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 
 	// Apply custom rule thresholds if found
 	if applicableRule != nil {
-		if applicableRule.Thresholds.CPU != nil {
-			thresholds.CPU = ensureHysteresisThreshold(applicableRule.Thresholds.CPU)
-		} else if applicableRule.Thresholds.CPULegacy != nil {
-			thresholds.CPU = m.convertLegacyThreshold(applicableRule.Thresholds.CPULegacy)
-		}
-		if applicableRule.Thresholds.Memory != nil {
-			thresholds.Memory = ensureHysteresisThreshold(applicableRule.Thresholds.Memory)
-		} else if applicableRule.Thresholds.MemoryLegacy != nil {
-			thresholds.Memory = m.convertLegacyThreshold(applicableRule.Thresholds.MemoryLegacy)
-		}
-		if applicableRule.Thresholds.Disk != nil {
-			thresholds.Disk = ensureHysteresisThreshold(applicableRule.Thresholds.Disk)
-		} else if applicableRule.Thresholds.DiskLegacy != nil {
-			thresholds.Disk = m.convertLegacyThreshold(applicableRule.Thresholds.DiskLegacy)
-		}
-		if applicableRule.Thresholds.DiskRead != nil {
-			thresholds.DiskRead = ensureHysteresisThreshold(applicableRule.Thresholds.DiskRead)
-		} else if applicableRule.Thresholds.DiskReadLegacy != nil {
-			thresholds.DiskRead = m.convertLegacyThreshold(applicableRule.Thresholds.DiskReadLegacy)
-		}
-		if applicableRule.Thresholds.DiskWrite != nil {
-			thresholds.DiskWrite = ensureHysteresisThreshold(applicableRule.Thresholds.DiskWrite)
-		} else if applicableRule.Thresholds.DiskWriteLegacy != nil {
-			thresholds.DiskWrite = m.convertLegacyThreshold(applicableRule.Thresholds.DiskWriteLegacy)
-		}
-		if applicableRule.Thresholds.NetworkIn != nil {
-			thresholds.NetworkIn = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkIn)
-		} else if applicableRule.Thresholds.NetworkInLegacy != nil {
-			thresholds.NetworkIn = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkInLegacy)
-		}
-		if applicableRule.Thresholds.NetworkOut != nil {
-			thresholds.NetworkOut = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkOut)
-		} else if applicableRule.Thresholds.NetworkOutLegacy != nil {
-			thresholds.NetworkOut = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkOutLegacy)
-		}
-		if applicableRule.Thresholds.DisableConnectivity {
-			thresholds.DisableConnectivity = true
-		}
-		if applicableRule.Thresholds.Backup != nil {
-			thresholds.Backup = applicableRule.Thresholds.Backup
-		}
-		if applicableRule.Thresholds.Snapshot != nil {
-			thresholds.Snapshot = applicableRule.Thresholds.Snapshot
-		}
+		thresholds = m.applyThresholdOverride(thresholds, applicableRule.Thresholds)
 
 		log.Debug().
 			Str("guest", guestID).
@@ -267,125 +224,5 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			Msg("Applied custom alert rule")
 	}
 
-	// Finally check guest-specific overrides (highest priority)
-	// First try the new stable ID format (instance-VMID)
-	override, exists := m.config.Overrides[guestID]
-
-	// If not found, try legacy ID formats for migration
-	if !exists {
-		override, exists = m.tryLegacyOverrideMigration(guest, guestID)
-	}
-
-	if exists {
-		// Apply the disabled flag if set
-		if override.Disabled {
-			thresholds.Disabled = true
-		}
-		if override.DisableConnectivity {
-			thresholds.DisableConnectivity = true
-		}
-
-		if override.CPU != nil {
-			thresholds.CPU = ensureHysteresisThreshold(override.CPU)
-		} else if override.CPULegacy != nil {
-			thresholds.CPU = m.convertLegacyThreshold(override.CPULegacy)
-		}
-		if override.Memory != nil {
-			thresholds.Memory = ensureHysteresisThreshold(override.Memory)
-		} else if override.MemoryLegacy != nil {
-			thresholds.Memory = m.convertLegacyThreshold(override.MemoryLegacy)
-		}
-		if override.Disk != nil {
-			thresholds.Disk = ensureHysteresisThreshold(override.Disk)
-		} else if override.DiskLegacy != nil {
-			thresholds.Disk = m.convertLegacyThreshold(override.DiskLegacy)
-		}
-		if override.DiskRead != nil {
-			thresholds.DiskRead = ensureHysteresisThreshold(override.DiskRead)
-		} else if override.DiskReadLegacy != nil {
-			thresholds.DiskRead = m.convertLegacyThreshold(override.DiskReadLegacy)
-		}
-		if override.DiskWrite != nil {
-			thresholds.DiskWrite = ensureHysteresisThreshold(override.DiskWrite)
-		} else if override.DiskWriteLegacy != nil {
-			thresholds.DiskWrite = m.convertLegacyThreshold(override.DiskWriteLegacy)
-		}
-		if override.NetworkIn != nil {
-			thresholds.NetworkIn = ensureHysteresisThreshold(override.NetworkIn)
-		} else if override.NetworkInLegacy != nil {
-			thresholds.NetworkIn = m.convertLegacyThreshold(override.NetworkInLegacy)
-		}
-		if override.NetworkOut != nil {
-			thresholds.NetworkOut = ensureHysteresisThreshold(override.NetworkOut)
-		} else if override.NetworkOutLegacy != nil {
-			thresholds.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
-		}
-		if override.Backup != nil {
-			thresholds.Backup = override.Backup
-		}
-		if override.Snapshot != nil {
-			thresholds.Snapshot = override.Snapshot
-		}
-	}
-
-	return thresholds
-}
-
-// tryLegacyOverrideMigration attempts to find and migrate legacy override formats.
-// Returns the override and true if found, or zero value and false otherwise.
-func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) (ThresholdConfig, bool) {
-	var node string
-	var vmid int
-	var instance string
-
-	// Extract node, vmid, and instance from the guest object
-	switch g := guest.(type) {
-	case models.VM:
-		node = g.Node
-		vmid = g.VMID
-		instance = g.Instance
-	case models.Container:
-		node = g.Node
-		vmid = g.VMID
-		instance = g.Instance
-	default:
-		// Not a VM or container, no legacy migration possible
-		return ThresholdConfig{}, false
-	}
-
-	// Try legacy format: instance-node-VMID
-	if instance != node {
-		legacyID := fmt.Sprintf("%s-%s-%d", instance, node, vmid)
-		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest override from legacy ID format")
-
-			// Move to new ID
-			m.config.Overrides[guestID] = legacyOverride
-			delete(m.config.Overrides, legacyID)
-
-			return legacyOverride, true
-		}
-	}
-
-	// Try standalone format: node-VMID
-	if instance == node {
-		legacyID := fmt.Sprintf("%s-%d", node, vmid)
-		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest override from legacy standalone ID format")
-
-			// Move to new ID
-			m.config.Overrides[guestID] = legacyOverride
-			delete(m.config.Overrides, legacyID)
-
-			return legacyOverride, true
-		}
-	}
-
-	return ThresholdConfig{}, false
+	return m.resolveThresholdOverride(thresholds, guestID)
 }

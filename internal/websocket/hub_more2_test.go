@@ -47,8 +47,8 @@ func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
 			t.Fatalf("unexpected type: %s", msg.Type)
 		}
 		payload := msg.Data.(map[string]interface{})
-		if payload["alertId"] != "alert-1" {
-			t.Fatalf("unexpected alertId: %v", payload["alertId"])
+		if payload["alertIdentifier"] != "alert-1" {
+			t.Fatalf("unexpected alertIdentifier: %v", payload["alertIdentifier"])
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("expected alertResolved broadcast")
@@ -108,6 +108,57 @@ func TestStopClosesChannel(t *testing.T) {
 	}
 }
 
+func TestStopIsIdempotent(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+	hub.Stop()
+
+	select {
+	case _, ok := <-hub.stopChan:
+		if ok {
+			t.Fatal("expected stopChan to be closed")
+		}
+	default:
+		t.Fatal("expected stopChan to be closed after repeated Stop calls")
+	}
+}
+
+func TestTryRegisterClientReturnsFalseWhenStopped(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- hub.tryRegisterClient(&Client{
+			hub:  hub,
+			id:   "stopped-client",
+			send: make(chan []byte, 1),
+		})
+	}()
+
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("expected tryRegisterClient to reject client during shutdown")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("tryRegisterClient blocked during shutdown")
+	}
+}
+
+func TestBroadcastStateSkippedWhenStopped(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+
+	hub.BroadcastState(map[string]string{"status": "down"})
+
+	select {
+	case <-hub.broadcastSeq:
+		t.Fatal("expected no broadcastSeq enqueue while hub is stopping")
+	default:
+	}
+}
+
 func TestHandleWebSocketPingPong(t *testing.T) {
 	hub := NewHub(nil)
 	go hub.Run()
@@ -116,7 +167,7 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?org_id=default"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
@@ -146,4 +197,64 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	}
 
 	t.Fatal("expected pong response")
+}
+
+func TestHandleWebSocket_ReadLimitExceededClosesConnection(t *testing.T) {
+	hub := NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?org_id=default"
+	dialer := websocket.Dialer{
+		// Disable compression so the oversized payload hits the server's
+		// read limit on the wire (repeated bytes compress too well).
+		EnableCompression: false,
+	}
+
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	oversizedPayload, err := json.Marshal(Message{
+		Type: "ping",
+		Data: strings.Repeat("x", maxWebSocketInboundMessageSize),
+	})
+	if err != nil {
+		t.Fatalf("marshal oversized payload: %v", err)
+	}
+	if len(oversizedPayload) <= maxWebSocketInboundMessageSize {
+		t.Fatalf("test payload must exceed read limit, got %d bytes", len(oversizedPayload))
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, oversizedPayload); err != nil {
+		t.Fatalf("write oversized payload: %v", err)
+	}
+
+	// Drain messages until the server closes the connection. The goroutine
+	// approach avoids gorilla/websocket's panic on retry after a timeout-induced
+	// fatal error — we set a long deadline so the only "fatal" read would be
+	// the close frame itself, after which we exit the loop immediately.
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("set read deadline: %v", err)
+	}
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-closed:
+		// Server closed the connection as expected
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected websocket connection to close after oversized inbound message")
+	}
 }

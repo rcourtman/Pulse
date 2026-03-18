@@ -3,6 +3,7 @@ package chat
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -47,6 +48,12 @@ type AIMetrics struct {
 
 	// Loop health - tracks agentic loop iterations
 	agenticIterations *prometheus.CounterVec
+
+	// Explore pre-pass health
+	exploreRuns         *prometheus.CounterVec
+	exploreDurationSec  *prometheus.HistogramVec
+	exploreInputTokens  *prometheus.CounterVec
+	exploreOutputTokens *prometheus.CounterVec
 }
 
 var (
@@ -137,6 +144,43 @@ func newAIMetrics() *AIMetrics {
 			},
 			[]string{"provider", "model"},
 		),
+		exploreRuns: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "ai",
+				Name:      "explore_runs_total",
+				Help:      "Total explore pre-pass runs by outcome and model",
+			},
+			[]string{"outcome", "model"},
+		),
+		exploreDurationSec: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: "pulse",
+				Subsystem: "ai",
+				Name:      "explore_duration_seconds",
+				Help:      "Explore pre-pass duration in seconds by outcome and model",
+				Buckets:   []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30},
+			},
+			[]string{"outcome", "model"},
+		),
+		exploreInputTokens: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "ai",
+				Name:      "explore_input_tokens_total",
+				Help:      "Total input tokens consumed by explore pre-pass by model",
+			},
+			[]string{"model"},
+		),
+		exploreOutputTokens: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "pulse",
+				Subsystem: "ai",
+				Name:      "explore_output_tokens_total",
+				Help:      "Total output tokens consumed by explore pre-pass by model",
+			},
+			[]string{"model"},
+		),
 	}
 
 	// Register all metrics
@@ -149,6 +193,10 @@ func newAIMetrics() *AIMetrics {
 		m.autoRecoveryAttempt,
 		m.autoRecoverySuccess,
 		m.agenticIterations,
+		m.exploreRuns,
+		m.exploreDurationSec,
+		m.exploreInputTokens,
+		m.exploreOutputTokens,
 	)
 
 	return m
@@ -173,7 +221,7 @@ func (m *AIMetrics) RecordStrictResolutionBlock(tool, action string) {
 
 // RecordRoutingMismatchBlock records when routing validation blocks an operation
 // that targeted a parent host when the user recently referenced a child resource.
-// Note: use small enums for kinds (node, lxc, vm, docker_container), not resource IDs
+// Note: use small enums for kinds (node, system-container, vm, app-container), not resource IDs
 func (m *AIMetrics) RecordRoutingMismatchBlock(tool, targetKind, childKind string) {
 	m.routingMismatchBlock.WithLabelValues(sanitizeLabel(tool), sanitizeLabel(targetKind), sanitizeLabel(childKind)).Inc()
 }
@@ -199,6 +247,22 @@ func (m *AIMetrics) RecordAutoRecoverySuccess(errorCode, tool string) {
 // This counts each turn in the agentic loop, not each tool call.
 func (m *AIMetrics) RecordAgenticIteration(provider, model string) {
 	m.agenticIterations.WithLabelValues(sanitizeLabel(provider), sanitizeLabel(model)).Inc()
+}
+
+// RecordExploreRun records explore pre-pass execution health.
+func (m *AIMetrics) RecordExploreRun(outcome, model string, duration time.Duration, inputTokens, outputTokens int) {
+	modelLabel := sanitizeLabel(model)
+	outcomeLabel := sanitizeLabel(outcome)
+	m.exploreRuns.WithLabelValues(outcomeLabel, modelLabel).Inc()
+	if duration > 0 {
+		m.exploreDurationSec.WithLabelValues(outcomeLabel, modelLabel).Observe(duration.Seconds())
+	}
+	if inputTokens > 0 {
+		m.exploreInputTokens.WithLabelValues(modelLabel).Add(float64(inputTokens))
+	}
+	if outputTokens > 0 {
+		m.exploreOutputTokens.WithLabelValues(modelLabel).Add(float64(outputTokens))
+	}
 }
 
 // AIMetricsTelemetryCallback adapts AIMetrics to the tools.TelemetryCallback interface.

@@ -10,6 +10,8 @@ import (
 )
 
 func TestHandleAddNodeAllowsTempsWithoutTransport(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DOCKER", "true")
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}

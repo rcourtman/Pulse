@@ -2,44 +2,62 @@
 
 import type { Resource } from './resource';
 
+export interface APITokenRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  suffix: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  scopes?: string[];
+  ownerUserId?: string;
+}
+
 export interface State {
-  nodes: Node[];
-  vms: VM[];
-  containers: Container[];
-  dockerHosts: DockerHost[];
-  removedDockerHosts?: RemovedDockerHost[];
-  kubernetesClusters?: KubernetesCluster[];
-  removedKubernetesClusters?: RemovedKubernetesCluster[];
-  removedHosts?: RemovedHost[];
-  hosts: Host[];
-  replicationJobs: ReplicationJob[];
-  storage: Storage[];
-  cephClusters: CephCluster[];
-  physicalDisks: PhysicalDisk[];
-  pbs: PBSInstance[];
-  pmg: PMGInstance[];
-  pbsBackups: PBSBackup[];
-  pmgBackups: PMGBackup[];
-  backups: Backups;
+  // Canonical v6 resource contract.
+  // Platform entities (nodes, guests, agents, storage, PBS/PMG, etc.) are modeled in `resources`.
+  connectedInfrastructure: ConnectedInfrastructureItem[];
   metrics: Metric[];
-  pveBackups: PVEBackups;
   performance: Performance;
   connectionHealth: Record<string, boolean>;
   stats: Stats;
   activeAlerts: Alert[];
   recentlyResolved: ResolvedAlert[];
-  lastUpdate: string;
+  lastUpdate: number;
   temperatureMonitoringEnabled?: boolean;
-  pveTagColors?: Record<string, string>;
-  // Unified resources (new data model - eventually replaces legacy arrays above)
-  resources?: Resource[];
+  // Unified resources (canonical resource model)
+  resources: Resource[];
 }
 
-export interface RemovedDockerHost {
+export interface ConnectedInfrastructureSurface {
   id: string;
-  hostname?: string;
+  kind: 'agent' | 'docker' | 'kubernetes' | 'proxmox' | 'pbs' | 'pmg';
+  label: string;
+  detail?: string;
+  controlId?: string;
+  action?: 'stop-monitoring' | 'allow-reconnect';
+  idLabel?: string;
+  idValue?: string;
+}
+
+export interface ConnectedInfrastructureItem {
+  id: string;
+  name: string;
   displayName?: string;
-  removedAt: number;
+  hostname?: string;
+  status: 'active' | 'ignored';
+  healthStatus?: string;
+  lastSeen?: number;
+  removedAt?: number;
+  version?: string;
+  isOutdatedBinary?: boolean;
+  linkedNodeId?: string;
+  commandsEnabled?: boolean;
+  scopeAgentId?: string;
+  upgradePlatform?: 'linux' | 'macos' | 'freebsd' | 'windows';
+  uninstallAgentId?: string;
+  uninstallHostname?: string;
+  surfaces: ConnectedInfrastructureSurface[];
 }
 
 export interface KubernetesCluster {
@@ -64,20 +82,6 @@ export interface KubernetesCluster {
   nodes?: KubernetesNode[];
   pods?: KubernetesPod[];
   deployments?: KubernetesDeployment[];
-}
-
-export interface RemovedHost {
-  id: string;
-  hostname?: string;
-  displayName?: string;
-  removedAt: number;
-}
-
-export interface RemovedKubernetesCluster {
-  id: string;
-  name?: string;
-  displayName?: string;
-  removedAt: number;
 }
 
 export interface KubernetesNode {
@@ -163,7 +167,7 @@ export interface Node {
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster
   clusterName?: string; // Name of cluster (empty if standalone)
-  linkedHostAgentId?: string; // ID of host agent running on this node (for merging)
+  linkedAgentId?: string; // ID of Pulse agent running on this node (for merging)
 }
 
 export interface GuestNetworkInterface {
@@ -200,7 +204,6 @@ export interface VM {
   uptime: number;
   template: boolean;
   lastBackup: number;
-  memorySource?: string;
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
@@ -239,7 +242,7 @@ export interface Container {
   osTemplate?: string; // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 }
 
-export interface DockerHost {
+export interface DockerRuntime {
   id: string;
   agentId: string;
   hostname: string;
@@ -276,11 +279,11 @@ export interface DockerHost {
   tokenRevokedAt?: number;
   hidden?: boolean;
   pendingUninstall?: boolean;
-  command?: DockerHostCommand;
+  command?: DockerRuntimeCommand;
   isLegacy?: boolean;
 }
 
-export interface DockerHostCommand {
+export interface DockerRuntimeCommand {
   id: string;
   type: string;
   status: string;
@@ -438,7 +441,7 @@ export interface PodmanContainerMetadata {
   userNamespace?: string;
 }
 
-export interface Host {
+export interface Agent {
   id: string;
   hostname: string;
   displayName: string;
@@ -470,7 +473,7 @@ export interface Host {
   tokenRevokedAt?: number;
   tags?: string[];
   isLegacy?: boolean;
-  // Linking: When this host agent is running on a known PVE entity
+  // Linking: When this agent is running on a known PVE entity
   linkedNodeId?: string; // ID of PVE node this agent is running on
   linkedVmId?: string; // ID of VM this agent is running inside
   linkedContainerId?: string; // ID of container this agent is running inside
@@ -493,14 +496,14 @@ export interface HostSensorSummary {
 }
 
 export interface HostDiskSMART {
-  device: string;        // Device name (e.g., sda)
-  model?: string;        // Disk model
-  serial?: string;       // Serial number
-  wwn?: string;          // World Wide Name
-  type?: string;         // Transport type: sata, sas, nvme
-  temperature: number;   // Temperature in Celsius
-  health?: string;       // PASSED, FAILED, UNKNOWN
-  standby?: boolean;     // True if disk was in standby
+  device: string; // Device name (e.g., sda)
+  model?: string; // Disk model
+  serial?: string; // Serial number
+  wwn?: string; // World Wide Name
+  type?: string; // Transport type: sata, sas, nvme
+  temperature: number; // Temperature in Celsius
+  health?: string; // PASSED, FAILED, UNKNOWN
+  standby?: boolean; // True if disk was in standby
 }
 
 export interface HostRAIDArray {
@@ -536,17 +539,19 @@ export interface HostDiskIO {
   ioTimeMs?: number;
 }
 
-export interface HostLookupResponse {
+export interface AgentLookupIdentity {
+  id: string;
+  hostname: string;
+  displayName?: string;
+  status: string;
+  connected: boolean;
+  lastSeen: number;
+  agentVersion?: string;
+}
+
+export interface AgentLookupResponse {
   success: boolean;
-  host: {
-    id: string;
-    hostname: string;
-    displayName?: string;
-    status: string;
-    connected: boolean;
-    lastSeen: number;
-    agentVersion?: string;
-  };
+  agent?: AgentLookupIdentity;
 }
 
 export interface ReplicationJob {
@@ -702,9 +707,25 @@ export interface PMGInstance {
   mailCount?: PMGMailCountPoint[];
   spamDistribution?: PMGSpamBucket[];
   quarantine?: PMGQuarantineTotals;
+  relayDomains?: PMGRelayDomain[];
+  domainStats?: PMGDomainStat[];
+  domainStatsAsOf?: string;
   connectionHealth: string;
   lastSeen: string;
   lastUpdated: string;
+}
+
+export interface PMGRelayDomain {
+  domain: string;
+  comment?: string;
+}
+
+export interface PMGDomainStat {
+  domain: string;
+  mailCount: number;
+  spamCount: number;
+  virusCount: number;
+  bytes?: number;
 }
 
 export interface PMGNodeStatus {
@@ -797,37 +818,6 @@ export interface PBSNamespace {
   depth: number;
 }
 
-export interface PBSBackup {
-  id: string;
-  instance: string;
-  datastore: string;
-  namespace: string;
-  backupType: string;
-  vmid: string;
-  backupTime: string;
-  size: number;
-  protected: boolean;
-  verified: boolean;
-  comment: string;
-  files: string[];
-  owner?: string;
-}
-
-export interface PMGBackup {
-  id: string;
-  instance: string;
-  node: string;
-  filename: string;
-  backupTime: string;
-  size: number;
-}
-
-export interface Backups {
-  pve: PVEBackups;
-  pbs: PBSBackup[];
-  pmg: PMGBackup[];
-}
-
 export interface PBSBackupJob {
   id: string;
   store: string;
@@ -882,7 +872,6 @@ export interface Memory {
   used: number;
   free: number;
   usage: number;
-  cache?: number;    // Reclaimable buff/cache; used + cache + free ≈ total
   balloon?: number;
   swapUsed?: number;
   swapTotal?: number;
@@ -984,58 +973,6 @@ export interface Metric {
   values: Record<string, number | string | boolean>;
 }
 
-export interface BackupTask {
-  id: string;
-  node: string;
-  type: string;
-  vmid: number;
-  status: string;
-  startTime: string;
-  endTime?: string;
-  size?: number;
-  error?: string;
-}
-
-export interface StorageBackup {
-  id: string;
-  storage: string;
-  node: string;
-  instance: string;
-  type: string;
-  vmid: number;
-  time: string;
-  ctime: number;
-  size: number;
-  format: string;
-  notes?: string;
-  protected: boolean;
-  volid: string;
-  isPBS: boolean;
-  verified: boolean;
-  verification?: string;
-  encryption?: string;
-}
-
-export interface PVEBackups {
-  backupTasks: BackupTask[];
-  storageBackups: StorageBackup[];
-  guestSnapshots: GuestSnapshot[];
-}
-
-export interface GuestSnapshot {
-  id: string;
-  name: string;
-  node: string;
-  instance: string;
-  type: string;
-  vmid: number;
-  time: string;
-  description: string;
-  parent: string;
-  vmstate: boolean;
-  sizeBytes?: number;
-}
-
 export interface Performance {
   apiCallDuration: Record<string, number>;
   lastPollDuration: number;
@@ -1089,7 +1026,7 @@ export interface IncidentEvent {
 
 export interface Incident {
   id: string;
-  alertId: string;
+  alertIdentifier: string;
   alertType: string;
   level: string;
   resourceId: string;
@@ -1116,64 +1053,64 @@ export type WSMessage =
   | { type: 'pong'; data?: unknown }
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
-  | { type: 'alertResolved'; data: { alertId: string } }
+  | { type: 'alertResolved'; data: { alertIdentifier: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
   | {
-    type: 'update:progress';
-    data: {
-      phase: string;
-      progress: number;
-      message: string;
-    };
-  }
+      type: 'update:progress';
+      data: {
+        phase: string;
+        progress: number;
+        message: string;
+      };
+    }
   | {
-    type: 'node_auto_registered';
-    data: {
-      type: string;
-      host: string;
-      name: string;
-      tokenId: string;
-      hasToken: boolean;
-      verifySSL?: boolean;
-      status?: string;
-    };
-  }
+      type: 'node_auto_registered';
+      data: {
+        type: string;
+        host: string;
+        name: string;
+        tokenId: string;
+        hasToken: boolean;
+        verifySSL?: boolean;
+        status?: string;
+      };
+    }
   | { type: 'node_deleted'; data: { nodeType: string } }
   | { type: 'nodes_changed'; data?: unknown }
   | {
-    type: 'discovery_update';
-    data: {
-      servers: Array<{
-        ip: string;
-        port: number;
-        type: string;
-        version: string;
-        hostname?: string;
-        release?: string;
-      }>;
-      errors?: string[];
-      timestamp?: number;
-      immediate?: boolean;
-      scanning?: boolean;
-      cached?: boolean;
-    };
-  }
+      type: 'discovery_update';
+      data: {
+        servers: Array<{
+          ip: string;
+          port: number;
+          type: string;
+          version: string;
+          hostname?: string;
+          release?: string;
+        }>;
+        errors?: string[];
+        timestamp?: number;
+        immediate?: boolean;
+        scanning?: boolean;
+        cached?: boolean;
+      };
+    }
   | {
-    type: 'discovery_started';
-    data?: {
-      subnet?: string;
-      timestamp?: number;
-      scanning?: boolean;
-    };
-  }
+      type: 'discovery_started';
+      data?: {
+        subnet?: string;
+        timestamp?: number;
+        scanning?: boolean;
+      };
+    }
   | {
-    type: 'discovery_complete';
-    data?: {
-      timestamp?: number;
-      scanning?: boolean;
+      type: 'discovery_complete';
+      data?: {
+        timestamp?: number;
+        scanning?: boolean;
+      };
     };
-  };
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';
-export type GuestType = 'qemu' | 'lxc';
+export type GuestType = 'vm' | 'system-container';

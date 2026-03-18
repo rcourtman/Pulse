@@ -6,7 +6,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
-| `.audit-signing.key` | Audit log signing key (Pulse Pro, encrypted) | 🔒 **Sensitive** |
+| `.audit-signing.key` | Audit log signing key (Pro/Pro+/Cloud, encrypted) | 🔒 **Sensitive** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -16,26 +16,25 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
 | `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
-| `env_token_suppressions.json` | Suppressed legacy env tokens (migration aid) | 📝 Standard |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
 | `ai_findings.json` | AI Patrol findings | 📝 Standard |
 | `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
 | `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
-| `license.enc` | Pulse Pro license key | 🔒 **Encrypted** |
+| `license.enc` | Relay/Pro/Pro+/Cloud license key | 🔒 **Encrypted** |
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
-| `agent_profiles.json` | Agent configuration profiles (Pulse Pro) | 📝 Standard |
-| `agent_profile_assignments.json` | Agent profile assignments (Pulse Pro) | 📝 Standard |
-| `profile-versions.json` | Agent profile version history (Pulse Pro) | 📝 Standard |
-| `profile-deployments.json` | Agent profile deployment status (Pulse Pro) | 📝 Standard |
-| `profile-changelog.json` | Agent profile change log (Pulse Pro) | 📝 Standard |
+| `agent_profiles.json` | Agent configuration profiles (Pro/Pro+/Cloud) | 📝 Standard |
+| `agent_profile_assignments.json` | Agent profile assignments (Pro/Pro+/Cloud) | 📝 Standard |
+| `profile-versions.json` | Agent profile version history (Pro/Pro+/Cloud) | 📝 Standard |
+| `profile-deployments.json` | Agent profile deployment status (Pro/Pro+/Cloud) | 📝 Standard |
+| `profile-changelog.json` | Agent profile change log (Pro/Pro+/Cloud) | 📝 Standard |
 | `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
-| `audit.db` | Audit log database (Pulse Pro, SQLite) | 🔒 **Sensitive** |
+| `audit.db` | Audit log database (Pro/Pro+/Cloud, SQLite) | 🔒 **Sensitive** |
 | `baselines.json` | AI baseline data for anomaly detection | 📝 Standard |
 | `ai_correlations.json` | AI correlation analysis cache | 📝 Standard |
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
@@ -67,10 +66,6 @@ This file controls access to Pulse. It is **never** exposed to the UI.
 # Admin Credentials (bcrypt hashed; plain text auto-hashes on startup)
 PULSE_AUTH_USER='admin'
 PULSE_AUTH_PASS='$2a$12$...' 
-
-# Legacy API tokens (deprecated, auto-migrated to api_tokens.json)
-API_TOKEN='token1'
-API_TOKENS='token2,token3'
 ```
 
 <details>
@@ -83,7 +78,6 @@ You can pre-configure Pulse by setting environment variables. Plain text credent
 docker run -d \
   -e PULSE_AUTH_USER=admin \
   -e PULSE_AUTH_PASS=secret123 \
-  -e API_TOKENS=ci-token,agent-token \
   rcourtman/pulse:latest
 ```
 </details>
@@ -103,7 +97,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ISSUER_URL` | Issuer URL from your IdP |
 | `OIDC_CLIENT_ID` | Client ID |
 | `OIDC_CLIENT_SECRET` | Client secret |
-| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/callback`) |
+| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/<provider-id>/callback`) |
 | `OIDC_LOGOUT_URL` | Optional logout URL |
 | `OIDC_SCOPES` | Space or comma-separated scopes |
 | `OIDC_USERNAME_CLAIM` | Claim for username (default: `preferred_username`) |
@@ -112,19 +106,13 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
-| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pulse Pro) |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pro/Pro+/Cloud) |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 
 </details>
 
-Legacy token flag (backwards compatibility):
-
-| Variable | Description |
-| ---------- | ------------- |
-| `API_TOKEN_ENABLED` | Legacy toggle for API token auth (defaults to enabled when tokens exist) |
-
-> **Note**: `API_TOKEN` / `API_TOKENS` are legacy and will be migrated into `api_tokens.json` on startup.
-> Manage API tokens in the UI for long-term support.
+> **Note**: `API_TOKEN` / `API_TOKENS` in `.env` are legacy and ignored at runtime in v6.
+> Manage API tokens in the UI (`api_tokens.json`) for supported behavior.
 
 ---
 
@@ -194,13 +182,15 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `metricsRetentionHourlyDays` | Hourly metrics retention (days) |
 | `metricsRetentionDailyDays` | Daily metrics retention (days) |
 | `disableDockerUpdateActions` | Hide Docker update actions in UI |
+| `reduceProUpsellNoise` | Reduce proactive Pro prompts (paywalls still appear when accessing gated features) |
+| `disableLocalUpgradeMetrics` | Disable local-only upgrade metrics collection |
 | `backendPort` | Legacy (unused) |
 | `frontendPort` | Legacy (ignored; use `FRONTEND_PORT`) |
 
 `discoveryConfig` supports:
-- `environment_override`, `subnet_allowlist`, `subnet_blocklist`, `ip_blocklist`
-- `max_hosts_per_scan`, `max_concurrent`, `enable_reverse_dns`, `scan_gateways`
-- `dial_timeout_ms`, `http_timeout_ms`
+- `environmentOverride`, `subnetAllowlist`, `subnetBlocklist`
+- `maxHostsPerScan`, `maxConcurrent`, `enableReverseDns`, `scanGateways`
+- `dialTimeoutMs`, `httpTimeoutMs`
 
 ### Common Overrides (Environment Variables)
 Environment variables take precedence over `system.json`.
@@ -208,7 +198,6 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port | `7655` |
-| `PORT` | Legacy alias for `FRONTEND_PORT` | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
@@ -230,6 +219,7 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. For reverse proxies, keep this as the public URL and use `PULSE_AGENT_CONNECT_URL` for agent installs if you need a direct/internal address. | Auto-detected |
+| `PULSE_PRO_TRIAL_SIGNUP_URL` | Hosted signup/checkout URL used when users click **Start Free Pro Trial**. Must be absolute `http(s)` URL. | `https://cloud.pulserelay.pro/start-pro-trial?...` |
 | `PULSE_AGENT_CONNECT_URL` | Dedicated direct URL for agents (overrides `PULSE_PUBLIC_URL` for agent install commands). Alias: `PULSE_AGENT_URL`. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
 | `PULSE_AGENT_CONFIG_PUBLIC_KEYS` | Comma-separated base64 Ed25519 public keys (raw 32-byte or PKIX-encoded) trusted by agents. | *(unset)* |
@@ -237,7 +227,7 @@ Environment variables take precedence over `system.json`.
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `DISCOVERY_SUBNET` | CIDR or `auto` | `auto` |
-| `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker_host`, `docker_bridge`, `lxc_privileged`, `lxc_unprivileged`) | `auto` |
+| `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker-host`, `docker-bridge`, `lxc-privileged`, `lxc-unprivileged`) | `auto` |
 | `DISCOVERY_SUBNET_ALLOWLIST` | Comma-separated CIDRs allowed for discovery | *(empty)* |
 | `DISCOVERY_SUBNET_BLOCKLIST` | Comma-separated CIDRs excluded from discovery | `169.254.0.0/16` |
 | `DISCOVERY_MAX_HOSTS_PER_SCAN` | Max hosts to scan per run | `1024` |
@@ -285,6 +275,8 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_DISABLE_LOCAL_UPGRADE_METRICS` | Disable local-only upgrade metrics collection | `false` |
+| `PULSE_TELEMETRY` | Anonymous usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides
 
@@ -308,6 +300,10 @@ These are stored in `system.json` and managed via the UI.
 | `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
 
 > **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CHECK_INTERVAL`, `AUTO_UPDATE_TIME`) are kept in sync for backwards compatibility but are not read at runtime.
+>
+> `stable` is the default and recommended production channel. `rc` is an
+> opt-in preview channel. In v6, unattended systemd auto-updates remain
+> `stable`-only even when `updateChannel` is set to `rc`.
 
 ### Auto-Import (Bootstrap)
 
@@ -400,7 +396,7 @@ docker run --init -e HTTPS_ENABLED=true \
 ## 🛡️ Security Best Practices
 
 1. **Permissions**: Ensure `.env` and `nodes.enc` are `600` (read/write by owner only).
-2. **Backups**: Back up `.env` separately from `system.json`.
+2. **Backup hygiene**: Back up `.env` separately from `system.json`.
 3. **Tokens**: Use scoped API tokens for agents instead of the admin password.
 
 ---
@@ -420,9 +416,9 @@ API tokens provide scoped, revocable access to Pulse. Manage tokens in **Setting
 | `docker:manage` | Container lifecycle actions (restart, stop) |
 | `kubernetes:report` | Kubernetes agent telemetry submission |
 | `kubernetes:manage` | Kubernetes cluster management |
-| `host-agent:report` | Host agent metrics submission |
-| `host-agent:config:read` | Read host-agent config payloads |
-| `host-agent:manage` | Manage host agents (unlink/delete/config) |
+| `agent:report` | Agent host telemetry submission |
+| `agent:config:read` | Read agent config payloads |
+| `agent:manage` | Manage registered agents (unlink/delete/config) |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration |
 
@@ -433,7 +429,7 @@ The UI offers quick presets for common use cases:
 | Preset | Scopes | Use Case |
 | -------- | -------- | ---------- |
 | **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
-| **Host agent** | `host-agent:report` | Host agent authentication |
+| **Agent host** | `agent:report` | Agent host telemetry authentication |
 | **Container report** | `docker:report` | Container agent (read-only) |
 | **Container manage** | `docker:report`, `docker:manage` | Container agent with actions |
 | **Settings read** | `settings:read` | Read-only config access |
@@ -458,3 +454,66 @@ For unattended displays (wall monitors, dashboards), use a kiosk token to avoid 
 - Can be revoked anytime from the UI
 
 > **Security note**: URL tokens appear in browser history and server logs. Use only for read-only dashboard access on trusted networks.
+
+---
+
+## TrueNAS Integration {#truenas}
+
+Pulse v6 supports first-class TrueNAS SCALE and CORE monitoring.
+
+### Adding a TrueNAS Instance
+
+1. Go to **Settings → TrueNAS**.
+2. Click **Add Connection**.
+3. Enter the URL (e.g., `https://truenas.local`) and an API key.
+4. Click **Test Connection** to verify, then **Save**.
+
+### Creating a TrueNAS API Key
+
+On your TrueNAS system:
+1. Navigate to the TrueNAS UI → **Settings → API Keys**.
+2. Click **Add** and create a new read-only key.
+3. Copy the key value and paste it into Pulse.
+
+### What Gets Monitored
+
+| Data | Where it appears |
+|---|---|
+| System info (CPU, memory, uptime) | Infrastructure page |
+| ZFS Pools & datasets | Storage page |
+| Physical disks | Storage page |
+| ZFS Snapshots | Recovery page |
+| Replication tasks | Recovery page |
+| TrueNAS alerts | Alerts page |
+
+TrueNAS connections are stored encrypted in `truenas.enc`.
+
+---
+
+## Relay / Mobile Remote Access (Relay and Above) {#relay}
+
+The relay protocol provides end-to-end encrypted remote access foundations for Pulse mobile connectivity.
+
+> Mobile app availability: staged rollout (coming soon). Relay configuration is available now for early-access/beta onboarding and future readiness.
+
+### Configuration
+
+1. Go to **Settings → Relay**.
+2. Toggle relay **On**.
+3. Use the **QR Code** or **Deep Link** when your mobile beta access is enabled.
+
+### Environment Overrides
+
+| Variable | Description | Default |
+|---|---|---|
+| `PULSE_RELAY_ENABLED` | Enable/disable relay | `false` |
+| `PULSE_RELAY_SERVER` | Override relay server URL | `relay.pulserelay.pro` |
+
+### Security
+
+- All data is encrypted end-to-end using ECDH key exchange.
+- The relay server never sees plaintext monitoring data.
+- Each mobile session has its own encryption channel.
+- Requires a valid Relay, Pro, Pro+, or Cloud license (gated by the `relay` feature key).
+
+Relay config is stored encrypted in `relay.enc`.

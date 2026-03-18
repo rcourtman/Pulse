@@ -1,67 +1,35 @@
-import { createSignal, type Accessor } from 'solid-js';
+import { createSignal } from 'solid-js';
 
-export interface TooltipPosition {
+export interface TooltipPos {
   x: number;
   y: number;
 }
 
-export interface UseTooltipResult {
-  /** Whether the tooltip is currently visible */
-  showTooltip: Accessor<boolean>;
-  /** Current tooltip position */
-  tooltipPos: Accessor<TooltipPosition>;
-  /** Handler for mouse enter - calculates position and shows tooltip */
-  handleMouseEnter: (e: MouseEvent) => void;
-  /** Handler for mouse leave - hides tooltip */
-  handleMouseLeave: () => void;
-}
-
 /**
- * Hook to manage tooltip visibility and positioning.
- * Positions tooltip centered above the target element.
+ * Shared tooltip positioning hook.
  *
- * @returns Object with tooltip state and event handlers
+ * Returns reactive signals for visibility and position, plus mouse handlers
+ * that can be spread onto any element:
  *
- * @example
- * ```tsx
- * function MyComponent() {
- *   const { showTooltip, tooltipPos, handleMouseEnter, handleMouseLeave } = useTooltip();
- *
- *   return (
- *     <>
- *       <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
- *         Hover me
- *       </div>
- *       <Show when={showTooltip()}>
- *         <Portal mount={document.body}>
- *           <div style={{ left: `${tooltipPos().x}px`, top: `${tooltipPos().y - 8}px` }}>
- *             Tooltip content
- *           </div>
- *         </Portal>
- *       </Show>
- *     </>
- *   );
- * }
- * ```
+ *   const tip = useTooltip();
+ *   <div onMouseEnter={tip.onMouseEnter} onMouseLeave={tip.onMouseLeave}>
+ *     ...
+ *     <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+ *       <span>Tooltip content</span>
+ *     </TooltipPortal>
+ *   </div>
  */
-export function useTooltip(): UseTooltipResult {
-  const [showTooltip, setShowTooltip] = createSignal(false);
-  const [tooltipPos, setTooltipPos] = createSignal<TooltipPosition>({ x: 0, y: 0 });
+export function useTooltip() {
+  const [show, setShow] = createSignal(false);
+  const [pos, setPos] = createSignal<TooltipPos>({ x: 0, y: 0 });
 
-  const handleMouseEnter = (e: MouseEvent) => {
+  const onMouseEnter = (e: MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-    setShowTooltip(true);
+    setPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setShow(true);
   };
 
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
+  const onMouseLeave = () => setShow(false);
 
-  return {
-    showTooltip,
-    tooltipPos,
-    handleMouseEnter,
-    handleMouseLeave,
-  };
+  return { show, setShow, pos, onMouseEnter, onMouseLeave } as const;
 }

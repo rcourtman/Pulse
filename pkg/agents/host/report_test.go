@@ -243,6 +243,64 @@ func TestRAIDArray_Fields(t *testing.T) {
 	}
 }
 
+func TestUnraidStorage_JSONMarshal(t *testing.T) {
+	report := Report{
+		Host:      HostInfo{Hostname: "tower"},
+		Timestamp: time.Now(),
+		Unraid: &UnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			SyncAction:   "check",
+			SyncProgress: 42.5,
+			NumProtected: 2,
+			Disks: []UnraidDisk{
+				{
+					Name:      "parity",
+					Device:    "/dev/sdb",
+					Role:      "parity",
+					Status:    "online",
+					RawStatus: "DISK_OK",
+					Slot:      0,
+				},
+				{
+					Name:      "disk1",
+					Device:    "/dev/sdc",
+					Role:      "data",
+					Status:    "online",
+					RawStatus: "DISK_OK",
+					Slot:      1,
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+
+	var decoded Report
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+
+	if decoded.Unraid == nil {
+		t.Fatal("expected unraid payload after round trip")
+	}
+	if !decoded.Unraid.ArrayStarted {
+		t.Fatalf("ArrayStarted = false, want true")
+	}
+	if decoded.Unraid.SyncAction != "check" {
+		t.Fatalf("SyncAction = %q, want check", decoded.Unraid.SyncAction)
+	}
+	if len(decoded.Unraid.Disks) != 2 {
+		t.Fatalf("disk count = %d, want 2", len(decoded.Unraid.Disks))
+	}
+	if decoded.Unraid.Disks[0].Role != "parity" {
+		t.Fatalf("first disk role = %q, want parity", decoded.Unraid.Disks[0].Role)
+	}
+}
+
 func TestRAIDDevice_Fields(t *testing.T) {
 	device := RAIDDevice{
 		Device: "/dev/sda1",

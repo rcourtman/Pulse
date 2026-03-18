@@ -15,7 +15,8 @@ func TestFormattersAndTables(t *testing.T) {
 		ID:             MakeResourceID(ResourceTypeDocker, "host1", "app"),
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     "app",
-		HostID:         "host1",
+		TargetID:       "host1",
+		AgentID:        "agent-1",
 		Hostname:       "host1",
 		ServiceType:    "app",
 		ServiceName:    "App Service",
@@ -77,6 +78,15 @@ func TestFormattersAndTables(t *testing.T) {
 	if jsonMap["service_name"] != "App Service" || jsonMap["resource_id"] != "app" {
 		t.Fatalf("unexpected json map: %#v", jsonMap)
 	}
+	if jsonMap["target_id"] != "host1" {
+		t.Fatalf("expected target_id=host1, got %#v", jsonMap["target_id"])
+	}
+	if jsonMap["agent_id"] != "agent-1" {
+		t.Fatalf("expected agent_id=agent-1, got %#v", jsonMap["agent_id"])
+	}
+	if _, hasLegacyHostID := jsonMap["host_id"]; hasLegacyHostID {
+		t.Fatalf("did not expect legacy host_id key in ToJSON output: %#v", jsonMap)
+	}
 	if ToJSON(nil) != nil {
 		t.Fatalf("expected nil json map for nil discovery")
 	}
@@ -98,7 +108,7 @@ func TestFormatDiscoverySummaryAndAge(t *testing.T) {
 			ID:           MakeResourceID(ResourceTypeVM, "node1", "101"),
 			ResourceType: ResourceTypeVM,
 			ResourceID:   "101",
-			HostID:       "node1",
+			TargetID:     "node1",
 			ServiceName:  "VM One",
 			Confidence:   0.95,
 			UpdatedAt:    now.Add(-2 * time.Hour),
@@ -107,7 +117,7 @@ func TestFormatDiscoverySummaryAndAge(t *testing.T) {
 			ID:           MakeResourceID(ResourceTypeDocker, "host1", "app"),
 			ResourceType: ResourceTypeDocker,
 			ResourceID:   "app",
-			HostID:       "host1",
+			TargetID:     "host1",
 			ServiceName:  "App",
 			Confidence:   0.75,
 			UpdatedAt:    now.Add(-2 * 24 * time.Hour),
@@ -154,7 +164,7 @@ func TestBuildResourceContextForPatrol(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "app"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "app",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "App Service",
 	}
 	if err := store.Save(discovery); err != nil {
@@ -182,7 +192,7 @@ func TestFormatScopeHint(t *testing.T) {
 		ID:             MakeResourceID(ResourceTypeDocker, "host1", "app"),
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     "app",
-		HostID:         "host1",
+		TargetID:       "host1",
 		Hostname:       "host1",
 		ServiceType:    "app",
 		ServiceName:    "App Service",

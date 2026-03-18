@@ -73,6 +73,8 @@ type Container struct {
 	Labels              map[string]string  `json:"labels,omitempty"`
 	Env                 []string           `json:"env,omitempty"`
 	Networks            []ContainerNetwork `json:"networks,omitempty"`
+	NetworkRXBytes      uint64             `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes      uint64             `json:"networkTxBytes,omitempty"`
 	WritableLayerBytes  int64              `json:"writableLayerBytes,omitempty"`
 	RootFilesystemBytes int64              `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *ContainerBlockIO  `json:"blockIo,omitempty"`

@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -133,7 +132,7 @@ func (r *RegistryChecker) ForceCheck() {
 }
 
 // CheckImageUpdate checks if a newer version of the image is available.
-func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, os, variant string) *ImageUpdateResult {
+func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, goos, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
 		return nil
 	}
@@ -155,11 +154,11 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	// internal/dockeragent/registry.go
 	// Check cache first
 	// internal/dockeragent/registry.go
-	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, os, variant)
+	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, goos, variant)
 	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
 
 	if cached := r.getCached(cacheKey); cached != nil {
-		r.logger.Debug().Str("image", image).Msg("Cache hit for update check")
+		r.logger.Debug().Str("image", image).Msg("cache hit for update check")
 		if cached.err != "" {
 			return &ImageUpdateResult{
 				Image:           image,
@@ -179,7 +178,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Fetch latest digest from registry
-	latestDigest, headDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, os, variant)
+	latestDigest, headDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, goos, variant)
 	if err != nil {
 		// Cache the error to avoid hammering the registry
 		r.cacheError(cacheKey, err.Error())
@@ -210,13 +209,13 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	updateAvailable := r.digestsDiffer(currentDigest, cacheValue)
 
-	r.logger.Info().
+	r.logger.Debug().
 		Str("image", image).
 		Str("currentDigest", currentDigest).
 		Str("latestDigest", latestDigest).
 		Str("headDigest", headDigest).
 		Str("arch", arch).
-		Str("os", os).
+		Str("os", goos).
 		Str("variant", variant).
 		Bool("updateAvailable", updateAvailable).
 		Msg("Checked image update")
@@ -252,7 +251,7 @@ func (r *RegistryChecker) digestsDiffer(current, latest string) bool {
 
 // fetchDigest retrieves the digest for an image from the registry.
 // Returns the resolved platform-specific digest AND the raw HEAD digest (which might be a manifest list).
-func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, os, variant string) (string, string, error) {
+func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository, tag, arch, goos, variant string) (string, string, error) {
 	// Get auth token if needed
 	token, err := r.getAuthToken(ctx, registry, repository)
 	if err != nil {
@@ -313,8 +312,8 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 	isManifestList := strings.Contains(contentType, "manifest.list") || strings.Contains(contentType, "image.index")
 
 	// If it's a manifest list and we have arch info, we need to resolve it
-	if isManifestList && arch != "" && os != "" {
-		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, os, variant, token)
+	if isManifestList && arch != "" && goos != "" {
+		resolved, err := r.resolveManifestList(ctx, registry, repository, tag, arch, goos, variant, token)
 		return resolved, digest, err
 	}
 
@@ -326,7 +325,7 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 }
 
 // resolveManifestList fetches the manifest list and finds the matching digest for the architecture.
-func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, repository, tag, arch, os, variant, token string) (string, error) {
+func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, repository, tag, arch, goos, variant, token string) (string, error) {
 	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
@@ -355,7 +354,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 		return "", fmt.Errorf("fetch manifest list failed: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxRegistryManifestBodyBytes)
 	if err != nil {
 		return "", fmt.Errorf("read list body: %w", err)
 	}
@@ -372,7 +371,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 
 	// Simple matching logic for now: exact match on Arch and OS
 	for _, m := range list.Manifests {
-		if m.Platform.Architecture == arch && m.Platform.OS == os {
+		if m.Platform.Architecture == arch && m.Platform.OS == goos {
 			if variant != "" && m.Platform.Variant != "" && variant != m.Platform.Variant {
 				continue
 			}
@@ -387,7 +386,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 		}
 	}
 
-	return "", fmt.Errorf("no matching manifest found for %s/%s in list", os, arch)
+	return "", fmt.Errorf("no matching manifest found for %s/%s in list", goos, arch)
 }
 
 type manifestList struct {
@@ -427,29 +426,33 @@ func (r *RegistryChecker) getAuthToken(ctx context.Context, registry, repository
 func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create token request: %w", err)
 	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("send token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			r.logger.Warn().Err(closeErr).Msg("Failed to close token response body")
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("token request failed: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxRegistryTokenBodyBytes)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read token response: %w", err)
 	}
 
 	var tokenResp struct {
 		Token string `json:"token"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", err
+		return "", fmt.Errorf("decode token response: %w", err)
 	}
 
 	return tokenResp.Token, nil

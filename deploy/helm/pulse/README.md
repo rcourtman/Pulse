@@ -1,6 +1,6 @@
 # pulse
 
-![Version: 5.1.23](https://img.shields.io/badge/Version-5.1.23-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 5.1.23](https://img.shields.io/badge/AppVersion-5.1.23-informational?style=flat-square)
+![Version: 5.1.6](https://img.shields.io/badge/Version-5.1.6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 5.1.6](https://img.shields.io/badge/AppVersion-5.1.6-informational?style=flat-square)
 
 Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 
@@ -15,6 +15,23 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 ## Source Code
 
 * <https://github.com/rcourtman/Pulse>
+
+## Explore Monitoring
+
+Enable Explore recording rules and alerts with:
+
+```yaml
+monitoring:
+  prometheusRule:
+    enabled: true
+```
+
+This creates recording rules for:
+- `pulse_ai_explore_failure_rate`
+- `pulse_ai_explore_p95_duration_seconds`
+- `pulse_ai_explore_skipped_no_model_total`
+
+and optional alerts for sustained failure rate, latency, and missing model configuration.
 
 ## Values
 
@@ -35,7 +52,7 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | agent.extraVolumes | list | `[]` |  |
 | agent.healthPort | int | `9191` |  |
 | agent.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.image.repository | string | `"ghcr.io/rcourtman/pulse-docker-agent"` |  |
+| agent.image.repository | string | `"ghcr.io/rcourtman/pulse-agent"` |  |
 | agent.image.tag | string | `""` |  |
 | agent.kind | string | `"DaemonSet"` |  |
 | agent.livenessProbe.enabled | bool | `true` |  |

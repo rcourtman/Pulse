@@ -12,12 +12,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
+const (
+	// selfUpdateRequestMaxAttempts bounds retries for transient update HTTP failures.
+	selfUpdateRequestMaxAttempts = 3
+
+	// selfUpdateRetryBaseDelay is the initial retry backoff delay.
+	selfUpdateRetryBaseDelay = 25 * time.Millisecond
+
+	// selfUpdateRetryMaxDelay caps retry backoff growth.
+	selfUpdateRetryMaxDelay = 250 * time.Millisecond
+)
+
+var selfUpdateRetrySleepFn = selfUpdateSleepWithContext
+
 // checkForUpdates checks if a newer version is available and performs self-update if needed
 func (a *Agent) checkForUpdates(ctx context.Context) {
+	if !a.tryStartUpdateCheck() {
+		a.logger.Debug().Msg("Skipping update check - previous check still running")
+		return
+	}
+	defer a.finishUpdateCheck()
+
 	// Skip updates if disabled via config
 	if a.cfg.DisableAutoUpdate {
 		a.logger.Info().Msg("Skipping update check - auto-update disabled")
@@ -46,27 +66,23 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 
 	// Get current version from server
 	url := fmt.Sprintf("%s/api/agent/version", target.URL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := a.doSelfUpdateGetWithRetry(ctx, target, url, "version check")
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to create version check request")
-		return
-	}
-
-	if target.Token != "" {
-		req.Header.Set("X-API-Token", target.Token)
-		req.Header.Set("Authorization", "Bearer "+target.Token)
-	}
-
-	client := a.httpClientFor(target)
-	resp, err := client.Do(req)
-	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to check for updates")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to create version check request")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		a.logger.Warn().Int("status", resp.StatusCode).Msg("Version endpoint returned non-200 status")
+		a.logger.Warn().
+			Int("status", resp.StatusCode).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Version endpoint returned non-200 status")
 		return
 	}
 
@@ -74,7 +90,13 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		Version string `json:"version"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
+	body, err := readBodyWithLimit(resp.Body, maxVersionResponseBodyBytes)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("Version response too large")
+		return
+	}
+
+	if err := json.Unmarshal(body, &versionResp); err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to decode version response")
 		return
 	}
@@ -85,22 +107,36 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		return
 	}
 
-	// Compare versions - normalize by stripping "v" prefix for comparison.
-	// Server returns version without prefix (e.g., "4.33.1"), but agent's
-	// Version may include it (e.g., "v4.33.1") depending on build.
-	if utils.NormalizeVersion(versionResp.Version) == utils.NormalizeVersion(Version) {
+	// Compare versions with semver ordering to prevent accidental downgrades.
+	currentNorm := utils.NormalizeVersion(Version)
+	serverNorm := utils.NormalizeVersion(versionResp.Version)
+	cmp := utils.CompareVersions(serverNorm, currentNorm)
+	if cmp == 0 {
 		a.logger.Debug().Str("version", Version).Msg("Agent is up to date")
+		return
+	}
+	if cmp < 0 {
+		a.logger.Debug().
+			Str("currentVersion", currentNorm).
+			Str("serverVersion", serverNorm).
+			Msg("Server has older version, skipping downgrade")
 		return
 	}
 
 	a.logger.Info().
 		Str("currentVersion", Version).
 		Str("availableVersion", versionResp.Version).
+		Str("target", target.URL).
 		Msg("New agent version available, performing self-update")
 
 	// Perform self-update
 	if err := selfUpdateFunc(a, ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to self-update agent")
+		a.logger.Error().
+			Err(err).
+			Str("target", target.URL).
+			Str("currentVersion", Version).
+			Str("availableVersion", versionResp.Version).
+			Msg("Failed to self-update agent")
 		return
 	}
 
@@ -120,12 +156,20 @@ func resolveSymlink(path string) (string, error) {
 }
 
 // verifyELFMagic checks that the file is a valid ELF binary
-func verifyELFMagic(path string) error {
+func verifyELFMagic(path string) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file for ELF verification: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			if retErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("close file after ELF verification: %w", closeErr))
+			} else {
+				retErr = fmt.Errorf("close file after ELF verification: %w", closeErr)
+			}
+		}
+	}()
 
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil {
@@ -167,6 +211,126 @@ func determineSelfUpdateArch() string {
 	}
 }
 
+func selfUpdateSleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func selfUpdateRetryBackoffDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return selfUpdateRetryBaseDelay
+	}
+
+	delay := selfUpdateRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > selfUpdateRetryMaxDelay {
+		return selfUpdateRetryMaxDelay
+	}
+	return delay
+}
+
+func isRetryableSelfUpdateStatus(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func newAuthedSelfUpdateGetRequest(ctx context.Context, target TargetConfig, requestURL string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if target.Token != "" {
+		req.Header.Set("X-API-Token", target.Token)
+		req.Header.Set("Authorization", "Bearer "+target.Token)
+	}
+
+	return req, nil
+}
+
+func (a *Agent) doSelfUpdateGetWithRetry(ctx context.Context, target TargetConfig, requestURL, operation string) (*http.Response, error) {
+	client := a.httpClientFor(target)
+	var lastErr error
+
+	for attempt := 1; attempt <= selfUpdateRequestMaxAttempts; attempt++ {
+		req, err := newAuthedSelfUpdateGetRequest(ctx, target, requestURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create %s request: %w", operation, err)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("%s request failed: %w", operation, err)
+			if attempt == selfUpdateRequestMaxAttempts || ctx.Err() != nil {
+				break
+			}
+
+			delay := selfUpdateRetryBackoffDelay(attempt)
+			a.logger.Warn().
+				Err(err).
+				Str("operation", operation).
+				Str("url", requestURL).
+				Int("attempt", attempt).
+				Int("maxAttempts", selfUpdateRequestMaxAttempts).
+				Dur("retryIn", delay).
+				Msg("Transient self-update request failure, retrying")
+			if err := selfUpdateRetrySleepFn(ctx, delay); err != nil {
+				return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+			}
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+
+		lastErr = fmt.Errorf("%s failed with status: %s", operation, resp.Status)
+		if !isRetryableSelfUpdateStatus(resp.StatusCode) {
+			resp.Body.Close()
+			return nil, lastErr
+		}
+
+		resp.Body.Close()
+		if attempt == selfUpdateRequestMaxAttempts || ctx.Err() != nil {
+			break
+		}
+
+		delay := selfUpdateRetryBackoffDelay(attempt)
+		a.logger.Warn().
+			Str("operation", operation).
+			Str("url", requestURL).
+			Int("statusCode", resp.StatusCode).
+			Int("attempt", attempt).
+			Int("maxAttempts", selfUpdateRequestMaxAttempts).
+			Dur("retryIn", delay).
+			Msg("Transient self-update response status, retrying")
+		if err := selfUpdateRetrySleepFn(ctx, delay); err != nil {
+			return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("%s request failed", operation)
+	}
+
+	return nil, lastErr
+}
+
 // selfUpdate downloads the new agent binary and replaces the current one
 func (a *Agent) selfUpdate(ctx context.Context) error {
 	target := a.primaryTarget()
@@ -193,7 +357,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 			Msg("Resolved symlink for self-update")
 	}
 
-	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-docker-agent"
+	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-agent"
 	archParam := determineSelfUpdateArch()
 
 	type downloadCandidate struct {
@@ -210,31 +374,13 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 	candidates = append(candidates, downloadCandidate{url: downloadBase})
 
-	client := a.httpClientFor(target)
 	var resp *http.Response
 	lastErr := errors.New("failed to download new binary")
 
 	for _, candidate := range candidates {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate.url, nil)
+		response, err := a.doSelfUpdateGetWithRetry(ctx, target, candidate.url, "binary download")
 		if err != nil {
-			lastErr = fmt.Errorf("failed to create download request: %w", err)
-			continue
-		}
-
-		if target.Token != "" {
-			req.Header.Set("X-API-Token", target.Token)
-			req.Header.Set("Authorization", "Bearer "+target.Token)
-		}
-
-		response, err := client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to download new binary: %w", err)
-			continue
-		}
-
-		if response.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
-			response.Body.Close()
+			lastErr = err
 			continue
 		}
 
@@ -252,19 +398,27 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	if resp == nil {
 		return lastErr
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close download response body")
+		}
+	}()
 
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
 
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := osCreateTempFn(targetDir, "pulse-docker-agent-*.tmp")
+	tmpFile, err := osCreateTempFn(targetDir, "pulse-agent-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file in %s: %w", targetDir, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer osRemoveFn(tmpPath) // Clean up if something goes wrong
+	defer func() {
+		if err := osRemoveFn(tmpPath); err != nil {
+			a.logger.Warn().Err(err).Str("path", tmpPath).Msg("Self-update: failed to clean up temp file")
+		}
+	}()
 
 	// Write downloaded binary to temp file with size limit (100 MB max)
 	const maxBinarySize = 100 * 1024 * 1024
@@ -272,11 +426,15 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1)
 	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		tmpFile.Close()
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close temp file after write failure")
+		}
 		return fmt.Errorf("failed to write downloaded binary: %w", err)
 	}
 	if written > maxBinarySize {
-		tmpFile.Close()
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close oversized temp file")
+		}
 		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
 	if err := closeFileFn(tmpFile); err != nil {
@@ -332,7 +490,10 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Let's use the actual token configured to be safe.
 	checkCmd := execCommandContextFn(ctx, tmpPath, "--self-test", "--token", a.cfg.APIToken)
 	if output, err := checkCmd.CombinedOutput(); err != nil {
-		a.logger.Error().Str("output", string(output)).Err(err).Msg("Self-update: pre-flight check failed")
+		a.logger.Error().
+			Err(err).
+			Int("outputBytes", len(output)).
+			Msg("Self-update: pre-flight check failed")
 		return fmt.Errorf("new binary failed self-test: %w", err)
 	}
 	a.logger.Debug().Msg("Self-update: pre-flight check passed")
@@ -346,12 +507,20 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Move new binary to current location
 	if err := osRenameFn(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		_ = osRenameFn(backupPath, realExecPath)
+		restoreErr := osRenameFn(backupPath, realExecPath)
+		if restoreErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to replace binary: %w", err),
+				fmt.Errorf("failed to restore backup binary: %w", restoreErr),
+			)
+		}
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	// Remove backup on success
-	_ = osRemoveFn(backupPath)
+	if err := osRemoveFn(backupPath); err != nil {
+		a.logger.Warn().Err(err).Str("path", backupPath).Msg("Self-update: failed to remove backup binary after successful replacement")
+	}
 
 	// On Unraid, also update the persistent copy on the flash drive
 	if isUnraid() {
@@ -364,7 +533,9 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 					a.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
 				} else if err := osRenameFn(tmpPersist, persistPath); err != nil {
 					a.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
-					_ = osRemoveFn(tmpPersist)
+					if removeErr := osRemoveFn(tmpPersist); removeErr != nil {
+						a.logger.Warn().Err(removeErr).Str("path", tmpPersist).Msg("Failed to remove temporary Unraid persistent binary")
+					}
 				} else {
 					a.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
 				}

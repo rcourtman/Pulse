@@ -3,6 +3,7 @@ package approval
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -36,6 +37,38 @@ func TestNewStoreEmptyDataDir(t *testing.T) {
 	}
 }
 
+func TestNewStore_NonPositiveConfigUsesDefaults(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: -1 * time.Minute,
+		MaxApprovals:   -10,
+	})
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	if store.defaultTimeout != 5*time.Minute {
+		t.Fatalf("defaultTimeout = %v, want %v", store.defaultTimeout, 5*time.Minute)
+	}
+	if store.maxApprovals != 100 {
+		t.Fatalf("maxApprovals = %d, want 100", store.maxApprovals)
+	}
+
+	req := &ApprovalRequest{Command: "echo ok"}
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+	if !req.ExpiresAt.After(req.RequestedAt) {
+		t.Fatal("approval expiry should be after request time")
+	}
+}
+
 func TestCreateApproval(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
@@ -52,7 +85,7 @@ func TestCreateApproval(t *testing.T) {
 		ExecutionID: "exec-1",
 		ToolID:      "tool-1",
 		Command:     "systemctl restart nginx",
-		TargetType:  "host",
+		TargetType:  "agent",
 		TargetID:    "host-1",
 		TargetName:  "webserver",
 		Context:     "Service needs restart due to config change",
@@ -77,6 +110,29 @@ func TestCreateApproval(t *testing.T) {
 	}
 }
 
+func TestCreateApproval_RejectsUnsupportedHostTargetType(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "uptime",
+		TargetType: "host",
+		TargetID:   "host-1",
+	}
+
+	if err := store.CreateApproval(req); err == nil {
+		t.Fatal("expected unsupported host target type to be rejected")
+	}
+}
+
 func TestGetApproval(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
@@ -92,7 +148,7 @@ func TestGetApproval(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "apt update",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, found := store.GetApproval(req.ID)
 	if !found {
@@ -122,7 +178,7 @@ func TestGetPendingApprovals(t *testing.T) {
 
 	// Create multiple approvals
 	for i := 0; i < 3; i++ {
-		store.CreateApproval(&ApprovalRequest{
+		_ = store.CreateApproval(&ApprovalRequest{
 			Command: "test command",
 		})
 	}
@@ -130,6 +186,69 @@ func TestGetPendingApprovals(t *testing.T) {
 	pending := store.GetPendingApprovals()
 	if len(pending) != 3 {
 		t.Errorf("GetPendingApprovals() count = %v, want %v", len(pending), 3)
+	}
+}
+
+func TestNormalizeOrgID(t *testing.T) {
+	if got := NormalizeOrgID(""); got != DefaultOrgID {
+		t.Fatalf("NormalizeOrgID(\"\") = %q, want %q", got, DefaultOrgID)
+	}
+	if got := NormalizeOrgID("  org-a  "); got != "org-a" {
+		t.Fatalf("NormalizeOrgID trims input, got %q", got)
+	}
+}
+
+func TestBelongsToOrg(t *testing.T) {
+	if BelongsToOrg(nil, "default") {
+		t.Fatal("BelongsToOrg should return false for nil request")
+	}
+
+	legacy := &ApprovalRequest{ID: "legacy"}
+	if !BelongsToOrg(legacy, "default") {
+		t.Fatal("legacy approvals should belong to default org")
+	}
+	if BelongsToOrg(legacy, "org-a") {
+		t.Fatal("legacy approvals should not belong to non-default org")
+	}
+
+	scoped := &ApprovalRequest{ID: "scoped", OrgID: "org-a"}
+	if !BelongsToOrg(scoped, "org-a") {
+		t.Fatal("expected approval to belong to matching org")
+	}
+	if BelongsToOrg(scoped, "Org-A") {
+		t.Fatal("org comparison should be case-sensitive")
+	}
+}
+
+func TestGetPendingApprovalsForOrg(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	_ = store.CreateApproval(&ApprovalRequest{OrgID: "org-a", Command: "pending-a"})
+	_ = store.CreateApproval(&ApprovalRequest{OrgID: "org-b", Command: "pending-b"})
+
+	expired := &ApprovalRequest{
+		OrgID:     "org-a",
+		Command:   "expired-a",
+		ExpiresAt: time.Now().Add(-1 * time.Minute),
+	}
+	_ = store.CreateApproval(expired)
+
+	pendingOrgA := store.GetPendingApprovalsForOrg("org-a")
+	if len(pendingOrgA) != 1 {
+		t.Fatalf("GetPendingApprovalsForOrg(org-a) count = %d, want 1", len(pendingOrgA))
+	}
+	if pendingOrgA[0].OrgID != "org-a" {
+		t.Fatalf("expected org-a approval, got %q", pendingOrgA[0].OrgID)
 	}
 }
 
@@ -145,9 +264,9 @@ func TestGetApprovalsByExecution(t *testing.T) {
 		DefaultTimeout: 1 * time.Minute,
 	})
 
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-1"})
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-2"})
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-2", Command: "cmd-3"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-1"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-2"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-2", Command: "cmd-3"})
 
 	results := store.GetApprovalsByExecution("exec-1")
 	if len(results) != 2 {
@@ -175,7 +294,7 @@ func TestApprove(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "systemctl restart nginx",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, err := store.Approve(req.ID, "admin")
 	if err != nil {
@@ -208,7 +327,7 @@ func TestDeny(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "rm -rf /tmp/data",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, err := store.Deny(req.ID, "admin", "Too dangerous")
 	if err != nil {
@@ -220,6 +339,98 @@ func TestDeny(t *testing.T) {
 	}
 	if got.DenyReason != "Too dangerous" {
 		t.Errorf("Deny() DenyReason = %v, want %v", got.DenyReason, "Too dangerous")
+	}
+}
+
+func TestConsumeApproval_LegacyWithoutCommandHash_MatchingTuple(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "docker restart web",
+		TargetType: "docker",
+		TargetID:   "host-1:web",
+	}
+	_ = store.CreateApproval(req)
+	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	_, _ = store.Approve(req.ID, "admin")
+
+	consumed, err := store.ConsumeApproval(req.ID, "docker restart web", "docker", "host-1:web")
+	if err != nil {
+		t.Fatalf("ConsumeApproval() error = %v", err)
+	}
+	if !consumed.Consumed {
+		t.Fatal("expected approval to be consumed")
+	}
+	if consumed.CommandHash == "" {
+		t.Fatal("expected legacy command hash to be backfilled on consume")
+	}
+}
+
+func TestConsumeApproval_LegacyWithoutCommandHash_MismatchRejected(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "docker restart web",
+		TargetType: "docker",
+		TargetID:   "host-1:web",
+	}
+	_ = store.CreateApproval(req)
+	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	_, _ = store.Approve(req.ID, "admin")
+
+	if _, err := store.ConsumeApproval(req.ID, "docker restart db", "docker", "host-1:db"); err == nil {
+		t.Fatal("expected mismatch for legacy approval without command hash")
+	}
+
+	stored, ok := store.GetApproval(req.ID)
+	if !ok {
+		t.Fatal("expected approval to exist")
+	}
+	if stored.Consumed {
+		t.Fatal("expected approval to remain unconsumed after mismatch")
+	}
+}
+
+func TestConsumeApproval_RejectsUnsupportedHostTargetTypeInput(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "uptime",
+		TargetType: "agent",
+		TargetID:   "node-1",
+	}
+	_ = store.CreateApproval(req)
+	_, _ = store.Approve(req.ID, "admin")
+
+	if _, err := store.ConsumeApproval(req.ID, "uptime", "host", "node-1"); err == nil {
+		t.Fatal("expected error for unsupported host target type input")
 	}
 }
 
@@ -236,16 +447,16 @@ func TestGetStats(t *testing.T) {
 	})
 
 	pending := &ApprovalRequest{Command: "pending"}
-	store.CreateApproval(pending)
+	_ = store.CreateApproval(pending)
 
 	approved := &ApprovalRequest{Command: "approved"}
-	store.CreateApproval(approved)
+	_ = store.CreateApproval(approved)
 	if _, err := store.Approve(approved.ID, "admin"); err != nil {
 		t.Fatalf("Approve() error = %v", err)
 	}
 
 	denied := &ApprovalRequest{Command: "denied"}
-	store.CreateApproval(denied)
+	_ = store.CreateApproval(denied)
 	if _, err := store.Deny(denied.ID, "admin", "no"); err != nil {
 		t.Fatalf("Deny() error = %v", err)
 	}
@@ -254,7 +465,7 @@ func TestGetStats(t *testing.T) {
 		Command:   "expired",
 		ExpiresAt: time.Now().Add(-time.Minute),
 	}
-	store.CreateApproval(expired)
+	_ = store.CreateApproval(expired)
 	store.CleanupExpired()
 
 	if err := store.StoreExecution(&ExecutionState{ID: "exec-1"}); err != nil {
@@ -267,6 +478,55 @@ func TestGetStats(t *testing.T) {
 	}
 	if stats["executions"] != 1 {
 		t.Fatalf("GetStats() executions = %v, want %v", stats["executions"], 1)
+	}
+}
+
+func TestGetStatsForOrg(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	pendingA := &ApprovalRequest{OrgID: "org-a", Command: "pending-a"}
+	_ = store.CreateApproval(pendingA)
+
+	approvedA := &ApprovalRequest{OrgID: "org-a", Command: "approved-a"}
+	_ = store.CreateApproval(approvedA)
+	if _, err := store.Approve(approvedA.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	deniedA := &ApprovalRequest{OrgID: "org-a", Command: "denied-a"}
+	_ = store.CreateApproval(deniedA)
+	if _, err := store.Deny(deniedA.ID, "admin", "no"); err != nil {
+		t.Fatalf("Deny() error = %v", err)
+	}
+
+	expiredA := &ApprovalRequest{
+		OrgID:     "org-a",
+		Command:   "expired-a",
+		ExpiresAt: time.Now().Add(-1 * time.Minute),
+	}
+	_ = store.CreateApproval(expiredA)
+
+	otherOrg := &ApprovalRequest{OrgID: "org-b", Command: "pending-b"}
+	_ = store.CreateApproval(otherOrg)
+
+	store.CleanupExpired()
+
+	stats := store.GetStatsForOrg("org-a")
+	if stats["pending"] != 1 || stats["approved"] != 1 || stats["denied"] != 1 || stats["expired"] != 1 {
+		t.Fatalf("GetStatsForOrg() unexpected counts: %+v", stats)
+	}
+	if stats["executions"] != 0 {
+		t.Fatalf("GetStatsForOrg() executions = %d, want 0", stats["executions"])
 	}
 }
 
@@ -303,7 +563,7 @@ func TestApproveAlreadyDecided(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "test",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 	_, _ = store.Deny(req.ID, "admin", "reason")
 
 	_, err = store.Approve(req.ID, "admin2")
@@ -346,10 +606,73 @@ func TestExecutionState(t *testing.T) {
 	if got.ID != state.ID {
 		t.Errorf("GetExecution() ID = %v, want %v", got.ID, state.ID)
 	}
+	if got.PendingToolCall == nil {
+		t.Fatal("GetExecution() should normalize pending tool call map")
+	}
 
 	_, found = store.GetExecution("nonexistent")
 	if found {
 		t.Error("GetExecution() found nonexistent state")
+	}
+}
+
+func TestStoreExecution_NormalizesEmptyCollections(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	state := &ExecutionState{ID: "state-normalized"}
+	if err := store.StoreExecution(state); err != nil {
+		t.Fatalf("StoreExecution() error = %v", err)
+	}
+
+	if state.OriginalRequest == nil {
+		t.Fatal("expected original request map to be normalized")
+	}
+	if state.Messages == nil {
+		t.Fatal("expected messages slice to be normalized")
+	}
+	if state.PendingToolCall == nil {
+		t.Fatal("expected pending tool call map to be normalized")
+	}
+}
+
+func TestExecutionStatePersistence_NormalizesLoadedCollections(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	raw := `[{"id":"exec-1","createdAt":"2026-03-15T10:00:00Z","expiresAt":"2026-03-15T11:00:00Z"}]`
+	if err := os.WriteFile(filepath.Join(tmpDir, "ai_executions.json"), []byte(raw), 0o600); err != nil {
+		t.Fatalf("write executions file: %v", err)
+	}
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	state, found := store.GetExecution("exec-1")
+	if !found {
+		t.Fatal("expected execution to load")
+	}
+	if state.OriginalRequest == nil {
+		t.Fatal("expected original request map to be normalized after load")
+	}
+	if state.Messages == nil {
+		t.Fatal("expected messages slice to be normalized after load")
+	}
+	if state.PendingToolCall == nil {
+		t.Fatal("expected pending tool call map to be normalized after load")
 	}
 }
 
@@ -368,7 +691,7 @@ func TestDeleteExecution(t *testing.T) {
 	state := &ExecutionState{
 		ID: "state-1",
 	}
-	store.StoreExecution(state)
+	_ = store.StoreExecution(state)
 
 	store.DeleteExecution(state.ID)
 
@@ -394,7 +717,7 @@ func TestCleanupExpired(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "test",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	// Wait for expiration
 	time.Sleep(10 * time.Millisecond)
@@ -518,7 +841,7 @@ func TestStorePersistence(t *testing.T) {
 		TargetID:   "host-1",
 		TargetName: "webserver",
 	}
-	store1.CreateApproval(req)
+	_ = store1.CreateApproval(req)
 	approvalID := req.ID
 
 	state := &ExecutionState{
@@ -527,7 +850,7 @@ func TestStorePersistence(t *testing.T) {
 			"message": "test",
 		},
 	}
-	store1.StoreExecution(state)
+	_ = store1.StoreExecution(state)
 
 	// Flush debounced writes to disk immediately
 	store1.Flush()
@@ -570,8 +893,8 @@ func TestMaxApprovals(t *testing.T) {
 	})
 
 	// Create first two approvals - should succeed
-	store.CreateApproval(&ApprovalRequest{Command: "test1"})
-	store.CreateApproval(&ApprovalRequest{Command: "test2"})
+	_ = store.CreateApproval(&ApprovalRequest{Command: "test1"})
+	_ = store.CreateApproval(&ApprovalRequest{Command: "test2"})
 
 	// Third should fail
 	err = store.CreateApproval(&ApprovalRequest{Command: "test3"})

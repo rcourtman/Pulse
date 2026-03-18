@@ -38,11 +38,6 @@ func TestSaveComplexConfigs_ErrorPaths(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("SaveEnvTokenSuppressions_Error", func(t *testing.T) {
-		err := cp.SaveEnvTokenSuppressions([]string{})
-		assert.Error(t, err)
-	})
-
 	t.Run("SaveWebhooks_Error", func(t *testing.T) {
 		err := cp.SaveWebhooks([]notifications.WebhookConfig{})
 		assert.Error(t, err)
@@ -79,12 +74,6 @@ func TestSaveComplexConfigs_MkdirErrors(t *testing.T) {
 
 	t.Run("SavePatrolRunHistory_MkdirError", func(t *testing.T) {
 		err := cp.SavePatrolRunHistory([]PatrolRunRecord{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "mkdir error")
-	})
-
-	t.Run("SaveEnvTokenSuppressions_MkdirError", func(t *testing.T) {
-		err := cp.SaveEnvTokenSuppressions([]string{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "mkdir error")
 	})

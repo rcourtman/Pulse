@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -227,5 +228,49 @@ func TestGenerateAlertInvestigationPrompt(t *testing.T) {
 		!strings.Contains(out, "**Resource:** pve1 (node)") ||
 		!strings.Contains(out, "**Node:** pve1") {
 		t.Fatalf("unexpected prompt: %s", out)
+	}
+}
+
+func TestAlertInvestigationRequestJSONCanonicalOutput(t *testing.T) {
+	req := AlertInvestigationRequest{
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		ResourceID:      "agent-1",
+		ResourceName:    "node-1",
+		ResourceType:    "node",
+		AlertType:       "cpu",
+		Level:           "warning",
+		Message:         "high cpu",
+	}
+
+	raw, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
+	}
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
+	}
+
+	var decoded AlertInvestigationRequest
+	if err := json.Unmarshal([]byte(`{
+		"alertIdentifier":"instance:node:100::metric/cpu",
+		"resource_id":"agent-1",
+		"resource_name":"node-1",
+		"resource_type":"node",
+		"alert_type":"cpu",
+		"level":"warning",
+		"message":"high cpu"
+	}`), &decoded); err != nil {
+		t.Fatalf("unmarshal canonical request: %v", err)
+	}
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier to load, got %q", decoded.AlertIdentifier)
 	}
 }

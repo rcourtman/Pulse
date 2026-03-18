@@ -1,10 +1,11 @@
 // Package discovery provides AI-powered infrastructure discovery capabilities.
 // It discovers services, versions, configurations, and CLI access methods
-// for VMs, LXCs, Docker containers, Kubernetes pods, and hosts.
+// for VMs, containers, Docker containers, Kubernetes pods, and hosts.
 package servicediscovery
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,25 +13,87 @@ import (
 type ResourceType string
 
 const (
-	ResourceTypeVM        ResourceType = "vm"
-	ResourceTypeLXC       ResourceType = "lxc"
-	ResourceTypeDocker    ResourceType = "docker"
-	ResourceTypeK8s       ResourceType = "k8s"
-	ResourceTypeHost      ResourceType = "host"
-	ResourceTypeDockerVM  ResourceType = "docker_vm"  // Docker on a VM
-	ResourceTypeDockerLXC ResourceType = "docker_lxc" // Docker in an LXC
+	ResourceTypeVM              ResourceType = "vm"
+	ResourceTypeSystemContainer ResourceType = "system-container"
+	ResourceTypeDocker          ResourceType = "docker"
+	ResourceTypeK8s             ResourceType = "k8s"
+	ResourceTypeAgent           ResourceType = "agent"
+
+	// Scan-only execution targets for Docker running inside another canonical resource.
+	ResourceTypeDockerVM              ResourceType = "docker_vm"               // Docker on a VM
+	ResourceTypeDockerSystemContainer ResourceType = "docker_system-container" // Docker in a system container
 )
+
+const (
+	legacyHostAlias             ResourceType = "host"
+	legacyResourceTypeLXC       ResourceType = "lxc"
+	legacyResourceTypeDockerLXC ResourceType = "docker_lxc"
+)
+
+type resourceTypeClass string
+
+const (
+	resourceTypeClassCanonical     resourceTypeClass = "canonical"
+	resourceTypeClassExecutionOnly resourceTypeClass = "execution-only"
+	resourceTypeClassLegacyAlias   resourceTypeClass = "legacy-alias"
+	resourceTypeClassUnknown       resourceTypeClass = "unknown"
+)
+
+func classifyResourceType(rt ResourceType) resourceTypeClass {
+	switch NormalizeResourceType(rt) {
+	case ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeDocker, ResourceTypeK8s, ResourceTypeAgent:
+		return resourceTypeClassCanonical
+	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
+		return resourceTypeClassExecutionOnly
+	case legacyHostAlias, legacyResourceTypeLXC, legacyResourceTypeDockerLXC:
+		return resourceTypeClassLegacyAlias
+	default:
+		return resourceTypeClassUnknown
+	}
+}
+
+// NormalizeResourceType keeps resource type handling whitespace-stable without
+// rewriting legacy or scan-only vocabulary into canonical types.
+func NormalizeResourceType(rt ResourceType) ResourceType {
+	return ResourceType(strings.TrimSpace(string(rt)))
+}
+
+// IsCanonicalDiscoveryType reports whether the resource type is part of the
+// canonical v6 discovery model and may be persisted or queried as discovery data.
+func (rt ResourceType) IsCanonicalDiscoveryType() bool {
+	return classifyResourceType(rt) == resourceTypeClassCanonical
+}
+
+// IsExecutionOnlyDiscoveryType reports whether the resource type is only valid
+// for internal scan execution routing and must not be stored as a discovery type.
+func (rt ResourceType) IsExecutionOnlyDiscoveryType() bool {
+	return classifyResourceType(rt) == resourceTypeClassExecutionOnly
+}
+
+// ValidateCanonicalDiscoveryResourceType enforces that service-discovery
+// persistence and query paths use canonical v6 resource vocabulary only.
+func ValidateCanonicalDiscoveryResourceType(rt ResourceType) error {
+	rt = NormalizeResourceType(rt)
+
+	switch classifyResourceType(rt) {
+	case resourceTypeClassCanonical:
+		return nil
+	case resourceTypeClassExecutionOnly:
+		return fmt.Errorf("resource type %q is an execution-only scan type, not a canonical discovery resource type", rt)
+	case resourceTypeClassLegacyAlias:
+		return fmt.Errorf("resource type %q is a legacy alias, not a canonical discovery resource type", rt)
+	default:
+		return fmt.Errorf("resource type %q is not a recognized discovery resource type", rt)
+	}
+}
 
 // FactCategory categorizes discovery facts.
 type FactCategory string
 
 const (
 	FactCategoryVersion    FactCategory = "version"
-	FactCategoryConfig     FactCategory = "config"
 	FactCategoryService    FactCategory = "service"
-	FactCategoryPort       FactCategory = "port"
 	FactCategoryHardware   FactCategory = "hardware"
-	FactCategoryNetwork    FactCategory = "network"
 	FactCategoryStorage    FactCategory = "storage"
 	FactCategoryDependency FactCategory = "dependency"
 	FactCategorySecurity   FactCategory = "security"
@@ -40,31 +103,30 @@ const (
 type ServiceCategory string
 
 const (
-	CategoryDatabase     ServiceCategory = "database"
-	CategoryWebServer    ServiceCategory = "web_server"
-	CategoryCache        ServiceCategory = "cache"
-	CategoryMessageQueue ServiceCategory = "message_queue"
-	CategoryMonitoring   ServiceCategory = "monitoring"
-	CategoryBackup       ServiceCategory = "backup"
-	CategoryNVR          ServiceCategory = "nvr"
-	CategoryStorage      ServiceCategory = "storage"
-	CategoryContainer    ServiceCategory = "container"
-	CategoryVirtualizer  ServiceCategory = "virtualizer"
-	CategoryNetwork      ServiceCategory = "network"
-	CategorySecurity     ServiceCategory = "security"
-	CategoryMedia        ServiceCategory = "media"
-	CategoryHomeAuto     ServiceCategory = "home_automation"
-	CategoryUnknown      ServiceCategory = "unknown"
+	CategoryDatabase    ServiceCategory = "database"
+	CategoryWebServer   ServiceCategory = "web_server"
+	CategoryCache       ServiceCategory = "cache"
+	CategoryMonitoring  ServiceCategory = "monitoring"
+	CategoryBackup      ServiceCategory = "backup"
+	CategoryNVR         ServiceCategory = "nvr"
+	CategoryStorage     ServiceCategory = "storage"
+	CategoryVirtualizer ServiceCategory = "virtualizer"
+	CategoryNetwork     ServiceCategory = "network"
+	CategorySecurity    ServiceCategory = "security"
+	CategoryMedia       ServiceCategory = "media"
+	CategoryHomeAuto    ServiceCategory = "home_automation"
+	CategoryUnknown     ServiceCategory = "unknown"
 )
 
 // ResourceDiscovery is the main data model for discovered resource information.
 type ResourceDiscovery struct {
 	// Identity
-	ID           string       `json:"id"`            // Unique ID: "lxc:minipc:101"
-	ResourceType ResourceType `json:"resource_type"` // vm, lxc, docker, k8s, host
+	ID           string       `json:"id"`            // Unique ID: "system-container:minipc:101"
+	ResourceType ResourceType `json:"resource_type"` // vm, system-container, docker, k8s, agent
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
-	HostID       string       `json:"host_id"`       // Proxmox node name or host agent ID
-	Hostname     string       `json:"hostname"`      // Human-readable host name
+	TargetID     string       `json:"target_id,omitempty"`
+	AgentID      string       `json:"agent_id,omitempty"`
+	Hostname     string       `json:"hostname"` // Human-readable host name
 
 	// AI-discovered info
 	ServiceType    string          `json:"service_type"`    // frigate, postgres, pbs
@@ -102,7 +164,10 @@ type ResourceDiscovery struct {
 	RawCommandOutput map[string]string `json:"raw_command_output,omitempty"`
 
 	// Auto-suggested web interface URL based on service type and discovered ports
-	SuggestedURL string `json:"suggested_url,omitempty"`
+	SuggestedURL             string `json:"suggested_url,omitempty"`
+	SuggestedURLSourceCode   string `json:"suggested_url_source_code,omitempty"`
+	SuggestedURLSourceDetail string `json:"suggested_url_source_detail,omitempty"`
+	SuggestedURLDiagnostic   string `json:"suggested_url_diagnostic,omitempty"`
 }
 
 // DiscoveryFact represents a single discovered fact about a resource.
@@ -135,12 +200,12 @@ type DockerBindMount struct {
 }
 
 // MakeResourceID creates a standardized resource ID.
-func MakeResourceID(resourceType ResourceType, hostID, resourceID string) string {
-	return fmt.Sprintf("%s:%s:%s", resourceType, hostID, resourceID)
+func MakeResourceID(resourceType ResourceType, targetID, resourceID string) string {
+	return fmt.Sprintf("%s:%s:%s", resourceType, targetID, resourceID)
 }
 
 // ParseResourceID parses a resource ID into its components.
-func ParseResourceID(id string) (resourceType ResourceType, hostID, resourceID string, err error) {
+func ParseResourceID(id string) (resourceType ResourceType, targetID, resourceID string, err error) {
 	var parts [3]string
 	count := 0
 	start := 0
@@ -164,7 +229,7 @@ func ParseResourceID(id string) (resourceType ResourceType, hostID, resourceID s
 type DiscoveryRequest struct {
 	ResourceType ResourceType `json:"resource_type"`
 	ResourceID   string       `json:"resource_id"`
-	HostID       string       `json:"host_id"`
+	TargetID     string       `json:"target_id,omitempty"`
 	Hostname     string       `json:"hostname"`
 	Force        bool         `json:"force"` // Force re-scan even if recent
 }
@@ -173,11 +238,8 @@ type DiscoveryRequest struct {
 type DiscoveryStatus string
 
 const (
-	DiscoveryStatusPending    DiscoveryStatus = "pending"
-	DiscoveryStatusRunning    DiscoveryStatus = "running"
-	DiscoveryStatusCompleted  DiscoveryStatus = "completed"
-	DiscoveryStatusFailed     DiscoveryStatus = "failed"
-	DiscoveryStatusNotStarted DiscoveryStatus = "not_started"
+	DiscoveryStatusRunning   DiscoveryStatus = "running"
+	DiscoveryStatusCompleted DiscoveryStatus = "completed"
 )
 
 // DiscoveryProgress represents the progress of an ongoing discovery.
@@ -220,7 +282,8 @@ type DiscoverySummary struct {
 	ID             string          `json:"id"`
 	ResourceType   ResourceType    `json:"resource_type"`
 	ResourceID     string          `json:"resource_id"`
-	HostID         string          `json:"host_id"`
+	TargetID       string          `json:"target_id,omitempty"`
+	AgentID        string          `json:"agent_id,omitempty"`
 	Hostname       string          `json:"hostname"`
 	ServiceType    string          `json:"service_type"`
 	ServiceName    string          `json:"service_name"`
@@ -235,11 +298,14 @@ type DiscoverySummary struct {
 
 // ToSummary converts a full discovery to a summary.
 func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
+	targetID := d.TargetID
+
 	return DiscoverySummary{
 		ID:             d.ID,
 		ResourceType:   d.ResourceType,
 		ResourceID:     d.ResourceID,
-		HostID:         d.HostID,
+		TargetID:       targetID,
+		AgentID:        d.AgentID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
 		ServiceName:    d.ServiceName,
@@ -257,11 +323,45 @@ func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 type AIAnalysisRequest struct {
 	ResourceType   ResourceType      `json:"resource_type"`
 	ResourceID     string            `json:"resource_id"`
-	HostID         string            `json:"host_id"`
+	TargetID       string            `json:"target_id"`
 	Hostname       string            `json:"hostname"`
 	CommandOutputs map[string]string `json:"command_outputs"`
 	ExistingFacts  []DiscoveryFact   `json:"existing_facts,omitempty"`
 	Metadata       map[string]any    `json:"metadata,omitempty"` // Image, labels, etc.
+}
+
+// ServiceStatus is a typed snapshot of service runtime status.
+type ServiceStatus struct {
+	Running             bool
+	LastRun             time.Time
+	Interval            string
+	CacheSize           int
+	AIAnalyzerSet       bool
+	ScannerSet          bool
+	StoreSet            bool
+	DeepScanTimeout     string
+	AIAnalysisTimeout   string
+	MaxDiscoveryAge     string
+	FingerprintCount    int
+	LastFingerprintScan time.Time
+}
+
+// ToMap converts the status snapshot to a legacy map representation.
+func (s ServiceStatus) ToMap() map[string]any {
+	return map[string]any{
+		"running":               s.Running,
+		"last_run":              s.LastRun,
+		"interval":              s.Interval,
+		"cache_size":            s.CacheSize,
+		"ai_analyzer_set":       s.AIAnalyzerSet,
+		"scanner_set":           s.ScannerSet,
+		"store_set":             s.StoreSet,
+		"deep_scan_timeout":     s.DeepScanTimeout,
+		"ai_analysis_timeout":   s.AIAnalysisTimeout,
+		"max_discovery_age":     s.MaxDiscoveryAge,
+		"fingerprint_count":     s.FingerprintCount,
+		"last_fingerprint_scan": s.LastFingerprintScan,
+	}
 }
 
 // AIAnalysisResponse is returned by the AI.
@@ -296,7 +396,7 @@ const CLIAccessVersion = 2 // v2: Changed from shell commands to pulse_control i
 
 type ContainerFingerprint struct {
 	ResourceID    string    `json:"resource_id"`
-	HostID        string    `json:"host_id"`
+	TargetID      string    `json:"target_id"`
 	Hash          string    `json:"hash"`           // SHA256 of metadata (truncated to 16 chars)
 	SchemaVersion int       `json:"schema_version"` // Version of fingerprint algorithm
 	GeneratedAt   time.Time `json:"generated_at"`

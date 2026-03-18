@@ -1,12 +1,27 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
 import { formatNumber } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
 import type { AICostSummary, AISettings } from '@/types/ai';
-import { PROVIDER_NAMES } from '@/types/ai';
+import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
+import {
+  AI_COST_DAILY_TOKEN_EMPTY_STATE,
+  AI_COST_DAILY_USD_EMPTY_STATE,
+  AI_COST_EMPTY_STATE,
+  getAICostLoadingState,
+  getAICostRangeButtonClass,
+} from '@/utils/aiCostPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
   style: 'currency',
@@ -53,7 +68,14 @@ const TinySparkline: Component<{
 
   return (
     <svg width={width()} height={height()} viewBox={`0 0 ${width()} ${height()}`} class="block">
-      <path d={pathD()} fill="none" stroke={stroke()} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      <path
+        d={pathD()}
+        fill="none"
+        stroke={stroke()}
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
   );
 };
@@ -75,7 +97,9 @@ export const AICostDashboard: Component = () => {
   const unpricedProviderModels = createMemo(() => {
     const data = summary();
     if (!data) return [];
-    return (data.provider_models ?? []).filter((pm) => !pm.pricing_known && (pm.total_tokens ?? 0) > 0);
+    return (data.provider_models ?? []).filter(
+      (pm) => !pm.pricing_known && (pm.total_tokens ?? 0) > 0,
+    );
   });
 
   const estimatedTotalUSD = createMemo(() => {
@@ -180,11 +204,18 @@ export const AICostDashboard: Component = () => {
   });
 
   const resetHistory = async () => {
-    if (!confirm('Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.')) return;
+    if (
+      !confirm(
+        'Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.',
+      )
+    )
+      return;
     try {
       const result = await AIAPI.resetCostHistory();
       if (result.backup_file) {
-        notificationStore.success(`Pulse Assistant usage history reset (backup: ${result.backup_file})`);
+        notificationStore.success(
+          `Pulse Assistant usage history reset (backup: ${result.backup_file})`,
+        );
       } else {
         notificationStore.success('Pulse Assistant usage history reset');
       }
@@ -223,12 +254,22 @@ export const AICostDashboard: Component = () => {
   };
 
   return (
-    <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
-      <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+    <Card padding="none" class="overflow-hidden border border-border" border={false}>
+      <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-            <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z" />
+          <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z"
+              />
             </svg>
           </div>
           <SectionHeader
@@ -238,17 +279,14 @@ export const AICostDashboard: Component = () => {
             class="flex-1"
           />
           <Show when={loading()}>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Loading…</div>
+            <div class="text-xs text-muted">Loading…</div>
           </Show>
           <div class="flex items-center gap-1">
             <button
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(1)}
-              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 1
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 1, loading())}
             >
               1d
             </button>
@@ -256,10 +294,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(7)}
-              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 7
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 7, loading())}
             >
               7d
             </button>
@@ -267,10 +302,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(30)}
-              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 30
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 30, loading())}
             >
               30d
             </button>
@@ -278,10 +310,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(90)}
-              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 90
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 90, loading())}
             >
               90d
             </button>
@@ -289,10 +318,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(365)}
-              class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${days() === 365
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 365, loading())}
             >
               1y
             </button>
@@ -302,31 +328,31 @@ export const AICostDashboard: Component = () => {
 
       <div class="p-6 space-y-4">
         <Show when={!summary() && loading()}>
-          <div class="text-sm text-gray-500 dark:text-gray-400">Loading usage…</div>
+          <div class="text-sm text-muted">{getAICostLoadingState().text}</div>
         </Show>
 
         <Show when={summary()?.truncated}>
-          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100">
-            Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}-day retention window.
+          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900 text-blue-900 dark:text-blue-100">
+            Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}
+            -day retention window.
           </div>
         </Show>
 
         <Show when={isOverBudget()}>
-          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100">
-            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(budgetForRange() ?? 0)}).
+          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100">
+            Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget (
+            {formatUSD(budgetForRange() ?? 0)}).
           </div>
         </Show>
 
         <Show when={loadError() && summary()}>
-          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100">
-            <div class="truncate">
-              Couldn’t refresh. Showing last loaded data. {loadError()}
-            </div>
+          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
+            <div class="truncate">Couldn’t refresh. Showing last loaded data. {loadError()}</div>
             <button
               type="button"
               disabled={loading()}
               onClick={() => loadSummary(days())}
-              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               Retry
             </button>
@@ -334,79 +360,76 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={!summary() && !loading() && loadError()}>
-          <div class="text-sm text-gray-500 dark:text-gray-400">{loadError()}</div>
+          <div class="text-sm text-muted">{loadError()}</div>
         </Show>
 
         <Show when={!summary() && !loading() && !loadError()}>
-          <div class="text-sm text-gray-500 dark:text-gray-400">No usage data yet.</div>
+          <div class="text-sm text-muted">{AI_COST_EMPTY_STATE}</div>
         </Show>
 
         <Show when={summary()}>
           {(data) => (
             <>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Estimated spend</div>
-                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Estimated spend</div>
+                  <div class="text-lg font-semibold text-base-content">
                     <Show
                       when={estimatedTotalUSD() != null}
-                      fallback={<span class="text-gray-500 dark:text-gray-400">—</span>}
+                      fallback={<span class="text-muted">—</span>}
                     >
                       {formatUSD(estimatedTotalUSD() ?? 0)}
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Total tokens</div>
-                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Total tokens</div>
+                  <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().totals.total_tokens)}
                   </div>
                 </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Model/provider pairs</div>
-                  <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Model/provider pairs</div>
+                  <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().provider_models.length)}
                   </div>
                 </div>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Chat</div>
-                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Chat</div>
+                  <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
                   </div>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">
-                    <Show
-                      when={useCaseMap().get('chat')?.pricingKnown}
-                      fallback={<span>—</span>}
-                    >
+                  <div class="text-xs text-muted">
+                    <Show when={useCaseMap().get('chat')?.pricingKnown} fallback={<span>—</span>}>
                       {formatUSD(useCaseMap().get('chat')?.usd ?? 0)}
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Patrol</div>
-                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Patrol</div>
+                  <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
                   </div>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">
-                    <Show
-                      when={useCaseMap().get('patrol')?.pricingKnown}
-                      fallback={<span>—</span>}
-                    >
+                  <div class="text-xs text-muted">
+                    <Show when={useCaseMap().get('patrol')?.pricingKnown} fallback={<span>—</span>}>
                       {formatUSD(useCaseMap().get('patrol')?.usd ?? 0)}
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Budget alert (USD per 30d)</div>
-                  <div class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
-                    <Show when={parsedBudgetUSD30d() != null} fallback={<span class="text-gray-500 dark:text-gray-400">—</span>}>
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
+                  <div class="text-xs text-muted">Budget alert (USD per 30d)</div>
+                  <div class="text-sm font-semibold text-base-content mt-1">
+                    <Show
+                      when={parsedBudgetUSD30d() != null}
+                      fallback={<span class="text-muted">—</span>}
+                    >
                       {formatUSD(parsedBudgetUSD30d() ?? 0)}
                     </Show>
                   </div>
-                  <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  <div class="text-[11px] text-muted mt-1">
                     Set in Pulse Assistant settings. Pro-rated for {days()}d:{' '}
                     <Show when={budgetForRange() != null} fallback={<span>—</span>}>
                       {formatUSD(budgetForRange() ?? 0)}
@@ -416,11 +439,14 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Daily estimated USD</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                      <Show when={anyPricingKnown() && lastDailyUSD() != null} fallback={<span>—</span>}>
+                    <div class="text-xs text-muted">Daily estimated USD</div>
+                    <div class="text-xs text-muted">
+                      <Show
+                        when={anyPricingKnown() && lastDailyUSD() != null}
+                        fallback={<span>—</span>}
+                      >
                         {formatUSD(lastDailyUSD() ?? 0)}
                       </Show>
                     </div>
@@ -428,16 +454,16 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={anyPricingKnown() && dailyUSDValues().length >= 2}
-                      fallback={<div class="text-xs text-gray-500 dark:text-gray-400">No daily USD trend yet.</div>}
+                      fallback={<div class="text-xs text-muted">{AI_COST_DAILY_USD_EMPTY_STATE}</div>}
                     >
                       <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700">
+                <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Daily total tokens</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <div class="text-xs text-muted">Daily total tokens</div>
+                    <div class="text-xs text-muted">
                       <Show when={lastDailyTokens() != null} fallback={<span>—</span>}>
                         {formatNumber(lastDailyTokens() ?? 0)}
                       </Show>
@@ -446,7 +472,9 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={dailyTokenValues().length >= 2}
-                      fallback={<div class="text-xs text-gray-500 dark:text-gray-400">No daily token trend yet.</div>}
+                      fallback={
+                        <div class="text-xs text-muted">{AI_COST_DAILY_TOKEN_EMPTY_STATE}</div>
+                      }
                     >
                       <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
                     </Show>
@@ -454,7 +482,7 @@ export const AICostDashboard: Component = () => {
                 </div>
               </div>
 
-              <div class="text-xs text-gray-500 dark:text-gray-400">
+              <div class="text-xs text-muted">
                 USD is an estimate based on public list prices. It may differ from billing.
                 <Show when={unpricedProviderModels().length > 0}>
                   <span class="ml-2">
@@ -463,7 +491,7 @@ export const AICostDashboard: Component = () => {
                       .slice(0, 6)
                       .map(
                         (pm) =>
-                          `${PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}/${pm.model}`,
+                          `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
                       )
                       .join(', ')}
                     <Show when={unpricedProviderModels().length > 6}>
@@ -478,7 +506,7 @@ export const AICostDashboard: Component = () => {
               </div>
 
               <div class="flex items-center justify-between gap-3">
-                <div class="text-xs text-gray-500 dark:text-gray-400">
+                <div class="text-xs text-muted">
                   History retention: {data().retention_days} days
                 </div>
                 <div class="flex items-center gap-2">
@@ -486,7 +514,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('csv')}
-                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export CSV
                   </button>
@@ -494,7 +522,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('json')}
-                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export JSON
                   </button>
@@ -502,7 +530,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={resetHistory}
-                    class={`text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Reset history
                   </button>
@@ -511,88 +539,88 @@ export const AICostDashboard: Component = () => {
 
               <Show when={(data().targets?.length ?? 0) > 0}>
                 <div class="overflow-x-auto">
-                  <table class="min-w-full text-sm">
-                    <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      <tr class="border-b border-gray-200 dark:border-gray-700">
-                        <th class="text-left py-2 pr-4">Top targets</th>
-                        <th class="text-right py-2 px-2">Est. USD</th>
-                        <th class="text-right py-2 px-2">Calls</th>
-                        <th class="text-right py-2 px-2">Tokens</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table class="min-w-full text-sm">
+                    <TableHeader class="text-xs text-muted uppercase tracking-wide">
+                      <TableRow class="border-b border-border">
+                        <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
+                        <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
+                        <TableHead class="text-right py-2 px-2">Calls</TableHead>
+                        <TableHead class="text-right py-2 px-2">Tokens</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       <For each={data().targets}>
                         {(t) => (
-                          <tr class="border-b border-gray-100 dark:border-gray-800">
-                            <td class="py-2 pr-4 text-gray-700 dark:text-gray-300 font-mono text-xs">
+                          <TableRow class="border-b border-border-subtle">
+                            <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                               {t.target_type}:{t.target_id}
-                            </td>
-                            <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               <Show
                                 when={t.pricing_known}
-                                fallback={<span class="text-gray-500 dark:text-gray-500">—</span>}
+                                fallback={<span class="text-muted">—</span>}
                               >
                                 {formatUSD(t.estimated_usd ?? 0)}
                               </Show>
-                            </td>
-                            <td class="py-2 px-2 text-right text-gray-700 dark:text-gray-300">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               {formatNumber(t.calls)}
-                            </td>
-                            <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
                               {formatNumber(t.total_tokens)}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         )}
                       </For>
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </Show>
 
               <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                  <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    <tr class="border-b border-gray-200 dark:border-gray-700">
-                      <th class="text-left py-2 pr-4">Provider</th>
-                      <th class="text-left py-2 pr-4">Model</th>
-                      <th class="text-right py-2 px-2">Est. USD</th>
-                      <th class="text-right py-2 px-2">Input</th>
-                      <th class="text-right py-2 px-2">Output</th>
-                      <th class="text-right py-2 px-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table class="min-w-full text-sm">
+                  <TableHeader class="text-xs text-muted uppercase tracking-wide">
+                    <TableRow class="border-b border-border">
+                      <TableHead class="text-left py-2 pr-4">Provider</TableHead>
+                      <TableHead class="text-left py-2 pr-4">Model</TableHead>
+                      <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
+                      <TableHead class="text-right py-2 px-2">Input</TableHead>
+                      <TableHead class="text-right py-2 px-2">Output</TableHead>
+                      <TableHead class="text-right py-2 px-2">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     <For each={data().provider_models}>
                       {(pm) => (
-                        <tr class="border-b border-gray-100 dark:border-gray-800">
-                          <td class="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">
-                            {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}
-                          </td>
-                          <td class="py-2 pr-4 text-gray-700 dark:text-gray-300 font-mono text-xs">
+                        <TableRow class="border-b border-border-subtle">
+                          <TableCell class="py-2 pr-4 font-medium text-base-content">
+                            {getAIProviderDisplayName(pm.provider) || pm.provider}
+                          </TableCell>
+                          <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                             {pm.model}
-                          </td>
-                          <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             <Show
                               when={pm.pricing_known}
-                              fallback={<span class="text-gray-500 dark:text-gray-500">—</span>}
+                              fallback={<span class="text-muted">—</span>}
                             >
                               {formatUSD(pm.estimated_usd ?? 0)}
                             </Show>
-                          </td>
-                          <td class="py-2 px-2 text-right text-gray-700 dark:text-gray-300">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.input_tokens)}
-                          </td>
-                          <td class="py-2 px-2 text-right text-gray-700 dark:text-gray-300">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.output_tokens)}
-                          </td>
-                          <td class="py-2 px-2 text-right text-gray-900 dark:text-gray-100">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-base-content">
                             {formatNumber(pm.total_tokens)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           )}

@@ -21,7 +21,7 @@ type CommandExecutor interface {
 type ExecuteCommandPayload struct {
 	RequestID  string `json:"request_id"`
 	Command    string `json:"command"`
-	TargetType string `json:"target_type"`         // "host", "container", "vm"
+	TargetType string `json:"target_type"`         // "agent", "container", "vm"
 	TargetID   string `json:"target_id,omitempty"` // VMID for container/VM
 	Timeout    int    `json:"timeout,omitempty"`
 }
@@ -60,14 +60,43 @@ type DeepScanner struct {
 	progressCallback ProgressCallback
 }
 
+const (
+	defaultDeepScannerMaxParallel = 3
+	defaultDeepScannerTimeout     = 30 * time.Second
+)
+
 // NewDeepScanner creates a new deep scanner.
 func NewDeepScanner(executor CommandExecutor) *DeepScanner {
 	return &DeepScanner{
 		executor:    executor,
 		progress:    make(map[string]*DiscoveryProgress),
-		maxParallel: 3, // Run up to 3 commands in parallel per resource
-		timeout:     30 * time.Second,
+		maxParallel: defaultDeepScannerMaxParallel, // Run up to 3 commands in parallel per resource
+		timeout:     defaultDeepScannerTimeout,
 	}
+}
+
+func (s *DeepScanner) runtimeSettings() (int, time.Duration) {
+	s.mu.RLock()
+	maxParallel := s.maxParallel
+	timeout := s.timeout
+	s.mu.RUnlock()
+
+	if maxParallel <= 0 {
+		log.Warn().
+			Int("max_parallel", maxParallel).
+			Int("default", defaultDeepScannerMaxParallel).
+			Msg("Invalid deep scanner max parallelism; using default")
+		maxParallel = defaultDeepScannerMaxParallel
+	}
+	if timeout <= 0 {
+		log.Warn().
+			Dur("timeout", timeout).
+			Dur("default", defaultDeepScannerTimeout).
+			Msg("Invalid deep scanner timeout; using default")
+		timeout = defaultDeepScannerTimeout
+	}
+
+	return maxParallel, timeout
 }
 
 // SetProgressCallback sets a callback function that will be called when discovery progress changes.
@@ -100,7 +129,7 @@ func (s *DeepScanner) notifyProgress(progress *DiscoveryProgress) {
 type ScanResult struct {
 	ResourceType   ResourceType
 	ResourceID     string
-	HostID         string
+	TargetID       string
 	Hostname       string
 	CommandOutputs map[string]string
 	Errors         map[string]string
@@ -110,8 +139,16 @@ type ScanResult struct {
 
 // Scan runs discovery commands on a resource and returns the outputs.
 func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResult, error) {
-	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
+	requestTargetID := canonicalRequestTargetID(req)
+	resourceID := MakeResourceID(req.ResourceType, requestTargetID, req.ResourceID)
 	startTime := time.Now()
+	scanLog := log.With().
+		Str("component", "service_discovery_scanner").
+		Str("resource_id", resourceID).
+		Str("resource_type", string(req.ResourceType)).
+		Str("target_id", requestTargetID).
+		Str("hostname", req.Hostname).
+		Logger()
 
 	// Initialize progress
 	s.mu.Lock()
@@ -136,7 +173,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	result := &ScanResult{
 		ResourceType:   req.ResourceType,
 		ResourceID:     req.ResourceID,
-		HostID:         req.HostID,
+		TargetID:       requestTargetID,
 		Hostname:       req.Hostname,
 		CommandOutputs: make(map[string]string),
 		Errors:         make(map[string]string),
@@ -145,18 +182,30 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 	// Check if we have an agent for this host
 	if s.executor == nil {
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "executor_missing").
+			Msg("Deep scan unavailable")
 		return nil, fmt.Errorf("no command executor available")
 	}
 
 	// Find the agent for this host
-	agentID := s.findAgentForHost(req.HostID, req.Hostname)
+	agentID := s.findAgentForTarget(requestTargetID, req.Hostname)
 	if agentID == "" {
-		return nil, fmt.Errorf("no connected agent for host %s (%s)", req.HostID, req.Hostname)
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "agent_not_connected").
+			Msg("Deep scan unavailable")
+		return nil, fmt.Errorf("no connected agent for target %s (%s)", requestTargetID, req.Hostname)
 	}
 
 	// Get commands for this resource type
 	commands := GetCommandsForResource(req.ResourceType)
 	if len(commands) == 0 {
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "commands_not_defined").
+			Msg("Deep scan unavailable")
 		return nil, fmt.Errorf("no commands defined for resource type %s", req.ResourceType)
 	}
 
@@ -172,8 +221,11 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		s.mu.Unlock()
 	}
 
+	// Get runtime settings for parallelism and timeouts
+	maxParallel, timeout := s.runtimeSettings()
+
 	// Run commands with limited parallelism
-	semaphore := make(chan struct{}, s.maxParallel)
+	semaphore := make(chan struct{}, maxParallel)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -196,7 +248,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 			targetID := s.getTargetID(req.ResourceType, req.ResourceID)
 
 			// Only validate TargetID when it will be interpolated into shell commands
-			// by the agent (container/vm types). Host/docker types don't use TargetID
+			// by the agent (container/vm types). Agent/docker types don't use TargetID
 			// in command wrapping, so they can have any format (including colons for IPv6).
 			targetType := s.getTargetType(req.ResourceType)
 			if targetType == "container" || targetType == "vm" {
@@ -209,7 +261,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 			}
 
 			// Execute the command
-			cmdCtx, cancel := context.WithTimeout(ctx, s.timeout)
+			cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 
 			cmdResult, err := s.executor.ExecuteCommand(cmdCtx, agentID, ExecuteCommandPayload{
@@ -227,10 +279,11 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 				if !cmd.Optional {
 					result.Errors[cmd.Name] = err.Error()
 				}
-				log.Debug().
+				scanLog.Debug().
+					Str("action", "command_execute_failed").
 					Err(err).
 					Str("command", cmd.Name).
-					Str("resource", resourceID).
+					Bool("optional", cmd.Optional).
 					Msg("Command failed during discovery")
 				return
 			}
@@ -249,6 +302,21 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 				if !cmdResult.Success && cmdResult.Error != "" && !cmd.Optional {
 					result.Errors[cmd.Name] = cmdResult.Error
+				}
+
+				if !cmdResult.Success {
+					event := scanLog.Debug()
+					if !cmd.Optional {
+						event = scanLog.Warn()
+					}
+					event.
+						Str("action", "command_result_failed").
+						Str("command", cmd.Name).
+						Bool("optional", cmd.Optional).
+						Int("exit_code", cmdResult.ExitCode).
+						Str("request_id", cmdResult.RequestID).
+						Str("command_error", cmdResult.Error).
+						Msg("Deep scan command reported failure")
 				}
 			}
 
@@ -282,8 +350,8 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 	s.notifyProgress(&completionProgress)
 
-	log.Info().
-		Str("resource", resourceID).
+	scanLog.Info().
+		Str("action", "scan_completed").
 		Int("outputs", len(result.CommandOutputs)).
 		Int("errors", len(result.Errors)).
 		Dur("duration", result.CompletedAt.Sub(result.StartedAt)).
@@ -298,7 +366,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 // since Docker isn't a recognized TargetType in the agent.
 func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string, cmd string) string {
 	switch resourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		// Agent wraps with pct exec based on TargetType="container"
 		return cmd
 	case ResourceTypeVM:
@@ -307,11 +375,11 @@ func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string,
 	case ResourceTypeDocker:
 		// Docker needs wrapping here since agent doesn't handle it
 		return BuildDockerCommand(resourceID, cmd)
-	case ResourceTypeHost:
+	case ResourceTypeAgent:
 		// Commands run directly on host
 		return cmd
-	case ResourceTypeDockerLXC:
-		// Docker inside LXC - agent wraps with pct exec, we just add docker exec
+	case ResourceTypeDockerSystemContainer:
+		// Docker inside system container - agent wraps with pct exec, we just add docker exec
 		// resourceID format: "vmid:container_name"
 		parts := splitResourceID(resourceID)
 		if len(parts) >= 2 {
@@ -333,20 +401,20 @@ func (s *DeepScanner) buildCommand(resourceType ResourceType, resourceID string,
 // getTargetType returns the target type for the agent execution payload.
 func (s *DeepScanner) getTargetType(resourceType ResourceType) string {
 	switch resourceType {
-	case ResourceTypeLXC:
+	case ResourceTypeSystemContainer:
 		return "container"
 	case ResourceTypeVM:
 		return "vm"
 	case ResourceTypeDocker:
-		return "host" // Docker commands run on host via docker exec
-	case ResourceTypeDockerLXC:
-		return "container" // Docker inside LXC: agent wraps with pct exec
+		return "agent" // Docker commands run on agent host via docker exec
+	case ResourceTypeDockerSystemContainer:
+		return "container" // Docker inside system container: agent wraps with pct exec
 	case ResourceTypeDockerVM:
 		return "vm" // Docker inside VM: agent wraps with qm guest exec
-	case ResourceTypeHost:
-		return "host"
+	case ResourceTypeAgent:
+		return "agent"
 	default:
-		return "host"
+		return "agent"
 	}
 }
 
@@ -354,7 +422,7 @@ func (s *DeepScanner) getTargetType(resourceType ResourceType) string {
 // For nested Docker (docker_lxc/docker_vm), this extracts just the vmid.
 func (s *DeepScanner) getTargetID(resourceType ResourceType, resourceID string) string {
 	switch resourceType {
-	case ResourceTypeDockerLXC, ResourceTypeDockerVM:
+	case ResourceTypeDockerSystemContainer, ResourceTypeDockerVM:
 		// resourceID format: "vmid:container_name" - extract just vmid
 		parts := splitResourceID(resourceID)
 		if len(parts) >= 1 {
@@ -366,19 +434,23 @@ func (s *DeepScanner) getTargetID(resourceType ResourceType, resourceID string) 
 	}
 }
 
-// findAgentForHost finds the agent ID for a given host.
-func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
+// findAgentForTarget finds the agent ID for a given canonical target.
+func (s *DeepScanner) findAgentForTarget(targetID, hostname string) string {
 	agents := s.executor.GetConnectedAgents()
 
 	log.Debug().
-		Str("hostID", hostID).
+		Str("component", "service_discovery_scanner").
+		Str("action", "find_agent_for_target").
+		Str("target_id", targetID).
 		Str("hostname", hostname).
 		Int("connected_agents", len(agents)).
-		Msg("Finding agent for host")
+		Msg("Finding agent for target")
 
 	// Log connected agents for debugging
 	for _, agent := range agents {
 		log.Debug().
+			Str("component", "service_discovery_scanner").
+			Str("action", "find_agent_for_target").
 			Str("agent_id", agent.AgentID).
 			Str("agent_hostname", agent.Hostname).
 			Msg("Connected agent")
@@ -386,14 +458,14 @@ func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
 
 	// First try exact match on agent ID
 	for _, agent := range agents {
-		if agent.AgentID == hostID {
+		if agent.AgentID == targetID {
 			return agent.AgentID
 		}
 	}
 
 	// Then try hostname match
 	for _, agent := range agents {
-		if agent.Hostname == hostname || agent.Hostname == hostID {
+		if agent.Hostname == hostname || agent.Hostname == targetID {
 			return agent.AgentID
 		}
 	}
@@ -444,45 +516,45 @@ func splitResourceID(id string) []string {
 	return parts
 }
 
-// ScanDocker runs discovery on Docker containers via the host.
-func (s *DeepScanner) ScanDocker(ctx context.Context, hostID, hostname, containerName string) (*ScanResult, error) {
+// ScanDocker runs discovery on Docker containers via the target agent.
+func (s *DeepScanner) ScanDocker(ctx context.Context, targetID, hostname, containerName string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   containerName,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
-// ScanLXC runs discovery on an LXC container.
-func (s *DeepScanner) ScanLXC(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
+// ScanSystemContainer runs discovery on a system container (LXC).
+func (s *DeepScanner) ScanSystemContainer(ctx context.Context, targetID, hostname, vmid string) (*ScanResult, error) {
 	req := DiscoveryRequest{
-		ResourceType: ResourceTypeLXC,
+		ResourceType: ResourceTypeSystemContainer,
 		ResourceID:   vmid,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
 // ScanVM runs discovery on a VM via QEMU guest agent.
-func (s *DeepScanner) ScanVM(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
+func (s *DeepScanner) ScanVM(ctx context.Context, targetID, hostname, vmid string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   vmid,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
-// ScanHost runs discovery on a host system.
-func (s *DeepScanner) ScanHost(ctx context.Context, hostID, hostname string) (*ScanResult, error) {
+// ScanHost runs discovery on an agent target system.
+func (s *DeepScanner) ScanHost(ctx context.Context, targetID, hostname string) (*ScanResult, error) {
 	req := DiscoveryRequest{
-		ResourceType: ResourceTypeHost,
-		ResourceID:   hostID,
-		HostID:       hostID,
+		ResourceType: ResourceTypeAgent,
+		ResourceID:   targetID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)

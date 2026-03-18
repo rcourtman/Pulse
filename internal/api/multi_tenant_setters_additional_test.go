@@ -15,10 +15,10 @@ func TestRouterSetMultiTenantMonitor(t *testing.T) {
 		alertHandlers:           &AlertHandlers{},
 		notificationHandlers:    &NotificationHandlers{},
 		dockerAgentHandlers:     &DockerAgentHandlers{},
-		hostAgentHandlers:       &HostAgentHandlers{},
+		unifiedAgentHandlers:    &UnifiedAgentHandlers{},
 		kubernetesAgentHandlers: &KubernetesAgentHandlers{},
 		systemSettingsHandler:   &SystemSettingsHandler{},
-		resourceHandlers:        NewResourceHandlers(),
+		resourceHandlers:        NewResourceHandlers(nil),
 	}
 
 	router.SetMultiTenantMonitor(nil)

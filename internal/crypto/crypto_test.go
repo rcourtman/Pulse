@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +46,109 @@ func withNewGCM(t *testing.T, fn func(cipher.Block) (cipher.AEAD, error)) {
 	orig := newGCM
 	newGCM = fn
 	t.Cleanup(func() { newGCM = orig })
+}
+
+func TestDeriveKeyValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cm      *CryptoManager
+		purpose string
+		length  int
+	}{
+		{
+			name:    "nil manager",
+			cm:      nil,
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "empty manager key",
+			cm:      &CryptoManager{},
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "zero length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  0,
+		},
+		{
+			name:    "negative length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  -1,
+		},
+		{
+			name:    "empty purpose",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "",
+			length:  32,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.cm.DeriveKey(tc.purpose, tc.length)
+			if err == nil {
+				t.Fatal("DeriveKey() expected error")
+			}
+		})
+	}
+}
+
+func TestDeriveKeyDeterministicAndPurposeScoped(t *testing.T) {
+	masterKey := make([]byte, 32)
+	for i := range masterKey {
+		masterKey[i] = byte(i + 1)
+	}
+
+	cm := &CryptoManager{key: masterKey}
+
+	first, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() first call error: %v", err)
+	}
+	second, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() second call error: %v", err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("DeriveKey() should be deterministic for same purpose/length")
+	}
+	if bytes.Equal(first, masterKey) {
+		t.Fatal("DeriveKey() should not return the raw master key bytes")
+	}
+
+	otherPurpose, err := cm.DeriveKey("session", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() other purpose error: %v", err)
+	}
+	if bytes.Equal(first, otherPurpose) {
+		t.Fatal("DeriveKey() should produce distinct keys for different purposes")
+	}
+
+	short, err := cm.DeriveKey("storage", 16)
+	if err != nil {
+		t.Fatalf("DeriveKey() short length error: %v", err)
+	}
+	if len(short) != 16 {
+		t.Fatalf("DeriveKey() short length = %d, want 16", len(short))
+	}
+	if !bytes.Equal(first[:16], short) {
+		t.Fatal("DeriveKey() output stream prefix mismatch for shorter length")
+	}
+}
+
+func TestDeriveKeyEntropyLimitError(t *testing.T) {
+	cm := &CryptoManager{key: make([]byte, 32)}
+
+	// HKDF-SHA256 expand is limited to 255 * hashLen (8160 bytes).
+	// Requesting more triggers an hkdf reader error path.
+	_, err := cm.DeriveKey("storage", 9000)
+	if err == nil {
+		t.Fatal("DeriveKey() expected entropy limit error")
+	}
 }
 
 func TestEncryptDecrypt(t *testing.T) {
@@ -189,6 +293,85 @@ func TestEncryptionKeyFilePermissions(t *testing.T) {
 	}
 }
 
+func TestGetOrCreateKeyAt_HardensExistingKeyPermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), encryptionKeyFileName))
+
+	key := make([]byte, encryptionKeyLength)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	keyPath := filepath.Join(tmpDir, encryptionKeyFileName)
+	if err := os.WriteFile(keyPath, []byte(base64.StdEncoding.EncodeToString(key)), 0o644); err != nil {
+		t.Fatalf("Failed to write existing key file: %v", err)
+	}
+	if err := os.Chmod(tmpDir, 0o755); err != nil {
+		t.Fatalf("Failed to loosen data dir permissions: %v", err)
+	}
+
+	loaded, err := getOrCreateKeyAt(tmpDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(loaded, key) {
+		t.Fatal("loaded key mismatch")
+	}
+
+	info, err := os.Stat(keyPath)
+	if err != nil {
+		t.Fatalf("stat key file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != encryptionKeyFilePerm {
+		t.Fatalf("key permissions = %o, want %o", got, encryptionKeyFilePerm)
+	}
+
+	dirInfo, err := os.Stat(tmpDir)
+	if err != nil {
+		t.Fatalf("stat key dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != encryptionKeyDirPerm {
+		t.Fatalf("dir permissions = %o, want %o", got, encryptionKeyDirPerm)
+	}
+}
+
+func TestGetOrCreateKeyAt_RejectsSymlinkedPrimaryKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), encryptionKeyFileName))
+
+	realKeyPath := filepath.Join(t.TempDir(), encryptionKeyFileName)
+	validKey := make([]byte, encryptionKeyLength)
+	for i := range validKey {
+		validKey[i] = byte(i)
+	}
+	if err := os.WriteFile(realKeyPath, []byte(base64.StdEncoding.EncodeToString(validKey)), 0o600); err != nil {
+		t.Fatalf("write real key: %v", err)
+	}
+
+	keyPath := filepath.Join(tmpDir, encryptionKeyFileName)
+	if err := os.Symlink(realKeyPath, keyPath); err != nil {
+		t.Skipf("symlink not supported on this platform: %v", err)
+	}
+
+	if _, err := getOrCreateKeyAt(tmpDir); err == nil {
+		t.Fatal("expected error for symlinked primary key path")
+	}
+}
+
+func TestGetOrCreateKeyAt_RejectsOversizedKeyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), encryptionKeyFileName))
+
+	keyPath := filepath.Join(tmpDir, encryptionKeyFileName)
+	oversized := bytes.Repeat([]byte("A"), maxEncryptionKeyFileSize+1)
+	if err := os.WriteFile(keyPath, oversized, 0o600); err != nil {
+		t.Fatalf("write oversized key: %v", err)
+	}
+
+	if _, err := getOrCreateKeyAt(tmpDir); err == nil {
+		t.Fatal("expected error for oversized key file")
+	}
+}
+
 func TestNewCryptoManagerAt_DefaultDataDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	withDefaultDataDir(t, tmpDir)
@@ -199,6 +382,31 @@ func TestNewCryptoManagerAt_DefaultDataDir(t *testing.T) {
 	}
 	if cm.keyPath != filepath.Join(tmpDir, ".encryption.key") {
 		t.Fatalf("keyPath = %q, want %q", cm.keyPath, filepath.Join(tmpDir, ".encryption.key"))
+	}
+}
+
+func TestNewCryptoManagerAt_WhitespaceDataDirUsesDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	withDefaultDataDir(t, tmpDir)
+
+	cm, err := NewCryptoManagerAt("   ")
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+	if cm.keyPath != filepath.Join(tmpDir, ".encryption.key") {
+		t.Fatalf("keyPath = %q, want %q", cm.keyPath, filepath.Join(tmpDir, ".encryption.key"))
+	}
+}
+
+func TestNewCryptoManagerAt_EmptyDefaultDataDirFails(t *testing.T) {
+	withDefaultDataDir(t, "   ")
+
+	_, err := NewCryptoManagerAt("")
+	if err == nil {
+		t.Fatal("Expected error when default data dir is empty")
+	}
+	if !strings.Contains(err.Error(), "data directory is required") {
+		t.Fatalf("expected data directory validation error, got: %v", err)
 	}
 }
 
@@ -313,6 +521,38 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	legacyDir := t.TempDir()
 	legacyPath := filepath.Join(legacyDir, ".encryption.key")
 	withLegacyKeyPath(t, legacyPath)
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("migrated key mismatch")
+	}
+	contents, err := os.ReadFile(filepath.Join(newDir, ".encryption.key"))
+	if err != nil {
+		t.Fatalf("Failed to read migrated key: %v", err)
+	}
+	if string(contents) != encoded {
+		t.Fatalf("migrated key contents mismatch")
+	}
+}
+
+func TestGetOrCreateKeyAt_IgnoresRelativeLegacyOverride(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", "relative/.encryption.key")
 
 	oldKey := make([]byte, 32)
 	for i := range oldKey {
@@ -545,11 +785,23 @@ func TestDecryptStringError(t *testing.T) {
 	}
 }
 
-func TestNewCryptoManagerRefusesOrphanedData(t *testing.T) {
-	// Skip if production key exists - migration code will always find and use it
-	if _, err := os.Stat("/etc/pulse/.encryption.key"); err == nil {
-		t.Skip("Skipping: production encryption key exists at /etc/pulse/.encryption.key - migration will find it")
+func TestEncryptNilManager(t *testing.T) {
+	var cm *CryptoManager
+	if _, err := cm.Encrypt([]byte("data")); err == nil {
+		t.Fatal("expected error for nil crypto manager")
 	}
+}
+
+func TestDecryptNilManager(t *testing.T) {
+	var cm *CryptoManager
+	if _, err := cm.Decrypt([]byte("data")); err == nil {
+		t.Fatal("expected error for nil crypto manager")
+	}
+}
+
+func TestNewCryptoManagerRefusesOrphanedData(t *testing.T) {
+	// Ensure we don't accidentally read a real production key during the legacy-migration path.
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
 
 	tmpDir := t.TempDir()
 
@@ -634,5 +886,70 @@ func TestEncryptRefusesAfterKeyDeleted(t *testing.T) {
 	}
 	if !bytes.Equal(decrypted, plaintext) {
 		t.Error("Decrypt() returned wrong data")
+	}
+}
+
+func TestEncryptRefusesWhenKeyPathIsSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	keyPath := filepath.Join(tmpDir, encryptionKeyFileName)
+	realKeyPath := filepath.Join(tmpDir, "real-encryption.key")
+	if err := os.Rename(keyPath, realKeyPath); err != nil {
+		t.Fatalf("move original key: %v", err)
+	}
+	if err := os.Symlink(realKeyPath, keyPath); err != nil {
+		t.Skipf("symlink not supported on this platform: %v", err)
+	}
+
+	if _, err := cm.Encrypt([]byte("new data")); err == nil {
+		t.Fatal("expected Encrypt to fail when key path is a symlink")
+	}
+}
+
+func TestEncryptRefusesWhenKeyFileMaterialChanges(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	replacement := make([]byte, encryptionKeyLength)
+	for i := range replacement {
+		replacement[i] = byte((i + 1) % 256)
+	}
+	if err := os.WriteFile(
+		filepath.Join(tmpDir, encryptionKeyFileName),
+		[]byte(base64.StdEncoding.EncodeToString(replacement)),
+		encryptionKeyFilePerm,
+	); err != nil {
+		t.Fatalf("overwrite key file: %v", err)
+	}
+
+	if _, err := cm.Encrypt([]byte("new data")); err == nil {
+		t.Fatal("expected Encrypt to fail when key file contents change")
+	}
+}
+
+func TestEncryptRefusesWhenKeyFileMaterialIsInvalid(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tmpDir, encryptionKeyFileName),
+		[]byte("not-base64"),
+		encryptionKeyFilePerm,
+	); err != nil {
+		t.Fatalf("overwrite key file: %v", err)
+	}
+
+	if _, err := cm.Encrypt([]byte("new data")); err == nil {
+		t.Fatal("expected Encrypt to fail when key file contents are invalid")
 	}
 }

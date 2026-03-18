@@ -2,6 +2,8 @@
 
 Pulse automatically detects and monitors ZFS pools on your Proxmox nodes.
 
+> **TrueNAS users:** TrueNAS ZFS pool monitoring is handled separately via the TrueNAS integration. See [CONFIGURATION.md](CONFIGURATION.md#truenas) for setup. This page covers Proxmox-native ZFS pools.
+
 ## 🚀 Features
 
 *   **Auto-Detection**: No configuration needed.
@@ -15,7 +17,7 @@ The Pulse user needs `Sys.Audit` permission on `/nodes/{node}/disks` (included i
 
 ```bash
 # Grant permission manually if needed
-pveum acl modify /nodes -user pulse-monitor@pam -role PVEAuditor
+pveum acl modify /nodes -user pulse-monitor@pve -role PVEAuditor
 ```
 
 ## 🔧 Configuration
@@ -37,6 +39,6 @@ PULSE_DISABLE_ZFS_MONITORING=true
 ## 🔍 Troubleshooting
 
 **No ZFS Data?**
-1.  Check permissions: `pveum user permissions pulse-monitor@pam`.
+1.  Check permissions: `pveum user permissions pulse-monitor@pve`.
 2.  Verify pools exist: `zpool list`.
 3.  Check logs: `journalctl -u pulse -n 200 | grep -i zfs`.

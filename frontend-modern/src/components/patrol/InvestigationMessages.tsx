@@ -7,6 +7,7 @@
 
 import { Component, createResource, Show, For } from 'solid-js';
 import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/api/patrol';
+import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 
 interface InvestigationMessagesProps {
   findingId: string;
@@ -27,44 +28,48 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
       } catch {
         return [];
       }
-    }
+    },
   );
 
   return (
     <div class="mt-2">
-      <Show when={messages.loading}>
-        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 py-2">
+      <Show when={!getInvestigationMessagesState(messages.loading, !!messages()?.length).empty && getInvestigationMessagesState(messages.loading, !!messages()?.length).text}>
+        <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          Loading messages...
+          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
         </div>
       </Show>
 
-      <Show when={!messages.loading && (!messages() || messages()!.length === 0)}>
-        <p class="text-xs text-gray-500 dark:text-gray-400 py-1">No investigation messages available.</p>
+      <Show when={getInvestigationMessagesState(messages.loading, !!messages()?.length).empty}>
+        <p class="text-xs text-muted py-1">
+          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
+        </p>
       </Show>
 
       <Show when={!messages.loading && messages() && messages()!.length > 0}>
-        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800/50">
+        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-border p-2 bg-surface-alt">
           <For each={messages()}>
             {(msg: ChatMessage) => {
               if (isEmptyMessage(msg)) return null;
 
               return (
                 <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div class={`max-w-[85%] rounded-lg px-3 py-2 ${
-                    msg.role === 'user'
-                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100'
-                      : msg.role === 'system'
-                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs'
-                      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200'
-                  }`}>
+                  <div
+                    class={`max-w-[85%] rounded-md px-3 py-2 ${
+                      msg.role === 'user'
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                        : msg.role === 'system'
+                          ? 'bg-surface-alt text-muted text-xs'
+                          : 'bg-surface text-base-content'
+                    }`}
+                  >
                     {/* Reasoning content (extended thinking) */}
                     <Show when={msg.reasoning_content}>
                       <details class="mb-1">
                         <summary class="text-[10px] text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">
                           Show reasoning
                         </summary>
-                        <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
+                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
                           {msg.reasoning_content}
                         </div>
                       </details>
@@ -80,10 +85,12 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       <div class="space-y-1">
                         <For each={msg.tool_calls}>
                           {(tc) => (
-                            <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1">
-                              <span class="font-semibold text-indigo-700 dark:text-indigo-300">{tc.name}</span>
+                            <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
+                              <span class="font-semibold text-indigo-700 dark:text-indigo-300">
+                                {tc.name}
+                              </span>
                               <Show when={tc.input && Object.keys(tc.input).length > 0}>
-                                <pre class="mt-1 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto max-h-24 overflow-y-auto">
+                                <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-24 overflow-y-auto">
                                   {JSON.stringify(tc.input, null, 2)}
                                 </pre>
                               </Show>
@@ -95,27 +102,29 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
                     {/* Tool result (tool output returned to assistant) */}
                     <Show when={msg.tool_result}>
-                      <div class={`text-xs rounded border px-2 py-1 ${
-                        msg.tool_result!.is_error
-                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30'
-                          : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30'
-                      }`}>
-                        <span class={`font-semibold text-[10px] ${
+                      <div
+                        class={`text-xs rounded border px-2 py-1 ${
                           msg.tool_result!.is_error
-                            ? 'text-red-700 dark:text-red-300'
-                            : 'text-green-700 dark:text-green-300'
-                        }`}>
+                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900'
+                            : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900'
+                        }`}
+                      >
+                        <span
+                          class={`font-semibold text-[10px] ${
+                            msg.tool_result!.is_error
+                              ? 'text-red-700 dark:text-red-300'
+                              : 'text-green-700 dark:text-green-300'
+                          }`}
+                        >
                           {msg.tool_result!.is_error ? 'Error' : 'Result'}
                         </span>
-                        <pre class="mt-1 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                        <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
                           {msg.tool_result!.content}
                         </pre>
                       </div>
                     </Show>
 
-                    <div class="text-[10px] text-gray-500 dark:text-gray-500 mt-1">
-                      {formatTimestamp(msg.timestamp)}
-                    </div>
+                    <div class="text-[10px] text-muted mt-1">{formatTimestamp(msg.timestamp)}</div>
                   </div>
                 </div>
               );

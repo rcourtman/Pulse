@@ -2,20 +2,31 @@ package host
 
 import "time"
 
-// Report represents the payload sent by the pulse-host-agent.
+// Report represents the payload sent by the host module of pulse-agent.
 type Report struct {
-	Agent      AgentInfo          `json:"agent"`
-	Host       HostInfo           `json:"host"`
-	Metrics    Metrics            `json:"metrics"`
-	Disks      []Disk             `json:"disks,omitempty"`
-	DiskIO     []DiskIO           `json:"diskIO,omitempty"`
-	Network    []NetworkInterface `json:"network,omitempty"`
-	Sensors    Sensors            `json:"sensors,omitempty"`
-	RAID       []RAIDArray        `json:"raid,omitempty"`
-	Ceph       *CephCluster       `json:"ceph,omitempty"`
-	Tags       []string           `json:"tags,omitempty"`
-	Timestamp  time.Time          `json:"timestamp"`
-	SequenceID string             `json:"sequenceId,omitempty"`
+	Agent          AgentInfo            `json:"agent"`
+	Host           HostInfo             `json:"host"`
+	Metrics        Metrics              `json:"metrics"`
+	Disks          []Disk               `json:"disks,omitempty"`
+	DiskIO         []DiskIO             `json:"diskIO,omitempty"`
+	Network        []NetworkInterface   `json:"network,omitempty"`
+	Sensors        Sensors              `json:"sensors,omitempty"`
+	RAID           []RAIDArray          `json:"raid,omitempty"`
+	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
+	Ceph           *CephCluster         `json:"ceph,omitempty"`
+	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
+	Tags           []string             `json:"tags,omitempty"`
+	Timestamp      time.Time            `json:"timestamp"`
+	SequenceID     string               `json:"sequenceId,omitempty"`
+}
+
+// ClusterNodeSensors contains temperature sensor data collected from a Proxmox
+// cluster sibling node via SSH. The agent on one node SSHes to peers using the
+// cluster's pre-existing root SSH trust to run `sensors -j`.
+type ClusterNodeSensors struct {
+	NodeName    string  `json:"nodeName"`              // Proxmox cluster node name (lowercase)
+	Sensors     Sensors `json:"sensors"`               // Temperature/fan/additional sensor data
+	CollectedAt string  `json:"collectedAt,omitempty"` // RFC3339 timestamp of collection
 }
 
 // AgentInfo describes the reporting agent.
@@ -157,6 +168,33 @@ type RAIDDevice struct {
 	Device string `json:"device"` // e.g., /dev/sda1
 	State  string `json:"state"`  // active, spare, faulty, removed
 	Slot   int    `json:"slot"`   // Position in array (-1 if not applicable)
+}
+
+// UnraidStorage represents best-effort Unraid array topology collected locally.
+type UnraidStorage struct {
+	ArrayStarted bool         `json:"arrayStarted"`
+	ArrayState   string       `json:"arrayState,omitempty"`
+	SyncAction   string       `json:"syncAction,omitempty"`
+	SyncProgress float64      `json:"syncProgress,omitempty"`
+	SyncErrors   int64        `json:"syncErrors,omitempty"`
+	NumProtected int          `json:"numProtected,omitempty"`
+	NumDisabled  int          `json:"numDisabled,omitempty"`
+	NumInvalid   int          `json:"numInvalid,omitempty"`
+	NumMissing   int          `json:"numMissing,omitempty"`
+	Disks        []UnraidDisk `json:"disks,omitempty"`
+}
+
+// UnraidDisk represents a disk's role and state inside an Unraid array.
+type UnraidDisk struct {
+	Name       string `json:"name"`
+	Device     string `json:"device,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Status     string `json:"status,omitempty"`
+	RawStatus  string `json:"rawStatus,omitempty"`
+	Serial     string `json:"serial,omitempty"`
+	Filesystem string `json:"filesystem,omitempty"`
+	SizeBytes  int64  `json:"sizeBytes,omitempty"`
+	Slot       int    `json:"slot,omitempty"`
 }
 
 // CephCluster represents Ceph cluster status collected by the host agent.

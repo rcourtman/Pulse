@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -39,7 +41,7 @@ type Note struct {
 type GuestKnowledge struct {
 	GuestID   string    `json:"guest_id"`
 	GuestName string    `json:"guest_name"`
-	GuestType string    `json:"guest_type"` // "vm", "container", "node", "host"
+	GuestType string    `json:"guest_type"` // canonical v6 type (e.g. vm, system-container, app-container, node, agent)
 	Notes     []Note    `json:"notes"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -57,6 +59,38 @@ type Store struct {
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
 var beforeKnowledgeWriteLock func()
 
+func normalizeGuestID(guestID string) string {
+	return strings.TrimSpace(guestID)
+}
+
+func isUnsupportedGuestID(guestID string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(guestID))
+	if unifiedresources.IsUnsupportedLegacyResourceIDAlias(normalized) {
+		return true
+	}
+	return strings.HasPrefix(normalized, "qemu/") || strings.HasPrefix(normalized, "lxc/") || strings.HasPrefix(normalized, "lxc-") || strings.HasPrefix(normalized, "ct-")
+}
+
+func normalizeGuestType(guestType string) string {
+	return strings.ToLower(strings.TrimSpace(guestType))
+}
+
+func isUnsupportedGuestType(guestType string) bool {
+	normalized := normalizeGuestType(guestType)
+	if normalized == "" {
+		return false
+	}
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
+		return true
+	}
+	switch normalized {
+	case "guest", "qemu", "container", "lxc", "docker", "docker-container", "k8s", "kubernetes", "kubernetes-cluster", "docker_service", "dockerhost":
+		return true
+	default:
+		return false
+	}
+}
+
 // NewStore creates a new knowledge store with encryption
 func NewStore(dataDir string) (*Store, error) {
 	knowledgeDir := filepath.Join(dataDir, "knowledge")
@@ -67,14 +101,16 @@ func NewStore(dataDir string) (*Store, error) {
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
 	cryptoMgr, err := newCryptoManagerAt(dataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize crypto for knowledge store, data will be unencrypted")
+		return nil, fmt.Errorf("failed to initialize crypto for knowledge store: %w", err)
 	}
 
-	return &Store{
+	store := &Store{
 		dataDir: knowledgeDir,
 		cache:   make(map[string]*GuestKnowledge),
 		crypto:  cryptoMgr,
-	}, nil
+	}
+
+	return store, nil
 }
 
 // guestFilePath returns the file path for a guest's knowledge
@@ -90,6 +126,11 @@ func (s *Store) guestFilePath(guestID string) string {
 
 // GetKnowledge retrieves knowledge for a guest
 func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
+	guestID = normalizeGuestID(guestID)
+	if isUnsupportedGuestID(guestID) {
+		return nil, fmt.Errorf("unsupported guest ID %q", guestID)
+	}
+
 	s.mu.RLock()
 	if cached, ok := s.cache[guestID]; ok {
 		s.mu.RUnlock()
@@ -110,11 +151,12 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 	}
 
 	filePath := s.guestFilePath(guestID)
+	migratedPlaintext := false
 	data, err := os.ReadFile(filePath)
 	if os.IsNotExist(err) {
 		// Try legacy unencrypted file
-		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
-		data, err = os.ReadFile(legacyPath)
+		legacyJSONPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
+		data, err = os.ReadFile(legacyJSONPath)
 		if os.IsNotExist(err) {
 			// No knowledge yet, return empty
 			knowledge := &GuestKnowledge{
@@ -127,8 +169,8 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read knowledge file: %w", err)
 		}
-		// Legacy file found - will be encrypted on next save
-		log.Info().Str("guest_id", guestID).Msg("Found unencrypted knowledge file, will encrypt on next save")
+		migratedPlaintext = true
+		log.Info().Str("guest_id", guestID).Msg("found unencrypted knowledge file, rewriting encrypted storage")
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read knowledge file: %w", err)
 	}
@@ -138,15 +180,16 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 		decrypted, err := s.crypto.Decrypt(data)
 		if err != nil {
 			// Try as plain JSON (migration case)
-			var knowledge GuestKnowledge
-			if jsonErr := json.Unmarshal(data, &knowledge); jsonErr == nil {
-				log.Info().Str("guest_id", guestID).Msg("Loaded unencrypted knowledge (will encrypt on next save)")
-				s.cache[guestID] = &knowledge
-				return &knowledge, nil
+			var plaintextKnowledge GuestKnowledge
+			if jsonErr := json.Unmarshal(data, &plaintextKnowledge); jsonErr == nil {
+				migratedPlaintext = true
+				log.Info().Str("guest_id", guestID).Msg("loaded unencrypted knowledge, rewriting encrypted storage")
+			} else {
+				return nil, fmt.Errorf("failed to decrypt knowledge: %w", err)
 			}
-			return nil, fmt.Errorf("failed to decrypt knowledge: %w", err)
+		} else {
+			data = decrypted
 		}
-		data = decrypted
 	}
 
 	var knowledge GuestKnowledge
@@ -154,38 +197,65 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 		return nil, fmt.Errorf("failed to parse knowledge file: %w", err)
 	}
 
+	needsMigration := false
+	if knowledge.GuestID == "" {
+		knowledge.GuestID = guestID
+		needsMigration = true
+	}
+	if knowledge.GuestID != guestID {
+		knowledge.GuestID = guestID
+		needsMigration = true
+	}
+
 	s.cache[guestID] = &knowledge
+
+	if needsMigration || migratedPlaintext {
+		if err := s.saveToFile(guestID, &knowledge); err != nil {
+			log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to migrate canonical guest knowledge file")
+		}
+	}
+
 	return &knowledge, nil
 }
 
 // SaveNote adds or updates a note for a guest
 func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content string) error {
+	guestID = normalizeGuestID(guestID)
+	if isUnsupportedGuestID(guestID) {
+		return fmt.Errorf("unsupported guest ID %q", guestID)
+	}
+	guestType = normalizeGuestType(guestType)
+	if isUnsupportedGuestType(guestType) {
+		return fmt.Errorf("unsupported guest type %q", guestType)
+	}
+
+	// Prime cache so note updates merge against existing stored knowledge.
+	if _, err := s.GetKnowledge(guestID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("guest_id", guestID).
+			Msg("failed to load existing knowledge for save; starting fresh")
+		s.mu.Lock()
+		s.cache[guestID] = &GuestKnowledge{
+			GuestID:   guestID,
+			GuestName: guestName,
+			GuestType: guestType,
+			Notes:     []Note{},
+		}
+		s.mu.Unlock()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Get or create knowledge
 	knowledge, ok := s.cache[guestID]
 	if !ok {
-		// Try to load from disk first
 		knowledge = &GuestKnowledge{
 			GuestID:   guestID,
 			GuestName: guestName,
 			GuestType: guestType,
 			Notes:     []Note{},
-		}
-
-		// Check for existing file
-		filePath := s.guestFilePath(guestID)
-		if data, err := os.ReadFile(filePath); err == nil {
-			// Decrypt if needed
-			if s.crypto != nil && filepath.Ext(filePath) == ".enc" {
-				if decrypted, err := s.crypto.Decrypt(data); err == nil {
-					data = decrypted
-				}
-			}
-			if err := json.Unmarshal(data, &knowledge); err != nil {
-				log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to parse existing knowledge, starting fresh")
-			}
 		}
 		s.cache[guestID] = knowledge
 	}
@@ -196,7 +266,10 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 	}
 	if guestType != "" {
 		knowledge.GuestType = guestType
+	} else {
+		knowledge.GuestType = normalizeGuestType(knowledge.GuestType)
 	}
+	knowledge.GuestID = guestID
 
 	now := time.Now()
 
@@ -233,6 +306,11 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 
 // DeleteNote removes a note
 func (s *Store) DeleteNote(guestID, noteID string) error {
+	guestID = normalizeGuestID(guestID)
+	if isUnsupportedGuestID(guestID) {
+		return fmt.Errorf("unsupported guest ID %q", guestID)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -255,6 +333,11 @@ func (s *Store) DeleteNote(guestID, noteID string) error {
 
 // GetNotesByCategory returns notes filtered by category
 func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
+	guestID = normalizeGuestID(guestID)
+	if isUnsupportedGuestID(guestID) {
+		return nil, fmt.Errorf("unsupported guest ID %q", guestID)
+	}
+
 	knowledge, err := s.GetKnowledge(guestID)
 	if err != nil {
 		return nil, err
@@ -271,9 +354,15 @@ func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
 
 // FormatForContext formats knowledge for injection into AI context
 func (s *Store) FormatForContext(guestID string) string {
+	guestID = normalizeGuestID(guestID)
+	if isUnsupportedGuestID(guestID) {
+		log.Warn().Str("guest_id", guestID).Msg("ignoring unsupported guest context request")
+		return ""
+	}
+
 	knowledge, err := s.GetKnowledge(guestID)
 	if err != nil {
-		log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to load guest knowledge")
+		log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to load guest knowledge")
 		return ""
 	}
 
@@ -344,7 +433,7 @@ func (s *Store) saveToFile(guestID string, knowledge *GuestKnowledge) error {
 		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
 		if _, err := os.Stat(legacyPath); err == nil {
 			os.Remove(legacyPath)
-			log.Info().Str("guest_id", guestID).Msg("Removed legacy unencrypted knowledge file")
+			log.Info().Str("guest_id", guestID).Msg("removed legacy unencrypted knowledge file")
 		}
 	}
 
@@ -365,10 +454,18 @@ func (s *Store) ListGuests() ([]string, error) {
 	}
 
 	var guests []string
+	seen := make(map[string]struct{})
 	for _, file := range files {
 		ext := filepath.Ext(file.Name())
 		if ext == ".json" || ext == ".enc" {
-			guestID := file.Name()[:len(file.Name())-len(ext)]
+			guestID := normalizeGuestID(file.Name()[:len(file.Name())-len(ext)])
+			if guestID == "" {
+				continue
+			}
+			if _, exists := seen[guestID]; exists {
+				continue
+			}
+			seen[guestID] = struct{}{}
 			guests = append(guests, guestID)
 		}
 	}
@@ -725,29 +822,29 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 		return
 	}
 
-	addToken(tokens, trimmed)
+	utils.AddToken(tokens, trimmed)
 
-	if last := lastSegment(trimmed, '/'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, '/'); last != "" {
+		utils.AddToken(tokens, last)
 	}
-	if last := lastSegment(trimmed, ':'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, ':'); last != "" {
+		utils.AddToken(tokens, last)
 	}
 
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "vm-") {
-		addToken(tokens, trimmed[3:])
+		utils.AddToken(tokens, trimmed[3:])
 	}
-	if strings.HasPrefix(lower, "ct-") {
-		addToken(tokens, trimmed[3:])
+	if strings.HasPrefix(lower, "system-container-") {
+		utils.AddToken(tokens, trimmed[17:])
 	}
-	if strings.HasPrefix(lower, "lxc-") {
-		addToken(tokens, trimmed[4:])
+	if strings.HasPrefix(lower, "app-container-") {
+		utils.AddToken(tokens, trimmed[14:])
 	}
 
-	if strings.Contains(lower, "qemu/") || strings.Contains(lower, "lxc/") || strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
-		if digits := trailingDigits(trimmed); digits != "" {
-			addToken(tokens, digits)
+	if strings.HasPrefix(lower, "vm-") {
+		if digits := utils.TrailingDigits(trimmed); digits != "" {
+			utils.AddToken(tokens, digits)
 		}
 	}
 
@@ -758,8 +855,8 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 			if slash := strings.Index(rest, "/"); slash >= 0 {
 				host := strings.TrimSpace(rest[:slash])
 				container := strings.TrimSpace(rest[slash+1:])
-				addToken(tokens, host)
-				addToken(tokens, container)
+				utils.AddToken(tokens, host)
+				utils.AddToken(tokens, container)
 			}
 		}
 	}
@@ -776,43 +873,6 @@ func matchesResourceTokens(guestID string, tokens map[string]struct{}) bool {
 		}
 	}
 	return false
-}
-
-func addToken(tokens map[string]struct{}, value string) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return
-	}
-	tokens[strings.ToLower(trimmed)] = struct{}{}
-}
-
-func lastSegment(value string, sep byte) string {
-	if value == "" {
-		return ""
-	}
-	idx := strings.LastIndexByte(value, sep)
-	if idx == -1 || idx+1 >= len(value) {
-		return ""
-	}
-	return value[idx+1:]
-}
-
-func trailingDigits(value string) string {
-	if value == "" {
-		return ""
-	}
-	i := len(value)
-	for i > 0 {
-		c := value[i-1]
-		if c < '0' || c > '9' {
-			break
-		}
-		i--
-	}
-	if i == len(value) {
-		return ""
-	}
-	return value[i:]
 }
 
 // getLegacyInfrastructureContext returns infrastructure context from legacy knowledge notes.

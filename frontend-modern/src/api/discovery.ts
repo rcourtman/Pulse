@@ -1,261 +1,333 @@
 import { apiFetch } from '@/utils/apiClient';
+import {
+  assertAPIResponseOK,
+  parseRequiredAPIResponse,
+  parseRequiredAPIResponseOrNull,
+} from './responseUtils';
 import type {
-    ResourceType,
-    ResourceDiscovery,
-    DiscoveryListResponse,
-    DiscoveryProgress,
-    DiscoveryStatus,
-    TriggerDiscoveryRequest,
-    UpdateNotesRequest,
-    DiscoveryInfo,
+  ResourceType,
+  ResourceDiscovery,
+  DiscoveryListResponse,
+  DiscoveryProgress,
+  DiscoveryStatus,
+  TriggerDiscoveryRequest,
+  UpdateNotesRequest,
+  DiscoveryInfo,
 } from '../types/discovery';
+import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
 const API_BASE = '/api/discovery';
+const resolveAPIResourceType = (resourceType: ResourceType): string =>
+  toDiscoveryAPIResourceType(resourceType) || resourceType;
+const resolveDiscoveryAgentId = (discovery: {
+  target_id?: string;
+  agent_id?: string;
+  resource_id: string;
+}): string => discovery.agent_id || discovery.target_id || discovery.resource_id;
+const buildDiscoveryTypePath = (resourceType: ResourceType): string =>
+  `${API_BASE}/type/${encodeURIComponent(resolveAPIResourceType(resourceType))}`;
+const buildDiscoveryInfoPath = (resourceType: ResourceType): string =>
+  `${API_BASE}/info/${encodeURIComponent(resolveAPIResourceType(resourceType))}`;
+const buildTypedDiscoveryPath = (
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+): string =>
+  `${API_BASE}/${encodeURIComponent(resolveAPIResourceType(resourceType))}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`;
+const buildTypedDiscoverySubresourcePath = (
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+  subresource: string,
+): string => `${buildTypedDiscoveryPath(resourceType, targetId, resourceId)}/${subresource}`;
+const buildAgentDiscoveryCollectionPath = (agentId: string): string =>
+  `${API_BASE}/agent/${encodeURIComponent(agentId)}`;
+const buildAgentDiscoveryDetailPath = (agentId: string, resourceId: string): string =>
+  `${buildAgentDiscoveryCollectionPath(agentId)}/${encodeURIComponent(resourceId)}`;
 
 /**
  * List all discoveries
  */
 export async function listDiscoveries(): Promise<DiscoveryListResponse> {
-    const response = await apiFetch(API_BASE);
-    if (!response.ok) {
-        throw new Error('Failed to list discoveries');
-    }
-    return response.json();
+  const response = await apiFetch(API_BASE);
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to list discoveries',
+    'Failed to parse discoveries',
+  );
 }
 
 /**
  * List discoveries by resource type
  */
 export async function listDiscoveriesByType(
-    resourceType: ResourceType
+  resourceType: ResourceType,
 ): Promise<DiscoveryListResponse> {
-    const response = await apiFetch(`${API_BASE}/type/${resourceType}`);
-    if (!response.ok) {
-        throw new Error(`Failed to list discoveries for type ${resourceType}`);
-    }
-    return response.json();
+  const response = await apiFetch(buildDiscoveryTypePath(resourceType));
+  return parseRequiredAPIResponse(
+    response,
+    `Failed to list discoveries for type ${resourceType}`,
+    `Failed to parse discoveries for type ${resourceType}`,
+  );
 }
 
 /**
- * List discoveries by host
+ * List discoveries by agent
  */
-export async function listDiscoveriesByHost(hostId: string): Promise<DiscoveryListResponse> {
-    const response = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
-    if (!response.ok) {
-        throw new Error(`Failed to list discoveries for host ${hostId}`);
-    }
-    return response.json();
+export async function listDiscoveriesByAgent(agentId: string): Promise<DiscoveryListResponse> {
+  const response = await apiFetch(buildAgentDiscoveryCollectionPath(agentId));
+  return parseRequiredAPIResponse(
+    response,
+    `Failed to list discoveries for agent ${agentId}`,
+    `Failed to parse discoveries for agent ${agentId}`,
+  );
 }
 
 /**
  * Get a specific discovery
  */
 export async function getDiscovery(
-    resourceType: ResourceType,
-    hostId: string,
-    resourceId: string
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
 ): Promise<ResourceDiscovery | null> {
-    const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`
+  if (resourceType === 'agent') {
+    // Agent discovery is frequently absent before first scan. Resolve via list endpoint
+    // first to avoid noisy 404s for expected "not discovered yet" states.
+    const agentListResponse = await apiFetch(buildAgentDiscoveryCollectionPath(targetId));
+    const agentList = await parseRequiredAPIResponse<DiscoveryListResponse>(
+      agentListResponse,
+      'Failed to list agent discoveries',
+      'Failed to parse agent discoveries',
     );
-    if (response.status === 404) {
-        return null;
+    if (!agentList.discoveries || agentList.discoveries.length === 0) {
+      return null;
     }
-    if (!response.ok) {
-        throw new Error('Failed to get discovery');
+
+    const resolvedAgentDiscovery =
+      agentList.discoveries.find(
+        (d) =>
+          d.resource_type === 'agent' &&
+          (d.resource_id === resourceId ||
+            d.resource_id === targetId ||
+            resolveDiscoveryAgentId(d) === targetId),
+      ) ?? agentList.discoveries.find((d) => d.resource_type === 'agent');
+
+    if (!resolvedAgentDiscovery) {
+      return null;
     }
-    return response.json();
+
+    const resolvedAgentId = resolveDiscoveryAgentId(resolvedAgentDiscovery);
+    if (!resolvedAgentId) {
+      return null;
+    }
+
+    const response = await apiFetch(
+      buildAgentDiscoveryDetailPath(resolvedAgentId, resolvedAgentDiscovery.resource_id),
+    );
+    return parseRequiredAPIResponseOrNull(
+      response,
+      404,
+      'Failed to get discovery',
+      'Failed to parse discovery',
+    );
+  }
+
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId));
+  return parseRequiredAPIResponseOrNull(
+    response,
+    404,
+    'Failed to get discovery',
+    'Failed to parse discovery',
+  );
 }
 
 /**
  * Trigger discovery for a resource
  */
 export async function triggerDiscovery(
-    resourceType: ResourceType,
-    hostId: string,
-    resourceId: string,
-    options?: TriggerDiscoveryRequest
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+  options?: TriggerDiscoveryRequest,
 ): Promise<ResourceDiscovery> {
-    const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(options || {}),
-        }
-    );
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Discovery failed' }));
-        throw new Error(error.message || 'Discovery failed');
-    }
-    return response.json();
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options || {}),
+  });
+  return parseRequiredAPIResponse(
+    response,
+    'Discovery failed',
+    'Failed to parse discovery trigger response',
+  );
 }
 
 /**
  * Get discovery progress
  */
 export async function getDiscoveryProgress(
-    resourceType: ResourceType,
-    hostId: string,
-    resourceId: string
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
 ): Promise<DiscoveryProgress> {
-    const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/progress`
-    );
-    if (!response.ok) {
-        throw new Error('Failed to get discovery progress');
-    }
-    return response.json();
+  const response = await apiFetch(
+    buildTypedDiscoverySubresourcePath(resourceType, targetId, resourceId, 'progress'),
+  );
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery progress',
+    'Failed to parse discovery progress',
+  );
 }
 
 /**
  * Update user notes for a discovery
  */
 export async function updateDiscoveryNotes(
-    resourceType: ResourceType,
-    hostId: string,
-    resourceId: string,
-    notes: UpdateNotesRequest
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+  notes: UpdateNotesRequest,
 ): Promise<ResourceDiscovery> {
-    const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/notes`,
-        {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(notes),
-        }
-    );
-    if (!response.ok) {
-        throw new Error('Failed to update notes');
-    }
-    return response.json();
+  const response = await apiFetch(
+    buildTypedDiscoverySubresourcePath(resourceType, targetId, resourceId, 'notes'),
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(notes),
+    },
+  );
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to update notes',
+    'Failed to parse updated discovery notes',
+  );
 }
 
 /**
  * Delete a discovery
  */
 export async function deleteDiscovery(
-    resourceType: ResourceType,
-    hostId: string,
-    resourceId: string
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
 ): Promise<void> {
-    const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
-        {
-            method: 'DELETE',
-        }
-    );
-    if (!response.ok) {
-        throw new Error('Failed to delete discovery');
-    }
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId), {
+    method: 'DELETE',
+  });
+  await assertAPIResponseOK(response, 'Failed to delete discovery');
 }
 
 /**
  * Get discovery service status
  */
 export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
-    const response = await apiFetch(`${API_BASE}/status`);
-    if (!response.ok) {
-        throw new Error('Failed to get discovery status');
-    }
-    return response.json();
+  const response = await apiFetch(`${API_BASE}/status`);
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery status',
+    'Failed to parse discovery status',
+  );
 }
 
 /**
  * Get discovery info for a resource type (AI provider info, commands that will run)
  */
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
-    const response = await apiFetch(`${API_BASE}/info/${resourceType}`);
-    if (!response.ok) {
-        throw new Error('Failed to get discovery info');
-    }
-    return response.json();
+  const response = await apiFetch(buildDiscoveryInfoPath(resourceType));
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery info',
+    'Failed to parse discovery info',
+  );
 }
 
 /**
  * Helper to format the last updated time
  */
 export function formatDiscoveryAge(updatedAt: string): string {
-    if (!updatedAt) return 'Unknown';
+  if (!updatedAt) return 'Unknown';
 
-    const updated = new Date(updatedAt);
-    const now = new Date();
-    const diffMs = now.getTime() - updated.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const updated = new Date(updatedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - updated.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins === 1) return '1 minute ago';
-    if (diffMins < 60) return `${diffMins} minutes ago`;
-    if (diffHours === 1) return '1 hour ago';
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays === 1) return '1 day ago';
-    return `${diffDays} days ago`;
+  if (diffMins < 1) return 'Just now';
+  if (diffMins === 1) return '1 minute ago';
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  if (diffHours === 1) return '1 hour ago';
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
 }
 
 /**
  * Helper to get a human-readable category name
  */
 export function getCategoryDisplayName(category: string): string {
-    const names: Record<string, string> = {
-        database: 'Database',
-        web_server: 'Web Server',
-        cache: 'Cache',
-        message_queue: 'Message Queue',
-        monitoring: 'Monitoring',
-        backup: 'Backup',
-        nvr: 'NVR',
-        storage: 'Storage',
-        container: 'Container',
-        virtualizer: 'Virtualizer',
-        network: 'Network',
-        security: 'Security',
-        media: 'Media',
-        home_automation: 'Home Automation',
-        unknown: 'Unknown',
-    };
-    return names[category] || category;
+  const names: Record<string, string> = {
+    database: 'Database',
+    web_server: 'Web Server',
+    cache: 'Cache',
+    message_queue: 'Message Queue',
+    monitoring: 'Monitoring',
+    backup: 'Backup',
+    nvr: 'NVR',
+    storage: 'Storage',
+    container: 'Container',
+    virtualizer: 'Virtualizer',
+    network: 'Network',
+    security: 'Security',
+    media: 'Media',
+    home_automation: 'Home Automation',
+    unknown: 'Unknown',
+  };
+  return names[category] || category;
 }
 
 /**
  * Helper to get confidence level description
  */
 export function getConfidenceLevel(confidence: number): {
-    label: string;
-    color: string;
+  label: string;
+  color: string;
 } {
-    if (confidence >= 0.9) {
-        return { label: 'High confidence', color: 'text-green-600 dark:text-green-400' };
-    }
-    if (confidence >= 0.7) {
-        return { label: 'Medium confidence', color: 'text-amber-600 dark:text-amber-400' };
-    }
-    return { label: 'Low confidence', color: 'text-gray-500 dark:text-gray-400' };
+  if (confidence >= 0.9) {
+    return { label: 'High confidence', color: 'text-green-600 dark:text-green-400' };
+  }
+  if (confidence >= 0.7) {
+    return { label: 'Medium confidence', color: 'text-amber-600 dark:text-amber-400' };
+  }
+  return { label: 'Low confidence', color: 'text-muted' };
 }
 
 /**
  * Connected agent info from WebSocket
  */
 export interface ConnectedAgent {
-    agent_id: string;
-    hostname: string;
-    version: string;
-    platform: string;
-    connected_at: string;
+  agent_id: string;
+  hostname: string;
+  version: string;
+  platform: string;
+  connected_at: string;
 }
 
 /**
  * Get list of agents connected via WebSocket (for command execution)
  */
 export async function getConnectedAgents(): Promise<{ count: number; agents: ConnectedAgent[] }> {
-    const response = await apiFetch('/api/ai/agents');
-    if (!response.ok) {
-        throw new Error('Failed to get connected agents');
-    }
-    return response.json();
+  const response = await apiFetch('/api/ai/agents');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get connected agents',
+    'Failed to parse connected agents',
+  );
 }

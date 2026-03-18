@@ -32,10 +32,10 @@ func TestUnifiedStore_SetPersistence_LoadsFindings(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	loaded := map[string]*UnifiedFinding{
 		"f1": {
-			ID:         "f1",
-			Source:     SourceThreshold,
-			ResourceID: "r1",
-			AlertID:    "a1",
+			ID:              "f1",
+			Source:          SourceThreshold,
+			ResourceID:      "r1",
+			AlertIdentifier: "a1",
 		},
 		"f2": {
 			ID:         "f2",
@@ -51,7 +51,7 @@ func TestUnifiedStore_SetPersistence_LoadsFindings(t *testing.T) {
 	if store.Get("f1") == nil {
 		t.Fatalf("expected finding f1 to load")
 	}
-	if store.GetByAlert("a1") == nil {
+	if store.GetByAlertIdentifier("a1") == nil {
 		t.Fatalf("expected alert index to load")
 	}
 	byResource := store.GetByResource("r1")
@@ -71,17 +71,17 @@ func TestUnifiedStore_SetPersistence_Error(t *testing.T) {
 func TestUnifiedStore_ConvertAlert_MetadataAndRecommendation(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "disk",
-		AlertLevel:   "critical",
-		ResourceID:   "vm-1",
-		ResourceName: "db",
-		Message:      "disk full",
-		Value:        96,
-		Threshold:    90,
-		StartTime:    time.Now().Add(-time.Minute),
-		LastSeen:     time.Now(),
-		Metadata:     map[string]interface{}{"resourceType": "node"},
+		AlertIdentifier: "alert-1",
+		AlertType:       "disk",
+		AlertLevel:      "critical",
+		ResourceID:      "vm-1",
+		ResourceName:    "db",
+		Message:         "disk full",
+		Value:           96,
+		Threshold:       90,
+		StartTime:       time.Now().Add(-time.Minute),
+		LastSeen:        time.Now(),
+		Metadata:        map[string]interface{}{"resourceType": "node"},
 	}
 
 	finding := store.ConvertAlert(alert)
@@ -102,15 +102,15 @@ func TestUnifiedStore_ConvertAlert_MetadataAndRecommendation(t *testing.T) {
 func TestUnifiedStore_AddFromAlert_ReopensResolved(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now().Add(-time.Minute),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now().Add(-time.Minute),
+		LastSeen:        time.Now(),
 	}
 
 	finding, _ := store.AddFromAlert(alert)
@@ -163,19 +163,19 @@ func TestUnifiedStore_AddFromAI_Existing(t *testing.T) {
 func TestUnifiedStore_BasicMutations(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 
-	if store.ResolveByAlert("missing") {
+	if store.ResolveByAlertIdentifier("missing") {
 		t.Fatalf("expected resolve to fail for missing alert")
 	}
 	if store.EnhanceWithAI("missing", "ctx", 0.5, "", nil) {
@@ -206,15 +206,15 @@ func TestUnifiedStore_BasicMutations(t *testing.T) {
 func TestUnifiedStore_AIFilteringAndDismiss(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	store.AddFromAlert(alert)
 
@@ -250,15 +250,15 @@ func TestUnifiedStore_AIFilteringAndDismiss(t *testing.T) {
 func TestUnifiedStore_FormatForContext(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "critical",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        95,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "critical",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           95,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 	store.EnhanceWithAI(finding.ID, "context", 0.9, "root-1", nil)
@@ -290,14 +290,14 @@ func TestUnifiedStore_FormatForContext(t *testing.T) {
 func TestUnifiedStore_SummaryIncludesEnhanced(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	alert := &SimpleAlertAdapter{
-		AlertID:    "alert-1",
-		AlertType:  "cpu",
-		AlertLevel: "warning",
-		ResourceID: "vm-1",
-		Value:      90,
-		Threshold:  80,
-		StartTime:  time.Now(),
-		LastSeen:   time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 	store.EnhanceWithAI(finding.ID, "context", 0.8, "", nil)
@@ -314,14 +314,14 @@ func TestUnifiedStore_ForceSave(t *testing.T) {
 	store.persistence = persistence
 
 	alert := &SimpleAlertAdapter{
-		AlertID:    "alert-1",
-		AlertType:  "cpu",
-		AlertLevel: "warning",
-		ResourceID: "vm-1",
-		Value:      90,
-		Threshold:  80,
-		StartTime:  time.Now(),
-		LastSeen:   time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	store.AddFromAlert(alert)
 
@@ -349,8 +349,8 @@ func TestUnifiedHelpers(t *testing.T) {
 	if determineResourceType("snapshot", nil) != "snapshot" {
 		t.Fatalf("expected snapshot resource type")
 	}
-	if determineResourceType("imageUpdateAvail", nil) != "docker" {
-		t.Fatalf("expected docker resource type")
+	if determineResourceType("imageUpdateAvail", nil) != "app-container" {
+		t.Fatalf("expected app-container resource type")
 	}
 	if determineResourceType("other", map[string]interface{}{"resourceType": "custom"}) != "custom" {
 		t.Fatalf("expected custom resource type")

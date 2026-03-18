@@ -7,6 +7,7 @@ interface APIAccessPanelProps {
   currentTokenHint?: string;
   onTokensChanged: () => void;
   refreshing: boolean;
+  canManage: boolean;
 }
 
 export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
@@ -14,19 +15,21 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
     <div class="space-y-6">
       <SettingsPanel
         title="API Access"
-        description="Generate scoped tokens for agents and automation"
+        description="Generate and manage scoped tokens for agents and automation."
         icon={<BadgeCheck class="w-5 h-5" strokeWidth={2} />}
+        noPadding
       >
-        <div class="space-y-3">
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            Generate scoped tokens for Docker agents, host agents, and automation pipelines. Tokens
-            are shown once—store them securely and rotate when infrastructure changes.
+        <div class="space-y-3 p-4 sm:p-6 pb-6">
+          <p class="text-sm text-muted">
+            Generate scoped tokens for container runtime agents, system agents, and automation
+            pipelines. Tokens are shown once—store them securely and rotate when infrastructure
+            changes.
           </p>
           <a
             href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
             target="_blank"
             rel="noreferrer"
-            class="inline-flex w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+            class="inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200"
           >
             View scope reference
           </a>
@@ -37,6 +40,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         currentTokenHint={props.currentTokenHint}
         onTokensChanged={props.onTokensChanged}
         refreshing={props.refreshing}
+        canManage={props.canManage}
       />
     </div>
   );

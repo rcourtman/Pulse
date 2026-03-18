@@ -18,7 +18,6 @@ import (
 // ConfigProfileHandler handles configuration profile operations
 type ConfigProfileHandler struct {
 	mtPersistence     *config.MultiTenantPersistence
-	legacyPersistence *config.ConfigPersistence
 	validator         *models.ProfileValidator
 	mu                sync.RWMutex
 	suggestionHandler *ProfileSuggestionHandler
@@ -32,26 +31,15 @@ func NewConfigProfileHandler(mtp *config.MultiTenantPersistence) *ConfigProfileH
 	}
 }
 
-// SetLegacyPersistence sets the single-tenant persistence fallback.
-func (h *ConfigProfileHandler) SetLegacyPersistence(p *config.ConfigPersistence) {
-	h.legacyPersistence = p
-}
-
 // getPersistence resolves the persistence instance for the current tenant
 func (h *ConfigProfileHandler) getPersistence(ctx context.Context) (*config.ConfigPersistence, error) {
-	if h.mtPersistence != nil {
-		orgID := GetOrgID(ctx)
-		return h.mtPersistence.GetPersistence(orgID)
-	}
-	if h.legacyPersistence != nil {
-		return h.legacyPersistence, nil
-	}
-	return nil, fmt.Errorf("no persistence available")
+	orgID := GetOrgID(ctx)
+	return h.mtPersistence.GetPersistence(orgID)
 }
 
 // SetAIHandler sets the AI handler for profile suggestions
 func (h *ConfigProfileHandler) SetAIHandler(aiHandler *AIHandler) {
-	h.suggestionHandler = NewProfileSuggestionHandler(h.mtPersistence, h.legacyPersistence, aiHandler)
+	h.suggestionHandler = NewProfileSuggestionHandler(h.mtPersistence, aiHandler)
 }
 
 // ServeHTTP implements the http.Handler interface
@@ -121,10 +109,10 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	} else if strings.HasSuffix(path, "/versions") {
 		// GET /{id}/versions - Get version history for a profile
-		id := strings.TrimSuffix(path, "/versions")
-		id = strings.TrimPrefix(id, "/")
+		profileID := strings.TrimSuffix(path, "/versions")
+		profileID = strings.TrimPrefix(profileID, "/")
 		if r.Method == http.MethodGet {
-			h.GetProfileVersions(w, r, id)
+			h.GetProfileVersions(w, r, profileID)
 			return
 		}
 	} else if strings.Contains(path, "/rollback/") {
@@ -132,23 +120,23 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		parts := strings.Split(path, "/")
 		if len(parts) >= 3 && r.Method == http.MethodPost {
 			// parts: ["", "id", "rollback", "version"]
-			id := parts[1]
+			profileID := parts[1]
 			version := parts[len(parts)-1]
-			h.RollbackProfile(w, r, id, version)
+			h.RollbackProfile(w, r, profileID, version)
 			return
 		}
 	} else {
 		// ID parameters
 		// Expecting /{id}
-		id := strings.TrimPrefix(path, "/")
+		profileID := strings.TrimPrefix(path, "/")
 		if r.Method == http.MethodGet {
-			h.GetProfile(w, r, id)
+			h.GetProfile(w, r, profileID)
 			return
 		} else if r.Method == http.MethodPut {
-			h.UpdateProfile(w, r, id)
+			h.UpdateProfile(w, r, profileID)
 			return
 		} else if r.Method == http.MethodDelete {
-			h.DeleteProfile(w, r, id)
+			h.DeleteProfile(w, r, profileID)
 			return
 		}
 	}
@@ -522,6 +510,24 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	profiles, err := persistence.LoadAgentProfiles()
+	if err != nil {
+		http.Error(w, "Failed to load profiles", http.StatusInternalServerError)
+		return
+	}
+
+	profileExists := false
+	for _, p := range profiles {
+		if p.ID == input.ProfileID {
+			profileExists = true
+			break
+		}
+	}
+	if !profileExists {
+		http.Error(w, "Profile not found", http.StatusNotFound)
+		return
+	}
+
 	// Remove existing assignment for this agent if exists
 	newAssignments := []models.AgentProfileAssignment{}
 	for _, a := range assignments {
@@ -542,7 +548,6 @@ func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get profile name for logging
-	profiles, _ := persistence.LoadAgentProfiles()
 	var profileName string
 	for _, p := range profiles {
 		if p.ID == input.ProfileID {
@@ -712,25 +717,45 @@ func (h *ConfigProfileHandler) GetChangeLog(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Filter by profile_id if specified
-	profileID := r.URL.Query().Get("profile_id")
-	if profileID != "" {
-		filtered := []models.ProfileChangeLog{}
-		for _, entry := range logs {
-			if entry.ProfileID == profileID {
-				filtered = append(filtered, entry)
-			}
-		}
-		logs = filtered
-	}
-
-	// Return empty array instead of null
-	if logs == nil {
-		logs = []models.ProfileChangeLog{}
-	}
+	logs = filterProfileLogsByID(logs, r.URL.Query().Get("profile_id"))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
+}
+
+func filterProfileLogsByID[T models.ProfileChangeLog | models.ProfileDeploymentStatus](logs []T, idParam string) []T {
+	if len(logs) == 0 {
+		return logs
+	}
+
+	switch any(logs[0]).(type) {
+	case models.ProfileChangeLog:
+		if idParam != "" {
+			var filtered []T
+			for _, entry := range logs {
+				if any(entry).(models.ProfileChangeLog).ProfileID == idParam {
+					filtered = append(filtered, entry)
+				}
+			}
+			logs = filtered
+		}
+	case models.ProfileDeploymentStatus:
+		if idParam != "" {
+			var filtered []T
+			for _, entry := range logs {
+				if any(entry).(models.ProfileDeploymentStatus).AgentID == idParam {
+					filtered = append(filtered, entry)
+				}
+			}
+			logs = filtered
+		}
+	}
+
+	if logs == nil {
+		empty := make([]T, 0)
+		return empty
+	}
+	return logs
 }
 
 // GetDeploymentStatus returns deployment status for all agents
@@ -749,22 +774,7 @@ func (h *ConfigProfileHandler) GetDeploymentStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Filter by agent_id if specified
-	agentID := r.URL.Query().Get("agent_id")
-	if agentID != "" {
-		filtered := []models.ProfileDeploymentStatus{}
-		for _, s := range status {
-			if s.AgentID == agentID {
-				filtered = append(filtered, s)
-			}
-		}
-		status = filtered
-	}
-
-	// Return empty array instead of null
-	if status == nil {
-		status = []models.ProfileDeploymentStatus{}
-	}
+	status = filterProfileLogsByID(status, r.URL.Query().Get("agent_id"))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)

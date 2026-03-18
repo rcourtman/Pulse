@@ -22,7 +22,7 @@ func TestKubernetesAgentHandlers_SetMultiTenantMonitor(t *testing.T) {
 	if handler.mtMonitor != mtm {
 		t.Fatalf("expected multi-tenant monitor to be set")
 	}
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set from multi-tenant default")
 	}
 }

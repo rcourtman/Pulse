@@ -9,10 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,6 +28,8 @@ const (
 	StatusExpired  ApprovalStatus = "expired"
 )
 
+const DefaultOrgID = "default"
+
 // RiskLevel indicates the potential impact of a command.
 type RiskLevel string
 
@@ -38,10 +42,11 @@ const (
 // ApprovalRequest represents a pending command awaiting user approval.
 type ApprovalRequest struct {
 	ID          string         `json:"id"`
-	ExecutionID string         `json:"executionId"` // Groups related approvals
-	ToolID      string         `json:"toolId"`      // From LLM tool call
+	OrgID       string         `json:"orgId,omitempty"` // Tenant/org scope for multi-tenant isolation
+	ExecutionID string         `json:"executionId"`     // Groups related approvals
+	ToolID      string         `json:"toolId"`          // From LLM tool call
 	Command     string         `json:"command"`
-	TargetType  string         `json:"targetType"` // host, container, vm, node
+	TargetType  string         `json:"targetType"` // agent, container, vm, node
 	TargetID    string         `json:"targetId"`
 	TargetName  string         `json:"targetName"`
 	Context     string         `json:"context"`   // Why AI wants to run this
@@ -58,6 +63,29 @@ type ApprovalRequest struct {
 	Consumed bool `json:"consumed,omitempty"`
 }
 
+// NormalizeOrgID normalizes tenant IDs used in approval records.
+func NormalizeOrgID(orgID string) string {
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		return DefaultOrgID
+	}
+	return normalized
+}
+
+// BelongsToOrg returns true when an approval request belongs to the provided org.
+// Legacy approvals without OrgID are treated as default-org only.
+func BelongsToOrg(req *ApprovalRequest, orgID string) bool {
+	if req == nil {
+		return false
+	}
+	requestOrg := strings.TrimSpace(req.OrgID)
+	normalizedOrg := NormalizeOrgID(orgID)
+	if requestOrg == "" {
+		return normalizedOrg == DefaultOrgID
+	}
+	return requestOrg == normalizedOrg
+}
+
 // ExecutionState stores the AI conversation state for resumption after approval.
 type ExecutionState struct {
 	ID              string                   `json:"id"`
@@ -66,6 +94,27 @@ type ExecutionState struct {
 	PendingToolCall map[string]interface{}   `json:"pendingToolCall"` // Tool call awaiting approval
 	CreatedAt       time.Time                `json:"createdAt"`
 	ExpiresAt       time.Time                `json:"expiresAt"`
+}
+
+func emptyExecutionState() *ExecutionState {
+	state := &ExecutionState{}
+	state.normalizeCollections()
+	return state
+}
+
+func (s *ExecutionState) normalizeCollections() {
+	if s == nil {
+		return
+	}
+	if s.OriginalRequest == nil {
+		s.OriginalRequest = map[string]interface{}{}
+	}
+	if s.Messages == nil {
+		s.Messages = []map[string]interface{}{}
+	}
+	if s.PendingToolCall == nil {
+		s.PendingToolCall = map[string]interface{}{}
+	}
 }
 
 // Store manages approval requests and execution states.
@@ -96,11 +145,11 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("data directory is required")
 	}
 
-	if cfg.DefaultTimeout == 0 {
+	if cfg.DefaultTimeout <= 0 {
 		cfg.DefaultTimeout = 5 * time.Minute
 	}
 
-	if cfg.MaxApprovals == 0 {
+	if cfg.MaxApprovals <= 0 {
 		cfg.MaxApprovals = 100
 	}
 
@@ -116,7 +165,7 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 	// Load existing data
 	if s.persist {
 		if err := s.load(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load approval data, starting fresh")
+			log.Warn().Err(err).Msg("failed to load approval data, starting fresh")
 		}
 	}
 
@@ -147,6 +196,11 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	}
 
 	// Set defaults
+	req.OrgID = strings.TrimSpace(req.OrgID)
+	req.TargetType = normalizeApprovalTargetType(req.TargetType)
+	if isUnsupportedApprovalTargetType(req.TargetType) {
+		return fmt.Errorf("unsupported targetType %q", req.TargetType)
+	}
 	req.Status = StatusPending
 	req.RequestedAt = time.Now()
 	if req.ExpiresAt.IsZero() {
@@ -215,6 +269,26 @@ func (s *Store) GetPendingApprovals() []*ApprovalRequest {
 	return pending
 }
 
+// GetPendingApprovalsForOrg returns all pending approvals visible to an org.
+func (s *Store) GetPendingApprovalsForOrg(orgID string) []*ApprovalRequest {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	var pending []*ApprovalRequest
+
+	for _, req := range s.approvals {
+		if !BelongsToOrg(req, orgID) {
+			continue
+		}
+		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
+			pending = append(pending, req)
+		}
+	}
+
+	return pending
+}
+
 // GetApprovalsByExecution returns all approvals for an execution ID.
 func (s *Store) GetApprovalsByExecution(executionID string) []*ApprovalRequest {
 	s.mu.RLock()
@@ -252,7 +326,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	now := time.Now()
@@ -319,24 +393,38 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 	}
 
 	if req.Consumed {
-		return nil, fmt.Errorf("approval request has already been consumed")
+		return nil, fmt.Errorf("approval request %s has already been consumed", id)
 	}
 
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	// Verify command hash matches
+	targetType = normalizeApprovalTargetType(targetType)
+	if isUnsupportedApprovalTargetType(targetType) {
+		return nil, fmt.Errorf("unsupported targetType %q", targetType)
+	}
 	expectedHash := ComputeCommandHash(command, targetType, targetID)
-	if req.CommandHash != "" && req.CommandHash != expectedHash {
+	approvedHash := req.CommandHash
+	if approvedHash == "" {
+		// Legacy approvals created before CommandHash existed are still bound to their
+		// original command+target tuple by deriving the canonical hash on consume.
+		approvedHash = ComputeCommandHash(req.Command, normalizeApprovalTargetType(req.TargetType), req.TargetID)
+	}
+	if approvedHash != expectedHash {
 		log.Warn().
 			Str("id", id).
-			Str("expected_hash", req.CommandHash).
+			Str("expected_hash", approvedHash).
 			Str("actual_hash", expectedHash).
 			Msg("Approval command hash mismatch - possible replay attack")
 		return nil, fmt.Errorf("approval command mismatch - this approval is for a different command/target")
+	}
+	// Backfill missing hash for legacy approvals once validated.
+	if req.CommandHash == "" {
+		req.CommandHash = approvedHash
 	}
 
 	// Mark as consumed (single-use)
@@ -356,10 +444,14 @@ func (s *Store) StoreExecution(state *ExecutionState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if state == nil {
+		return fmt.Errorf("execution state is required")
+	}
 	if state.ID == "" {
 		return fmt.Errorf("execution ID is required")
 	}
 
+	state.normalizeCollections()
 	state.CreatedAt = time.Now()
 	if state.ExpiresAt.IsZero() {
 		state.ExpiresAt = state.CreatedAt.Add(s.defaultTimeout)
@@ -387,6 +479,7 @@ func (s *Store) GetExecution(id string) (*ExecutionState, bool) {
 		return nil, false
 	}
 
+	state.normalizeCollections()
 	return state, true
 }
 
@@ -468,6 +561,38 @@ func (s *Store) GetStats() map[string]int {
 	return stats
 }
 
+// GetStatsForOrg returns statistics scoped to approvals visible to an org.
+func (s *Store) GetStatsForOrg(orgID string) map[string]int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	stats := map[string]int{
+		"pending":    0,
+		"approved":   0,
+		"denied":     0,
+		"expired":    0,
+		"executions": 0,
+	}
+
+	for _, req := range s.approvals {
+		if !BelongsToOrg(req, orgID) {
+			continue
+		}
+		switch req.Status {
+		case StatusPending:
+			stats["pending"]++
+		case StatusApproved:
+			stats["approved"]++
+		case StatusDenied:
+			stats["denied"]++
+		case StatusExpired:
+			stats["expired"]++
+		}
+	}
+
+	return stats
+}
+
 // Persistence
 
 func (s *Store) approvalsFile() string {
@@ -479,11 +604,24 @@ func (s *Store) executionsFile() string {
 }
 
 func (s *Store) load() error {
+	shouldPersist := false
+
 	// Load approvals
 	if data, err := os.ReadFile(s.approvalsFile()); err == nil {
 		var approvals []*ApprovalRequest
 		if err := json.Unmarshal(data, &approvals); err == nil {
 			for _, a := range approvals {
+				if isUnsupportedApprovalTargetType(a.TargetType) {
+					shouldPersist = true
+					log.Warn().
+						Str("id", a.ID).
+						Str("target_type", normalizeApprovalTargetType(a.TargetType)).
+						Msg("dropping approval with unsupported target type")
+					continue
+				}
+				if canonicalizeApprovalRequest(a) {
+					shouldPersist = true
+				}
 				s.approvals[a.ID] = a
 			}
 		}
@@ -494,9 +632,18 @@ func (s *Store) load() error {
 		var executions []*ExecutionState
 		if err := json.Unmarshal(data, &executions); err == nil {
 			for _, e := range executions {
+				if e == nil {
+					e = emptyExecutionState()
+				} else {
+					e.normalizeCollections()
+				}
 				s.executions[e.ID] = e
 			}
 		}
+	}
+
+	if shouldPersist {
+		s.save()
 	}
 
 	return nil
@@ -516,7 +663,7 @@ func (s *Store) save() {
 	}
 	if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
 		if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("Failed to save approvals")
+			log.Error().Err(err).Msg("failed to save approvals")
 		}
 	}
 
@@ -527,7 +674,7 @@ func (s *Store) save() {
 	}
 	if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
 		if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("Failed to save executions")
+			log.Error().Err(err).Msg("failed to save executions")
 		}
 	}
 }
@@ -555,12 +702,12 @@ func (s *Store) scheduleSave() {
 
 		if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
 			if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("Failed to save approvals")
+				log.Error().Err(err).Msg("failed to save approvals")
 			}
 		}
 		if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
 			if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("Failed to save executions")
+				log.Error().Err(err).Msg("failed to save executions")
 			}
 		}
 	})
@@ -600,12 +747,12 @@ func (s *Store) cleanupLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug().Msg("Approval store cleanup loop stopped")
+			log.Debug().Msg("approval store cleanup loop stopped")
 			return
 		case <-ticker.C:
 			cleaned := s.CleanupExpired()
 			if cleaned > 0 {
-				log.Debug().Int("count", cleaned).Msg("Cleaned up expired approval items")
+				log.Debug().Int("count", cleaned).Msg("cleaned up expired approval items")
 			}
 		}
 	}
@@ -699,6 +846,36 @@ func ComputeCommandHash(command, targetType, targetID string) string {
 	h.Write([]byte("|"))
 	h.Write([]byte(targetID))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func normalizeApprovalTargetType(targetType string) string {
+	return strings.ToLower(strings.TrimSpace(targetType))
+}
+
+func isUnsupportedApprovalTargetType(targetType string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalizeApprovalTargetType(targetType))
+}
+
+func canonicalizeApprovalRequest(req *ApprovalRequest) bool {
+	if req == nil {
+		return false
+	}
+
+	changed := false
+	prevType := req.TargetType
+	req.TargetType = normalizeApprovalTargetType(req.TargetType)
+	if req.TargetType != prevType {
+		changed = true
+	}
+
+	// Keep command hash aligned with canonical target tuple.
+	canonicalHash := ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+	if req.CommandHash == "" || changed {
+		req.CommandHash = canonicalHash
+		return true
+	}
+
+	return changed
 }
 
 // Global store instance

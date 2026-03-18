@@ -1,0 +1,1973 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rs/zerolog/log"
+)
+
+// ResourceHandlers provides HTTP handlers for the unified resource API.
+type ResourceHandlers struct {
+	cfg                 *config.Config
+	storeMu             sync.Mutex
+	stores              map[string]unified.ResourceStore
+	cacheMu             sync.Mutex
+	registryCache       map[string]registryCacheEntry
+	supplementalMu      sync.RWMutex
+	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
+	stateProvider       SnapshotProvider
+	tenantStateProvider TenantStateProvider
+}
+
+type registrySeed struct {
+	snapshot      models.StateSnapshot
+	resources     []unified.Resource
+	lastUpdate    time.Time
+	unifiedSource bool
+}
+
+// SupplementalRecordsProvider provides out-of-band ingest records for a specific source.
+type SupplementalRecordsProvider interface {
+	GetCurrentRecords() []unified.IngestRecord
+}
+
+// TenantSupplementalRecordsProvider is an optional interface for providers that can scope
+// supplemental records to a specific organization. This prevents cross-tenant leakage when
+// Pulse runs in multi-tenant mode.
+//
+// Providers that do not implement this interface will be treated as "global"/legacy and
+// their records will be ingested into every tenant registry.
+type TenantSupplementalRecordsProvider interface {
+	GetCurrentRecordsForOrg(orgID string) []unified.IngestRecord
+}
+
+// SupplementalSnapshotSourceOwner is an optional interface for providers that
+// own source-native resource ingestion and want matching legacy snapshot slices
+// suppressed during registry construction.
+type SupplementalSnapshotSourceOwner interface {
+	SnapshotOwnedSources() []unified.DataSource
+}
+
+// TenantSupplementalSnapshotSourceOwner is the tenant-aware variant of
+// SupplementalSnapshotSourceOwner.
+type TenantSupplementalSnapshotSourceOwner interface {
+	SnapshotOwnedSourcesForOrg(orgID string) []unified.DataSource
+}
+
+// NewResourceHandlers creates a new ResourceHandlers.
+func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
+	return &ResourceHandlers{
+		cfg:                 cfg,
+		stores:              make(map[string]unified.ResourceStore),
+		registryCache:       make(map[string]registryCacheEntry),
+		supplementalRecords: make(map[unified.DataSource]SupplementalRecordsProvider),
+	}
+}
+
+// SetStateProvider sets the state provider for on-demand population.
+func (h *ResourceHandlers) SetStateProvider(provider SnapshotProvider) {
+	h.stateProvider = provider
+}
+
+// SetTenantStateProvider sets the tenant-aware provider.
+func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) {
+	h.tenantStateProvider = provider
+}
+
+// SetSupplementalRecordsProvider configures additional records for a source.
+func (h *ResourceHandlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
+	h.supplementalMu.Lock()
+	if h.supplementalRecords == nil {
+		h.supplementalRecords = make(map[unified.DataSource]SupplementalRecordsProvider)
+	}
+	if provider == nil {
+		delete(h.supplementalRecords, source)
+	} else {
+		h.supplementalRecords[source] = provider
+	}
+	h.supplementalMu.Unlock()
+
+	// Provider changes alter ingestion inputs, so clear all cached registries.
+	h.cacheMu.Lock()
+	h.registryCache = make(map[string]registryCacheEntry)
+	h.cacheMu.Unlock()
+}
+
+// HandleListResources handles GET /api/resources.
+func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	allResources := registry.List()
+	resources := allResources
+	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
+		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
+		return
+	}
+
+	filters := parseListFilters(r)
+	resources = applyFilters(resources, filters)
+	applySorting(resources, filters.sortField, filters.sortOrder)
+
+	paged, meta := paginate(resources, filters.page, filters.limit)
+	attachDiscoveryTargets(paged)
+	attachMetricsTargets(paged, registry)
+	attachCanonicalIdentities(paged)
+	attachResourcePolicies(paged)
+	pruneResourcesForListResponse(paged)
+
+	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
+	// no conversion needed), but recompute ByType from the full registry list so keys
+	// match the canonical REST resource contract.
+	stats := registry.Stats()
+	stats.ByType = computeResourceContractByType(allResources)
+
+	applyResourceContractTypes(paged)
+
+	response := EmptyResourcesResponse()
+	response.Data = paged
+	response.Meta = meta
+	response.Aggregations = stats
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response.NormalizeCollections())
+}
+
+// HandleStorageSummary handles GET /api/resources/storage-summary.
+func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resources := registry.List()
+	filters := parseListFilters(r)
+	storageSubjects := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if !isStorageSummaryResource(resource) {
+			continue
+		}
+		storageSubjects = append(storageSubjects, resource)
+	}
+	storageSubjects = applyFilters(storageSubjects, filters)
+
+	response := buildStorageSummaryResponse(storageSubjects)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleStorageIncidents handles GET /api/resources/storage-incidents.
+func (h *ResourceHandlers) HandleStorageIncidents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resources := registry.List()
+	filters := parseListFilters(r)
+	incidentSubjects := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if !isStorageSummaryResource(resource) || resource.IncidentCount == 0 {
+			continue
+		}
+		incidentSubjects = append(incidentSubjects, resource)
+	}
+	incidentSubjects = applyFilters(incidentSubjects, filters)
+
+	response := buildStorageIncidentsResponse(incidentSubjects)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// pruneResourcesForListResponse removes heavy, platform-specific fields that would bloat
+// the list response. Detail drawers can fetch full payloads via GET /api/resources/{id}.
+func pruneResourcesForListResponse(resources []unified.Resource) {
+	for i := range resources {
+		pruneResourceForListResponse(&resources[i])
+	}
+}
+
+func pruneResourceForListResponse(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+
+	// PMG domain stats can be very large; keep summary-only in list.
+	if resource.PMG != nil {
+		resource.PMG.RelayDomains = nil
+		resource.PMG.DomainStats = nil
+		resource.PMG.DomainStatsAsOf = time.Time{}
+	}
+}
+
+// HandleGetResource handles GET /api/resources/{id}.
+func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	resource, ok := registry.Get(resourceID)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	resourceCopy := *resource
+	attachDiscoveryTarget(&resourceCopy)
+	attachMetricsTarget(&resourceCopy, registry)
+	attachCanonicalIdentity(&resourceCopy)
+	attachResourcePolicy(&resourceCopy)
+	resourceCopy.Type = resourceContractType(resourceCopy)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resourceCopy)
+}
+
+// HandleResourceRoutes dispatches nested resource routes.
+func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/children") {
+		h.HandleGetChildren(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/metrics") {
+		h.HandleGetMetrics(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/link") {
+		h.HandleLink(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/unlink") {
+		h.HandleUnlink(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/report-merge") {
+		h.HandleReportMerge(w, r)
+		return
+	}
+	h.HandleGetResource(w, r)
+}
+
+// HandleGetChildren handles GET /api/resources/{id}/children.
+func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	path = strings.TrimSuffix(path, "/children")
+	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	children := registry.GetChildren(path)
+	attachCanonicalIdentities(children)
+	attachResourcePolicies(children)
+	applyResourceContractTypes(children)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data":  children,
+		"count": len(children),
+	})
+}
+
+// HandleGetMetrics handles GET /api/resources/{id}/metrics.
+func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	path = strings.TrimSuffix(path, "/metrics")
+	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	resource, ok := registry.Get(path)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resource.Metrics)
+}
+
+// HandleStats handles GET /api/resources/stats.
+func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	allResources := registry.List()
+	stats := registry.Stats()
+	stats.ByType = computeResourceContractByType(allResources)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
+// HandleLink handles POST /api/resources/{id}/link.
+func (h *ResourceHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	path = strings.TrimSuffix(path, "/link")
+	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		TargetID string `json:"targetId"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if payload.TargetID == "" {
+		http.Error(w, "targetId required", http.StatusBadRequest)
+		return
+	}
+	payload.TargetID = unified.CanonicalResourceID(payload.TargetID)
+
+	link := unified.ResourceLink{
+		ResourceA: path,
+		ResourceB: payload.TargetID,
+		PrimaryID: path,
+		Reason:    payload.Reason,
+		CreatedBy: getUserID(r),
+		CreatedAt: time.Now().UTC(),
+	}
+
+	if err := store.AddLink(link); err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	h.invalidateCache(orgID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "ok",
+		"message": "Resources linked",
+	})
+}
+
+// HandleUnlink handles POST /api/resources/{id}/unlink.
+func (h *ResourceHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	path = strings.TrimSuffix(path, "/unlink")
+	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		TargetID string `json:"targetId"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if payload.TargetID == "" {
+		http.Error(w, "targetId required", http.StatusBadRequest)
+		return
+	}
+	payload.TargetID = unified.CanonicalResourceID(payload.TargetID)
+
+	exclusion := unified.ResourceExclusion{
+		ResourceA: path,
+		ResourceB: payload.TargetID,
+		Reason:    payload.Reason,
+		CreatedBy: getUserID(r),
+		CreatedAt: time.Now().UTC(),
+	}
+
+	if err := store.AddExclusion(exclusion); err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	h.invalidateCache(orgID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "ok",
+		"message": "Resources unlinked",
+	})
+}
+
+// HandleReportMerge handles POST /api/resources/{id}/report-merge.
+func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	path = strings.TrimSuffix(path, "/report-merge")
+	path = strings.TrimSuffix(path, "/")
+	path = unified.CanonicalResourceID(path)
+	if path == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Sources []string `json:"sources"`
+		Notes   string   `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resource, ok := registry.Get(path)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	if len(resource.Sources) < 2 {
+		http.Error(w, "Resource is not merged", http.StatusBadRequest)
+		return
+	}
+
+	sourceTargets := registry.SourceTargets(path)
+	if len(sourceTargets) == 0 {
+		http.Error(w, "No source targets found", http.StatusBadRequest)
+		return
+	}
+
+	filteredSources := make(map[string]struct{})
+	for _, source := range payload.Sources {
+		filteredSources[strings.ToLower(strings.TrimSpace(source))] = struct{}{}
+	}
+
+	reason := strings.TrimSpace(payload.Notes)
+	if reason == "" {
+		reason = "reported_incorrect_merge"
+	}
+
+	exclusionsAdded := 0
+	seen := make(map[string]struct{})
+	for _, target := range sourceTargets {
+		if len(filteredSources) > 0 {
+			if _, ok := filteredSources[strings.ToLower(string(target.Source))]; !ok {
+				continue
+			}
+		}
+		if target.CandidateID == "" || target.CandidateID == path {
+			continue
+		}
+		key := target.CandidateID
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		exclusion := unified.ResourceExclusion{
+			ResourceA: path,
+			ResourceB: target.CandidateID,
+			Reason:    reason,
+			CreatedBy: getUserID(r),
+			CreatedAt: time.Now().UTC(),
+		}
+		if err := store.AddExclusion(exclusion); err != nil {
+			log.Error().
+				Err(err).
+				Str("orgID", orgID).
+				Str("resourceID", path).
+				Str("candidateID", target.CandidateID).
+				Msg("Failed to add resource merge exclusion")
+			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+			return
+		}
+		exclusionsAdded += 1
+	}
+
+	if exclusionsAdded == 0 {
+		http.Error(w, "No exclusions created", http.StatusBadRequest)
+		return
+	}
+
+	log.Info().
+		Str("orgID", orgID).
+		Str("resourceID", path).
+		Int("exclusionsAdded", exclusionsAdded).
+		Str("userID", getUserID(r)).
+		Strs("sources", payload.Sources).
+		Msg("Reported resource merge issue")
+	h.invalidateCache(orgID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":     "ok",
+		"message":    "Merge reported",
+		"exclusions": exclusionsAdded,
+	})
+}
+
+// buildRegistry constructs a registry for the current tenant.
+func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {
+	store, err := h.getStore(orgID)
+	if err != nil {
+		return nil, err
+	}
+	key := cacheKey(orgID)
+
+	seed, err := h.registrySeed(orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	h.cacheMu.Lock()
+	entry, ok := h.registryCache[key]
+	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) {
+		h.cacheMu.Unlock()
+		return entry.registry, nil
+	}
+	h.cacheMu.Unlock()
+
+	h.supplementalMu.RLock()
+	supplementalProviders := make(map[unified.DataSource]SupplementalRecordsProvider, len(h.supplementalRecords))
+	for source, provider := range h.supplementalRecords {
+		supplementalProviders[source] = provider
+	}
+	h.supplementalMu.RUnlock()
+
+	registry := unified.NewRegistry(store)
+	if seed.unifiedSource {
+		registry.IngestResources(seed.resources)
+	} else {
+		ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
+		registry.IngestSnapshot(unified.SnapshotWithoutSources(seed.snapshot, ownedSources))
+
+		for source, provider := range supplementalProviders {
+			if provider == nil {
+				continue
+			}
+			var records []unified.IngestRecord
+			if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
+				records = tenantProvider.GetCurrentRecordsForOrg(orgID)
+			} else {
+				records = provider.GetCurrentRecords()
+			}
+			if len(records) == 0 {
+				continue
+			}
+			registry.IngestRecords(source, records)
+		}
+	}
+
+	h.cacheMu.Lock()
+	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate}
+	h.cacheMu.Unlock()
+
+	return registry, nil
+}
+
+func (h *ResourceHandlers) registrySeed(orgID string) (registrySeed, error) {
+	seed := registrySeed{}
+
+	if orgID != "" && orgID != "default" {
+		if h.tenantStateProvider == nil {
+			return seed, errors.New("tenant state provider unavailable")
+		}
+		resources, lastUpdate := h.tenantStateProvider.UnifiedResourceSnapshotForTenant(orgID)
+		seed.resources = resources
+		seed.lastUpdate = lastUpdate
+		seed.unifiedSource = true
+		return seed, nil
+	}
+
+	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
+		resources, lastUpdate := provider.UnifiedResourceSnapshot()
+		if len(resources) > 0 || !lastUpdate.IsZero() {
+			seed.resources = resources
+			seed.lastUpdate = lastUpdate
+			seed.unifiedSource = true
+			return seed, nil
+		}
+	}
+
+	if h.stateProvider != nil {
+		seed.snapshot = h.stateProvider.ReadSnapshot()
+		seed.lastUpdate = seed.snapshot.LastUpdate
+	}
+	return seed, nil
+}
+
+func supplementalSnapshotOwnedSources(providers map[unified.DataSource]SupplementalRecordsProvider, orgID string) []unified.DataSource {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	owned := make(map[string]unified.DataSource)
+	for _, provider := range providers {
+		if provider == nil {
+			continue
+		}
+
+		var sources []unified.DataSource
+		if tenantOwner, ok := any(provider).(TenantSupplementalSnapshotSourceOwner); ok {
+			sources = tenantOwner.SnapshotOwnedSourcesForOrg(orgID)
+		} else if owner, ok := any(provider).(SupplementalSnapshotSourceOwner); ok {
+			sources = owner.SnapshotOwnedSources()
+		}
+
+		for _, source := range sources {
+			key := strings.ToLower(strings.TrimSpace(string(source)))
+			if key == "" {
+				continue
+			}
+			owned[key] = unified.DataSource(key)
+		}
+	}
+
+	if len(owned) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(owned))
+	for key := range owned {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]unified.DataSource, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, owned[key])
+	}
+	return out
+}
+
+func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error) {
+	h.storeMu.Lock()
+	defer h.storeMu.Unlock()
+	key := cacheKey(orgID)
+	if store, ok := h.stores[key]; ok {
+		return store, nil
+	}
+	dataDir := ""
+	if h.cfg != nil {
+		dataDir = h.cfg.DataPath
+	}
+	store, err := unified.NewSQLiteResourceStore(dataDir, key)
+	if err != nil {
+		return nil, err
+	}
+	h.stores[key] = store
+	return store, nil
+}
+
+func (h *ResourceHandlers) invalidateCache(orgID string) {
+	key := cacheKey(orgID)
+	h.cacheMu.Lock()
+	delete(h.registryCache, key)
+	h.cacheMu.Unlock()
+}
+
+func cacheKey(orgID string) string {
+	key := strings.TrimSpace(orgID)
+	if key == "" {
+		key = "default"
+	}
+	return key
+}
+
+// ResourcesResponse represents the list response for the unified resources API.
+type ResourcesResponse struct {
+	Data         []unified.Resource    `json:"data"`
+	Meta         ResourcesMeta         `json:"meta"`
+	Aggregations unified.ResourceStats `json:"aggregations"`
+}
+
+func EmptyResourcesResponse() ResourcesResponse {
+	return ResourcesResponse{}.NormalizeCollections()
+}
+
+func (r ResourcesResponse) NormalizeCollections() ResourcesResponse {
+	if r.Data == nil {
+		r.Data = []unified.Resource{}
+	}
+	if r.Aggregations.ByType == nil {
+		r.Aggregations.ByType = map[unified.ResourceType]int{}
+	}
+	if r.Aggregations.ByStatus == nil {
+		r.Aggregations.ByStatus = map[unified.ResourceStatus]int{}
+	}
+	if r.Aggregations.BySource == nil {
+		r.Aggregations.BySource = map[unified.DataSource]int{}
+	}
+	return r
+}
+
+// ResourcesMeta represents pagination metadata.
+type ResourcesMeta struct {
+	Page       int `json:"page"`
+	Limit      int `json:"limit"`
+	Total      int `json:"total"`
+	TotalPages int `json:"totalPages"`
+}
+
+type StorageSummaryResponse struct {
+	GeneratedAt            time.Time                `json:"generatedAt"`
+	TotalResources         int                      `json:"totalResources"`
+	RiskyResources         int                      `json:"riskyResources"`
+	CriticalResources      int                      `json:"criticalResources"`
+	WarningResources       int                      `json:"warningResources"`
+	ProtectionReducedCount int                      `json:"protectionReducedCount"`
+	RebuildInProgressCount int                      `json:"rebuildInProgressCount"`
+	DependentResourceCount int                      `json:"dependentResourceCount"`
+	ProtectedWorkloadCount int                      `json:"protectedWorkloadCount"`
+	AffectedDatastoreCount int                      `json:"affectedDatastoreCount"`
+	ByPlatform             map[string]int           `json:"byPlatform"`
+	ByResourceType         map[string]int           `json:"byResourceType"`
+	ByIncidentCategory     map[string]int           `json:"byIncidentCategory"`
+	TopIncidents           []StorageSummaryIncident `json:"topIncidents"`
+}
+
+func EmptyStorageSummaryResponse() StorageSummaryResponse {
+	return StorageSummaryResponse{}.NormalizeCollections()
+}
+
+func (r StorageSummaryResponse) NormalizeCollections() StorageSummaryResponse {
+	if r.ByPlatform == nil {
+		r.ByPlatform = map[string]int{}
+	}
+	if r.ByResourceType == nil {
+		r.ByResourceType = map[string]int{}
+	}
+	if r.ByIncidentCategory == nil {
+		r.ByIncidentCategory = map[string]int{}
+	}
+	if r.TopIncidents == nil {
+		r.TopIncidents = []StorageSummaryIncident{}
+	}
+	return r
+}
+
+type StorageSummaryIncident struct {
+	ResourceID            string `json:"resourceId"`
+	ResourceType          string `json:"resourceType"`
+	Name                  string `json:"name"`
+	ParentName            string `json:"parentName,omitempty"`
+	Platform              string `json:"platform,omitempty"`
+	Topology              string `json:"topology,omitempty"`
+	Status                string `json:"status"`
+	IncidentCount         int    `json:"incidentCount"`
+	IncidentCategory      string `json:"incidentCategory,omitempty"`
+	IncidentLabel         string `json:"incidentLabel,omitempty"`
+	IncidentSeverity      string `json:"incidentSeverity,omitempty"`
+	IncidentPriority      int    `json:"incidentPriority,omitempty"`
+	IncidentSummary       string `json:"incidentSummary,omitempty"`
+	IncidentImpactSummary string `json:"incidentImpactSummary,omitempty"`
+	IncidentUrgency       string `json:"incidentUrgency,omitempty"`
+	IncidentAction        string `json:"incidentAction,omitempty"`
+	ProtectionReduced     bool   `json:"protectionReduced,omitempty"`
+	RebuildInProgress     bool   `json:"rebuildInProgress,omitempty"`
+	ConsumerCount         int    `json:"consumerCount,omitempty"`
+	ProtectedWorkloads    int    `json:"protectedWorkloads,omitempty"`
+	AffectedDatastores    int    `json:"affectedDatastores,omitempty"`
+}
+
+type StorageIncidentsResponse struct {
+	GeneratedAt       time.Time                `json:"generatedAt"`
+	TotalResources    int                      `json:"totalResources"`
+	CriticalResources int                      `json:"criticalResources"`
+	WarningResources  int                      `json:"warningResources"`
+	ByCategory        map[string]int           `json:"byCategory"`
+	ByUrgency         map[string]int           `json:"byUrgency"`
+	Sections          []StorageIncidentSection `json:"sections"`
+}
+
+func EmptyStorageIncidentsResponse() StorageIncidentsResponse {
+	return StorageIncidentsResponse{}.NormalizeCollections()
+}
+
+func (r StorageIncidentsResponse) NormalizeCollections() StorageIncidentsResponse {
+	if r.ByCategory == nil {
+		r.ByCategory = map[string]int{}
+	}
+	if r.ByUrgency == nil {
+		r.ByUrgency = map[string]int{}
+	}
+	if r.Sections == nil {
+		r.Sections = []StorageIncidentSection{}
+	}
+	for i := range r.Sections {
+		if r.Sections[i].Resources == nil {
+			r.Sections[i].Resources = []StorageSummaryIncident{}
+		}
+	}
+	return r
+}
+
+type StorageIncidentSection struct {
+	Category          string                   `json:"category"`
+	Label             string                   `json:"label"`
+	ResourceCount     int                      `json:"resourceCount"`
+	CriticalResources int                      `json:"criticalResources"`
+	WarningResources  int                      `json:"warningResources"`
+	PrimaryUrgency    string                   `json:"primaryUrgency,omitempty"`
+	Resources         []StorageSummaryIncident `json:"resources"`
+}
+
+type registryCacheEntry struct {
+	registry   *unified.ResourceRegistry
+	lastUpdate time.Time
+}
+
+func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryResponse {
+	response := EmptyStorageSummaryResponse()
+	response.GeneratedAt = time.Now().UTC()
+
+	incidentCandidates := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		response.TotalResources++
+
+		platform := storageSummaryPlatform(resource)
+		if platform == "" {
+			platform = "unknown"
+		}
+		response.ByPlatform[platform]++
+		response.ByResourceType[string(resourceContractType(resource))]++
+
+		if storageSummaryProtectionReduced(resource) {
+			response.ProtectionReducedCount++
+		}
+		if storageSummaryRebuildInProgress(resource) {
+			response.RebuildInProgressCount++
+		}
+		response.DependentResourceCount += storageSummaryConsumerCount(resource)
+		response.ProtectedWorkloadCount += storageSummaryProtectedWorkloadCount(resource)
+		response.AffectedDatastoreCount += storageSummaryAffectedDatastoreCount(resource)
+
+		if resource.IncidentCount > 0 {
+			response.RiskyResources++
+			switch resource.IncidentSeverity {
+			case storagehealth.RiskCritical:
+				response.CriticalResources++
+			default:
+				response.WarningResources++
+			}
+			category := strings.TrimSpace(resource.IncidentCategory)
+			if category != "" {
+				response.ByIncidentCategory[category]++
+			}
+			incidentCandidates = append(incidentCandidates, resource)
+		}
+	}
+
+	sort.Slice(incidentCandidates, func(i, j int) bool {
+		return storageIncidentLess(incidentCandidates[i], incidentCandidates[j])
+	})
+
+	for i, resource := range incidentCandidates {
+		if i == 10 {
+			break
+		}
+		response.TopIncidents = append(response.TopIncidents, buildStorageSummaryIncident(resource))
+	}
+
+	return response.NormalizeCollections()
+}
+
+func buildStorageIncidentsResponse(resources []unified.Resource) StorageIncidentsResponse {
+	response := EmptyStorageIncidentsResponse()
+	response.GeneratedAt = time.Now().UTC()
+	if len(resources) == 0 {
+		return response.NormalizeCollections()
+	}
+
+	incidentResources := cloneStorageIncidentSubjects(resources)
+	sort.Slice(incidentResources, func(i, j int) bool {
+		return storageIncidentLess(incidentResources[i], incidentResources[j])
+	})
+
+	sectionIndex := make(map[string]int)
+	for _, resource := range incidentResources {
+		response.TotalResources++
+		switch resource.IncidentSeverity {
+		case storagehealth.RiskCritical:
+			response.CriticalResources++
+		default:
+			response.WarningResources++
+		}
+
+		category := strings.TrimSpace(resource.IncidentCategory)
+		if category == "" {
+			category = unified.IncidentCategoryHealth
+		}
+		response.ByCategory[category]++
+
+		urgency := strings.TrimSpace(resource.IncidentUrgency)
+		if urgency == "" {
+			urgency = unified.IncidentUrgencyPlan
+		}
+		response.ByUrgency[urgency]++
+
+		idx, ok := sectionIndex[category]
+		if !ok {
+			response.Sections = append(response.Sections, StorageIncidentSection{
+				Category:  category,
+				Label:     storageIncidentSectionLabel(category),
+				Resources: make([]StorageSummaryIncident, 0, 8),
+			})
+			idx = len(response.Sections) - 1
+			sectionIndex[category] = idx
+		}
+
+		section := &response.Sections[idx]
+		section.ResourceCount++
+		switch resource.IncidentSeverity {
+		case storagehealth.RiskCritical:
+			section.CriticalResources++
+		default:
+			section.WarningResources++
+		}
+		if storageIncidentUrgencyRank(urgency) > storageIncidentUrgencyRank(section.PrimaryUrgency) {
+			section.PrimaryUrgency = urgency
+		}
+		section.Resources = append(section.Resources, buildStorageSummaryIncident(resource))
+	}
+
+	sort.SliceStable(response.Sections, func(i, j int) bool {
+		left := response.Sections[i]
+		right := response.Sections[j]
+		if storageIncidentCategoryRank(left.Category) != storageIncidentCategoryRank(right.Category) {
+			return storageIncidentCategoryRank(left.Category) < storageIncidentCategoryRank(right.Category)
+		}
+		if left.CriticalResources != right.CriticalResources {
+			return left.CriticalResources > right.CriticalResources
+		}
+		if left.ResourceCount != right.ResourceCount {
+			return left.ResourceCount > right.ResourceCount
+		}
+		return left.Label < right.Label
+	})
+
+	return response.NormalizeCollections()
+}
+
+func buildStorageSummaryIncident(resource unified.Resource) StorageSummaryIncident {
+	return StorageSummaryIncident{
+		ResourceID:            resource.ID,
+		ResourceType:          string(resourceContractType(resource)),
+		Name:                  resource.Name,
+		ParentName:            resource.ParentName,
+		Platform:              storageSummaryPlatform(resource),
+		Topology:              storageSummaryTopology(resource),
+		Status:                string(resource.Status),
+		IncidentCount:         resource.IncidentCount,
+		IncidentCategory:      resource.IncidentCategory,
+		IncidentLabel:         resource.IncidentLabel,
+		IncidentSeverity:      string(resource.IncidentSeverity),
+		IncidentPriority:      resource.IncidentPriority,
+		IncidentSummary:       resource.IncidentSummary,
+		IncidentImpactSummary: resource.IncidentImpactSummary,
+		IncidentUrgency:       resource.IncidentUrgency,
+		IncidentAction:        resource.IncidentAction,
+		ProtectionReduced:     storageSummaryProtectionReduced(resource),
+		RebuildInProgress:     storageSummaryRebuildInProgress(resource),
+		ConsumerCount:         storageSummaryConsumerCount(resource),
+		ProtectedWorkloads:    storageSummaryProtectedWorkloadCount(resource),
+		AffectedDatastores:    storageSummaryAffectedDatastoreCount(resource),
+	}
+}
+
+func cloneStorageIncidentSubjects(resources []unified.Resource) []unified.Resource {
+	cloned := make([]unified.Resource, len(resources))
+	copy(cloned, resources)
+	return cloned
+}
+
+func storageIncidentLess(left, right unified.Resource) bool {
+	if left.IncidentPriority != right.IncidentPriority {
+		return left.IncidentPriority > right.IncidentPriority
+	}
+	if left.IncidentSeverity != right.IncidentSeverity {
+		return left.IncidentSeverity > right.IncidentSeverity
+	}
+	if left.Name != right.Name {
+		return left.Name < right.Name
+	}
+	return left.ID < right.ID
+}
+
+func storageIncidentSectionLabel(category string) string {
+	switch strings.TrimSpace(category) {
+	case unified.IncidentCategoryRecoverability:
+		return "Backup & Recoverability"
+	case unified.IncidentCategoryProtection:
+		return "Protection & Redundancy"
+	case unified.IncidentCategoryRebuild:
+		return "Rebuild & Recovery"
+	case unified.IncidentCategoryCapacity:
+		return "Capacity Pressure"
+	case unified.IncidentCategoryDiskHealth:
+		return "Disk Health"
+	case unified.IncidentCategoryAvailability:
+		return "Availability"
+	default:
+		return "Storage Health"
+	}
+}
+
+func storageIncidentCategoryRank(category string) int {
+	switch strings.TrimSpace(category) {
+	case unified.IncidentCategoryRecoverability:
+		return 1
+	case unified.IncidentCategoryProtection:
+		return 2
+	case unified.IncidentCategoryRebuild:
+		return 3
+	case unified.IncidentCategoryCapacity:
+		return 4
+	case unified.IncidentCategoryDiskHealth:
+		return 5
+	case unified.IncidentCategoryAvailability:
+		return 6
+	default:
+		return 7
+	}
+}
+
+func storageIncidentUrgencyRank(urgency string) int {
+	switch strings.TrimSpace(urgency) {
+	case unified.IncidentUrgencyNow:
+		return 4
+	case unified.IncidentUrgencyToday:
+		return 3
+	case unified.IncidentUrgencyPlan:
+		return 2
+	case unified.IncidentUrgencyMonitor:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func isStorageSummaryResource(resource unified.Resource) bool {
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypeStorage, unified.ResourceTypePhysicalDisk, unified.ResourceTypePBS:
+		return true
+	case unified.ResourceTypeAgent:
+		if resource.TrueNAS != nil {
+			return true
+		}
+		if resource.Agent != nil && (resource.Agent.Unraid != nil || resource.Agent.StorageRisk != nil) {
+			return true
+		}
+	}
+	return false
+}
+
+func storageSummaryPlatform(resource unified.Resource) string {
+	if resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "" {
+		return strings.TrimSpace(resource.Storage.Platform)
+	}
+	if resource.TrueNAS != nil {
+		return "truenas"
+	}
+	if resource.PBS != nil {
+		return "pbs"
+	}
+	if resource.Agent != nil && resource.Agent.Unraid != nil {
+		return "unraid"
+	}
+	for _, source := range resource.Sources {
+		if trimmed := strings.TrimSpace(string(source)); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func storageSummaryTopology(resource unified.Resource) string {
+	if resource.Storage != nil && strings.TrimSpace(resource.Storage.Topology) != "" {
+		return strings.TrimSpace(resource.Storage.Topology)
+	}
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypePhysicalDisk:
+		return "disk"
+	case unified.ResourceTypePBS:
+		return "backup-server"
+	case unified.ResourceTypeAgent:
+		if resource.Agent != nil && resource.Agent.Unraid != nil {
+			return "array-host"
+		}
+		if resource.TrueNAS != nil {
+			return "nas"
+		}
+	}
+	return string(resourceContractType(resource))
+}
+
+func storageSummaryProtectionReduced(resource unified.Resource) bool {
+	if resource.Storage != nil && resource.Storage.ProtectionReduced {
+		return true
+	}
+	if resource.Agent != nil && resource.Agent.ProtectionReduced {
+		return true
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.ProtectionReduced {
+		return true
+	}
+	return false
+}
+
+func storageSummaryRebuildInProgress(resource unified.Resource) bool {
+	if resource.Storage != nil && resource.Storage.RebuildInProgress {
+		return true
+	}
+	if resource.Agent != nil && resource.Agent.RebuildInProgress {
+		return true
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.RebuildInProgress {
+		return true
+	}
+	return false
+}
+
+func storageSummaryConsumerCount(resource unified.Resource) int {
+	if resource.Storage != nil {
+		return resource.Storage.ConsumerCount
+	}
+	return 0
+}
+
+func storageSummaryProtectedWorkloadCount(resource unified.Resource) int {
+	if resource.PBS != nil {
+		return resource.PBS.ProtectedWorkloadCount
+	}
+	return 0
+}
+
+func storageSummaryAffectedDatastoreCount(resource unified.Resource) int {
+	if resource.PBS != nil {
+		return resource.PBS.AffectedDatastoreCount
+	}
+	return 0
+}
+
+// Filtering helpers.
+type listFilters struct {
+	types     map[unified.ResourceType]struct{}
+	sources   map[unified.DataSource]struct{}
+	statuses  map[unified.ResourceStatus]struct{}
+	parent    string
+	cluster   string
+	namespace string
+	query     string
+	tags      map[string]struct{}
+	page      int
+	limit     int
+	sortField string
+	sortOrder string
+}
+
+func parseListFilters(r *http.Request) listFilters {
+	filters := listFilters{
+		types:     parseResourceTypes(r.URL.Query().Get("type")),
+		sources:   parseSources(r.URL.Query().Get("source")),
+		statuses:  parseStatuses(r.URL.Query().Get("status")),
+		parent:    strings.TrimSpace(r.URL.Query().Get("parent")),
+		cluster:   strings.TrimSpace(r.URL.Query().Get("cluster")),
+		namespace: strings.TrimSpace(r.URL.Query().Get("namespace")),
+		query:     strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q"))),
+		tags:      parseTags(r.URL.Query().Get("tags")),
+		page:      parseIntDefault(r.URL.Query().Get("page"), 1),
+		limit:     parseIntDefault(r.URL.Query().Get("limit"), 50),
+		sortField: strings.TrimSpace(r.URL.Query().Get("sort")),
+		sortOrder: strings.TrimSpace(strings.ToLower(r.URL.Query().Get("order"))),
+	}
+	if filters.page < 1 {
+		filters.page = 1
+	}
+	if filters.limit < 1 {
+		filters.limit = 50
+	}
+	if filters.limit > 100 {
+		filters.limit = 100
+	}
+	if filters.sortField == "" {
+		filters.sortField = "name"
+	}
+	if filters.sortOrder != "desc" {
+		filters.sortOrder = "asc"
+	}
+	return filters
+}
+
+func applyFilters(resources []unified.Resource, filters listFilters) []unified.Resource {
+	out := make([]unified.Resource, 0, len(resources))
+	for _, r := range resources {
+		if len(filters.types) > 0 {
+			if _, ok := filters.types[resourceContractType(r)]; !ok {
+				continue
+			}
+		}
+		if len(filters.sources) > 0 {
+			matched := false
+			for _, source := range r.Sources {
+				if _, ok := filters.sources[source]; ok {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		if len(filters.statuses) > 0 {
+			if _, ok := filters.statuses[r.Status]; !ok {
+				continue
+			}
+		}
+		if filters.parent != "" {
+			if r.ParentID == nil || *r.ParentID != filters.parent {
+				continue
+			}
+		}
+		if filters.cluster != "" {
+			cluster := strings.ToLower(filters.cluster)
+			identityCluster := strings.ToLower(r.Identity.ClusterName)
+			proxmoxCluster := ""
+			if r.Proxmox != nil {
+				proxmoxCluster = strings.ToLower(r.Proxmox.ClusterName)
+			}
+			dockerSwarmClusterName := ""
+			dockerSwarmClusterID := ""
+			if r.Docker != nil && r.Docker.Swarm != nil {
+				dockerSwarmClusterName = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterName))
+				dockerSwarmClusterID = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterID))
+			}
+
+			if identityCluster != cluster && proxmoxCluster != cluster && dockerSwarmClusterName != cluster && dockerSwarmClusterID != cluster {
+				continue
+			}
+		}
+		if filters.namespace != "" {
+			if r.Kubernetes == nil {
+				continue
+			}
+			want := strings.ToLower(filters.namespace)
+			got := strings.ToLower(strings.TrimSpace(r.Kubernetes.Namespace))
+			if got != want {
+				continue
+			}
+		}
+		if filters.query != "" {
+			name := strings.ToLower(r.Name)
+			if !strings.Contains(name, filters.query) {
+				continue
+			}
+		}
+		if len(filters.tags) > 0 {
+			matched := false
+			for _, tag := range r.Tags {
+				if _, ok := filters.tags[strings.ToLower(tag)]; ok {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func applySorting(resources []unified.Resource, field, order string) {
+	sort.Slice(resources, func(i, j int) bool {
+		a := resources[i]
+		b := resources[j]
+		less := false
+		switch field {
+		case "status":
+			less = a.Status < b.Status
+		case "type":
+			less = a.Type < b.Type
+		case "lastSeen":
+			less = a.LastSeen.Before(b.LastSeen)
+		default:
+			less = strings.ToLower(a.Name) < strings.ToLower(b.Name)
+		}
+		if order == "desc" {
+			return !less
+		}
+		return less
+	})
+}
+
+func paginate(resources []unified.Resource, page, limit int) ([]unified.Resource, ResourcesMeta) {
+	total := len(resources)
+	start := (page - 1) * limit
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+
+	paged := resources[start:end]
+	totalPages := total / limit
+	if total%limit != 0 {
+		totalPages++
+	}
+	meta := ResourcesMeta{
+		Page:       page,
+		Limit:      limit,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+	return paged, meta
+}
+
+func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
+	result := make(map[unified.ResourceType]struct{})
+	for _, part := range splitCSV(raw) {
+		for _, resourceType := range resourceTypeFilterAdapter(part) {
+			result[resourceType] = struct{}{}
+		}
+	}
+	return result
+}
+
+func unsupportedResourceTypeFilterTokens(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var unsupported []string
+	for _, part := range splitCSV(raw) {
+		if !isSupportedResourceTypeFilterToken(part) {
+			unsupported = append(unsupported, part)
+		}
+	}
+	return unsupported
+}
+
+func isSupportedResourceTypeFilterToken(token string) bool {
+	return len(resourceTypeFilterAdapter(token)) > 0
+}
+
+func resourceTypeFilterAdapter(token string) []unified.ResourceType {
+	switch token {
+	case "agent", "agents", "node", "nodes":
+		return []unified.ResourceType{unified.ResourceTypeAgent}
+	case "docker-host":
+		return []unified.ResourceType{"docker-host"}
+	case "vm", "vms":
+		return []unified.ResourceType{unified.ResourceTypeVM}
+	case "system-container", "system-containers", "oci-container":
+		return []unified.ResourceType{unified.ResourceTypeSystemContainer}
+	case "app-container", "app-containers":
+		return []unified.ResourceType{unified.ResourceTypeAppContainer}
+	case "docker-service", "service", "services":
+		return []unified.ResourceType{unified.ResourceTypeDockerService}
+	case "pod", "pods":
+		return []unified.ResourceType{unified.ResourceTypePod}
+	case "k8s-cluster", "k8s-clusters":
+		return []unified.ResourceType{unified.ResourceTypeK8sCluster}
+	case "k8s-node", "k8s-nodes":
+		return []unified.ResourceType{unified.ResourceTypeK8sNode}
+	case "k8s-deployment", "k8s-deployments":
+		return []unified.ResourceType{unified.ResourceTypeK8sDeployment}
+	case "storage":
+		return []unified.ResourceType{unified.ResourceTypeStorage}
+	case "pbs":
+		return []unified.ResourceType{unified.ResourceTypePBS}
+	case "pmg":
+		return []unified.ResourceType{unified.ResourceTypePMG}
+	case "ceph", "pool":
+		return []unified.ResourceType{unified.ResourceTypeCeph}
+	case "physical_disk", "physical-disk", "physicaldisk", "disk":
+		return []unified.ResourceType{unified.ResourceTypePhysicalDisk}
+	default:
+		return nil
+	}
+}
+
+func parseSources(raw string) map[unified.DataSource]struct{} {
+	result := make(map[unified.DataSource]struct{})
+	for _, part := range splitCSV(raw) {
+		switch part {
+		case "proxmox":
+			result[unified.SourceProxmox] = struct{}{}
+		case "agent":
+			result[unified.SourceAgent] = struct{}{}
+		case "docker":
+			result[unified.SourceDocker] = struct{}{}
+		case "pbs":
+			result[unified.SourcePBS] = struct{}{}
+		case "pmg":
+			result[unified.SourcePMG] = struct{}{}
+		case "kubernetes":
+			result[unified.SourceK8s] = struct{}{}
+		case "truenas":
+			result[unified.SourceTrueNAS] = struct{}{}
+		}
+	}
+	return result
+}
+
+func parseStatuses(raw string) map[unified.ResourceStatus]struct{} {
+	result := make(map[unified.ResourceStatus]struct{})
+	for _, part := range splitCSV(raw) {
+		switch part {
+		case "online":
+			result[unified.StatusOnline] = struct{}{}
+		case "offline":
+			result[unified.StatusOffline] = struct{}{}
+		case "warning":
+			result[unified.StatusWarning] = struct{}{}
+		case "unknown":
+			result[unified.StatusUnknown] = struct{}{}
+		}
+	}
+	return result
+}
+
+func parseTags(raw string) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, part := range splitCSV(raw) {
+		if part == "" {
+			continue
+		}
+		result[strings.ToLower(part)] = struct{}{}
+	}
+	return result
+}
+
+func attachDiscoveryTargets(resources []unified.Resource) {
+	for i := range resources {
+		attachDiscoveryTarget(&resources[i])
+	}
+}
+
+func attachDiscoveryTarget(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+	resource.DiscoveryTarget = buildDiscoveryTarget(*resource)
+}
+
+func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {
+	for i := range resources {
+		attachMetricsTarget(&resources[i], registry)
+	}
+}
+
+func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceRegistry) {
+	if resource == nil || registry == nil {
+		return
+	}
+	resource.MetricsTarget = registry.MetricsTarget(resource.ID)
+}
+
+func attachCanonicalIdentities(resources []unified.Resource) {
+	for i := range resources {
+		attachCanonicalIdentity(&resources[i])
+	}
+}
+
+func attachCanonicalIdentity(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+	unified.RefreshCanonicalIdentity(resource)
+}
+
+func attachResourcePolicies(resources []unified.Resource) {
+	for i := range resources {
+		attachResourcePolicy(&resources[i])
+	}
+}
+
+func attachResourcePolicy(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+	unified.RefreshPolicyMetadata(resource)
+}
+
+// resourceContractType maps internal unified resource shapes onto the canonical
+// REST resource-type contract without exposing legacy aliases.
+func resourceContractType(r unified.Resource) unified.ResourceType {
+	canonicalType := unified.CanonicalResourceType(r.Type)
+	switch canonicalType {
+	case unified.ResourceTypeAgent:
+		if r.Proxmox != nil || r.Agent != nil {
+			return "agent"
+		}
+		if r.Docker != nil {
+			return "docker-host"
+		}
+		return "agent"
+	case unified.ResourceTypeSystemContainer:
+		return "system-container"
+	case unified.ResourceTypeAppContainer:
+		return "app-container"
+	default:
+		// Other resource types already match their canonical API names.
+		return canonicalType
+	}
+}
+
+// applyResourceContractTypes rewrites Type fields on the response slice so the
+// REST API exposes the canonical resource-type contract.
+func applyResourceContractTypes(resources []unified.Resource) {
+	for i := range resources {
+		resources[i].Type = resourceContractType(resources[i])
+	}
+}
+
+// computeResourceContractByType builds the ByType aggregation using the
+// canonical REST resource-type contract. Does not mutate the input slice.
+func computeResourceContractByType(resources []unified.Resource) map[unified.ResourceType]int {
+	m := make(map[unified.ResourceType]int, 8)
+	for _, r := range resources {
+		m[resourceContractType(r)]++
+	}
+	return m
+}
+
+func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypeAgent:
+		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypeVM:
+		return proxmoxGuestDiscoveryTarget(resource, "vm")
+	case unified.ResourceTypeSystemContainer:
+		return proxmoxGuestDiscoveryTarget(resource, "system-container")
+	case unified.ResourceTypePBS:
+		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypePMG:
+		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypeCeph:
+		return cephDiscoveryTarget(resource)
+	case unified.ResourceTypeK8sCluster:
+		return kubernetesDiscoveryTarget(resource)
+	case unified.ResourceTypeK8sNode:
+		return kubernetesDiscoveryTarget(resource)
+	case unified.ResourceTypePod:
+		return kubernetesDiscoveryTarget(resource)
+	case unified.ResourceTypeK8sDeployment:
+		return kubernetesDiscoveryTarget(resource)
+	case unified.ResourceTypePhysicalDisk:
+		return physicalDiskDiscoveryTarget(resource)
+	default:
+		return nil
+	}
+}
+
+func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.Ceph == nil {
+		return nil
+	}
+	hostID := firstNonEmptyTrimmed(
+		resource.Ceph.FSID,
+		resource.Name,
+		resource.ID,
+	)
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "ceph",
+		AgentID:      hostID,
+		ResourceID:   resource.ID,
+		Hostname:     resource.Name,
+	}
+}
+
+func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	linkedAgentID := ""
+	agentBacked := hasSource(resource.Sources, unified.SourceAgent) || resource.Agent != nil
+	if agentBacked {
+		linkedAgentID = proxmoxLinkedAgentID(resource.Proxmox)
+	}
+	if linkedAgentID != "" {
+		agentBacked = true
+	}
+	hostID := firstNonEmptyTrimmed(
+		agentID(resource.Agent),
+		linkedAgentID,
+		proxmoxNodeName(resource.Proxmox),
+		agentHostname(resource.Agent),
+		dockerHostname(resource.Docker),
+		pbsHostname(resource.PBS),
+		pmgHostname(resource.PMG),
+		firstResourceHostname(resource),
+		resource.Name,
+		resource.ID,
+	)
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "agent",
+		AgentID:      hostID,
+		ResourceID:   hostID,
+		Hostname: firstNonEmptyTrimmed(
+			agentHostname(resource.Agent),
+			proxmoxNodeName(resource.Proxmox),
+			dockerHostname(resource.Docker),
+			pbsHostname(resource.PBS),
+			pmgHostname(resource.PMG),
+			firstResourceHostname(resource),
+			resource.Name,
+			hostID,
+		),
+	}
+}
+
+func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string) *unified.DiscoveryTarget {
+	if resource.Proxmox == nil || resource.Proxmox.NodeName == "" || resource.Proxmox.VMID == 0 {
+		return nil
+	}
+	resourceID := strconv.Itoa(resource.Proxmox.VMID)
+	hostID := strings.TrimSpace(resource.Proxmox.NodeName)
+	if hostID == "" || resourceID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: string(resourceType),
+		AgentID:      hostID,
+		ResourceID:   resourceID,
+		Hostname: firstNonEmptyTrimmed(
+			firstResourceHostname(resource),
+			resource.Name,
+			resourceID,
+		),
+	}
+}
+
+func kubernetesDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.Kubernetes == nil {
+		return nil
+	}
+	resourceType := unified.CanonicalResourceType(resource.Type)
+
+	hostID := firstNonEmptyTrimmed(
+		resource.Kubernetes.AgentID,
+		resource.Kubernetes.ClusterID,
+		resource.Kubernetes.ClusterName,
+	)
+	if hostID == "" {
+		return nil
+	}
+
+	resourceID := ""
+	switch resourceType {
+	case unified.ResourceTypeK8sCluster:
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.ClusterID,
+			resource.Kubernetes.ClusterName,
+			resource.Name,
+		)
+	case unified.ResourceTypeK8sNode:
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.NodeUID,
+			resource.Kubernetes.NodeName,
+			resource.Name,
+		)
+	case unified.ResourceTypeK8sDeployment:
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.DeploymentUID,
+			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
+			resource.Name,
+		)
+	case unified.ResourceTypePod:
+		resourceID = firstNonEmptyTrimmed(
+			resource.Kubernetes.PodUID,
+			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
+			resource.Name,
+		)
+	default:
+		return nil
+	}
+	if resourceID == "" {
+		return nil
+	}
+
+	return &unified.DiscoveryTarget{
+		ResourceType: string(resourceType),
+		AgentID:      hostID,
+		ResourceID:   resourceID,
+		Hostname: firstNonEmptyTrimmed(
+			resource.Kubernetes.ClusterName,
+			resource.Kubernetes.Context,
+			resource.Name,
+		),
+	}
+}
+
+func physicalDiskDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.PhysicalDisk == nil {
+		return nil
+	}
+	hostID := ""
+	if resource.Proxmox != nil {
+		hostID = resource.Proxmox.NodeName
+	}
+	if hostID == "" {
+		hostID = firstNonEmptyTrimmed(firstResourceHostname(resource), resource.Name)
+	}
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "disk",
+		AgentID:      hostID,
+		ResourceID:   resource.ID,
+		Hostname:     hostID,
+	}
+}
+
+func kubernetesNamespacedName(namespace, name string) string {
+	ns := strings.TrimSpace(namespace)
+	n := strings.TrimSpace(name)
+	if ns == "" {
+		return n
+	}
+	if n == "" {
+		return ns
+	}
+	return ns + "/" + n
+}
+
+func firstResourceHostname(resource unified.Resource) string {
+	for _, hostname := range resource.Identity.Hostnames {
+		trimmed := strings.TrimSpace(hostname)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func hasSource(sources []unified.DataSource, target unified.DataSource) bool {
+	for _, source := range sources {
+		if source == target {
+			return true
+		}
+	}
+	return false
+}
+
+func agentID(agent *unified.AgentData) string {
+	if agent == nil {
+		return ""
+	}
+	return agent.AgentID
+}
+
+func agentHostname(agent *unified.AgentData) string {
+	if agent == nil {
+		return ""
+	}
+	return agent.Hostname
+}
+
+func proxmoxLinkedAgentID(proxmox *unified.ProxmoxData) string {
+	if proxmox == nil {
+		return ""
+	}
+	return proxmox.LinkedAgentID
+}
+
+func proxmoxNodeName(proxmox *unified.ProxmoxData) string {
+	if proxmox == nil {
+		return ""
+	}
+	return proxmox.NodeName
+}
+
+func dockerHostname(docker *unified.DockerData) string {
+	if docker == nil {
+		return ""
+	}
+	return docker.Hostname
+}
+
+func pbsHostname(pbs *unified.PBSData) string {
+	if pbs == nil {
+		return ""
+	}
+	return pbs.Hostname
+}
+
+func pmgHostname(pmg *unified.PMGData) string {
+	if pmg == nil {
+		return ""
+	}
+	return pmg.Hostname
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(strings.ToLower(part))
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+func parseIntDefault(raw string, def int) int {
+	if raw == "" {
+		return def
+	}
+	val, err := strconv.Atoi(raw)
+	if err != nil {
+		return def
+	}
+	return val
+}
+
+// getUserID attempts to resolve the user ID for auditing.
+func getUserID(r *http.Request) string {
+	return auth.GetUser(r.Context())
+}

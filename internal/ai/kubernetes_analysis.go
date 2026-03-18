@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 const (
@@ -32,100 +32,111 @@ func (s *Service) AnalyzeKubernetesCluster(ctx context.Context, clusterID string
 	}
 
 	s.mu.RLock()
-	stateProvider := s.stateProvider
+	rs := s.readState
 	s.mu.RUnlock()
-	if stateProvider == nil {
+	if rs == nil {
 		return nil, ErrKubernetesStateUnavailable
 	}
 
-	state := stateProvider.GetState()
-	cluster, ok := findKubernetesCluster(state.KubernetesClusters, clusterID)
-	if !ok {
+	cluster := findK8sCluster(rs.K8sClusters(), clusterID)
+	if cluster == nil {
 		return nil, ErrKubernetesClusterNotFound
 	}
 
-	clusterName := kubernetesClusterDisplayName(cluster)
+	clusterName := cluster.Name()
 	prompt := fmt.Sprintf(
 		"Analyze the Kubernetes cluster %q. Summarize health, highlight critical issues, and suggest the next actions. Be concise and specific to the telemetry.",
 		clusterName,
 	)
 
+	clusterSourceID := cluster.ClusterID()
 	systemPrompt := s.buildSystemPrompt(ExecuteRequest{
 		Prompt:     prompt,
-		TargetType: "kubernetes_cluster",
-		TargetID:   cluster.ID,
+		TargetType: "k8s-cluster",
+		TargetID:   clusterSourceID,
 	})
 	systemPrompt += "\n\n## Kubernetes Cluster Telemetry\n"
-	systemPrompt += buildKubernetesClusterContext(cluster)
+	systemPrompt += buildK8sClusterContext(cluster, rs)
 	systemPrompt += "\n\nUse the telemetry above only. Do not request kubectl output."
 
 	return s.Execute(ctx, ExecuteRequest{
 		Prompt:       prompt,
-		TargetType:   "kubernetes_cluster",
-		TargetID:     cluster.ID,
+		TargetType:   "k8s-cluster",
+		TargetID:     clusterSourceID,
 		SystemPrompt: systemPrompt,
 		UseCase:      "chat",
 	})
 }
 
-func findKubernetesCluster(clusters []models.KubernetesCluster, clusterID string) (models.KubernetesCluster, bool) {
+func findK8sCluster(clusters []*unifiedresources.K8sClusterView, clusterID string) *unifiedresources.K8sClusterView {
 	for _, cluster := range clusters {
-		if cluster.ID == clusterID {
-			return cluster, true
+		if cluster == nil {
+			continue
+		}
+		if cluster.ClusterID() == clusterID {
+			return cluster
 		}
 	}
-	return models.KubernetesCluster{}, false
+	return nil
 }
 
-func kubernetesClusterDisplayName(cluster models.KubernetesCluster) string {
-	if cluster.CustomDisplayName != "" {
-		return cluster.CustomDisplayName
-	}
-	if cluster.DisplayName != "" {
-		return cluster.DisplayName
-	}
-	if cluster.Name != "" {
-		return cluster.Name
-	}
-	return cluster.ID
-}
-
-func buildKubernetesClusterContext(cluster models.KubernetesCluster) string {
+func buildK8sClusterContext(cluster *unifiedresources.K8sClusterView, rs unifiedresources.ReadState) string {
 	var b strings.Builder
 
-	clusterName := kubernetesClusterDisplayName(cluster)
+	clusterName := cluster.Name()
 	b.WriteString("### Cluster Summary\n")
 	b.WriteString(fmt.Sprintf("- Name: %s\n", clusterName))
-	b.WriteString(fmt.Sprintf("- ID: %s\n", cluster.ID))
-	if cluster.Status != "" {
-		b.WriteString(fmt.Sprintf("- Status: %s\n", cluster.Status))
+	b.WriteString(fmt.Sprintf("- ID: %s\n", cluster.ClusterID()))
+	if status := cluster.SourceStatus(); status != "" {
+		b.WriteString(fmt.Sprintf("- Status: %s\n", status))
 	}
-	if cluster.Version != "" {
-		b.WriteString(fmt.Sprintf("- Version: %s\n", cluster.Version))
+	if v := cluster.Version(); v != "" {
+		b.WriteString(fmt.Sprintf("- Version: %s\n", v))
 	}
-	if cluster.Server != "" {
-		b.WriteString(fmt.Sprintf("- API server: %s\n", cluster.Server))
+	if s := cluster.Server(); s != "" {
+		b.WriteString(fmt.Sprintf("- API server: %s\n", s))
 	}
-	if cluster.Context != "" {
-		b.WriteString(fmt.Sprintf("- Context: %s\n", cluster.Context))
+	if ctx := cluster.Context(); ctx != "" {
+		b.WriteString(fmt.Sprintf("- Context: %s\n", ctx))
 	}
-	if cluster.AgentVersion != "" {
-		b.WriteString(fmt.Sprintf("- Agent version: %s\n", cluster.AgentVersion))
+	if av := cluster.AgentVersion(); av != "" {
+		b.WriteString(fmt.Sprintf("- Agent version: %s\n", av))
 	}
-	if cluster.IntervalSeconds > 0 {
-		b.WriteString(fmt.Sprintf("- Telemetry interval: %ds\n", cluster.IntervalSeconds))
+	if is := cluster.IntervalSeconds(); is > 0 {
+		b.WriteString(fmt.Sprintf("- Telemetry interval: %ds\n", is))
 	}
-	if !cluster.LastSeen.IsZero() {
-		age := formatKubernetesAge(time.Since(cluster.LastSeen))
-		b.WriteString(fmt.Sprintf("- Last seen: %s (%s ago)\n", cluster.LastSeen.Format(time.RFC3339), age))
+	if ls := cluster.LastSeen(); !ls.IsZero() {
+		age := formatKubernetesAge(time.Since(ls))
+		b.WriteString(fmt.Sprintf("- Last seen: %s (%s ago)\n", ls.Format(time.RFC3339), age))
 	}
-	if cluster.PendingUninstall {
+	if cluster.PendingUninstall() {
 		b.WriteString("- Pending uninstall: true\n")
 	}
 
-	nodeSummary, nodeIssues := summarizeKubernetesNodes(cluster.Nodes)
-	podSummary, podIssues, restartLeaders := summarizeKubernetesPods(cluster.Pods)
-	deploymentSummary, deploymentIssues := summarizeKubernetesDeployments(cluster.Deployments)
+	// Filter nodes, pods, and deployments belonging to this cluster by ParentID.
+	clusterResID := cluster.ID()
+	var clusterNodes []*unifiedresources.K8sNodeView
+	for _, node := range rs.K8sNodes() {
+		if node != nil && node.ParentID() == clusterResID {
+			clusterNodes = append(clusterNodes, node)
+		}
+	}
+	var clusterPods []*unifiedresources.PodView
+	for _, pod := range rs.Pods() {
+		if pod != nil && pod.ParentID() == clusterResID {
+			clusterPods = append(clusterPods, pod)
+		}
+	}
+	var clusterDeploys []*unifiedresources.K8sDeploymentView
+	for _, deploy := range rs.K8sDeployments() {
+		if deploy != nil && deploy.ParentID() == clusterResID {
+			clusterDeploys = append(clusterDeploys, deploy)
+		}
+	}
+
+	nodeSummary, nodeIssues := summarizeK8sNodes(clusterNodes)
+	podSummary, podIssues, restartLeaders := summarizeK8sPods(clusterPods)
+	deploymentSummary, deploymentIssues := summarizeK8sDeployments(clusterDeploys)
 
 	b.WriteString("\n### Workload Summary\n")
 	b.WriteString(nodeSummary)
@@ -171,7 +182,7 @@ func buildKubernetesClusterContext(cluster models.KubernetesCluster) string {
 	return strings.TrimSpace(b.String())
 }
 
-func summarizeKubernetesNodes(nodes []models.KubernetesNode) (string, []string) {
+func summarizeK8sNodes(nodes []*unifiedresources.K8sNodeView) (string, []string) {
 	total := len(nodes)
 	ready := 0
 	notReady := 0
@@ -179,17 +190,17 @@ func summarizeKubernetesNodes(nodes []models.KubernetesNode) (string, []string) 
 	var issues []string
 
 	for _, node := range nodes {
-		if node.Ready {
+		if node.Ready() {
 			ready++
 		} else {
 			notReady++
 		}
-		if node.Unschedulable {
+		if node.Unschedulable() {
 			unschedulable++
 		}
 
-		if !node.Ready || node.Unschedulable {
-			issue := fmt.Sprintf("%s (ready=%t, unschedulable=%t)", node.Name, node.Ready, node.Unschedulable)
+		if !node.Ready() || node.Unschedulable() {
+			issue := fmt.Sprintf("%s (ready=%t, unschedulable=%t)", node.Name(), node.Ready(), node.Unschedulable())
 			issues = append(issues, issue)
 		}
 	}
@@ -202,14 +213,14 @@ func summarizeKubernetesNodes(nodes []models.KubernetesNode) (string, []string) 
 	return summary, issues
 }
 
-func summarizeKubernetesPods(pods []models.KubernetesPod) (string, []string, []string) {
+func summarizeK8sPods(pods []*unifiedresources.PodView) (string, []string, []string) {
 	total := len(pods)
 	phaseCounts := make(map[string]int)
 	var unhealthy []podIssue
 	var restarts []podIssue
 
 	for _, pod := range pods {
-		phase := strings.ToLower(strings.TrimSpace(pod.Phase))
+		phase := strings.ToLower(strings.TrimSpace(pod.PodPhase()))
 		if phase == "" {
 			phase = "unknown"
 		}
@@ -219,22 +230,21 @@ func summarizeKubernetesPods(pods []models.KubernetesPod) (string, []string, []s
 			continue
 		}
 
-		isHealthy := isKubernetesPodHealthy(pod)
-		if !isHealthy {
+		if !isK8sPodHealthy(pod) {
 			unhealthy = append(unhealthy, podIssue{
-				name:      pod.Name,
-				namespace: pod.Namespace,
-				reason:    kubernetesPodReason(pod),
-				restarts:  pod.Restarts,
+				name:      pod.Name(),
+				namespace: pod.Namespace(),
+				reason:    k8sPodReason(pod),
+				restarts:  pod.Restarts(),
 			})
 		}
 
-		if pod.Restarts > 0 {
+		if pod.Restarts() > 0 {
 			restarts = append(restarts, podIssue{
-				name:      pod.Name,
-				namespace: pod.Namespace,
-				reason:    kubernetesPodReason(pod),
-				restarts:  pod.Restarts,
+				name:      pod.Name(),
+				namespace: pod.Namespace(),
+				reason:    k8sPodReason(pod),
+				restarts:  pod.Restarts(),
 			})
 		}
 	}
@@ -253,24 +263,24 @@ func summarizeKubernetesPods(pods []models.KubernetesPod) (string, []string, []s
 	return summary, issueLines, restartLines
 }
 
-func summarizeKubernetesDeployments(deployments []models.KubernetesDeployment) (string, []string) {
+func summarizeK8sDeployments(deployments []*unifiedresources.K8sDeploymentView) (string, []string) {
 	total := len(deployments)
 	healthy := 0
 	var issues []string
 
 	for _, deployment := range deployments {
-		if isKubernetesDeploymentHealthy(deployment) {
+		if isK8sDeploymentHealthy(deployment) {
 			healthy++
 			continue
 		}
 		issues = append(issues, fmt.Sprintf(
 			"%s/%s desired=%d ready=%d updated=%d available=%d",
-			deployment.Namespace,
-			deployment.Name,
-			deployment.DesiredReplicas,
-			deployment.ReadyReplicas,
-			deployment.UpdatedReplicas,
-			deployment.AvailableReplicas,
+			deployment.Namespace(),
+			deployment.Name(),
+			deployment.DesiredReplicas(),
+			deployment.ReadyReplicas(),
+			deployment.UpdatedReplicas(),
+			deployment.AvailableReplicas(),
 		))
 	}
 
@@ -336,8 +346,8 @@ func formatPodIssueLine(issue podIssue) string {
 	return fmt.Sprintf("%s %s", base, issue.reason)
 }
 
-func isKubernetesPodHealthy(pod models.KubernetesPod) bool {
-	phase := strings.ToLower(strings.TrimSpace(pod.Phase))
+func isK8sPodHealthy(pod *unifiedresources.PodView) bool {
+	phase := strings.ToLower(strings.TrimSpace(pod.PodPhase()))
 	if phase == "" {
 		return false
 	}
@@ -345,7 +355,7 @@ func isKubernetesPodHealthy(pod models.KubernetesPod) bool {
 		return false
 	}
 
-	containers := pod.Containers
+	containers := pod.PodContainers()
 	if len(containers) == 0 {
 		return true
 	}
@@ -362,38 +372,38 @@ func isKubernetesPodHealthy(pod models.KubernetesPod) bool {
 	return true
 }
 
-func isKubernetesDeploymentHealthy(deployment models.KubernetesDeployment) bool {
-	desired := deployment.DesiredReplicas
+func isK8sDeploymentHealthy(deployment *unifiedresources.K8sDeploymentView) bool {
+	desired := deployment.DesiredReplicas()
 	if desired <= 0 {
 		return true
 	}
-	if deployment.AvailableReplicas < desired {
+	if deployment.AvailableReplicas() < desired {
 		return false
 	}
-	if deployment.ReadyReplicas < desired {
+	if deployment.ReadyReplicas() < desired {
 		return false
 	}
-	if deployment.UpdatedReplicas < desired {
+	if deployment.UpdatedReplicas() < desired {
 		return false
 	}
 	return true
 }
 
-func kubernetesPodReason(pod models.KubernetesPod) string {
+func k8sPodReason(pod *unifiedresources.PodView) string {
 	var parts []string
-	phase := strings.TrimSpace(pod.Phase)
+	phase := strings.TrimSpace(pod.PodPhase())
 	if phase != "" {
 		parts = append(parts, fmt.Sprintf("phase=%s", phase))
 	}
-	if pod.Reason != "" {
-		parts = append(parts, fmt.Sprintf("reason=%s", pod.Reason))
+	if reason := pod.PodReason(); reason != "" {
+		parts = append(parts, fmt.Sprintf("reason=%s", reason))
 	}
-	if message := strings.TrimSpace(pod.Message); message != "" {
+	if message := strings.TrimSpace(pod.PodMessage()); message != "" {
 		parts = append(parts, fmt.Sprintf("message=%s", truncateKubernetesMessage(message)))
 	}
 
 	containerIssues := []string{}
-	for _, container := range pod.Containers {
+	for _, container := range pod.PodContainers() {
 		if container.Ready && strings.ToLower(strings.TrimSpace(container.State)) == "running" {
 			continue
 		}
@@ -412,8 +422,8 @@ func kubernetesPodReason(pod models.KubernetesPod) string {
 	if len(containerIssues) > 0 {
 		parts = append(parts, fmt.Sprintf("containers=%s", strings.Join(containerIssues, "; ")))
 	}
-	if pod.Restarts > 0 {
-		parts = append(parts, fmt.Sprintf("restarts=%d", pod.Restarts))
+	if pod.Restarts() > 0 {
+		parts = append(parts, fmt.Sprintf("restarts=%d", pod.Restarts()))
 	}
 
 	return strings.TrimSpace(strings.Join(parts, ", "))

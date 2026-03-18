@@ -40,32 +40,74 @@ var raplBasePath = "/sys/class/powercap/intel-rapl"
 // Shorter intervals are less accurate; longer intervals add latency.
 const sampleInterval = 100 * time.Millisecond
 
+func waitForSample(ctx context.Context) error {
+	timer := time.NewTimer(sampleInterval)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // CollectPower reads power consumption data from the system.
 // Supports Intel RAPL and AMD energy driver.
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Try Intel RAPL first (most common on Intel)
-	if data, err := collectRALP(ctx); err == nil && data.Available {
-		return data, nil
+	raplData, raplErr := collectRAPL(ctx)
+	if raplErr == nil && raplData != nil && raplData.Available {
+		return raplData, nil
+	}
+	if raplErr != nil {
+		log.Debug().
+			Str("component", "sensors_power").
+			Str("action", "collect_rapl_failed").
+			Err(raplErr).
+			Msg("Failed to collect Intel RAPL power data")
 	}
 
 	// Try AMD energy driver (for AMD Ryzen/EPYC)
-	if data, err := collectAMDEnergy(ctx); err == nil && data.Available {
-		return data, nil
+	amdData, amdErr := collectAMDEnergy(ctx)
+	if amdErr == nil && amdData != nil && amdData.Available {
+		return amdData, nil
+	}
+	if amdErr != nil {
+		log.Debug().
+			Str("component", "sensors_power").
+			Str("action", "collect_amd_energy_failed").
+			Err(amdErr).
+			Msg("Failed to collect AMD energy power data")
 	}
 
 	// TODO: Add IPMI support for server BMCs
 
-	return nil, fmt.Errorf("no power monitoring available")
+	return nil, fmt.Errorf("no power monitoring available (rapl: %v, amd_energy: %v)", raplErr, amdErr)
 }
 
-// collectRALP reads power data from Intel RAPL sysfs interface.
+// collectRAPL reads power data from Intel RAPL sysfs interface.
 // RAPL provides energy counters in microjoules that we sample twice
 // to calculate instantaneous power in watts.
-func collectRALP(ctx context.Context) (*PowerData, error) {
+func collectRAPL(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Check if RAPL is available
-	if _, err := os.Stat(raplBasePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("RAPL not available: %w", err)
+	if _, err := os.Stat(raplBasePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("RAPL not available: %w", err)
+		}
+		return nil, fmt.Errorf("check RAPL availability: %w", err)
 	}
 
 	data := &PowerData{Source: "rapl"}
@@ -73,7 +115,10 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 	// Find all RAPL domains (packages)
 	// Typically: intel-rapl:0 (package), intel-rapl:0:0 (core), intel-rapl:0:1 (uncore), etc.
 	packages, err := filepath.Glob(filepath.Join(raplBasePath, "intel-rapl:*"))
-	if err != nil || len(packages) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("find RAPL packages: %w", err)
+	}
+	if len(packages) == 0 {
 		return nil, fmt.Errorf("no RAPL packages found")
 	}
 
@@ -86,7 +131,7 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 	// Wait for sample interval
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("RAPL sampling canceled: %w", ctx.Err())
 	case <-time.After(sampleInterval):
 	}
 
@@ -106,14 +151,7 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 			continue
 		}
 
-		// Handle counter wraparound (energy counters are typically 32-bit)
-		var deltaUJ uint64
-		if energy2 >= energy1 {
-			deltaUJ = energy2 - energy1
-		} else {
-			// Counter wrapped around
-			deltaUJ = (^uint64(0) - energy1) + energy2 + 1
-		}
+		deltaUJ := energyDelta(energy1, energy2)
 
 		// Convert microjoules to watts
 		watts := float64(deltaUJ) / 1e6 / duration
@@ -152,29 +190,56 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 	for _, pkgPath := range packages {
 		// Read the package energy
 		energyPath := filepath.Join(pkgPath, "energy_uj")
-		if energy, err := readUint64File(energyPath); err == nil {
+		energy, err := readUint64File(energyPath)
+		if err != nil {
+			log.Debug().
+				Str("path", energyPath).
+				Err(err).
+				Msg("Skipping RAPL package energy reading")
+		} else {
 			name := filepath.Base(pkgPath)
 			// Also read the domain name if available
 			namePath := filepath.Join(pkgPath, "name")
-			if domainName, err := readStringFile(namePath); err == nil {
+			if domainName, nameErr := readStringFile(namePath); nameErr == nil {
 				name = domainName
+			} else {
+				log.Debug().
+					Str("component", "sensors_power").
+					Str("action", "read_rapl_domain_name_failed").
+					Str("name_path", namePath).
+					Err(err).
+					Msg("Failed to read RAPL domain name, using path fallback")
 			}
 			result[name] = energy
 		}
-
 		// Also read subdomain energy (core, uncore, dram)
-		subdomains, _ := filepath.Glob(filepath.Join(pkgPath, "intel-rapl:*"))
+		subdomains, err := filepath.Glob(filepath.Join(pkgPath, "intel-rapl:*"))
+		if err != nil {
+			return nil, fmt.Errorf("find RAPL subdomains for %s: %w", pkgPath, err)
+		}
 		for _, subPath := range subdomains {
 			energyPath := filepath.Join(subPath, "energy_uj")
-			if energy, err := readUint64File(energyPath); err == nil {
-				name := filepath.Base(subPath)
-				// Read subdomain name
-				namePath := filepath.Join(subPath, "name")
-				if domainName, err := readStringFile(namePath); err == nil {
-					name = domainName
-				}
-				result[name] = energy
+			energy, err := readUint64File(energyPath)
+			if err != nil {
+				log.Debug().
+					Str("path", energyPath).
+					Err(err).
+					Msg("Skipping RAPL subdomain energy reading")
+				continue
 			}
+
+			name := filepath.Base(subPath)
+			// Read subdomain name
+			namePath := filepath.Join(subPath, "name")
+			if domainName, nameErr := readStringFile(namePath); nameErr == nil {
+				name = domainName
+			} else {
+				log.Debug().
+					Str("path", namePath).
+					Err(nameErr).
+					Msg("Using fallback RAPL subdomain name")
+			}
+			result[name] = energy
 		}
 	}
 
@@ -185,20 +250,34 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 	return result, nil
 }
 
+// energyDelta calculates the delta between two energy counter readings,
+// handling counter wraparound (energy counters are typically 32-bit).
+func energyDelta(before, after uint64) uint64 {
+	if after >= before {
+		return after - before
+	}
+	// Counter wrapped around
+	return (^uint64(0) - before) + after + 1
+}
+
 // readUint64File reads a file containing a single uint64 value.
 func readUint64File(path string) (uint64, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("read %s: %w", path, err)
 	}
-	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	value, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse uint64 from %s: %w", path, err)
+	}
+	return value, nil
 }
 
 // readStringFile reads a file containing a single string value.
 func readStringFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read %s: %w", path, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
@@ -209,10 +288,12 @@ var hwmonBasePath = "/sys/class/hwmon"
 // collectAMDEnergy reads power data from AMD energy driver via hwmon.
 // The amd_energy module exposes energy counters similar to Intel RAPL.
 func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Find hwmon device with amd_energy driver
 	hwmonPath, err := findAMDEnergyHwmon()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find AMD energy hwmon: %w", err)
 	}
 
 	data := &PowerData{Source: "amd_energy"}
@@ -226,7 +307,7 @@ func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
 	// Wait for sample interval
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("AMD energy sampling canceled: %w", ctx.Err())
 	case <-time.After(sampleInterval):
 	}
 
@@ -245,13 +326,7 @@ func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
 			continue
 		}
 
-		// Handle counter wraparound
-		var deltaUJ uint64
-		if energy2 >= energy1 {
-			deltaUJ = energy2 - energy1
-		} else {
-			deltaUJ = (^uint64(0) - energy1) + energy2 + 1
-		}
+		deltaUJ := energyDelta(energy1, energy2)
 
 		// Convert microjoules to watts
 		watts := float64(deltaUJ) / 1e6 / duration
@@ -300,6 +375,10 @@ func findAMDEnergyHwmon() (string, error) {
 
 		name, err := readStringFile(namePath)
 		if err != nil {
+			log.Debug().
+				Str("path", namePath).
+				Err(err).
+				Msg("Skipping hwmon device without readable name")
 			continue
 		}
 
@@ -318,13 +397,22 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 
 	// AMD energy exposes energy*_input files (in microjoules)
 	energyFiles, err := filepath.Glob(filepath.Join(hwmonPath, "energy*_input"))
-	if err != nil || len(energyFiles) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("find AMD energy files in %s: %w", hwmonPath, err)
+	}
+	if len(energyFiles) == 0 {
 		return nil, fmt.Errorf("no AMD energy files found")
 	}
 
 	for _, energyPath := range energyFiles {
 		energy, err := readUint64File(energyPath)
 		if err != nil {
+			log.Debug().
+				Str("component", "sensors_power").
+				Str("action", "read_amd_energy_failed").
+				Str("energy_path", energyPath).
+				Err(err).
+				Msg("Failed to read AMD energy counter")
 			continue
 		}
 
@@ -333,6 +421,13 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 		labelPath := strings.Replace(energyPath, "_input", "_label", 1)
 		label, err := readStringFile(labelPath)
 		if err != nil {
+			log.Debug().
+				Str("component", "sensors_power").
+				Str("action", "read_amd_label_failed").
+				Str("label_path", labelPath).
+				Err(err).
+				Msg("Failed to read AMD energy label, using filename fallback")
+
 			// Use filename as fallback
 			label = filepath.Base(energyPath)
 		}

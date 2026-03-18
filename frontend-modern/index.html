@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <title>Pulse</title>
     <!-- Inline critical styles to prevent flash of unstyled content -->
-    <style>
+    <style nonce="__CSP_NONCE__">
       /* Apply theme immediately before any CSS loads */
       html { background-color: #f3f4f6; } /* gray-100 */
       html.dark { background-color: #111827; } /* gray-900 */
@@ -21,16 +21,28 @@
         background-color: inherit;
       }
     </style>
-    <!-- Apply dark mode immediately from localStorage to prevent flash -->
-    <script>
+    <!-- Apply theme immediately from localStorage to prevent flash -->
+    <script nonce="__CSP_NONCE__">
       (function() {
         try {
-          var darkMode = localStorage.getItem('pulse_dark_mode');
-          var prefersDark = darkMode === 'true' || 
-            (darkMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (prefersDark) {
-            document.documentElement.classList.add('dark');
+          var themePreference = localStorage.getItem('pulseThemePreference');
+          var legacyDarkMode = localStorage.getItem('darkMode');
+          var legacyBootstrapMode = localStorage.getItem('pulse_dark_mode');
+          var prefersDark;
+
+          if (themePreference === 'dark') {
+            prefersDark = true;
+          } else if (themePreference === 'light') {
+            prefersDark = false;
+          } else if (legacyDarkMode === 'true' || legacyDarkMode === 'false') {
+            prefersDark = legacyDarkMode === 'true';
+          } else if (legacyBootstrapMode === 'true' || legacyBootstrapMode === 'false') {
+            prefersDark = legacyBootstrapMode === 'true';
+          } else {
+            prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           }
+
+          document.documentElement.classList.toggle('dark', prefersDark);
         } catch (e) {}
       })();
     </script>

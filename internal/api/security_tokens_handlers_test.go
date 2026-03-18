@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,9 +10,21 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
+	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestSecurityTokens_ListCreateDelete(t *testing.T) {
+	capture := &auditCaptureLogger{}
+	prevLogger := audit.GetLogger()
+	prevManager := GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(prevLogger)
+		SetTenantAuditManager(prevManager)
+	})
+
 	cfg := &config.Config{}
 	persistence := config.NewConfigPersistence(t.TempDir())
 	router := &Router{
@@ -34,6 +47,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"]}`))
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
 	rr = httptest.NewRecorder()
 	router.handleCreateAPIToken(rr, req)
 	if rr.Code != http.StatusOK {
@@ -55,6 +69,9 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected token stored in config")
+	}
+	if got := cfg.APITokens[0].OrgID; got != "default" {
+		t.Fatalf("expected token org binding default, got %q", got)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/security/tokens", nil)
@@ -88,7 +105,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
 	}
 
-	// Test deletion of migrated env token suppression
+	// Deleting an existing token should succeed.
 	record := config.APITokenRecord{
 		ID:        "migrated",
 		Name:      "Migrated from .env token",
@@ -98,12 +115,209 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	cfg.APITokens = append(cfg.APITokens, record)
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/migrated", nil)
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
 	rr = httptest.NewRecorder()
 	router.handleDeleteAPIToken(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rr.Code)
 	}
-	if !cfg.IsEnvMigrationSuppressed("hash-migrated") {
-		t.Fatalf("expected env migration suppression to be recorded")
+
+	events, err := capture.Query(audit.QueryFilter{})
+	if err != nil {
+		t.Fatalf("query audit events: %v", err)
+	}
+
+	var sawCreate, sawDelete bool
+	for _, event := range events {
+		if event.EventType == "token_created" && event.Success {
+			sawCreate = true
+			if event.User != "alice" {
+				t.Fatalf("token_created audit user = %q, want %q", event.User, "alice")
+			}
+			if strings.Contains(event.Details, createResp.Token) {
+				t.Fatalf("token_created audit details leaked raw token")
+			}
+		}
+		if event.EventType == "token_deleted" && event.Success {
+			sawDelete = true
+		}
+	}
+	if !sawCreate {
+		t.Fatalf("expected successful token_created audit event")
+	}
+	if !sawDelete {
+		t.Fatalf("expected successful token_deleted audit event")
+	}
+}
+
+func TestSecurityTokens_Create_WithExpiresIn(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	start := time.Now().UTC()
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"1h"}`))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	end := time.Now().UTC()
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var createResp struct {
+		Token  string      `json:"token"`
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&createResp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if createResp.Record.ExpiresAt == nil {
+		t.Fatalf("expected expiresAt to be set in response record")
+	}
+	if exp := *createResp.Record.ExpiresAt; exp.Before(start.Add(time.Hour)) || exp.After(end.Add(time.Hour).Add(2*time.Second)) {
+		t.Fatalf("unexpected expiresAt: %v (start=%v end=%v)", exp, start, end)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ExpiresAt == nil {
+		t.Fatalf("expected expiresAt to be stored in config")
+	}
+}
+
+func TestSecurityTokens_Create_WithInvalidExpiresIn(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"not-a-duration"}`))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected no token stored in config on invalid expiresIn")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"30s"}`))
+	rr = httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected no token stored in config when expiresIn < 1m")
+	}
+}
+
+func TestSecurityTokens_Create_BindsTokenToRequestOrg(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"]}`))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected token stored in config")
+	}
+	if got := cfg.APITokens[0].OrgID; got != "acme" {
+		t.Fatalf("token org binding = %q, want acme", got)
+	}
+}
+
+func TestSecurityTokens_Create_RejectsScopeEscalationForTokenCaller(t *testing.T) {
+	tests := []struct {
+		name         string
+		body         string
+		wantFragment string
+	}{
+		{
+			name:         "explicit scope escalation",
+			body:         `{"name":"escalated","scopes":["monitoring:read","settings:write"]}`,
+			wantFragment: `Cannot grant scope "settings:write"`,
+		},
+		{
+			name:         "omitted scopes defaults to wildcard escalation",
+			body:         `{"name":"full-access"}`,
+			wantFragment: `Cannot grant scope "*"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			persistence := config.NewConfigPersistence(t.TempDir())
+			router := &Router{
+				config:      cfg,
+				persistence: persistence,
+			}
+
+			caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+			caller.OrgID = "acme"
+
+			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(tt.body))
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+			req = req.WithContext(authpkg.WithAPIToken(req.Context(), &caller))
+			rr := httptest.NewRecorder()
+			router.handleCreateAPIToken(rr, req)
+
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), tt.wantFragment) {
+				t.Fatalf("expected response to contain %q, got %q", tt.wantFragment, rr.Body.String())
+			}
+			if len(cfg.APITokens) != 0 {
+				t.Fatalf("expected no tokens to be stored after denied creation, got %d", len(cfg.APITokens))
+			}
+		})
+	}
+}
+
+func TestSecurityTokens_Delete_RejectsScopeEscalationForTokenCaller(t *testing.T) {
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{
+			{
+				ID:        "broad-token",
+				Name:      "broad",
+				Hash:      "hash-broad",
+				CreatedAt: time.Now().Add(-time.Hour),
+				Scopes:    []string{config.ScopeWildcard},
+				OrgID:     "default",
+			},
+		},
+	}
+	router := &Router{config: cfg}
+
+	caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	caller.OrgID = "default"
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
+	req = req.WithContext(authpkg.WithAPIToken(req.Context(), &caller))
+	rr := httptest.NewRecorder()
+	router.handleDeleteAPIToken(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), config.ScopeWildcard) {
+		t.Fatalf("expected forbidden response to mention missing scope, got %q", rr.Body.String())
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != "broad-token" {
+		t.Fatalf("expected target token to remain configured, got %+v", cfg.APITokens)
 	}
 }

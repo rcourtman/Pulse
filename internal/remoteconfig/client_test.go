@@ -11,8 +11,8 @@ import (
 func TestClient_Fetch(t *testing.T) {
 	t.Run("successful fetch with full config", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/api/agents/host/agent-1/config" {
-				t.Errorf("Expected path /api/agents/host/agent-1/config, got %s", r.URL.Path)
+			if r.URL.Path != "/api/agents/agent/agent-1/config" {
+				t.Errorf("Expected path /api/agents/agent/agent-1/config, got %s", r.URL.Path)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -23,7 +23,7 @@ func TestClient_Fetch(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{
 				"success": true,
-				"hostId": "agent-1",
+				"agentId": "agent-1",
 				"config": {
 					"commandsEnabled": true,
 					"settings": {
@@ -64,7 +64,7 @@ func TestClient_Fetch(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{
 				"success": true,
-				"hostId": "agent-1",
+				"agentId": "agent-1",
 				"config": {
 					"commandsEnabled": true,
 					"settings": {
@@ -112,9 +112,9 @@ func TestClient_Fetch(t *testing.T) {
 	})
 }
 
-func TestClient_ResolveHostID(t *testing.T) {
+func TestClient_ResolveAgentID(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/agents/host/lookup" {
+		if r.URL.Path != "/api/agents/agent/lookup" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -122,7 +122,7 @@ func TestClient_ResolveHostID(t *testing.T) {
 		switch r.URL.Query().Get("hostname") {
 		case "known":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"host":{"id":"host-123"}}`))
+			w.Write([]byte(`{"success":true,"agent":{"id":"agent-123"}}`))
 		case "unknown":
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"success":false}`))
@@ -142,27 +142,27 @@ func TestClient_ResolveHostID(t *testing.T) {
 		APIToken: "token",
 	})
 
-	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
-		t.Fatalf("expected empty hostID for blank hostname, got %q err=%v", got, err)
+	if got, err := client.resolveAgentID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty agentID for blank hostname, got %q err=%v", got, err)
 	}
 
 	client.cfg.Hostname = "known"
-	if got, err := client.resolveHostID(context.Background()); err != nil || got != "host-123" {
-		t.Fatalf("expected host-123, got %q err=%v", got, err)
+	if got, err := client.resolveAgentID(context.Background()); err != nil || got != "agent-123" {
+		t.Fatalf("expected agent-123, got %q err=%v", got, err)
 	}
 
 	client.cfg.Hostname = "unknown"
-	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
-		t.Fatalf("expected empty hostID, got %q err=%v", got, err)
+	if got, err := client.resolveAgentID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty agentID, got %q err=%v", got, err)
 	}
 
 	client.cfg.Hostname = "bad"
-	if _, err := client.resolveHostID(context.Background()); err == nil {
+	if _, err := client.resolveAgentID(context.Background()); err == nil {
 		t.Fatal("expected error for server failure")
 	}
 
 	client.cfg.Hostname = "invalid"
-	if _, err := client.resolveHostID(context.Background()); err == nil {
+	if _, err := client.resolveAgentID(context.Background()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

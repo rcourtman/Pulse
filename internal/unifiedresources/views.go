@@ -1,0 +1,3654 @@
+package unifiedresources
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+)
+
+// Metric helpers (nil-safe).
+//
+// Note: This package already has a different `metricPercent(*MetricValue) float64`
+// helper used by unified AI adapters. These view helpers intentionally take a
+// `*ResourceMetrics` + selector to keep accessors thin and consistent.
+func viewMetricPercent(m *ResourceMetrics, pick func(*ResourceMetrics) *MetricValue) float64 {
+	if m == nil {
+		return 0
+	}
+	v := pick(m)
+	if v == nil {
+		return 0
+	}
+	return v.Percent
+}
+
+func viewMetricUsed(m *ResourceMetrics, pick func(*ResourceMetrics) *MetricValue) int64 {
+	if m == nil {
+		return 0
+	}
+	v := pick(m)
+	if v == nil || v.Used == nil {
+		return 0
+	}
+	return *v.Used
+}
+
+func viewMetricTotal(m *ResourceMetrics, pick func(*ResourceMetrics) *MetricValue) int64 {
+	if m == nil {
+		return 0
+	}
+	v := pick(m)
+	if v == nil || v.Total == nil {
+		return 0
+	}
+	return *v.Total
+}
+
+func viewMetricValue(m *ResourceMetrics, pick func(*ResourceMetrics) *MetricValue) float64 {
+	if m == nil {
+		return 0
+	}
+	v := pick(m)
+	if v == nil {
+		return 0
+	}
+	return v.Value
+}
+
+var (
+	selectMetricsCPU       = func(m *ResourceMetrics) *MetricValue { return m.CPU }
+	selectMetricsMemory    = func(m *ResourceMetrics) *MetricValue { return m.Memory }
+	selectMetricsDisk      = func(m *ResourceMetrics) *MetricValue { return m.Disk }
+	selectMetricsNetIn     = func(m *ResourceMetrics) *MetricValue { return m.NetIn }
+	selectMetricsNetOut    = func(m *ResourceMetrics) *MetricValue { return m.NetOut }
+	selectMetricsDiskRead  = func(m *ResourceMetrics) *MetricValue { return m.DiskRead }
+	selectMetricsDiskWrite = func(m *ResourceMetrics) *MetricValue { return m.DiskWrite }
+)
+
+// VMView wraps a VM resource (ResourceTypeVM).
+type VMView struct{ r *Resource }
+
+func NewVMView(r *Resource) VMView { return VMView{r: r} }
+
+func (v VMView) String() string { return fmt.Sprintf("VMView(%s, %q)", v.ID(), v.Name()) }
+
+func (v VMView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v VMView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v VMView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v VMView) VMID() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.VMID
+}
+
+func (v VMView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
+func (v VMView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.NodeName)
+}
+
+func (v VMView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Instance)
+}
+
+func (v VMView) Template() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.Template
+}
+
+func (v VMView) CPUs() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.CPUs
+}
+
+func (v VMView) Uptime() int64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.Uptime
+}
+
+func (v VMView) LastBackup() time.Time {
+	if v.r == nil || v.r.Proxmox == nil {
+		return time.Time{}
+	}
+	return v.r.Proxmox.LastBackup
+}
+
+func (v VMView) DiskStatusReason() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.DiskStatusReason
+}
+
+func (v VMView) OSName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSName
+}
+
+func (v VMView) OSVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSVersion
+}
+
+func (v VMView) AgentVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.AgentVersion
+}
+
+func (v VMView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Proxmox.NetworkInterfaces)
+}
+
+func (v VMView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Proxmox.Disks)
+}
+
+func (v VMView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v VMView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v VMView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v VMView) ParentName() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ParentName
+}
+
+func (v VMView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v VMView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v VMView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v VMView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v VMView) DiskUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v VMView) DiskTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v VMView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v VMView) NetIn() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v VMView) NetOut() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v VMView) DiskRead() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskRead)
+}
+
+func (v VMView) DiskWrite() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskWrite)
+}
+
+func (v VMView) Lock() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Lock
+}
+
+func (v VMView) IPAddresses() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Identity.IPAddresses)
+}
+
+// ContainerView wraps a system container resource (ResourceTypeSystemContainer).
+// It shares the same Proxmox payload shape and accessor set as VMView.
+type ContainerView struct{ r *Resource }
+
+func NewContainerView(r *Resource) ContainerView { return ContainerView{r: r} }
+
+func (v ContainerView) String() string { return fmt.Sprintf("ContainerView(%s, %q)", v.ID(), v.Name()) }
+
+func (v ContainerView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v ContainerView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v ContainerView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v ContainerView) VMID() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.VMID
+}
+
+func (v ContainerView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
+func (v ContainerView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.NodeName)
+}
+
+func (v ContainerView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Instance)
+}
+
+func (v ContainerView) ContainerType() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.ContainerType
+}
+
+func (v ContainerView) IsOCI() bool {
+	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.IsOCI
+}
+
+func (v ContainerView) Template() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.Template
+}
+
+func (v ContainerView) CPUs() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.CPUs
+}
+
+func (v ContainerView) Uptime() int64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.Uptime
+}
+
+func (v ContainerView) LastBackup() time.Time {
+	if v.r == nil || v.r.Proxmox == nil {
+		return time.Time{}
+	}
+	return v.r.Proxmox.LastBackup
+}
+
+func (v ContainerView) OSName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSName
+}
+
+func (v ContainerView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Proxmox.NetworkInterfaces)
+}
+
+func (v ContainerView) OSTemplate() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSTemplate
+}
+
+func (v ContainerView) HasDocker() bool {
+	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.HasDocker
+}
+
+func (v ContainerView) DockerCheckedAt() time.Time {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.DockerCheckedAt == nil {
+		return time.Time{}
+	}
+	return *v.r.Proxmox.DockerCheckedAt
+}
+
+func (v ContainerView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Proxmox.Disks)
+}
+
+func (v ContainerView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v ContainerView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v ContainerView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v ContainerView) ParentName() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ParentName
+}
+
+func (v ContainerView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v ContainerView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v ContainerView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v ContainerView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v ContainerView) DiskUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v ContainerView) DiskTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v ContainerView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v ContainerView) NetIn() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v ContainerView) NetOut() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v ContainerView) DiskRead() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskRead)
+}
+
+func (v ContainerView) DiskWrite() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsDiskWrite)
+}
+
+func (v ContainerView) Lock() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Lock
+}
+
+func (v ContainerView) IPAddresses() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Identity.IPAddresses)
+}
+
+// NodeView wraps an infrastructure parent resource with Proxmox data.
+type NodeView struct{ r *Resource }
+
+func NewNodeView(r *Resource) NodeView { return NodeView{r: r} }
+
+func (v NodeView) String() string { return fmt.Sprintf("NodeView(%s, %q)", v.ID(), v.Name()) }
+
+func (v NodeView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v NodeView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+// SourceID returns the original Proxmox-level node ID (e.g. "node/pve").
+func (v NodeView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
+func (v NodeView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v NodeView) NodeName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.NodeName)
+}
+
+func (v NodeView) ClusterName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.ClusterName)
+}
+
+func (v NodeView) IsClusterMember() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.IsClusterMember
+}
+
+func (v NodeView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Instance)
+}
+
+func (v NodeView) HostURL() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.HostURL
+}
+
+func (v NodeView) GuestURL() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.GuestURL
+}
+
+func (v NodeView) ConnectionHealth() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.ConnectionHealth
+}
+
+func (v NodeView) PVEVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.PVEVersion
+}
+
+func (v NodeView) KernelVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.KernelVersion
+}
+
+func (v NodeView) Uptime() int64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.Uptime
+}
+
+func (v NodeView) CPUs() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	if v.r.Proxmox.CPUInfo != nil && v.r.Proxmox.CPUInfo.Cores > 0 && v.r.Proxmox.CPUInfo.Sockets > 0 {
+		return v.r.Proxmox.CPUInfo.Cores * v.r.Proxmox.CPUInfo.Sockets
+	}
+	return v.r.Proxmox.CPUs
+}
+
+func (v NodeView) CPUInfo() models.CPUInfo {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.CPUInfo == nil {
+		return models.CPUInfo{}
+	}
+	return models.CPUInfo{
+		Model:   v.r.Proxmox.CPUInfo.Model,
+		Cores:   v.r.Proxmox.CPUInfo.Cores,
+		Sockets: v.r.Proxmox.CPUInfo.Sockets,
+	}
+}
+
+func (v NodeView) Temperature() float64 {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.Temperature == nil {
+		return 0
+	}
+	return *v.r.Proxmox.Temperature
+}
+
+func (v NodeView) HasTemperature() bool {
+	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.Temperature != nil
+}
+
+func (v NodeView) TemperatureDetails() *models.Temperature {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneTemperature(v.r.Proxmox.TemperatureDetails)
+}
+
+func (v NodeView) LoadAverage() []float64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneFloat64Slice(v.r.Proxmox.LoadAverage)
+}
+
+func (v NodeView) PendingUpdates() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.PendingUpdates
+}
+
+func (v NodeView) TemperatureMonitoringEnabled() *bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneBoolPtr(v.r.Proxmox.TemperatureMonitoringEnabled)
+}
+
+func (v NodeView) PendingUpdatesCheckedAt() time.Time {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.PendingUpdatesCheckedAt == nil {
+		return time.Time{}
+	}
+	return *v.r.Proxmox.PendingUpdatesCheckedAt
+}
+
+func (v NodeView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v NodeView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v NodeView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v NodeView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v NodeView) DiskUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v NodeView) DiskTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v NodeView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v NodeView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v NodeView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v NodeView) LinkedAgentID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.LinkedAgentID)
+}
+
+// HostView wraps an infrastructure parent resource with Agent data.
+type HostView struct{ r *Resource }
+
+func NewHostView(r *Resource) HostView { return HostView{r: r} }
+
+func (v HostView) String() string { return fmt.Sprintf("HostView(%s, %q)", v.ID(), v.Name()) }
+
+func (v HostView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v HostView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v HostView) Hostname() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.Hostname
+}
+
+func (v HostView) MachineID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.MachineID
+}
+
+func (v HostView) TokenID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenID
+}
+
+func (v HostView) TokenName() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenName
+}
+
+func (v HostView) TokenHint() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenHint
+}
+
+func (v HostView) TokenLastUsedAt() *time.Time {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.TokenLastUsedAt == nil {
+		return nil
+	}
+	copied := *v.r.Agent.TokenLastUsedAt
+	return &copied
+}
+
+func (v HostView) Platform() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.Platform
+}
+
+func (v HostView) OSName() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.OSName
+}
+
+func (v HostView) OSVersion() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.OSVersion
+}
+
+func (v HostView) KernelVersion() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.KernelVersion
+}
+
+func (v HostView) Architecture() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.Architecture
+}
+
+func (v HostView) CPUCount() int {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.CPUCount
+}
+
+func (v HostView) LoadAverage() []float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneFloat64Slice(v.r.Agent.LoadAverage)
+}
+
+func (v HostView) AgentVersion() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.AgentVersion
+}
+
+func (v HostView) AgentID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.AgentID
+}
+
+func (v HostView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.UptimeSeconds
+}
+
+func (v HostView) IntervalSeconds() int {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.IntervalSeconds
+}
+
+func (v HostView) Temperature() float64 {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Temperature == nil {
+		return 0
+	}
+	return *v.r.Agent.Temperature
+}
+
+func (v HostView) HasTemperature() bool {
+	return v.r != nil && v.r.Agent != nil && v.r.Agent.Temperature != nil
+}
+
+func (v HostView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Agent.NetworkInterfaces)
+}
+
+func (v HostView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Agent.Disks)
+}
+
+func (v HostView) LinkedNodeID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Agent.LinkedNodeID)
+}
+
+func (v HostView) LinkedVMID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Agent.LinkedVMID)
+}
+
+func (v HostView) LinkedContainerID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Agent.LinkedContainerID)
+}
+
+func (v HostView) CommandsEnabled() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.CommandsEnabled
+}
+
+func (v HostView) ReportIP() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.ReportIP
+}
+
+func (v HostView) DiskExclude() []string {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Agent.DiskExclude)
+}
+
+func (v HostView) IsLegacy() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.IsLegacy
+}
+
+func (v HostView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v HostView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v HostView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v HostView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v HostView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
+}
+
+func (v HostView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
+}
+
+func (v HostView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
+}
+
+func (v HostView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
+}
+
+func (v HostView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
+}
+
+func (v HostView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v HostView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
+}
+
+func (v HostView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v HostView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v HostView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v HostView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v HostView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v HostView) SwapUsed() int64 {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Memory == nil {
+		return 0
+	}
+	return v.r.Agent.Memory.SwapUsed
+}
+
+func (v HostView) SwapTotal() int64 {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Memory == nil {
+		return 0
+	}
+	return v.r.Agent.Memory.SwapTotal
+}
+
+func (v HostView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v HostView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v HostView) NetInRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.NetInRate
+}
+
+func (v HostView) NetOutRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.NetOutRate
+}
+
+func (v HostView) DiskReadRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.DiskReadRate
+}
+
+func (v HostView) DiskWriteRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.DiskWriteRate
+}
+
+func (v HostView) StorageRisk() *StorageRisk {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneStorageRisk(v.r.Agent.StorageRisk)
+}
+
+func (v HostView) StorageRiskSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.StorageRiskSummary
+}
+
+func (v HostView) StoragePostureSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.StoragePostureSummary
+}
+
+func (v HostView) ProtectionReduced() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.ProtectionReduced
+}
+
+func (v HostView) ProtectionSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.ProtectionSummary
+}
+
+func (v HostView) RebuildInProgress() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.RebuildInProgress
+}
+
+func (v HostView) RebuildSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.RebuildSummary
+}
+
+func (v HostView) Unraid() *HostUnraidMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostUnraidMeta(v.r.Agent.Unraid)
+}
+
+func (v HostView) TrueNAS() *TrueNASData {
+	if v.r == nil {
+		return nil
+	}
+	return cloneTrueNASData(v.r.TrueNAS)
+}
+
+func (v HostView) Sensors() *HostSensorMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostSensorMeta(v.r.Agent.Sensors)
+}
+
+func (v HostView) RAID() []HostRAIDMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostRAIDMetaSlice(v.r.Agent.RAID)
+}
+
+func (v HostView) DiskIO() []HostDiskIOMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostDiskIOMetaSlice(v.r.Agent.DiskIO)
+}
+
+func (v HostView) Ceph() *HostCephMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostCephMeta(v.r.Agent.Ceph)
+}
+
+// DockerHostView wraps an infrastructure parent resource with Docker data.
+type DockerHostView struct{ r *Resource }
+
+func NewDockerHostView(r *Resource) DockerHostView { return DockerHostView{r: r} }
+
+func (v DockerHostView) String() string {
+	return fmt.Sprintf("DockerHostView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v DockerHostView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v DockerHostView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v DockerHostView) HostSourceID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Docker.HostSourceID)
+}
+
+func (v DockerHostView) Hostname() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Hostname
+}
+
+func (v DockerHostView) DisplayName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.DisplayName
+}
+
+func (v DockerHostView) CustomDisplayName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.CustomDisplayName
+}
+
+func (v DockerHostView) MachineID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.MachineID
+}
+
+func (v DockerHostView) AgentID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.AgentID
+}
+
+func (v DockerHostView) DockerVersion() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.DockerVersion
+}
+
+func (v DockerHostView) Runtime() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Runtime
+}
+
+func (v DockerHostView) RuntimeVersion() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.RuntimeVersion
+}
+
+func (v DockerHostView) OS() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.OS
+}
+
+func (v DockerHostView) KernelVersion() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.KernelVersion
+}
+
+func (v DockerHostView) Architecture() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Architecture
+}
+
+func (v DockerHostView) AgentVersion() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.AgentVersion
+}
+
+func (v DockerHostView) CPUs() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.CPUs
+}
+
+func (v DockerHostView) TotalMemoryBytes() int64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.TotalMemoryBytes
+}
+
+func (v DockerHostView) TokenID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenID
+}
+
+func (v DockerHostView) TokenName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenName
+}
+
+func (v DockerHostView) TokenHint() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenHint
+}
+
+func (v DockerHostView) TokenLastUsedAt() *time.Time {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.TokenLastUsedAt == nil {
+		return nil
+	}
+	copied := *v.r.Docker.TokenLastUsedAt
+	return &copied
+}
+
+func (v DockerHostView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.UptimeSeconds
+}
+
+func (v DockerHostView) IntervalSeconds() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.IntervalSeconds
+}
+
+func (v DockerHostView) LoadAverage() []float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneFloat64Slice(v.r.Docker.LoadAverage)
+}
+
+func (v DockerHostView) Temperature() float64 {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.Temperature == nil {
+		return 0
+	}
+	return *v.r.Docker.Temperature
+}
+
+func (v DockerHostView) HasTemperature() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.Temperature != nil
+}
+
+func (v DockerHostView) Swarm() *DockerSwarmInfo {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerSwarmInfo(v.r.Docker.Swarm)
+}
+
+func (v DockerHostView) Containers() []models.DockerContainer {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerContainer(nil), v.r.Docker.Containers...)
+}
+
+func (v DockerHostView) Services() []models.DockerService {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerService(nil), v.r.Docker.Services...)
+}
+
+func (v DockerHostView) Tasks() []models.DockerTask {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	// Note: these are not deep-cloned
+	return append([]models.DockerTask(nil), v.r.Docker.Tasks...)
+}
+
+func (v DockerHostView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Docker.NetworkInterfaces)
+}
+
+func (v DockerHostView) Disks() []DiskInfo {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDiskInfos(v.r.Docker.Disks)
+}
+
+func (v DockerHostView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerHostView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerHostView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v DockerHostView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v DockerHostView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v DockerHostView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v DockerHostView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerHostView) NetInRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.NetInRate
+}
+
+func (v DockerHostView) NetOutRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.NetOutRate
+}
+
+func (v DockerHostView) DiskReadRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.DiskReadRate
+}
+
+func (v DockerHostView) DiskWriteRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.DiskWriteRate
+}
+
+func (v DockerHostView) ChildCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.ChildCount
+}
+
+func (v DockerHostView) PendingUninstall() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.PendingUninstall
+}
+
+func (v DockerHostView) Hidden() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.Hidden
+}
+
+func (v DockerHostView) IsLegacy() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.IsLegacy
+}
+
+func (v DockerHostView) Command() *models.DockerHostCommandStatus {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.Command == nil {
+		return nil
+	}
+	copied := *v.r.Docker.Command
+	return &copied
+}
+
+// StoragePoolView wraps a storage resource.
+type StoragePoolView struct{ r *Resource }
+
+func NewStoragePoolView(r *Resource) StoragePoolView { return StoragePoolView{r: r} }
+
+func (v StoragePoolView) String() string {
+	return fmt.Sprintf("StoragePoolView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v StoragePoolView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v StoragePoolView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v StoragePoolView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v StoragePoolView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v StoragePoolView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v StoragePoolView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v StoragePoolView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
+}
+
+func (v StoragePoolView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
+}
+
+func (v StoragePoolView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
+}
+
+func (v StoragePoolView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
+}
+
+func (v StoragePoolView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
+}
+
+func (v StoragePoolView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v StoragePoolView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
+}
+
+func (v StoragePoolView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.NodeName)
+}
+
+func (v StoragePoolView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Instance)
+}
+
+// SourceID returns the original Proxmox-level storage ID (e.g. "local-lvm").
+func (v StoragePoolView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
+func (v StoragePoolView) StorageType() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.Type
+}
+
+func (v StoragePoolView) Content() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.Content
+}
+
+func (v StoragePoolView) ContentTypes() []string {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Storage.ContentTypes)
+}
+
+func (v StoragePoolView) Shared() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.Shared
+}
+
+func (v StoragePoolView) Enabled() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.Enabled
+}
+
+func (v StoragePoolView) Active() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.Active
+}
+
+func (v StoragePoolView) IsCeph() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.IsCeph
+}
+
+func (v StoragePoolView) IsZFS() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.IsZFS
+}
+
+// PhysicalDiskView wraps a physical disk resource.
+type PhysicalDiskView struct{ r *Resource }
+
+func NewPhysicalDiskView(r *Resource) PhysicalDiskView { return PhysicalDiskView{r: r} }
+
+func (v PhysicalDiskView) String() string {
+	return fmt.Sprintf("PhysicalDiskView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v PhysicalDiskView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PhysicalDiskView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PhysicalDiskView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PhysicalDiskView) DevPath() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.DevPath
+}
+
+func (v PhysicalDiskView) Model() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Model
+}
+
+func (v PhysicalDiskView) Serial() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Serial
+}
+
+func (v PhysicalDiskView) WWN() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.WWN
+}
+
+func (v PhysicalDiskView) DiskType() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.DiskType
+}
+
+func (v PhysicalDiskView) SizeBytes() int64 {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.SizeBytes
+}
+
+func (v PhysicalDiskView) Health() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Health
+}
+
+func (v PhysicalDiskView) Wearout() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.Wearout
+}
+
+func (v PhysicalDiskView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.NodeName
+}
+
+func (v PhysicalDiskView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Instance
+}
+
+func (v PhysicalDiskView) Temperature() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.Temperature
+}
+
+func (v PhysicalDiskView) RPM() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.RPM
+}
+
+func (v PhysicalDiskView) Used() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Used
+}
+
+func (v PhysicalDiskView) SMART() *SMARTMeta {
+	if v.r == nil || v.r.PhysicalDisk == nil || v.r.PhysicalDisk.SMART == nil {
+		return nil
+	}
+	return cloneSMARTMeta(v.r.PhysicalDisk.SMART)
+}
+
+func (v PhysicalDiskView) MetricResourceID() string {
+	if v.r == nil {
+		return ""
+	}
+	if v.r.MetricsTarget != nil {
+		return v.r.MetricsTarget.ResourceID
+	}
+	return PhysicalDiskMetaMetricID(v.r.PhysicalDisk, v.r.ID)
+}
+
+func (v PhysicalDiskView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PhysicalDiskView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v PhysicalDiskView) ParentName() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ParentName
+}
+
+func (v StoragePoolView) ZFSPoolState() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.ZFSPoolState
+}
+
+func (v StoragePoolView) ZFSReadErrors() int64 {
+	if v.r == nil || v.r.Storage == nil {
+		return 0
+	}
+	return v.r.Storage.ZFSReadErrors
+}
+
+func (v StoragePoolView) ZFSWriteErrors() int64 {
+	if v.r == nil || v.r.Storage == nil {
+		return 0
+	}
+	return v.r.Storage.ZFSWriteErrors
+}
+
+func (v StoragePoolView) ZFSChecksumErrors() int64 {
+	if v.r == nil || v.r.Storage == nil {
+		return 0
+	}
+	return v.r.Storage.ZFSChecksumErrors
+}
+
+func (v StoragePoolView) AccessibleNodes() []string {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Storage.Nodes)
+}
+
+func (v StoragePoolView) Path() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.Path
+}
+
+func (v StoragePoolView) RiskSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.RiskSummary
+}
+
+func (v StoragePoolView) ConsumerCount() int {
+	if v.r == nil || v.r.Storage == nil {
+		return 0
+	}
+	return v.r.Storage.ConsumerCount
+}
+
+func (v StoragePoolView) ConsumerTypes() []string {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Storage.ConsumerTypes)
+}
+
+func (v StoragePoolView) TopConsumers() []StorageConsumerMeta {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStorageConsumerMetaSlice(v.r.Storage.TopConsumers)
+}
+
+func (v StoragePoolView) ConsumerImpactSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.ConsumerImpactSummary
+}
+
+func (v StoragePoolView) PostureSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.PostureSummary
+}
+
+func (v StoragePoolView) ProtectionReduced() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.ProtectionReduced
+}
+
+func (v StoragePoolView) ProtectionSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.ProtectionSummary
+}
+
+func (v StoragePoolView) RebuildInProgress() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.RebuildInProgress
+}
+
+func (v StoragePoolView) RebuildSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.RebuildSummary
+}
+
+func (v StoragePoolView) DiskUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v StoragePoolView) DiskTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v StoragePoolView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v StoragePoolView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v StoragePoolView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v StoragePoolView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v StoragePoolView) ParentName() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ParentName
+}
+
+// PBSInstanceView wraps a PBS resource.
+type PBSInstanceView struct{ r *Resource }
+
+func NewPBSInstanceView(r *Resource) PBSInstanceView { return PBSInstanceView{r: r} }
+
+func (v PBSInstanceView) String() string {
+	return fmt.Sprintf("PBSInstanceView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v PBSInstanceView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PBSInstanceView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PBSInstanceView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PBSInstanceView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v PBSInstanceView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v PBSInstanceView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v PBSInstanceView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
+}
+
+func (v PBSInstanceView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
+}
+
+func (v PBSInstanceView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
+}
+
+func (v PBSInstanceView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
+}
+
+func (v PBSInstanceView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
+}
+
+func (v PBSInstanceView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v PBSInstanceView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
+}
+
+func (v PBSInstanceView) Hostname() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.Hostname
+}
+
+func (v PBSInstanceView) InstanceID() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.InstanceID
+}
+
+func (v PBSInstanceView) HostURL() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.HostURL
+}
+
+func (v PBSInstanceView) GuestURL() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.GuestURL
+}
+
+func (v PBSInstanceView) Version() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.Version
+}
+
+func (v PBSInstanceView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.UptimeSeconds
+}
+
+func (v PBSInstanceView) DatastoreCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.DatastoreCount
+}
+
+func (v PBSInstanceView) Datastores() []PBSDatastoreMeta {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return clonePBSDatastoreMetaSlice(v.r.PBS.Datastores)
+}
+
+func (v PBSInstanceView) DatastoreDetails() []models.PBSDatastore {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return clonePBSDatastores(v.r.PBS.DatastoreDetails)
+}
+
+func (v PBSInstanceView) ProtectedWorkloadCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.ProtectedWorkloadCount
+}
+
+func (v PBSInstanceView) ProtectedWorkloadTypes() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.ProtectedWorkloadTypes)
+}
+
+func (v PBSInstanceView) ProtectedWorkloadNames() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.ProtectedWorkloadNames)
+}
+
+func (v PBSInstanceView) AffectedDatastoreCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.AffectedDatastoreCount
+}
+
+func (v PBSInstanceView) AffectedDatastores() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.AffectedDatastores)
+}
+
+func (v PBSInstanceView) AffectedDatastoreSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.AffectedDatastoreSummary
+}
+
+func (v PBSInstanceView) ProtectedWorkloadSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.ProtectedWorkloadSummary
+}
+
+func (v PBSInstanceView) PostureSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.PostureSummary
+}
+
+func (v PBSInstanceView) BackupJobCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.BackupJobCount
+}
+
+func (v PBSInstanceView) BackupJobs() []models.PBSBackupJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSBackupJob(nil), v.r.PBS.BackupJobs...)
+}
+
+func (v PBSInstanceView) SyncJobCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.SyncJobCount
+}
+
+func (v PBSInstanceView) SyncJobs() []models.PBSSyncJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSSyncJob(nil), v.r.PBS.SyncJobs...)
+}
+
+func (v PBSInstanceView) VerifyJobCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.VerifyJobCount
+}
+
+func (v PBSInstanceView) VerifyJobs() []models.PBSVerifyJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSVerifyJob(nil), v.r.PBS.VerifyJobs...)
+}
+
+func (v PBSInstanceView) PruneJobCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.PruneJobCount
+}
+
+func (v PBSInstanceView) PruneJobs() []models.PBSPruneJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSPruneJob(nil), v.r.PBS.PruneJobs...)
+}
+
+func (v PBSInstanceView) GarbageJobCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.GarbageJobCount
+}
+
+func (v PBSInstanceView) GarbageJobs() []models.PBSGarbageJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSGarbageJob(nil), v.r.PBS.GarbageJobs...)
+}
+
+func (v PBSInstanceView) ConnectionHealth() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.ConnectionHealth
+}
+
+func (v PBSInstanceView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v PBSInstanceView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PBSInstanceView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PBSInstanceView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PBSInstanceView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v PBSInstanceView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v PBSInstanceView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PBSInstanceView) CustomURL() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.CustomURL
+}
+
+// PMGInstanceView wraps a PMG resource.
+type PMGInstanceView struct{ r *Resource }
+
+func NewPMGInstanceView(r *Resource) PMGInstanceView { return PMGInstanceView{r: r} }
+
+func (v PMGInstanceView) String() string {
+	return fmt.Sprintf("PMGInstanceView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v PMGInstanceView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PMGInstanceView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PMGInstanceView) InstanceID() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.InstanceID
+}
+
+func (v PMGInstanceView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PMGInstanceView) Hostname() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.Hostname
+}
+
+func (v PMGInstanceView) Version() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.Version
+}
+
+func (v PMGInstanceView) NodeCount() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.NodeCount
+}
+
+func (v PMGInstanceView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.UptimeSeconds
+}
+
+func (v PMGInstanceView) QueueActive() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueActive
+}
+
+func (v PMGInstanceView) QueueDeferred() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueDeferred
+}
+
+func (v PMGInstanceView) QueueHold() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueHold
+}
+
+func (v PMGInstanceView) QueueTotal() int {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.QueueTotal
+}
+
+func (v PMGInstanceView) MailCountTotal() float64 {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.MailCountTotal
+}
+
+func (v PMGInstanceView) SpamIn() float64 {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.SpamIn
+}
+
+func (v PMGInstanceView) VirusIn() float64 {
+	if v.r == nil || v.r.PMG == nil {
+		return 0
+	}
+	return v.r.PMG.VirusIn
+}
+
+func (v PMGInstanceView) ConnectionHealth() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.ConnectionHealth
+}
+
+func (v PMGInstanceView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v PMGInstanceView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PMGInstanceView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v PMGInstanceView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v PMGInstanceView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PMGInstanceView) CustomURL() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.CustomURL
+}
+
+func (v PMGInstanceView) Nodes() []PMGNodeMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGNodeMetaSlice(v.r.PMG.Nodes)
+}
+
+func (v PMGInstanceView) MailStats() *PMGMailStatsMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGMailStatsMeta(v.r.PMG.MailStats)
+}
+
+func (v PMGInstanceView) Quarantine() *PMGQuarantineMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGQuarantineMeta(v.r.PMG.Quarantine)
+}
+
+func (v PMGInstanceView) SpamDistribution() []PMGSpamBucketMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return clonePMGSpamBucketMetaSlice(v.r.PMG.SpamDistribution)
+}
+
+// K8sClusterView wraps a Kubernetes cluster resource.
+type K8sClusterView struct{ r *Resource }
+
+func NewK8sClusterView(r *Resource) K8sClusterView { return K8sClusterView{r: r} }
+
+func (v K8sClusterView) String() string {
+	return fmt.Sprintf("K8sClusterView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v K8sClusterView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v K8sClusterView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v K8sClusterView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v K8sClusterView) ClusterID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterID
+}
+
+func (v K8sClusterView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sClusterView) SourceName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.SourceName
+}
+
+func (v K8sClusterView) SourceStatus() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.SourceStatus
+}
+
+func (v K8sClusterView) AgentID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.AgentID
+}
+
+func (v K8sClusterView) Context() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Context
+}
+
+func (v K8sClusterView) Server() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Server
+}
+
+func (v K8sClusterView) Version() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Version
+}
+
+func (v K8sClusterView) PendingUninstall() bool {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return false
+	}
+	return v.r.Kubernetes.PendingUninstall
+}
+
+func (v K8sClusterView) MetricCapabilities() *K8sMetricCapabilities {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return cloneKubernetesMetricCapabilities(v.r.Kubernetes.MetricCapabilities)
+}
+
+func (v K8sClusterView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v K8sClusterView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v K8sClusterView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v K8sClusterView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v K8sClusterView) AgentVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.AgentVersion
+}
+
+func (v K8sClusterView) IntervalSeconds() int {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.IntervalSeconds
+}
+
+func (v K8sClusterView) ChildCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.ChildCount
+}
+
+// WorkloadView is a polymorphic view over VM + LXC resources.
+type WorkloadView struct{ r *Resource }
+
+func NewWorkloadView(r *Resource) WorkloadView { return WorkloadView{r: r} }
+
+func (v WorkloadView) String() string { return fmt.Sprintf("WorkloadView(%s, %q)", v.ID(), v.Name()) }
+
+func (v WorkloadView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v WorkloadView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v WorkloadView) Type() ResourceType {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Type
+}
+
+func (v WorkloadView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v WorkloadView) VMID() int {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.VMID
+}
+
+func (v WorkloadView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.NodeName
+}
+
+func (v WorkloadView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Instance
+}
+
+func (v WorkloadView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v WorkloadView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v WorkloadView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v WorkloadView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v WorkloadView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v WorkloadView) IsVM() bool { return v.r != nil && v.r.Type == ResourceTypeVM }
+
+func (v WorkloadView) IsContainer() bool {
+	return v.r != nil && v.r.Type == ResourceTypeSystemContainer
+}
+
+// InfrastructureView is a polymorphic view over host resources.
+type InfrastructureView struct{ r *Resource }
+
+func NewInfrastructureView(r *Resource) InfrastructureView { return InfrastructureView{r: r} }
+
+func (v InfrastructureView) String() string {
+	return fmt.Sprintf("InfrastructureView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v InfrastructureView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v InfrastructureView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v InfrastructureView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v InfrastructureView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v InfrastructureView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v InfrastructureView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v InfrastructureView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v InfrastructureView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v InfrastructureView) HasProxmox() bool { return v.r != nil && v.r.Proxmox != nil }
+
+func (v InfrastructureView) HasAgent() bool { return v.r != nil && v.r.Agent != nil }
+
+func (v InfrastructureView) HasDocker() bool { return v.r != nil && v.r.Docker != nil }
+
+func (v InfrastructureView) ChildCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.ChildCount
+}
+
+// K8sNodeView wraps a Kubernetes node resource (ResourceTypeK8sNode).
+type K8sNodeView struct{ r *Resource }
+
+func NewK8sNodeView(r *Resource) K8sNodeView { return K8sNodeView{r: r} }
+
+func (v K8sNodeView) String() string { return fmt.Sprintf("K8sNodeView(%s, %q)", v.ID(), v.Name()) }
+
+func (v K8sNodeView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v K8sNodeView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v K8sNodeView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v K8sNodeView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sNodeView) NodeUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeUID
+}
+
+func (v K8sNodeView) NodeName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeName
+}
+
+func (v K8sNodeView) Ready() bool {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return false
+	}
+	return v.r.Kubernetes.Ready
+}
+
+func (v K8sNodeView) Unschedulable() bool {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return false
+	}
+	return v.r.Kubernetes.Unschedulable
+}
+
+func (v K8sNodeView) Roles() []string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Kubernetes.Roles)
+}
+
+func (v K8sNodeView) KubeletVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.KubeletVersion
+}
+
+func (v K8sNodeView) ContainerRuntimeVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ContainerRuntimeVersion
+}
+
+func (v K8sNodeView) OSImage() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OSImage
+}
+
+func (v K8sNodeView) KernelVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.KernelVersion
+}
+
+func (v K8sNodeView) Architecture() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Architecture
+}
+
+func (v K8sNodeView) CapacityCPU() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityCPU
+}
+
+func (v K8sNodeView) CapacityMemoryBytes() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityMemoryBytes
+}
+
+func (v K8sNodeView) CapacityPods() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityPods
+}
+
+func (v K8sNodeView) AllocCPU() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocCPU
+}
+
+func (v K8sNodeView) AllocMemoryBytes() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocMemoryBytes
+}
+
+func (v K8sNodeView) AllocPods() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocPods
+}
+
+func (v K8sNodeView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v K8sNodeView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v K8sNodeView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v K8sNodeView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v K8sNodeView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// PodView wraps a Pod resource (ResourceTypePod).
+type PodView struct{ r *Resource }
+
+func NewPodView(r *Resource) PodView { return PodView{r: r} }
+
+func (v PodView) String() string { return fmt.Sprintf("PodView(%s, %q)", v.ID(), v.Name()) }
+
+func (v PodView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PodView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PodView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PodView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v PodView) ClusterID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterID
+}
+
+func (v PodView) NodeName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeName
+}
+
+func (v PodView) Namespace() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Namespace
+}
+
+func (v PodView) PodUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodUID
+}
+
+func (v PodView) PodPhase() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodPhase
+}
+
+func (v PodView) Restarts() int {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.Restarts
+}
+
+func (v PodView) OwnerKind() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OwnerKind
+}
+
+func (v PodView) OwnerName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OwnerName
+}
+
+func (v PodView) Image() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Image
+}
+
+func (v PodView) Labels() map[string]string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return cloneStringMap(v.r.Kubernetes.Labels)
+}
+
+func (v PodView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v PodView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PodView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v PodView) NetInRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v PodView) NetOutRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v PodView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v PodView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PodView) PodReason() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodReason
+}
+
+func (v PodView) PodMessage() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodMessage
+}
+
+func (v PodView) PodContainers() []K8sPodContainer {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	src := v.r.Kubernetes.PodContainers
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]K8sPodContainer, len(src))
+	copy(out, src)
+	return out
+}
+
+func (v PodView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// K8sDeploymentView wraps a Kubernetes deployment resource (ResourceTypeK8sDeployment).
+type K8sDeploymentView struct{ r *Resource }
+
+func NewK8sDeploymentView(r *Resource) K8sDeploymentView { return K8sDeploymentView{r: r} }
+
+func (v K8sDeploymentView) String() string {
+	return fmt.Sprintf("K8sDeploymentView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v K8sDeploymentView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v K8sDeploymentView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v K8sDeploymentView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v K8sDeploymentView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sDeploymentView) Namespace() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Namespace
+}
+
+func (v K8sDeploymentView) DeploymentUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.DeploymentUID
+}
+
+func (v K8sDeploymentView) DesiredReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.DesiredReplicas
+}
+
+func (v K8sDeploymentView) UpdatedReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.UpdatedReplicas
+}
+
+func (v K8sDeploymentView) ReadyReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.ReadyReplicas
+}
+
+func (v K8sDeploymentView) AvailableReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AvailableReplicas
+}
+
+func (v K8sDeploymentView) Labels() map[string]string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return cloneStringMap(v.r.Kubernetes.Labels)
+}
+
+func (v K8sDeploymentView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v K8sDeploymentView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v K8sDeploymentView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// DockerContainerView wraps a Docker/OCI app container resource (ResourceTypeAppContainer).
+type DockerContainerView struct{ r *Resource }
+
+func NewDockerContainerView(r *Resource) DockerContainerView { return DockerContainerView{r: r} }
+
+func (v DockerContainerView) String() string {
+	return fmt.Sprintf("DockerContainerView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v DockerContainerView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v DockerContainerView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v DockerContainerView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v DockerContainerView) ContainerID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.ContainerID
+}
+
+func (v DockerContainerView) HostSourceID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Docker.HostSourceID)
+}
+
+func (v DockerContainerView) Image() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Image
+}
+
+func (v DockerContainerView) ContainerState() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.ContainerState
+}
+
+func (v DockerContainerView) Health() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Health
+}
+
+func (v DockerContainerView) RestartCount() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.RestartCount
+}
+
+func (v DockerContainerView) ExitCode() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.ExitCode
+}
+
+func (v DockerContainerView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v DockerContainerView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v DockerContainerView) NetInRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v DockerContainerView) NetOutRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
+}
+
+func (v DockerContainerView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.UptimeSeconds
+}
+
+func (v DockerContainerView) Ports() []DockerPortMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerPortMetaSlice(v.r.Docker.Ports)
+}
+
+func (v DockerContainerView) Labels() map[string]string {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneStringMap(v.r.Docker.Labels)
+}
+
+func (v DockerContainerView) Networks() []DockerNetworkMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerNetworkMetaSlice(v.r.Docker.Networks)
+}
+
+func (v DockerContainerView) Mounts() []DockerMountMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerMountMetaSlice(v.r.Docker.Mounts)
+}
+
+func (v DockerContainerView) UpdateStatus() *DockerUpdateStatusMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerUpdateStatusMeta(v.r.Docker.UpdateStatus)
+}
+
+func (v DockerContainerView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v DockerContainerView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Tags)
+}
+
+func (v DockerContainerView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v5.0.0)'
+        description: 'Release tag (e.g., v6.0.0)'
         required: true
         type: string
       prerelease:
@@ -71,6 +71,66 @@ jobs:
           echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
           echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate release line policy
+        env:
+          TAG: ${{ steps.extract.outputs.tag }}
+          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist in repository tags."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing floating-tag promotion."
+            exit 1
+          fi
+
+          if [ "$PRERELEASE" != "true" ]; then
+            BASE_VERSION="${TAG#v}"
+            BASE_VERSION="${BASE_VERSION%%-*}"
+            mapfile -t RC_TAGS < <(git tag -l "v${BASE_VERSION}-rc.*" --sort=-version:refname)
+            if [ "${#RC_TAGS[@]}" -eq 0 ]; then
+              echo "::error::Stable tag ${TAG} has no matching RC tags for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            MATCHED_RC=""
+            for rc_tag in "${RC_TAGS[@]}"; do
+              rc_commit="$(git rev-list -n1 "refs/tags/${rc_tag}")"
+              if git merge-base --is-ancestor "$rc_commit" "$TAG_COMMIT"; then
+                MATCHED_RC="$rc_tag"
+                break
+              fi
+            done
+
+            if [ -z "$MATCHED_RC" ]; then
+              echo "::error::Stable tag ${TAG} does not descend from any matching RC tag for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            echo "[OK] ${TAG} descends from prerelease ${MATCHED_RC}"
+          fi
+
+          echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -108,11 +168,11 @@ jobs:
             exit 1
           fi
           
-          # Also wait for agent image
+          # Also wait for unified agent image
           ATTEMPT=0
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if docker manifest inspect rcourtman/pulse-docker-agent:${TAG} > /dev/null 2>&1; then
-              echo "Image rcourtman/pulse-docker-agent:${TAG} is available!"
+            if docker manifest inspect rcourtman/pulse-agent:${TAG} > /dev/null 2>&1; then
+              echo "Image rcourtman/pulse-agent:${TAG} is available!"
               exit 0
             fi
             ATTEMPT=$((ATTEMPT + 1))
@@ -158,7 +218,7 @@ jobs:
               ghcr.io/${OWNER}/pulse:${TAG}
           fi
 
-      - name: Promote Docker agent image tags
+      - name: Promote Pulse agent image tags
         env:
           TAG: ${{ steps.extract.outputs.tag }}
           PRERELEASE: ${{ steps.extract.outputs.prerelease }}
@@ -173,22 +233,22 @@ jobs:
 
           if [ "$PRERELEASE" = "true" ]; then
             docker buildx imagetools create \
-              -t rcourtman/pulse-docker-agent:rc \
-              rcourtman/pulse-docker-agent:${TAG}
+              -t rcourtman/pulse-agent:rc \
+              rcourtman/pulse-agent:${TAG}
             docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse-docker-agent:rc \
-              ghcr.io/${OWNER}/pulse-docker-agent:${TAG}
+              -t ghcr.io/${OWNER}/pulse-agent:rc \
+              ghcr.io/${OWNER}/pulse-agent:${TAG}
           else
             docker buildx imagetools create \
-              -t rcourtman/pulse-docker-agent:latest \
-              -t rcourtman/pulse-docker-agent:${MAJOR_MINOR} \
-              -t rcourtman/pulse-docker-agent:${MAJOR} \
-              rcourtman/pulse-docker-agent:${TAG}
+              -t rcourtman/pulse-agent:latest \
+              -t rcourtman/pulse-agent:${MAJOR_MINOR} \
+              -t rcourtman/pulse-agent:${MAJOR} \
+              rcourtman/pulse-agent:${TAG}
             docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse-docker-agent:latest \
-              -t ghcr.io/${OWNER}/pulse-docker-agent:${MAJOR_MINOR} \
-              -t ghcr.io/${OWNER}/pulse-docker-agent:${MAJOR} \
-              ghcr.io/${OWNER}/pulse-docker-agent:${TAG}
+              -t ghcr.io/${OWNER}/pulse-agent:latest \
+              -t ghcr.io/${OWNER}/pulse-agent:${MAJOR_MINOR} \
+              -t ghcr.io/${OWNER}/pulse-agent:${MAJOR} \
+              ghcr.io/${OWNER}/pulse-agent:${TAG}
           fi
 
       - name: Promotion summary

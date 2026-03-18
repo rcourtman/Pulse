@@ -5,12 +5,14 @@ import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { RunToolCallTrace } from './RunToolCallTrace';
 import {
-  formatRelativeTime,
   formatDurationMs,
   formatTriggerReason,
   formatScope,
+  getCanonicalScopeResourceIds,
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
+import { formatRelativeTime } from '@/utils/format';
+import { getPatrolRunStatusPresentation, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 
 import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 import ActivityIcon from 'lucide-solid/icons/activity';
@@ -30,11 +32,18 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import FilterXIcon from 'lucide-solid/icons/filter-x';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import MailIcon from 'lucide-solid/icons/mail';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 interface PatrolStreamState {
   phase: Accessor<string>;
   currentTool: Accessor<string>;
   tokens: Accessor<number>;
+  resynced: Accessor<boolean>;
+  resyncReason: Accessor<string>;
+  bufferStartSeq: Accessor<number>;
+  bufferEndSeq: Accessor<number>;
+  outputTruncated: Accessor<boolean>;
+  reconnectCount: Accessor<number>;
   isStreaming: Accessor<boolean>;
   errorMessage: Accessor<string>;
 }
@@ -53,11 +62,26 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   // Live in-progress entry
   if (props.isLive) {
     const hasError = () => !!props.patrolStream.errorMessage();
+    const resyncTitle = () => {
+      const reason = props.patrolStream.resyncReason();
+      const start = props.patrolStream.bufferStartSeq();
+      const end = props.patrolStream.bufferEndSeq();
+      const parts: string[] = [];
+      if (reason) parts.push(`reason=${reason}`);
+      if (start > 0 || end > 0) parts.push(`buffer=${start || '?'}..${end || '?'}`);
+      if (props.patrolStream.outputTruncated()) parts.push('output_truncated=true');
+      if (props.patrolStream.reconnectCount() > 0)
+        parts.push(`reconnects=${props.patrolStream.reconnectCount()}`);
+      return parts.length ? parts.join(' ') : '';
+    };
     return (
-      <div class={`rounded-md border transition-colors ${hasError()
-        ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
-        : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-        }`}>
+      <div
+        class={`rounded-md border transition-colors ${
+          hasError()
+            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900'
+            : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
+        }`}
+      >
         <div class="px-3 py-2">
           <div class="flex flex-wrap items-center gap-2 text-xs">
             <Show when={!hasError()}>
@@ -67,6 +91,26 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </span>
               <span class="font-medium text-blue-800 dark:text-blue-200">Running now</span>
             </Show>
+            <Show
+              when={
+                !hasError() &&
+                (props.patrolStream.resynced() || props.patrolStream.reconnectCount() > 0)
+              }
+            >
+              <span
+                title={resyncTitle()}
+                class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+              >
+                <RefreshCwIcon class="w-3 h-3" />
+                <span>
+                  {props.patrolStream.resynced()
+                    ? props.patrolStream.resyncReason() === 'buffer_rotated'
+                      ? 'Resynced (truncated)'
+                      : 'Resynced'
+                    : `Reconnected${props.patrolStream.reconnectCount() > 1 ? ` x${props.patrolStream.reconnectCount()}` : ''}`}
+                </span>
+              </span>
+            </Show>
             <Show when={hasError()}>
               <ShieldAlertIcon class="w-3.5 h-3.5 text-red-500" />
               <span class="font-medium text-red-800 dark:text-red-200">Error</span>
@@ -75,7 +119,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               <span class="text-blue-700 dark:text-blue-300">{props.patrolStream.phase()}</span>
             </Show>
             <Show when={!hasError() && props.patrolStream.currentTool()}>
-              <span class="font-mono text-[11px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+              <span class="font-mono text-[11px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
                 {props.patrolStream.currentTool()}
               </span>
             </Show>
@@ -99,31 +143,28 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const run = props.run;
   const scopeSummary = formatScope(run);
   const duration = formatDurationMs(run.duration_ms);
+  const runStatus = getPatrolRunStatusPresentation(run.status);
+  const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
+  const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
 
   return (
-    <div class={`rounded-md border transition-colors ${props.selected
-      ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-      : 'border-gray-200 dark:border-gray-700'
-      }`}>
+    <div
+      class={`rounded-md border transition-colors ${
+        props.selected
+          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
+          : 'border-border'
+      }`}
+    >
       <button
         type="button"
         onClick={() => props.onSelect(props.selected ? null : run)}
-        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-gray-50 dark:hover:bg-gray-700/40' : ''}`}
+        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-surface-hover' : ''}`}
       >
-        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <span class="text-gray-900 dark:text-gray-100 font-medium">
-            {formatRelativeTime(run.started_at)}
+        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span class="text-base-content font-medium">
+            {formatRelativeTime(run.started_at, { compact: true })}
           </span>
-          <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-            : run.status === 'issues_found'
-              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-              : run.status === 'error'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-            }`}>
-            {run.status.replace(/_/g, ' ')}
-          </span>
+          <span class={`px-1.5 py-0.5 rounded ${runStatus.badgeClass}`}>{runStatus.label}</span>
           <span>{formatTriggerReason(run.trigger_reason)}</span>
           <Show when={scopeSummary}>
             <span>• {scopeSummary}</span>
@@ -138,7 +179,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <span>• {run.new_findings} new</span>
           </Show>
           <Show when={run.rejected_findings}>
-            <span class="text-gray-400 dark:text-gray-500">• {run.rejected_findings} rejected</span>
+            <span class="text-muted">• {run.rejected_findings} rejected</span>
           </Show>
         </div>
       </button>
@@ -146,22 +187,70 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
       {/* Inline expansion details */}
       <Show when={props.selected}>
         <div class="px-3 pb-3 border-t border-blue-200 dark:border-blue-800 mt-0">
-
           {/* Section 1: Narrative Summary */}
-          <div class="mt-3 flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <div class="mt-3 flex items-start gap-2 text-sm text-base-content">
             <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <p>
-              {run.resources_checked > 0
-                ? <>Scanned <strong>{run.resources_checked}</strong> resource{run.resources_checked !== 1 ? 's' : ''}{' '}
-                  {formatDurationMs(run.duration_ms) ? <>in <strong>{formatDurationMs(run.duration_ms)}</strong></> : ''}{' '}
-                  {run.tool_call_count > 0 ? <>using <strong>{run.tool_call_count}</strong> tool call{run.tool_call_count !== 1 ? 's' : ''}</> : ''}.{' '}
+              {run.resources_checked > 0 ? (
+                <>
+                  Scanned <strong>{run.resources_checked}</strong> resource
+                  {run.resources_checked !== 1 ? 's' : ''}{' '}
+                  {formatDurationMs(run.duration_ms) ? (
+                    <>
+                      in <strong>{formatDurationMs(run.duration_ms)}</strong>
+                    </>
+                  ) : (
+                    ''
+                  )}{' '}
+                  {run.tool_call_count > 0 ? (
+                    <>
+                      using <strong>{run.tool_call_count}</strong> tool call
+                      {run.tool_call_count !== 1 ? 's' : ''}
+                    </>
+                  ) : (
+                    ''
+                  )}
+                  .{' '}
                 </>
-                : <>Patrol completed{formatDurationMs(run.duration_ms) ? <> in <strong>{formatDurationMs(run.duration_ms)}</strong></> : ''}.{' '}</>
-              }
-              {run.new_findings > 0
-                ? <>Found <strong>{run.new_findings}</strong> new issue{run.new_findings !== 1 ? 's' : ''}{run.auto_fix_count > 0 ? <>, auto-fixed <strong>{run.auto_fix_count}</strong></> : ''}.</>
-                : <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
-              }
+              ) : (
+                <>
+                  Patrol completed
+                  {formatDurationMs(run.duration_ms) ? (
+                    <>
+                      {' '}
+                      in <strong>{formatDurationMs(run.duration_ms)}</strong>
+                    </>
+                  ) : (
+                    ''
+                  )}
+                  .{' '}
+                </>
+              )}
+              {run.new_findings > 0 ? (
+                <>
+                  Found <strong>{run.new_findings}</strong> new issue
+                  {run.new_findings !== 1 ? 's' : ''}
+                  {run.auto_fix_count > 0 ? (
+                    <>
+                      , auto-fixed <strong>{run.auto_fix_count}</strong>
+                    </>
+                  ) : (
+                    ''
+                  )}
+                  .
+                </>
+              ) : run.existing_findings > 0 ? (
+                <>
+                  No new issues, but <strong>{run.existing_findings}</strong> existing issue
+                  {run.existing_findings !== 1 ? 's' : ''} remain.
+                </>
+              ) : runIsHealthy ? (
+                <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
+              ) : (
+                <span class="text-amber-600 dark:text-amber-400">
+                  Patrol completed with issues requiring review.
+                </span>
+              )}
             </p>
           </div>
 
@@ -169,49 +258,53 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <Show when={run.resources_checked > 0}>
             <div class="mt-3">
               <div class="flex items-center gap-1.5 mb-2">
-                <SearchIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+                <SearchIcon class="w-3.5 h-3.5 text-muted" />
+                <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                   Resources Scanned ({run.resources_checked})
                 </span>
               </div>
               <div class="flex flex-wrap gap-1.5">
                 <Show when={run.nodes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                    <ServerIcon class="w-3 h-3" /> {run.nodes_checked} node{run.nodes_checked !== 1 ? 's' : ''}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                    <ServerIcon class="w-3 h-3" /> {run.nodes_checked} node
+                    {run.nodes_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.guests_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                    <MonitorIcon class="w-3 h-3" /> {run.guests_checked} VM{run.guests_checked !== 1 ? 's' : ''}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                    <MonitorIcon class="w-3 h-3" /> {run.guests_checked} VM
+                    {run.guests_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.docker_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
-                    <BoxIcon class="w-3 h-3" /> {run.docker_checked} container{run.docker_checked !== 1 ? 's' : ''}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300">
+                    <BoxIcon class="w-3 h-3" /> {run.docker_checked} container
+                    {run.docker_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.storage_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                     <HardDriveIcon class="w-3 h-3" /> {run.storage_checked} storage
                   </span>
                 </Show>
                 <Show when={run.hosts_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                    <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} host{run.hosts_checked !== 1 ? 's' : ''}
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300">
+                    <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} agent
+                    {run.hosts_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.pbs_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
                     <DatabaseIcon class="w-3 h-3" /> {run.pbs_checked} PBS
                   </span>
                 </Show>
                 <Show when={run.pmg_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
                     <MailIcon class="w-3 h-3" /> {run.pmg_checked} PMG
                   </span>
                 </Show>
                 <Show when={run.kubernetes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
                     <ActivityIcon class="w-3 h-3" /> {run.kubernetes_checked} K8s
                   </span>
                 </Show>
@@ -222,39 +315,41 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           {/* Section 3: Outcomes */}
           <div class="mt-3">
             <div class="flex items-center gap-1.5 mb-2">
-              <ShieldAlertIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-              <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+              <ShieldAlertIcon class="w-3.5 h-3.5 text-muted" />
+              <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                 Outcomes
               </span>
             </div>
             <div class="flex flex-wrap gap-1.5">
               <Show when={run.new_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
                   <AlertTriangleIcon class="w-3 h-3" /> {run.new_findings} new
                 </span>
               </Show>
               <Show when={run.existing_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-hover ">
                   <ActivityIcon class="w-3 h-3" /> {run.existing_findings} existing
                 </span>
               </Show>
               <Show when={run.resolved_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> {run.resolved_findings} resolved
                 </span>
               </Show>
               <Show when={run.auto_fix_count > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
                   <WrenchIcon class="w-3 h-3" /> {run.auto_fix_count} auto-fixed
                 </span>
               </Show>
               <Show when={run.rejected_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt ">
                   <FilterXIcon class="w-3 h-3" /> {run.rejected_findings} rejected
                 </span>
               </Show>
-              <Show when={run.status === 'healthy' && run.new_findings === 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+              <Show
+                when={runIsHealthy && run.new_findings === 0 && run.existing_findings === 0}
+              >
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> All clear
                 </span>
               </Show>
@@ -262,7 +357,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           </div>
 
           {/* Section 4: AI Effort Bar */}
-          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900/50 text-xs text-gray-500 dark:text-gray-400">
+          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-surface-alt text-xs text-muted">
             <Show when={formatDurationMs(run.duration_ms)}>
               <span class="inline-flex items-center gap-1">
                 <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
@@ -270,16 +365,29 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             </Show>
             <Show when={run.tool_call_count > 0}>
               <span class="inline-flex items-center gap-1">
-                <ZapIcon class="w-3.5 h-3.5" /> {run.tool_call_count} tool call{run.tool_call_count !== 1 ? 's' : ''}
+                <ZapIcon class="w-3.5 h-3.5" /> {run.tool_call_count} tool call
+                {run.tool_call_count !== 1 ? 's' : ''}
+              </span>
+            </Show>
+            <Show when={run.triage_flags > 0}>
+              <span class="inline-flex items-center gap-1">
+                <ShieldAlertIcon class="w-3.5 h-3.5" /> {run.triage_flags} triage flag
+                {run.triage_flags !== 1 ? 's' : ''}
+              </span>
+            </Show>
+            <Show when={run.triage_skipped_llm}>
+              <span class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                <BrainCircuitIcon class="w-3.5 h-3.5" /> LLM skipped
               </span>
             </Show>
             <Show when={(run.input_tokens || 0) + (run.output_tokens || 0) > 0}>
               <span class="inline-flex items-center gap-1">
-                <BrainCircuitIcon class="w-3.5 h-3.5" /> {((run.input_tokens || 0) + (run.output_tokens || 0)).toLocaleString()} tokens
+                <BrainCircuitIcon class="w-3.5 h-3.5" />{' '}
+                {((run.input_tokens || 0) + (run.output_tokens || 0)).toLocaleString()} tokens
               </span>
             </Show>
             <Show when={run.type === 'scoped'}>
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] font-medium">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400 text-[10px] font-medium">
                 {formatScope(run) || 'Scoped'}
               </span>
             </Show>
@@ -290,8 +398,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <div class="mt-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
-                  <BrainCircuitIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                  <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+                  <BrainCircuitIcon class="w-3.5 h-3.5 text-muted" />
+                  <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
                     Patrol Analysis
                   </span>
                 </div>
@@ -305,7 +413,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <Show when={showRunAnalysis()}>
                 <div
-                  class="mt-2 p-3 rounded bg-white dark:bg-gray-900 text-sm leading-relaxed text-gray-700 dark:text-gray-200 max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                  class="mt-2 p-3 rounded bg-surface text-sm leading-relaxed text-base-content max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(sanitizeAnalysis(run.ai_analysis))}
                 />
@@ -317,11 +425,14 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <RunToolCallTrace runId={run.id} toolCallCount={run.tool_call_count} />
 
           {/* Section 7: Inline Findings */}
-          <Show when={run.finding_ids?.length}>
+          <Show when={run.finding_ids !== undefined}>
             <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
               <FindingsPanel
-                filterFindingIds={run.finding_ids}
+                filterFindingIds={run.finding_ids ?? []}
                 filterOverride="all"
+                scopeResourceIds={canonicalScopeResourceIds}
+                scopeResourceTypes={run.scope_resource_types}
+                showScopeWarnings={true}
                 showControls={false}
               />
             </div>

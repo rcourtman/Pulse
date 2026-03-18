@@ -118,17 +118,6 @@ func TestSaveAlertConfig_WriteError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSaveOIDCConfig_WriteError(t *testing.T) {
-	tempDir := t.TempDir()
-	cp := NewConfigPersistence(tempDir)
-
-	mfs := &mockFSError{FileSystem: defaultFileSystem{}, writeError: errors.New("write error")}
-	cp.SetFileSystem(mfs)
-
-	err := cp.SaveOIDCConfig(OIDCConfig{})
-	assert.Error(t, err)
-}
-
 func TestSaveEmailConfig_WriteError(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)
@@ -165,7 +154,7 @@ func TestLoadEmailConfig_Errors(t *testing.T) {
 
 	// 2. Decrypt Error (garbage data with crypto enabled)
 	cp.SetFileSystem(defaultFileSystem{})
-	os.WriteFile(filepath.Join(tempDir, "email.enc"), []byte("garbage"), 0600)
+	_ = os.WriteFile(filepath.Join(tempDir, "email.enc"), []byte("garbage"), 0600)
 	// crypto is enabled by NewConfigPersistence
 	_, err = cp.LoadEmailConfig()
 	assert.Error(t, err)
@@ -191,7 +180,7 @@ func TestLoadAppriseConfig_Errors(t *testing.T) {
 
 	// 2. Decrypt Error
 	cp.SetFileSystem(defaultFileSystem{})
-	os.WriteFile(filepath.Join(tempDir, "apprise.enc"), []byte("garbage"), 0600)
+	_ = os.WriteFile(filepath.Join(tempDir, "apprise.enc"), []byte("garbage"), 0600)
 	_, err = cp.LoadAppriseConfig()
 	assert.Error(t, err)
 

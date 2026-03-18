@@ -82,7 +82,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		var profiles []models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&profiles)
+		_ = json.NewDecoder(rec.Body).Decode(&profiles)
 		if len(profiles) != 1 {
 			t.Errorf("expected 1 profile, got %d", len(profiles))
 		}
@@ -109,7 +109,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		}
 
 		var updated models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&updated)
+		_ = json.NewDecoder(rec.Body).Decode(&updated)
 		if updated.Name != "Updated Profile" {
 			t.Errorf("expected updated name, got %q", updated.Name)
 		}
@@ -122,7 +122,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		var assignments []models.AgentProfileAssignment
-		json.NewDecoder(rec.Body).Decode(&assignments)
+		_ = json.NewDecoder(rec.Body).Decode(&assignments)
 		if len(assignments) != 0 {
 			t.Errorf("expected 0 assignments, got %d", len(assignments))
 		}
@@ -144,9 +144,36 @@ func TestConfigProfileHandlers(t *testing.T) {
 		}
 
 		var created models.AgentProfileAssignment
-		json.NewDecoder(rec.Body).Decode(&created)
+		_ = json.NewDecoder(rec.Body).Decode(&created)
 		if created.AgentID != "test-agent" || created.ProfileID != profileID {
 			t.Errorf("assignment mismatch: %+v", created)
+		}
+	})
+
+	t.Run("AssignProfileRejectsMissingProfile", func(t *testing.T) {
+		assignment := models.AgentProfileAssignment{
+			AgentID:   "missing-profile-agent",
+			ProfileID: "missing-profile",
+		}
+		body, _ := json.Marshal(assignment)
+		req := httptest.NewRequest(http.MethodPost, "/assignments", bytes.NewBuffer(body))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		req = httptest.NewRequest(http.MethodGet, "/assignments", nil)
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		var assignments []models.AgentProfileAssignment
+		if err := json.NewDecoder(rec.Body).Decode(&assignments); err != nil {
+			t.Fatalf("failed to decode: %v", err)
+		}
+		if len(assignments) != 1 {
+			t.Fatalf("expected existing assignment count to remain 1 after rejected missing-profile assignment, got %d", len(assignments))
 		}
 	})
 
@@ -219,7 +246,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		rec = httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		var profiles []models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&profiles)
+		_ = json.NewDecoder(rec.Body).Decode(&profiles)
 		if len(profiles) != 0 {
 			t.Errorf("expected 0 profiles after delete, got %d", len(profiles))
 		}

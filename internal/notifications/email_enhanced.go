@@ -65,6 +65,12 @@ func (a *plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	return nil, nil
 }
 
+func sanitizeEmailHeaderValue(value string) string {
+	clean := strings.ReplaceAll(value, "\r", " ")
+	clean = strings.ReplaceAll(clean, "\n", " ")
+	return strings.TrimSpace(clean)
+}
+
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
@@ -101,6 +107,11 @@ type EnhancedEmailManager struct {
 	rateLimit *RateLimiter
 }
 
+var (
+	smtpDialTimeout       = net.DialTimeout
+	smtpTLSDialWithDialer = tls.DialWithDialer
+)
+
 // RateLimiter implements a simple rate limiter
 type RateLimiter struct {
 	mu        sync.Mutex
@@ -134,7 +145,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			log.Debug().
 				Int("attempt", attempt).
 				Dur("delay", delay).
-				Msg("Retrying email send after delay")
+				Msg("retrying email send after delay")
 			time.Sleep(delay)
 		}
 
@@ -150,7 +161,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			if attempt > 0 {
 				log.Info().
 					Int("attempt", attempt).
-					Msg("Email sent successfully after retry")
+					Msg("email sent successfully after retry")
 			}
 			return nil
 		}
@@ -160,7 +171,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			Err(err).
 			Int("attempt", attempt).
 			Str("provider", e.config.Provider).
-			Msg("Email send attempt failed")
+			Msg("email send attempt failed")
 	}
 
 	return fmt.Errorf("email failed after %d attempts: %w", e.config.MaxRetries+1, lastErr)
@@ -195,12 +206,12 @@ func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string)
 	// Build message with enhanced headers
 	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
 
-	msg := fmt.Sprintf("From: %s\r\n", e.config.From)
-	msg += fmt.Sprintf("To: %s\r\n", strings.Join(e.config.To, ", "))
+	msg := fmt.Sprintf("From: %s\r\n", sanitizeEmailHeaderValue(e.config.From))
+	msg += fmt.Sprintf("To: %s\r\n", sanitizeEmailHeaderValue(strings.Join(e.config.To, ", ")))
 	if e.config.ReplyTo != "" {
-		msg += fmt.Sprintf("Reply-To: %s\r\n", e.config.ReplyTo)
+		msg += fmt.Sprintf("Reply-To: %s\r\n", sanitizeEmailHeaderValue(e.config.ReplyTo))
 	}
-	msg += fmt.Sprintf("Subject: %s\r\n", subject)
+	msg += fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeaderValue(subject))
 	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	msg += fmt.Sprintf("Message-ID: <%d@pulse-monitoring>\r\n", time.Now().UnixNano())
 	msg += "MIME-Version: 1.0\r\n"
@@ -278,7 +289,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 	}
-	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	conn, err := smtpTLSDialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("TLS dial failed: %w", err)
 	}
@@ -336,7 +347,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 // sendStartTLS sends email using STARTTLS
 func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("TCP dial failed: %w", err)
 	}
@@ -416,7 +427,10 @@ func (e *EnhancedEmailManager) TestConnection() error {
 			ServerName:         e.config.SMTPHost,
 			InsecureSkipVerify: e.config.SkipTLSVerify,
 		}
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
+		dialer := &net.Dialer{
+			Timeout: 10 * time.Second,
+		}
+		conn, err = smtpTLSDialWithDialer(dialer, "tcp", addr, tlsConfig)
 	} else {
 		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
 	}
@@ -425,6 +439,11 @@ func (e *EnhancedEmailManager) TestConnection() error {
 		return fmt.Errorf("connection failed: %w", err)
 	}
 	defer conn.Close()
+
+	// Bound handshake/auth commands so TestConnection cannot hang indefinitely.
+	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return fmt.Errorf("failed to set connection deadline: %w", err)
+	}
 
 	client, err := smtp.NewClient(conn, e.config.SMTPHost)
 	if err != nil {
@@ -460,7 +479,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 // sendPlain sends email over plain SMTP connection with timeout
 func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("TCP dial failed: %w", err)
 	}

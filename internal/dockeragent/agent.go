@@ -7,18 +7,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -75,29 +75,63 @@ const (
 	RuntimePodman RuntimeKind = "podman"
 )
 
+// backupContainerMarker is the substring used to identify backup containers
+// created during container updates.
+const backupContainerMarker = "_pulse_backup_"
+
+// isBackupContainer reports whether any of the given container names contains
+// the Pulse backup marker (e.g. "myapp_pulse_backup_20240101_120000").
+func isBackupContainer(names []string) bool {
+	for _, name := range names {
+		if strings.Contains(name, backupContainerMarker) {
+			return true
+		}
+	}
+	return false
+}
+
+// setAgentHeaders sets the standard authentication and metadata headers for
+// requests from the Docker agent to a Pulse backend.
+func setAgentHeaders(req *http.Request, token string) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Token", token)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("User-Agent", "pulse-agent/"+Version)
+}
+
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg              Config
-	docker           dockerClient
-	daemonHost       string
-	daemonID         string // Cached at init; Podman can return unstable IDs across calls
-	runtime          RuntimeKind
-	runtimeVer       string
-	agentVersion     string
-	supportsSwarm    bool
-	httpClients      map[bool]*http.Client
-	logger           zerolog.Logger
-	machineID        string
-	hostName         string
-	cpuCount         int
-	targets          []TargetConfig
-	allowedStates    map[string]struct{}
-	stateFilters     []string
-	hostID           string
-	prevContainerCPU map[string]cpuSample
-	cpuMu            sync.Mutex // protects prevContainerCPU
-	reportBuffer     *buffer.Queue[agentsdocker.Report]
-	registryChecker  *RegistryChecker // For checking container image updates
+	cfg                Config
+	docker             dockerClient
+	daemonHost         string
+	daemonID           string // Cached at init; Podman can return unstable IDs across calls
+	runtime            RuntimeKind
+	runtimeVer         string
+	agentVersion       string
+	supportsSwarm      bool
+	httpClients        map[bool]*http.Client
+	logger             zerolog.Logger
+	machineID          string
+	hostName           string
+	cpuCount           int
+	targets            []TargetConfig
+	allowedStates      map[string]struct{}
+	stateFilters       []string
+	hostID             string
+	prevContainerCPU   map[string]cpuSample
+	cpuMu              sync.Mutex // protects prevContainerCPU
+	reportBuffer       *utils.Queue[agentsdocker.Report]
+	registryChecker    *RegistryChecker // For checking container image updates
+	collectMu          sync.Mutex       // serializes collectOnce calls
+	backgroundMu       sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
+	updateCheckRunning bool
+	cleanupTaskRunning bool
+	asyncOnce          sync.Once
+	asyncCtx           context.Context
+	asyncCancel        context.CancelFunc
+	asyncWG            sync.WaitGroup
+	closeOnce          sync.Once
+	closeErr           error
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -114,7 +148,7 @@ type cpuSample struct {
 func New(cfg Config) (*Agent, error) {
 	targets, err := normalizeTargetsFn(cfg.Targets)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize targets: %w", err)
 	}
 
 	if len(targets) == 0 {
@@ -130,7 +164,7 @@ func New(cfg Config) (*Agent, error) {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dockeragent.New: normalize fallback target: %w", err)
 		}
 	}
 
@@ -141,13 +175,13 @@ func New(cfg Config) (*Agent, error) {
 
 	stateFilters, err := normalizeContainerStates(cfg.ContainerStates)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize container states: %w", err)
 	}
 	cfg.ContainerStates = stateFilters
 
 	scope, err := normalizeSwarmScope(cfg.SwarmScope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize swarm scope: %w", err)
 	}
 	cfg.SwarmScope = scope
 
@@ -163,21 +197,21 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	if logger == nil {
-		defaultLogger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
+		defaultLogger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Str("component", "pulse-agent-docker").Logger()
 		logger = &defaultLogger
 	} else {
-		scoped := logger.With().Str("component", "pulse-docker-agent").Logger()
+		scoped := logger.With().Str("component", "pulse-agent-docker").Logger()
 		logger = &scoped
 	}
 
 	runtimePref, err := normalizeRuntime(cfg.Runtime)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize runtime: %w", err)
 	}
 
 	dockerClient, info, runtimeKind, err := connectRuntimeFn(runtimePref, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", err)
 	}
 	cfg.Runtime = string(runtimeKind)
 
@@ -249,13 +283,15 @@ func New(cfg Config) (*Agent, error) {
 		allowedStates:    make(map[string]struct{}, len(stateFilters)),
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
-		reportBuffer:     buffer.New[agentsdocker.Report](bufferCapacity),
+		reportBuffer:     utils.New[agentsdocker.Report](bufferCapacity),
 		registryChecker:  newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
 	for _, state := range stateFilters {
 		agent.allowedStates[state] = struct{}{}
 	}
+
+	agent.ensureAsyncLifecycle()
 
 	return agent, nil
 }
@@ -269,31 +305,98 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 	seen := make(map[string]struct{}, len(raw))
 
 	for _, target := range raw {
-		url := strings.TrimSpace(target.URL)
+		targetURL := strings.TrimSpace(target.URL)
 		token := strings.TrimSpace(target.Token)
-		if url == "" && token == "" {
+		if targetURL == "" && token == "" {
 			continue
 		}
 
-		if url == "" {
+		if targetURL == "" {
 			return nil, errors.New("pulse target URL is required")
 		}
 		if token == "" {
-			return nil, fmt.Errorf("pulse target %s is missing API token", url)
+			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		url = strings.TrimRight(url, "/")
-		key := fmt.Sprintf("%s|%s|%t", url, token, target.InsecureSkipVerify)
+		normalizedURL, err := normalizeTargetURL(targetURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
+		}
+
+		key := fmt.Sprintf("%s|%s|%t", normalizedURL, token, target.InsecureSkipVerify)
 		if _, exists := seen[key]; exists {
 			continue
 		}
 		seen[key] = struct{}{}
 
 		normalized = append(normalized, TargetConfig{
-			URL:                url,
+			URL:                normalizedURL,
 			Token:              token,
 			InsecureSkipVerify: target.InsecureSkipVerify,
 		})
+	}
+
+	return normalized, nil
+}
+
+func normalizeTargetURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("must include http:// or https:// with a valid host")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+
+	if scheme == "http" {
+		host := parsed.Hostname()
+		ip := net.ParseIP(host)
+		isLoopbackOrPrivate := strings.EqualFold(host, "localhost") ||
+			(ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()))
+		if !isLoopbackOrPrivate {
+			return "", fmt.Errorf("http is only allowed for loopback or private network addresses, use https for %s", host)
+		}
+	}
+
+	if parsed.User != nil {
+		return "", errors.New("userinfo is not supported")
+	}
+
+	if parsed.RawQuery != "" {
+		return "", errors.New("query parameters are not supported")
+	}
+
+	if parsed.Fragment != "" {
+		return "", errors.New("fragments are not supported")
+	}
+
+	if parsed.Hostname() == "" {
+		return "", errors.New("host is required")
+	}
+
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
+		}
+	}
+
+	parsed.Scheme = scheme
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = ""
+
+	normalized := strings.TrimRight(parsed.String(), "/")
+	if normalized == "" {
+		return "", errors.New("URL is empty after normalization")
 	}
 
 	return normalized, nil
@@ -373,7 +476,9 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClien
 
 		if preference != RuntimeAuto && runtime != preference {
 			attempts = append(attempts, fmt.Sprintf("%s: detected %s runtime", candidate.label, runtime))
-			_ = cli.Close()
+			if closeErr := cli.Close(); closeErr != nil {
+				attempts = append(attempts, fmt.Sprintf("%s: close client after runtime mismatch: %v", candidate.label, closeErr))
+			}
 			continue
 		}
 
@@ -402,7 +507,12 @@ func tryRuntimeCandidate(opts []client.Opt) (dockerClient, systemtypes.Info, err
 
 	info, err := cli.Info(ctx)
 	if err != nil {
-		_ = cli.Close()
+		if closeErr := cli.Close(); closeErr != nil {
+			return nil, systemtypes.Info{}, errors.Join(
+				err,
+				fmt.Errorf("close runtime client after info failure: %w", closeErr),
+			)
+		}
 		return nil, systemtypes.Info{}, err
 	}
 
@@ -440,18 +550,6 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			host:  rootless,
 			label: "podman rootless socket",
 		})
-
-		// Discover rootless Podman sockets for other users (e.g. agent runs as root
-		// but Podman rootless is installed for uid 1000)
-		if matches, err := filepath.Glob("/run/user/*/podman/podman.sock"); err == nil {
-			for _, match := range matches {
-				sockURI := "unix://" + match
-				add(runtimeCandidate{
-					host:  sockURI,
-					label: fmt.Sprintf("podman rootless socket (%s)", match),
-				})
-			}
-		}
 
 		add(runtimeCandidate{
 			host:  "unix:///run/podman/podman.sock",
@@ -501,17 +599,6 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			label: "podman rootless socket",
 		})
 
-		// Discover rootless Podman sockets for other users
-		if matches, err := filepath.Glob("/run/user/*/podman/podman.sock"); err == nil {
-			for _, match := range matches {
-				sockURI := "unix://" + match
-				add(runtimeCandidate{
-					host:  sockURI,
-					label: fmt.Sprintf("podman rootless socket (%s)", match),
-				})
-			}
-		}
-
 		add(runtimeCandidate{
 			host:  "unix:///run/podman/podman.sock",
 			label: "podman system socket",
@@ -525,33 +612,6 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 	}
 
 	if preference == RuntimeDocker || preference == RuntimeAuto {
-		// Prefer rootless docker if present. Rootless installs use the per-user XDG runtime socket.
-		rootlessDocker := fmt.Sprintf("unix:///run/user/%d/docker.sock", os.Getuid())
-		add(runtimeCandidate{
-			host:  rootlessDocker,
-			label: "docker rootless socket",
-		})
-
-		// Discover rootless Docker sockets for other users (e.g. agent runs as root
-		// but Docker rootless is installed for uid 1000)
-		if matches, err := filepath.Glob("/run/user/*/docker.sock"); err == nil {
-			for _, match := range matches {
-				sockURI := "unix://" + match
-				add(runtimeCandidate{
-					host:  sockURI,
-					label: fmt.Sprintf("docker rootless socket (%s)", match),
-				})
-			}
-		}
-
-		// macOS Docker Desktop socket
-		if home := os.Getenv("HOME"); home != "" {
-			add(runtimeCandidate{
-				host:  "unix://" + filepath.Join(home, ".docker", "run", "docker.sock"),
-				label: "docker desktop socket",
-			})
-		}
-
 		add(runtimeCandidate{
 			host:           "unix:///var/run/docker.sock",
 			label:          "default docker socket",
@@ -631,7 +691,12 @@ func (a *Agent) Run(ctx context.Context) error {
 		if errors.Is(err, ErrStopRequested) {
 			return nil
 		}
-		a.logger.Error().Err(err).Msg("Failed to send initial report")
+		a.logger.Error().
+			Err(err).
+			Str("phase", "startup").
+			Int("targets", len(a.targets)).
+			Int("buffered_reports", a.bufferedReports()).
+			Msg("Failed to send docker report")
 	}
 
 	for {
@@ -644,7 +709,12 @@ func (a *Agent) Run(ctx context.Context) error {
 				if errors.Is(err, ErrStopRequested) {
 					return nil
 				}
-				a.logger.Error().Err(err).Msg("Failed to send docker report")
+				a.logger.Error().
+					Err(err).
+					Str("phase", "periodic").
+					Int("targets", len(a.targets)).
+					Int("buffered_reports", a.bufferedReports()).
+					Msg("Failed to send docker report")
 			}
 		case <-updateTimer.C:
 			go a.checkForUpdates(ctx)
@@ -668,17 +738,57 @@ func stopTimer(timer *time.Timer) {
 	}
 }
 
+func (a *Agent) ensureAsyncLifecycle() {
+	a.asyncOnce.Do(func() {
+		a.asyncCtx, a.asyncCancel = context.WithCancel(context.Background())
+	})
+}
+
+func (a *Agent) runAsync(task func(context.Context)) {
+	a.ensureAsyncLifecycle()
+
+	a.asyncWG.Add(1)
+	go func() {
+		defer a.asyncWG.Done()
+		task(a.asyncCtx)
+	}()
+}
+
+func (a *Agent) waitForAsyncDelay(delay time.Duration) bool {
+	if delay <= 0 {
+		return true
+	}
+
+	a.ensureAsyncLifecycle()
+	timer := newTimerFn(delay)
+	defer stopTimer(timer)
+
+	select {
+	case <-a.asyncCtx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 func (a *Agent) collectOnce(ctx context.Context) error {
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+
 	report, err := a.buildReport(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("build docker report: %w", err)
 	}
 
 	if err := a.sendReport(ctx, report); err != nil {
 		if errors.Is(err, ErrStopRequested) {
 			return nil
 		}
-		a.logger.Warn().Err(err).Msg("Failed to send docker report, buffering")
+		a.logger.Warn().
+			Err(err).
+			Int("buffered_reports", a.bufferedReports()).
+			Int("targets", len(a.targets)).
+			Msg("Failed to send docker report, buffering")
 		a.reportBuffer.Push(report)
 		return nil
 	}
@@ -700,7 +810,10 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			if errors.Is(err, ErrStopRequested) {
 				return
 			}
-			a.logger.Warn().Err(err).Msg("Failed to flush buffered docker report, stopping flush")
+			a.logger.Warn().
+				Err(err).
+				Int("remaining_reports", a.bufferedReports()).
+				Msg("Failed to flush buffered docker report, stopping flush")
 			return
 		}
 		a.reportBuffer.Pop()
@@ -712,17 +825,29 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 	}
 }
 
+func (a *Agent) bufferedReports() int {
+	if a.reportBuffer == nil {
+		return 0
+	}
+	return a.reportBuffer.Len()
+}
+
 func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) error {
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+
 	var errs []error
 	containerCount := len(report.Containers)
 
 	for _, target := range a.targets {
-		err := a.sendReportToTarget(ctx, target, payload, containerCount)
+		err := a.sendReportToTarget(ctx, target, compressed, containerCount)
 		if err == nil {
 			continue
 		}
@@ -762,26 +887,31 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return fmt.Errorf("target %s: create request: %w", target.URL, err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", target.Token)
-	req.Header.Set("Authorization", "Bearer "+target.Token)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+	setAgentHeaders(req, target.Token)
+	req.Header.Set("Content-Encoding", "gzip")
 
 	client := a.httpClientFor(target)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("target %s: send report: %w", target.URL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Str("target", target.URL).Msg("Failed to close report response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
+		if readErr != nil {
+			return fmt.Errorf("target %s: read error response: %w", target.URL, readErr)
+		}
 		if hostRemoved := detectHostRemovedError(bodyBytes); hostRemoved != "" {
 			a.logger.Warn().
 				Str("hostID", a.hostID).
 				Str("pulseURL", target.URL).
 				Str("detail", hostRemoved).
-				Msg("Pulse rejected docker report because this host was previously removed. Allow the host to re-enroll from the Pulse UI or rerun the installer with a docker:manage token.")
+				Msg("Pulse rejected docker report because monitoring was previously stopped for this host. Allow reconnect from the Pulse UI or rerun the installer with a docker:manage token.")
 			return ErrStopRequested
 		}
 		errMsg := strings.TrimSpace(string(bodyBytes))
@@ -799,7 +929,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
 	if err != nil {
 		return fmt.Errorf("target %s: read response: %w", target.URL, err)
 	}
@@ -822,7 +952,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		if errors.Is(err, ErrStopRequested) {
 			return ErrStopRequested
 		}
-		return err
+		return fmt.Errorf("handle command from %s: %w", target.URL, err)
 	}
 
 	return nil
@@ -834,16 +964,25 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 		return a.handleStopCommand(ctx, target, command)
 	case agentsdocker.CommandTypeUpdateContainer:
 		return a.handleUpdateContainerCommand(ctx, target, command)
+	case agentsdocker.CommandTypeUpdateAll:
+		return a.handleUpdateAllCommand(ctx, target, command)
 	case agentsdocker.CommandTypeCheckUpdates:
 		return a.handleCheckUpdatesCommand(ctx, target, command)
 	default:
-		a.logger.Warn().Str("command", command.Type).Msg("Received unsupported control command")
+		a.logger.Warn().
+			Str("target", target.URL).
+			Str("command", command.Type).
+			Str("commandID", command.ID).
+			Msg("Received unsupported control command")
 		return nil
 	}
 }
 
 func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	a.logger.Info().Str("commandID", command.ID).Msg("Received check updates command from Pulse")
+	a.logger.Info().
+		Str("commandID", command.ID).
+		Str("target", target.URL).
+		Msg("Received check updates command from Pulse")
 
 	if a.registryChecker != nil {
 		a.registryChecker.ForceCheck()
@@ -854,23 +993,42 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 		return fmt.Errorf("send check updates acknowledgement: %w", err)
 	}
 
-	// Trigger an immediate collection cycle to report updates
-	go func() {
-		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
-		a.collectOnce(ctx)
-	}()
+	// Trigger an immediate collection cycle to report updates.
+	a.runAsync(func(asyncCtx context.Context) {
+		if !a.waitForAsyncDelay(1 * time.Second) {
+			return
+		}
+		select {
+		case <-asyncCtx.Done():
+			return
+		case <-ctx.Done():
+			return
+		default:
+		}
+		_ = a.collectOnce(ctx)
+	})
 
 	return nil
 }
 
 func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	a.logger.Info().Str("commandID", command.ID).Msg("Received stop command from Pulse")
+	a.logger.Info().
+		Str("commandID", command.ID).
+		Str("target", target.URL).
+		Msg("Received stop command from Pulse")
 
 	if err := a.disableSelf(ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to disable pulse-docker-agent service")
+		a.logger.Error().
+			Err(err).
+			Str("target", target.URL).
+			Str("commandID", command.ID).
+			Msg("Failed to disable pulse-agent service")
 		if ackErr := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, err.Error()); ackErr != nil {
-			a.logger.Error().Err(ackErr).Msg("Failed to send failure acknowledgement to Pulse")
+			a.logger.Error().
+				Err(ackErr).
+				Str("target", target.URL).
+				Str("commandID", command.ID).
+				Msg("Failed to send failure acknowledgement to Pulse")
 		}
 		return nil
 	}
@@ -879,90 +1037,87 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 		return fmt.Errorf("send stop acknowledgement: %w", err)
 	}
 
-	a.logger.Info().Msg("Stop command acknowledged; terminating agent")
+	a.logger.Info().Str("commandID", command.ID).Msg("Stop command acknowledged; terminating agent")
 
 	// After sending the acknowledgement, stop the systemd service to prevent restart.
 	// This is done after the ack to ensure the acknowledgement is sent before the
 	// process is terminated by systemctl stop.
-	go func() {
-		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
-		stopServiceCtx := context.Background()
-		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
+	a.runAsync(func(asyncCtx context.Context) {
+		// Small delay to ensure the ack response completes.
+		if !a.waitForAsyncDelay(1 * time.Second) {
+			return
 		}
-	}()
+
+		stopServiceCtx, cancel := context.WithTimeout(asyncCtx, 5*time.Second)
+		defer cancel()
+		if err := stopSystemdService(stopServiceCtx, "pulse-agent"); err != nil {
+			a.logger.Warn().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("service", "pulse-agent").
+				Msg("Failed to stop systemd service, agent will exit normally")
+		}
+	})
 
 	return ErrStopRequested
 }
 
 func (a *Agent) disableSelf(ctx context.Context) error {
-	if err := disableSystemdService(ctx, "pulse-docker-agent"); err != nil {
-		return err
+	if err := disableSystemdService(ctx, "pulse-agent"); err != nil {
+		return fmt.Errorf("disable systemd service: %w", err)
 	}
 
 	// Remove Unraid startup script if present to prevent restart on reboot.
 	if err := removeFileIfExists(unraidStartupScriptPath); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to remove Unraid startup script")
+		a.logger.Warn().
+			Err(err).
+			Str("path", unraidStartupScriptPath).
+			Msg("Failed to remove Unraid startup script")
 	}
 
 	// Best-effort log cleanup (ignore errors).
-	_ = removeFileIfExists(agentLogPath)
+	if err := removeFileIfExists(agentLogPath); err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to remove agent log directory")
+	}
 
 	return nil
 }
 
 func disableSystemdService(ctx context.Context, service string) error {
-	if _, err := exec.LookPath("systemctl"); err != nil {
-		// Not a systemd environment; nothing to do.
-		return nil
-	}
-
-	cmd := exec.CommandContext(ctx, "systemctl", "disable", service)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-			trimmedOutput := strings.TrimSpace(string(output))
-			lowerOutput := strings.ToLower(trimmedOutput)
-			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
-				return nil
-			}
-			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
-				return fmt.Errorf("systemctl disable %s: access denied. Run 'sudo systemctl disable --now %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
-			}
-		}
-		return fmt.Errorf("systemctl disable %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
-	}
-
-	return nil
+	return runSystemctlCommand(ctx, "disable", service)
 }
 
 func stopSystemdService(ctx context.Context, service string) error {
+	// Stop the service to terminate the current running instance.
+	// This prevents systemd from restarting the service (services stopped via
+	// systemctl stop are not restarted even with Restart=always).
+	return runSystemctlCommand(ctx, "stop", service)
+}
+
+func runSystemctlCommand(ctx context.Context, action, service string) error {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		// Not a systemd environment; nothing to do.
 		return nil
 	}
 
-	// Stop the service to terminate the current running instance.
-	// This prevents systemd from restarting the service (services stopped via
-	// systemctl stop are not restarted even with Restart=always).
-	cmd := exec.CommandContext(ctx, "systemctl", "stop", service)
+	cmd := exec.CommandContext(ctx, "systemctl", action, service)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
 			trimmedOutput := strings.TrimSpace(string(output))
 			lowerOutput := strings.ToLower(trimmedOutput)
-			// Ignore "not found" errors since the service might already be stopped
 			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
 				return nil
 			}
 			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
-				return fmt.Errorf("systemctl stop %s: access denied. Run 'sudo systemctl stop %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
+				if action == "disable" {
+					return fmt.Errorf("systemctl disable %s: access denied. Run 'sudo systemctl disable --now %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
+				}
+				return fmt.Errorf("systemctl %s %s: access denied. Run 'sudo systemctl %s %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", action, service, action, service, trimmedOutput)
 			}
 		}
-		return fmt.Errorf("systemctl stop %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("systemctl %s %s: %w (%s)", action, service, err, strings.TrimSpace(string(output)))
 	}
 
 	return nil
@@ -973,7 +1128,7 @@ func removeFileIfExists(path string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("remove %s: %w", path, err)
 	}
 	return nil
 }
@@ -988,7 +1143,7 @@ func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConf
 	}
 
 	ackPayload := agentsdocker.CommandAck{
-		HostID:  a.hostID,
+		AgentID: a.hostID,
 		Status:  status,
 		Message: message,
 		Payload: payload,
@@ -1005,19 +1160,23 @@ func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConf
 		return fmt.Errorf("create acknowledgement request: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", target.Token)
-	req.Header.Set("Authorization", "Bearer "+target.Token)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+	setAgentHeaders(req, target.Token)
 
 	resp, err := a.httpClientFor(target).Do(req)
 	if err != nil {
 		return fmt.Errorf("send acknowledgement: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Str("target", target.URL).Msg("Failed to close acknowledgement response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
+		if err != nil {
+			return fmt.Errorf("read acknowledgement error response: %w", err)
+		}
 		return fmt.Errorf("pulse responded %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
 	}
 
@@ -1067,34 +1226,89 @@ func newHTTPClient(insecure bool) *http.Client {
 }
 
 func (a *Agent) Close() error {
-	return a.docker.Close()
+	a.closeOnce.Do(func() {
+		a.ensureAsyncLifecycle()
+		a.asyncCancel()
+
+		done := make(chan struct{})
+		go func() {
+			a.asyncWG.Wait()
+			close(done)
+		}()
+
+		waitTimer := newTimerFn(2 * time.Second)
+		select {
+		case <-done:
+			stopTimer(waitTimer)
+		case <-waitTimer.C:
+			a.logger.Warn().Msg("Timed out waiting for docker agent background work to stop")
+		}
+
+		for _, client := range a.httpClients {
+			if client != nil {
+				client.CloseIdleConnections()
+			}
+		}
+		if a.registryChecker != nil && a.registryChecker.httpClient != nil {
+			a.registryChecker.httpClient.CloseIdleConnections()
+		}
+
+		if a.docker != nil {
+			a.closeErr = a.docker.Close()
+		}
+	})
+
+	return a.closeErr
+}
+
+func (a *Agent) tryStartUpdateCheck() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.updateCheckRunning {
+		return false
+	}
+	a.updateCheckRunning = true
+	return true
+}
+
+func (a *Agent) finishUpdateCheck() {
+	a.backgroundMu.Lock()
+	a.updateCheckRunning = false
+	a.backgroundMu.Unlock()
+}
+
+func (a *Agent) tryStartCleanupTask() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.cleanupTaskRunning {
+		return false
+	}
+	a.cleanupTaskRunning = true
+	return true
+}
+
+func (a *Agent) finishCleanupTask() {
+	a.backgroundMu.Lock()
+	a.cleanupTaskRunning = false
+	a.backgroundMu.Unlock()
 }
 
 func readMachineID() (string, error) {
 	for _, path := range machineIDPaths {
 		data, err := osReadFileFn(path)
 		if err == nil {
-			id := strings.TrimSpace(string(data))
+			machineID := strings.TrimSpace(string(data))
 			// Format as UUID if it's a 32-char hex string (like machine-id typically is),
 			// to match the behavior of the host agent.
-			if len(id) == 32 && isHexString(id) {
+			if len(machineID) == 32 && utils.IsHexString(machineID) {
 				return fmt.Sprintf("%s-%s-%s-%s-%s",
-					id[0:8], id[8:12], id[12:16],
-					id[16:20], id[20:32]), nil
+					machineID[0:8], machineID[8:12], machineID[12:16],
+					machineID[16:20], machineID[20:32]), nil
 			}
-			return id, nil
+			return machineID, nil
 		}
 	}
 	return "", errors.New("machine-id not found")
-}
-
-func isHexString(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
 }
 
 func readSystemUptime() int64 {
@@ -1121,7 +1335,9 @@ func detectHostRemovedError(body []byte) string {
 	if strings.ToLower(payload.Code) != "invalid_report" {
 		return ""
 	}
-	if !strings.Contains(strings.ToLower(payload.Error), "was removed") {
+	lowerError := strings.ToLower(payload.Error)
+	if !strings.Contains(lowerError, "was removed") &&
+		!strings.Contains(lowerError, "monitoring stopped") {
 		return ""
 	}
 	return payload.Error

@@ -202,8 +202,8 @@ func (s *SAMLService) buildManualMetadata() (*saml.EntityDescriptor, error) {
 	}
 
 	// Add SLO endpoint if configured
-	if s.config.IDPSLOUrl != "" {
-		sloURL, err := url.Parse(s.config.IDPSLOUrl)
+	if s.config.IDPSLOURL != "" {
+		sloURL, err := url.Parse(s.config.IDPSLOURL)
 		if err == nil {
 			metadata.IDPSSODescriptors[0].SingleLogoutServices = []saml.Endpoint{
 				{
@@ -574,11 +574,14 @@ func (s *SAMLService) RefreshMetadata(ctx context.Context) error {
 	}
 
 	if err := s.loadIDPMetadata(ctx); err != nil {
-		return err
+		return fmt.Errorf("load idp metadata: %w", err)
 	}
 
 	// Reinitialize SP with new metadata
-	return s.initServiceProvider()
+	if err := s.initServiceProvider(); err != nil {
+		return fmt.Errorf("initialize service provider: %w", err)
+	}
+	return nil
 }
 
 // ProviderID returns the provider identifier

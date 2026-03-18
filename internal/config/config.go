@@ -1,7 +1,7 @@
 // Package config manages Pulse configuration from multiple sources.
 //
 // Configuration File Separation:
-//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN/API_TOKENS)
+//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS)
 //   - system.json: Application settings (polling interval, timeouts, update settings, etc.)
 //   - nodes.enc: Encrypted node credentials (PVE/PBS passwords and tokens)
 //
@@ -22,11 +22,11 @@ import (
 
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -50,6 +50,37 @@ var (
 	netInterfaceAddrs = net.InterfaceAddrs
 )
 
+// CanonicalUpdateChannel returns the supported v6 update channel if valid.
+func CanonicalUpdateChannel(channel string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "stable":
+		return "stable", true
+	case "rc":
+		return "rc", true
+	default:
+		return "", false
+	}
+}
+
+// EffectiveUpdateChannel resolves the runtime update channel using persisted
+// settings first and a fallback runtime/config value second. v6 only supports
+// stable and rc, and defaults to stable when unset.
+func EffectiveUpdateChannel(channel string, fallback string) string {
+	if canonical, ok := CanonicalUpdateChannel(channel); ok {
+		return canonical
+	}
+	if canonical, ok := CanonicalUpdateChannel(fallback); ok {
+		return canonical
+	}
+	return "stable"
+}
+
+// EffectiveAutoUpdateEnabled enforces the v6 policy that unattended
+// auto-updates only run on the stable channel.
+func EffectiveAutoUpdateEnabled(channel string, enabled bool) bool {
+	return enabled && EffectiveUpdateChannel(channel, "") == "stable"
+}
+
 // IsPasswordHashed checks if a string looks like a bcrypt hash
 func IsPasswordHashed(password string) bool {
 	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
@@ -67,8 +98,7 @@ func IsPasswordHashed(password string) bool {
 	if length >= 55 && length < 60 {
 		log.Error().
 			Int("length", length).
-			Str("hash_start", password[:20]+"...").
-			Msg("Bcrypt hash appears truncated! Should be 60 characters. Password will be treated as plaintext.")
+			Msg("Bcrypt hash appears truncated; expected 60 characters; treating value as plaintext")
 		return false // Treat as plaintext to force user to fix it
 	}
 
@@ -84,8 +114,8 @@ type Config struct {
 	ConfigPath      string
 	DataPath        string
 	AppRoot         string `json:"-"`                                       // Root directory of the application (where binary lives)
-	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
-	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)
+	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
+	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -134,17 +164,19 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken                   string           `envconfig:"API_TOKEN"`
+	APIToken                   string
 	APITokens                  []APITokenRecord `json:"-"`
-	SuppressedEnvMigrations    []string         `json:"-"` // Hashes of env tokens deleted by user (prevent re-migration)
 	AuthUser                   string           `envconfig:"PULSE_AUTH_USER"`
 	AuthPass                   string           `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuthEnvDetected     bool             `json:"-"`
 	DemoMode                   bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
 	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
+	DisableLocalUpgradeMetrics bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"` // Disable local-only upgrade UX metrics collection
+	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
+	MetricsToken               string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`             // Bearer token for /metrics endpoint (empty = unauthenticated)
+	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Hosted signup/checkout URL for starting Pulse Pro trials
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -154,12 +186,11 @@ type Config struct {
 	ProxyAuthAdminRole     string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
 	ProxyAuthLogoutURL     string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
 
-	// OIDC configuration
-	OIDC *OIDCConfig `json:"-"`
 	// HTTPS/TLS settings
-	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
-	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
-	TLSKeyFile   string `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPSEnabled     bool   `envconfig:"HTTPS_ENABLED" default:"false"`
+	TLSCertFile      string `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile       string `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPRedirectPort int    `envconfig:"HTTP_REDIRECT_PORT" default:"0"` // When HTTPS is enabled, start an HTTP listener on this port that redirects to HTTPS (0 = disabled)
 
 	// Update settings
 	UpdateChannel           string
@@ -257,12 +288,6 @@ func (c *Config) DeepCopy() *Config {
 		}
 	}
 
-	// Deep copy SuppressedEnvMigrations slice
-	if len(c.SuppressedEnvMigrations) > 0 {
-		clone.SuppressedEnvMigrations = make([]string, len(c.SuppressedEnvMigrations))
-		copy(clone.SuppressedEnvMigrations, c.SuppressedEnvMigrations)
-	}
-
 	// Deep copy EnvOverrides map
 	if len(c.EnvOverrides) > 0 {
 		clone.EnvOverrides = make(map[string]bool, len(c.EnvOverrides))
@@ -274,12 +299,6 @@ func (c *Config) DeepCopy() *Config {
 	// Deep copy Discovery config
 	clone.Discovery = CloneDiscoveryConfig(c.Discovery)
 
-	// Deep copy OIDC config if present using the Clone method
-	// which properly deep copies all slices and maps
-	if c.OIDC != nil {
-		clone.OIDC = c.OIDC.Clone()
-	}
-
 	return &clone
 }
 
@@ -289,10 +308,9 @@ func NormalizeDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
 	normalized := CloneDiscoveryConfig(cfg)
 
 	// Normalize environment override and ensure it's valid.
-	normalized.EnvironmentOverride = strings.TrimSpace(normalized.EnvironmentOverride)
-	if normalized.EnvironmentOverride == "" {
-		normalized.EnvironmentOverride = defaults.EnvironmentOverride
-	} else if !IsValidDiscoveryEnvironment(normalized.EnvironmentOverride) {
+	if canonicalEnv, ok := CanonicalDiscoveryEnvironment(normalized.EnvironmentOverride); ok {
+		normalized.EnvironmentOverride = canonicalEnv
+	} else {
 		log.Warn().
 			Str("environment", normalized.EnvironmentOverride).
 			Msg("Unknown discovery environment override detected; falling back to auto")
@@ -349,9 +367,9 @@ func sanitizeCIDRList(values []string) []string {
 	return cleaned
 }
 
-// UnmarshalJSON supports both legacy camelCase and new snake_case field names.
+// UnmarshalJSON decodes the persisted snake_case discovery config format.
 func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
-	type modern struct {
+	type payload struct {
 		EnvironmentOverride *string   `json:"environment_override"`
 		SubnetAllowlist     *[]string `json:"subnet_allowlist"`
 		SubnetBlocklist     *[]string `json:"subnet_blocklist"`
@@ -362,84 +380,52 @@ func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
 		DialTimeout         *int      `json:"dial_timeout_ms"`
 		HTTPTimeout         *int      `json:"http_timeout_ms"`
 	}
-	type legacy struct {
-		EnvironmentOverride *string   `json:"environmentOverride"`
-		SubnetAllowlist     *[]string `json:"subnetAllowlist"`
-		SubnetBlocklist     *[]string `json:"subnetBlocklist"`
-		MaxHostsPerScan     *int      `json:"maxHostsPerScan"`
-		MaxConcurrent       *int      `json:"maxConcurrent"`
-		EnableReverseDNS    *bool     `json:"enableReverseDns"`
-		ScanGateways        *bool     `json:"scanGateways"`
-		DialTimeout         *int      `json:"dialTimeoutMs"`
-		HTTPTimeout         *int      `json:"httpTimeoutMs"`
-	}
 
-	var modernPayload modern
-	if err := json.Unmarshal(data, &modernPayload); err != nil {
-		return err
+	var in payload
+	if err := json.Unmarshal(data, &in); err != nil {
+		return fmt.Errorf("unmarshal discovery config: %w", err)
 	}
-
-	var legacyPayload legacy
-	_ = json.Unmarshal(data, &legacyPayload)
 
 	cfg := DefaultDiscoveryConfig()
 
-	if modernPayload.EnvironmentOverride != nil {
-		cfg.EnvironmentOverride = strings.TrimSpace(*modernPayload.EnvironmentOverride)
-	} else if legacyPayload.EnvironmentOverride != nil {
-		cfg.EnvironmentOverride = strings.TrimSpace(*legacyPayload.EnvironmentOverride)
+	if in.EnvironmentOverride != nil {
+		cfg.EnvironmentOverride = strings.TrimSpace(*in.EnvironmentOverride)
 	}
 
 	switch {
-	case modernPayload.SubnetAllowlist != nil:
-		cfg.SubnetAllowlist = sanitizeCIDRList(*modernPayload.SubnetAllowlist)
-	case legacyPayload.SubnetAllowlist != nil:
-		cfg.SubnetAllowlist = sanitizeCIDRList(*legacyPayload.SubnetAllowlist)
+	case in.SubnetAllowlist != nil:
+		cfg.SubnetAllowlist = sanitizeCIDRList(*in.SubnetAllowlist)
 	default:
 		cfg.SubnetAllowlist = []string{}
 	}
 
 	switch {
-	case modernPayload.SubnetBlocklist != nil:
-		cfg.SubnetBlocklist = sanitizeCIDRList(*modernPayload.SubnetBlocklist)
-	case legacyPayload.SubnetBlocklist != nil:
-		cfg.SubnetBlocklist = sanitizeCIDRList(*legacyPayload.SubnetBlocklist)
+	case in.SubnetBlocklist != nil:
+		cfg.SubnetBlocklist = sanitizeCIDRList(*in.SubnetBlocklist)
 	}
 
-	if modernPayload.MaxHostsPerScan != nil {
-		cfg.MaxHostsPerScan = *modernPayload.MaxHostsPerScan
-	} else if legacyPayload.MaxHostsPerScan != nil {
-		cfg.MaxHostsPerScan = *legacyPayload.MaxHostsPerScan
+	if in.MaxHostsPerScan != nil {
+		cfg.MaxHostsPerScan = *in.MaxHostsPerScan
 	}
 
-	if modernPayload.MaxConcurrent != nil {
-		cfg.MaxConcurrent = *modernPayload.MaxConcurrent
-	} else if legacyPayload.MaxConcurrent != nil {
-		cfg.MaxConcurrent = *legacyPayload.MaxConcurrent
+	if in.MaxConcurrent != nil {
+		cfg.MaxConcurrent = *in.MaxConcurrent
 	}
 
-	if modernPayload.EnableReverseDNS != nil {
-		cfg.EnableReverseDNS = *modernPayload.EnableReverseDNS
-	} else if legacyPayload.EnableReverseDNS != nil {
-		cfg.EnableReverseDNS = *legacyPayload.EnableReverseDNS
+	if in.EnableReverseDNS != nil {
+		cfg.EnableReverseDNS = *in.EnableReverseDNS
 	}
 
-	if modernPayload.ScanGateways != nil {
-		cfg.ScanGateways = *modernPayload.ScanGateways
-	} else if legacyPayload.ScanGateways != nil {
-		cfg.ScanGateways = *legacyPayload.ScanGateways
+	if in.ScanGateways != nil {
+		cfg.ScanGateways = *in.ScanGateways
 	}
 
-	if modernPayload.DialTimeout != nil {
-		cfg.DialTimeout = *modernPayload.DialTimeout
-	} else if legacyPayload.DialTimeout != nil {
-		cfg.DialTimeout = *legacyPayload.DialTimeout
+	if in.DialTimeout != nil {
+		cfg.DialTimeout = *in.DialTimeout
 	}
 
-	if modernPayload.HTTPTimeout != nil {
-		cfg.HTTPTimeout = *modernPayload.HTTPTimeout
-	} else if legacyPayload.HTTPTimeout != nil {
-		cfg.HTTPTimeout = *legacyPayload.HTTPTimeout
+	if in.HTTPTimeout != nil {
+		cfg.HTTPTimeout = *in.HTTPTimeout
 	}
 
 	*d = NormalizeDiscoveryConfig(cfg)
@@ -448,11 +434,21 @@ func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
 
 // IsValidDiscoveryEnvironment reports whether the supplied override is recognised.
 func IsValidDiscoveryEnvironment(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "auto", "native", "docker_host", "docker_bridge", "lxc_privileged", "lxc_unprivileged":
-		return true
+	_, ok := CanonicalDiscoveryEnvironment(value)
+	return ok
+}
+
+// CanonicalDiscoveryEnvironment returns the canonical discovery environment token.
+// Only canonical v6 hyphen-separated tokens are accepted.
+func CanonicalDiscoveryEnvironment(value string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "", "auto":
+		return "auto", true
+	case "native", "docker-host", "docker-bridge", "lxc-privileged", "lxc-unprivileged":
+		return normalized, true
 	default:
-		return false
+		return "", false
 	}
 }
 
@@ -469,6 +465,54 @@ func splitAndTrim(value string) []string {
 		}
 	}
 	return result
+}
+
+func parsePortOverride(envVar, value string) (int, error) {
+	port, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", envVar)
+	}
+	if port <= 0 || port > 65535 {
+		return 0, fmt.Errorf("%s must be between 1 and 65535", envVar)
+	}
+	return port, nil
+}
+
+func parseConnectionTimeoutOverride(value string) (time.Duration, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return 0, fmt.Errorf("connection timeout value cannot be empty")
+	}
+	if looksLikeNumericSeconds(raw) {
+		return time.ParseDuration(raw + "s")
+	}
+	return time.ParseDuration(raw)
+}
+
+func looksLikeNumericSeconds(value string) bool {
+	if value == "" {
+		return false
+	}
+	if value[0] == '+' || value[0] == '-' {
+		value = value[1:]
+		if value == "" {
+			return false
+		}
+	}
+	dotSeen := false
+	for _, ch := range value {
+		if ch == '.' {
+			if dotSeen {
+				return false
+			}
+			dotSeen = true
+			continue
+		}
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // PVEInstance represents a Proxmox VE connection
@@ -576,13 +620,53 @@ type PMGInstance struct {
 // Global persistence instance for saving
 var globalPersistence *ConfigPersistence
 
+// defaultDataDir is the fallback config/data directory when PULSE_DATA_DIR is not set.
+// Kept as a var to allow tests to override without requiring /etc/pulse to exist.
+var defaultDataDir = "/etc/pulse"
+
+// ResolveRuntimeDataDir returns the canonical runtime data directory for Pulse.
+// Callers may provide an explicit owner path; otherwise the resolved directory
+// comes from PULSE_DATA_DIR and finally the package default.
+func ResolveRuntimeDataDir(explicitPath string) string {
+	return utils.ResolveDataDirWithDefault(explicitPath, defaultDataDir)
+}
+
+// parsePollingIntervalEnv reads an environment variable that represents a polling
+// interval (accepts Go duration strings like "30s" or plain integer seconds),
+// validates that it meets a minimum, and returns the parsed duration. Returns
+// (0, false) when the env var is unset or the value is invalid/below minimum.
+func parsePollingIntervalEnv(envName string, minDuration time.Duration) (time.Duration, bool) {
+	intervalStr := utils.GetenvTrim(envName)
+	if intervalStr == "" {
+		return 0, false
+	}
+
+	if dur, err := time.ParseDuration(intervalStr); err == nil {
+		if dur < minDuration {
+			log.Warn().Dur("interval", dur).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		log.Info().Dur("interval", dur).Msgf("Overriding %s polling interval from environment", strings.TrimSuffix(envName, "_POLLING_INTERVAL"))
+		return dur, true
+	}
+
+	if seconds, err := strconv.Atoi(intervalStr); err == nil {
+		if time.Duration(seconds)*time.Second < minDuration {
+			log.Warn().Int("seconds", seconds).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		log.Info().Int("seconds", seconds).Msgf("Overriding %s polling interval (seconds) from environment", strings.TrimSuffix(envName, "_POLLING_INTERVAL"))
+		return time.Duration(seconds) * time.Second, true
+	}
+
+	log.Warn().Str("value", intervalStr).Msgf("Invalid %s value, expected duration or seconds", envName)
+	return 0, false
+}
+
 // Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
 	// Get data directory from environment
-	dataDir := "/etc/pulse"
-	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
-		dataDir = dir
-	}
+	dataDir := ResolveRuntimeDataDir("")
 
 	// Load .env file if it exists (for deployment overrides)
 	envFile := filepath.Join(dataDir, ".env")
@@ -597,24 +681,6 @@ func Load() (*Config, error) {
 	// Also try loading from current directory for development
 	if err := godotenv.Load(); err == nil {
 		log.Info().Msg("Loaded configuration from .env in current directory")
-	}
-
-	// Load mock.env and mock.env.local for mock mode configuration
-	mockEnv := "mock.env"
-	mockEnvLocal := "mock.env.local"
-	if _, err := os.Stat(mockEnv); err == nil {
-		if err := godotenv.Load(mockEnv); err != nil {
-			log.Warn().Err(err).Str("file", mockEnv).Msg("Failed to load mock.env file")
-		} else {
-			log.Info().Str("file", mockEnv).Msg("Loaded mock mode configuration")
-		}
-	}
-	if _, err := os.Stat(mockEnvLocal); err == nil {
-		if err := godotenv.Load(mockEnvLocal); err != nil {
-			log.Warn().Err(err).Str("file", mockEnvLocal).Msg("Failed to load mock.env.local file")
-		} else {
-			log.Info().Str("file", mockEnvLocal).Msg("Loaded local mock mode overrides")
-		}
 	}
 
 	// Initialize config with defaults
@@ -649,10 +715,11 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:                false,
 		DiscoverySubnet:                 "auto",
 		TemperatureMonitoringEnabled:    true,
+		TelemetryEnabled:                true,            // Enabled by default; opt out via PULSE_TELEMETRY=false or Settings
 		MaxPollTimeout:                  3 * time.Minute, // Default max poll timeout for large clusters
+		ProTrialSignupURL:               pkglicensing.DefaultProTrialSignupURL,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
-		OIDC:                            NewOIDCConfig(),
 		// Metrics retention defaults (tiered)
 		MetricsRetentionRawHours:    2,  // 2 hours of raw ~5s data
 		MetricsRetentionMinuteHours: 24, // 24 hours of minute averages
@@ -715,10 +782,8 @@ func Load() (*Config, error) {
 				cfg.AdaptivePollingMaxInterval = time.Duration(systemSettings.AdaptivePollingMaxInterval) * time.Second
 			}
 
-			if systemSettings.UpdateChannel != "" {
-				cfg.UpdateChannel = systemSettings.UpdateChannel
-			}
-			cfg.AutoUpdateEnabled = systemSettings.AutoUpdateEnabled
+			cfg.UpdateChannel = EffectiveUpdateChannel(systemSettings.UpdateChannel, cfg.UpdateChannel)
+			cfg.AutoUpdateEnabled = EffectiveAutoUpdateEnabled(cfg.UpdateChannel, systemSettings.AutoUpdateEnabled)
 			if systemSettings.AutoUpdateCheckInterval > 0 {
 				cfg.AutoUpdateCheckInterval = time.Duration(systemSettings.AutoUpdateCheckInterval) * time.Hour
 			}
@@ -755,6 +820,14 @@ func Load() (*Config, error) {
 			cfg.HideLocalLogin = systemSettings.HideLocalLogin
 			// Load DisableDockerUpdateActions (hide Docker update buttons)
 			cfg.DisableDockerUpdateActions = systemSettings.DisableDockerUpdateActions
+			// Load DisableLocalUpgradeMetrics (privacy: local-only upgrade UX metrics)
+			cfg.DisableLocalUpgradeMetrics = systemSettings.DisableLocalUpgradeMetrics
+			// Load TelemetryEnabled (enabled by default; nil means true for upgrading users)
+			if systemSettings.TelemetryEnabled != nil {
+				cfg.TelemetryEnabled = *systemSettings.TelemetryEnabled
+			} else {
+				cfg.TelemetryEnabled = true // default: enabled
+			}
 			// Load PublicURL from settings (will be overridden by env var if set)
 			if systemSettings.PublicURL != "" {
 				cfg.PublicURL = systemSettings.PublicURL
@@ -774,7 +847,7 @@ func Load() (*Config, error) {
 				cfg.MetricsRetentionDailyDays = systemSettings.MetricsRetentionDailyDays
 			}
 
-			// APIToken no longer loaded from system.json - only from .env
+			// APIToken is not loaded from system.json; it is kept in sync from APITokens.
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
@@ -791,30 +864,29 @@ func Load() (*Config, error) {
 			}
 		}
 
-		if oidcSettings, err := persistence.LoadOIDCConfig(); err == nil && oidcSettings != nil {
-			cfg.OIDC = oidcSettings
-		} else if err != nil {
-			log.Warn().Err(err).Msg("Failed to load OIDC configuration")
-		}
 	}
 
 	// Load API tokens
 	if tokens, err := persistence.LoadAPITokens(); err == nil {
+		if migrated := bindMissingAPITokenIDs(tokens); migrated > 0 {
+			if err := persistence.SaveAPITokens(tokens); err != nil {
+				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist API token ID migration")
+			} else {
+				log.Warn().Int("count", migrated).Msg("Migrated API tokens missing IDs")
+			}
+		}
+		if migrated := bindLegacyAPITokensToDefault(tokens); migrated > 0 {
+			if err := persistence.SaveAPITokens(tokens); err != nil {
+				log.Error().Err(err).Int("count", migrated).Msg("Failed to persist legacy API token org binding migration")
+			} else {
+				log.Warn().Int("count", migrated).Msg("Migrated legacy API tokens to default organization binding")
+			}
+		}
 		cfg.APITokens = tokens
 		cfg.SortAPITokens()
 		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
 	} else {
 		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
-	}
-
-	// Load suppressed env token migrations (tokens user deleted that came from .env)
-	if suppressions, err := persistence.LoadEnvTokenSuppressions(); err == nil {
-		cfg.SuppressedEnvMigrations = suppressions
-		if len(suppressions) > 0 {
-			log.Debug().Int("count", len(suppressions)).Msg("Loaded env token suppression list")
-		}
-	} else {
-		log.Warn().Err(err).Msg("Failed to load env token suppressions")
 	}
 
 	// Ensure polling intervals have sane defaults if not set
@@ -870,70 +942,19 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if intervalStr := utils.GetenvTrim("PVE_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PVEPollingInterval = dur
-				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PVE polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PVEPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PVE polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PVE_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PVE_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PVEPollingInterval = dur
+		cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
 	}
 
-	if intervalStr := utils.GetenvTrim("PBS_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PBSPollingInterval = dur
-				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PBS polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PBSPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PBS polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PBS_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PBS_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PBSPollingInterval = dur
+		cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
 	}
 
-	if intervalStr := utils.GetenvTrim("PMG_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PMGPollingInterval = dur
-				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PMG polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PMGPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PMG polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PMG_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PMG_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PMGPollingInterval = dur
+		cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
 	}
 
 	if enabledStr := utils.GetenvTrim("ENABLE_TEMPERATURE_MONITORING"); enabledStr != "" {
@@ -960,38 +981,50 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Support legacy aliases so existing env files continue to work.
-	// Canonical key remains PULSE_DISABLE_DOCKER_UPDATE_ACTIONS.
-	dockerUpdateActionsEnvVars := []string{
-		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
-		"DISABLE_DOCKER_UPDATE_ACTIONS",
-		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
-		"HIDE_DOCKER_UPDATE_ACTIONS",
-	}
-	for _, envVar := range dockerUpdateActionsEnvVars {
-		value := utils.GetenvTrim(envVar)
-		if value == "" {
-			continue
-		}
-
-		disabled, err := strconv.ParseBool(value)
-		if err != nil {
+	if disableDockerUpdateActionsStr := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"); disableDockerUpdateActionsStr != "" {
+		if disabled, err := strconv.ParseBool(disableDockerUpdateActionsStr); err == nil {
+			cfg.DisableDockerUpdateActions = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
+			cfg.EnvOverrides["disableDockerUpdateActions"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding Docker update actions setting from environment")
+		} else {
 			log.Warn().
-				Str("env", envVar).
-				Str("value", value).
-				Msg("Invalid Docker update actions env var value, ignoring")
-			break
+				Str("value", disableDockerUpdateActionsStr).
+				Msg("Invalid PULSE_DISABLE_DOCKER_UPDATE_ACTIONS value, ignoring")
 		}
+	}
 
-		cfg.DisableDockerUpdateActions = disabled
-		cfg.EnvOverrides[envVar] = true
-		cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
-		cfg.EnvOverrides["disableDockerUpdateActions"] = true
-		log.Info().
-			Str("env", envVar).
-			Bool("disabled", disabled).
-			Msg("Overriding Docker update actions setting from environment")
-		break
+	if disableLocalUpgradeMetricsStr := utils.GetenvTrim("PULSE_DISABLE_LOCAL_UPGRADE_METRICS"); disableLocalUpgradeMetricsStr != "" {
+		if disabled, err := strconv.ParseBool(disableLocalUpgradeMetricsStr); err == nil {
+			cfg.DisableLocalUpgradeMetrics = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_LOCAL_UPGRADE_METRICS"] = true
+			cfg.EnvOverrides["disableLocalUpgradeMetrics"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding local upgrade metrics setting from environment")
+		} else {
+			log.Warn().Str("value", disableLocalUpgradeMetricsStr).Msg("Invalid PULSE_DISABLE_LOCAL_UPGRADE_METRICS value, ignoring")
+		}
+	}
+
+	if telemetryStr := utils.GetenvTrim("PULSE_TELEMETRY"); telemetryStr != "" {
+		if enabled, err := strconv.ParseBool(telemetryStr); err == nil {
+			cfg.TelemetryEnabled = enabled
+			cfg.EnvOverrides["PULSE_TELEMETRY"] = true
+			cfg.EnvOverrides["telemetryEnabled"] = true
+			log.Info().Bool("enabled", enabled).Msg("Overriding telemetry setting from environment")
+		} else {
+			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
+		}
+	}
+	if trialSignupURL := utils.GetenvTrim(pkglicensing.ProTrialSignupURLEnvVar); trialSignupURL != "" {
+		resolved := pkglicensing.ResolveProTrialSignupURL(trialSignupURL)
+		if resolved != pkglicensing.DefaultProTrialSignupURL {
+			cfg.ProTrialSignupURL = resolved
+			cfg.EnvOverrides[pkglicensing.ProTrialSignupURLEnvVar] = true
+			cfg.EnvOverrides["proTrialSignupURL"] = true
+			log.Info().Str("url", resolved).Msg("Overriding Pulse Pro trial signup URL from environment")
+		} else {
+			log.Warn().Str("value", trialSignupURL).Msg("Invalid PULSE_PRO_TRIAL_SIGNUP_URL value, ignoring")
+		}
 	}
 
 	if enabledStr := utils.GetenvTrim("ENABLE_BACKUP_POLLING"); enabledStr != "" {
@@ -1018,9 +1051,13 @@ func Load() (*Config, error) {
 
 	if baseInterval := utils.GetenvTrim("ADAPTIVE_POLLING_BASE_INTERVAL"); baseInterval != "" {
 		if dur, err := time.ParseDuration(baseInterval); err == nil {
-			cfg.AdaptivePollingBaseInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling base interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", baseInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_BASE_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingBaseInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling base interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", baseInterval).Msg("Invalid ADAPTIVE_POLLING_BASE_INTERVAL value, expected duration string")
 		}
@@ -1028,9 +1065,13 @@ func Load() (*Config, error) {
 
 	if minInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MIN_INTERVAL"); minInterval != "" {
 		if dur, err := time.ParseDuration(minInterval); err == nil {
-			cfg.AdaptivePollingMinInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling min interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", minInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_MIN_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingMinInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling min interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", minInterval).Msg("Invalid ADAPTIVE_POLLING_MIN_INTERVAL value, expected duration string")
 		}
@@ -1038,9 +1079,13 @@ func Load() (*Config, error) {
 
 	if maxInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MAX_INTERVAL"); maxInterval != "" {
 		if dur, err := time.ParseDuration(maxInterval); err == nil {
-			cfg.AdaptivePollingMaxInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", maxInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_MAX_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingMaxInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", maxInterval).Msg("Invalid ADAPTIVE_POLLING_MAX_INTERVAL value, expected duration string")
 		}
@@ -1145,11 +1190,6 @@ func Load() (*Config, error) {
 	if bindAddr := utils.GetenvTrim("BIND_ADDRESS"); bindAddr != "" {
 		cfg.BindAddress = bindAddr
 		cfg.EnvOverrides["BIND_ADDRESS"] = true
-	} else if backendHost := utils.GetenvTrim("BACKEND_HOST"); backendHost != "" {
-		// Deprecated: BACKEND_HOST is the old name for BIND_ADDRESS
-		log.Warn().Msg("BACKEND_HOST is deprecated, use BIND_ADDRESS instead")
-		cfg.BindAddress = backendHost
-		cfg.EnvOverrides["BIND_ADDRESS"] = true
 	}
 
 	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {
@@ -1166,107 +1206,19 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
-	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {
-		if p, err := strconv.Atoi(frontendPort); err == nil {
+	if frontendPort := utils.GetenvTrim("FRONTEND_PORT"); frontendPort != "" {
+		if p, err := parsePortOverride("FRONTEND_PORT", frontendPort); err == nil {
 			cfg.FrontendPort = p
+			cfg.EnvOverrides["FRONTEND_PORT"] = true
 			log.Info().Int("port", p).Msg("Overriding frontend port from FRONTEND_PORT env var")
-		}
-	} else if port := os.Getenv("PORT"); port != "" {
-		// Fall back to PORT for backwards compatibility
-		if p, err := strconv.Atoi(port); err == nil {
-			cfg.FrontendPort = p
-			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var (legacy)")
-		}
-	}
-	envTokens := make([]string, 0, 4)
-	if list := utils.GetenvTrim("API_TOKENS"); list != "" {
-		for _, part := range strings.Split(list, ",") {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				envTokens = append(envTokens, part)
-			}
-		}
-	}
-	if token := utils.GetenvTrim("API_TOKEN"); token != "" {
-		envTokens = append(envTokens, token)
-	}
-
-	if len(envTokens) > 0 {
-		cfg.EnvOverrides["API_TOKEN"] = true
-		cfg.EnvOverrides["API_TOKENS"] = true
-
-		// Track if we migrated any new tokens from env to persistence
-		migratedCount := 0
-		needsPersist := false
-
-		for _, tokenValue := range envTokens {
-			if tokenValue == "" {
-				continue
-			}
-
-			hashed := tokenValue
-			prefix := tokenPrefix(tokenValue)
-			suffix := tokenSuffix(tokenValue)
-
-			if !auth.IsAPITokenHashed(tokenValue) {
-				hashed = auth.HashAPIToken(tokenValue)
-				prefix = tokenPrefix(tokenValue)
-				suffix = tokenSuffix(tokenValue)
-				log.Debug().Msg("Auto-hashed plain text API token from environment variable")
-			}
-
-			// Check if this token already exists in api_tokens.json
-			if cfg.HasAPITokenHash(hashed) {
-				continue
-			}
-
-			// Check if user previously deleted this migrated token (prevent re-migration)
-			if cfg.IsEnvMigrationSuppressed(hashed) {
-				continue
-			}
-
-			// Migrate env token to api_tokens.json
-			record := APITokenRecord{
-				ID:        uuid.NewString(),
-				Name:      "Migrated from .env (" + prefix + ")",
-				Hash:      hashed,
-				Prefix:    prefix,
-				Suffix:    suffix,
-				CreatedAt: time.Now().UTC(),
-				Scopes:    []string{ScopeWildcard},
-			}
-			cfg.APITokens = append(cfg.APITokens, record)
-			migratedCount++
-			needsPersist = true
-		}
-
-		cfg.SortAPITokens()
-
-		// Persist migrated tokens to api_tokens.json
-		if needsPersist && persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				log.Error().Err(err).Msg("Failed to persist migrated API tokens from environment")
-			} else {
-				log.Warn().
-					Int("count", migratedCount).
-					Msg("Migrated API tokens from .env to api_tokens.json - API_TOKEN/API_TOKENS in .env are deprecated and will be ignored in future releases. Manage tokens via the UI instead.")
-			}
+		} else {
+			log.Warn().Str("value", frontendPort).Msg("Ignoring invalid FRONTEND_PORT from environment")
 		}
 	}
 
-	// Legacy migration: if a single token is present without metadata, wrap it.
-	if !cfg.HasAPITokens() && cfg.APIToken != "" {
-		if record, err := NewHashedAPITokenRecord(cfg.APIToken, "Legacy token", time.Now().UTC(), nil); err == nil {
-			cfg.APITokens = []APITokenRecord{*record}
-			cfg.SortAPITokens()
-			log.Info().Msg("Migrated legacy API token into token record store")
-		}
-	}
 	// Detect deprecated DISABLE_AUTH flag and strip it from the runtime env so downstream
 	// components behave as if it were never set.
 	if disableAuthEnv := os.Getenv("DISABLE_AUTH"); disableAuthEnv != "" {
-		cfg.DisableAuthEnvDetected = true
 		if err := os.Unsetenv("DISABLE_AUTH"); err != nil {
 			log.Warn().
 				Str("DISABLE_AUTH", disableAuthEnv).
@@ -1316,56 +1268,6 @@ func Load() (*Config, error) {
 		}
 	}
 
-	oidcEnv := make(map[string]string)
-	if val := os.Getenv("OIDC_ENABLED"); val != "" {
-		oidcEnv["OIDC_ENABLED"] = val
-	}
-	if val := os.Getenv("OIDC_ISSUER_URL"); val != "" {
-		oidcEnv["OIDC_ISSUER_URL"] = val
-	}
-	if val := os.Getenv("OIDC_CLIENT_ID"); val != "" {
-		oidcEnv["OIDC_CLIENT_ID"] = val
-	}
-	if val := os.Getenv("OIDC_CLIENT_SECRET"); val != "" {
-		oidcEnv["OIDC_CLIENT_SECRET"] = val
-	}
-	if val := os.Getenv("OIDC_REDIRECT_URL"); val != "" {
-		oidcEnv["OIDC_REDIRECT_URL"] = val
-	}
-	if val := os.Getenv("OIDC_LOGOUT_URL"); val != "" {
-		oidcEnv["OIDC_LOGOUT_URL"] = val
-	}
-	if val := os.Getenv("OIDC_SCOPES"); val != "" {
-		oidcEnv["OIDC_SCOPES"] = val
-	}
-	if val := os.Getenv("OIDC_USERNAME_CLAIM"); val != "" {
-		oidcEnv["OIDC_USERNAME_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_EMAIL_CLAIM"); val != "" {
-		oidcEnv["OIDC_EMAIL_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_GROUPS_CLAIM"); val != "" {
-		oidcEnv["OIDC_GROUPS_CLAIM"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_GROUPS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_GROUPS"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_DOMAINS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_DOMAINS"] = val
-	}
-	if val := os.Getenv("OIDC_ALLOWED_EMAILS"); val != "" {
-		oidcEnv["OIDC_ALLOWED_EMAILS"] = val
-	}
-	if val := os.Getenv("OIDC_CA_BUNDLE"); val != "" {
-		oidcEnv["OIDC_CA_BUNDLE"] = val
-	}
-	if len(oidcEnv) > 0 {
-		// Ensure cfg.OIDC is initialized before merging env vars
-		if cfg.OIDC == nil {
-			cfg.OIDC = NewOIDCConfig()
-		}
-		cfg.OIDC.MergeFromEnv(oidcEnv)
-	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser
 		log.Info().Msg("Overriding auth user from env var")
@@ -1386,8 +1288,13 @@ func Load() (*Config, error) {
 		} else {
 			// Already hashed - validate it's complete
 			if len(authPass) != 60 {
-				log.Error().Int("length", len(authPass)).Msg("Bcrypt hash appears truncated! Expected 60 characters. Authentication may fail.")
-				log.Error().Msg("Ensure the full hash is enclosed in single quotes in your .env file or Docker environment")
+				log.Error().
+					Int("length", len(authPass)).
+					Str("env_var", "PULSE_AUTH_PASS").
+					Msg("Bcrypt hash appears truncated; expected 60 characters; authentication may fail")
+				log.Error().
+					Str("env_var", "PULSE_AUTH_PASS").
+					Msg("Ensure the full bcrypt hash is enclosed in single quotes in your .env file or Docker environment")
 			}
 			cfg.AuthPass = authPass
 			log.Debug().Msg("Loaded pre-hashed password from env var")
@@ -1406,6 +1313,19 @@ func Load() (*Config, error) {
 	if tlsKeyFile := os.Getenv("TLS_KEY_FILE"); tlsKeyFile != "" {
 		cfg.TLSKeyFile = tlsKeyFile
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
+	}
+	if redirectPort := os.Getenv("HTTP_REDIRECT_PORT"); redirectPort != "" {
+		if p, err := strconv.Atoi(redirectPort); err == nil && p > 0 && p <= 65535 {
+			cfg.HTTPRedirectPort = p
+			cfg.EnvOverrides["HTTP_REDIRECT_PORT"] = true
+			log.Debug().Int("port", p).Msg("HTTP redirect port from env var")
+		}
+	}
+
+	if metricsToken := utils.GetenvTrim("PULSE_METRICS_TOKEN"); metricsToken != "" {
+		cfg.MetricsToken = metricsToken
+		cfg.EnvOverrides["PULSE_METRICS_TOKEN"] = true
+		log.Debug().Msg("Metrics token configured from env var")
 	}
 
 	// Support PULSE_AGENT_URL as an alias for PULSE_AGENT_CONNECT_URL
@@ -1452,8 +1372,8 @@ func Load() (*Config, error) {
 		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
 	if envOverride := utils.GetenvTrim("DISCOVERY_ENVIRONMENT_OVERRIDE"); envOverride != "" {
-		if IsValidDiscoveryEnvironment(envOverride) {
-			cfg.Discovery.EnvironmentOverride = strings.ToLower(envOverride)
+		if canonicalEnv, ok := CanonicalDiscoveryEnvironment(envOverride); ok {
+			cfg.Discovery.EnvironmentOverride = canonicalEnv
 			cfg.EnvOverrides["discoveryEnvironmentOverride"] = true
 			log.Info().Str("environment", cfg.Discovery.EnvironmentOverride).Msg("Discovery environment override set by DISCOVERY_ENVIRONMENT_OVERRIDE")
 		} else {
@@ -1546,18 +1466,30 @@ func Load() (*Config, error) {
 	}
 
 	if logMaxSize := os.Getenv("LOG_MAX_SIZE"); logMaxSize != "" {
-		if size, err := strconv.Atoi(logMaxSize); err == nil && size > 0 {
-			cfg.LogMaxSize = size
-			cfg.EnvOverrides["logMaxSize"] = true
-			log.Info().Int("size_mb", size).Msg("Log max size overridden by LOG_MAX_SIZE env var")
+		if size, err := strconv.Atoi(logMaxSize); err == nil {
+			if size <= 0 {
+				log.Warn().Str("value", logMaxSize).Msg("Ignoring non-positive LOG_MAX_SIZE from environment")
+			} else {
+				cfg.LogMaxSize = size
+				cfg.EnvOverrides["logMaxSize"] = true
+				log.Info().Int("size_mb", size).Msg("Log max size overridden by LOG_MAX_SIZE env var")
+			}
+		} else {
+			log.Warn().Str("value", logMaxSize).Msg("Invalid LOG_MAX_SIZE value, expected integer")
 		}
 	}
 
 	if logMaxAge := os.Getenv("LOG_MAX_AGE"); logMaxAge != "" {
-		if age, err := strconv.Atoi(logMaxAge); err == nil && age > 0 {
-			cfg.LogMaxAge = age
-			cfg.EnvOverrides["logMaxAge"] = true
-			log.Info().Int("days", age).Msg("Log max age overridden by LOG_MAX_AGE env var")
+		if age, err := strconv.Atoi(logMaxAge); err == nil {
+			if age <= 0 {
+				log.Warn().Str("value", logMaxAge).Msg("Ignoring non-positive LOG_MAX_AGE from environment")
+			} else {
+				cfg.LogMaxAge = age
+				cfg.EnvOverrides["logMaxAge"] = true
+				log.Info().Int("days", age).Msg("Log max age overridden by LOG_MAX_AGE env var")
+			}
+		} else {
+			log.Warn().Str("value", logMaxAge).Msg("Invalid LOG_MAX_AGE value, expected integer")
 		}
 	}
 
@@ -1568,15 +1500,17 @@ func Load() (*Config, error) {
 	}
 
 	cfg.Discovery = NormalizeDiscoveryConfig(cfg.Discovery)
-	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
-		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
-			cfg.ConnectionTimeout = d
-			cfg.EnvOverrides["connectionTimeout"] = true
-			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
-		} else if d, err := time.ParseDuration(connectionTimeout); err == nil {
-			cfg.ConnectionTimeout = d
-			cfg.EnvOverrides["connectionTimeout"] = true
-			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
+	if connectionTimeout := utils.GetenvTrim("CONNECTION_TIMEOUT"); connectionTimeout != "" {
+		if d, err := parseConnectionTimeoutOverride(connectionTimeout); err == nil {
+			if d < time.Second {
+				log.Warn().Dur("value", d).Msg("Ignoring CONNECTION_TIMEOUT below 1s from environment")
+			} else {
+				cfg.ConnectionTimeout = d
+				cfg.EnvOverrides["connectionTimeout"] = true
+				log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
+			}
+		} else {
+			log.Warn().Str("value", connectionTimeout).Msg("Invalid CONNECTION_TIMEOUT value, expected seconds or duration string")
 		}
 	}
 	if maxPollTimeout := os.Getenv("MAX_POLL_TIMEOUT"); maxPollTimeout != "" {
@@ -1597,19 +1531,23 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["allowedOrigins"] = true
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
+
 	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
 		cfg.PublicURL = publicURL
 		cfg.EnvOverrides["publicURL"] = true
 		log.Info().Str("url", publicURL).Msg("Public URL configured from PULSE_PUBLIC_URL env var")
 	} else {
-		// Try to auto-detect public URL if not explicitly configured
-		if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
-			cfg.PublicURL = detectedURL
-			log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
+		// In hosted mode, fail closed unless explicitly configured.
+		if os.Getenv("PULSE_HOSTED_MODE") == "true" {
+			log.Warn().Msg("Hosted mode enabled: public URL not configured; external links (e.g., magic links) will be disabled. Set PULSE_PUBLIC_URL.")
+		} else {
+			// Try to auto-detect public URL if not explicitly configured
+			if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
+				cfg.PublicURL = detectedURL
+				log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
+			}
 		}
 	}
-
-	cfg.OIDC.ApplyDefaults(cfg.PublicURL)
 
 	// Initialize logging with configuration values
 	logging.Init(logging.Config{
@@ -1634,28 +1572,22 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// SaveOIDCConfig persists OIDC settings using the shared config persistence layer.
-func SaveOIDCConfig(settings *OIDCConfig) error {
-	if globalPersistence == nil {
-		return fmt.Errorf("config persistence not initialized")
-	}
-	if settings == nil {
-		return fmt.Errorf("oidc settings cannot be nil")
-	}
-
-	clone := settings.Clone()
-	if clone == nil {
-		return fmt.Errorf("failed to clone oidc settings")
-	}
-
-	return globalPersistence.SaveOIDCConfig(*clone)
-}
-
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	// Validate server settings
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
+	}
+	if c.SSHPort != 0 && (c.SSHPort < 1 || c.SSHPort > 65535) {
+		return fmt.Errorf("invalid SSH port: %d (must be between 1 and 65535)", c.SSHPort)
+	}
+	if c.HTTPRedirectPort != 0 {
+		if c.HTTPRedirectPort < 1 || c.HTTPRedirectPort > 65535 {
+			return fmt.Errorf("invalid HTTP redirect port: %d (must be between 1 and 65535)", c.HTTPRedirectPort)
+		}
+		if c.HTTPRedirectPort == c.FrontendPort {
+			return fmt.Errorf("HTTP redirect port (%d) must differ from frontend port", c.HTTPRedirectPort)
+		}
 	}
 
 	// Validate monitoring settings
@@ -1718,10 +1650,6 @@ func (c *Config) Validate() error {
 		validPBS = append(validPBS, pbs)
 	}
 	c.PBSInstances = validPBS
-
-	if err := c.OIDC.Validate(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -1796,6 +1724,9 @@ func getOutboundIP() string {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || localAddr == nil || localAddr.IP == nil {
+		return ""
+	}
 	return localAddr.IP.String()
 }

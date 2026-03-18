@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -21,6 +22,7 @@ type PollResult struct {
 type PollTask struct {
 	InstanceName string
 	InstanceType string // "pve", "pbs", or "pmg"
+	Run          func(ctx context.Context)
 	PVEClient    PVEClientInterface
 	PBSClient    *pbs.Client
 	PMGClient    *pmg.Client

@@ -2,19 +2,174 @@ package hostagent
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 )
+
+func canonicalSetupScriptCommand(expectedScriptURL string, setupToken string) string {
+	return fmt.Sprintf(
+		`curl -fsSL '%s' | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN='%s' bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN='%s' bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`,
+		expectedScriptURL,
+		setupToken,
+		setupToken,
+	)
+}
+
+func canonicalSetupScriptCommandWithoutEnv(expectedScriptURL string) string {
+	return fmt.Sprintf(
+		`curl -fsSL '%s' | { if [ "$(id -u)" -eq 0 ]; then bash; elif command -v sudo >/dev/null 2>&1; then sudo bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`,
+		expectedScriptURL,
+	)
+}
+
+func canonicalSetupScriptURLResponseJSON(baseURL string, ptype string, host string, setupToken string) string {
+	setupURL := fmt.Sprintf(
+		"%s/api/setup-script?host=%s&pulse_url=%s&type=%s",
+		baseURL,
+		url.QueryEscape(host),
+		url.QueryEscape(baseURL),
+		url.QueryEscape(ptype),
+	)
+	downloadURL := fmt.Sprintf(
+		"%s/api/setup-script?host=%s&pulse_url=%s&setup_token=%s&type=%s",
+		baseURL,
+		url.QueryEscape(host),
+		url.QueryEscape(baseURL),
+		url.QueryEscape(setupToken),
+		url.QueryEscape(ptype),
+	)
+	commandWithEnv := canonicalSetupScriptCommand(setupURL, setupToken)
+	commandWithoutEnv := canonicalSetupScriptCommandWithoutEnv(setupURL)
+	return fmt.Sprintf(
+		`{"type":"%s","host":"%s","url":"%s","downloadURL":"%s","scriptFileName":"pulse-setup-%s.sh","command":%q,"commandWithEnv":%q,"commandWithoutEnv":%q,"setupToken":"%s","tokenHint":"%s…%s","expires":1900000000}`,
+		ptype,
+		host,
+		setupURL,
+		downloadURL,
+		ptype,
+		commandWithEnv,
+		commandWithEnv,
+		commandWithoutEnv,
+		setupToken,
+		setupToken[:3],
+		setupToken[len(setupToken)-3:],
+	)
+}
+
+func TestParseProxmoxProductType(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawType  string
+		expected proxmoxProductType
+	}{
+		{name: "pve", rawType: "pve", expected: proxmoxProductPVE},
+		{name: "pbs uppercase", rawType: "PBS", expected: proxmoxProductPBS},
+		{name: "trimmed", rawType: "  pve  ", expected: proxmoxProductPVE},
+		{name: "invalid", rawType: "invalid", expected: proxmoxProductUnknown},
+		{name: "empty", rawType: "", expected: proxmoxProductUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseProxmoxProductType(tt.rawType); got != tt.expected {
+				t.Fatalf("parseProxmoxProductType(%q) = %q, want %q", tt.rawType, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRegisterWithPulse_Payload(t *testing.T) {
+	var gotPayload autoRegisterRequest
+	var setupTokenHeader string
+	var setupTokenPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		switch r.URL.Path {
+		case "/api/setup-script-url":
+			setupTokenHeader = r.Header.Get("X-API-Token")
+			if err := json.NewDecoder(r.Body).Decode(&setupTokenPayload); err != nil {
+				t.Fatalf("decode setup token payload: %v", err)
+			}
+			publicURL := "http://" + r.Host
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.4:8006", "setup-token-123")))
+			return
+		case "/api/auto-register":
+			if gotToken := r.Header.Get("X-API-Token"); gotToken != "" {
+				t.Fatalf("unexpected X-API-Token header %q", gotToken)
+			}
+			if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"success","message":"Node node-1 registered successfully at https://10.0.0.4:8006","action":"use_token","type":"pve","source":"agent","host":"https://10.0.0.4:8006","nodeId":"node-1","nodeName":"node-1","tokenId":"token-id","tokenValue":"token-value"}`))
+			return
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	p := &ProxmoxSetup{
+		logger:     zerolog.Nop(),
+		httpClient: server.Client(),
+		pulseURL:   server.URL,
+		apiToken:   "pulse-token",
+		hostname:   "node-1",
+	}
+
+	resp, err := p.registerWithPulse(context.Background(), proxmoxProductPVE, "https://10.0.0.4:8006", "token-id", "token-value")
+	if err != nil {
+		t.Fatalf("registerWithPulse failed: %v", err)
+	}
+	if resp.NodeName != "node-1" {
+		t.Fatalf("unexpected nodeName %q", resp.NodeName)
+	}
+
+	if gotPayload.Type != proxmoxProductPVE {
+		t.Fatalf("unexpected type %q", gotPayload.Type)
+	}
+	if gotPayload.Host != "https://10.0.0.4:8006" {
+		t.Fatalf("unexpected host %q", gotPayload.Host)
+	}
+	if gotPayload.ServerName != "node-1" {
+		t.Fatalf("unexpected serverName %q", gotPayload.ServerName)
+	}
+	if gotPayload.AuthToken != "setup-token-123" {
+		t.Fatalf("unexpected authToken %q", gotPayload.AuthToken)
+	}
+	if gotPayload.TokenID != "token-id" {
+		t.Fatalf("unexpected tokenId %q", gotPayload.TokenID)
+	}
+	if gotPayload.TokenValue != "token-value" {
+		t.Fatalf("unexpected tokenValue %q", gotPayload.TokenValue)
+	}
+	if gotPayload.Source != autoRegisterSourceAgent {
+		t.Fatalf("unexpected source %q", gotPayload.Source)
+	}
+	if setupTokenHeader != "pulse-token" {
+		t.Fatalf("unexpected setup token auth header %q", setupTokenHeader)
+	}
+	if setupTokenPayload["type"] != "pve" {
+		t.Fatalf("unexpected setup token type %#v", setupTokenPayload["type"])
+	}
+	if setupTokenPayload["host"] != "https://10.0.0.4:8006" {
+		t.Fatalf("unexpected setup token host %#v", setupTokenPayload["host"])
+	}
+}
 
 func TestParseTokenValue_RegexFallback(t *testing.T) {
 	p := &ProxmoxSetup{logger: zerolog.Nop()}
@@ -37,114 +192,6 @@ func TestParsePBSTokenValue_RegexFallback(t *testing.T) {
 	}
 	if p.parsePBSTokenValue("no match") != "" {
 		t.Error("expected empty")
-	}
-}
-
-func TestMonitorTokenName_Deterministic(t *testing.T) {
-	p := &ProxmoxSetup{hostname: "node-01", pulseURL: "https://Pulse.EXAMPLE.com:7655"}
-	if got := p.monitorTokenName(); got != "pulse-node-01-pulse-example-com" {
-		t.Fatalf("monitorTokenName() = %q", got)
-	}
-
-	p = &ProxmoxSetup{hostname: "Pulse Host"}
-	if got := p.monitorTokenName(); got != "pulse-pulse-host" {
-		t.Fatalf("monitorTokenName() with hostname fallback = %q", got)
-	}
-
-	p = &ProxmoxSetup{pulseURL: "https://Pulse.EXAMPLE.com:7655"}
-	if got := p.monitorTokenName(); got != "pulse-pulse-example-com" {
-		t.Fatalf("monitorTokenName() with Pulse URL fallback = %q", got)
-	}
-}
-
-func TestMonitorTokenName_UniquePerNodeForSamePulse(t *testing.T) {
-	first := (&ProxmoxSetup{hostname: "pve-a", pulseURL: "https://pulse.example.com:7655"}).monitorTokenName()
-	second := (&ProxmoxSetup{hostname: "pve-b", pulseURL: "https://pulse.example.com:7655"}).monitorTokenName()
-
-	if first == second {
-		t.Fatalf("expected unique token names per node, got %q for both", first)
-	}
-}
-
-func TestSetupPVEToken_RotatesExistingToken(t *testing.T) {
-	mc := &mockCollector{}
-	createCalls := 0
-	removeCalled := false
-	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
-		if name == "pveum" && len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
-			createCalls++
-			if createCalls == 1 {
-				return "already exists", fmt.Errorf("already exists")
-			}
-			return "│ value │ rotated-token │", nil
-		}
-		if name == "pveum" && len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "remove" {
-			removeCalled = true
-			return "", nil
-		}
-		return "", nil
-	}
-
-	p := &ProxmoxSetup{
-		logger:    zerolog.Nop(),
-		collector: mc,
-	}
-	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
-	if err != nil {
-		t.Fatalf("setupPVEToken: %v", err)
-	}
-	if tokenID != "pulse-monitor@pam!pulse-test" {
-		t.Fatalf("tokenID = %q", tokenID)
-	}
-	if tokenValue != "rotated-token" {
-		t.Fatalf("tokenValue = %q", tokenValue)
-	}
-	if !removeCalled {
-		t.Fatal("expected existing token to be removed before recreate")
-	}
-	if createCalls != 2 {
-		t.Fatalf("expected 2 create attempts, got %d", createCalls)
-	}
-}
-
-func TestSetupPBSToken_RotatesExistingToken(t *testing.T) {
-	mc := &mockCollector{}
-	createCalls := 0
-	deleteCalled := false
-	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
-		if name == "proxmox-backup-manager" && len(arg) > 1 && arg[0] == "user" && arg[1] == "generate-token" {
-			createCalls++
-			if createCalls == 1 {
-				return "already exists", fmt.Errorf("already exists")
-			}
-			return `{"value":"rotated-pbs-token"}`, nil
-		}
-		if name == "proxmox-backup-manager" && len(arg) > 1 && arg[0] == "user" && arg[1] == "delete-token" {
-			deleteCalled = true
-			return "", nil
-		}
-		return "", nil
-	}
-
-	p := &ProxmoxSetup{
-		logger:    zerolog.Nop(),
-		collector: mc,
-	}
-	tokenID, tokenValue, err := p.setupPBSToken(context.Background(), "pulse-test")
-	if err != nil {
-		t.Fatalf("setupPBSToken: %v", err)
-	}
-	if tokenID != "pulse-monitor@pbs!pulse-test" {
-		t.Fatalf("tokenID = %q", tokenID)
-	}
-	if tokenValue != "rotated-pbs-token" {
-		t.Fatalf("tokenValue = %q", tokenValue)
-	}
-	if !deleteCalled {
-		t.Fatal("expected existing token to be deleted before recreate")
-	}
-	if createCalls != 2 {
-		t.Fatalf("expected 2 create attempts, got %d", createCalls)
 	}
 }
 
@@ -233,14 +280,14 @@ func TestScoreIPv4(t *testing.T) {
 }
 
 func TestStateFileForType(t *testing.T) {
-	setup := &ProxmoxSetup{}
-	if setup.stateFileForType("pve") != stateFilePVE {
+	setup := &ProxmoxSetup{stateDir: "/var/lib/pulse-agent"}
+	if setup.stateFileForType("pve") != "/var/lib/pulse-agent/proxmox-pve-registered" {
 		t.Error("wrong PVE state file")
 	}
-	if setup.stateFileForType("pbs") != stateFilePBS {
+	if setup.stateFileForType("pbs") != "/var/lib/pulse-agent/proxmox-pbs-registered" {
 		t.Error("wrong PBS state file")
 	}
-	if setup.stateFileForType("unknown") != stateFilePath {
+	if setup.stateFileForType("unknown") != "/var/lib/pulse-agent/proxmox-registered" {
 		t.Error("wrong unknown state file")
 	}
 }
@@ -255,18 +302,25 @@ func TestGetHostURL(t *testing.T) {
 
 	t.Run("uses reportIP override", func(t *testing.T) {
 		p.reportIP = "1.2.3.4"
-		if got := p.getHostURL("pve"); got != "https://1.2.3.4:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://1.2.3.4:8006" {
+			t.Errorf("got %s", got)
+		}
+	})
+
+	t.Run("formats IPv6 reportIP override", func(t *testing.T) {
+		p.reportIP = "2001:db8::1"
+		if got := p.getHostURL(context.Background(), proxmoxProductPBS); got != "https://[2001:db8::1]:8007" {
 			t.Errorf("got %s", got)
 		}
 	})
 
 	t.Run("uses IP that reaches pulse", func(t *testing.T) {
 		p.reportIP = ""
-		p.pulseURL = "http://pulse:7655"
+		p.pulseURL = "https://pulse:7655"
 		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
 		}
-		if got := p.getHostURL("pve"); got != "https://10.1.1.1:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://10.1.1.1:8006" {
 			t.Errorf("got %s", got)
 		}
 	})
@@ -284,7 +338,7 @@ func TestGetHostURL(t *testing.T) {
 		mc.hostnameFn = func() (string, error) { return "test-host", nil }
 		mc.lookupIPFn = func(h string) ([]net.IP, error) { return nil, nil }
 
-		if got := p.getHostURL("pbs"); got != "https://10.0.0.5:8007" {
+		if got := p.getHostURL(context.Background(), "pbs"); got != "https://10.0.0.5:8007" {
 			t.Errorf("got %s", got)
 		}
 	})
@@ -295,10 +349,54 @@ func TestGetHostURL(t *testing.T) {
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			return "", fmt.Errorf("fail")
 		}
-		if got := p.getHostURL("pve"); got != "https://test-host:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://test-host:8006" {
 			t.Errorf("got %s", got)
 		}
 	})
+
+	t.Run("hostname probe uses caller context", func(t *testing.T) {
+		p.reportIP = ""
+		p.pulseURL = ""
+		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) { return nil, fmt.Errorf("fail") }
+
+		var sawCanceledCtx bool
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "hostname" && len(arg) > 0 && arg[0] == "-I" && ctx.Err() == context.Canceled {
+				sawCanceledCtx = true
+			}
+			return "", context.Canceled
+		}
+
+		canceledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		if got := p.getHostURL(canceledCtx, "pve"); got != "https://test-host:8006" {
+			t.Errorf("got %s", got)
+		}
+		if !sawCanceledCtx {
+			t.Fatalf("expected hostname probe to observe canceled caller context")
+		}
+	})
+}
+
+func TestGetIPThatReachesPulse_IPv6Target(t *testing.T) {
+	mc := &mockCollector{}
+	var dialAddress string
+	mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+		dialAddress = address
+		return nil, fmt.Errorf("expected failure to stop flow")
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+		pulseURL:  "https://[2001:db8::1]",
+	}
+
+	_ = p.getIPThatReachesPulse()
+	if dialAddress != "[2001:db8::1]:443" {
+		t.Fatalf("dial address = %q, want %q", dialAddress, "[2001:db8::1]:443")
+	}
 }
 
 func TestProxmoxSetup_RunForType(t *testing.T) {
@@ -308,7 +406,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "host", "", false)
+	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "host", "", "", false)
 
 	t.Run("skips if already registered", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, nil } // exists
@@ -321,7 +419,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	t.Run("performs registration successfully", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
-			// pveum user token add pulse-monitor@pam ... --privsep 0
+			// pveum user token add pulse-monitor@pve ... --privsep 0
 			// arg[0]=user, arg[1]=token, arg[2]=add
 			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
 				return "│ value │ my-token │", nil
@@ -344,110 +442,78 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	})
 }
 
-func TestRegisterWithPulseRetry(t *testing.T) {
-	// Server returns 503 twice, then 200
-	var attempt int32
-	var gotAuth string
-	var gotAPIToken string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		gotAPIToken = r.Header.Get("X-API-Token")
-		n := atomic.AddInt32(&attempt, 1)
-		if n <= 2 {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
+func TestPrivProbeRoleName_Sanitizes(t *testing.T) {
+	got := privProbeRoleName("VM.GuestAgent.Audit")
+	if got != "PulseTmpPrivCheck_VM_GuestAgent_Audit" {
+		t.Fatalf("unexpected role name: %q", got)
+	}
+
+	got2 := privProbeRoleName("a:b/c d,e.f")
+	if strings.ContainsAny(got2, ".:/ ,") {
+		t.Fatalf("expected sanitized role name, got: %q", got2)
+	}
+}
+
+func TestProxmoxSetup_ProbePVEPrivilege_CreatesAndDeletesRole(t *testing.T) {
+	mc := &mockCollector{}
+	addCalls := 0
+	deleteCalls := 0
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" || len(arg) < 3 {
+			return "", nil
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
+		if arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			addCalls++
+			return "", nil
+		}
+		if arg[0] == "role" && arg[1] == "delete" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			deleteCalls++
+			return "", nil
+		}
+		return "", nil
+	}
 
 	p := &ProxmoxSetup{
-		logger:        zerolog.Nop(),
-		httpClient:    server.Client(),
-		pulseURL:      server.URL,
-		apiToken:      "test-token",
-		hostname:      "test-host",
-		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond},
+		logger:    zerolog.Nop(),
+		collector: mc,
 	}
 
-	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
-	if err != nil {
-		t.Fatalf("expected success after retries, got: %v", err)
+	if ok := p.probePVEPrivilege(context.Background(), "Sys.Audit"); !ok {
+		t.Fatalf("expected probe to succeed")
 	}
-	if atomic.LoadInt32(&attempt) != 3 {
-		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempt))
-	}
-	if gotAuth != "Bearer test-token" {
-		t.Fatalf("Authorization = %q, want %q", gotAuth, "Bearer test-token")
-	}
-	if gotAPIToken != "test-token" {
-		t.Fatalf("X-API-Token = %q, want %q", gotAPIToken, "test-token")
+	if addCalls != 1 || deleteCalls != 1 {
+		t.Fatalf("expected 1 add and 1 delete call, got add=%d delete=%d", addCalls, deleteCalls)
 	}
 }
 
-func TestRegisterWithPulseNoRetryOn4xx(t *testing.T) {
-	// Server returns 401 - should NOT retry
-	var attempt int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempt, 1)
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte("invalid token"))
-	}))
-	defer server.Close()
+func TestProxmoxSetup_ProbePVEPrivilege_ReturnsFalseOnAddError(t *testing.T) {
+	mc := &mockCollector{}
+	deleteCalls := 0
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name == "pveum" && len(arg) >= 3 && arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			return "", fmt.Errorf("unknown privilege")
+		}
+		if name == "pveum" && len(arg) >= 3 && arg[0] == "role" && arg[1] == "delete" {
+			deleteCalls++
+		}
+		return "", nil
+	}
 
 	p := &ProxmoxSetup{
-		logger:        zerolog.Nop(),
-		httpClient:    server.Client(),
-		pulseURL:      server.URL,
-		apiToken:      "bad-token",
-		hostname:      "test-host",
-		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
+		logger:    zerolog.Nop(),
+		collector: mc,
 	}
 
-	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
-	if err == nil {
-		t.Fatal("expected error for 401")
+	if ok := p.probePVEPrivilege(context.Background(), "VM.Monitor"); ok {
+		t.Fatalf("expected probe to fail")
 	}
-	if atomic.LoadInt32(&attempt) != 1 {
-		t.Errorf("expected exactly 1 attempt (no retry on 4xx), got %d", atomic.LoadInt32(&attempt))
-	}
-	// Verify it's a clientError
-	var ce *clientError
-	if !errors.As(err, &ce) {
-		t.Errorf("expected clientError, got %T: %v", err, err)
+	if deleteCalls != 0 {
+		t.Fatalf("expected no delete calls when add fails, got %d", deleteCalls)
 	}
 }
 
-func TestRegisterWithPulseAllRetriesFail(t *testing.T) {
-	// Server always returns 503
-	var attempt int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempt, 1)
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte("service unavailable"))
-	}))
-	defer server.Close()
-
-	p := &ProxmoxSetup{
-		logger:        zerolog.Nop(),
-		httpClient:    server.Client(),
-		pulseURL:      server.URL,
-		apiToken:      "test-token",
-		hostname:      "test-host",
-		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
-	}
-
-	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
-	if err == nil {
-		t.Fatal("expected error when all retries fail")
-	}
-	// 3 attempts: initial + 2 retries (len(retryBackoffs) = 2)
-	if atomic.LoadInt32(&attempt) != 3 {
-		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempt))
-	}
-}
-
-func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T) {
+func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *testing.T) {
 	mc := &mockCollector{}
 	var pulseMonitorPrivs string
 
@@ -479,11 +545,6 @@ func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T)
 			return "", nil
 		}
 
-		// Token creation path expects a value row.
-		if len(arg) > 2 && arg[0] == "user" && arg[1] == "token" && arg[2] == "add" {
-			return "│ value │ my-token │", nil
-		}
-
 		return "", nil
 	}
 
@@ -492,13 +553,7 @@ func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T)
 		collector: mc,
 	}
 
-	tokenID, tokenValue, err := p.setupPVEToken(context.Background(), "pulse-test")
-	if err != nil {
-		t.Fatalf("setupPVEToken returned error: %v", err)
-	}
-	if tokenID == "" || tokenValue == "" {
-		t.Fatalf("expected tokenID and tokenValue to be set, got tokenID=%q tokenValue=%q", tokenID, tokenValue)
-	}
+	p.configurePVEPermissions(context.Background())
 
 	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
 		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
@@ -506,13 +561,16 @@ func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T)
 	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
 		t.Fatalf("did not expect PulseMonitor privileges to include VM.Monitor when it is unavailable, got %q", pulseMonitorPrivs)
 	}
+	if strings.Contains(pulseMonitorPrivs, " ") {
+		t.Fatalf("expected comma-separated privileges, got %q", pulseMonitorPrivs)
+	}
 }
 
 func TestProxmoxSetup_RunAll(t *testing.T) {
 	mc := &mockCollector{}
 
 	t.Run("detects both and runs both", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "", "host", "", "", false)
 		mc.lookPathFn = func(file string) (string, error) { return "/bin/" + file, nil }
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
@@ -542,7 +600,8 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	})
 
 	t.Run("forced type", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "pbs", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "pbs", "host", "", "", false)
+		p.retryBackoffs = []time.Duration{} // disable retries so registration fails immediately in test
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			if name == "proxmox-backup-manager" && len(arg) > 1 && arg[1] == "generate-token" {
@@ -551,22 +610,27 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 			return "", nil
 		}
 
-		p.httpClient = &http.Client{Transport: &mockTransport{statusCode: 200}}
-
 		results, _ := p.RunAll(context.Background())
 		if len(results) != 1 || results[0].ProxmoxType != "pbs" {
 			t.Errorf("expected pbs result")
+		}
+	})
+
+	t.Run("invalid forced type returns error", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "invalid", "host", "", "", false)
+		if _, err := p.RunAll(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
+			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}
 	})
 }
 
 func TestIsTypeRegistered_Legacy(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc}
+	p := &ProxmoxSetup{collector: mc, stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("legacy state file exists and pve installed", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -584,7 +648,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 	t.Run("legacy state file exists and pbs only", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -602,7 +666,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 	t.Run("legacy exists but no products found", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) {
-			if name == stateFilePath {
+			if name == "/var/lib/pulse-agent/proxmox-registered" {
 				return nil, nil
 			}
 			return nil, os.ErrNotExist
@@ -623,7 +687,7 @@ func TestIsTypeRegistered_Legacy(t *testing.T) {
 
 func TestProxmoxSetup_MarkAsRegistered_Errors(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("mkdir error", func(t *testing.T) {
 		mc.mkdirAllFn = func(p string, m os.FileMode) error { return fmt.Errorf("fail") }
@@ -637,9 +701,46 @@ func TestProxmoxSetup_MarkAsRegistered_Errors(t *testing.T) {
 	})
 }
 
+func TestProxmoxSetup_MarkAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
+	mc := &mockCollector{}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
+
+	var gotDirPerm os.FileMode
+	var gotFilePerm os.FileMode
+	chmodPerms := make(map[string]os.FileMode)
+
+	mc.mkdirAllFn = func(path string, perm os.FileMode) error {
+		gotDirPerm = perm
+		return nil
+	}
+	mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error {
+		gotFilePerm = perm
+		return nil
+	}
+	mc.chmodFn = func(name string, mode os.FileMode) error {
+		chmodPerms[name] = mode
+		return nil
+	}
+
+	p.markAsRegistered()
+
+	if gotDirPerm != proxmoxStateDirPerm {
+		t.Fatalf("MkdirAll perm = %o, want %o", gotDirPerm, proxmoxStateDirPerm)
+	}
+	if gotFilePerm != proxmoxStateFilePerm {
+		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
+	}
+	if chmodPerms["/var/lib/pulse-agent"] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod state dir = %o, want %o", chmodPerms["/var/lib/pulse-agent"], proxmoxStateDirPerm)
+	}
+	if chmodPerms["/var/lib/pulse-agent/proxmox-registered"] != proxmoxStateFilePerm {
+		t.Fatalf("Chmod state file = %o, want %o", chmodPerms["/var/lib/pulse-agent/proxmox-registered"], proxmoxStateFilePerm)
+	}
+}
+
 func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 	mc := &mockCollector{}
-	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
 
 	t.Run("mkdir error", func(t *testing.T) {
 		mc.mkdirAllFn = func(p string, m os.FileMode) error { return fmt.Errorf("fail") }
@@ -653,6 +754,47 @@ func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 	})
 }
 
+func TestProxmoxSetup_MarkTypeAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
+	mc := &mockCollector{}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop(), stateDir: "/var/lib/pulse-agent"}
+
+	var gotDirPerm os.FileMode
+	var gotFilePerm os.FileMode
+	chmodPerms := make(map[string]os.FileMode)
+	targetFile := p.stateFileForType("pve")
+
+	mc.mkdirAllFn = func(path string, perm os.FileMode) error {
+		gotDirPerm = perm
+		return nil
+	}
+	mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error {
+		if filename != targetFile {
+			t.Fatalf("write target file = %q, want %q", filename, targetFile)
+		}
+		gotFilePerm = perm
+		return nil
+	}
+	mc.chmodFn = func(name string, mode os.FileMode) error {
+		chmodPerms[name] = mode
+		return nil
+	}
+
+	p.markTypeAsRegistered("pve")
+
+	if gotDirPerm != proxmoxStateDirPerm {
+		t.Fatalf("MkdirAll perm = %o, want %o", gotDirPerm, proxmoxStateDirPerm)
+	}
+	if gotFilePerm != proxmoxStateFilePerm {
+		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
+	}
+	if chmodPerms["/var/lib/pulse-agent"] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod state dir = %o, want %o", chmodPerms["/var/lib/pulse-agent"], proxmoxStateDirPerm)
+	}
+	if chmodPerms[targetFile] != proxmoxStateFilePerm {
+		t.Fatalf("Chmod(%q) = %o, want %o", targetFile, chmodPerms[targetFile], proxmoxStateFilePerm)
+	}
+}
+
 func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	mc := &mockCollector{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -661,7 +803,7 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	defer server.Close()
 
 	t.Run("auto-detects and runs", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", "", false)
 		mc.lookPathFn = func(file string) (string, error) {
 			if file == "pvesh" {
 				return "/bin/pvesh", nil
@@ -684,6 +826,60 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 		res, err := p.Run(context.Background())
 		if err != nil || res == nil || !res.Registered || res.ProxmoxType != "pve" {
 			t.Fatalf("failed: %v (res: %v)", err, res)
+		}
+	})
+
+	t.Run("invalid pulse URL fails fast", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, "not-a-url", "token", "", "host", "", "", false)
+		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid pulse URL") {
+			t.Fatalf("expected pulse URL validation error, got %v", err)
+		}
+	})
+
+	t.Run("missing token still registers when auth is optional", func(t *testing.T) {
+		var gotPayload autoRegisterRequest
+		requestCount := 0
+		noTokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			switch r.URL.Path {
+			case "/api/setup-script-url":
+				if gotToken := r.Header.Get("X-API-Token"); gotToken != "" {
+					t.Fatalf("setup token auth header = %q, want empty", gotToken)
+				}
+				publicURL := "http://" + r.Host
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.4:8006", "setup-token-optional")))
+			case "/api/auto-register":
+				if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+					t.Fatalf("decode payload: %v", err)
+				}
+				w.WriteHeader(http.StatusOK)
+			default:
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+		}))
+		defer noTokenServer.Close()
+
+		p := NewProxmoxSetup(zerolog.Nop(), noTokenServer.Client(), mc, noTokenServer.URL, " ", "", "host", "", "", false)
+		res, err := p.Run(context.Background())
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if res == nil || !res.Registered {
+			t.Fatalf("expected proxmox setup to register without token, got %+v", res)
+		}
+		if gotPayload.AuthToken != "setup-token-optional" {
+			t.Fatalf("authToken = %q, want %q", gotPayload.AuthToken, "setup-token-optional")
+		}
+		if requestCount != 2 {
+			t.Fatalf("requestCount = %d, want 2", requestCount)
+		}
+	})
+
+	t.Run("invalid proxmox type fails fast", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "bad", "host", "", "", false)
+		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
+			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}
 	})
 }

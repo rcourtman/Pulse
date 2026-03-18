@@ -50,6 +50,11 @@ type IntervalRequest struct {
 	InstanceType   InstanceType
 }
 
+// TaskMetadata contains optional scheduling context carried across task planning.
+type TaskMetadata struct {
+	ChangeHash string
+}
+
 // InstanceDescriptor describes a monitored endpoint for scheduling purposes.
 type InstanceDescriptor struct {
 	Name          string
@@ -59,7 +64,7 @@ type InstanceDescriptor struct {
 	LastScheduled time.Time
 	LastInterval  time.Duration
 	ErrorCount    int
-	Metadata      map[string]any
+	Metadata      TaskMetadata
 }
 
 // ScheduledTask represents a single polling opportunity planned by the scheduler.
@@ -69,7 +74,7 @@ type ScheduledTask struct {
 	NextRun      time.Time
 	Interval     time.Duration
 	Priority     float64
-	Metadata     map[string]any
+	Metadata     TaskMetadata
 }
 
 // SchedulerConfig contains tunables for the adaptive scheduler.

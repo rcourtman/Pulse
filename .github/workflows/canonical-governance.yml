@@ -1,0 +1,145 @@
+name: Canonical Governance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pulse-pro evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-pro
+          fetch-depth: 1
+          path: .governance/repos/pulse-pro
+
+      - name: Checkout pulse-enterprise evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-enterprise
+          fetch-depth: 1
+          path: .governance/repos/pulse-enterprise
+
+      - name: Checkout pulse-mobile evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-mobile
+          fetch-depth: 1
+          path: .governance/repos/pulse-mobile
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Determine governance diff range
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            range="${{ github.event.before }}...${{ github.sha }}"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            range="HEAD^...HEAD"
+          else
+            range=""
+          fi
+          echo "range=${range}" >> "$GITHUB_OUTPUT"
+
+      - name: Run canonical completion guard against changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ steps.diff.outputs.range }}" ]; then
+            git diff --name-only "${{ steps.diff.outputs.range }}" \
+              | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+          else
+            printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+          fi
+
+      - name: Run status audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+        run: python3 scripts/release_control/status_audit.py --check
+
+      - name: Run control plane audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+        run: python3 scripts/release_control/control_plane_audit.py --check
+
+      - name: Run registry audit
+        run: python3 scripts/release_control/registry_audit.py --check
+
+      - name: Run contract audit
+        run: python3 scripts/release_control/contract_audit.py --check
+
+      - name: Run canonical completion guard unit tests
+        run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run control plane audit unit tests
+        run: python3 scripts/release_control/control_plane_audit_test.py
+
+      - name: Run contract audit unit tests
+        run: python3 scripts/release_control/contract_audit_test.py
+
+      - name: Run staged Go formatter unit tests
+        run: python3 scripts/release_control/format_staged_go_test.py
+
+      - name: Run governance stage guard unit tests
+        run: python3 scripts/release_control/governance_stage_guard_test.py
+
+      - name: Run registry audit unit tests
+        run: python3 scripts/release_control/registry_audit_test.py
+
+      - name: Run repo file IO unit tests
+        run: python3 scripts/release_control/repo_file_io_test.py
+
+      - name: Run release promotion policy unit tests
+        run: python3 scripts/release_control/release_promotion_policy_test.py
+
+      - name: Run status audit unit tests
+        run: python3 scripts/release_control/status_audit_test.py
+
+      - name: Run subsystem contract helper unit tests
+        run: python3 scripts/release_control/subsystem_contracts_test.py
+
+      - name: Run subsystem lookup unit tests
+        run: python3 scripts/release_control/subsystem_lookup_test.py
+
+      - name: Run repo governance guardrail tests
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+        run: go test ./internal/repoctl -count=1
+
+      - name: Run active-target automated readiness assertion proofs
+        run: python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type automated
+
+      - name: Run active-target hybrid readiness assertion proofs
+        run: python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type hybrid
+
+      - name: Run readiness assertion guard unit tests
+        run: python3 scripts/release_control/readiness_assertion_guard_test.py

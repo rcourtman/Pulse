@@ -33,7 +33,7 @@ func TestSignConfigPayloadInvalidSettings(t *testing.T) {
 	}
 
 	payload := SignedConfigPayload{
-		HostID:    "host-1",
+		AgentID:   "host-1",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Settings:  map[string]interface{}{"bad": func() {}},
@@ -45,7 +45,7 @@ func TestSignConfigPayloadInvalidSettings(t *testing.T) {
 
 func TestVerifyConfigPayloadSignatureInvalidBase64(t *testing.T) {
 	payload := SignedConfigPayload{
-		HostID:    "host",
+		AgentID:   "host",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 	}
@@ -56,7 +56,7 @@ func TestVerifyConfigPayloadSignatureInvalidBase64(t *testing.T) {
 
 func TestVerifyConfigPayloadSignatureMissing(t *testing.T) {
 	payload := SignedConfigPayload{
-		HostID:    "host",
+		AgentID:   "host",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 	}
@@ -134,6 +134,30 @@ func TestTrustedConfigPublicKeysErrors(t *testing.T) {
 	}
 }
 
+func TestTrustedConfigPublicKeysUsesInjectedDefaultWhenEnvUnset(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	raw, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey: %v", err)
+	}
+	injected := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: raw}))
+
+	original := trustedConfigPublicKeysPEM
+	trustedConfigPublicKeysPEM = injected
+	t.Cleanup(func() {
+		trustedConfigPublicKeysPEM = original
+	})
+
+	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", "")
+	keys, err := trustedConfigPublicKeys()
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("expected injected default key, got %d err=%v", len(keys), err)
+	}
+}
+
 func TestVerifyConfigPayloadSignatureFailure(t *testing.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -142,7 +166,7 @@ func TestVerifyConfigPayloadSignatureFailure(t *testing.T) {
 	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", base64.StdEncoding.EncodeToString(pub))
 
 	payload := SignedConfigPayload{
-		HostID:    "host-1",
+		AgentID:   "host-1",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Settings:  map[string]interface{}{"key": "value"},
@@ -154,7 +178,7 @@ func TestVerifyConfigPayloadSignatureFailure(t *testing.T) {
 
 func TestCanonicalConfigPayloadEmptySettings(t *testing.T) {
 	payload := SignedConfigPayload{
-		HostID:    "host-1",
+		AgentID:   "host-1",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 	}
@@ -162,7 +186,7 @@ func TestCanonicalConfigPayloadEmptySettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalConfigPayload error: %v", err)
 	}
-	if !strings.Contains(string(data), `"hostId":"host-1"`) {
+	if !strings.Contains(string(data), `"agentId":"host-1"`) {
 		t.Fatalf("unexpected payload: %s", string(data))
 	}
 }
@@ -179,7 +203,7 @@ func TestMarshalSortedMapEmptyAndInvalid(t *testing.T) {
 
 func TestVerifyConfigPayloadSignatureCanonicalError(t *testing.T) {
 	payload := SignedConfigPayload{
-		HostID:    "host",
+		AgentID:   "host",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Settings:  map[string]interface{}{"bad": func() {}},
@@ -197,7 +221,7 @@ func TestMarshalCanonicalValueSliceError(t *testing.T) {
 
 func TestVerifyConfigPayloadSignatureTrustedKeysError(t *testing.T) {
 	payload := SignedConfigPayload{
-		HostID:    "host",
+		AgentID:   "host",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 	}

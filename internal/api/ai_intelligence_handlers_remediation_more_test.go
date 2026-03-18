@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 )
 
@@ -35,7 +33,7 @@ func TestHandleGetRemediations_WithLog(t *testing.T) {
 	patrol := svc.GetPatrolService()
 	setUnexportedField(t, patrol, "remediationLog", log)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations?hours=1", nil)
 	rec := httptest.NewRecorder()
 
@@ -79,7 +77,7 @@ func TestHandleGetRemediations_FilterFinding(t *testing.T) {
 	patrol := svc.GetPatrolService()
 	setUnexportedField(t, patrol, "remediationLog", log)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations?finding_id=finding-2", nil)
 	rec := httptest.NewRecorder()
 
@@ -112,30 +110,35 @@ func TestHandleGetRemediations_LicenseHeader(t *testing.T) {
 	}
 }
 
-func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
-		ID:          "plan-1",
-		Title:       "Critical fix",
-		Description: "fix it",
-		RiskLevel:   remediation.RiskCritical,
-		Steps: []remediation.RemediationStep{
-			{Order: 0, Command: "echo ok"},
-		},
+func TestHandleGetRemediations_LockedScrubsCountAndStats(t *testing.T) {
+	svc := newEnabledAIService(t)
+	svc.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	log := ai.NewRemediationLog(ai.RemediationLogConfig{MaxRecords: 10})
+	record := ai.RemediationRecord{
+		ResourceID:   "vm-1",
+		ResourceType: "vm",
+		ResourceName: "vm-one",
+		FindingID:    "finding-1",
+		Problem:      "cpu high",
+		Action:       "restart",
+		Outcome:      ai.OutcomeResolved,
+		Automatic:    true,
+		Timestamp:    time.Now(),
+		Duration:     2 * time.Second,
 	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
-	}
-	if _, err := engine.ApprovePlan(plan.ID, "tester"); err != nil {
-		t.Fatalf("ApprovePlan: %v", err)
+	if err := log.Log(record); err != nil {
+		t.Fatalf("log remediation: %v", err)
 	}
 
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
+	patrol := svc.GetPatrolService()
+	setUnexportedField(t, patrol, "remediationLog", log)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans?limit=5", nil)
+	handler := &AISettingsHandler{defaultAIService: svc}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/remediations?hours=1", nil)
 	rec := httptest.NewRecorder()
-	handler.HandleGetRemediationPlans(rec, req)
+
+	handler.HandleGetRemediations(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -145,69 +148,27 @@ func TestHandleGetRemediationPlans_StatusMapping(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	plans := payload["plans"].([]interface{})
-	if len(plans) != 1 {
-		t.Fatalf("expected 1 plan, got %d", len(plans))
-	}
-	planView := plans[0].(map[string]interface{})
-	if planView["risk_level"] != string(remediation.RiskHigh) {
-		t.Fatalf("expected risk_level high, got %#v", planView["risk_level"])
-	}
-	if planView["status"] != "approved" {
-		t.Fatalf("expected status approved, got %#v", planView["status"])
-	}
-}
 
-func TestHandleGetRemediationPlan_Success(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
-		ID:    "plan-2",
-		Title: "Fix",
-		Steps: []remediation.RemediationStep{{Order: 0, Command: "echo ok"}},
+	if payload["license_required"] != true {
+		t.Fatalf("expected license_required=true, got %#v", payload["license_required"])
 	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
+	if payload["count"] != float64(0) {
+		t.Fatalf("expected count 0 when locked, got %#v", payload["count"])
 	}
-
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-2?plan_id=plan-2", nil)
-	rec := httptest.NewRecorder()
-	handler.HandleGetRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	remediations, ok := payload["remediations"].([]interface{})
+	if !ok {
+		t.Fatalf("expected remediations array, got %#v", payload["remediations"])
 	}
-	var got remediation.RemediationPlan
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("decode response: %v", err)
+	if len(remediations) != 0 {
+		t.Fatalf("expected locked remediations to be scrubbed, got %d items", len(remediations))
 	}
-	if got.ID != "plan-2" {
-		t.Fatalf("unexpected plan id: %s", got.ID)
+	stats, ok := payload["stats"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stats object, got %#v", payload["stats"])
 	}
-}
-
-func TestHandleApproveRemediationPlan_Success(t *testing.T) {
-	engine := remediation.NewEngine(remediation.EngineConfig{})
-	plan := &remediation.RemediationPlan{
-		ID:    "plan-3",
-		Title: "Approve",
-		Steps: []remediation.RemediationStep{{Order: 0, Command: "echo ok"}},
-	}
-	if err := engine.CreatePlan(plan); err != nil {
-		t.Fatalf("CreatePlan: %v", err)
-	}
-
-	handler := &AISettingsHandler{}
-	handler.SetRemediationEngine(engine)
-
-	body := []byte(`{"plan_id":"plan-3"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-3/approve", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleApproveRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	for _, key := range []string{"total", "resolved", "partial", "failed", "unknown", "automatic", "manual"} {
+		if stats[key] != float64(0) {
+			t.Fatalf("expected stats[%q]=0 when locked, got %#v", key, stats[key])
+		}
 	}
 }

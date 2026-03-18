@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"fmt"
+	"html"
 	"strings"
 	"time"
 	"unicode"
@@ -69,6 +70,18 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
 		titleCase(string(alert.Level)), alertType, alert.ResourceName)
+
+	escapedLevel := html.EscapeString(string(alert.Level))
+	escapedResourceName := html.EscapeString(alert.ResourceName)
+	escapedMessage := html.EscapeString(alert.Message)
+	escapedCurrentValue := html.EscapeString(formatMetricValue(alert.Type, alert.Value))
+	escapedThresholdValue := html.EscapeString(formatMetricThreshold(alert.Type, alert.Threshold))
+	escapedResourceID := html.EscapeString(alert.ResourceID)
+	escapedAlertType := html.EscapeString(alertType)
+	escapedNode := html.EscapeString(alertNodeDisplay(alert))
+	escapedInstance := html.EscapeString(alert.Instance)
+	escapedStarted := html.EscapeString(alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"))
+	escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -164,17 +177,17 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 </body>
 </html>`,
 		levelBg, levelColor, levelColor,
-		alert.Level,
-		alert.ResourceName,
-		alert.Message,
-		formatMetricValue(alert.Type, alert.Value),
-		formatMetricThreshold(alert.Type, alert.Threshold),
-		alert.ResourceID,
-		alertType,
-		alertNodeDisplay(alert),
-		alert.Instance,
-		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
-		formatDuration(time.Since(alert.StartTime)),
+		escapedLevel,
+		escapedResourceName,
+		escapedMessage,
+		escapedCurrentValue,
+		escapedThresholdValue,
+		escapedResourceID,
+		escapedAlertType,
+		escapedNode,
+		escapedInstance,
+		escapedStarted,
+		escapedDuration,
 	)
 
 	// Plain text version
@@ -240,6 +253,14 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 			levelColor = "#ffd93d"
 		}
 
+		escapedResourceName := html.EscapeString(alert.ResourceName)
+		escapedType := html.EscapeString(alert.Type)
+		escapedNode := html.EscapeString(alertNodeDisplay(alert))
+		escapedLevel := html.EscapeString(string(alert.Level))
+		escapedValue := html.EscapeString(formatMetricValue(alert.Type, alert.Value))
+		escapedThreshold := html.EscapeString(formatMetricThreshold(alert.Type, alert.Threshold))
+		escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
+
 		alertRows.WriteString(fmt.Sprintf(`
                 <tr>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef;">
@@ -263,11 +284,11 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                     </td>
                 </tr>`,
 			levelColor,
-			alert.ResourceName,
-			alert.Type, alertNodeDisplay(alert),
-			levelColor, alert.Level,
-			formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold),
-			formatDuration(time.Since(alert.StartTime)),
+			escapedResourceName,
+			escapedType, escapedNode,
+			levelColor, escapedLevel,
+			escapedValue, escapedThreshold,
+			escapedDuration,
 		))
 	}
 

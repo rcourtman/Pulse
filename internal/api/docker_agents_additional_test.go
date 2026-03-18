@@ -104,12 +104,74 @@ func TestDockerAgentHandlers_HandleReport(t *testing.T) {
 	if resp["success"] != true {
 		t.Fatalf("success = %v, want true", resp["success"])
 	}
-	if resp["hostId"] == "" {
-		t.Fatalf("expected hostId in response")
+	if resp["agentId"] == "" {
+		t.Fatalf("expected agentId in response")
+	}
+}
+
+// TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit verifies
+// that a new Docker host counts as a monitored system.
+func TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	existingHostID := seedDockerHost(t, monitor)
+	if existingHostID == "" {
+		t.Fatalf("expected seeded host ID")
+	}
+
+	// New Docker host should be blocked because it is a distinct monitored system.
+	newReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-2",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "docker-host-2",
+			Name:             "Docker Host 2",
+			MachineID:        "machine-2",
+			DockerVersion:    "26.0.0",
+			TotalCPU:         4,
+			TotalMemoryBytes: 4 << 30,
+			UptimeSeconds:    60,
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	newBody, _ := json.Marshal(newReport)
+	newReq := httptest.NewRequest(http.MethodPost, "/api/agents/docker/report", bytes.NewReader(newBody))
+	newRec := httptest.NewRecorder()
+	handler.HandleReport(newRec, newReq)
+	if newRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402: %s", newRec.Code, newRec.Body.String())
 	}
 }
 
 func TestDockerAgentHandlers_HandleCommandAck(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	hostID := seedDockerHost(t, monitor)
+
+	cmdStatus, err := monitor.QueueDockerHostStop(hostID)
+	if err != nil {
+		t.Fatalf("QueueDockerHostStop: %v", err)
+	}
+
+	reqBody := map[string]string{
+		"agentId": hostID,
+		"status":  "completed",
+	}
+	body, _ := json.Marshal(reqBody)
+	path := "/api/agents/docker/commands/" + cmdStatus.ID + "/ack"
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleCommandAck(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDockerAgentHandlers_HandleCommandAck_RejectsLegacyHostIDAlias(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
@@ -128,8 +190,8 @@ func TestDockerAgentHandlers_HandleCommandAck(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleCommandAck(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -137,7 +199,7 @@ func TestDockerAgentHandlers_HandleDockerHostActions(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/allow-reenroll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/allow-reenroll", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleDockerHostActions(rec, req)
@@ -150,7 +212,7 @@ func TestDockerAgentHandlers_HandleDeleteHost(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/agents/docker/hosts/"+hostID+"?force=true", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/agents/docker/runtimes/"+hostID+"?force=true", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleDeleteHost(rec, req)
@@ -163,7 +225,7 @@ func TestDockerAgentHandlers_HandleUnhideHost(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/unhide", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/unhide", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleUnhideHost(rec, req)
@@ -176,7 +238,7 @@ func TestDockerAgentHandlers_HandleMarkPendingUninstall(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/pending-uninstall", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/pending-uninstall", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleMarkPendingUninstall(rec, req)
@@ -190,7 +252,7 @@ func TestDockerAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
 	hostID := seedDockerHost(t, monitor)
 
 	body := []byte(`{"displayName":"My Docker Host"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/display-name", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/display-name", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleSetCustomDisplayName(rec, req)
@@ -204,7 +266,7 @@ func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
 	hostID := seedDockerHost(t, monitor)
 
 	reqBody := map[string]string{
-		"hostId":        hostID,
+		"agentId":       hostID,
 		"containerId":   "container-1",
 		"containerName": "nginx",
 	}
@@ -218,13 +280,32 @@ func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
 	}
 }
 
+func TestDockerAgentHandlers_HandleContainerUpdate_RejectsLegacyHostIDAlias(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, &config.Config{DataPath: t.TempDir()})
+	hostID := seedDockerHost(t, monitor)
+
+	reqBody := map[string]string{
+		"hostId":        hostID,
+		"containerId":   "container-legacy",
+		"containerName": "nginx",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/containers/container-legacy/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleContainerUpdate(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestDockerAgentHandlers_HandleContainerUpdate_Disabled(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir(), DisableDockerUpdateActions: true}
 	handler, monitor := newDockerAgentHandlers(t, cfg)
 	hostID := seedDockerHost(t, monitor)
 
 	reqBody := map[string]string{
-		"hostId":        hostID,
+		"agentId":       hostID,
 		"containerId":   "container-2",
 		"containerName": "redis",
 	}
@@ -242,7 +323,7 @@ func TestDockerAgentHandlers_HandleCheckUpdates(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/check-updates", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/check-updates", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleCheckUpdates(rec, req)
@@ -252,5 +333,66 @@ func TestDockerAgentHandlers_HandleCheckUpdates(t *testing.T) {
 
 	if !strings.Contains(rec.Body.String(), "Check for updates") {
 		t.Fatalf("expected check updates message")
+	}
+}
+
+func TestDockerAgentHandlers_HandleUpdateAll(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	hostID := seedDockerHost(t, monitor)
+
+	// Ensure the host has at least one container with an update available.
+	_, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-host",
+		},
+		Containers: []agentsdocker.Container{{
+			ID:        "container-1",
+			Name:      "nginx",
+			Image:     "nginx:latest",
+			CreatedAt: time.Now().UTC(),
+			State:     "running",
+			Status:    "Up",
+			UpdateStatus: &agentsdocker.UpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now().UTC(),
+			},
+		}},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport (with containers): %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/update-all", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAll(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "Update all containers") {
+		t.Fatalf("expected update-all message")
+	}
+}
+
+func TestDockerAgentHandlers_HandleUpdateAll_Disabled(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), DisableDockerUpdateActions: true}
+	handler, monitor := newDockerAgentHandlers(t, cfg)
+	hostID := seedDockerHost(t, monitor)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/update-all", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAll(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
 	}
 }

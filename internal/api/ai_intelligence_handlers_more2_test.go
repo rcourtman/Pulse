@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -30,12 +28,18 @@ func (s stubForecastProvider) GetMetricHistory(_ string, _ string, _, _ time.Tim
 	return s.points, nil
 }
 
-type stubForecastStateProvider struct {
-	state forecast.StateSnapshot
+type stubForecastResourceIterator struct {
+	vms      []forecast.ResourceInfo
+	cts      []forecast.ResourceInfo
+	nodes    []forecast.ResourceInfo
+	storages []forecast.ResourceInfo
 }
 
-func (s stubForecastStateProvider) GetState() forecast.StateSnapshot {
-	return s.state
+func (s stubForecastResourceIterator) ForecastVMs() []forecast.ResourceInfo        { return s.vms }
+func (s stubForecastResourceIterator) ForecastContainers() []forecast.ResourceInfo { return s.cts }
+func (s stubForecastResourceIterator) ForecastNodes() []forecast.ResourceInfo      { return s.nodes }
+func (s stubForecastResourceIterator) ForecastStoragePools() []forecast.ResourceInfo {
+	return s.storages
 }
 
 func makeForecastPoints(count int, start time.Time, startValue, step float64) []forecast.MetricDataPoint {
@@ -62,7 +66,7 @@ func TestHandleGetAnomalies_NoStateProvider(t *testing.T) {
 	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
 	svc.SetBaselineStore(store)
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	handler := &AISettingsHandler{defaultAIService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
 
@@ -75,24 +79,13 @@ func TestHandleGetAnomalies_NoStateProvider(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload["message"] != "State provider not available" {
+	if payload["message"] != "ReadState not available" {
 		t.Fatalf("unexpected message: %#v", payload["message"])
 	}
 }
 
 func TestHandleGetAnomalies_MixedResources(t *testing.T) {
 	svc := newEnabledAIService(t)
-	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
-	addBaseline(t, store, "vm-1", "vm", "cpu", 10)
-	addBaseline(t, store, "vm-1", "vm", "memory", 10)
-	addBaseline(t, store, "vm-1", "vm", "disk", 10)
-	addBaseline(t, store, "ct-1", "container", "cpu", 10)
-	addBaseline(t, store, "ct-1", "container", "memory", 10)
-	addBaseline(t, store, "ct-1", "container", "disk", 10)
-	addBaseline(t, store, "node-1", "node", "cpu", 10)
-	addBaseline(t, store, "node-1", "node", "memory", 10)
-	svc.SetBaselineStore(store)
-
 	state := models.StateSnapshot{
 		VMs: []models.VM{
 			{ID: "vm-1", Name: "vm-one", Status: "running", CPU: 0.9, Memory: models.Memory{Usage: 85}, Disk: models.Disk{Usage: 90}},
@@ -110,7 +103,45 @@ func TestHandleGetAnomalies_MixedResources(t *testing.T) {
 	}
 	svc.SetStateProvider(snapshotStateProvider{state: state})
 
-	handler := &AISettingsHandler{legacyAIService: svc}
+	rs := newTestReadState(state)
+	vmID := ""
+	for _, v := range rs.VMs() {
+		if v != nil && v.Name() == "vm-one" {
+			vmID = v.ID()
+			break
+		}
+	}
+	ctID := ""
+	for _, c := range rs.Containers() {
+		if c != nil && c.Name() == "ct-one" {
+			ctID = c.ID()
+			break
+		}
+	}
+	nodeID := ""
+	for _, n := range rs.Nodes() {
+		if n != nil && n.Name() == "node-one" {
+			nodeID = n.ID()
+			break
+		}
+	}
+	if vmID == "" || ctID == "" || nodeID == "" {
+		t.Fatalf("expected ReadState to contain test resources (vm=%q ct=%q node=%q)", vmID, ctID, nodeID)
+	}
+
+	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
+	addBaseline(t, store, vmID, "vm", "cpu", 10)
+	addBaseline(t, store, vmID, "vm", "memory", 10)
+	addBaseline(t, store, vmID, "vm", "disk", 10)
+	addBaseline(t, store, ctID, "container", "cpu", 10)
+	addBaseline(t, store, ctID, "container", "memory", 10)
+	addBaseline(t, store, ctID, "container", "disk", 10)
+	addBaseline(t, store, nodeID, "node", "cpu", 10)
+	addBaseline(t, store, nodeID, "node", "memory", 10)
+	svc.SetBaselineStore(store)
+
+	handler := &AISettingsHandler{defaultAIService: svc}
+	handler.SetReadState(rs)
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
 
@@ -148,7 +179,7 @@ func TestHandleGetLearningStatus_WaitingAndActive(t *testing.T) {
 		store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
 		svc.SetBaselineStore(store)
 
-		handler := &AISettingsHandler{legacyAIService: svc}
+		handler := &AISettingsHandler{defaultAIService: svc}
 		req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 		rec := httptest.NewRecorder()
 
@@ -175,7 +206,7 @@ func TestHandleGetLearningStatus_WaitingAndActive(t *testing.T) {
 		}
 		svc.SetBaselineStore(store)
 
-		handler := &AISettingsHandler{legacyAIService: svc}
+		handler := &AISettingsHandler{defaultAIService: svc}
 		req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/learning", nil)
 		rec := httptest.NewRecorder()
 
@@ -356,11 +387,11 @@ func TestHandleGetForecastOverview_Success(t *testing.T) {
 	points := makeForecastPoints(60, time.Now().Add(-60*time.Hour), 50, 0.1)
 	svc := forecast.NewService(forecast.DefaultForecastConfig())
 	svc.SetDataProvider(stubForecastProvider{points: points})
-	svc.SetStateProvider(stubForecastStateProvider{state: forecast.StateSnapshot{
-		VMs:        []forecast.VMInfo{{ID: "vm-1", Name: "vm-one"}},
-		Containers: []forecast.ContainerInfo{{ID: "ct-1", Name: "ct-one"}},
-		Nodes:      []forecast.NodeInfo{{ID: "node-1", Name: "node-one"}},
-	}})
+	svc.SetResourceIterator(stubForecastResourceIterator{
+		vms:   []forecast.ResourceInfo{{ID: "vm-1", Name: "vm-one"}},
+		cts:   []forecast.ResourceInfo{{ID: "ct-1", Name: "ct-one"}},
+		nodes: []forecast.ResourceInfo{{ID: "node-1", Name: "node-one"}},
+	})
 
 	handler := &AISettingsHandler{forecastService: svc}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/forecasts/overview?metric=cpu&horizon_hours=24&threshold=60", nil)
@@ -447,100 +478,6 @@ func TestHandleGetProxmoxCorrelations_ResourceFilter(t *testing.T) {
 	}
 }
 
-func TestHandleExecuteRemediationPlan_Errors(t *testing.T) {
-	t.Run("no_engine", func(t *testing.T) {
-		handler := &AISettingsHandler{}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", nil)
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-		}
-	})
-
-	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("bad-json"))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("missing_ids", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/execute", bytes.NewBufferString("{}"))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("execution_error", func(t *testing.T) {
-		engine := remediation.NewEngine(remediation.EngineConfig{})
-		plan := &remediation.RemediationPlan{
-			ID:          "plan-no-exec",
-			FindingID:   "finding-1",
-			ResourceID:  "res-1",
-			Title:       "Restart",
-			Description: "Restart service",
-			Steps: []remediation.RemediationStep{
-				{
-					Order:       0,
-					Description: "Restart",
-					Command:     "echo ok",
-					Target:      "host-1",
-				},
-			},
-		}
-		if err := engine.CreatePlan(plan); err != nil {
-			t.Fatalf("CreatePlan: %v", err)
-		}
-		handler := &AISettingsHandler{remediationEngine: engine}
-		body := bytes.NewBufferString(`{"plan_id":"plan-no-exec"}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-no-exec/execute", body)
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-}
-
-func TestHandleRollbackRemediationPlan_Errors(t *testing.T) {
-	t.Run("no_engine", func(t *testing.T) {
-		handler := &AISettingsHandler{}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", nil)
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-		}
-	})
-
-	t.Run("invalid_body", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("bad-json"))
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-
-	t.Run("missing_execution_id", func(t *testing.T) {
-		handler := &AISettingsHandler{remediationEngine: remediation.NewEngine(remediation.EngineConfig{})}
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/remediation/plans/plan-1/rollback", bytes.NewBufferString("{}"))
-		rec := httptest.NewRecorder()
-		handler.HandleRollbackRemediationPlan(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
-	})
-}
-
 func TestHandleGetIncidentData_Errors(t *testing.T) {
 	t.Run("invalid_path", func(t *testing.T) {
 		handler := &AISettingsHandler{}
@@ -569,6 +506,65 @@ func TestHandleGetIncidentData_Errors(t *testing.T) {
 		handler.HandleGetIncidentData(rec, req)
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["resource_id"] != "res-1" {
+			t.Fatalf("unexpected resource_id: %#v", payload["resource_id"])
+		}
+		if payload["message"] != "Pulse Patrol service not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+		if incidents, ok := payload["incidents"].([]interface{}); !ok || len(incidents) != 0 {
+			t.Fatalf("expected empty incidents, got %#v", payload["incidents"])
+		}
+		if payload["formatted_context"] != "" {
+			t.Fatalf("expected empty formatted_context, got %#v", payload["formatted_context"])
+		}
+	})
+
+	t.Run("no_patrol", func(t *testing.T) {
+		svc := newEnabledAIService(t)
+		setUnexportedField(t, svc, "patrolService", (*ai.PatrolService)(nil))
+		handler := &AISettingsHandler{defaultAIService: svc}
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/incidents/res-1", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetIncidentData(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["message"] != "Patrol service not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+	})
+
+	t.Run("no_incident_store", func(t *testing.T) {
+		svc := newEnabledAIService(t)
+		handler := &AISettingsHandler{defaultAIService: svc}
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/incidents/res-1", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetIncidentData(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["message"] != "Incident store not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+		if payload["resource_id"] != "res-1" {
+			t.Fatalf("unexpected resource_id: %#v", payload["resource_id"])
 		}
 	})
 }
@@ -729,30 +725,6 @@ func TestHandleGetProxmoxCorrelations_MethodNotAllowed(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetProxmoxCorrelations(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestHandleExecuteRemediationPlan_MethodNotAllowed(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1/execute", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleExecuteRemediationPlan(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestHandleRollbackRemediationPlan_MethodNotAllowed(t *testing.T) {
-	handler := &AISettingsHandler{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/remediation/plans/plan-1/rollback", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleRollbackRemediationPlan(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)

@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
@@ -26,8 +25,8 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 		cfg.DataPath = t.TempDir()
 	}
 	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
-	h.legacyConfig = cfg
-	h.legacyPersistence = config.NewConfigPersistence(cfg.DataPath)
+	h.defaultConfig = cfg
+	h.defaultPersistence = config.NewConfigPersistence(cfg.DataPath)
 
 	return h
 }
@@ -46,7 +45,7 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 	}
@@ -64,12 +63,53 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissing) {
-		t.Fatalf("expected missing-auth error, got %q", rec.Body.String())
+	if body := rec.Body.String(); body != "Pulse setup token required\n" {
+		t.Fatalf("body = %q, want missing-auth guidance", body)
+	}
+}
+
+func TestHandleAutoRegisterRejectsInvalidSetupToken(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  "invalid-setup-token",
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != "Invalid or expired setup token\n" {
+		t.Fatalf("body = %q, want invalid-setup-token guidance", body)
 	}
 }
 
 func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
@@ -83,7 +123,7 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	const tokenValue = "TEMP-TOKEN"
 	tokenHash := internalauth.HashAPIToken(tokenValue)
 	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
 	}
@@ -92,10 +132,11 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 		AuthToken:  tokenValue,
+		Source:     "script",
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -115,9 +156,14 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	if len(cfg.PVEInstances) != 1 {
 		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
 	}
+	if cfg.PVEInstances[0].Source != "script" {
+		t.Fatalf("source = %q, want script", cfg.PVEInstances[0].Source)
+	}
 }
 
-func TestHandleAutoRegisterAcceptsRecentlyUsedSetupToken(t *testing.T) {
+func TestHandleAutoRegisterRejectsMissingSource(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
@@ -128,16 +174,11 @@ func TestHandleAutoRegisterAcceptsRecentlyUsedSetupToken(t *testing.T) {
 
 	handler := newTestConfigHandlers(t, cfg)
 
-	const tokenValue = "ABCDEF1234567890ABCDEF1234567890"
+	const tokenValue = "TEMP-TOKEN"
 	tokenHash := internalauth.HashAPIToken(tokenValue)
 	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
-		Used:      true,
-		NodeType:  "pve",
-	}
-	handler.recentSetupTokens[tokenHash] = recentSetupToken{
-		ExpiresAt: time.Now().Add(30 * time.Second),
 		NodeType:  "pve",
 	}
 	handler.codeMutex.Unlock()
@@ -145,10 +186,264 @@ func TestHandleAutoRegisterAcceptsRecentlyUsedSetupToken(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
 		TokenValue: "secret-token",
 		ServerName: "pve.local",
 		AuthToken:  tokenValue,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != "source is required\n" {
+		t.Fatalf("body = %q, want canonical missing-source guidance", body)
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected missing-source request to persist nothing, got %d nodes", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterRejectsMissingServerName(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		TokenValue: "secret-token",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != "Missing required canonical auto-register fields: serverName\n" {
+		t.Fatalf("body = %q, want canonical missing-serverName guidance", body)
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected missing-serverName request to persist nothing, got %d nodes", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterRejectsMismatchedCompletionPayload(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != "tokenId and tokenValue must be provided together\n" {
+		t.Fatalf("body = %q, want canonical completion-payload guidance", body)
+	}
+}
+
+func TestHandleAutoRegisterRejectsUnknownSource(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "manual",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected unknown-source request to persist nothing, got %d nodes", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterRejectsUnknownType(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pmg",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pmg",
+		Host:       "https://pmg.local:8006",
+		TokenID:    "pulse-monitor@pmg!token",
+		TokenValue: "secret-token",
+		ServerName: "pmg.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 || len(cfg.PBSInstances) != 0 {
+		t.Fatalf("expected unknown-type request to persist nothing, got %d PVE and %d PBS nodes", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+}
+
+func TestHandleAutoRegisterAcceptsSecureCallerProvidedTokenWithoutCredentials(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-server",
+		TokenValue: "created-locally",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "agent",
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -164,9 +459,24 @@ func TestHandleAutoRegisterAcceptsRecentlyUsedSetupToken(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
 	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
+	}
+	if cfg.PVEInstances[0].TokenName != "pulse-monitor@pve!pulse-server" {
+		t.Fatalf("tokenName = %q, want caller-provided token id", cfg.PVEInstances[0].TokenName)
+	}
+	if cfg.PVEInstances[0].TokenValue != "created-locally" {
+		t.Fatalf("tokenValue = %q, want caller-provided token value", cfg.PVEInstances[0].TokenValue)
+	}
+	if cfg.PVEInstances[0].Source != "agent" {
+		t.Fatalf("source = %q, want agent", cfg.PVEInstances[0].Source)
+	}
 }
 
-func TestHandleAutoRegisterRejectsUsedSetupTokenOutsideGrace(t *testing.T) {
+func TestHandleAutoRegisterReturnsCanonicalNodeIdentity(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
@@ -177,27 +487,23 @@ func TestHandleAutoRegisterRejectsUsedSetupTokenOutsideGrace(t *testing.T) {
 
 	handler := newTestConfigHandlers(t, cfg)
 
-	const tokenValue = "1234567890ABCDEF1234567890ABCDEF"
+	const tokenValue = "TEMP-TOKEN"
 	tokenHash := internalauth.HashAPIToken(tokenValue)
 	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
-		Used:      true,
-		NodeType:  "pve",
-	}
-	handler.recentSetupTokens[tokenHash] = recentSetupToken{
-		ExpiresAt: time.Now().Add(-30 * time.Second),
 		NodeType:  "pve",
 	}
 	handler.codeMutex.Unlock()
 
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
-		Host:       "https://pve.local:8006",
-		TokenID:    "pulse-monitor@pam!token",
+		Host:       "https://192.0.2.10:8006",
+		TokenID:    "pulse-monitor@pve!pulse-node-1",
 		TokenValue: "secret-token",
-		ServerName: "pve.local",
+		ServerName: "pve-node-1",
 		AuthToken:  tokenValue,
+		Source:     "script",
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -210,50 +516,369 @@ func TestHandleAutoRegisterRejectsUsedSetupTokenOutsideGrace(t *testing.T) {
 
 	handler.HandleAutoRegister(rec, req)
 
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Status     string `json:"status"`
+		Message    string `json:"message"`
+		Type       string `json:"type"`
+		Source     string `json:"source"`
+		Host       string `json:"host"`
+		NodeID     string `json:"nodeId"`
+		NodeName   string `json:"nodeName"`
+		TokenID    string `json:"tokenId"`
+		TokenValue string `json:"tokenValue"`
+		Action     string `json:"action"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	if response.Type != "pve" {
+		t.Fatalf("type = %q, want pve", response.Type)
+	}
+	if response.Source != "script" {
+		t.Fatalf("source = %q, want script", response.Source)
+	}
+	if response.Host != "https://192.0.2.10:8006" {
+		t.Fatalf("host = %q, want normalized host", response.Host)
+	}
+	if response.NodeID != "pve-node-1" {
+		t.Fatalf("nodeId = %q, want canonical node identity", response.NodeID)
+	}
+	if response.NodeName != "pve-node-1" {
+		t.Fatalf("nodeName = %q, want canonical node identity", response.NodeName)
+	}
+	if response.Message != "Node pve-node-1 registered successfully at https://192.0.2.10:8006" {
+		t.Fatalf("message = %q", response.Message)
+	}
+	if response.Action != "use_token" {
+		t.Fatalf("action = %q, want use_token", response.Action)
+	}
+	if response.TokenID != "pulse-monitor@pve!pulse-node-1" {
+		t.Fatalf("tokenId = %q", response.TokenID)
+	}
+	if response.TokenValue != "secret-token" {
+		t.Fatalf("tokenValue = %q", response.TokenValue)
+	}
+}
+
+func TestBuildAutoRegisterEventDataUsesCanonicalIdentity(t *testing.T) {
+	req := &AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://192.0.2.10:8006",
+		TokenID:    "pulse-monitor@pve!pulse-node-1",
+		ServerName: "pve-node-1",
+	}
+
+	event := buildAutoRegisterEventData(req, "https://pve.local:8006", "pve-node-1 (2)", "pulse-monitor@pve!pulse-node-1")
+
+	if got := event["host"]; got != "https://pve.local:8006" {
+		t.Fatalf("host = %#v, want normalized stored host", got)
+	}
+	if got := event["name"]; got != "pve-node-1 (2)" {
+		t.Fatalf("name = %#v, want canonical stored node name", got)
+	}
+	if got := event["nodeId"]; got != "pve-node-1 (2)" {
+		t.Fatalf("nodeId = %#v, want canonical stored node identity", got)
+	}
+	if got := event["nodeName"]; got != "pve-node-1 (2)" {
+		t.Fatalf("nodeName = %#v, want canonical stored node identity", got)
+	}
+	if got := event["tokenId"]; got != "pulse-monitor@pve!pulse-node-1" {
+		t.Fatalf("tokenId = %#v, want explicit token id", got)
+	}
+	if got := event["verifySSL"]; got != true {
+		t.Fatalf("verifySSL = %#v, want true", got)
+	}
+}
+
+func TestHandleAutoRegisterPreservesExplicitAgentSource(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "agent",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
+	}
+	if cfg.PVEInstances[0].Source != "agent" {
+		t.Fatalf("source = %q, want explicit agent source preserved", cfg.PVEInstances[0].Source)
+	}
+}
+
+func TestHandleAutoRegister_BlocksNewCountedSystemAtLimit(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:   "existing-node",
+				Host:   "https://pve-existing.local:8006",
+				Source: "manual",
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "existing-node",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "existing-node",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"existing-node"},
+				},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.defaultMonitor = monitor
+
+	const tokenValue = "LIMIT-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve-new.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		TokenValue: "secret-token",
+		ServerName: "pve-new.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 once monitored-system cap is full, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAutoRegisterRejectsRemovedBodyTokenContract(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	record, err := config.NewAPITokenRecord("org-bound-body-token-123.12345678", "org-bound", []string{config.ScopeAgentReport})
+	if err != nil {
+		t.Fatalf("new api token record: %v", err)
+	}
+	record.OrgID = "org-a"
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		APITokens:  []config.APITokenRecord{*record},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  "org-bound-body-token-123.12345678",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), autoRegisterAuthUsedSetup) {
-		t.Fatalf("expected used-setup-token error, got %q", rec.Body.String())
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected no PVE instances stored on removed body-token contract, got %d", len(cfg.PVEInstances))
 	}
 }
 
-func TestValidateAutoRegisterSetupTokenAcceptsGraceReplayAfterCleanupForMatchingType(t *testing.T) {
-	const tokenValue = "ABCDEF1234567890ABCDEF1234567890"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
+func TestHandleAutoRegisterRejectsRemovedHeaderTokenContract(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
 
-	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()})
+	record, err := config.NewAPITokenRecord("org-bound-header-token-123.12345678", "org-bound", []string{config.ScopeAgentReport})
+	if err != nil {
+		t.Fatalf("new api token record: %v", err)
+	}
+	record.OrgID = "org-a"
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		APITokens:  []config.APITokenRecord{*record},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", "org-bound-header-token-123.12345678")
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected no PVE instances stored on org mismatch, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterRejectsNonCanonicalTokenID(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				ClusterName: "cluster-A",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
 	handler.codeMutex.Lock()
-	handler.recentSetupTokens[tokenHash] = recentSetupToken{
-		ExpiresAt: time.Now().Add(30 * time.Second),
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
 	}
 	handler.codeMutex.Unlock()
 
-	ok, reason := handler.validateAutoRegisterSetupToken(tokenValue, "pve")
-	if !ok {
-		t.Fatalf("expected grace replay to succeed, got ok=%v reason=%q", ok, reason)
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.0.5:8006",
+		TokenID:    "pulse@pve!token",
+		TokenValue: "secret",
+		ServerName: "minipc",
+		AuthToken:  tokenValue,
+		Source:     "script",
 	}
-}
 
-func TestValidateAutoRegisterSetupTokenRejectsGraceReplayAfterCleanupForWrongType(t *testing.T) {
-	const tokenValue = "1234567890ABCDEF1234567890ABCDEF"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-
-	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()})
-	handler.codeMutex.Lock()
-	handler.recentSetupTokens[tokenHash] = recentSetupToken{
-		ExpiresAt: time.Now().Add(30 * time.Second),
-		NodeType:  "pve",
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
 	}
-	handler.codeMutex.Unlock()
 
-	ok, reason := handler.validateAutoRegisterSetupToken(tokenValue, "pbs")
-	if ok {
-		t.Fatalf("expected grace replay to be rejected for wrong node type")
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d, body=%s", rec.Code, rec.Body.String())
 	}
-	if reason != autoRegisterAuthSetupNodeType {
-		t.Fatalf("expected reason %q, got %q", autoRegisterAuthSetupNodeType, reason)
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected canonical cluster instance to remain unchanged, got %d", len(cfg.PVEInstances))
+	}
+	cluster := cfg.PVEInstances[0]
+	if got := cluster.TokenName; got != "" {
+		t.Fatalf("TokenName = %q, want empty unchanged token id", got)
+	}
+	if got := cluster.TokenValue; got != "" {
+		t.Fatalf("TokenValue = %q, want empty unchanged token value", got)
 	}
 }
 
@@ -324,15 +949,10 @@ func TestDisambiguateNodeName(t *testing.T) {
 // with the same hostname but different IPs are stored as separate nodes.
 // This is a regression test for Issue #891.
 func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	// Mock detectPVECluster to avoid network calls
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
 
 	cfg := &config.Config{
 		DataPath:   tempDir,
@@ -347,7 +967,7 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 
 	// Register first node "px1" at 10.0.1.100
 	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
 	}
@@ -356,10 +976,11 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	reqBody1 := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://10.0.1.100:8006",
-		TokenID:    "pulse-monitor@pam!token1",
+		TokenID:    "pulse-monitor@pve!pulse-px1-a",
 		TokenValue: "secret-token-1",
 		ServerName: "px1",
 		AuthToken:  tokenValue,
+		Source:     "script",
 	}
 
 	body1, _ := json.Marshal(reqBody1)
@@ -373,7 +994,7 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 
 	// Register second node "px1" at 10.0.2.224 (same hostname, different host)
 	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
 	}
@@ -382,10 +1003,11 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	reqBody2 := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://10.0.2.224:8006",
-		TokenID:    "pulse-monitor@pam!token2",
+		TokenID:    "pulse-monitor@pve!pulse-px1-b",
 		TokenValue: "secret-token-2",
 		ServerName: "px1", // Same hostname as first node
 		AuthToken:  tokenValue,
+		Source:     "script",
 	}
 
 	body2, _ := json.Marshal(reqBody2)
@@ -417,110 +1039,6 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 
 	if node2.Name != "px1 (10.0.2.224)" {
 		t.Errorf("second node name = %q, want %q (should be disambiguated)", node2.Name, "px1 (10.0.2.224)")
-	}
-}
-
-func TestHandleAutoRegisterClusterMergeRefreshesStoredToken(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		endpoints := []config.ClusterEndpoint{
-			{
-				NodeID:      "node-1",
-				NodeName:    "pve-a",
-				Host:        "https://10.0.1.10:8006",
-				Fingerprint: "fp-a",
-				Online:      true,
-			},
-		}
-		if strings.Contains(clientConfig.Host, "10.0.1.11") {
-			endpoints = append(endpoints, config.ClusterEndpoint{
-				NodeID:      "node-2",
-				NodeName:    "pve-b",
-				Host:        "https://10.0.1.11:8006",
-				Fingerprint: "fp-b",
-				Online:      true,
-			})
-		}
-		return true, "cluster-a", endpoints
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-	}
-	handler := newTestConfigHandlers(t, cfg)
-
-	const authToken = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(authToken)
-
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	firstReq := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.1.10:8006",
-		TokenID:    "pulse-monitor@pam!pulse-pve-a-pulse-example-com",
-		TokenValue: "old-secret",
-		ServerName: "pve-a",
-		Source:     "agent",
-		AuthToken:  authToken,
-	}
-	firstBody, _ := json.Marshal(firstReq)
-	firstHTTPReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(firstBody))
-	firstRec := httptest.NewRecorder()
-	handler.HandleAutoRegister(firstRec, firstHTTPReq)
-	if firstRec.Code != http.StatusOK {
-		t.Fatalf("first registration failed: status=%d body=%s", firstRec.Code, firstRec.Body.String())
-	}
-
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	secondReq := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.1.11:8006",
-		TokenID:    "pulse-monitor@pam!pulse-pve-b-pulse-example-com",
-		TokenValue: "new-secret",
-		ServerName: "pve-b",
-		Source:     "agent",
-		AuthToken:  authToken,
-	}
-	secondBody, _ := json.Marshal(secondReq)
-	secondHTTPReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(secondBody))
-	secondRec := httptest.NewRecorder()
-	handler.HandleAutoRegister(secondRec, secondHTTPReq)
-	if secondRec.Code != http.StatusOK {
-		t.Fatalf("second registration failed: status=%d body=%s", secondRec.Code, secondRec.Body.String())
-	}
-
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 merged cluster instance, got %d", len(cfg.PVEInstances))
-	}
-
-	instance := cfg.PVEInstances[0]
-	if instance.TokenName != secondReq.TokenID {
-		t.Fatalf("merged cluster TokenName = %q, want %q", instance.TokenName, secondReq.TokenID)
-	}
-	if instance.TokenValue != secondReq.TokenValue {
-		t.Fatalf("merged cluster TokenValue = %q, want %q", instance.TokenValue, secondReq.TokenValue)
-	}
-	if instance.Host != firstReq.Host {
-		t.Fatalf("merged cluster Host = %q, want original primary host %q", instance.Host, firstReq.Host)
-	}
-	if len(instance.ClusterEndpoints) != 2 {
-		t.Fatalf("expected 2 cluster endpoints after merge, got %d", len(instance.ClusterEndpoints))
 	}
 }
 
@@ -565,654 +1083,5 @@ func TestExtractHostIP(t *testing.T) {
 				t.Errorf("extractHostIP(%q) = %q, want %q", tt.hostURL, got, tt.expected)
 			}
 		})
-	}
-}
-
-func TestIsPulseAgentToken(t *testing.T) {
-	tests := []struct {
-		token string
-		want  bool
-	}{
-		{"pulse-monitor@pam!pulse-1234567890", true},
-		{"pulse-monitor@pbs!pulse-1234567890", true},
-		{"pulse-monitor@pam!pulse-pulse-example-com", true},
-		{"pulse-monitor@pam!pulse-", true},
-		{"pulse-monitor@pam!token1", false},
-		{"root@pam!mytoken", false},
-		{"", false},
-	}
-	for _, tt := range tests {
-		if got := isPulseAgentToken(tt.token); got != tt.want {
-			t.Errorf("isPulseAgentToken(%q) = %v, want %v", tt.token, got, tt.want)
-		}
-	}
-}
-
-// TestAutoRegisterAgentReRegistrationMerges verifies that an agent re-registering
-// with a new Pulse token (e.g., after an update) merges with the existing entry
-// instead of creating a duplicate. Regression test for Issue #1245.
-func TestAutoRegisterAgentReRegistrationMerges(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		// Pre-existing agent-registered node with an old Pulse token
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve",
-				Host:       "https://10.0.1.100:8006",
-				TokenName:  "pulse-monitor@pam!pulse-1700000000",
-				TokenValue: "old-secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	// Agent re-registers with a NEW Pulse token (different timestamp) and possibly different IP
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.1.200:8006", // IP may have changed
-		TokenID:    "pulse-monitor@pam!pulse-1700099999",
-		TokenValue: "new-secret",
-		ServerName: "pve",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	// Should still be exactly 1 node (merged, not duplicated)
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance after re-registration, got %d (duplicate created!)", len(cfg.PVEInstances))
-	}
-
-	// Token should be updated to the new one
-	node := cfg.PVEInstances[0]
-	if node.TokenName != "pulse-monitor@pam!pulse-1700099999" {
-		t.Errorf("token not updated: got %q, want %q", node.TokenName, "pulse-monitor@pam!pulse-1700099999")
-	}
-}
-
-// TestAutoRegisterPreservesUserConfiguredHostname verifies that when an agent
-// re-registers with the same token but sends a local IP, a user-configured
-// hostname (public URL) is preserved instead of being overwritten.
-// Regression test for Issue #1283.
-func TestAutoRegisterPreservesUserConfiguredHostname(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		// Agent originally registered with local IP, user later edited to public hostname
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve01",
-				Host:       "https://pve.example.com:8006", // User-configured hostname
-				TokenName:  "pulse-monitor@pam!pulse-1700000000",
-				TokenValue: "old-secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	// Agent re-registers with same token but sends local IP
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://192.168.1.100:8006", // Local IP from agent
-		TokenID:    "pulse-monitor@pam!pulse-1700000000",
-		TokenValue: "new-secret",
-		ServerName: "pve01",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	// Should still be exactly 1 node
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-
-	node := cfg.PVEInstances[0]
-
-	// Host should still be the user-configured hostname, NOT overwritten with local IP
-	if node.Host != "https://pve.example.com:8006" {
-		t.Errorf("user-configured hostname was overwritten: got %q, want %q",
-			node.Host, "https://pve.example.com:8006")
-	}
-
-	// Token value should still be updated
-	if node.TokenValue != "new-secret" {
-		t.Errorf("token value not updated: got %q, want %q", node.TokenValue, "new-secret")
-	}
-}
-
-// TestAutoRegisterPreservesUserConfiguredPublicIP verifies that when an agent
-// re-registers with a local/private IP, a user-configured public IP is preserved.
-// This is the exact scenario from #1283: Host URL was a public IP, agent sends
-// its local 192.168.x.x IP, and the public IP gets overwritten.
-func TestAutoRegisterPreservesUserConfiguredPublicIP(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve01",
-				Host:       "https://203.0.113.52:8006", // User-configured public IP
-				TokenName:  "pulse-monitor@pam!pulse-1700000000",
-				TokenValue: "old-secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	// Agent re-registers with same token but sends local/private IP
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://192.168.0.250:8006", // Local IP from agent
-		TokenID:    "pulse-monitor@pam!pulse-1700000000",
-		TokenValue: "new-secret",
-		ServerName: "pve01",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-
-	node := cfg.PVEInstances[0]
-
-	// Public IP should be preserved, NOT overwritten with agent's local IP
-	if node.Host != "https://203.0.113.52:8006" {
-		t.Errorf("user-configured public IP was overwritten: got %q, want %q",
-			node.Host, "https://203.0.113.52:8006")
-	}
-
-	if node.TokenValue != "new-secret" {
-		t.Errorf("token value not updated: got %q, want %q", node.TokenValue, "new-secret")
-	}
-}
-
-// TestAutoRegisterAgentDHCPPreservesHost verifies that when an agent re-registers
-// with a different IP (DHCP), the existing host is preserved. The entry still
-// merges (preventing duplicates), but the host is not overwritten since the user
-// may have configured it. DHCP on servers is rare; the user can update manually.
-func TestAutoRegisterAgentDHCPPreservesHost(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve01",
-				Host:       "https://10.0.1.100:8006",
-				TokenName:  "pulse-monitor@pam!pulse-1700000000",
-				TokenValue: "secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.1.200:8006", // New IP from DHCP
-		TokenID:    "pulse-monitor@pam!pulse-1700000000",
-		TokenValue: "secret",
-		ServerName: "pve01",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	// Still 1 entry (merged, not duplicated)
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-
-	node := cfg.PVEInstances[0]
-
-	// Host should be preserved (agent source always preserves to protect user edits)
-	if node.Host != "https://10.0.1.100:8006" {
-		t.Errorf("host should be preserved for agent source: got %q, want %q",
-			node.Host, "https://10.0.1.100:8006")
-	}
-}
-
-// TestAutoRegisterNonAgentDHCPUpdatesHost verifies that DHCP IP changes from
-// non-agent sources (e.g., script-based registration) still update the host.
-func TestAutoRegisterNonAgentDHCPUpdatesHost(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve01",
-				Host:       "https://10.0.1.100:8006",
-				TokenName:  "pulse-monitor@pam!pulse-1700000000",
-				TokenValue: "secret",
-				Source:     "script",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.1.200:8006",
-		TokenID:    "pulse-monitor@pam!pulse-1700000000",
-		TokenValue: "secret",
-		ServerName: "pve01",
-		Source:     "script", // Non-agent source
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-
-	node := cfg.PVEInstances[0]
-
-	// Host should be updated for non-agent DHCP
-	if node.Host != "https://10.0.1.200:8006" {
-		t.Errorf("non-agent DHCP host update failed: got %q, want %q",
-			node.Host, "https://10.0.1.200:8006")
-	}
-}
-
-// TestAutoRegisterPBSPreservesUserConfiguredHostname verifies the same
-// hostname-preservation logic works for PBS instances. Regression test for #1283.
-func TestAutoRegisterPBSPreservesUserConfiguredHostname(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		PBSInstances: []config.PBSInstance{
-			{
-				Name:       "pbs01",
-				Host:       "https://pbs.example.com:8007",
-				TokenName:  "pulse-monitor@pbs!pulse-1700000000",
-				TokenValue: "old-secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pbs",
-	}
-	handler.codeMutex.Unlock()
-
-	reqBody := AutoRegisterRequest{
-		Type:       "pbs",
-		Host:       "https://192.168.1.50:8007",
-		TokenID:    "pulse-monitor@pbs!pulse-1700000000",
-		TokenValue: "new-secret",
-		ServerName: "pbs01",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	if len(cfg.PBSInstances) != 1 {
-		t.Fatalf("expected 1 PBS instance, got %d", len(cfg.PBSInstances))
-	}
-
-	node := cfg.PBSInstances[0]
-	if node.Host != "https://pbs.example.com:8007" {
-		t.Errorf("PBS user-configured hostname was overwritten: got %q, want %q",
-			node.Host, "https://pbs.example.com:8007")
-	}
-	if node.TokenValue != "new-secret" {
-		t.Errorf("PBS token value not updated: got %q, want %q", node.TokenValue, "new-secret")
-	}
-}
-
-// TestAutoRegisterAgentDifferentHostsSameNameStaySeparate verifies that two
-// genuinely different hosts with the same name but non-Pulse tokens (e.g.,
-// manually created tokens) are NOT merged. Regression test for Issue #891.
-func TestAutoRegisterAgentDifferentHostsSameNameStaySeparate(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		// Existing node with a manually-created (non-Pulse) token
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:       "pve",
-				Host:       "https://10.0.1.100:8006",
-				TokenName:  "root@pam!my-manual-token",
-				TokenValue: "manual-secret",
-				Source:     "agent",
-			},
-		},
-	}
-
-	handler := newTestConfigHandlers(t, cfg)
-
-	const tokenValue = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(tokenValue)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	// Different physical host registers with same name but Pulse agent token
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://10.0.2.200:8006",
-		TokenID:    "pulse-monitor@pam!pulse-1700099999",
-		TokenValue: "new-secret",
-		ServerName: "pve",
-		Source:     "agent",
-		AuthToken:  tokenValue,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	// Should be 2 separate nodes (one has manual token, other has Pulse token)
-	if len(cfg.PVEInstances) != 2 {
-		t.Fatalf("expected 2 PVE instances (different hosts), got %d", len(cfg.PVEInstances))
-	}
-}
-
-func TestHandleAutoRegisterStoresFingerprintForNewPVE(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-	}
-	handler := newTestConfigHandlers(t, cfg)
-
-	pveServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer pveServer.Close()
-
-	const authToken = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(authToken)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       pveServer.URL,
-		TokenID:    "pulse-monitor@pam!pulse-1772387119",
-		TokenValue: "secret-token",
-		ServerName: "pve01",
-		Source:     "agent",
-		AuthToken:  authToken,
-	}
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-
-	expectedFP, err := tlsutil.FetchFingerprint(pveServer.URL)
-	if err != nil {
-		t.Fatalf("failed to fetch expected fingerprint: %v", err)
-	}
-
-	if cfg.PVEInstances[0].Fingerprint == "" {
-		t.Fatalf("expected non-empty fingerprint on auto-registered node")
-	}
-	if cfg.PVEInstances[0].Fingerprint != expectedFP {
-		t.Fatalf("fingerprint mismatch: got %q want %q", cfg.PVEInstances[0].Fingerprint, expectedFP)
-	}
-}
-
-func TestHandleAutoRegisterUpdateDoesNotClearFingerprintWhenFetchFails(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", tempDir)
-
-	originalDetectPVECluster := detectPVECluster
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-		return false, "", nil
-	}
-	defer func() { detectPVECluster = originalDetectPVECluster }()
-
-	cfg := &config.Config{
-		DataPath:   tempDir,
-		ConfigPath: tempDir,
-		PVEInstances: []config.PVEInstance{
-			{
-				Name:        "pve01",
-				Host:        "https://127.0.0.1:1", // Force FetchFingerprint to fail quickly
-				TokenName:   "pulse-monitor@pam!pulse-1700000000",
-				TokenValue:  "old-secret",
-				Fingerprint: "existing-fingerprint",
-				VerifySSL:   true,
-				Source:      "agent",
-			},
-		},
-	}
-	handler := newTestConfigHandlers(t, cfg)
-
-	const authToken = "TEMP-TOKEN"
-	tokenHash := internalauth.HashAPIToken(authToken)
-	handler.codeMutex.Lock()
-	handler.setupCodes[tokenHash] = &SetupCode{
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		NodeType:  "pve",
-	}
-	handler.codeMutex.Unlock()
-
-	reqBody := AutoRegisterRequest{
-		Type:       "pve",
-		Host:       "https://127.0.0.1:1",
-		TokenID:    "pulse-monitor@pam!pulse-1700000001",
-		TokenValue: "new-secret",
-		ServerName: "pve01",
-		Source:     "agent",
-		AuthToken:  authToken,
-	}
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleAutoRegister(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	if len(cfg.PVEInstances) != 1 {
-		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
-	}
-	if cfg.PVEInstances[0].Fingerprint != "existing-fingerprint" {
-		t.Fatalf("expected existing fingerprint to be preserved, got %q", cfg.PVEInstances[0].Fingerprint)
 	}
 }

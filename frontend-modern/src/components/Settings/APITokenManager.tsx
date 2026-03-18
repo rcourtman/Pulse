@@ -1,21 +1,44 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
-import type { DockerHost, Host } from '@/types/api';
 import { getPulseBaseUrl } from '@/utils/url';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { logger } from '@/utils/logger';
+import {
+  getAPITokenGenerateErrorMessage,
+  getAPITokensLoadErrorMessage,
+  getAPITokenRevokeErrorMessage,
+} from '@/utils/apiTokenPresentation';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { useResources } from '@/hooks/useResources';
+import type { Resource } from '@/types/resource';
+import {
+  getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  hasAgentFacet as resourceHasAgentFacet,
+} from '@/utils/agentResources';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
   API_SCOPE_OPTIONS,
   DOCKER_MANAGE_SCOPE,
   DOCKER_REPORT_SCOPE,
-  HOST_AGENT_SCOPE,
+  AGENT_REPORT_SCOPE,
   MONITORING_READ_SCOPE,
   SETTINGS_READ_SCOPE,
   SETTINGS_WRITE_SCOPE,
@@ -25,6 +48,7 @@ interface APITokenManagerProps {
   currentTokenHint?: string;
   onTokensChanged?: () => void;
   refreshing?: boolean;
+  canManage?: boolean;
 }
 
 const SCOPES_DOC_URL =
@@ -32,43 +56,119 @@ const SCOPES_DOC_URL =
 const WILDCARD_SCOPE = '*';
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
-  const { state, markDockerHostsTokenRevoked, markHostsTokenRevoked } = useWebSocket();
-  const dockerHosts = createMemo<DockerHost[]>(() => state.dockerHosts ?? []);
-  const hosts = createMemo<Host[]>(() => state.hosts ?? []);
+  const { markDockerRuntimesTokenRevoked, markAgentsTokenRevoked } = useWebSocket();
+  const { byType, resources } = useResources();
+
+  const dockerRuntimeResources = createMemo(() => byType('docker-host'));
+  const hasAgentScopeResource = (resource: Resource): boolean => {
+    if (resource.type === 'docker-host') return false;
+    return (
+      resource.type === 'agent' ||
+      resource.type === 'pbs' ||
+      resource.type === 'pmg' ||
+      resource.type === 'truenas' ||
+      resourceHasAgentFacet(resource)
+    );
+  };
+  const agentCapableResources = createMemo(() =>
+    resources().filter((resource) => hasAgentScopeResource(resource)),
+  );
+
+  const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
+    return resource.platformData
+      ? (unwrap(resource.platformData) as Record<string, unknown>)
+      : undefined;
+  };
+
+  const readPlatformString = (value: unknown): string | undefined => {
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  };
+
+  const readPlatformNumber = (value: unknown): number | undefined => {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  };
+
+  const readNestedPlatformField = (
+    platformData: Record<string, unknown> | undefined,
+    field: string,
+  ): unknown => {
+    if (!platformData) return undefined;
+    if (field in platformData) return platformData[field];
+    const agent = platformData.agent;
+    if (agent && typeof agent === 'object' && field in (agent as Record<string, unknown>)) {
+      return (agent as Record<string, unknown>)[field];
+    }
+    const docker = platformData.docker;
+    if (docker && typeof docker === 'object' && field in (docker as Record<string, unknown>)) {
+      return (docker as Record<string, unknown>)[field];
+    }
+    return undefined;
+  };
+
+  const tokenIdForResource = (resource: Resource): string | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformString(readNestedPlatformField(platformData, 'tokenId'));
+  };
+
+  const agentActionIdForResource = (resource: Resource): string => {
+    return getActionableAgentIdFromResource(resource) || resource.id;
+  };
+
+  const dockerActionIdForResource = (resource: Resource): string => {
+    return getActionableDockerRuntimeIdFromResource(resource) || resource.id;
+  };
+
+  const revokedTokenIdForResource = (resource: Resource): string | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformString(readNestedPlatformField(platformData, 'revokedTokenId'));
+  };
+
+  const tokenRevokedAtForResource = (resource: Resource): number | undefined => {
+    const platformData = readPlatformData(resource);
+    return readPlatformNumber(readNestedPlatformField(platformData, 'tokenRevokedAt'));
+  };
+
   const dockerTokenUsage = createMemo(() => {
-    type UsageHost = { id: string; label: string };
-    const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
-    for (const host of dockerHosts()) {
-      const tokenId = host.tokenId;
+    type UsageRuntime = { id: string; label: string };
+    const usage = new Map<string, { count: number; runtimes: UsageRuntime[] }>();
+    for (const resource of dockerRuntimeResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
-      const label = host.displayName?.trim() || host.hostname || host.id;
+      const runtimeId = dockerActionIdForResource(resource);
+      const label = getPreferredResourceDisplayName(resource);
       const previous = usage.get(tokenId);
       if (previous) {
+        if (previous.runtimes.some((runtime) => runtime.id === runtimeId)) continue;
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: host.id, label }],
+          runtimes: [...previous.runtimes, { id: runtimeId, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+        usage.set(tokenId, {
+          count: 1,
+          runtimes: [{ id: runtimeId, label }],
+        });
       }
     }
     return usage;
   });
-  const hostTokenUsage = createMemo(() => {
-    type UsageHost = { id: string; label: string };
-    const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
-    for (const host of hosts()) {
-      const tokenId = host.tokenId;
+  const agentTokenUsage = createMemo(() => {
+    type UsageAgent = { id: string; label: string };
+    const usage = new Map<string, { count: number; agents: UsageAgent[] }>();
+    for (const resource of agentCapableResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
-      const label = host.displayName?.trim() || host.hostname || host.id;
+      const agentId = agentActionIdForResource(resource);
+      const label = getPreferredResourceDisplayName(resource);
       const previous = usage.get(tokenId);
       if (previous) {
+        if (previous.agents.some((agent) => agent.id === agentId)) continue;
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, { id: host.id, label }],
+          agents: [...previous.agents, { id: agentId, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+        usage.set(tokenId, { count: 1, agents: [{ id: agentId, label }] });
       }
     }
     return usage;
@@ -77,16 +177,15 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokens, setTokens] = createSignal<APITokenRecord[]>([]);
   const [tokensLoaded, setTokensLoaded] = createSignal(false);
   const sortedTokens = createMemo(() =>
-    [...tokens()].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    ),
+    [...tokens()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   );
   const totalTokens = createMemo(() => sortedTokens().length);
-  const wildcardCount = createMemo(() =>
-    sortedTokens().filter((token) => {
-      const scopes = token.scopes;
-      return !scopes || scopes.length === 0 || scopes.includes('*');
-    }).length,
+  const wildcardCount = createMemo(
+    () =>
+      sortedTokens().filter((token) => {
+        const scopes = token.scopes;
+        return !scopes || scopes.length === 0 || scopes.includes('*');
+      }).length,
   );
   const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
   const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
@@ -98,6 +197,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [nameInput, setNameInput] = createSignal('');
   const tokenRevealState = useTokenRevealState();
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
+  const canManage = () => props.canManage !== false;
 
   type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
   type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
@@ -123,17 +223,19 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     {
       label: 'Kiosk / Dashboard',
       scopes: [MONITORING_READ_SCOPE],
-      description: 'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
+      description:
+        'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
     },
     {
-      label: 'Host agent',
-      scopes: [HOST_AGENT_SCOPE],
-      description: 'Allow pulse-host-agent to submit OS, CPU, and disk metrics.',
+      label: 'Agent',
+      scopes: [AGENT_REPORT_SCOPE],
+      description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
     },
     {
       label: 'Container report',
       scopes: [DOCKER_REPORT_SCOPE],
-      description: 'Permits container agents (Docker or Podman) to stream host and container telemetry only.',
+      description:
+        'Permits container agents (Docker or Podman) to stream runtime and container telemetry only.',
     },
     {
       label: 'Container manage',
@@ -153,9 +255,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   ];
 
   const presetMatchesSelection = (presetScopes: string[]) => {
-    const selection = [...selectedScopes()]
-      .filter((scope) => scope !== WILDCARD_SCOPE)
-      .sort();
+    const selection = [...selectedScopes()].filter((scope) => scope !== WILDCARD_SCOPE).sort();
     const target = [...presetScopes].sort();
     if (target.length === 0) {
       return isFullAccessSelected();
@@ -165,7 +265,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     }
     return target.every((scope) => selection.includes(scope));
   };
-
 
   const applyScopePreset = (scopes: string[]) => {
     const unique = Array.from(new Set(scopes)).filter(Boolean);
@@ -196,7 +295,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setTokensLoaded(true);
     } catch (err) {
       logger.error('Failed to load API tokens', err);
-      notificationStore.error('Failed to load API tokens');
+      notificationStore.error(getAPITokensLoadErrorMessage());
     } finally {
       setLoading(false);
     }
@@ -209,45 +308,55 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   createEffect(() => {
     if (!tokensLoaded()) return;
     const activeTokenIds = new Set(tokens().map((token) => token.id));
-    const pendingDockerByToken = new Map<string, string[]>();
+    const pendingRuntimesByToken = new Map<string, string[]>();
 
-    for (const host of dockerHosts()) {
-      const tokenId = host.tokenId;
+    for (const resource of dockerRuntimeResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       if (activeTokenIds.has(tokenId)) continue;
-      if (host.revokedTokenId === tokenId) continue;
+      if (revokedTokenIdForResource(resource) === tokenId) continue;
 
-      if (!pendingDockerByToken.has(tokenId)) {
-        pendingDockerByToken.set(tokenId, []);
+      if (!pendingRuntimesByToken.has(tokenId)) {
+        pendingRuntimesByToken.set(tokenId, []);
       }
-      pendingDockerByToken.get(tokenId)!.push(host.id);
+      const runtimeIds = pendingRuntimesByToken.get(tokenId)!;
+      const runtimeId = dockerActionIdForResource(resource);
+      if (!runtimeIds.includes(runtimeId)) {
+        runtimeIds.push(runtimeId);
+      }
     }
 
-    pendingDockerByToken.forEach((hostIds, tokenId) => {
-      if (hostIds.length === 0) return;
-      markDockerHostsTokenRevoked(tokenId, hostIds);
+    pendingRuntimesByToken.forEach((runtimeIds, tokenId) => {
+      if (runtimeIds.length === 0) return;
+      markDockerRuntimesTokenRevoked(tokenId, runtimeIds);
     });
 
-    const pendingHostsByToken = new Map<string, string[]>();
-    for (const host of hosts()) {
-      const tokenId = host.tokenId;
+    const pendingAgentsByToken = new Map<string, string[]>();
+    for (const resource of agentCapableResources()) {
+      const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       if (activeTokenIds.has(tokenId)) continue;
-      if (host.revokedTokenId === tokenId && host.tokenRevokedAt) continue;
+      if (revokedTokenIdForResource(resource) === tokenId && tokenRevokedAtForResource(resource))
+        continue;
 
-      if (!pendingHostsByToken.has(tokenId)) {
-        pendingHostsByToken.set(tokenId, []);
+      if (!pendingAgentsByToken.has(tokenId)) {
+        pendingAgentsByToken.set(tokenId, []);
       }
-      pendingHostsByToken.get(tokenId)!.push(host.id);
+      const agentIds = pendingAgentsByToken.get(tokenId)!;
+      const agentId = agentActionIdForResource(resource);
+      if (!agentIds.includes(agentId)) {
+        agentIds.push(agentId);
+      }
     }
 
-    pendingHostsByToken.forEach((hostIds, tokenId) => {
-      if (hostIds.length === 0) return;
-      markHostsTokenRevoked(tokenId, hostIds);
+    pendingAgentsByToken.forEach((agentIds, tokenId) => {
+      if (agentIds.length === 0) return;
+      markAgentsTokenRevoked(tokenId, agentIds);
     });
   });
 
   const handleGenerate = async () => {
+    if (!canManage()) return;
     setIsGenerating(true);
     try {
       const trimmedName = nameInput().trim() || undefined;
@@ -266,11 +375,13 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         source: 'security',
         note: 'Copy this token now. You can reopen this dialog from Security → API tokens while this page stays open.',
       });
-      notificationStore.success('New API token generated. Copy it below while it is still visible.');
+      notificationStore.success(
+        'New API token generated. Copy it below while it is still visible.',
+      );
       props.onTokensChanged?.();
     } catch (err) {
       logger.error('Failed to generate API token', err);
-      notificationStore.error('Failed to generate API token');
+      notificationStore.error(getAPITokenGenerateErrorMessage(err));
     } finally {
       setIsGenerating(false);
     }
@@ -295,36 +406,36 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const handleDelete = async (record: APITokenRecord) => {
+    if (!canManage()) return;
     const dockerUsage = dockerTokenUsage().get(record.id);
-    const hostUsage = hostTokenUsage().get(record.id);
+    const agentUsage = agentTokenUsage().get(record.id);
     const displayName = tokenNameForDialog(record);
 
-    const affectedDockerHostIds = dockerUsage ? dockerUsage.hosts.map((host) => host.id) : [];
-    const affectedHostAgentIds = hostUsage ? hostUsage.hosts.map((host) => host.id) : [];
+    const affectedRuntimeIds = dockerUsage ? dockerUsage.runtimes.map((runtime) => runtime.id) : [];
+    const affectedAgentIds = agentUsage ? agentUsage.agents.map((agent) => agent.id) : [];
     let revokeMessage: string | undefined;
     const messageChunks: string[] = [];
     if (dockerUsage) {
-      const hostListPreview = dockerUsage.hosts
+      const runtimeListPreview = dockerUsage.runtimes
         .slice(0, 5)
-        .map((host) => host.label)
+        .map((runtime) => runtime.label)
         .join(', ');
-      const extraCount = dockerUsage.hosts.length - 5;
-      const hostSummary =
-        extraCount > 0 ? `${hostListPreview}, +${extraCount} more` : hostListPreview;
-      const hostCountLabel =
-        dockerUsage.count === 1 ? 'container host' : `${dockerUsage.count} container hosts`;
-      messageChunks.push(`${hostCountLabel}: ${hostSummary}`);
+      const extraCount = dockerUsage.runtimes.length - 5;
+      const usageSummary =
+        extraCount > 0 ? `${runtimeListPreview}, +${extraCount} more` : runtimeListPreview;
+      const runtimeCountLabel =
+        dockerUsage.count === 1 ? 'container runtime' : `${dockerUsage.count} container runtimes`;
+      messageChunks.push(`${runtimeCountLabel}: ${usageSummary}`);
     }
-    if (hostUsage) {
-      const agentListPreview = hostUsage.hosts
+    if (agentUsage) {
+      const agentListPreview = agentUsage.agents
         .slice(0, 5)
-        .map((host) => host.label)
+        .map((agent) => agent.label)
         .join(', ');
-      const agentExtra = hostUsage.hosts.length - 5;
+      const agentExtra = agentUsage.agents.length - 5;
       const agentSummary =
         agentExtra > 0 ? `${agentListPreview}, +${agentExtra} more` : agentListPreview;
-      const agentCountLabel =
-        hostUsage.count === 1 ? 'host agent' : `${hostUsage.count} host agents`;
+      const agentCountLabel = agentUsage.count === 1 ? 'agent' : `${agentUsage.count} agents`;
       messageChunks.push(`${agentCountLabel}: ${agentSummary}`);
     }
     if (messageChunks.length > 0) {
@@ -334,13 +445,15 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     try {
       await SecurityAPI.deleteToken(record.id);
       setTokens((prev) => prev.filter((token) => token.id !== record.id));
-      notificationStore.success(revokeMessage ? `Token revoked: ${revokeMessage}` : 'Token revoked');
+      notificationStore.success(
+        revokeMessage ? `Token revoked: ${revokeMessage}` : 'Token revoked',
+      );
       props.onTokensChanged?.();
-      if (affectedDockerHostIds.length > 0) {
-        markDockerHostsTokenRevoked(record.id, affectedDockerHostIds);
+      if (affectedRuntimeIds.length > 0) {
+        markDockerRuntimesTokenRevoked(record.id, affectedRuntimeIds);
       }
-      if (affectedHostAgentIds.length > 0) {
-        markHostsTokenRevoked(record.id, affectedHostAgentIds);
+      if (affectedAgentIds.length > 0) {
+        markAgentsTokenRevoked(record.id, affectedAgentIds);
       }
 
       const current = newTokenRecord();
@@ -350,7 +463,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       }
     } catch (err) {
       logger.error('Failed to revoke API token', err);
-      notificationStore.error('Failed to revoke API token');
+      notificationStore.error(getAPITokenRevokeErrorMessage());
     }
   };
 
@@ -374,14 +487,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   return (
     <div class="space-y-5">
-      <Card
-        padding="lg"
-        class="border border-gray-200/80 bg-gray-50 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/60"
-      >
-        <div class="flex flex-col gap-6">
+      <Card padding="none" class="border border-border shadow-sm">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
+              <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
                 <BadgeCheck class="h-5 w-5" />
               </div>
               <SectionHeader
@@ -395,65 +505,69 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <button
               type="button"
               onClick={focusCreateSection}
-              class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+              disabled={!canManage()}
+              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
             >
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               New token
             </button>
           </div>
 
+          <Show when={!canManage()}>
+            <Card
+              tone="info"
+              padding="sm"
+              class="border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
+            >
+              Token management is read-only for this account. You can review existing tokens but
+              cannot create or revoke them.
+            </Card>
+          </Show>
+
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="rounded-lg border border-gray-200/70 bg-white/70 p-4 text-sm text-gray-700 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <div class="rounded-md border border-border p-4 text-sm shadow-sm">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Total tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {totalTokens()}
-              </div>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Stored credentials across all agents
-              </p>
+              <div class="mt-1 text-2xl font-semibold text-base-content">{totalTokens()}</div>
+              <p class="mt-1 text-xs text-muted">Stored credentials across all agents</p>
             </div>
-            <div class="rounded-lg border border-gray-200/70 bg-white/70 p-4 text-sm text-gray-700 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300">
-              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <div class="rounded-md border border-border p-4 text-sm shadow-sm">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Scoped tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {scopedTokenCount()}
-              </div>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Limited access tokens with defined scopes
-              </p>
+              <div class="mt-1 text-2xl font-semibold text-base-content">{scopedTokenCount()}</div>
+              <p class="mt-1 text-xs text-muted">Limited access tokens with defined scopes</p>
             </div>
             <div
-              class={`rounded-lg border p-4 text-sm shadow-sm ${hasWildcardTokens()
-                ? 'border-amber-300/80 bg-amber-50/80 text-amber-900 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-100'
-                : 'border-gray-200/70 bg-white/70 text-gray-700 dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300'
-                }`}
+              class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
             >
               <div
-                class={`text-[0.7rem] font-semibold uppercase tracking-wide ${hasWildcardTokens()
-                  ? 'text-amber-700 dark:text-amber-300'
-                  : 'text-gray-500 dark:text-gray-400'
-                  }`}
+                class={`text-[0.7rem] font-semibold uppercase tracking-wide ${
+                  hasWildcardTokens() ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
+                }`}
               >
                 Full access tokens
               </div>
               <div
-                class={`mt-1 text-2xl font-semibold ${hasWildcardTokens()
-                  ? 'text-amber-800 dark:text-amber-100'
-                  : 'text-gray-900 dark:text-gray-100'
-                  }`}
+                class={`mt-1 text-2xl font-semibold ${
+                  hasWildcardTokens() ? 'text-amber-800 dark:text-amber-100' : 'text-base-content'
+                }`}
               >
                 {wildcardCount()}
               </div>
               <p
-                class={`mt-1 text-xs ${hasWildcardTokens()
-                  ? 'text-amber-700 dark:text-amber-200'
-                  : 'text-gray-500 dark:text-gray-400'
-                  }`}
+                class={`mt-1 text-xs ${
+                  hasWildcardTokens() ? 'text-amber-700 dark:text-amber-200' : 'text-muted'
+                }`}
               >
                 {hasWildcardTokens()
                   ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
@@ -468,11 +582,24 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         <Card
           tone="info"
           padding="sm"
-          class="flex items-center gap-2 border border-blue-200/70 text-xs text-blue-800 dark:border-blue-800/70 dark:text-blue-200"
+          class="flex items-center gap-2 border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
         >
           <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4" stroke="currentColor" />
-            <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke-width="4" stroke-linecap="round" stroke="currentColor" />
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke-width="4"
+              stroke="currentColor"
+            />
+            <path
+              class="opacity-75"
+              d="M4 12a8 8 0 018-8"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke="currentColor"
+            />
           </svg>
           <span>Refreshing security status…</span>
         </Card>
@@ -483,13 +610,18 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <Card
             tone="success"
             padding="sm"
-            class="flex flex-wrap items-center justify-between gap-3 border border-green-300/70 text-sm text-green-800 dark:border-green-700/70 dark:text-green-200"
+            class="flex flex-wrap items-center justify-between gap-3 border border-green-300 text-sm text-green-800 dark:border-green-700 dark:text-green-200"
           >
             <span>
-              ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord())})
+              ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> (
+              {tokenHint(newTokenRecord())})
             </span>
             <div class="flex items-center gap-3 text-xs">
-              <button onClick={reopenTokenDialog} class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100">
+              <button
+                onClick={reopenTokenDialog}
+                disabled={!canManage()}
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+              >
                 Show
               </button>
               <button
@@ -497,21 +629,27 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   setNewTokenValue(null);
                   setNewTokenRecord(null);
                 }}
-                class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Dismiss
               </button>
             </div>
           </Card>
 
-          <Show when={newTokenRecord()?.scopes?.length === 1 && newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE}>
-            <div class="rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800/30 dark:bg-blue-900/10 dark:text-blue-100">
+          <Show
+            when={
+              newTokenRecord()?.scopes?.length === 1 &&
+              newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE
+            }
+          >
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
               <div class="mb-2 font-semibold">Magic Kiosk Link</div>
               <p class="mb-3 text-xs text-blue-700 dark:text-blue-300">
-                Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for wall displays and digital signage.
+                Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for
+                wall displays and digital signage.
               </p>
               <div class="flex items-center gap-2">
-                <code class="flex-1 rounded border border-blue-200 bg-white px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black/20 dark:text-blue-200 break-all">
+                <code class="flex-1 rounded border border-blue-200 bg-surface px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
                   {getPulseBaseUrl()}/?token={newTokenValue()}&kiosk=1
                 </code>
                 <button
@@ -537,171 +675,197 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <Card
             tone="muted"
             padding="md"
-            class="border border-dashed border-gray-300/80 text-sm text-gray-600 dark:border-gray-600/70 dark:text-gray-400"
+            class="border border-dashed border-border text-sm text-muted"
           >
             No tokens yet.{' '}
-            <button onClick={focusCreateSection} class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
+            <button
+              onClick={focusCreateSection}
+              disabled={!canManage()}
+              class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
               Create one
             </button>{' '}
             to authenticate agents and integrations.
           </Card>
         }
       >
-        <Card padding="none" tone="glass" class="overflow-hidden">
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/60 px-5 py-4 dark:border-gray-700 dark:bg-gray-900/40">
+        <Card padding="none" tone="card" class="overflow-hidden">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover px-5 py-4">
             <div>
-              <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Token inventory</h4>
-              <p class="text-xs text-gray-600 dark:text-gray-400">
+              <h4 class="text-sm font-semibold text-base-content">Token inventory</h4>
+              <p class="text-xs text-muted">
                 Active credentials sorted by most recent creation date.
               </p>
             </div>
             <button
               type="button"
               onClick={focusCreateSection}
-              class="inline-flex items-center gap-2 rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/20"
+              disabled={!canManage()}
+              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900"
             >
               Generate new
             </button>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100/80 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
-                <tr>
-                  <th class="px-5 py-3">Name</th>
-                  <th class="px-5 py-3">Hint</th>
-                  <th class="px-5 py-3">Scopes</th>
-                  <th class="px-5 py-3">Usage</th>
-                  <th class="px-5 py-3">Created</th>
-                  <th class="px-5 py-3">Last used</th>
-                  <th class="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                <For each={sortedTokens()}>
-                  {(token) => {
+          <div class="w-full overflow-x-auto">
+            <PulseDataGrid
+              data={sortedTokens()}
+              columns={[
+                {
+                  key: 'name',
+                  label: 'Name',
+                  render: (token) => (
+                    <span class="font-medium text-base-content">{token.name || 'Untitled'}</span>
+                  ),
+                },
+                {
+                  key: 'hint',
+                  label: 'Hint',
+                  render: (token) => (
+                    <span class="font-mono text-xs text-muted">{tokenHint(token)}</span>
+                  ),
+                },
+                {
+                  key: 'scopes',
+                  label: 'Scopes',
+                  render: (token) => {
+                    const rawScopes =
+                      token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
+                    const scopeBadges = rawScopes.includes('*')
+                      ? [{ value: '*', label: 'Full' }]
+                      : rawScopes.map((scope) => ({
+                          value: scope,
+                          label: API_SCOPE_LABELS[scope] ?? scope,
+                        }));
+                    return (
+                      <div class="flex flex-wrap gap-1.5">
+                        <For each={scopeBadges}>
+                          {(scope) => {
+                            const isWildcard = scope.value === '*';
+                            return (
+                              <span
+                                class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                  isWildcard
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                                    : 'bg-surface-alt text-base-content'
+                                }`}
+                                title={scope.value}
+                              >
+                                {scope.label}
+                              </span>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    );
+                  },
+                },
+                {
+                  key: 'usage',
+                  label: 'Usage',
+                  render: (token) => {
                     const dockerUsageEntry = dockerTokenUsage().get(token.id);
-                    const hostUsageEntry = hostTokenUsage().get(token.id);
+                    const agentUsageEntry = agentTokenUsage().get(token.id);
                     const usageSegments: string[] = [];
                     const usageTitleSegments: string[] = [];
                     if (dockerUsageEntry) {
                       usageSegments.push(
                         dockerUsageEntry.count === 1
-                          ? dockerUsageEntry.hosts[0]?.label ?? 'Container host'
-                          : `${dockerUsageEntry.count} container hosts`,
+                          ? (dockerUsageEntry.runtimes[0]?.label ?? 'Container runtime')
+                          : `${dockerUsageEntry.count} container runtimes`,
                       );
                       usageTitleSegments.push(
-                        `Container hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                        `Container runtimes: ${dockerUsageEntry.runtimes.map((runtime) => runtime.label).join(', ')}`,
                       );
                     }
-                    if (hostUsageEntry) {
+                    if (agentUsageEntry) {
                       usageSegments.push(
-                        hostUsageEntry.count === 1
-                          ? `${hostUsageEntry.hosts[0]?.label ?? 'Host agent'} (agent)`
-                          : `${hostUsageEntry.count} host agents`,
+                        agentUsageEntry.count === 1
+                          ? `${agentUsageEntry.agents[0]?.label ?? 'Agent'}`
+                          : `${agentUsageEntry.count} agents`,
                       );
                       usageTitleSegments.push(
-                        `Host agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                        `Agents: ${agentUsageEntry.agents.map((agent) => agent.label).join(', ')}`,
                       );
                     }
-                    const hostSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
-                    const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
-                    const scopeBadges = rawScopes.includes('*')
-                      ? [{ value: '*', label: 'Full' }]
-                      : rawScopes.map((scope) => ({
-                        value: scope,
-                        label: API_SCOPE_LABELS[scope] ?? scope,
-                      }));
-                    const rowIsWildcard = scopeBadges.some((scope) => scope.value === '*');
-
+                    const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
                     return (
-                      <tr
-                        class={`transition-colors ${rowIsWildcard
-                          ? 'bg-amber-50/50 dark:bg-amber-900/10'
-                          : 'bg-white dark:bg-gray-900/10'
-                          } hover:bg-blue-50/40 dark:hover:bg-gray-800/50`}
+                      <div
+                        class="flex flex-wrap items-center gap-2"
+                        title={
+                          usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined
+                        }
                       >
-                        <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-gray-100">
-                          {token.name || 'Untitled'}
-                        </td>
-                        <td class="px-5 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
-                          {tokenHint(token)}
-                        </td>
-                        <td class="px-5 py-3">
-                          <div class="flex flex-wrap gap-1.5">
-                            <For each={scopeBadges}>
-                              {(scope) => {
-                                const isWildcard = scope.value === '*';
-                                return (
-                                  <span
-                                    class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
-                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
-                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                      }`}
-                                    title={scope.value}
-                                  >
-                                    {scope.label}
-                                  </span>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </td>
-                        <td
-                          class="px-5 py-3 text-gray-600 dark:text-gray-400"
-                          title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
-                        >
-                          <div class="flex flex-wrap items-center gap-2">
-                            <span>{hostSummary}</span>
-                            <Show when={hostUsageEntry && hostUsageEntry.count > 1}>
-                              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                  <path
-                                    fill-rule="evenodd"
-                                    d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
-                                    clip-rule="evenodd"
-                                  />
-                                </svg>
-                                Host agents sharing this token ({hostUsageEntry!.count})
-                              </span>
-                            </Show>
-                          </div>
-                        </td>
-                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400">
-                          {formatRelativeTime(new Date(token.createdAt).getTime())}
-                        </td>
-                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400">
-                          {token.lastUsedAt
-                            ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
-                            : 'Never'}
-                        </td>
-                        <td class="px-5 py-3 text-right">
-                          <button
-                            onClick={() => handleDelete(token)}
-                            class="text-sm font-semibold text-red-600 transition hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
+                        <span class="text-muted">{usageSummary}</span>
+                        <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
+                          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path
+                                fill-rule="evenodd"
+                                d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                                clip-rule="evenodd"
+                              />
+                            </svg>
+                            Agents sharing this token ({agentUsageEntry!.count})
+                          </span>
+                        </Show>
+                      </div>
                     );
-                  }}
-                </For>
-              </tbody>
-            </table>
+                  },
+                },
+                {
+                  key: 'createdAt',
+                  label: 'Created',
+                  render: (token) => (
+                    <span class="text-muted">
+                      {formatRelativeTime(new Date(token.createdAt).getTime())}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'lastUsedAt',
+                  label: 'Last used',
+                  render: (token) => (
+                    <span class="text-muted">
+                      {token.lastUsedAt
+                        ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                        : 'Never'}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'action',
+                  label: 'Action',
+                  align: 'right',
+                  render: (token) => (
+                    <button
+                      onClick={() => handleDelete(token)}
+                      disabled={!canManage()}
+                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                    >
+                      Revoke
+                    </button>
+                  ),
+                },
+              ]}
+              keyExtractor={(token) => token.id}
+              desktopMinWidth="1000px"
+              class="border-x-0 sm:border-x border-t-0 rounded-t-none"
+            />
           </div>
         </Card>
       </Show>
 
       <Card
-        padding="lg"
-        class={`border border-gray-200 dark:border-gray-700 transition-shadow ${createHighlight() ? 'ring-2 ring-blue-500/60 shadow-lg' : ''
-          }`}
+        padding="none"
+        class={`border border-border transition-shadow ${
+          createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
+        }`}
         ref={(el: HTMLDivElement) => {
           createSectionRef = el;
         }}
       >
-        <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <SectionHeader
               size="sm"
@@ -711,8 +875,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             />
             <button
               onClick={handleGenerate}
-              disabled={isGenerating()}
-              class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+              disabled={!canManage() || isGenerating()}
+              class="inline-flex min-h-10 sm:min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
             </button>
@@ -720,7 +884,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
           <div class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+              <label class="text-xs font-semibold uppercase tracking-wide text-muted">
                 Token name
               </label>
               <input
@@ -728,19 +892,21 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 value={nameInput()}
                 onInput={(e) => setNameInput(e.currentTarget.value)}
                 placeholder="e.g. Container pipeline"
-                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/40"
+                disabled={!canManage()}
+                class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
               />
             </div>
 
             <div class="space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-semibold uppercase tracking-wide text-muted">
                   Quick presets
                 </span>
                 <button
                   type="button"
-                  class="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+                  class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
                   onClick={clearScopes}
+                  disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Clear selection
@@ -750,11 +916,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <div class="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${isFullAccessSelected()
-                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                    }`}
+                  class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
                   onClick={clearScopes}
+                  disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Full access
@@ -764,11 +928,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   {(preset) => (
                     <button
                       type="button"
-                      class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${presetMatchesSelection(preset.scopes)
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                        }`}
+                      class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes) ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
                       onClick={() => applyScopePreset(preset.scopes)}
+                      disabled={!canManage()}
                       title={preset.description}
                     >
                       {preset.label}
@@ -778,15 +940,15 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               </div>
             </div>
 
-            <details class="group rounded-lg border border-gray-200 bg-gray-50/60 p-4 text-sm transition dark:border-gray-700 dark:bg-gray-900/40">
-              <summary class="cursor-pointer text-sm font-semibold text-gray-700 transition hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-300">
+            <details class="group rounded-md border border-border bg-surface-hover p-4 text-sm transition">
+              <summary class="min-h-10 sm:min-h-10 cursor-pointer text-sm font-semibold text-base-content transition hover:text-blue-600 dark:hover:text-blue-300">
                 Custom scopes
               </summary>
               <div class="mt-3 space-y-4">
                 <For each={scopeGroups()}>
                   {([group, options]) => (
                     <div class="space-y-2">
-                      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                         {group}
                       </div>
                       <div class="flex flex-wrap gap-2">
@@ -796,10 +958,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                             return (
                               <button
                                 type="button"
-                                class={`rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive()
-                                  ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                                  : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
-                                  }`}
+                                class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
                                 onClick={() => {
                                   setSelectedScopes((prev) => {
                                     if (prev.includes(option.value)) {
@@ -808,6 +967,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                                     return [...prev, option.value];
                                   });
                                 }}
+                                disabled={!canManage()}
                                 title={option.description}
                               >
                                 {option.label}
@@ -829,16 +989,17 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         <Card
           tone="warning"
           padding="sm"
-          class="flex flex-wrap items-center gap-3 border border-amber-300/70 text-sm text-amber-800 dark:border-amber-700/70 dark:text-amber-100"
+          class="flex flex-wrap items-center gap-3 border border-amber-300 text-sm text-amber-800 dark:border-amber-700 dark:text-amber-100"
         >
-          ⚠ {wildcardCount()} full access {wildcardCount() === 1 ? 'token' : 'tokens'} – consider switching to scoped presets for least privilege.
+          ⚠ {wildcardCount()} full access {wildcardCount() === 1 ? 'token' : 'tokens'} – consider
+          switching to scoped presets for least privilege.
         </Card>
       </Show>
 
-      <Card tone="muted" padding="sm" class="text-xs text-gray-600 dark:text-gray-400">
+      <Card tone="muted" padding="sm" class="text-xs text-muted">
         Separate tokens per integration • Rotate regularly •{' '}
         <a
-          class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
           href={SCOPES_DOC_URL}
           target="_blank"
           rel="noreferrer"

@@ -1,15 +1,9 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
+import type { APITokenRecord as APITokenRecordModel } from '@/types/api';
+import { objectArrayFieldOrEmpty } from './responseUtils';
 
-export interface APITokenRecord {
-  id: string;
-  name: string;
-  prefix: string;
-  suffix: string;
-  createdAt: string;
-  lastUsedAt?: string;
-  scopes?: string[];
-}
+export type APITokenRecord = APITokenRecordModel;
 
 export interface CreateAPITokenResponse {
   token: string;
@@ -23,7 +17,7 @@ export class SecurityAPI {
 
   static async listTokens(): Promise<APITokenRecord[]> {
     const response = await apiFetchJSON<{ tokens: APITokenRecord[] }>('/api/security/tokens');
-    return response.tokens ?? [];
+    return objectArrayFieldOrEmpty<APITokenRecord>(response, 'tokens');
   }
 
   static async createToken(name?: string, scopes?: string[]): Promise<CreateAPITokenResponse> {
@@ -42,7 +36,7 @@ export class SecurityAPI {
   }
 
   static async deleteToken(id: string): Promise<void> {
-    await apiFetchJSON(`/api/security/tokens/${id}`, {
+    await apiFetchJSON(`/api/security/tokens/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }

@@ -60,7 +60,7 @@ func TestReport_JSONMarshal(t *testing.T) {
 	now := time.Now()
 	report := Report{
 		Agent: AgentInfo{
-			ID:              "docker-agent-1",
+			ID:              "agent-docker-1",
 			Version:         "1.0.0",
 			Type:            "docker",
 			IntervalSeconds: 30,
@@ -426,13 +426,13 @@ func TestReportResponse_Fields(t *testing.T) {
 
 func TestCommandAck_Fields(t *testing.T) {
 	ack := CommandAck{
-		HostID:  "host-123",
+		AgentID: "agent-123",
 		Status:  CommandStatusCompleted,
 		Message: "Command executed successfully",
 	}
 
-	if ack.HostID != "host-123" {
-		t.Errorf("HostID = %q, want host-123", ack.HostID)
+	if ack.AgentID != "agent-123" {
+		t.Errorf("AgentID = %q, want agent-123", ack.AgentID)
 	}
 	if ack.Status != CommandStatusCompleted {
 		t.Errorf("Status = %q, want %q", ack.Status, CommandStatusCompleted)

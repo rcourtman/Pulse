@@ -6,18 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
-	return fn(r)
-}
 
 func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	// Mock OpenAI SSE stream
@@ -127,6 +122,104 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"location": "NYC"}, toolCalls[0].Input)
 }
 
+func TestOpenAIClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if tools, ok := got["tools"]; ok {
+			toolList, isList := tools.([]interface{})
+			require.True(t, isList, "tools field should be a JSON array when present")
+			assert.Len(t, toolList, 0, "tools should be omitted or empty when tool_choice is none")
+		}
+		_, hasToolChoice := got["tool_choice"]
+		assert.False(t, hasToolChoice, "tool_choice should be omitted when tools are dropped")
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-none-tools",
+			Model: "gpt-4",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "No tools"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "No tools", resp.Content)
+}
+
+func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if tools, ok := got["tools"]; ok {
+			toolList, isList := tools.([]interface{})
+			require.True(t, isList, "tools field should be a JSON array when present")
+			assert.Len(t, toolList, 0, "tools should be omitted or empty when tool_choice is none")
+		}
+		_, hasToolChoice := got["tool_choice"]
+		assert.False(t, hasToolChoice, "tool_choice should be omitted when tools are dropped")
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		events := []string{
+			`{"id":"chatcmpl-1","choices":[{"delta":{"content":"Hello"}}],"object":"chat.completion.chunk"}`,
+			`[DONE]`,
+		}
+		for _, event := range events {
+			fmt.Fprintf(w, "data: %s\n\n", event)
+			w.(http.Flusher).Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	var content string
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "done":
+			doneCalled = true
+		}
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", content)
+	assert.True(t, doneCalled)
+}
+
 func TestOpenAIClient_ChatStream_Errors(t *testing.T) {
 	t.Run("401 Unauthorized", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +288,11 @@ func TestOpenAIClient_Configuration(t *testing.T) {
 	}
 }
 
+func TestNewOpenAIClient_StripsOpenRouterPrefix(t *testing.T) {
+	client := NewOpenAIClient("key", "openrouter:openai/gpt-4o-mini", "https://openrouter.ai/api/v1", 0)
+	assert.Equal(t, "openai/gpt-4o-mini", client.model)
+}
+
 func TestOpenAIClient_ListModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -215,65 +313,40 @@ func TestOpenAIClient_ListModels(t *testing.T) {
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
 
-	assert.Len(t, models, 3)
-	assert.Equal(t, "gpt-4", models[0].ID)
-	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
-	assert.Equal(t, "claude-3", models[2].ID)
-}
-
-func TestOpenAIClient_ListModels_OfficialEndpointStillFiltersNonChatModels(t *testing.T) {
-	client := NewOpenAIClient("sk-test", "gpt-4", "", 0)
-	client.client = &http.Client{
-		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			assert.Equal(t, "https", r.URL.Scheme)
-			assert.Equal(t, "api.openai.com", r.URL.Host)
-			assert.Equal(t, "/v1/models", r.URL.Path)
-
-			rec := httptest.NewRecorder()
-			rec.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(rec).Encode(map[string]interface{}{
-				"data": []map[string]interface{}{
-					{"id": "gpt-4", "object": "model", "created": 1234567890, "owned_by": "openai"},
-					{"id": "gpt-3.5-turbo", "object": "model", "created": 1234567890, "owned_by": "openai"},
-					{"id": "claude-3", "object": "model", "created": 1234567890, "owned_by": "anthropic"},
-				},
-			})
-			return rec.Result(), nil
-		}),
-	}
-
-	models, err := client.ListModels(context.Background())
-	require.NoError(t, err)
-
 	assert.Len(t, models, 2)
 	assert.Equal(t, "gpt-4", models[0].ID)
 	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
 }
 
-func TestOpenAIClient_ListModels_CustomEndpointIncludesNonOpenAIModelNames(t *testing.T) {
+func TestOpenAIClient_ListModels_OpenRouterReturnsCatalog(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/models", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		assert.Equal(t, "https://pulse.app", r.Header.Get("HTTP-Referer"))
+		assert.Equal(t, "Pulse", r.Header.Get("X-Title"))
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]interface{}{
-				{"id": "llama3-8b", "object": "model", "created": 1234567890, "owned_by": "localai"},
-				{"id": "qwen3.5-27b", "object": "model", "created": 1234567891, "owned_by": "localai"},
-				{"id": "gemma-3-4b", "object": "model", "created": 1234567892, "owned_by": "localai"},
+				{"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet 4.5"},
+				{"id": "openai/gpt-4o-mini", "name": "GPT-4o mini", "description": "Fast and cheap"},
+				{"id": "meta-llama/llama-3.3-70b-instruct", "name": "Llama 3.3 70B Instruct"},
 			},
 		})
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("sk-test", "llama3-8b", server.URL+"/custom-openai", 0)
+	client := NewOpenAIClient("sk-test", "openai/gpt-4o-mini", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/api/v1/chat/completions#openrouter.ai"
 
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
-
 	assert.Len(t, models, 3)
-	assert.Equal(t, "llama3-8b", models[0].ID)
-	assert.Equal(t, "qwen3.5-27b", models[1].ID)
-	assert.Equal(t, "gemma-3-4b", models[2].ID)
+	assert.Equal(t, "anthropic/claude-sonnet-4.5", models[0].ID)
+	assert.Equal(t, "Claude Sonnet 4.5", models[0].Name)
+	assert.Equal(t, "Fast and cheap", models[1].Description)
+	assert.Equal(t, "meta-llama/llama-3.3-70b-instruct", models[2].ID)
 }
 
 func TestOpenAIClient_Chat_Success(t *testing.T) {

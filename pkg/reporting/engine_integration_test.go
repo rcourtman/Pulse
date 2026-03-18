@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 // TestReportEngineWithMetricsStore verifies the full data pipeline from
@@ -41,8 +42,6 @@ func TestReportEngineWithMetricsStore(t *testing.T) {
 
 	// Flush to ensure data is written to SQLite
 	store.Flush()
-	// Brief pause to let the background writer process
-	time.Sleep(200 * time.Millisecond)
 
 	// Generate a report for the last 2 hours (uses raw tier)
 	req := MetricReportRequest{
@@ -53,10 +52,16 @@ func TestReportEngineWithMetricsStore(t *testing.T) {
 		Format:       FormatCSV,
 	}
 
-	data, contentType, err := engine.Generate(req)
-	if err != nil {
-		t.Fatalf("report generation failed: %v", err)
-	}
+	var data []byte
+	var contentType string
+	require.Eventually(t, func() bool {
+		var genErr error
+		data, contentType, genErr = engine.Generate(req)
+		if genErr != nil || contentType != "text/csv" {
+			return false
+		}
+		return countCSVDataRows(string(data)) > 0
+	}, 2*time.Second, 25*time.Millisecond)
 
 	if contentType != "text/csv" {
 		t.Errorf("expected text/csv, got %s", contentType)
@@ -78,19 +83,7 @@ func TestReportEngineWithMetricsStore(t *testing.T) {
 	}
 
 	// Verify data rows exist (not just headers)
-	lines := strings.Split(csv, "\n")
-	dataStarted := false
-	dataRows := 0
-	for _, line := range lines {
-		if strings.HasPrefix(line, "# DATA") {
-			dataStarted = true
-			continue
-		}
-		if dataStarted && !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "Timestamp") && line != "" {
-			dataRows++
-		}
-	}
-
+	dataRows := countCSVDataRows(csv)
 	if dataRows == 0 {
 		t.Fatal("report has zero data rows — metrics store data did not reach report output")
 	}
@@ -127,7 +120,6 @@ func TestReportEngineWithMetricsStore_VM(t *testing.T) {
 	}
 
 	store.Flush()
-	time.Sleep(200 * time.Millisecond)
 
 	req := MetricReportRequest{
 		ResourceType: "vm",
@@ -137,10 +129,16 @@ func TestReportEngineWithMetricsStore_VM(t *testing.T) {
 		Format:       FormatPDF,
 	}
 
-	data, contentType, err := engine.Generate(req)
-	if err != nil {
-		t.Fatalf("PDF report generation failed: %v", err)
-	}
+	var data []byte
+	var contentType string
+	require.Eventually(t, func() bool {
+		var genErr error
+		data, contentType, genErr = engine.Generate(req)
+		if genErr != nil || contentType != "application/pdf" {
+			return false
+		}
+		return len(data) >= 1000
+	}, 2*time.Second, 25*time.Millisecond)
 
 	if contentType != "application/pdf" {
 		t.Errorf("expected application/pdf, got %s", contentType)
@@ -149,6 +147,66 @@ func TestReportEngineWithMetricsStore_VM(t *testing.T) {
 	if len(data) < 1000 {
 		t.Errorf("PDF seems too small (%d bytes), likely has no data", len(data))
 	}
+}
+
+func TestReportEngineWithMetricsStore_CanonicalContainerAliases(t *testing.T) {
+	dir := t.TempDir()
+	store, err := metrics.NewStore(metrics.StoreConfig{
+		DBPath:          filepath.Join(dir, "metrics.db"),
+		WriteBufferSize: 10,
+		FlushInterval:   100 * time.Millisecond,
+		RetentionRaw:    24 * time.Hour,
+		RetentionMinute: 7 * 24 * time.Hour,
+		RetentionHourly: 30 * 24 * time.Hour,
+		RetentionDaily:  90 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	now := time.Now()
+
+	systemContainerID := "pve1:200"
+	appContainerID := "docker-abc123"
+
+	for i := 0; i < 6; i++ {
+		ts := now.Add(time.Duration(-30+i*5) * time.Minute)
+		store.Write("container", systemContainerID, "cpu", float64(20+i), ts)
+		store.Write("dockerContainer", appContainerID, "cpu", float64(40+i), ts)
+	}
+	store.Flush()
+
+	systemReq := MetricReportRequest{
+		ResourceType: "system-container",
+		ResourceID:   systemContainerID,
+		Start:        now.Add(-1 * time.Hour),
+		End:          now.Add(time.Minute),
+		Format:       FormatCSV,
+		MetricType:   "cpu",
+	}
+	appReq := MetricReportRequest{
+		ResourceType: "app-container",
+		ResourceID:   appContainerID,
+		Start:        now.Add(-1 * time.Hour),
+		End:          now.Add(time.Minute),
+		Format:       FormatCSV,
+		MetricType:   "cpu",
+	}
+
+	require.Eventually(t, func() bool {
+		systemCSV, _, genErr := engine.Generate(systemReq)
+		if genErr != nil || countCSVDataRows(string(systemCSV)) == 0 {
+			return false
+		}
+
+		appCSV, _, genErr := engine.Generate(appReq)
+		if genErr != nil || countCSVDataRows(string(appCSV)) == 0 {
+			return false
+		}
+		return true
+	}, 2*time.Second, 25*time.Millisecond)
 }
 
 // TestReportEngineStaleStoreAfterClose verifies that querying a closed
@@ -175,7 +233,6 @@ func TestReportEngineStaleStoreAfterClose(t *testing.T) {
 	now := time.Now()
 	store.Write("node", "test-node", "cpu", 50.0, now)
 	store.Flush()
-	time.Sleep(200 * time.Millisecond)
 
 	// Close the store (simulates what happens during monitor reload)
 	store.Close()
@@ -190,11 +247,9 @@ func TestReportEngineStaleStoreAfterClose(t *testing.T) {
 	}
 
 	_, _, err = engine.Generate(req)
-	// After a store is closed, the engine should return an error (not silent empty results)
+	// After a store is closed, the engine should return an error (not silent empty results).
 	if err == nil {
-		t.Log("Note: querying a closed store did not return an error — this means blank reports could occur silently after monitor reload")
-	} else {
-		t.Logf("Querying closed store returned error as expected: %v", err)
+		t.Fatal("expected error when generating a report with a closed metrics store")
 	}
 }
 
@@ -222,7 +277,6 @@ func TestReportEngineReplacedStore(t *testing.T) {
 	now := time.Now()
 	store1.Write("node", "node-1", "cpu", 50.0, now)
 	store1.Flush()
-	time.Sleep(200 * time.Millisecond)
 
 	// Simulate reload: close old store, create new one (same DB file)
 	store1.Close()
@@ -244,7 +298,6 @@ func TestReportEngineReplacedStore(t *testing.T) {
 	// Write additional data via new store
 	store2.Write("node", "node-1", "cpu", 55.0, now.Add(5*time.Minute))
 	store2.Flush()
-	time.Sleep(200 * time.Millisecond)
 
 	// Replace global engine with new store
 	engine2 := NewReportEngine(EngineConfig{MetricsStore: store2})
@@ -258,24 +311,15 @@ func TestReportEngineReplacedStore(t *testing.T) {
 		Format:       FormatCSV,
 	}
 
-	data, _, err := engine2.Generate(req)
-	if err != nil {
-		t.Fatalf("report generation failed after store replacement: %v", err)
-	}
+	var data []byte
+	require.Eventually(t, func() bool {
+		var genErr error
+		data, _, genErr = engine2.Generate(req)
+		return genErr == nil && countCSVDataRows(string(data)) > 0
+	}, 2*time.Second, 25*time.Millisecond)
 
 	csv := string(data)
-	lines := strings.Split(csv, "\n")
-	dataStarted := false
-	dataRows := 0
-	for _, line := range lines {
-		if strings.HasPrefix(line, "# DATA") {
-			dataStarted = true
-			continue
-		}
-		if dataStarted && !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "Timestamp") && line != "" {
-			dataRows++
-		}
-	}
+	dataRows := countCSVDataRows(csv)
 
 	if dataRows == 0 {
 		t.Fatal("report has zero data rows after store replacement — fix did not work")
@@ -330,12 +374,13 @@ func TestReportEngineGetterSurvivesReload(t *testing.T) {
 	// Phase 1: Write data and generate a report — should work
 	currentStore.Write("node", "node-1", "cpu", 50.0, now)
 	currentStore.Flush()
-	time.Sleep(200 * time.Millisecond)
 
-	data, _, err := engine.Generate(req)
-	if err != nil {
-		t.Fatalf("phase 1: report generation failed: %v", err)
-	}
+	var data []byte
+	require.Eventually(t, func() bool {
+		var genErr error
+		data, _, genErr = engine.Generate(req)
+		return genErr == nil && countCSVDataRows(string(data)) > 0
+	}, 2*time.Second, 25*time.Millisecond)
 	rows1 := countCSVDataRows(string(data))
 	if rows1 == 0 {
 		t.Fatal("phase 1: expected data rows, got zero")
@@ -350,13 +395,13 @@ func TestReportEngineGetterSurvivesReload(t *testing.T) {
 	currentStore.Write("node", "node-1", "cpu", 60.0, now.Add(5*time.Minute))
 	currentStore.Write("node", "node-1", "cpu", 70.0, now.Add(10*time.Minute))
 	currentStore.Flush()
-	time.Sleep(200 * time.Millisecond)
 
 	// Phase 3: Same engine instance, should use the new store via getter
-	data, _, err = engine.Generate(req)
-	if err != nil {
-		t.Fatalf("phase 3: report generation failed after reload: %v", err)
-	}
+	require.Eventually(t, func() bool {
+		var genErr error
+		data, _, genErr = engine.Generate(req)
+		return genErr == nil && countCSVDataRows(string(data)) > 0
+	}, 2*time.Second, 25*time.Millisecond)
 	rows3 := countCSVDataRows(string(data))
 	if rows3 == 0 {
 		t.Fatal("phase 3: report has zero data rows after reload — getter did not resolve new store")

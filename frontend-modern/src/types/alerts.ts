@@ -17,16 +17,15 @@ export interface AlertThresholds {
   diskTemperature?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';
-  // Legacy support for backward compatibility
-  cpuLegacy?: number;
-  memoryLegacy?: number;
-  diskLegacy?: number;
-  diskReadLegacy?: number;
-  diskWriteLegacy?: number;
-  networkInLegacy?: number;
-  networkOutLegacy?: number;
   // Allow indexing with string
-  [key: string]: HysteresisThreshold | BackupAlertConfig | SnapshotAlertConfig | number | boolean | string | undefined;
+  [key: string]:
+    | HysteresisThreshold
+    | BackupAlertConfig
+    | SnapshotAlertConfig
+    | number
+    | boolean
+    | string
+    | undefined;
 }
 
 export type RawOverrideConfig = AlertThresholds & {
@@ -73,7 +72,6 @@ export interface DockerThresholdConfig {
   serviceCriticalGapPercent?: number;
   stateDisableConnectivity?: boolean;
   statePoweredOffSeverity?: 'warning' | 'critical';
-  updateAlertDelayHours?: number;
 }
 
 export interface PMGThresholdDefaults {
@@ -124,7 +122,7 @@ export interface AlertConfig {
   activationTime?: string;
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
-  hostDefaults?: AlertThresholds;
+  agentDefaults?: AlertThresholds;
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
   dockerIgnoredContainerPrefixes?: string[];
@@ -140,13 +138,12 @@ export interface AlertConfig {
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;
-  timeThreshold?: number; // Legacy single global delay
   timeThresholds?: {
     guest?: number;
     node?: number;
     storage?: number;
     pbs?: number;
-    host?: number;
+    agent?: number;
   };
   metricTimeThresholds?: Record<string, Record<string, number>>;
   aggregation?: {
@@ -198,7 +195,6 @@ export interface AlertConfig {
       };
     };
     cooldown?: number;
-    groupingWindow?: number;
     maxAlertsHour?: number;
     notifyOnResolve?: boolean;
     grouping?: {
@@ -217,7 +213,7 @@ export interface AlertConfig {
   disableAllStorage?: boolean;
   disableAllPBS?: boolean;
   disableAllPMG?: boolean;
-  disableAllHosts?: boolean;
+  disableAllAgents?: boolean;
   disableAllDockerHosts?: boolean;
   disableAllDockerContainers?: boolean;
   disableAllDockerServices?: boolean;
@@ -225,7 +221,7 @@ export interface AlertConfig {
   disableAllGuestsOffline?: boolean;
   disableAllPBSOffline?: boolean;
   disableAllPMGOffline?: boolean;
-  disableAllHostsOffline?: boolean;
+  disableAllAgentsOffline?: boolean;
   disableAllDockerHostsOffline?: boolean;
 }
 

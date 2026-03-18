@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,7 +20,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_control",
-			Description: `WRITE operations: control VMs/LXCs (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
+			Description: `WRITE operations: control VMs/containers (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -79,7 +80,6 @@ func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]
 
 func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
-	runOnHost, _ := args["run_on_host"].(bool)
 	targetHost, _ := args["target_host"].(string)
 
 	if command == "" {
@@ -104,8 +104,8 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 				Msg("[Control] Target resource not in resolved context - may indicate model hallucination")
 		}
 
-		// Validate routing context - block if targeting a Proxmox host when child resources exist
-		// This prevents accidentally executing commands on the host when user meant to target an LXC/VM
+		// Validate routing context - block if targeting a host node when child resources exist
+		// This prevents accidentally executing commands on the host when user meant to target a container/VM
 		routingResult := e.validateRoutingContext(targetHost)
 		if routingResult.IsBlocked() {
 			return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
@@ -130,19 +130,34 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
-	// Determine target type for approval validation
-	targetType := "container"
-	if runOnHost {
-		targetType = "host"
+	// Execute via agent server
+	if e.agentServer == nil {
+		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	// Check if this is a pre-approved execution with command hash validation
-	// This validates the approval matches this exact command+target and marks it as consumed
-	preApproved := consumeApprovalWithValidation(args, command, targetType, e.targetID)
+	// Resolve target to the correct agent and routing info (with full provenance)
+	// If targetHost is a container/VM name, this routes to the host node agent
+	// with the correct TargetType and TargetID for pct exec / qm guest exec
+	routing := e.resolveTargetForCommandFull(targetHost)
+	if routing.AgentID == "" {
+		if targetHost != "" {
+			if routing.TargetType == "container" || routing.TargetType == "vm" {
+				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its host node; install Pulse Unified Agent on the node", targetHost, routing.TargetType)), nil
+			}
+			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
+		}
+		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
+	}
 
-	// Skip approval checks if pre-approved or in autonomous mode
+	approvalTargetType, approvalTargetID, approvalTargetName := approvalTargetForCommand(targetHost, routing)
+
+	// Check if this is a pre-approved execution with command hash validation.
+	// This validates the approval matches this exact command+target and marks it as consumed.
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, approvalTargetType, approvalTargetID)
+
+	// Skip approval checks if pre-approved or in autonomous mode.
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
+		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
 	if e.isAutonomous {
@@ -152,27 +167,8 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			Msg("Auto-approving command for autonomous investigation")
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Security policy requires approval")
+		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
-	}
-
-	// Execute via agent server
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
-	// Resolve target to the correct agent and routing info (with full provenance)
-	// If targetHost is an LXC/VM name, this routes to the Proxmox host agent
-	// with the correct TargetType and TargetID for pct exec / qm guest exec
-	routing := e.resolveTargetForCommandFull(targetHost)
-	if routing.AgentID == "" {
-		if targetHost != "" {
-			if routing.TargetType == "container" || routing.TargetType == "vm" {
-				return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", targetHost, routing.TargetType)), nil
-			}
-			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
-		}
-		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
 	}
 
 	log.Debug().
@@ -199,16 +195,55 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	if result.Stderr != "" {
 		output += "\n" + result.Stderr
 	}
-	if result.ExitCode != 0 {
-		return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
-	// Success - always show output explicitly to prevent LLM hallucination
-	// When output is empty, we must be explicit about it so the LLM doesn't fabricate results
-	if output == "" {
-		return NewTextResult("Command completed successfully (exit code 0).\n\nOutput:\n(no output)"), nil
+	success := result.ExitCode == 0
+	response := map[string]interface{}{
+		"success":      success,
+		"type":         "command",
+		"command":      command,
+		"target_host":  targetHost,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"execution":    buildExecutionProvenance(targetHost, routing),
+		"verification": map[string]interface{}{"ok": success, "method": "exit_code", "exit_code": result.ExitCode},
 	}
-	return NewTextResult(fmt.Sprintf("Command completed successfully (exit code 0).\n\nOutput:\n%s", output)), nil
+	return NewJSONResultWithIsError(response, !success), nil
+}
+
+// approvalTargetForCommand derives stable approval binding fields from resolved routing.
+// This ensures replay protection hashes match the actual execution target.
+func approvalTargetForCommand(targetHost string, routing CommandRoutingResult) (targetType, targetID, targetName string) {
+	targetType = routing.TargetType
+	targetID = strings.TrimSpace(routing.TargetID)
+
+	if targetType == "" {
+		targetType = "agent"
+	}
+
+	if targetType == "agent" {
+		// Agent-level executions do not carry routing.TargetID in ExecuteCommand payload.
+		// Use agent ID to bind approvals to a specific connected agent.
+		targetID = strings.TrimSpace(routing.AgentID)
+		if targetID == "" {
+			targetID = strings.TrimSpace(targetHost)
+		}
+	} else if targetID == "" {
+		// Defensive fallback for unexpected missing IDs.
+		targetID = strings.TrimSpace(targetHost)
+	}
+
+	targetName = strings.TrimSpace(targetHost)
+	if targetName == "" {
+		targetName = strings.TrimSpace(routing.AgentHostname)
+	}
+	if targetName == "" {
+		targetName = strings.TrimSpace(routing.AgentID)
+	}
+
+	return targetType, targetID, targetName
 }
 
 func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -248,14 +283,14 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	guest, err := e.resolveGuest(guestID)
 	if err != nil {
-		return NewTextResult(fmt.Sprintf("Could not find guest '%s': %v", guestID, err)), nil
+		return NewErrorResult(fmt.Errorf("could not find guest '%s': %v", guestID, err)), nil
 	}
 
 	// Check if guest is protected
 	vmidStr := fmt.Sprintf("%d", guest.VMID)
 	for _, protected := range e.protectedGuests {
 		if protected == vmidStr || protected == guest.Name {
-			return NewTextResult(fmt.Sprintf("Guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant.", guest.Name, guest.VMID)), nil
+			return NewErrorResult(fmt.Errorf("guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant", guest.Name, guest.VMID)), nil
 		}
 	}
 
@@ -267,7 +302,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	// For delete action, verify guest is stopped first
 	if action == "delete" && guest.Status != "stopped" {
-		return NewTextResult(fmt.Sprintf("Cannot delete %s (VMID %d) - it is currently %s. Stop it first, then try deleting again.", guest.Name, guest.VMID, guest.Status)), nil
+		return NewErrorResult(fmt.Errorf("cannot delete %s (VMID %d) - it is currently %s; stop it first, then try deleting again", guest.Name, guest.VMID, guest.Status)), nil
 	}
 
 	var command string
@@ -289,8 +324,11 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		command = fmt.Sprintf("%s stop %d --skiplock", cmdTool, guest.VMID)
 	}
 
-	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
-	preApproved := isPreApproved(args)
+	approvalTargetID := fmt.Sprintf("%s:%d", guest.Node, guest.VMID)
+
+	// Check if this is a pre-approved execution (agentic loop re-executing after user approval).
+	// Use consumeApprovalWithValidation to enforce command-bound, single-use approvals.
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, guest.Type, approvalTargetID)
 
 	// Check security policy (skip if pre-approved)
 	if !preApproved && e.policy != nil {
@@ -300,7 +338,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 			// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-			approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+			approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 		}
 	}
@@ -308,7 +346,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-		approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
@@ -318,12 +356,12 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	agentID := e.findAgentForNode(guest.Node)
 	if agentID == "" {
-		return NewTextResult(fmt.Sprintf("No agent available on node '%s'. Install Pulse Unified Agent on the Proxmox host to enable control.", guest.Node)), nil
+		return NewErrorResult(fmt.Errorf("no agent available on node '%s'; install Pulse Unified Agent on the node to enable control", guest.Node)), nil
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
-		TargetType: "host",
+		TargetType: "agent",
 		TargetID:   "",
 	})
 	if err != nil {
@@ -333,10 +371,6 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	output := result.Stdout
 	if result.Stderr != "" {
 		output += "\n" + result.Stderr
-	}
-
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed '%s' on %s (VMID %d). The action is complete.\n%s", action, guest.Name, guest.VMID, output)), nil
 	}
 
 	// Detect idempotent success: the guest is already in the desired state.
@@ -352,127 +386,69 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		alreadyDone = strings.Contains(outputLower, "already running")
 	}
 	if alreadyDone {
-		return NewTextResult(fmt.Sprintf("✓ %s (VMID %d) is already %s. No action needed.\n", guest.Name, guest.VMID, func() string {
-			if action == "start" {
-				return "running"
-			}
-			return "stopped"
-		}())), nil
+		result.ExitCode = 0
+		output = fmt.Sprintf("%s\n(idempotent: desired state already set)", output)
 	}
 
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
+	}
+
+	verify := e.verifyGuestAction(ctx, agentID, cmdTool, guest.VMID, action)
+	verify["ok"] = result.ExitCode == 0
+	success := result.ExitCode == 0
+	response := map[string]interface{}{
+		"success":      success,
+		"type":         "guest",
+		"guest":        guest.Name,
+		"guest_id":     fmt.Sprintf("%d", guest.VMID),
+		"guest_type":   guest.Type,
+		"node":         guest.Node,
+		"action":       action,
+		"command":      command,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"verification": verify,
+	}
+	return NewJSONResultWithIsError(response, !success), nil
 }
 
-func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	containerName, _ := args["container"].(string)
-	hostName, _ := args["host"].(string)
-	action, _ := args["action"].(string)
-
-	if containerName == "" {
-		return NewErrorResult(fmt.Errorf("container name is required")), nil
-	}
-	if action == "" {
-		return NewErrorResult(fmt.Errorf("action is required")), nil
-	}
-
-	validActions := map[string]bool{"start": true, "stop": true, "restart": true}
-	if !validActions[action] {
-		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, or restart", action)), nil
+func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdTool string, vmID int, action string) map[string]interface{} {
+	expect := ""
+	switch action {
+	case "start", "restart":
+		expect = "running"
+	case "stop", "shutdown":
+		expect = "stopped"
+	case "delete":
+		expect = "deleted"
 	}
 
-	// Validate resource is in resolved context
-	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
-	validation := e.validateResolvedResource(containerName, action, true)
-	if validation.IsBlocked() {
-		// Hard validation failure - return consistent error envelope
-		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
-	}
-	if validation.ErrorMsg != "" {
-		// Soft validation - log warning but allow operation
-		log.Warn().
-			Str("container", containerName).
-			Str("action", action).
-			Str("host", hostName).
-			Str("validation_error", validation.ErrorMsg).
-			Msg("[ControlDocker] Container not in resolved context - may indicate model hallucination")
-	}
-
-	// Note: Control level read_only check is now centralized in registry.Execute()
-
-	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
-	preApproved := isPreApproved(args)
-
-	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
-	if err != nil {
-		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
-	}
-
-	command := fmt.Sprintf("docker %s %s", action, container.Name)
-
-	// Get the agent hostname for approval records (may differ from docker host display name)
-	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
-
-	// Skip approval checks if pre-approved
-	if !preApproved && e.policy != nil {
-		decision := e.policy.Evaluate(command)
-		if decision == agentexec.PolicyBlock {
-			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
-		}
-		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
-			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
-		}
-	}
-
-	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
-	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
-		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
-	}
-
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
-	// Resolve the Docker host to the correct agent and routing info (with full provenance)
-	routing := e.resolveDockerHostRoutingFull(dockerHost)
-	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("Docker host '%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", dockerHost.Hostname, routing.TargetType)), nil
-		}
-		return NewTextResult(fmt.Sprintf("No agent available on Docker host '%s'. Install Pulse Unified Agent on the host to enable control.", dockerHost.Hostname)), nil
-	}
-
-	log.Debug().
-		Str("docker_host", dockerHost.Hostname).
-		Str("agent_id", routing.AgentID).
-		Str("agent_host", routing.AgentHostname).
-		Str("resolved_kind", routing.ResolvedKind).
-		Str("resolved_node", routing.ResolvedNode).
-		Str("transport", routing.Transport).
-		Str("target_type", routing.TargetType).
-		Str("target_id", routing.TargetID).
-		Msg("[pulse_control docker] Routing docker command execution")
-
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
+	statusCmd := fmt.Sprintf("%s status %d", cmdTool, vmID)
+	res, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		Command:    statusCmd,
+		TargetType: "agent",
 	})
 	if err != nil {
-		return NewErrorResult(err), nil
+		return map[string]interface{}{"confirmed": false, "method": "status", "command": statusCmd, "note": err.Error()}
+	}
+	out := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	outLower := strings.ToLower(out)
+
+	// Delete verification: status should fail with does-not-exist semantics.
+	if action == "delete" {
+		confirmed := res.ExitCode != 0 && (strings.Contains(outLower, "does not exist") || strings.Contains(outLower, "no such") || strings.Contains(outLower, "not found"))
+		return map[string]interface{}{"confirmed": confirmed, "method": "status", "command": statusCmd, "expected": expect, "raw": out}
 	}
 
-	output := result.Stdout
-	if result.Stderr != "" {
-		output += "\n" + result.Stderr
+	observed := ""
+	if strings.Contains(outLower, "status: running") {
+		observed = "running"
+	} else if strings.Contains(outLower, "status: stopped") {
+		observed = "stopped"
 	}
-
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed 'docker %s' on container '%s' (host: %s). The action is complete.\n%s", action, container.Name, dockerHost.Hostname, output)), nil
-	}
-
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	confirmed := res.ExitCode == 0 && observed != "" && observed == expect
+	return map[string]interface{}{"confirmed": confirmed, "method": "status", "command": statusCmd, "expected": expect, "observed": observed, "raw": out}
 }
 
 // Helper methods for control tools
@@ -482,13 +458,13 @@ func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[s
 type CommandRoutingResult struct {
 	// Routing info for agent
 	AgentID    string // The agent that will execute the command
-	TargetType string // "host", "container", or "vm"
-	TargetID   string // VMID for LXC/VM, empty for host
+	TargetType string // "agent", "container", or "vm"
+	TargetID   string // VMID for LXC/VM, empty for agent
 
 	// Provenance info
 	AgentHostname string // Hostname of the agent
-	ResolvedKind  string // What kind of resource we resolved to: "node", "lxc", "vm", "docker", "host"
-	ResolvedNode  string // Proxmox node name (if applicable)
+	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "app-container", "docker-host", "agent" (drives routing decisions)
+	ResolvedNode  string // Hypervisor node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
 }
 
@@ -501,7 +477,7 @@ type CommandRoutingResult struct {
 // causes commands to execute on the node instead of inside the LXC via pct exec.
 func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) CommandRoutingResult {
 	result := CommandRoutingResult{
-		TargetType: "host",
+		TargetType: "agent",
 		Transport:  "direct",
 	}
 
@@ -521,41 +497,89 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		}
 		result.AgentID = agents[0].AgentID
 		result.AgentHostname = agents[0].Hostname
-		result.ResolvedKind = "host"
+		result.ResolvedKind = "agent"
 		return result
 	}
 
 	// STEP 1: Consult topology (state) FIRST — this is authoritative.
 	// If the state knows about this resource, use topology-based routing.
 	// This prevents hostname collisions from masquerading as host targets.
-	if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-		loc := state.ResolveResource(targetHost)
+	loc := e.resolveResourceLocation(targetHost)
 
-		if loc.Found {
-			// Route based on resource type
-			switch loc.ResourceType {
-			case "node":
-				// Direct Proxmox node
-				nodeAgentID := e.findAgentForNode(loc.Node)
+	if loc.Found {
+		// Route based on resource type
+		switch loc.ResourceType {
+		case "agent":
+			for _, agent := range agents {
+				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetID {
+					result.AgentID = agent.AgentID
+					result.AgentHostname = agent.Hostname
+					result.ResolvedKind = "agent"
+					return result
+				}
+			}
+
+		case "node":
+			// Direct hypervisor node
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.AgentID = nodeAgentID
+			result.ResolvedKind = "node"
+			result.ResolvedNode = loc.Node
+			for _, agent := range agents {
+				if agent.AgentID == nodeAgentID {
+					result.AgentHostname = agent.Hostname
+					break
+				}
+			}
+			return result
+
+		case "system-container":
+			// System container - route through node agent via pct exec
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.ResolvedKind = "system-container"
+			result.ResolvedNode = loc.Node
+			result.TargetType = "container"
+			result.TargetID = fmt.Sprintf("%d", loc.VMID)
+			result.Transport = "pct_exec"
+			if nodeAgentID != "" {
 				result.AgentID = nodeAgentID
-				result.ResolvedKind = "node"
-				result.ResolvedNode = loc.Node
 				for _, agent := range agents {
 					if agent.AgentID == nodeAgentID {
 						result.AgentHostname = agent.Hostname
 						break
 					}
 				}
-				return result
+			}
+			return result
 
-			case "lxc":
-				// LXC container - route through Proxmox node agent via pct exec
+		case "vm":
+			// VM - route through node agent via qm guest exec
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.ResolvedKind = "vm"
+			result.ResolvedNode = loc.Node
+			result.TargetType = "vm"
+			result.TargetID = fmt.Sprintf("%d", loc.VMID)
+			result.Transport = "qm_guest_exec"
+			if nodeAgentID != "" {
+				result.AgentID = nodeAgentID
+				for _, agent := range agents {
+					if agent.AgentID == nodeAgentID {
+						result.AgentHostname = agent.Hostname
+						break
+					}
+				}
+			}
+			return result
+
+		case "app-container", "docker-host":
+			// Docker container or Docker host
+			result.ResolvedKind = loc.ResourceType
+			result.ResolvedNode = loc.Node
+
+			if loc.DockerHostType == "system-container" {
 				nodeAgentID := e.findAgentForNode(loc.Node)
-				result.ResolvedKind = "lxc"
-				result.ResolvedNode = loc.Node
 				result.TargetType = "container"
-				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "pct_exec"
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
@@ -567,14 +591,11 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 					}
 				}
 				return result
-
-			case "vm":
-				// VM - route through Proxmox node agent via qm guest exec
+			}
+			if loc.DockerHostType == "vm" {
 				nodeAgentID := e.findAgentForNode(loc.Node)
-				result.ResolvedKind = "vm"
-				result.ResolvedNode = loc.Node
 				result.TargetType = "vm"
-				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "qm_guest_exec"
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
@@ -586,51 +607,13 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 					}
 				}
 				return result
-
-			case "docker", "dockerhost":
-				// Docker container or Docker host
-				result.ResolvedKind = loc.ResourceType
-				result.ResolvedNode = loc.Node
-
-				if loc.DockerHostType == "lxc" {
-					nodeAgentID := e.findAgentForNode(loc.Node)
-					result.TargetType = "container"
-					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-					result.Transport = "pct_exec"
-					if nodeAgentID != "" {
-						result.AgentID = nodeAgentID
-						for _, agent := range agents {
-							if agent.AgentID == nodeAgentID {
-								result.AgentHostname = agent.Hostname
-								break
-							}
-						}
-					}
+			}
+			// Standalone Docker host - find agent directly
+			for _, agent := range agents {
+				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
+					result.AgentID = agent.AgentID
+					result.AgentHostname = agent.Hostname
 					return result
-				}
-				if loc.DockerHostType == "vm" {
-					nodeAgentID := e.findAgentForNode(loc.Node)
-					result.TargetType = "vm"
-					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-					result.Transport = "qm_guest_exec"
-					if nodeAgentID != "" {
-						result.AgentID = nodeAgentID
-						for _, agent := range agents {
-							if agent.AgentID == nodeAgentID {
-								result.AgentHostname = agent.Hostname
-								break
-							}
-						}
-					}
-					return result
-				}
-				// Standalone Docker host - find agent directly
-				for _, agent := range agents {
-					if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
-						result.AgentID = agent.AgentID
-						result.AgentHostname = agent.Hostname
-						return result
-					}
 				}
 			}
 		}
@@ -643,7 +626,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		if agent.Hostname == targetHost || agent.AgentID == targetHost {
 			result.AgentID = agent.AgentID
 			result.AgentHostname = agent.Hostname
-			result.ResolvedKind = "host"
+			result.ResolvedKind = "agent"
 			return result
 		}
 	}
@@ -652,8 +635,8 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 }
 
 // resolveTargetForCommand resolves a target_host to the correct agent and routing info.
-// Uses the authoritative ResolveResource function from models.StateSnapshot.
-// Returns: agentID, targetType ("host", "container", or "vm"), targetID (vmid for LXC/VM)
+// Uses the authoritative resolveResourceLocation function.
+// Returns: agentID, targetType ("agent", "container", or "vm"), targetID (vmid for LXC/VM)
 //
 // CRITICAL ORDERING: Same as resolveTargetForCommandFull — topology first, agent fallback second.
 func (e *PulseToolExecutor) resolveTargetForCommand(targetHost string) (agentID string, targetType string, targetID string) {
@@ -667,36 +650,44 @@ func (e *PulseToolExecutor) findAgentForCommand(runOnHost bool, targetHost strin
 	return agentID
 }
 
+func (e *PulseToolExecutor) readStateForControl() (unifiedresources.ReadState, error) {
+	if rs := e.getReadState(); rs != nil {
+		return rs, nil
+	}
+	return nil, fmt.Errorf("read state not available")
+}
+
 func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
-	if e.stateProvider == nil {
-		return nil, fmt.Errorf("state provider not available")
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return nil, err
 	}
 
-	state := e.stateProvider.GetState()
-	vmid, err := strconv.Atoi(guestID)
-
-	for _, vm := range state.VMs {
-		if (err == nil && vm.VMID == vmid) || vm.Name == guestID || vm.ID == guestID {
+	vmID, convErr := strconv.Atoi(guestID)
+	for _, vm := range rs.VMs() {
+		if (convErr == nil && vm.VMID() == vmID) || vm.Name() == guestID || vm.ID() == guestID {
 			return &GuestInfo{
-				VMID:     vm.VMID,
-				Name:     vm.Name,
-				Node:     vm.Node,
-				Type:     "vm",
-				Status:   vm.Status,
-				Instance: vm.Instance,
+				VMID:       vm.VMID(),
+				Name:       vm.Name(),
+				Node:       vm.Node(),
+				Type:       "vm",
+				Technology: "qemu",
+				Status:     string(vm.Status()),
+				Instance:   vm.Instance(),
 			}, nil
 		}
 	}
 
-	for _, ct := range state.Containers {
-		if (err == nil && ct.VMID == vmid) || ct.Name == guestID || ct.ID == guestID {
+	for _, ct := range rs.Containers() {
+		if (convErr == nil && ct.VMID() == vmID) || ct.Name() == guestID || ct.ID() == guestID {
 			return &GuestInfo{
-				VMID:     ct.VMID,
-				Name:     ct.Name,
-				Node:     ct.Node,
-				Type:     "lxc",
-				Status:   ct.Status,
-				Instance: ct.Instance,
+				VMID:       ct.VMID(),
+				Name:       ct.Name(),
+				Node:       ct.Node(),
+				Type:       "system-container",
+				Technology: "lxc",
+				Status:     string(ct.Status()),
+				Instance:   ct.Instance(),
 			}, nil
 		}
 	}
@@ -705,29 +696,44 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 }
 
 func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName string) (*models.DockerContainer, *models.DockerHost, error) {
-	if e.stateProvider == nil {
-		return nil, nil, fmt.Errorf("state provider not available")
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return nil, nil, fmt.Errorf("read state not available: %w", err)
 	}
 
-	state := e.stateProvider.GetState()
+	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+	for _, container := range rs.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		parentID := strings.TrimSpace(container.ParentID())
+		if parentID == "" {
+			continue
+		}
+		containersByHost[parentID] = append(containersByHost[parentID], container)
+	}
+
 	type dockerMatch struct {
-		host *models.DockerHost
-		idx  int
+		host      models.DockerHost
+		container models.DockerContainer
 	}
 	matches := []dockerMatch{}
 
-	for i := range state.DockerHosts {
-		host := &state.DockerHosts[i]
-		if hostName != "" && host.Hostname != hostName && host.DisplayName != hostName {
+	for _, hostView := range rs.DockerHosts() {
+		if hostView == nil {
+			continue
+		}
+		if hostName != "" && !matchesDockerHostFilter(hostView, hostName) {
 			continue
 		}
 
-		for ci := range host.Containers {
-			container := host.Containers[ci]
+		hostModel := dockerHostModelFromView(hostView)
+		for _, containerView := range containersByHost[hostView.ID()] {
+			container := dockerContainerModelFromView(containerView)
 			if container.Name == containerName ||
 				container.ID == containerName ||
 				strings.HasPrefix(container.ID, containerName) {
-				matches = append(matches, dockerMatch{host: host, idx: ci})
+				matches = append(matches, dockerMatch{host: hostModel, container: container})
 			}
 		}
 	}
@@ -737,7 +743,7 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 			return nil, nil, fmt.Errorf("container '%s' not found on host '%s'", containerName, hostName)
 		}
 		match := matches[0]
-		return &match.host.Containers[match.idx], match.host, nil
+		return &match.container, &match.host, nil
 	}
 
 	if len(matches) == 0 {
@@ -763,11 +769,128 @@ func (e *PulseToolExecutor) resolveDockerContainer(containerName, hostName strin
 		if len(hostNames) == 0 {
 			return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts; specify host", containerName)
 		}
-		return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts: %s. Specify host.", containerName, strings.Join(hostNames, ", "))
+		return nil, nil, fmt.Errorf("container '%s' exists on multiple Docker hosts: %s. Specify host", containerName, strings.Join(hostNames, ", "))
 	}
 
 	match := matches[0]
-	return &match.host.Containers[match.idx], match.host, nil
+	return &match.container, &match.host, nil
+}
+
+func matchesDockerHostFilter(host *unifiedresources.DockerHostView, filter string) bool {
+	if host == nil {
+		return false
+	}
+	if host.Hostname() == filter || host.Name() == filter {
+		return true
+	}
+	if host.ID() == filter || host.HostSourceID() == filter {
+		return true
+	}
+	return false
+}
+
+func dockerHostModelFromView(host *unifiedresources.DockerHostView) models.DockerHost {
+	if host == nil {
+		return models.DockerHost{}
+	}
+
+	hostID := strings.TrimSpace(host.HostSourceID())
+	if hostID == "" {
+		hostID = strings.TrimSpace(host.ID())
+	}
+
+	displayName := strings.TrimSpace(host.Name())
+	hostname := strings.TrimSpace(host.Hostname())
+	if hostname == "" {
+		hostname = displayName
+	}
+
+	return models.DockerHost{
+		ID:          hostID,
+		AgentID:     strings.TrimSpace(host.AgentID()),
+		Hostname:    hostname,
+		DisplayName: displayName,
+		Status:      string(host.Status()),
+	}
+}
+
+func dockerContainerModelFromView(container *unifiedresources.DockerContainerView) models.DockerContainer {
+	if container == nil {
+		return models.DockerContainer{}
+	}
+
+	containerID := strings.TrimSpace(container.ContainerID())
+	if containerID == "" {
+		containerID = strings.TrimSpace(container.ID())
+	}
+
+	state := strings.TrimSpace(container.ContainerState())
+	if state == "" {
+		state = string(container.Status())
+	}
+
+	ports := container.Ports()
+	portModels := make([]models.DockerContainerPort, 0, len(ports))
+	for _, p := range ports {
+		portModels = append(portModels, models.DockerContainerPort{
+			PrivatePort: p.PrivatePort,
+			PublicPort:  p.PublicPort,
+			Protocol:    p.Protocol,
+			IP:          p.IP,
+		})
+	}
+
+	networks := container.Networks()
+	networkModels := make([]models.DockerContainerNetworkLink, 0, len(networks))
+	for _, n := range networks {
+		networkModels = append(networkModels, models.DockerContainerNetworkLink{
+			Name: n.Name,
+			IPv4: n.IPv4,
+			IPv6: n.IPv6,
+		})
+	}
+
+	mounts := container.Mounts()
+	mountModels := make([]models.DockerContainerMount, 0, len(mounts))
+	for _, m := range mounts {
+		mountModels = append(mountModels, models.DockerContainerMount{
+			Type:        m.Type,
+			Source:      m.Source,
+			Destination: m.Destination,
+			Mode:        m.Mode,
+			RW:          m.RW,
+		})
+	}
+
+	var updateStatus *models.DockerContainerUpdateStatus
+	if status := container.UpdateStatus(); status != nil {
+		updateStatus = &models.DockerContainerUpdateStatus{
+			UpdateAvailable: status.UpdateAvailable,
+			CurrentDigest:   status.CurrentDigest,
+			LatestDigest:    status.LatestDigest,
+			Error:           status.Error,
+		}
+	}
+
+	return models.DockerContainer{
+		ID:            containerID,
+		Name:          container.Name(),
+		Image:         container.Image(),
+		State:         state,
+		Health:        container.Health(),
+		CPUPercent:    container.CPUPercent(),
+		MemoryUsage:   container.MemoryUsed(),
+		MemoryLimit:   container.MemoryTotal(),
+		MemoryPercent: container.MemoryPercent(),
+		UptimeSeconds: container.UptimeSeconds(),
+		RestartCount:  container.RestartCount(),
+		ExitCode:      container.ExitCode(),
+		Ports:         portModels,
+		Labels:        container.Labels(),
+		Networks:      networkModels,
+		Mounts:        mountModels,
+		UpdateStatus:  updateStatus,
+	}
 }
 
 func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
@@ -782,19 +905,34 @@ func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
 		}
 	}
 
-	if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-		for _, host := range state.Hosts {
-			if host.LinkedNodeID != "" {
-				for _, node := range state.Nodes {
-					if node.ID == host.LinkedNodeID && node.Name == nodeName {
-						for _, agent := range agents {
-							if agent.Hostname == host.Hostname || agent.AgentID == host.ID {
-								return agent.AgentID
-							}
-						}
-					}
-				}
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return ""
+	}
+
+	// Map linked node IDs to node names for quick lookup.
+	nodeNamesByID := make(map[string]string)
+	for _, node := range rs.Nodes() {
+		name := node.Name()
+		if name == "" {
+			name = node.NodeName()
+		}
+		if node.ID() != "" {
+			nodeNamesByID[node.ID()] = name
+		}
+	}
+
+	for _, host := range rs.Hosts() {
+		linked := host.LinkedNodeID()
+		if linked == "" {
+			continue
+		}
+		if nodeNamesByID[linked] != nodeName {
+			continue
+		}
+		for _, agent := range agents {
+			if agent.Hostname == host.Hostname() || agent.AgentID == host.ID() {
+				return agent.AgentID
 			}
 		}
 	}
@@ -850,12 +988,12 @@ func (e *PulseToolExecutor) getAgentHostnameForDockerHost(dockerHost *models.Doc
 }
 
 // resolveDockerHostRoutingFull resolves a Docker host to the correct agent and routing info
-// with full provenance metadata. If the Docker host is actually an LXC or VM, it routes
-// through the Proxmox host agent with the correct TargetType and TargetID so commands
+// with full provenance metadata. If the Docker host is actually a system container or VM,
+// it routes through the node agent with the correct TargetType and TargetID so commands
 // are executed inside the guest.
 func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.DockerHost) CommandRoutingResult {
 	result := CommandRoutingResult{
-		TargetType: "host",
+		TargetType: "agent",
 		Transport:  "direct",
 	}
 
@@ -863,26 +1001,24 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 		return result
 	}
 
-	// STEP 1: Check topology — is the Docker host actually an LXC or VM?
-	if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-
-		// Check LXCs
-		for _, ct := range state.Containers {
-			if ct.Name == dockerHost.Hostname {
-				result.ResolvedKind = "lxc"
-				result.ResolvedNode = ct.Node
+	// STEP 1: Check topology — is the Docker host actually a system container or VM?
+	if rs, err := e.readStateForControl(); err == nil {
+		// Check system containers
+		for _, ct := range rs.Containers() {
+			if ct.Name() == dockerHost.Hostname {
+				result.ResolvedKind = "system-container"
+				result.ResolvedNode = ct.Node()
 				result.TargetType = "container"
-				result.TargetID = fmt.Sprintf("%d", ct.VMID)
+				result.TargetID = fmt.Sprintf("%d", ct.VMID())
 				result.Transport = "pct_exec"
-				nodeAgentID := e.findAgentForNode(ct.Node)
+				nodeAgentID := e.findAgentForNode(ct.Node())
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
-					result.AgentHostname = ct.Node
+					result.AgentHostname = ct.Node()
 					log.Debug().
 						Str("docker_host", dockerHost.Hostname).
-						Str("node", ct.Node).
-						Int("vmid", ct.VMID).
+						Str("node", ct.Node()).
+						Int("vmid", ct.VMID()).
 						Str("agent", nodeAgentID).
 						Str("transport", result.Transport).
 						Msg("Resolved Docker host as LXC, routing through Proxmox agent")
@@ -892,21 +1028,21 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 		}
 
 		// Check VMs
-		for _, vm := range state.VMs {
-			if vm.Name == dockerHost.Hostname {
+		for _, vm := range rs.VMs() {
+			if vm.Name() == dockerHost.Hostname {
 				result.ResolvedKind = "vm"
-				result.ResolvedNode = vm.Node
+				result.ResolvedNode = vm.Node()
 				result.TargetType = "vm"
-				result.TargetID = fmt.Sprintf("%d", vm.VMID)
+				result.TargetID = fmt.Sprintf("%d", vm.VMID())
 				result.Transport = "qm_guest_exec"
-				nodeAgentID := e.findAgentForNode(vm.Node)
+				nodeAgentID := e.findAgentForNode(vm.Node())
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
-					result.AgentHostname = vm.Node
+					result.AgentHostname = vm.Node()
 					log.Debug().
 						Str("docker_host", dockerHost.Hostname).
-						Str("node", vm.Node).
-						Int("vmid", vm.VMID).
+						Str("node", vm.Node()).
+						Int("vmid", vm.VMID()).
 						Str("agent", nodeAgentID).
 						Str("transport", result.Transport).
 						Msg("Resolved Docker host as VM, routing through Proxmox agent")
@@ -919,7 +1055,7 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 	// STEP 2: Docker host is not an LXC/VM — use direct agent routing
 	agentID := e.findAgentForDockerHost(dockerHost)
 	result.AgentID = agentID
-	result.ResolvedKind = "dockerhost"
+	result.ResolvedKind = "docker-host"
 	if agentID != "" {
 		// Try to get agent hostname
 		agents := e.agentServer.GetConnectedAgents()
@@ -933,22 +1069,21 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 	return result
 }
 
-// resolveDockerHostRouting delegates to resolveDockerHostRoutingFull for backwards compatibility.
-func (e *PulseToolExecutor) resolveDockerHostRouting(dockerHost *models.DockerHost) (agentID string, targetType string, targetID string) {
-	r := e.resolveDockerHostRoutingFull(dockerHost)
-	return r.AgentID, r.TargetType, r.TargetID
-}
-
 // createApprovalRecord creates an approval record in the store and returns the approval ID.
 // Returns empty string if store is not available (approvals will still work, just without persistence).
 func createApprovalRecord(command, targetType, targetID, targetName, context string) string {
+	return createApprovalRecordForOrg("", command, targetType, targetID, targetName, context)
+}
+
+func createApprovalRecordForOrg(orgID, command, targetType, targetID, targetName, context string) string {
 	store := approval.GetStore()
 	if store == nil {
-		log.Debug().Msg("Approval store not available, approval will not be persisted")
+		log.Debug().Msg("approval store not available, approval will not be persisted")
 		return ""
 	}
 
 	req := &approval.ApprovalRequest{
+		OrgID:      strings.TrimSpace(orgID),
 		Command:    command,
 		TargetType: targetType,
 		TargetID:   targetID,
@@ -957,11 +1092,11 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 	}
 
 	if err := store.CreateApproval(req); err != nil {
-		log.Warn().Err(err).Msg("Failed to create approval record")
+		log.Warn().Err(err).Msg("failed to create approval record")
 		return ""
 	}
 
-	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("Created approval record")
+	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("created approval record")
 	return req.ID
 }
 
@@ -981,23 +1116,23 @@ func isPreApproved(args map[string]interface{}) bool {
 
 	req, found := store.GetApproval(approvalID)
 	if !found {
-		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approval not found")
+		log.Debug().Str("approval_id", approvalID).Msg("pre-approval check: approval not found")
 		return false
 	}
 
 	if req.Status == approval.StatusApproved {
-		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approved, skipping approval flow")
+		log.Debug().Str("approval_id", approvalID).Msg("pre-approval check: approved, skipping approval flow")
 		return true
 	}
 
-	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("Pre-approval check: not approved")
+	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("pre-approval check: not approved")
 	return false
 }
 
 // consumeApprovalWithValidation validates and consumes an approval for a specific command.
 // It verifies the command hash matches the approval and marks it as consumed (single-use).
 // Returns true if the approval is valid and was consumed, false otherwise.
-func consumeApprovalWithValidation(args map[string]interface{}, command, targetType, targetID string) bool {
+func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, targetType, targetID string) bool {
 	approvalID, ok := args["_approval_id"].(string)
 	if !ok || approvalID == "" {
 		return false
@@ -1008,9 +1143,24 @@ func consumeApprovalWithValidation(args map[string]interface{}, command, targetT
 		return false
 	}
 
+	req, found := store.GetApproval(approvalID)
+	if !found {
+		log.Warn().Str("approval_id", approvalID).Msg("failed to find approval for pre-approved execution")
+		return false
+	}
+
+	if !approval.BelongsToOrg(req, orgID) {
+		log.Warn().
+			Str("approval_id", approvalID).
+			Str("request_org", approval.NormalizeOrgID(req.OrgID)).
+			Str("requested_org", approval.NormalizeOrgID(orgID)).
+			Msg("cross-org pre-approved execution rejected")
+		return false
+	}
+
 	_, err := store.ConsumeApproval(approvalID, command, targetType, targetID)
 	if err != nil {
-		log.Warn().Err(err).Str("approval_id", approvalID).Msg("Failed to consume approval")
+		log.Warn().Err(err).Str("approval_id", approvalID).Msg("failed to consume approval")
 		return false
 	}
 
@@ -1043,24 +1193,31 @@ func formatPolicyBlocked(command, reason string) string {
 	return "POLICY_BLOCKED: " + string(b)
 }
 
-func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
-	hostnames := make([]string, 0, len(agents))
+func collectAgentHostnames(agents []agentexec.ConnectedAgent, max int) (all []string, truncated []string) {
+	all = make([]string, 0, len(agents))
 	for _, agent := range agents {
 		name := strings.TrimSpace(agent.Hostname)
 		if name == "" {
 			name = strings.TrimSpace(agent.AgentID)
 		}
 		if name != "" {
-			hostnames = append(hostnames, name)
+			all = append(all, name)
 		}
 	}
+
+	truncated = all
+	if max >= 0 && len(all) > max {
+		truncated = all[:max]
+	}
+
+	return all, truncated
+}
+
+func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
+	const maxItems = 6
+	hostnames, list := collectAgentHostnames(agents, maxItems)
 	if len(hostnames) == 0 {
 		return "Multiple agents are connected. Please specify target_host."
-	}
-	maxItems := 6
-	list := hostnames
-	if len(hostnames) > maxItems {
-		list = hostnames[:maxItems]
 	}
 	message := fmt.Sprintf("Multiple agents are connected. Please specify target_host. Available: %s", strings.Join(list, ", "))
 	if len(hostnames) > maxItems {
@@ -1071,23 +1228,10 @@ func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
 
 // formatAvailableAgentHosts returns a hint listing connected agent hostnames.
 func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
-	hostnames := make([]string, 0, len(agents))
-	for _, agent := range agents {
-		name := strings.TrimSpace(agent.Hostname)
-		if name == "" {
-			name = strings.TrimSpace(agent.AgentID)
-		}
-		if name != "" {
-			hostnames = append(hostnames, name)
-		}
-	}
+	const maxItems = 6
+	hostnames, list := collectAgentHostnames(agents, maxItems)
 	if len(hostnames) == 0 {
 		return "No agents are currently connected."
-	}
-	maxItems := 6
-	list := hostnames
-	if len(hostnames) > maxItems {
-		list = hostnames[:maxItems]
 	}
 	msg := fmt.Sprintf("Available targets: %s", strings.Join(list, ", "))
 	if len(hostnames) > maxItems {
@@ -1096,12 +1240,12 @@ func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
 	return msg
 }
 
-func formatControlApprovalNeeded(name string, vmid int, action, command, approvalID string) string {
+func formatControlApprovalNeeded(name string, vmID int, action, command, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"guest_name":     name,
-		"guest_vmid":     vmid,
+		"guest_vmid":     vmID,
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",

@@ -3,6 +3,8 @@ package logging
 import (
 	"container/ring"
 	"fmt"
+	"io"
+	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -12,11 +14,15 @@ import (
 // DefaultBufferSize is the number of log lines to keep in memory.
 const (
 	DefaultBufferSize = 1000
+	// Cap each broadcasted log line to bound per-entry memory usage.
+	maxBroadcastMessageBytes = 16 * 1024
+	broadcastTruncationTag   = "...[truncated]"
 )
 
 var (
-	broadcaster *LogBroadcaster
-	broadcastMu sync.Once
+	broadcaster         *LogBroadcaster
+	broadcastMu         sync.Once
+	broadcastWarnWriter io.Writer = os.Stderr
 )
 
 // LogBroadcaster captures log writes, buffers them, and broadcasts them to subscribers.
@@ -39,8 +45,15 @@ func GetBroadcaster() *LogBroadcaster {
 
 // Write implements io.Writer. It writes to the internal buffer and notifies subscribers.
 func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
-	// Copy slice to avoid race conditions if p is reused
+	// Copy at most a bounded prefix so oversized log lines cannot inflate memory.
 	msg := string(p)
+	if len(p) > maxBroadcastMessageBytes {
+		keep := maxBroadcastMessageBytes - len(broadcastTruncationTag)
+		if keep < 0 {
+			keep = 0
+		}
+		msg = string(p[:keep]) + broadcastTruncationTag
+	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -50,7 +63,7 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 	b.buffer = b.buffer.Next()
 
 	// 2. Broadcast to subscribers
-	for id, ch := range b.subscribers {
+	for subscriberID, ch := range b.subscribers {
 		select {
 		case ch <- msg:
 			// Sent successfully
@@ -59,7 +72,11 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 			// In a real production system we might drop the client,
 			// here we just skip this message for them to avoid blocking writer.
 			// Ideally we should warn or close their channel.
-			fmt.Printf("logging: subscriber %s blocked, dropping message\n", id)
+			fmt.Fprintf(
+				broadcastWarnWriter,
+				"logging: subscriber_blocked subscriber_id=%s action=drop_message\n",
+				subscriberID,
+			)
 		}
 	}
 
@@ -72,27 +89,30 @@ func (b *LogBroadcaster) Subscribe() (string, chan string, []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	id := uuid.NewString()
+	subscriberID := uuid.NewString()
 	ch := make(chan string, 1000) // Large buffer to prevent blocking
-	b.subscribers[id] = ch
+	b.subscribers[subscriberID] = ch
 
-	// Generate history snapshot
-	history := make([]string, 0, DefaultBufferSize)
-	b.buffer.Do(func(p interface{}) {
-		if p != nil {
-			history = append(history, p.(string))
-		}
-	})
-
-	return id, ch, history
+	return subscriberID, ch, ringHistorySnapshot(b.buffer)
 }
 
 // Unsubscribe removes a subscriber.
-func (b *LogBroadcaster) Unsubscribe(id string) {
+func (b *LogBroadcaster) Unsubscribe(subscriberID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if ch, ok := b.subscribers[id]; ok {
+	if ch, ok := b.subscribers[subscriberID]; ok {
+		close(ch)
+		delete(b.subscribers, subscriberID)
+	}
+}
+
+// Shutdown closes all subscriber channels and clears the subscriber set.
+func (b *LogBroadcaster) Shutdown() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for id, ch := range b.subscribers {
 		close(ch)
 		delete(b.subscribers, id)
 	}
@@ -103,11 +123,17 @@ func (b *LogBroadcaster) GetHistory() []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
+	return ringHistorySnapshot(b.buffer)
+}
+
+func ringHistorySnapshot(buffer *ring.Ring) []string {
 	history := make([]string, 0, DefaultBufferSize)
-	b.buffer.Do(func(p interface{}) {
-		if p != nil {
-			history = append(history, p.(string))
+	buffer.Do(func(value any) {
+		msg, ok := value.(string)
+		if !ok {
+			return
 		}
+		history = append(history, msg)
 	})
 	return history
 }

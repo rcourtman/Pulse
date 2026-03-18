@@ -331,7 +331,10 @@ func (r *Runner) waitForPatrolIdle(ctx context.Context) error {
 		var status struct {
 			Running bool `json:"running"`
 		}
-		json.NewDecoder(resp.Body).Decode(&status)
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			resp.Body.Close()
+			return fmt.Errorf("decode patrol status: %w", err)
+		}
 		resp.Body.Close()
 
 		if !status.Running {
@@ -342,10 +345,17 @@ func (r *Runner) waitForPatrolIdle(ctx context.Context) error {
 			fmt.Printf("  Patrol is running, waiting...\n")
 		}
 
+		waitTimer := time.NewTimer(3 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return fmt.Errorf("timeout waiting for patrol idle")
-		case <-time.After(3 * time.Second):
+		case <-waitTimer.C:
 		}
 	}
 }
@@ -356,10 +366,17 @@ func (r *Runner) waitForPatrolComplete(ctx context.Context) (bool, error) {
 	// First, wait briefly for patrol to actually start (Running=true)
 	sawRunning := false
 	for i := 0; i < 10; i++ {
+		waitTimer := time.NewTimer(1 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return false, fmt.Errorf("timeout waiting for patrol to start")
-		case <-time.After(1 * time.Second):
+		case <-waitTimer.C:
 		}
 
 		running, healthy, err := r.getPatrolStatus(ctx)
@@ -392,10 +409,17 @@ func (r *Runner) waitForPatrolComplete(ctx context.Context) (bool, error) {
 
 	// Now poll until Running=false (patrol completed)
 	for {
+		waitTimer := time.NewTimer(3 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return false, fmt.Errorf("timeout waiting for patrol to complete")
-		case <-time.After(3 * time.Second):
+		case <-waitTimer.C:
 		}
 
 		running, healthy, err := r.getPatrolStatus(ctx)
@@ -445,9 +469,9 @@ func (r *Runner) getPatrolStatus(ctx context.Context) (bool, bool, error) {
 
 // triggerPatrolRun triggers POST /api/ai/patrol/run.
 func (r *Runner) triggerPatrolRun() error {
-	url := r.config.BaseURL + "/api/ai/patrol/run"
+	patrolRunURL := r.config.BaseURL + "/api/ai/patrol/run"
 
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest("POST", patrolRunURL, nil)
 	if err != nil {
 		return err
 	}

@@ -19,25 +19,10 @@ func TestNewConfigPersistence_Scenarios(t *testing.T) {
 		assert.Equal(t, tempDir, cp.configDir)
 	})
 
-	// 2. configDir empty, PULSE_DATA_DIR not set
-	t.Run("DefaultDir", func(t *testing.T) {
-		// Mock homedir or just let it use /etc/pulse if we can
-		// But /etc/pulse might not be writeable.
-		// Actually NewCryptoManagerAt will try to create/read key there.
-		// This might fail if not root.
-	})
-
-	// 3. Crypto initialization error
+	// 2. Crypto initialization error
 	t.Run("CryptoError", func(t *testing.T) {
-		// Hide legacy key if it exists
-		systemKeyPath := "/etc/pulse/.encryption.key"
-		backupKeyPath := "/etc/pulse/.encryption.key.test-backup-init"
-		if _, err := os.Stat(systemKeyPath); err == nil {
-			require.NoError(t, os.Rename(systemKeyPath, backupKeyPath))
-			t.Cleanup(func() {
-				os.Rename(backupKeyPath, systemKeyPath)
-			})
-		}
+		// Ensure the crypto migration path can't pick up a real on-disk legacy key.
+		t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
 
 		tempDir := t.TempDir()
 		invalidPath := filepath.Join(tempDir, "file")

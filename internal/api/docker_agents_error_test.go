@@ -15,7 +15,7 @@ func TestDockerAgentHandlers_SetMonitorAndTenant(t *testing.T) {
 	handler := &DockerAgentHandlers{}
 	monitor := &monitoring.Monitor{}
 	handler.SetMonitor(monitor)
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set")
 	}
 
@@ -28,14 +28,14 @@ func TestDockerAgentHandlers_SetMonitorAndTenant(t *testing.T) {
 	if handler.mtMonitor != mtm {
 		t.Fatalf("expected multi-tenant monitor to be set")
 	}
-	if handler.legacyMonitor != monitor {
+	if handler.defaultMonitor != monitor {
 		t.Fatalf("expected legacy monitor to be set from multi-tenant default")
 	}
 }
 
 func TestDockerAgentHandlers_GetMonitorFallback(t *testing.T) {
 	legacy := &monitoring.Monitor{}
-	handler := &DockerAgentHandlers{legacyMonitor: legacy}
+	handler := &DockerAgentHandlers{baseAgentHandlers: baseAgentHandlers{defaultMonitor: legacy}}
 
 	if got := handler.getMonitor(context.Background()); got != legacy {
 		t.Fatalf("expected legacy monitor fallback")
@@ -85,8 +85,8 @@ func TestDockerAgentHandlers_HandleCommandAck_Errors(t *testing.T) {
 	}
 
 	payload := map[string]string{
-		"hostId": "host-1",
-		"status": "unknown",
+		"agentId": "host-1",
+		"status":  "unknown",
 	}
 	body, _ := json.Marshal(payload)
 	req = httptest.NewRequest(http.MethodPost, "/api/agents/docker/commands/cmd-2/ack", bytes.NewReader(body))

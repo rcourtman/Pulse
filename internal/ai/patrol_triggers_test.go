@@ -434,11 +434,28 @@ func TestAlertTriggeredPatrolScope(t *testing.T) {
 	if len(scope.ResourceIDs) != 1 || scope.ResourceIDs[0] != "res-1" {
 		t.Errorf("expected resource res-1, got %v", scope.ResourceIDs)
 	}
-	if scope.AlertID != "alert-1" {
-		t.Errorf("expected alertID alert-1, got %s", scope.AlertID)
+	if scope.AlertIdentifier != "alert-1" {
+		t.Errorf("expected alertIdentifier alert-1, got %s", scope.AlertIdentifier)
 	}
 	if scope.Depth != PatrolDepthQuick {
 		t.Errorf("expected quick depth, got %v", scope.Depth)
+	}
+}
+
+func TestPatrolScopeFactories_IgnoreLegacyResourceTypes(t *testing.T) {
+	scope := AlertTriggeredPatrolScope("alert-legacy", "res-legacy", "docker_container", "docker_cpu")
+	if len(scope.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", scope.ResourceTypes)
+	}
+
+	cleared := AlertClearedPatrolScope("alert-k8s", "res-k8s", "kubernetes_cluster")
+	if len(cleared.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", cleared.ResourceTypes)
+	}
+
+	anomaly := AnomalyDetectedPatrolScope("res-host", "host", "cpu", 95, 50)
+	if len(anomaly.ResourceTypes) != 0 {
+		t.Fatalf("expected empty resource type filter for legacy alias, got %v", anomaly.ResourceTypes)
 	}
 }
 
@@ -451,8 +468,8 @@ func TestAlertClearedPatrolScope(t *testing.T) {
 	if scope.Priority != triggerPriorityAlertCleared {
 		t.Errorf("expected priority %d, got %d", triggerPriorityAlertCleared, scope.Priority)
 	}
-	if scope.AlertID != "alert-2" {
-		t.Errorf("expected alertID alert-2, got %s", scope.AlertID)
+	if scope.AlertIdentifier != "alert-2" {
+		t.Errorf("expected alertIdentifier alert-2, got %s", scope.AlertIdentifier)
 	}
 }
 

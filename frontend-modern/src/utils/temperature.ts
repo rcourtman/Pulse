@@ -39,7 +39,7 @@ export const celsiusToFahrenheit = (celsius: number): number => {
  */
 export const formatTemperature = (
   celsius: number | null | undefined,
-  options: { showUnit?: boolean; decimals?: number } = {}
+  options: { showUnit?: boolean; decimals?: number } = {},
 ): string => {
   const { showUnit = true, decimals = 0 } = options;
 
@@ -90,4 +90,13 @@ export const getCpuTemperature = (temperature?: Temperature | null): number | nu
   }
 
   return Math.max(...candidates);
+};
+
+export const getTemperatureTextClass = (celsius: number | null | undefined): string => {
+  if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) {
+    return 'text-muted';
+  }
+  if (celsius >= 70) return 'text-red-600 dark:text-red-400';
+  if (celsius >= 60) return 'text-amber-600 dark:text-amber-400';
+  return 'text-green-600 dark:text-green-400';
 };
