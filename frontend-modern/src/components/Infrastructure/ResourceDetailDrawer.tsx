@@ -72,6 +72,9 @@ const buildInfrastructureResourceHref = (resourceId: string): string | null => {
   return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
 };
 
+const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
+  Boolean(value && Object.keys(value).length > 0);
+
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab =
     | 'overview'
@@ -1535,7 +1538,25 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                               formatRelativeTime(relationship.observedAt)}
                           </span>
                         </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Last Seen</span>
+                          <span class="font-medium text-base-content">
+                            {formatFacetTimestamp(relationship.lastSeenAt) ||
+                              formatFacetTimestamp(relationship.observedAt) ||
+                              formatRelativeTime(relationship.lastSeenAt)}
+                          </span>
+                        </div>
                       </div>
+                      <Show when={hasMetadataEntries(relationship.metadata)}>
+                        <details class="mt-2 rounded border border-border bg-base px-2 py-1">
+                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                            Metadata
+                          </summary>
+                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                            {JSON.stringify(relationship.metadata ?? {}, null, 2)}
+                          </pre>
+                        </details>
+                      </Show>
                     </div>
                   )}
                 </For>
@@ -1606,6 +1627,16 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
                           {change.reason}
                         </div>
+                      </Show>
+                      <Show when={hasMetadataEntries(change.metadata)}>
+                        <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                            Metadata
+                          </summary>
+                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                            {JSON.stringify(change.metadata ?? {}, null, 2)}
+                          </pre>
+                        </details>
                       </Show>
                       <Show when={change.relatedResources && change.relatedResources.length > 0}>
                         <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">

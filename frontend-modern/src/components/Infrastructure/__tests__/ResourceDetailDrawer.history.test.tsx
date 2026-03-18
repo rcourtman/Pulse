@@ -75,6 +75,10 @@ describe('ResourceDetailDrawer history tab', () => {
           discoverer: 'proxmox_adapter',
           observedAt: '2026-03-18T12:00:00Z',
           lastSeenAt: '2026-03-18T12:05:00Z',
+          metadata: {
+            cluster: 'pve-prod',
+            hypervisor: 'pve-1',
+          },
         },
       ],
       recentChanges: [
@@ -92,6 +96,10 @@ describe('ResourceDetailDrawer history tab', () => {
           actor: 'agent:oncall-helper',
           relatedResources: ['node:pve-1'],
           reason: 'Routine restart requested',
+          metadata: {
+            ticket: 'INC-1234',
+            policy: 'routine-maintenance',
+          },
         },
       ],
       counts: {
@@ -148,6 +156,10 @@ describe('ResourceDetailDrawer history tab', () => {
           discoverer: 'proxmox_adapter',
           observedAt: '2026-03-18T12:00:00Z',
           lastSeenAt: '2026-03-18T12:05:00Z',
+          metadata: {
+            cluster: 'pve-prod',
+            hypervisor: 'pve-1',
+          },
         },
       ],
       recentChanges: [
@@ -165,6 +177,10 @@ describe('ResourceDetailDrawer history tab', () => {
           actor: 'agent:oncall-helper',
           relatedResources: ['node:pve-1'],
           reason: 'Routine restart requested',
+          metadata: {
+            ticket: 'INC-1234',
+            policy: 'routine-maintenance',
+          },
         },
       ],
       counts: {
@@ -206,5 +222,9 @@ describe('ResourceDetailDrawer history tab', () => {
       panel.getByRole('link', { name: 'Open related resource node:pve-1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
+    expect(panel.getByText('Last Seen')).toBeInTheDocument();
+    expect(panel.getAllByText('Metadata')).toHaveLength(2);
+    expect(panel.getByText(/"hypervisor": "pve-1"/)).toBeInTheDocument();
+    expect(panel.getByText(/"ticket": "INC-1234"/)).toBeInTheDocument();
   });
 });

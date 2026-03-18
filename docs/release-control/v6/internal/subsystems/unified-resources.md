@@ -193,6 +193,10 @@ timeline endpoint is paginated. Relationship and timeline references in that
 drawer now route through the canonical infrastructure resource filter, so the
 resource graph remains navigable from the history surface instead of being
 purely descriptive text.
+Relationship cards in that drawer also surface `lastSeenAt` freshness and
+optional metadata blocks, and timeline cards surface change metadata when it
+is present, so the graph history view preserves the richer provenance already
+carried by the unified-resource model instead of flattening those fields away.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client
