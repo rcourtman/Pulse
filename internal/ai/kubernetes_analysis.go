@@ -54,7 +54,7 @@ func (s *Service) AnalyzeKubernetesCluster(ctx context.Context, clusterID string
 		Prompt:     prompt,
 		TargetType: "k8s-cluster",
 		TargetID:   clusterSourceID,
-	})
+	}, "")
 	systemPrompt += "\n\n## Kubernetes Cluster Telemetry\n"
 	systemPrompt += buildK8sClusterContext(cluster, rs)
 	systemPrompt += "\n\nUse the telemetry above only. Do not request kubectl output."

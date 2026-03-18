@@ -2874,7 +2874,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	svc.enrichRequestFromFinding(&req)
 
 	// Build the system prompt
-	prompt := svc.buildSystemPrompt(req)
+	prompt := svc.buildSystemPrompt(req, "")
 
 	// Verify the prompt includes routing context
 	if !strings.Contains(prompt, "minipc") {

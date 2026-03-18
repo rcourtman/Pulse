@@ -41,6 +41,12 @@ func (s *Service) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
 // buildUnifiedResourceContext creates AI context from the unified resource model.
 // This provides a cleaner, deduplicated view of infrastructure.
 func (s *Service) buildUnifiedResourceContext() string {
+	return s.buildUnifiedResourceContextForModel("")
+}
+
+// buildUnifiedResourceContextForModel creates AI context from the unified resource
+// model and records an export audit when the outbound model is known.
+func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) string {
 	s.mu.RLock()
 	urp := s.unifiedResourceProvider
 	ap := s.alertProvider
@@ -99,9 +105,11 @@ func (s *Service) buildUnifiedResourceContext() string {
 		for _, resource := range allResources {
 			byResourceID[resource.ID] = resource
 		}
+		sensitivityCounts := make(map[unifiedresources.ResourceSensitivity]int)
+		localOnlyCount := 0
+		var redactionHints []unifiedresources.ResourceRedactionHint
+		redactionHintSet := make(map[unifiedresources.ResourceRedactionHint]struct{})
 		if len(allResources) > 0 {
-			sensitivityCounts := make(map[unifiedresources.ResourceSensitivity]int)
-			localOnlyCount := 0
 			for _, resource := range allResources {
 				if resource.Policy == nil {
 					continue
@@ -110,6 +118,18 @@ func (s *Service) buildUnifiedResourceContext() string {
 				if resource.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
 					localOnlyCount++
 				}
+				for _, hint := range resource.Policy.Routing.Redact {
+					redactionHintSet[hint] = struct{}{}
+				}
+			}
+			if len(redactionHintSet) > 0 {
+				redactionHints = make([]unifiedresources.ResourceRedactionHint, 0, len(redactionHintSet))
+				for hint := range redactionHintSet {
+					redactionHints = append(redactionHints, hint)
+				}
+				sort.Slice(redactionHints, func(i, j int) bool {
+					return redactionHints[i] < redactionHints[j]
+				})
 			}
 			if len(sensitivityCounts) > 0 {
 				sections = append(sections, "\n### Data Governance")
@@ -507,6 +527,10 @@ func (s *Service) buildUnifiedResourceContext() string {
 				Int("max_size", maxContextSize).
 				Msg("Unified resource context truncated")
 			result = result[:maxContextSize] + "\n\n[... Context truncated ...]"
+		}
+
+		if strings.TrimSpace(destinationModel) != "" {
+			s.recordUnifiedResourceExport(destinationModel, result, stats, sensitivityCounts, localOnlyCount, redactionHints)
 		}
 
 		log.Debug().Int("unified_resource_context_size", len(result)).Msg("built unified resource context")

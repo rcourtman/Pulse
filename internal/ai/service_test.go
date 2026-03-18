@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -600,6 +601,34 @@ func TestService_ExecuteStream(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
 	svc.cfg = &config.AIConfig{Enabled: true}
+	if svc.resourceExportStore != nil {
+		_ = svc.resourceExportStore.Close()
+	}
+	svc.resourceExportStore = unifiedresources.NewMemoryStore()
+	svc.resourceExportStoreOrgID = svc.orgID
+
+	resource := unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "test-node",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+	}
+	svc.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{resource}
+		},
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{resource}
+		},
+		getStatsFunc: func() unifiedresources.ResourceStats {
+			return unifiedresources.ResourceStats{
+				Total: 1,
+				ByType: map[unifiedresources.ResourceType]int{
+					unifiedresources.ResourceTypeAgent: 1,
+				},
+			}
+		},
+	}
 
 	mockP := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -638,6 +667,20 @@ func TestService_ExecuteStream(t *testing.T) {
 	}
 	if !foundContent {
 		t.Error("Expected content event in stream")
+	}
+
+	audits, err := svc.resourceExportStore.GetExportAudits(time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetExportAudits failed: %v", err)
+	}
+	if len(audits) != 1 {
+		t.Fatalf("expected 1 export audit, got %d", len(audits))
+	}
+	if audits[0].Destination != "anthropic:test-model" {
+		t.Fatalf("expected destination anthropic:test-model, got %q", audits[0].Destination)
+	}
+	if audits[0].EnvelopeHash == "" {
+		t.Fatal("expected export envelope hash to be recorded")
 	}
 }
 

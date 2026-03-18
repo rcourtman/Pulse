@@ -52,6 +52,7 @@ runtime cost control, and shared AI transport surfaces.
 1. Update this contract when canonical AI runtime or transport entry points move
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
+4. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
 
 ## Current State
 
@@ -126,3 +127,8 @@ That same requirement includes `pulse_query action=config`: guest-config
 payloads must carry canonical resource policy metadata, and config-fact
 extraction must not persist raw guest hostnames when governed redaction covers
 hostname or platform identity fields.
+Outbound model-bound context exports now also belong to this runtime
+boundary. When the AI service assembles unified-resource context for a model
+request, it must record a durable export audit with the active destination
+model and governed redaction decision instead of treating the prompt boundary
+as a transient formatting step.

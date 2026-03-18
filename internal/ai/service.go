@@ -166,23 +166,25 @@ type PatrolStreamResponse struct {
 
 // Service orchestrates AI interactions
 type Service struct {
-	mu                      sync.RWMutex
-	orgID                   string
-	persistence             *config.ConfigPersistence
-	provider                providers.Provider
-	cfg                     *config.AIConfig
-	agentServer             AgentServer
-	policy                  CommandPolicy
-	stateProvider           StateProvider
-	readState               unifiedresources.ReadState
-	alertProvider           AlertProvider
-	knowledgeStore          *knowledge.Store
-	costStore               *cost.Store
-	unifiedResourceProvider UnifiedResourceProvider
-	patrolService           *PatrolService        // Background AI monitoring service
-	metadataProvider        MetadataProvider      // Enables AI to update resource URLs
-	incidentStore           *memory.IncidentStore // Incident timelines for alert memory
-	chatService             ChatServiceProvider   // Chat service for investigation orchestrator
+	mu                       sync.RWMutex
+	orgID                    string
+	persistence              *config.ConfigPersistence
+	provider                 providers.Provider
+	cfg                      *config.AIConfig
+	agentServer              AgentServer
+	policy                   CommandPolicy
+	stateProvider            StateProvider
+	readState                unifiedresources.ReadState
+	alertProvider            AlertProvider
+	knowledgeStore           *knowledge.Store
+	costStore                *cost.Store
+	unifiedResourceProvider  UnifiedResourceProvider
+	resourceExportStore      unifiedresources.ResourceStore
+	resourceExportStoreOrgID string
+	patrolService            *PatrolService        // Background AI monitoring service
+	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
+	incidentStore            *memory.IncidentStore // Incident timelines for alert memory
+	chatService              ChatServiceProvider   // Chat service for investigation orchestrator
 
 	// Infrastructure discovery service - detects apps running on hosts
 	infraDiscoveryService *infradiscovery.Service
@@ -280,7 +282,7 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		}
 	}
 
-	return &Service{
+	svc := &Service{
 		orgID:          "default",
 		persistence:    persistence,
 		agentServer:    agentServer,
@@ -297,17 +299,67 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 			providers: make(map[string]providerModelsEntry),
 		},
 	}
+
+	if persistence != nil {
+		if store, err := unifiedresources.NewSQLiteResourceStore(persistence.DataDir(), svc.orgID); err != nil {
+			log.Warn().Err(err).Str("orgID", svc.orgID).Msg("failed to initialize unified resource export store")
+		} else {
+			svc.resourceExportStore = store
+			svc.resourceExportStoreOrgID = svc.orgID
+		}
+	}
+
+	return svc
 }
 
 // SetOrgID sets the org scope used when creating approval records.
 func (s *Service) SetOrgID(orgID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	normalized := strings.TrimSpace(orgID)
 	if normalized == "" {
 		normalized = "default"
 	}
+
+	s.mu.Lock()
+	if s.orgID == normalized && s.resourceExportStore != nil {
+		s.mu.Unlock()
+		return
+	}
+
+	oldStore := s.resourceExportStore
+	persistence := s.persistence
 	s.orgID = normalized
+	s.resourceExportStore = nil
+	s.resourceExportStoreOrgID = ""
+	s.mu.Unlock()
+
+	if oldStore != nil {
+		if err := oldStore.Close(); err != nil {
+			log.Warn().Err(err).Str("orgID", normalized).Msg("failed to close previous unified resource export store")
+		}
+	}
+
+	if persistence == nil {
+		return
+	}
+
+	store, err := unifiedresources.NewSQLiteResourceStore(persistence.DataDir(), normalized)
+	if err != nil {
+		log.Warn().Err(err).Str("orgID", normalized).Msg("failed to initialize unified resource export store for org")
+		return
+	}
+
+	s.mu.Lock()
+	if s.orgID == normalized && s.resourceExportStore == nil {
+		s.resourceExportStore = store
+		s.resourceExportStoreOrgID = normalized
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+
+	if err := store.Close(); err != nil {
+		log.Warn().Err(err).Str("orgID", normalized).Msg("failed to close unused unified resource export store")
+	}
 }
 
 // GetOrgID returns the org scope associated with this service instance.
@@ -949,6 +1001,9 @@ func (s *Service) Stop() {
 	s.StopPatrol()
 
 	s.mu.Lock()
+	store := s.resourceExportStore
+	s.resourceExportStore = nil
+	s.resourceExportStoreOrgID = ""
 	defer s.mu.Unlock()
 
 	if s.infraDiscoveryCancel != nil {
@@ -957,6 +1012,12 @@ func (s *Service) Stop() {
 	}
 	if s.discoveryService != nil {
 		s.discoveryService.Stop()
+	}
+
+	if store != nil {
+		if err := store.Close(); err != nil {
+			log.Warn().Err(err).Msg("failed to close unified resource export store")
+		}
 	}
 }
 
@@ -1698,7 +1759,7 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	}
 
 	// Build and include the system prompt
-	systemPrompt := s.buildSystemPrompt(req)
+	systemPrompt := s.buildSystemPrompt(req, "")
 	result["system_prompt_length"] = len(systemPrompt)
 	result["system_prompt"] = systemPrompt
 
@@ -1877,7 +1938,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 	// Build the system prompt
 	systemPrompt := req.SystemPrompt
 	if systemPrompt == "" {
-		systemPrompt = s.buildSystemPrompt(req)
+		systemPrompt = s.buildSystemPrompt(req, modelString)
 	}
 
 	// Check if agent is available for this target
@@ -2077,7 +2138,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// Build the system prompt
 	systemPrompt := req.SystemPrompt
 	if systemPrompt == "" {
-		systemPrompt = s.buildSystemPrompt(req)
+		systemPrompt = s.buildSystemPrompt(req, modelString)
 	}
 
 	// Debug log the system prompt length and key sections
@@ -3838,7 +3899,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 }
 
 // buildSystemPrompt creates the system prompt based on the request context
-func (s *Service) buildSystemPrompt(req ExecuteRequest) string {
+func (s *Service) buildSystemPrompt(req ExecuteRequest, destinationModel string) string {
 	prompt := `You are Pulse's diagnostic assistant for Proxmox, Docker, and Kubernetes homelabs.
 
 ## Command Approval
@@ -3895,7 +3956,11 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 	s.mu.RUnlock()
 
 	if hasUnifiedResourceProvider {
-		prompt += s.buildUnifiedResourceContext()
+		if strings.TrimSpace(destinationModel) != "" {
+			prompt += s.buildUnifiedResourceContextForModel(destinationModel)
+		} else {
+			prompt += s.buildUnifiedResourceContext()
+		}
 	} else {
 		log.Warn().Msg("AI context: unified resource provider not available, infrastructure context will be limited")
 	}
