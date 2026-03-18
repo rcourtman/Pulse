@@ -115,6 +115,9 @@ as adjacent governed API ownership rather than timeline-store ownership. The
 storage and recovery lanes still own their own persistence and query
 contracts, while the control-plane execution trail remains governed by the
 unified-resource and audit contracts.
+Those unified audit list endpoints also clamp oversized `limit` requests to
+the governed maximum, so adjacent recovery and storage workflows do not turn
+bounded history reads into unbounded collection scans.
 The same shared API runtime now also exposes dedicated
 `/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
 `/api/resources/{id}/timeline` reads, but storage and recovery must continue

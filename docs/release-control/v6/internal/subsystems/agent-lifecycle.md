@@ -92,6 +92,9 @@ and export audit reads alongside the enterprise audit surface. That read path
 belongs to the API and unified-resource contracts, not to lifecycle ownership,
 so the agent-install and registration lane stays focused on fleet continuity
 instead of adopting execution-history persistence as a side effect.
+Those unified audit list endpoints also clamp oversized `limit` requests to
+the governed maximum, so audit history stays bounded even when callers ask
+for arbitrarily large pages.
 The same shared API runtime now also exposes dedicated unified-resource
 capability, relationship, and timeline reads through
 `internal/api/resources.go`, but those query surfaces remain owned by the API

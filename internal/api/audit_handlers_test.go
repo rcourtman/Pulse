@@ -820,3 +820,45 @@ func TestHandleListUnifiedExportAudits(t *testing.T) {
 		t.Fatalf("unexpected export audit id: %q", payload.Audits[0].ID)
 	}
 }
+
+func TestParseAuditLimitCapsOversizedRequests(t *testing.T) {
+	cases := []struct {
+		name         string
+		raw          string
+		defaultLimit int
+		want         int
+	}{
+		{
+			name:         "uses default when blank",
+			raw:          "",
+			defaultLimit: 100,
+			want:         100,
+		},
+		{
+			name:         "caps oversized requests",
+			raw:          "5000",
+			defaultLimit: 100,
+			want:         1000,
+		},
+		{
+			name:         "preserves valid request below cap",
+			raw:          "250",
+			defaultLimit: 100,
+			want:         250,
+		},
+		{
+			name:         "rejects non-positive input",
+			raw:          "0",
+			defaultLimit: 100,
+			want:         100,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseAuditLimit(tt.raw, tt.defaultLimit); got != tt.want {
+				t.Fatalf("parseAuditLimit(%q, %d) = %d, want %d", tt.raw, tt.defaultLimit, got, tt.want)
+			}
+		})
+	}
+}

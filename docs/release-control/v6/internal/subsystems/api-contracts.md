@@ -140,6 +140,10 @@ The same API contract now also owns the dedicated frontend resource facet
 client in `frontend-modern/src/api/resources.ts`, which fetches the governed
 capability, relationship, and timeline surfaces from `internal/api/resources.go`
 instead of teaching the drawer or list views to reconstruct them inline.
+The unified action, lifecycle, and export audit reads now also clamp oversized
+`limit` requests to the governed maximum of `1000`, so the control-plane audit
+surface stays bounded even when callers ask for arbitrarily large history
+pages.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate graph-detail schema.

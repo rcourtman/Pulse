@@ -4069,6 +4069,15 @@ func TestContract_UnifiedExportAuditsJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_UnifiedAuditLimitCapsOversizedRequests(t *testing.T) {
+	if got := parseAuditLimit("5000", 100); got != 1000 {
+		t.Fatalf("parseAuditLimit oversized request = %d, want 1000", got)
+	}
+	if got := parseAuditLimit("250", 100); got != 250 {
+		t.Fatalf("parseAuditLimit normal request = %d, want 250", got)
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

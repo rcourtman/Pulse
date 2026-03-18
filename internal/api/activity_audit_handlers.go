@@ -21,6 +21,8 @@ var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 
 var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 
+const maxUnifiedAuditLimit = 1000
+
 // AuditHandlers provides HTTP handlers for audit log endpoints.
 type AuditHandlers struct {
 	resourceStoreProvider func(orgID string) (unifiedresources.ResourceStore, error)
@@ -623,6 +625,9 @@ func parseAuditLimit(raw string, defaultLimit int) int {
 	}
 	if limit <= 0 {
 		return defaultLimit
+	}
+	if limit > maxUnifiedAuditLimit {
+		return maxUnifiedAuditLimit
 	}
 	return limit
 }
