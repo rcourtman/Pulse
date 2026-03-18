@@ -226,3 +226,36 @@ func TestExecuteMCPTool_ErrorsAndSuccess(t *testing.T) {
 		t.Fatalf("expected success, got output=%q err=%v", output, err)
 	}
 }
+
+func TestService_StartInitializesActionAuditStore(t *testing.T) {
+	svc := NewService(Config{
+		AIConfig: &config.AIConfig{
+			ChatModel: "mock:model",
+		},
+		DataDir: t.TempDir(),
+		OrgID:   "org-a",
+	})
+	svc.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return &mockStreamingProvider{}, nil
+	}
+
+	if err := svc.Start(context.Background()); err != nil {
+		t.Fatalf("start service: %v", err)
+	}
+	if svc.actionAuditStore == nil {
+		t.Fatalf("expected action audit store to be initialized")
+	}
+	if svc.executor == nil {
+		t.Fatalf("expected executor to be initialized")
+	}
+	if svc.executor.GetActionAuditStore() == nil {
+		t.Fatalf("expected executor action audit store to be set")
+	}
+
+	if err := svc.Stop(context.Background()); err != nil {
+		t.Fatalf("stop service: %v", err)
+	}
+	if svc.actionAuditStore != nil {
+		t.Fatalf("expected action audit store to be cleared on stop")
+	}
+}

@@ -98,6 +98,8 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 	containerName, _ := args["container"].(string)
 	hostName, _ := args["host"].(string)
 	operation, _ := args["operation"].(string)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if containerName == "" {
 		return NewErrorResult(fmt.Errorf("container name is required")), nil
@@ -129,6 +131,7 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 
 	// Check if this is a pre-approved execution (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "docker", approvalTargetID)
+	requiresApproval := !e.isAutonomous && (e.controlLevel == ControlLevelControlled || (e.policy != nil && e.policy.Evaluate(command) == agentexec.PolicyRequireApproval))
 
 	// Get the agent hostname for approval records
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
@@ -175,11 +178,26 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		Str("target_id", routing.TargetID).
 		Msg("[pulse_docker] Routing docker command execution")
 
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_docker",
+		func() string {
+			if dockerHost.ID != "" {
+				return fmt.Sprintf("%s:%s", dockerHost.ID, container.Name)
+			}
+			return fmt.Sprintf("%s:%s", dockerHost.Hostname, container.Name)
+		}(),
+		approvalID,
+		requiresApproval,
+		routing.AgentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		},
+		"pulse_docker",
+		fmt.Sprintf("%s docker container %s", operation, container.Name),
+	)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}

@@ -350,6 +350,49 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 3, 18, 13, 30, 0, 0, time.UTC)
+
+	first := ActionAuditRecord{
+		ID:        "action-2",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     ActionStatePlanned,
+		Request: ActionRequest{
+			RequestID:      "req-2",
+			ResourceID:     "vm:301",
+			CapabilityName: "restart",
+			RequestedBy:    "agent:test",
+		},
+	}
+	second := first
+	second.UpdatedAt = now.Add(2 * time.Minute)
+	second.State = ActionStateCompleted
+	second.Result = &ExecutionResult{Success: true, Output: "done"}
+
+	if err := store.RecordActionAudit(first); err != nil {
+		t.Fatalf("RecordActionAudit(first): %v", err)
+	}
+	if err := store.RecordActionAudit(second); err != nil {
+		t.Fatalf("RecordActionAudit(second): %v", err)
+	}
+
+	results, err := store.GetActionAudits("vm:301", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 action audit after upsert, got %d", len(results))
+	}
+	if results[0].State != ActionStateCompleted {
+		t.Fatalf("expected latest action state to win, got %q", results[0].State)
+	}
+	if results[0].Result == nil || results[0].Result.Output != "done" {
+		t.Fatalf("expected latest action result to win, got %+v", results[0].Result)
+	}
+}
+
 func TestActionLifecycleEvent_RoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)

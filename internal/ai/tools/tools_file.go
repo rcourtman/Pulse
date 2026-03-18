@@ -230,6 +230,8 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if blocked, reason := safety.IsSensitivePath(path); blocked {
 		return NewToolResponseResult(NewToolBlockedError(
@@ -279,6 +281,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -309,11 +312,26 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		command = fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_file_edit",
+		func() string {
+			if dockerContainer != "" {
+				return fmt.Sprintf("%s:%s:%s", targetHost, dockerContainer, path)
+			}
+			return fmt.Sprintf("%s:%s", targetHost, path)
+		}(),
+		approvalID,
+		requiresApproval,
+		routing.AgentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		},
+		"pulse_file_edit",
+		fmt.Sprintf("append %d bytes to %s", len(content), path),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to append to file: %w", err)), nil
 	}
@@ -366,6 +384,8 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if blocked, reason := safety.IsSensitivePath(path); blocked {
 		return NewToolResponseResult(NewToolBlockedError(
@@ -415,6 +435,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -445,11 +466,26 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		command = fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_file_edit",
+		func() string {
+			if dockerContainer != "" {
+				return fmt.Sprintf("%s:%s:%s", targetHost, dockerContainer, path)
+			}
+			return fmt.Sprintf("%s:%s", targetHost, path)
+		}(),
+		approvalID,
+		requiresApproval,
+		routing.AgentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		},
+		"pulse_file_edit",
+		fmt.Sprintf("write %d bytes to %s", len(content), path),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to write file: %w", err)), nil
 	}

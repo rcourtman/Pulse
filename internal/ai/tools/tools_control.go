@@ -81,6 +81,8 @@ func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]
 func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required")), nil
@@ -122,6 +124,8 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
 	}
+
+	requiresApproval := !e.isAutonomous && (e.controlLevel == ControlLevelControlled || decision == agentexec.PolicyRequireApproval)
 
 	if targetHost == "" && e.agentServer != nil {
 		agents := e.agentServer.GetConnectedAgents()
@@ -182,11 +186,31 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		Str("target_id", routing.TargetID).
 		Msg("[pulse_control] Routing command execution")
 
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_control",
+		func() string {
+			if targetHost != "" {
+				return targetHost
+			}
+			return routing.AgentHostname
+		}(),
+		approvalID,
+		requiresApproval,
+		routing.AgentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		},
+		"pulse_control",
+		fmt.Sprintf("run command %q on %s", command, func() string {
+			if strings.TrimSpace(targetHost) != "" {
+				return strings.TrimSpace(targetHost)
+			}
+			return strings.TrimSpace(routing.AgentHostname)
+		}()),
+	)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
@@ -250,6 +274,8 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	guestID, _ := args["guest_id"].(string)
 	action, _ := args["action"].(string)
 	force, _ := args["force"].(bool)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if guestID == "" {
 		return NewErrorResult(fmt.Errorf("guest_id is required")), nil
@@ -350,6 +376,8 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
+
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
@@ -359,11 +387,21 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewErrorResult(fmt.Errorf("no agent available on node '%s'; install Pulse Unified Agent on the node to enable control", guest.Node)), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: "agent",
-		TargetID:   "",
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_control",
+		fmt.Sprintf("%s:%d", guest.Node, guest.VMID),
+		approvalID,
+		requiresApproval,
+		agentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: "agent",
+			TargetID:   "",
+		},
+		"pulse_control",
+		fmt.Sprintf("%s guest %s", action, guest.Name),
+	)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}

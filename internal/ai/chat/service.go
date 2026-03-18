@@ -81,6 +81,7 @@ type Service struct {
 	readState         unifiedresources.ReadState
 	agentServer       AgentServer
 	executor          *tools.PulseToolExecutor
+	actionAuditStore  unifiedresources.ResourceStore
 	sessions          *SessionStore
 	agenticLoop       *AgenticLoop
 	provider          providers.StreamingProvider
@@ -274,6 +275,22 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 	s.sessions = store
 
+	if s.actionAuditStore == nil {
+		actionAuditStore, err := unifiedresources.NewSQLiteResourceStore(dataDir, s.orgID)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("orgID", s.orgID).
+				Str("data_dir", dataDir).
+				Msg("failed to initialize action audit store")
+		} else {
+			s.actionAuditStore = actionAuditStore
+			if s.executor != nil {
+				s.executor.SetActionAuditStore(actionAuditStore)
+			}
+		}
+	}
+
 	// Create provider
 	provider, err := s.createProvider()
 	if err != nil {
@@ -302,6 +319,12 @@ func (s *Service) Stop(ctx context.Context) error {
 
 	s.started = false
 	s.provider = nil
+	if s.actionAuditStore != nil {
+		if err := s.actionAuditStore.Close(); err != nil {
+			log.Warn().Err(err).Msg("failed to close action audit store")
+		}
+		s.actionAuditStore = nil
+	}
 	log.Info().Msg("pulse AI (direct) stopped")
 	return nil
 }

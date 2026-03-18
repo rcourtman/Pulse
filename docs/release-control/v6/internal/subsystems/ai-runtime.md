@@ -132,3 +132,9 @@ boundary. When the AI service assembles unified-resource context for a model
 request, it must record a durable export audit with the active destination
 model and governed redaction decision instead of treating the prompt boundary
 as a transient formatting step.
+
+The same runtime boundary now also owns durable action execution auditing.
+`internal/ai/chat/service.go` initializes the unified-resource audit store on
+startup, and the write-action tool paths under `internal/ai/tools/` persist
+append-only action lifecycle and action audit records through that shared
+store instead of leaving command execution state in memory-only tool helpers.

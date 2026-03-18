@@ -89,6 +89,9 @@ That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home
 next to the resource timeline instead of leaving those records isolated in
 memory-only models.
+The in-memory store mirrors the durable audit contract by upserting action
+audits on action ID, so tests and runtime callers observe the same current
+record state that SQLite persists for the control-plane execution trail.
 
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.

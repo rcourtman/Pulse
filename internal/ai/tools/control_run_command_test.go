@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -175,6 +177,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 	})
 
 	t.Run("ExecuteSuccess", func(t *testing.T) {
+		store := unifiedresources.NewMemoryStore()
 		agentSrv := &mockAgentServer{}
 		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
 			{AgentID: "agent1", Hostname: "node1"},
@@ -187,7 +190,10 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			ExitCode: 0,
 		}, nil).Once()
 
-		exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv})
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:      agentSrv,
+			ActionAuditStore: store,
+		})
 		exec.SetContext("host", "host1", false)
 
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
@@ -203,6 +209,19 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			assert.Equal(t, true, v["ok"])
 		}
 		agentSrv.AssertExpectations(t)
+
+		audits, err := store.GetActionAudits("", time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, audits, 1)
+		assert.Equal(t, "pulse_control", audits[0].Request.CapabilityName)
+		assert.Contains(t, audits[0].Plan.Message, "run command \"uptime\"")
+
+		events, err := store.GetActionLifecycleEvents(audits[0].ID, time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, events, 3)
+		assert.Equal(t, unifiedresources.ActionStatePlanned, events[2].State)
+		assert.Equal(t, unifiedresources.ActionStateExecuting, events[1].State)
+		assert.Equal(t, unifiedresources.ActionStateCompleted, events[0].State)
 	})
 }
 

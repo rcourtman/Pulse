@@ -848,6 +848,12 @@ func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limi
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for i := range m.actionAudits {
+		if m.actionAudits[i].ID == record.ID {
+			m.actionAudits[i] = record
+			return nil
+		}
+	}
 	m.actionAudits = append(m.actionAudits, record)
 	return nil
 }

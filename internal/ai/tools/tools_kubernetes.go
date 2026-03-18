@@ -505,6 +505,8 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	namespace, _ := args["namespace"].(string)
 	deployment, _ := args["deployment"].(string)
 	replicas := intArg(args, "replicas", -1)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -547,6 +549,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -559,11 +562,21 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: "agent",
-		TargetID:   "",
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_kubernetes",
+		fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment),
+		approvalID,
+		requiresApproval,
+		agentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: "agent",
+			TargetID:   "",
+		},
+		"pulse_kubernetes",
+		fmt.Sprintf("scale deployment %s to %d replicas", deployment, replicas),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
 	}
@@ -585,6 +598,8 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 	clusterArg, _ := args["cluster"].(string)
 	namespace, _ := args["namespace"].(string)
 	deployment, _ := args["deployment"].(string)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -624,6 +639,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -636,11 +652,21 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: "agent",
-		TargetID:   "",
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_kubernetes",
+		fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment),
+		approvalID,
+		requiresApproval,
+		agentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: "agent",
+			TargetID:   "",
+		},
+		"pulse_kubernetes",
+		fmt.Sprintf("restart deployment %s", deployment),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
 	}
@@ -662,6 +688,8 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	clusterArg, _ := args["cluster"].(string)
 	namespace, _ := args["namespace"].(string)
 	pod, _ := args["pod"].(string)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -701,6 +729,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -713,11 +742,21 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: "agent",
-		TargetID:   "",
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_kubernetes",
+		fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod),
+		approvalID,
+		requiresApproval,
+		agentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    command,
+			TargetType: "agent",
+			TargetID:   "",
+		},
+		"pulse_kubernetes",
+		fmt.Sprintf("delete pod %s", pod),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
 	}
@@ -741,6 +780,8 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 	pod, _ := args["pod"].(string)
 	container, _ := args["container"].(string)
 	command, _ := args["command"].(string)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -788,6 +829,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, kubectlCmd, "kubernetes", approvalTargetID)
+	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -800,11 +842,21 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
-	result, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		Command:    kubectlCmd,
-		TargetType: "agent",
-		TargetID:   "",
-	})
+	result, err := e.executeCommandWithAudit(
+		ctx,
+		"pulse_kubernetes",
+		fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod),
+		approvalID,
+		requiresApproval,
+		agentID,
+		agentexec.ExecuteCommandPayload{
+			Command:    kubectlCmd,
+			TargetType: "agent",
+			TargetID:   "",
+		},
+		"pulse_kubernetes",
+		fmt.Sprintf("execute command in pod %s", pod),
+	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
 	}

@@ -370,6 +370,7 @@ type ExecutorConfig struct {
 
 	// Optional providers - unified resources
 	UnifiedResourceProvider UnifiedResourceProvider
+	ActionAuditStore        unifiedresources.ResourceStore
 	// Optional typed read access to current infrastructure state.
 	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
 	ReadState unifiedresources.ReadState
@@ -421,6 +422,7 @@ type PulseToolExecutor struct {
 
 	// Unified resources provider
 	unifiedResourceProvider UnifiedResourceProvider
+	actionAuditStore        unifiedresources.ResourceStore
 	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
 	readState unifiedresources.ReadState
 
@@ -495,6 +497,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
 		discoveryProvider:        cfg.DiscoveryProvider,
 		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
+		actionAuditStore:         cfg.ActionAuditStore,
 		readState:                cfg.ReadState,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
@@ -699,6 +702,16 @@ func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
 // SetUnifiedResourceProvider sets the unified resource provider
 func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceProvider) {
 	e.unifiedResourceProvider = provider
+}
+
+// SetActionAuditStore sets the durable store used to persist action audit and lifecycle events.
+func (e *PulseToolExecutor) SetActionAuditStore(store unifiedresources.ResourceStore) {
+	e.actionAuditStore = store
+}
+
+// GetActionAuditStore returns the durable store used to persist action audit and lifecycle events.
+func (e *PulseToolExecutor) GetActionAuditStore() unifiedresources.ResourceStore {
+	return e.actionAuditStore
 }
 
 // SetResolvedContext sets the session-scoped resolved context for resource validation.

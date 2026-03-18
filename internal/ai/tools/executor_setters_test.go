@@ -87,6 +87,10 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	updatesProvider := &mockUpdatesProvider{}
 	exec.SetUpdatesProvider(updatesProvider)
 	assert.Equal(t, updatesProvider, exec.updatesProvider)
+
+	actionAuditStore := unifiedresources.NewMemoryStore()
+	exec.SetActionAuditStore(actionAuditStore)
+	assert.Equal(t, actionAuditStore, exec.actionAuditStore)
 }
 
 func TestPulseToolExecutor_ListTools(t *testing.T) {
