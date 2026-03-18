@@ -92,6 +92,10 @@ and export audit reads alongside the enterprise audit surface. That read path
 belongs to the API and unified-resource contracts, not to lifecycle ownership,
 so the agent-install and registration lane stays focused on fleet continuity
 instead of adopting execution-history persistence as a side effect.
+The same shared API runtime now also exposes dedicated unified-resource
+capability, relationship, and timeline reads through
+`internal/api/resources.go`, but those query surfaces remain owned by the API
+and unified-resource contracts rather than by lifecycle continuity.
 
 The owned backend API surfaces must preserve the exact-release installer
 fallback, canonical /api/auto-register behavior, and hosted org install-command

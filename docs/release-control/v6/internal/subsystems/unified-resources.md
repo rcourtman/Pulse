@@ -84,6 +84,11 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 `internal/unifiedresources/store.go` persists those changes so `RecentChanges`
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
+`internal/api/resources.go` now exposes that same history through dedicated
+`/api/resources/{id}/timeline` reads, while `/api/resources/{id}/capabilities`
+and `/api/resources/{id}/relationships` expose the current graph facets as
+separate queryable surfaces instead of forcing consumers to parse the full
+resource payload.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

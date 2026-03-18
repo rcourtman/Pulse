@@ -854,6 +854,129 @@ func TestResourceGetResource(t *testing.T) {
 	}
 }
 
+func TestResourceGetFacetsAndTimeline(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:       "vm:42",
+		Type:     unified.ResourceTypeVM,
+		Name:     "web-42",
+		Status:   unified.StatusOnline,
+		LastSeen: now,
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+			},
+		},
+		Relationships: []unified.ResourceRelationship{
+			{
+				SourceID:   "vm:42",
+				TargetID:   "node-1",
+				Type:       unified.RelRunsOn,
+				Confidence: 1,
+				Active:     true,
+				Discoverer: "proxmox_adapter",
+				ObservedAt: now,
+				LastSeenAt: now,
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordChange(unified.ResourceChange{
+		ID:               "chg-42",
+		ResourceID:       "vm:42",
+		ObservedAt:       now,
+		OccurredAt:       &now,
+		Kind:             unified.ChangeStateTransition,
+		From:             "offline",
+		To:               "online",
+		SourceType:       unified.SourcePlatformEvent,
+		SourceAdapter:    unified.AdapterProxmox,
+		Confidence:       unified.ConfidenceHigh,
+		Reason:           "vm started",
+		RelatedResources: []string{"node-1"},
+		Metadata:         map[string]any{"source": "snapshot"},
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+
+	t.Run("capabilities", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/capabilities", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID   string                       `json:"resourceId"`
+			Capabilities []unified.ResourceCapability `json:"capabilities"`
+			Count        int                          `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode capabilities: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.Capabilities) != 1 {
+			t.Fatalf("unexpected capabilities payload: %#v", payload)
+		}
+	})
+
+	t.Run("relationships", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/relationships", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                         `json:"resourceId"`
+			Relationships []unified.ResourceRelationship `json:"relationships"`
+			Count         int                            `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode relationships: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.Relationships) != 1 {
+			t.Fatalf("unexpected relationships payload: %#v", payload)
+		}
+	})
+
+	t.Run("timeline", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/timeline?limit=10", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Count         int                      `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode timeline: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected timeline payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42" {
+			t.Fatalf("unexpected timeline change: %#v", payload.RecentChanges[0])
+		}
+	})
+}
+
 func containsSource(sources []unified.DataSource, target unified.DataSource) bool {
 	for _, source := range sources {
 		if source == target {

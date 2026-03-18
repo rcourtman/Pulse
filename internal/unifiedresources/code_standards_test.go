@@ -233,6 +233,28 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 }
 
+func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		"HandleGetResourceCapabilities",
+		"HandleGetResourceRelationships",
+		"HandleGetResourceTimeline",
+		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
+		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
+		"strings.HasSuffix(r.URL.Path, \"/timeline\")",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resources.go must expose canonical facet read snippet %q", snippet)
+		}
+	}
+}
+
 // TestNoLegacyHostResourceTypeSymbol prevents reintroducing the removed
 // ResourceTypeHost symbol. v6 code must use ResourceTypeAgent and
 // CanonicalResourceType() for legacy normalization.

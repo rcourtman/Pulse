@@ -3567,6 +3567,151 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceCapabilitiesJSONSnapshot(t *testing.T) {
+	payload := struct {
+		ResourceID   string                                `json:"resourceId"`
+		Capabilities []unifiedresources.ResourceCapability `json:"capabilities"`
+		Count        int                                   `json:"count"`
+	}{
+		ResourceID: "vm:42",
+		Capabilities: []unifiedresources.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unifiedresources.CapabilityTypeCommon,
+				Description:          "Restart the VM",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource capabilities response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"vm:42",
+		"capabilities":[
+			{
+				"name":"restart",
+				"type":"common",
+				"description":"Restart the VM",
+				"minimumApprovalLevel":"admin"
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ResourceRelationshipsJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
+	payload := struct {
+		ResourceID    string                                  `json:"resourceId"`
+		Relationships []unifiedresources.ResourceRelationship `json:"relationships"`
+		Count         int                                     `json:"count"`
+	}{
+		ResourceID: "vm:42",
+		Relationships: []unifiedresources.ResourceRelationship{
+			{
+				SourceID:   "vm:42",
+				TargetID:   "node-1",
+				Type:       unifiedresources.RelRunsOn,
+				Confidence: 1,
+				Active:     true,
+				Discoverer: "proxmox_adapter",
+				ObservedAt: now,
+				LastSeenAt: now,
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource relationships response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"vm:42",
+		"relationships":[
+			{
+				"sourceId":"vm:42",
+				"targetId":"node-1",
+				"type":"runs_on",
+				"confidence":1,
+				"active":true,
+				"discoverer":"proxmox_adapter",
+				"observedAt":"2026-03-18T17:00:00Z",
+				"lastSeenAt":"2026-03-18T17:00:00Z"
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ResourceTimelineJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
+	payload := struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Count         int                               `json:"count"`
+	}{
+		ResourceID: "vm:42",
+		RecentChanges: []unifiedresources.ResourceChange{
+			{
+				ID:               "chg-42",
+				ResourceID:       "vm:42",
+				ObservedAt:       now,
+				OccurredAt:       &now,
+				Kind:             unifiedresources.ChangeStateTransition,
+				From:             "offline",
+				To:               "online",
+				SourceType:       unifiedresources.SourcePlatformEvent,
+				SourceAdapter:    unifiedresources.AdapterProxmox,
+				Confidence:       unifiedresources.ConfidenceHigh,
+				RelatedResources: []string{"node-1"},
+				Reason:           "vm started",
+				Metadata:         map[string]any{"source": "snapshot"},
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource timeline response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"vm:42",
+		"recentChanges":[
+			{
+				"id":"chg-42",
+				"observedAt":"2026-03-18T17:00:00Z",
+				"occurredAt":"2026-03-18T17:00:00Z",
+				"resourceId":"vm:42",
+				"kind":"state_transition",
+				"from":"offline",
+				"to":"online",
+				"sourceType":"platform_event",
+				"sourceAdapter":"proxmox_adapter",
+				"confidence":"high",
+				"relatedResources":["node-1"],
+				"reason":"vm started",
+				"metadata":{"source":"snapshot"}
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
 	payload := struct {

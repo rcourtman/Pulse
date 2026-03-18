@@ -279,6 +279,18 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 
 // HandleResourceRoutes dispatches nested resource routes.
 func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/capabilities") {
+		h.HandleGetResourceCapabilities(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/relationships") {
+		h.HandleGetResourceRelationships(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/timeline") {
+		h.HandleGetResourceTimeline(w, r)
+		return
+	}
 	if strings.HasSuffix(r.URL.Path, "/children") {
 		h.HandleGetChildren(w, r)
 		return
@@ -367,6 +379,146 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resource.Metrics)
+}
+
+// HandleGetResourceCapabilities handles GET /api/resources/{id}/capabilities.
+func (h *ResourceHandlers) HandleGetResourceCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/capabilities")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	resource, ok := registry.Get(resourceID)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	capabilities := resource.Capabilities
+	if capabilities == nil {
+		capabilities = []unified.ResourceCapability{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"resourceId":   resourceID,
+		"capabilities": capabilities,
+		"count":        len(capabilities),
+	})
+}
+
+// HandleGetResourceRelationships handles GET /api/resources/{id}/relationships.
+func (h *ResourceHandlers) HandleGetResourceRelationships(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/relationships")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	resource, ok := registry.Get(resourceID)
+	if !ok {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	relationships := resource.Relationships
+	if relationships == nil {
+		relationships = []unified.ResourceRelationship{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"resourceId":    resourceID,
+		"relationships": relationships,
+		"count":         len(relationships),
+	})
+}
+
+// HandleGetResourceTimeline handles GET /api/resources/{id}/timeline.
+func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/timeline")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	since := time.Time{}
+	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, raw)
+		if parseErr != nil {
+			http.Error(w, "Invalid since value", http.StatusBadRequest)
+			return
+		}
+		since = parsed.UTC()
+	}
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed <= 0 {
+			http.Error(w, "Invalid limit value", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+
+	changes, err := store.GetRecentChanges(resourceID, since, limit)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"resourceId":    resourceID,
+		"recentChanges": changes,
+		"count":         len(changes),
+	})
 }
 
 // HandleStats handles GET /api/resources/stats.

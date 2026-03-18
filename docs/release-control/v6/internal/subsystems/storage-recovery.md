@@ -115,6 +115,11 @@ as adjacent governed API ownership rather than timeline-store ownership. The
 storage and recovery lanes still own their own persistence and query
 contracts, while the control-plane execution trail remains governed by the
 unified-resource and audit contracts.
+The same shared API runtime now also exposes dedicated
+`/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
+`/api/resources/{id}/timeline` reads, but storage and recovery must continue
+to treat those as adjacent governed API ownership rather than storage/recovery
+timeline ownership.
 
 The frontend storage and recovery surfaces are also first-class runtime entry
 points. `frontend-modern/src/components/Storage/` plus

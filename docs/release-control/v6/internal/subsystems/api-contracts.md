@@ -116,6 +116,10 @@ through the owned backend response: resource objects can expose canonical
 `capabilities`, `relationships`, and `recentChanges` in addition to policy and
 identity metadata, so the backend payload contract stays aligned with the
 timeline and control-plane model instead of flattening those fields away.
+The same resource contract now also exposes dedicated facet endpoints for
+`/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
+`/api/resources/{id}/timeline`, so operators can read the graph and change
+history without depending on a monolithic resource payload.
 The same API contract now also exposes the unified-resource control-plane
 history through dedicated enterprise audit reads. The action, lifecycle, and
 export history endpoints live in `internal/api/activity_audit_handlers.go` and
