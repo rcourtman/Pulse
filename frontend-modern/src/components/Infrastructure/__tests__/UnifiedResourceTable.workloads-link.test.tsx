@@ -168,6 +168,36 @@ describe('UnifiedResourceTable workloads links', () => {
             backupJobCount: 1,
           },
         },
+        capabilities: [
+          {
+            name: 'backup',
+            type: 'native',
+            description: 'Create a backup snapshot',
+            minimumApprovalLevel: 'admin',
+          },
+        ],
+        relationships: [
+          {
+            sourceId: 'pbs-1',
+            targetId: 'storage-1',
+            type: 'depends_on',
+            confidence: 0.88,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: new Date().toISOString(),
+            lastSeenAt: new Date().toISOString(),
+          },
+        ],
+        recentChanges: [
+          {
+            id: 'pbs-change-1',
+            observedAt: new Date().toISOString(),
+            resourceId: 'pbs-1',
+            kind: 'state_transition',
+            sourceType: 'pulse_diff',
+            confidence: 'high',
+          },
+        ],
       }),
       baseResource({
         id: 'pmg-1',
@@ -183,6 +213,36 @@ describe('UnifiedResourceTable workloads links', () => {
             nodeCount: 1,
           },
         },
+        capabilities: [
+          {
+            name: 'thresholds',
+            type: 'common',
+            description: 'Adjust mail gateway thresholds',
+            minimumApprovalLevel: 'dry_run_only',
+          },
+        ],
+        relationships: [
+          {
+            sourceId: 'pmg-1',
+            targetId: 'mail-queue-1',
+            type: 'depends_on',
+            confidence: 0.9,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: new Date().toISOString(),
+            lastSeenAt: new Date().toISOString(),
+          },
+        ],
+        recentChanges: [
+          {
+            id: 'pmg-change-1',
+            observedAt: new Date().toISOString(),
+            resourceId: 'pmg-1',
+            kind: 'metric_anomaly',
+            sourceType: 'heuristic',
+            confidence: 'medium',
+          },
+        ],
       }),
     ];
 
@@ -212,6 +272,9 @@ describe('UnifiedResourceTable workloads links', () => {
       const row = within(pbsRow);
       expect(row.getByText('2')).toBeInTheDocument();
       expect(row.getByText('1')).toBeInTheDocument();
+      expect(row.getByText('Capabilities 1')).toBeInTheDocument();
+      expect(row.getByText('Relationships 1')).toBeInTheDocument();
+      expect(row.getByText('Timeline 1')).toBeInTheDocument();
     }
 
     const pmgRow = getByText('pmg-main').closest('tr');
@@ -220,6 +283,9 @@ describe('UnifiedResourceTable workloads links', () => {
       const row = within(pmgRow);
       expect(row.getByText('519')).toBeInTheDocument();
       expect(row.getByText('1')).toBeInTheDocument();
+      expect(row.getByText('Capabilities 1')).toBeInTheDocument();
+      expect(row.getByText('Relationships 1')).toBeInTheDocument();
+      expect(row.getByText('Timeline 1')).toBeInTheDocument();
     }
 
     const pbsLink = getByRole('link', { name: /open pbs backups/i });

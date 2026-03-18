@@ -83,6 +83,9 @@ It now also includes the compact resource-facet summary chips rendered next
 to policy metadata, and those chips must stay within the same bounded
 windowing and mounted-row budget proved by
 `UnifiedResourceTable.performance.contract.test.tsx`.
+The same facet summary contract applies to the service-resource rows inside
+the unified table as well, so PBS and PMG entries must keep the same bounded
+presentation and verification surface as the primary fleet rows.
 Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather

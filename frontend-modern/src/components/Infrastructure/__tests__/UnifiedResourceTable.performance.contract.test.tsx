@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@solidjs/testing-library';
+import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import {
@@ -181,6 +181,134 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);
       });
+    });
+
+    it('renders service facet summary badges without changing the dedicated service row budget', async () => {
+      const resources: Resource[] = [
+        makeResource(0, {
+          id: 'pbs-service',
+          type: 'pbs',
+          displayName: 'pbs-service',
+          name: 'pbs-service',
+          platformType: 'proxmox-pbs',
+          sourceType: 'api',
+          platformData: {
+            sources: ['pbs'],
+            pbs: {
+              datastoreCount: 1,
+              backupJobCount: 1,
+            },
+          },
+          capabilities: [
+            {
+              name: 'backup',
+              type: 'native',
+              description: 'Create a backup snapshot',
+              minimumApprovalLevel: 'admin',
+            },
+          ],
+          relationships: [
+            {
+              sourceId: 'pbs-service',
+              targetId: 'storage-1',
+              type: 'depends_on',
+              confidence: 0.88,
+              active: true,
+              discoverer: 'proxmox_adapter',
+              observedAt: new Date().toISOString(),
+              lastSeenAt: new Date().toISOString(),
+            },
+          ],
+          recentChanges: [
+            {
+              id: 'pbs-change-1',
+              observedAt: new Date().toISOString(),
+              resourceId: 'pbs-service',
+              kind: 'state_transition',
+              sourceType: 'pulse_diff',
+              confidence: 'high',
+            },
+          ],
+        }),
+        makeResource(1, {
+          id: 'pmg-service',
+          type: 'pmg',
+          displayName: 'pmg-service',
+          name: 'pmg-service',
+          platformType: 'proxmox-pmg',
+          sourceType: 'api',
+          platformData: {
+            sources: ['pmg'],
+            pmg: {
+              queueTotal: 12,
+              nodeCount: 1,
+            },
+          },
+          capabilities: [
+            {
+              name: 'thresholds',
+              type: 'common',
+              description: 'Adjust mail gateway thresholds',
+              minimumApprovalLevel: 'dry_run_only',
+            },
+          ],
+          relationships: [
+            {
+              sourceId: 'pmg-service',
+              targetId: 'mail-queue-1',
+              type: 'depends_on',
+              confidence: 0.9,
+              active: true,
+              discoverer: 'proxmox_adapter',
+              observedAt: new Date().toISOString(),
+              lastSeenAt: new Date().toISOString(),
+            },
+          ],
+          recentChanges: [
+            {
+              id: 'pmg-change-1',
+              observedAt: new Date().toISOString(),
+              resourceId: 'pmg-service',
+              kind: 'metric_anomaly',
+              sourceType: 'heuristic',
+              confidence: 'medium',
+            },
+          ],
+        }),
+      ];
+      const { container, getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(getBodyRowCount(container)).toBe(2);
+      });
+
+      const pbsRow = getByText('pbs-service').closest('tr');
+      expect(pbsRow).toBeTruthy();
+      if (pbsRow) {
+        const row = within(pbsRow);
+        expect(row.getByText('Capabilities 1')).toBeInTheDocument();
+        expect(row.getByText('Relationships 1')).toBeInTheDocument();
+        expect(row.getByText('Timeline 1')).toBeInTheDocument();
+      }
+
+      const pmgRow = getByText('pmg-service').closest('tr');
+      expect(pmgRow).toBeTruthy();
+      if (pmgRow) {
+        const row = within(pmgRow);
+        expect(row.getByText('Capabilities 1')).toBeInTheDocument();
+        expect(row.getByText('Relationships 1')).toBeInTheDocument();
+        expect(row.getByText('Timeline 1')).toBeInTheDocument();
+      }
     });
   });
 

@@ -176,6 +176,9 @@ performance proof route. The shared resource table now also surfaces compact
 facet summary chips for capabilities, relationships, and timeline events, so
 facet presentation changes must continue to flow through the same governed
 resource-row surface rather than inventing a separate ad hoc summary path.
+Those chips now appear on both the primary fleet rows and the PBS/PMG service
+rows, so the unified consumer surface must remain consistent across the full
+table instead of diverging by resource class.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client

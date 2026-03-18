@@ -1105,6 +1105,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const facetBadges = createMemo(() => getResourceFacetBadges(resource));
                       const healthClass = createMemo(() =>
                         getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
                           .textClass,
@@ -1184,6 +1185,17 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
+                                </Show>
+                                <Show when={facetBadges().length > 0}>
+                                  <div class="mt-0.5 flex flex-wrap gap-1">
+                                    <For each={facetBadges()}>
+                                      {(badge) => (
+                                        <span class={badge.classes} title={badge.title}>
+                                          {badge.label}
+                                        </span>
+                                      )}
+                                    </For>
+                                  </div>
                                 </Show>
                               </div>
                             </TableCell>
@@ -1401,6 +1413,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+                      const facetBadges = createMemo(() => getResourceFacetBadges(resource));
                       const healthClass = createMemo(() =>
                         getServiceHealthSummaryPresentation(resource.status, pmgRow()?.health)
                           .textClass,
@@ -1485,6 +1498,17 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
+                                </Show>
+                                <Show when={facetBadges().length > 0}>
+                                  <div class="mt-0.5 flex flex-wrap gap-1">
+                                    <For each={facetBadges()}>
+                                      {(badge) => (
+                                        <span class={badge.classes} title={badge.title}>
+                                          {badge.label}
+                                        </span>
+                                      )}
+                                    </For>
+                                  </div>
                                 </Show>
                               </div>
                             </TableCell>
