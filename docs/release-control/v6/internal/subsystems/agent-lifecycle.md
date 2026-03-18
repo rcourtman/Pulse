@@ -103,6 +103,9 @@ fleet-continuity ownership instead of re-deriving resource history locally.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the fleet
 lane continues to consume only the canonical adapter set rather than
 introducing a broader compatibility escape hatch.
+The router now wires the tenant resource state provider during initial setup
+when a multi-tenant monitor is present, so tenant-scoped fleet pages do not
+trip a missing-provider 500 before the monitor has finished initializing.
 The dedicated profile client now also routes list, schema, and validation
 parsing through shared response helpers in `frontend-modern/src/api/agentProfiles.ts`,
 so profile transport stays aligned with the governed API contract instead of

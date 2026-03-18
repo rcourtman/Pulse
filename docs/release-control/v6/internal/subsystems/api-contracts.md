@@ -148,6 +148,10 @@ unified-resource seeds end to end: `internal/api/resources.go`,
 `internal/api/router_helpers.go`, and `internal/api/state_provider.go` no
 longer treat raw tenant `StateSnapshot` data as a live registry-seeding owner
 once `UnifiedResourceSnapshotForTenant` is available.
+The router now wires the tenant resource state provider during initial setup
+when a multi-tenant monitor is present, so non-default org resource list and
+facet reads do not fall back to a missing-provider 500 during normal tenant
+requests.
 The unified agent settings surface now also follows an explicit shared
 boundary with agent-lifecycle. Changes to
 `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` must carry this

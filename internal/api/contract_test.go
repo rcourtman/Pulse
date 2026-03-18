@@ -3580,6 +3580,23 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceListUsesTenantStateProviderAtStartup(t *testing.T) {
+	cfg := &config.Config{
+		DataPath:   t.TempDir(),
+		ConfigPath: t.TempDir(),
+	}
+	router := NewRouter(cfg, nil, &monitoring.MultiTenantMonitor{}, nil, nil, "1.0.0")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?page=1&limit=100", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
+
+	router.resourceHandlers.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestContract_ResourceCapabilitiesJSONSnapshot(t *testing.T) {
 	payload := struct {
 		ResourceID   string                                `json:"resourceId"`

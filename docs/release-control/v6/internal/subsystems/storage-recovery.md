@@ -127,6 +127,9 @@ canonical history contract without re-deriving their own timeline slices.
 Invalid `sourceAdapter` values are rejected at the API boundary, which keeps
 storage and recovery reads aligned with the canonical adapter set instead of
 turning the timeline filter into an arbitrary free-text escape hatch.
+The router now wires the tenant resource state provider during initial setup
+when a multi-tenant monitor is present, so tenant-scoped storage and recovery
+pages do not hit a missing-provider 500 before the monitor is fully wired.
 The shared unified-resource consumer hook now also preserves `capabilities`,
 `relationships`, `recentChanges`, `facetCounts`, `policy`, and `aiSafeSummary`
 fields when storage and recovery surfaces read unified resources, so those
