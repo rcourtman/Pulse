@@ -3936,11 +3936,12 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 		Relationships []unifiedresources.ResourceRelationship `json:"relationships"`
 		RecentChanges []unifiedresources.ResourceChange       `json:"recentChanges"`
 		Counts        struct {
-			Capabilities            int                                       `json:"capabilities"`
-			Relationships           int                                       `json:"relationships"`
-			RecentChanges           int                                       `json:"recentChanges"`
-			RecentChangeKinds       map[unifiedresources.ChangeKind]int       `json:"recentChangeKinds"`
-			RecentChangeSourceTypes map[unifiedresources.ChangeSourceType]int `json:"recentChangeSourceTypes"`
+			Capabilities               int                                          `json:"capabilities"`
+			Relationships              int                                          `json:"relationships"`
+			RecentChanges              int                                          `json:"recentChanges"`
+			RecentChangeKinds          map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
+			RecentChangeSourceTypes    map[unifiedresources.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
+			RecentChangeSourceAdapters map[unifiedresources.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 		} `json:"counts"`
 	}{
 		ResourceID: "vm:42",
@@ -3988,11 +3989,12 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 			},
 		},
 		Counts: struct {
-			Capabilities            int                                       `json:"capabilities"`
-			Relationships           int                                       `json:"relationships"`
-			RecentChanges           int                                       `json:"recentChanges"`
-			RecentChangeKinds       map[unifiedresources.ChangeKind]int       `json:"recentChangeKinds"`
-			RecentChangeSourceTypes map[unifiedresources.ChangeSourceType]int `json:"recentChangeSourceTypes"`
+			Capabilities               int                                          `json:"capabilities"`
+			Relationships              int                                          `json:"relationships"`
+			RecentChanges              int                                          `json:"recentChanges"`
+			RecentChangeKinds          map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
+			RecentChangeSourceTypes    map[unifiedresources.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
+			RecentChangeSourceAdapters map[unifiedresources.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 		}{
 			Capabilities:      1,
 			Relationships:     1,
@@ -4001,6 +4003,10 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 			RecentChangeSourceTypes: map[unifiedresources.ChangeSourceType]int{
 				unifiedresources.SourcePlatformEvent: 1,
 				unifiedresources.SourcePulseDiff:     2,
+			},
+			RecentChangeSourceAdapters: map[unifiedresources.ChangeSourceAdapter]int{
+				unifiedresources.AdapterProxmox: 1,
+				unifiedresources.AdapterDocker:  2,
 			},
 		},
 	}
@@ -4060,6 +4066,10 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 			"recentChangeSourceTypes":{
 				"platform_event":1,
 				"pulse_diff":2
+			},
+			"recentChangeSourceAdapters":{
+				"docker_adapter":2,
+				"proxmox_adapter":1
 			}
 		}
 	}`

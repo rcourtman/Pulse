@@ -125,6 +125,10 @@ That same facet bundle now also returns grouped recent-change provenance
 counts by source type, so the detail drawer can distinguish platform events,
 pulse diffs, heuristics, user actions, and agent actions without re-deriving
 adapter provenance from the loaded slice.
+That same facet bundle now also returns grouped recent-change adapter counts
+by source adapter, so the detail drawer can distinguish Docker, Proxmox,
+TrueNAS, and ops-helper provenance without re-deriving integration origin
+from the loaded slice.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

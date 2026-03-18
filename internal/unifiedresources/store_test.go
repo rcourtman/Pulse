@@ -800,6 +800,28 @@ func TestCountRecentChangesBySourceType_RespectsFilters(t *testing.T) {
 	if !reflect.DeepEqual(filteredCounts, map[ChangeSourceType]int{SourcePlatformEvent: 1, SourcePulseDiff: 1}) {
 		t.Fatalf("CountRecentChangesBySourceTypeFiltered source adapters = %#v, want %#v", filteredCounts, map[ChangeSourceType]int{SourcePlatformEvent: 1, SourcePulseDiff: 1})
 	}
+
+	adapterCounts, err := store.CountRecentChangesBySourceAdapter("vm:1", base.Add(-35*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChangesBySourceAdapter vm:1: %v", err)
+	}
+	wantAdapterCounts := map[ChangeSourceAdapter]int{
+		AdapterDocker:  1,
+		AdapterProxmox: 2,
+	}
+	if !reflect.DeepEqual(adapterCounts, wantAdapterCounts) {
+		t.Fatalf("CountRecentChangesBySourceAdapter vm:1 = %#v, want %#v", adapterCounts, wantAdapterCounts)
+	}
+
+	filteredAdapterCounts, err := store.CountRecentChangesBySourceAdapterFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		SourceTypes: []ChangeSourceType{SourcePulseDiff},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesBySourceAdapterFiltered source types: %v", err)
+	}
+	if !reflect.DeepEqual(filteredAdapterCounts, map[ChangeSourceAdapter]int{AdapterDocker: 1, AdapterProxmox: 1}) {
+		t.Fatalf("CountRecentChangesBySourceAdapterFiltered source types = %#v, want %#v", filteredAdapterCounts, map[ChangeSourceAdapter]int{AdapterDocker: 1, AdapterProxmox: 1})
+	}
 }
 
 func TestGetRecentChanges_RespectsFilters(t *testing.T) {

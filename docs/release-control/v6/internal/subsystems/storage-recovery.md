@@ -125,6 +125,10 @@ That same shared facet bundle now also carries grouped
 recovery surfaces can separate platform events, pulse diffs, heuristics,
 user actions, and agent actions without inferring provenance from the loaded
 slice.
+That same shared facet bundle now also carries grouped
+`recentChangeSourceAdapters` counts by canonical source adapter, so storage
+and recovery surfaces can separate Docker, Proxmox, TrueNAS, and ops-helper
+provenance without inferring integration origin from the loaded slice.
 Those same resource timeline records also preserve `relatedResources` graph
 context for non-relationship changes, so storage and recovery views can still
 link neighboring resources when the timeline entry is a restart, anomaly, or

@@ -4,6 +4,7 @@ import type {
   ResourceChange,
   ResourceChangeKind,
   ResourceFacetCounts,
+  ResourceFacetSourceAdapter,
   ResourceRelationship,
 } from '@/types/resource';
 
@@ -119,6 +120,39 @@ const recentChangeSourceTypeLabels: Record<
   },
 };
 
+const recentChangeSourceAdapterOrder: ResourceFacetSourceAdapter[] = [
+  'docker_adapter',
+  'proxmox_adapter',
+  'truenas_adapter',
+  'agent:ops-helper',
+];
+
+const recentChangeSourceAdapterLabels: Record<
+  ResourceFacetSourceAdapter,
+  { label: string; plural: string; className: string }
+> = {
+  docker_adapter: {
+    label: 'Docker adapter',
+    plural: 'Docker adapters',
+    className: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
+  },
+  proxmox_adapter: {
+    label: 'Proxmox adapter',
+    plural: 'Proxmox adapters',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+  },
+  truenas_adapter: {
+    label: 'TrueNAS adapter',
+    plural: 'TrueNAS adapters',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  },
+  'agent:ops-helper': {
+    label: 'Ops helper',
+    plural: 'Ops helpers',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  },
+};
+
 const buildFacetBadges = (
   capabilities?: readonly ResourceCapability[] | null,
   relationships?: readonly ResourceRelationship[] | null,
@@ -182,6 +216,24 @@ const buildFacetBadges = (
           sourceTypeLabel.plural.toLowerCase(),
         ),
         className: `${badgeBase} ${sourceTypeLabel.className}`,
+      });
+    }
+  }
+
+  const sourceAdapterCounts = counts?.recentChangeSourceAdapters;
+  if (sourceAdapterCounts) {
+    for (const sourceAdapter of recentChangeSourceAdapterOrder) {
+      const count = sourceAdapterCounts[sourceAdapter];
+      if (!count || count <= 0) continue;
+      const sourceAdapterLabel = recentChangeSourceAdapterLabels[sourceAdapter];
+      badges.push({
+        label: `${sourceAdapterLabel.label} ${count}`,
+        title: countLabel(
+          count,
+          sourceAdapterLabel.label.toLowerCase(),
+          sourceAdapterLabel.plural.toLowerCase(),
+        ),
+        className: `${badgeBase} ${sourceAdapterLabel.className}`,
       });
     }
   }

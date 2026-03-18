@@ -114,6 +114,10 @@ describe('ResourceDetailDrawer history tab', () => {
           platform_event: 1,
           pulse_diff: 2,
         },
+        recentChangeSourceAdapters: {
+          docker_adapter: 2,
+          proxmox_adapter: 1,
+        },
       },
     });
 
@@ -136,6 +140,8 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(screen.getByText('Anomaly 1')).toBeInTheDocument();
     expect(screen.getByText('Platform event 1')).toBeInTheDocument();
     expect(screen.getByText('Pulse diff 2')).toBeInTheDocument();
+    expect(screen.getByText('Docker adapter 2')).toBeInTheDocument();
+    expect(screen.getByText('Proxmox adapter 1')).toBeInTheDocument();
   });
 
   it('renders resource capability, relationship, and timeline facets', async () => {
@@ -202,6 +208,10 @@ describe('ResourceDetailDrawer history tab', () => {
         recentChangeKinds: {
           restart: 2,
           metric_anomaly: 1,
+        },
+        recentChangeSourceAdapters: {
+          docker_adapter: 1,
+          proxmox_adapter: 2,
         },
       },
     });
@@ -305,6 +315,10 @@ describe('ResourceDetailDrawer history tab', () => {
         recentChangeKinds: {
           restart: 1,
           metric_anomaly: 1,
+        },
+        recentChangeSourceAdapters: {
+          docker_adapter: 1,
+          proxmox_adapter: 1,
         },
       },
     };
@@ -442,6 +456,10 @@ describe('ResourceDetailDrawer history tab', () => {
             restart: 1,
             metric_anomaly: 1,
           },
+          recentChangeSourceAdapters: {
+            docker_adapter: 1,
+            proxmox_adapter: 1,
+          },
         },
       })
       .mockResolvedValueOnce({
@@ -487,6 +505,9 @@ describe('ResourceDetailDrawer history tab', () => {
           recentChanges: 1,
           recentChangeKinds: {
             metric_anomaly: 1,
+          },
+          recentChangeSourceAdapters: {
+            docker_adapter: 1,
           },
         },
       });

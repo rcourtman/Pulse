@@ -148,6 +148,11 @@ That same shared facet bundle now also carries grouped
 lifecycle-adjacent detail surfaces can distinguish platform events, pulse
 diffs, heuristics, user actions, and agent actions without re-inferencing the
 provenance mix in the browser.
+That same shared facet bundle now also carries grouped
+`recentChangeSourceAdapters` counts by canonical source adapter, so the
+lifecycle-adjacent detail surfaces can distinguish Docker, Proxmox, TrueNAS,
+and ops-helper provenance without re-inferencing the integration mix in the
+browser.
 Timeline entries surfaced through that same boundary also preserve
 `relatedResources` graph context for non-relationship changes, so adjacent
 fleet and install surfaces can link the affected neighbors without trying to

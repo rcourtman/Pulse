@@ -136,6 +136,10 @@ The same facet bundle contract now also returns grouped
 drawer and summary chips can distinguish platform events, pulse diffs,
 heuristics, user actions, and agent actions without inventing frontend-local
 provenance heuristics.
+The same facet bundle contract now also returns grouped
+`recentChangeSourceAdapters` counts by canonical source adapter, so the
+shared drawer and summary chips can distinguish Docker, Proxmox, TrueNAS, and
+ops-helper provenance without inventing frontend-local integration heuristics.
 Canonical timeline entries now also preserve graph context in
 `relatedResources`, so the history surface can explain which neighboring
 resources moved with restart, anomaly, config, state transition, and

@@ -33,6 +33,8 @@ type ResourceStore interface {
 	CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error)
 	CountRecentChangesBySourceType(canonicalID string, since time.Time) (map[ChangeSourceType]int, error)
 	CountRecentChangesBySourceTypeFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceType]int, error)
+	CountRecentChangesBySourceAdapter(canonicalID string, since time.Time) (map[ChangeSourceAdapter]int, error)
+	CountRecentChangesBySourceAdapterFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceAdapter]int, error)
 	RecordActionAudit(record ActionAuditRecord) error
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -863,6 +865,41 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceTypeFiltered(canonicalID
 	return counts, nil
 }
 
+func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapter(canonicalID string, since time.Time) (map[ChangeSourceAdapter]int, error) {
+	return s.CountRecentChangesBySourceAdapterFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapterFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceAdapter]int, error) {
+	query, args := buildRecentChangeCountQuery(canonicalID, since, filters, "SELECT COALESCE(source_adapter, ''), COUNT(*) FROM resource_changes")
+	query += ` GROUP BY source_adapter`
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query resource change counts by source adapter: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[ChangeSourceAdapter]int)
+	for rows.Next() {
+		var sourceAdapter string
+		var count int
+		if err := rows.Scan(&sourceAdapter, &count); err != nil {
+			return nil, fmt.Errorf("scan resource change source adapter count row: %w", err)
+		}
+		if sourceAdapter == "" {
+			continue
+		}
+		counts[ChangeSourceAdapter(sourceAdapter)] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate resource change source adapter count rows: %w", err)
+	}
+	return counts, nil
+}
+
 func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1264,6 +1301,33 @@ func (m *MemoryStore) CountRecentChangesBySourceTypeFiltered(canonicalID string,
 			continue
 		}
 		counts[change.SourceType]++
+	}
+	if len(counts) == 0 {
+		return nil, nil
+	}
+	return counts, nil
+}
+
+func (m *MemoryStore) CountRecentChangesBySourceAdapter(canonicalID string, since time.Time) (map[ChangeSourceAdapter]int, error) {
+	return m.CountRecentChangesBySourceAdapterFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (m *MemoryStore) CountRecentChangesBySourceAdapterFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceAdapter]int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	canonicalID = CanonicalResourceID(canonicalID)
+	counts := make(map[ChangeSourceAdapter]int)
+	for _, change := range m.changes {
+		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+			continue
+		}
+		if !since.IsZero() && change.ObservedAt.Before(since) {
+			continue
+		}
+		if !filters.matches(change) {
+			continue
+		}
+		counts[change.SourceAdapter]++
 	}
 	if len(counts) == 0 {
 		return nil, nil

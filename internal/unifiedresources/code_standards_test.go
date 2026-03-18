@@ -326,11 +326,14 @@ func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	if !strings.Contains(typesSource, "json:\"facetCounts,omitempty\"") {
 		t.Fatalf("internal/unifiedresources/types.go must keep the facetCounts JSON contract")
 	}
-	if !strings.Contains(typesSource, "RecentChangeKinds       map[ChangeKind]int") {
+	if !strings.Contains(typesSource, "RecentChangeKinds          map[ChangeKind]int") {
 		t.Fatalf("internal/unifiedresources/types.go must expose grouped timeline counts on the canonical facet model")
 	}
-	if !strings.Contains(typesSource, "RecentChangeSourceTypes map[ChangeSourceType]int") {
+	if !strings.Contains(typesSource, "RecentChangeSourceTypes    map[ChangeSourceType]int") {
 		t.Fatalf("internal/unifiedresources/types.go must expose grouped timeline source-type counts on the canonical facet model")
+	}
+	if !strings.Contains(typesSource, "RecentChangeSourceAdapters map[ChangeSourceAdapter]int") {
+		t.Fatalf("internal/unifiedresources/types.go must expose grouped timeline source-adapter counts on the canonical facet model")
 	}
 
 	cloneData, err := os.ReadFile(filepath.Join("clone.go"))

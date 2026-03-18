@@ -48,6 +48,10 @@ describe('ResourceAPI', () => {
           platform_event: 1,
           pulse_diff: 2,
         },
+        recentChangeSourceAdapters: {
+          docker_adapter: 2,
+          proxmox_adapter: 1,
+        },
       },
     } as any);
 
@@ -82,6 +86,10 @@ describe('ResourceAPI', () => {
           platform_event: 1,
           pulse_diff: 2,
         },
+        recentChangeSourceAdapters: {
+          docker_adapter: 2,
+          proxmox_adapter: 1,
+        },
       },
     });
     expect(result.counts).toStrictEqual({
@@ -95,6 +103,10 @@ describe('ResourceAPI', () => {
       recentChangeSourceTypes: {
         platform_event: 1,
         pulse_diff: 2,
+      },
+      recentChangeSourceAdapters: {
+        docker_adapter: 2,
+        proxmox_adapter: 1,
       },
     });
   });

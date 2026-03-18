@@ -167,6 +167,12 @@ export type ResourceChangeSourceAdapter =
   | 'agent:ops-helper'
   | string;
 
+export type ResourceFacetSourceAdapter =
+  | 'docker_adapter'
+  | 'proxmox_adapter'
+  | 'truenas_adapter'
+  | 'agent:ops-helper';
+
 export interface ResourceCapabilityParam {
   name: string;
   type: string;
@@ -193,6 +199,7 @@ export interface ResourceFacetCounts {
   recentChanges: number;
   recentChangeKinds?: Partial<Record<ResourceChangeKind, number>>;
   recentChangeSourceTypes?: Partial<Record<ResourceChangeSourceType, number>>;
+  recentChangeSourceAdapters?: Partial<Record<ResourceFacetSourceAdapter, number>>;
 }
 
 export interface ResourceRelationship {

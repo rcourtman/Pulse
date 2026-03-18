@@ -986,11 +986,12 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Counts        struct {
-				Capabilities            int                              `json:"capabilities"`
-				Relationships           int                              `json:"relationships"`
-				RecentChanges           int                              `json:"recentChanges"`
-				RecentChangeKinds       map[unified.ChangeKind]int       `json:"recentChangeKinds"`
-				RecentChangeSourceTypes map[unified.ChangeSourceType]int `json:"recentChangeSourceTypes"`
+				Capabilities               int                                 `json:"capabilities"`
+				Relationships              int                                 `json:"relationships"`
+				RecentChanges              int                                 `json:"recentChanges"`
+				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
+				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
+				RecentChangeSourceAdapters map[unified.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -1007,6 +1008,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.Counts.RecentChangeSourceTypes; len(got) != 2 || got[unified.SourcePlatformEvent] != 1 || got[unified.SourcePulseDiff] != 2 {
 			t.Fatalf("unexpected recent change source type counts: %#v", got)
+		}
+		if got := payload.Counts.RecentChangeSourceAdapters; len(got) != 2 || got[unified.AdapterProxmox] != 2 || got[unified.AdapterDocker] != 1 {
+			t.Fatalf("unexpected recent change source adapter counts: %#v", got)
 		}
 		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
 			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
@@ -1149,11 +1153,12 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			Counts        struct {
-				Capabilities            int                              `json:"capabilities"`
-				Relationships           int                              `json:"relationships"`
-				RecentChanges           int                              `json:"recentChanges"`
-				RecentChangeKinds       map[unified.ChangeKind]int       `json:"recentChangeKinds"`
-				RecentChangeSourceTypes map[unified.ChangeSourceType]int `json:"recentChangeSourceTypes"`
+				Capabilities               int                                 `json:"capabilities"`
+				Relationships              int                                 `json:"relationships"`
+				RecentChanges              int                                 `json:"recentChanges"`
+				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
+				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
+				RecentChangeSourceAdapters map[unified.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -1167,6 +1172,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.Counts.RecentChangeSourceTypes; len(got) != 1 || got[unified.SourcePlatformEvent] != 1 {
 			t.Fatalf("unexpected filtered facet source type counts: %#v", got)
+		}
+		if got := payload.Counts.RecentChangeSourceAdapters; len(got) != 1 || got[unified.AdapterProxmox] != 1 {
+			t.Fatalf("unexpected filtered facet source adapter counts: %#v", got)
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {
 			t.Fatalf("unexpected filtered facets change: %#v", payload.RecentChanges[0])
@@ -1185,11 +1193,12 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			Counts        struct {
-				Capabilities            int                              `json:"capabilities"`
-				Relationships           int                              `json:"relationships"`
-				RecentChanges           int                              `json:"recentChanges"`
-				RecentChangeKinds       map[unified.ChangeKind]int       `json:"recentChangeKinds"`
-				RecentChangeSourceTypes map[unified.ChangeSourceType]int `json:"recentChangeSourceTypes"`
+				Capabilities               int                                 `json:"capabilities"`
+				Relationships              int                                 `json:"relationships"`
+				RecentChanges              int                                 `json:"recentChanges"`
+				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
+				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
+				RecentChangeSourceAdapters map[unified.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -1203,6 +1212,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.Counts.RecentChangeSourceTypes; len(got) != 1 || got[unified.SourcePulseDiff] != 1 {
 			t.Fatalf("unexpected adapter-filtered facet source type counts: %#v", got)
+		}
+		if got := payload.Counts.RecentChangeSourceAdapters; len(got) != 1 || got[unified.AdapterDocker] != 1 {
+			t.Fatalf("unexpected adapter-filtered facet source adapter counts: %#v", got)
 		}
 		if payload.RecentChanges[0].ID != "chg-42-extra-2" {
 			t.Fatalf("unexpected adapter-filtered facets change: %#v", payload.RecentChanges[0])

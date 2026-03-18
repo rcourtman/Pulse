@@ -160,6 +160,10 @@ describe('UnifiedResourceTable performance contract', () => {
               platform_event: 1,
               pulse_diff: 2,
             },
+            recentChangeSourceAdapters: {
+              docker_adapter: 2,
+              proxmox_adapter: 1,
+            },
           }}
           recentChanges={[]}
         />
@@ -172,6 +176,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Anomaly 1')).toBeInTheDocument();
       expect(getByText('Platform event 1')).toBeInTheDocument();
       expect(getByText('Pulse diff 2')).toBeInTheDocument();
+      expect(getByText('Docker adapter 2')).toBeInTheDocument();
+      expect(getByText('Proxmox adapter 1')).toBeInTheDocument();
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
@@ -206,13 +212,17 @@ describe('UnifiedResourceTable performance contract', () => {
                   restart: 2,
                   metric_anomaly: 1,
                 },
-                recentChangeSourceTypes: {
-                  platform_event: 1,
-                  pulse_diff: 2,
-                },
+              recentChangeSourceTypes: {
+                platform_event: 1,
+                pulse_diff: 2,
               },
-              recentChanges: [],
-            }
+              recentChangeSourceAdapters: {
+                docker_adapter: 2,
+                proxmox_adapter: 1,
+              },
+            },
+            recentChanges: [],
+          }
           : {},
       );
       const { container, getByText } = render(() => (
