@@ -153,16 +153,7 @@ describe('UnifiedResourceTable performance contract', () => {
             relationships: 1,
             recentChanges: 3,
           }}
-          recentChanges={[
-            {
-              id: 'change-1',
-              observedAt: '2026-03-18T12:06:00Z',
-              resourceId: 'vm:42',
-              kind: 'restart',
-              sourceType: 'platform_event',
-              confidence: 'high',
-            },
-          ]}
+          recentChanges={[]}
         />
       ));
 
@@ -195,16 +186,12 @@ describe('UnifiedResourceTable performance contract', () => {
                   lastSeenAt: new Date().toISOString(),
                 },
               ],
-              recentChanges: [
-                {
-                  id: 'change-0',
-                  observedAt: new Date().toISOString(),
-                  resourceId: 'resource-0',
-                  kind: 'state_transition',
-                  sourceType: 'pulse_diff',
-                  confidence: 'high',
-                },
-              ],
+              facetCounts: {
+                capabilities: 1,
+                relationships: 1,
+                recentChanges: 3,
+              },
+              recentChanges: [],
             }
           : {},
       );
@@ -223,7 +210,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Capabilities 1')).toBeInTheDocument();
         expect(getByText('Relationships 1')).toBeInTheDocument();
-        expect(getByText('Timeline 1')).toBeInTheDocument();
+        expect(getByText('Timeline 3')).toBeInTheDocument();
       });
       await waitFor(() => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);

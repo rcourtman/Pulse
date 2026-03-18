@@ -40,6 +40,7 @@ type Resource struct {
 	Capabilities          []ResourceCapability    `json:"capabilities,omitempty"`
 	Relationships         []ResourceRelationship  `json:"relationships,omitempty"`
 	RecentChanges         []ResourceChange        `json:"recentChanges,omitempty"`
+	FacetCounts           ResourceFacetCounts     `json:"facetCounts,omitempty"`
 	Incidents             []ResourceIncident      `json:"incidents,omitempty"`
 	IncidentCount         int                     `json:"incidentCount,omitempty"`
 	IncidentCode          string                  `json:"incidentCode,omitempty"`
@@ -63,6 +64,14 @@ type Resource struct {
 	PhysicalDisk *PhysicalDiskMeta `json:"physicalDisk,omitempty"`
 	Ceph         *CephMeta         `json:"ceph,omitempty"`
 	TrueNAS      *TrueNASData      `json:"truenas,omitempty"`
+}
+
+// ResourceFacetCounts captures the total count of each resource facet that
+// may be surfaced in row summaries or detail drawers.
+type ResourceFacetCounts struct {
+	Capabilities  int `json:"capabilities"`
+	Relationships int `json:"relationships"`
+	RecentChanges int `json:"recentChanges"`
 }
 
 // DiscoveryTarget describes the canonical discovery request coordinates

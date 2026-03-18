@@ -257,6 +257,35 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	}
 }
 
+func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
+	typesData, err := os.ReadFile(filepath.Join("types.go"))
+	if err != nil {
+		t.Fatalf("failed to read types.go: %v", err)
+	}
+	typesSource := string(typesData)
+	if !strings.Contains(typesSource, "FacetCounts           ResourceFacetCounts") {
+		t.Fatalf("internal/unifiedresources/types.go must expose Resource.FacetCounts on the canonical resource model")
+	}
+	if !strings.Contains(typesSource, "json:\"facetCounts,omitempty\"") {
+		t.Fatalf("internal/unifiedresources/types.go must keep the facetCounts JSON contract")
+	}
+
+	cloneData, err := os.ReadFile(filepath.Join("clone.go"))
+	if err != nil {
+		t.Fatalf("failed to read clone.go: %v", err)
+	}
+	cloneSource := string(cloneData)
+	requiredSnippets := []string{
+		"out.FacetCounts = resourceFacetCounts(out)",
+		"func resourceFacetCounts(resource Resource) ResourceFacetCounts",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(cloneSource, snippet) {
+			t.Fatalf("internal/unifiedresources/clone.go must derive canonical facet counts via %q", snippet)
+		}
+	}
+}
+
 // TestNoLegacyHostResourceTypeSymbol prevents reintroducing the removed
 // ResourceTypeHost symbol. v6 code must use ResourceTypeAgent and
 // CanonicalResourceType() for legacy normalization.

@@ -3479,6 +3479,11 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						},
 					},
 				},
+				FacetCounts: unifiedresources.ResourceFacetCounts{
+					Capabilities:  1,
+					Relationships: 1,
+					RecentChanges: 1,
+				},
 			},
 		},
 		Meta: ResourcesMeta{
@@ -3557,7 +3562,12 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 						"reason":"vm started",
 						"metadata":{"source":"snapshot"}
 					}
-				]
+				],
+				"facetCounts":{
+					"capabilities":1,
+					"relationships":1,
+					"recentChanges":1
+				}
 			}
 		],
 		"meta":{"page":1,"limit":50,"total":1,"totalPages":1},

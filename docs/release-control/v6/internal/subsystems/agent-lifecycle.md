@@ -122,6 +122,10 @@ That same shared `internal/api/` lifecycle boundary also assumes tenant-scoped
 resource helpers stay on canonical unified-resource seeds: adjacent fleet and
 install surfaces may not revive raw tenant `StateSnapshot` fallback through
 shared API resource wiring once `UnifiedResourceSnapshotForTenant` exists.
+That same boundary now also assumes canonical resource payloads preserve
+shared facet totals through `facetCounts`, so the resource list and detail
+surfaces can keep row summaries aligned without re-inferring totals from
+consumer-local slices.
 That same shared `internal/api/` boundary now also assumes tenant AI services
 stay on canonical Patrol runtime wiring: adjacent fleet and install surfaces
 must not revive tenant snapshot-provider bridges through shared AI handler

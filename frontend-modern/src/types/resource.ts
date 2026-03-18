@@ -192,6 +192,12 @@ export interface ResourceCapability {
   params?: ResourceCapabilityParam[];
 }
 
+export interface ResourceFacetCounts {
+  capabilities: number;
+  relationships: number;
+  recentChanges: number;
+}
+
 export interface ResourceRelationship {
   sourceId: string;
   targetId: string;
@@ -486,6 +492,7 @@ export interface Resource {
   capabilities?: ResourceCapability[];
   relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
+  facetCounts?: ResourceFacetCounts;
 
   // Common source facets (optional; not all backends/state payloads include these).
   // Prefer these over casting `platformData` when available.

@@ -40,9 +40,18 @@ func cloneResource(in *Resource) Resource {
 	out.PhysicalDisk = clonePhysicalDiskMeta(in.PhysicalDisk)
 	out.Ceph = cloneCephMeta(in.Ceph)
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
+	out.FacetCounts = resourceFacetCounts(out)
 	RefreshCanonicalIdentity(&out)
 	RefreshPolicyMetadata(&out)
 	return out
+}
+
+func resourceFacetCounts(resource Resource) ResourceFacetCounts {
+	return ResourceFacetCounts{
+		Capabilities:  len(resource.Capabilities),
+		Relationships: len(resource.Relationships),
+		RecentChanges: len(resource.RecentChanges),
+	}
 }
 
 func cloneParentBySourceMap(in map[DataSource]string) map[DataSource]string {

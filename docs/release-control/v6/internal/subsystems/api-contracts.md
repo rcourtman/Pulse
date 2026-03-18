@@ -115,8 +115,9 @@ The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
 The unified resource API payload now carries the richer domain facets directly
 through the owned backend response: resource objects can expose canonical
-`capabilities`, `relationships`, and `recentChanges` in addition to policy and
-identity metadata, so the backend payload contract stays aligned with the
+`capabilities`, `relationships`, `recentChanges`, and derived `facetCounts`
+in addition to policy and identity metadata, so the backend payload contract
+stays aligned with the
 timeline and control-plane model instead of flattening those fields away.
 The same resource contract now also exposes dedicated facet endpoints for
 `/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and

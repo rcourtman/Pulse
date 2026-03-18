@@ -176,6 +176,9 @@ performance proof route. The shared resource table now also surfaces compact
 facet summary chips for capabilities, relationships, and timeline events, so
 facet presentation changes must continue to flow through the same governed
 resource-row surface rather than inventing a separate ad hoc summary path.
+Those row summaries now prefer canonical `facetCounts` on the resource object
+when available, so the backend list/read shapes remain the source of truth
+instead of forcing the frontend to infer totals only from loaded slices.
 Those chips now appear on both the primary fleet rows and the PBS/PMG service
 rows, so the unified consumer surface must remain consistent across the full
 table instead of diverging by resource class. The same facet summary now also

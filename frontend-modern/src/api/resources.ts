@@ -2,6 +2,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import type {
   ResourceCapability,
   ResourceChange,
+  ResourceFacetCounts,
   ResourceRelationship,
 } from '@/types/resource';
 
@@ -26,12 +27,6 @@ export interface ResourceTimelineResponse {
   resourceId: string;
   recentChanges: ResourceChange[];
   count: number;
-}
-
-export interface ResourceFacetCounts {
-  capabilities: number;
-  relationships: number;
-  recentChanges: number;
 }
 
 export interface ResourceFacetBundle {

@@ -65,6 +65,11 @@ describe('ResourceAPI', () => {
         recentChanges: 3,
       },
     });
+    expect(result.counts).toStrictEqual({
+      capabilities: 1,
+      relationships: 1,
+      recentChanges: 3,
+    });
   });
 
   it('omits invalid timeline query values instead of emitting broken URLs', async () => {

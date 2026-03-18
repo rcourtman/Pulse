@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import type {
   ResourceCapability,
   ResourceChange,
+  ResourceFacetCounts,
   ResourceRelationship,
 } from '@/types/resource';
 
@@ -11,17 +12,11 @@ type FacetBadge = {
   className: string;
 };
 
-export interface ResourceFacetSummaryCounts {
-  capabilities?: number | null;
-  relationships?: number | null;
-  recentChanges?: number | null;
-}
-
 export interface ResourceFacetSummaryProps {
   capabilities?: readonly ResourceCapability[] | null;
   relationships?: readonly ResourceRelationship[] | null;
   recentChanges?: readonly ResourceChange[] | null;
-  counts?: ResourceFacetSummaryCounts | null;
+  counts?: ResourceFacetCounts | null;
   class?: string;
   testId?: string;
 }
@@ -36,7 +31,7 @@ const buildFacetBadges = (
   capabilities?: readonly ResourceCapability[] | null,
   relationships?: readonly ResourceRelationship[] | null,
   recentChanges?: readonly ResourceChange[] | null,
-  counts?: ResourceFacetSummaryCounts | null,
+  counts?: ResourceFacetCounts | null,
 ): FacetBadge[] => {
   const badges: FacetBadge[] = [];
   const capabilityCount = counts?.capabilities ?? capabilities?.length ?? 0;

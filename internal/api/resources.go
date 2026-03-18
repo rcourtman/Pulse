@@ -277,11 +277,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(resourceCopy)
 }
 
-type resourceFacetCountsResponse struct {
-	Capabilities  int `json:"capabilities"`
-	Relationships int `json:"relationships"`
-	RecentChanges int `json:"recentChanges"`
-}
+type resourceFacetCountsResponse = unified.ResourceFacetCounts
 
 type resourceFacetBundleResponse struct {
 	ResourceID    string                         `json:"resourceId"`
@@ -412,8 +408,8 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		Relationships: relationships,
 		RecentChanges: recentChanges,
 		Counts: resourceFacetCountsResponse{
-			Capabilities:  len(capabilities),
-			Relationships: len(relationships),
+			Capabilities:  resource.FacetCounts.Capabilities,
+			Relationships: resource.FacetCounts.Relationships,
 			RecentChanges: changeCount,
 		},
 	})
@@ -524,7 +520,7 @@ func (h *ResourceHandlers) HandleGetResourceCapabilities(w http.ResponseWriter, 
 	json.NewEncoder(w).Encode(map[string]any{
 		"resourceId":   resourceID,
 		"capabilities": capabilities,
-		"count":        len(capabilities),
+		"count":        resource.FacetCounts.Capabilities,
 	})
 }
 
@@ -566,7 +562,7 @@ func (h *ResourceHandlers) HandleGetResourceRelationships(w http.ResponseWriter,
 	json.NewEncoder(w).Encode(map[string]any{
 		"resourceId":    resourceID,
 		"relationships": relationships,
-		"count":         len(relationships),
+		"count":         resource.FacetCounts.Relationships,
 	})
 }
 

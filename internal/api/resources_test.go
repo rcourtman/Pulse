@@ -179,6 +179,39 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 				LastSeen:  now,
 				UpdatedAt: now,
 				Sources:   []unified.DataSource{unified.SourceAgent},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unified.CapabilityTypeCommon,
+						Description:          "Restart the resource",
+						MinimumApprovalLevel: unified.ApprovalAdmin,
+					},
+				},
+				Relationships: []unified.ResourceRelationship{
+					{
+						SourceID:   "agent-seeded",
+						TargetID:   "node-1",
+						Type:       unified.RelRunsOn,
+						Confidence: 1,
+						Active:     true,
+						Discoverer: "proxmox_adapter",
+						ObservedAt: now,
+						LastSeenAt: now,
+					},
+				},
+				RecentChanges: []unified.ResourceChange{
+					{
+						ID:            "chg-1",
+						ResourceID:    "agent-seeded",
+						ObservedAt:    now,
+						Kind:          unified.ChangeStateTransition,
+						From:          "offline",
+						To:            "online",
+						SourceType:    unified.SourcePlatformEvent,
+						SourceAdapter: unified.AdapterProxmox,
+						Confidence:    unified.ConfidenceHigh,
+					},
+				},
 				Identity: unified.ResourceIdentity{
 					Hostnames: []string{"seeded-agent"},
 				},
@@ -212,6 +245,9 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 	if strings.TrimSpace(resp.Data[0].AISafeSummary) == "" {
 		t.Fatal("expected aiSafeSummary on seeded resource")
+	}
+	if got := resp.Data[0].FacetCounts; got.Capabilities != 1 || got.Relationships != 1 || got.RecentChanges != 1 {
+		t.Fatalf("facetCounts = %+v, want 1/1/1", got)
 	}
 }
 

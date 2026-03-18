@@ -292,7 +292,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const resourceTimeline = createMemo(
     () => resourceFacets()?.recentChanges ?? props.resource.recentChanges ?? [],
   );
-  const resourceFacetCounts = createMemo(() => resourceFacets()?.counts ?? null);
+  const resourceFacetCounts = createMemo(
+    () => resourceFacets()?.counts ?? props.resource.facetCounts ?? null,
+  );
   const resourceCapabilityCount = createMemo(
     () => resourceFacetCounts()?.capabilities ?? resourceCapabilities().length,
   );

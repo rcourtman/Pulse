@@ -690,6 +690,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   capabilities={resource.capabilities}
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
+                                  counts={resource.facetCounts}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1142,6 +1143,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   capabilities={resource.capabilities}
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
+                                  counts={resource.facetCounts}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1449,6 +1451,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   capabilities={resource.capabilities}
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
+                                  counts={resource.facetCounts}
                                   class="mt-0.5"
                                 />
                               </div>

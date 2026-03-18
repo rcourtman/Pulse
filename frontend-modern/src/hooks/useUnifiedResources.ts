@@ -8,6 +8,7 @@ import type {
   Resource,
   ResourceCapability,
   ResourceChange,
+  ResourceFacetCounts,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourcePBSMeta,
@@ -308,6 +309,7 @@ type APIResource = {
   capabilities?: ResourceCapability[];
   relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
+  facetCounts?: ResourceFacetCounts;
   physicalDisk?: {
     devPath?: string;
     model?: string;
@@ -714,6 +716,7 @@ const toResource = (v2: APIResource): Resource => {
     capabilities: v2.capabilities,
     relationships: v2.relationships,
     recentChanges: v2.recentChanges,
+    facetCounts: v2.facetCounts,
     platformData: {
       sources,
       sourceStatus: v2.sourceStatus,
