@@ -46,6 +46,41 @@ const (
 	AdapterOpsAgent ChangeSourceAdapter = "agent:ops-helper"
 )
 
+// ResourceChangeFilters narrows the resource timeline to specific change kinds
+// and source origins while preserving the canonical change record shape.
+type ResourceChangeFilters struct {
+	Kinds       []ChangeKind       `json:"kinds,omitempty"`
+	SourceTypes []ChangeSourceType `json:"sourceTypes,omitempty"`
+}
+
+func (filters ResourceChangeFilters) matches(change ResourceChange) bool {
+	if len(filters.Kinds) > 0 {
+		match := false
+		for _, kind := range filters.Kinds {
+			if kind == change.Kind {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	if len(filters.SourceTypes) > 0 {
+		match := false
+		for _, sourceType := range filters.SourceTypes {
+			if sourceType == change.SourceType {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
+}
+
 // ResourceChange represents a deterministic point-in-time state transition,
 // event, or metadata change tracked by Pulse, forming the historical "Court Record".
 type ResourceChange struct {

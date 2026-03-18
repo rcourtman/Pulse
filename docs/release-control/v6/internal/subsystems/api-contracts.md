@@ -123,6 +123,10 @@ The same resource contract now also exposes dedicated facet endpoints for
 `/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
 `/api/resources/{id}/timeline`, so operators can read the graph and change
 history without depending on a monolithic resource payload.
+Those history reads now also accept governed `kind` and `sourceType` query
+filters, and the backend store owns the corresponding filtered counts, so the
+timeline contract can narrow by change class without inventing a frontend-only
+slice of the graph.
 The same API contract now also exposes the unified-resource control-plane
 history through dedicated enterprise audit reads. The action, lifecycle, and
 export history endpoints live in `internal/api/activity_audit_handlers.go` and

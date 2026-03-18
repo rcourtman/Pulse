@@ -941,7 +941,7 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		ResourceID:       "vm:42",
 		ObservedAt:       now,
 		OccurredAt:       &now,
-		Kind:             unified.ChangeStateTransition,
+		Kind:             unified.ChangeRestart,
 		From:             "offline",
 		To:               "online",
 		SourceType:       unified.SourcePlatformEvent,
@@ -1069,6 +1069,57 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.RecentChanges[0].Metadata["ticket"]; got != "INC-1234" {
 			t.Fatalf("unexpected timeline metadata: %#v", payload.RecentChanges[0].Metadata)
+		}
+	})
+
+	t.Run("filtered timeline", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/timeline?kind=restart&sourceType=platform_event", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Count         int                      `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode filtered timeline: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected filtered timeline payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42" {
+			t.Fatalf("unexpected filtered timeline change: %#v", payload.RecentChanges[0])
+		}
+	})
+
+	t.Run("filtered facets", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/facets?kind=restart&sourceType=platform_event", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                         `json:"resourceId"`
+			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+			Relationships []unified.ResourceRelationship `json:"relationships"`
+			Counts        struct {
+				Capabilities  int `json:"capabilities"`
+				Relationships int `json:"relationships"`
+				RecentChanges int `json:"recentChanges"`
+			} `json:"counts"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode filtered facets: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected filtered facets payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42" {
+			t.Fatalf("unexpected filtered facets change: %#v", payload.RecentChanges[0])
 		}
 	})
 }

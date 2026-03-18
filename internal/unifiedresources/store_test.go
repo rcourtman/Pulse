@@ -126,6 +126,90 @@ func TestNewSQLiteResourceStore_MigratesLegacyStore(t *testing.T) {
 	}
 }
 
+func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T) {
+	dataDir := t.TempDir()
+	legacyPath := filepath.Join(dataDir, "resources", resourceDBFileName)
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(%q) failed: %v", filepath.Dir(legacyPath), err)
+	}
+
+	db, err := sql.Open("sqlite", legacyPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%q) failed: %v", legacyPath, err)
+	}
+	if _, err := db.Exec(`
+		CREATE TABLE resource_changes (
+			id TEXT PRIMARY KEY,
+			canonical_id TEXT NOT NULL,
+			observed_at DATETIME NOT NULL,
+			occurred_at DATETIME,
+			kind TEXT NOT NULL,
+			from_state TEXT,
+			to_state TEXT,
+			source TEXT,
+			confidence TEXT NOT NULL,
+			reason TEXT
+		)
+	`); err != nil {
+		_ = db.Close()
+		t.Fatalf("create legacy resource_changes table failed: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO resource_changes (
+			id, canonical_id, observed_at, occurred_at, kind, from_state, to_state, source, confidence, reason
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, "chg-legacy", "vm:legacy", time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC), nil, string(ChangeStateTransition), "offline", "online", "proxmox", string(ConfidenceHigh), "legacy row"); err != nil {
+		_ = db.Close()
+		t.Fatalf("insert legacy resource change failed: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy db failed: %v", err)
+	}
+
+	store, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	results, err := store.GetRecentChanges("vm:legacy", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges on migrated legacy table returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("GetRecentChanges on migrated legacy table returned %d rows, want 1", len(results))
+	}
+	if results[0].ID != "chg-legacy" {
+		t.Fatalf("unexpected legacy row after migration: %+v", results[0])
+	}
+	if results[0].SourceType != SourcePulseDiff {
+		t.Fatalf("legacy source type = %q, want %q", results[0].SourceType, SourcePulseDiff)
+	}
+	if results[0].SourceAdapter != ChangeSourceAdapter("proxmox") {
+		t.Fatalf("legacy source adapter = %q, want proxmox", results[0].SourceAdapter)
+	}
+
+	if err := store.RecordChange(ResourceChange{
+		ID:            "chg-new",
+		ResourceID:    "vm:legacy",
+		ObservedAt:    time.Date(2026, 3, 18, 13, 0, 0, 0, time.UTC),
+		Kind:          ChangeRestart,
+		SourceType:    SourcePlatformEvent,
+		SourceAdapter: AdapterProxmox,
+		Confidence:    ConfidenceHigh,
+		Reason:        "post-migration write",
+	}); err != nil {
+		t.Fatalf("RecordChange after migration failed: %v", err)
+	}
+	results, err = store.GetRecentChanges("vm:legacy", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after migration write returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("GetRecentChanges after migration write returned %d rows, want 2", len(results))
+	}
+}
+
 func newTestStore(t *testing.T) *SQLiteResourceStore {
 	t.Helper()
 	dir := t.TempDir()
@@ -327,6 +411,82 @@ func TestCountRecentChanges_RespectsFilters(t *testing.T) {
 	}
 	if allCount != 2 {
 		t.Fatalf("CountRecentChanges all = %d, want 2", allCount)
+	}
+
+	filteredCount, err := store.CountRecentChangesFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		Kinds: []ChangeKind{ChangeAnomaly, ChangeRelationship},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesFiltered kinds: %v", err)
+	}
+	if filteredCount != 2 {
+		t.Fatalf("CountRecentChangesFiltered kinds = %d, want 2", filteredCount)
+	}
+
+	sourceFilteredCount, err := store.CountRecentChangesFiltered("", base.Add(-25*time.Minute), ResourceChangeFilters{
+		SourceTypes: []ChangeSourceType{SourcePulseDiff},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesFiltered source types: %v", err)
+	}
+	if sourceFilteredCount != 3 {
+		t.Fatalf("CountRecentChangesFiltered source types = %d, want 3", sourceFilteredCount)
+	}
+}
+
+func TestGetRecentChanges_RespectsFilters(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:         "chg-1",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-30 * time.Minute),
+			Kind:       ChangeStateTransition,
+			SourceType: SourcePlatformEvent,
+			Confidence: ConfidenceHigh,
+		},
+		{
+			ID:         "chg-2",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-20 * time.Minute),
+			Kind:       ChangeAnomaly,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceMedium,
+		},
+		{
+			ID:         "chg-3",
+			ResourceID: "vm:1",
+			ObservedAt: base.Add(-10 * time.Minute),
+			Kind:       ChangeRelationship,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceLow,
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	results, err := store.GetRecentChangesFiltered("vm:1", base.Add(-35*time.Minute), 10, ResourceChangeFilters{
+		Kinds: []ChangeKind{ChangeRelationship},
+	})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered kinds: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "chg-3" {
+		t.Fatalf("GetRecentChangesFiltered kinds = %#v, want chg-3", results)
+	}
+
+	sourceResults, err := store.GetRecentChangesFiltered("vm:1", base.Add(-25*time.Minute), 10, ResourceChangeFilters{
+		SourceTypes: []ChangeSourceType{SourcePulseDiff},
+	})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered source types: %v", err)
+	}
+	if len(sourceResults) != 2 || sourceResults[0].ID != "chg-3" || sourceResults[1].ID != "chg-2" {
+		t.Fatalf("GetRecentChangesFiltered source types = %#v, want chg-3 then chg-2", sourceResults)
 	}
 }
 

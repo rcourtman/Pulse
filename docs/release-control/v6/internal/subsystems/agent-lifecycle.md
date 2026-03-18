@@ -96,6 +96,10 @@ The same shared API runtime now also exposes dedicated unified-resource
 capability, relationship, and timeline reads through
 `internal/api/resources.go`, but those query surfaces remain owned by the API
 and unified-resource contracts rather than by lifecycle continuity.
+Those same dedicated reads also accept governed timeline filters for change
+kind and source type, and the underlying store owns the filtered counts so
+agent lifecycle routing still stays on canonical fleet-continuity ownership
+instead of re-deriving resource history locally.
 The dedicated profile client now also routes list, schema, and validation
 parsing through shared response helpers in `frontend-modern/src/api/agentProfiles.ts`,
 so profile transport stays aligned with the governed API contract instead of

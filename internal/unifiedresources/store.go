@@ -26,7 +26,9 @@ type ResourceStore interface {
 	GetExclusions() ([]ResourceExclusion, error)
 	RecordChange(change ResourceChange) error
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error)
+	GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error)
 	CountRecentChanges(canonicalID string, since time.Time) (int, error)
+	CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error)
 	RecordActionAudit(record ActionAuditRecord) error
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -345,6 +347,104 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize resource store schema: %w", err)
 	}
+	if err := s.migrateResourceChangesSchema(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
+	columns, err := s.tableColumns("resource_changes")
+	if err != nil {
+		return err
+	}
+
+	if err := s.addResourceChangesColumnIfMissing(columns, "source_type", "TEXT NOT NULL DEFAULT 'pulse_diff'"); err != nil {
+		return err
+	}
+	if err := s.addResourceChangesColumnIfMissing(columns, "source_adapter", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.addResourceChangesColumnIfMissing(columns, "actor", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.addResourceChangesColumnIfMissing(columns, "related_resources", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := s.addResourceChangesColumnIfMissing(columns, "metadata_json", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
+		return err
+	}
+
+	if err := s.normalizeResourceChangeRows(columns); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) addResourceChangesColumnIfMissing(columns map[string]struct{}, columnName, definition string) error {
+	if _, ok := columns[columnName]; ok {
+		return nil
+	}
+	if _, err := s.db.Exec("ALTER TABLE resource_changes ADD COLUMN " + columnName + " " + definition); err != nil {
+		return fmt.Errorf("add resource_changes.%s column: %w", columnName, err)
+	}
+	columns[columnName] = struct{}{}
+	return nil
+}
+
+func (s *SQLiteResourceStore) tableColumns(tableName string) (map[string]struct{}, error) {
+	rows, err := s.db.Query(`PRAGMA table_info(` + tableName + `)`)
+	if err != nil {
+		return nil, fmt.Errorf("inspect %s schema: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	columns := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			typ     string
+			notNull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return nil, fmt.Errorf("scan %s schema: %w", tableName, err)
+		}
+		columns[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate %s schema: %w", tableName, err)
+	}
+	return columns, nil
+}
+
+func (s *SQLiteResourceStore) normalizeResourceChangeRows(columns map[string]struct{}) error {
+	assignments := []string{
+		"actor = COALESCE(NULLIF(TRIM(actor), ''), '')",
+		"related_resources = COALESCE(NULLIF(TRIM(related_resources), ''), '[]')",
+		"metadata_json = COALESCE(NULLIF(TRIM(metadata_json), ''), '{}')",
+	}
+	if _, ok := columns["source"]; ok {
+		assignments = append(assignments,
+			"source_adapter = CASE WHEN TRIM(COALESCE(source_adapter, '')) = '' THEN COALESCE(NULLIF(TRIM(source), ''), '') ELSE source_adapter END",
+			"source_type = CASE "+
+				"WHEN TRIM(COALESCE(source_type, '')) = '' THEN "+
+				"CASE WHEN lower(TRIM(COALESCE(source, ''))) IN ('platform_event', 'pulse_diff', 'heuristic', 'user_action', 'agent_action') "+
+				"THEN lower(TRIM(source)) ELSE 'pulse_diff' END "+
+				"ELSE lower(TRIM(source_type)) END",
+		)
+	} else {
+		assignments = append(assignments,
+			"source_adapter = COALESCE(NULLIF(TRIM(source_adapter), ''), '')",
+			"source_type = CASE WHEN TRIM(COALESCE(source_type, '')) = '' THEN 'pulse_diff' ELSE lower(TRIM(source_type)) END",
+		)
+	}
+	query := `UPDATE resource_changes SET ` + strings.Join(assignments, ", ")
+	if _, err := s.db.Exec(query); err != nil {
+		return fmt.Errorf("normalize resource_changes rows: %w", err)
+	}
 	return nil
 }
 
@@ -496,20 +596,46 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 }
 
 func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
+	return s.GetRecentChangesFiltered(canonicalID, since, limit, ResourceChangeFilters{})
+}
+
+func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error) {
 	query := `
-		SELECT id, canonical_id, observed_at, occurred_at, kind, from_state, to_state, source_type, source_adapter, actor, confidence, reason, related_resources, metadata_json 
+		SELECT id, canonical_id, observed_at, occurred_at, COALESCE(kind, ''), COALESCE(from_state, ''), COALESCE(to_state, ''), COALESCE(source_type, ''), COALESCE(source_adapter, ''), COALESCE(actor, ''), COALESCE(confidence, ''), COALESCE(reason, ''), COALESCE(related_resources, ''), COALESCE(metadata_json, '')
 		FROM resource_changes`
 
 	args := []any{}
+	conditions := []string{}
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		query += `
-		WHERE canonical_id = ? AND observed_at >= ?`
-		args = append(args, canonicalID, since)
+		conditions = append(conditions, "canonical_id = ?")
+		args = append(args, canonicalID)
 	} else {
-		query += `
-		WHERE observed_at >= ?`
+		conditions = append(conditions, "observed_at >= ?")
 		args = append(args, since)
+	}
+	if !since.IsZero() && canonicalID != "" {
+		conditions = append(conditions, "observed_at >= ?")
+		args = append(args, since)
+	}
+	if len(filters.Kinds) > 0 {
+		placeholders := make([]string, 0, len(filters.Kinds))
+		for _, kind := range filters.Kinds {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(kind))
+		}
+		conditions = append(conditions, "kind IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(filters.SourceTypes) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceTypes))
+		for _, sourceType := range filters.SourceTypes {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceType))
+		}
+		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(conditions) > 0 {
+		query += "\n\t\tWHERE " + strings.Join(conditions, " AND ")
 	}
 	query += `
 		ORDER BY observed_at DESC`
@@ -554,13 +680,36 @@ func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Ti
 }
 
 func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.Time) (int, error) {
-	query := `SELECT COUNT(*) FROM resource_changes WHERE observed_at >= ?`
-	args := []any{since}
+	return s.CountRecentChangesFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error) {
+	query := `SELECT COUNT(*) FROM resource_changes`
+	args := []any{}
+	conditions := []string{"observed_at >= ?"}
+	args = append(args, since)
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		query += ` AND canonical_id = ?`
+		conditions = append(conditions, "canonical_id = ?")
 		args = append(args, canonicalID)
 	}
+	if len(filters.Kinds) > 0 {
+		placeholders := make([]string, 0, len(filters.Kinds))
+		for _, kind := range filters.Kinds {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(kind))
+		}
+		conditions = append(conditions, "kind IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(filters.SourceTypes) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceTypes))
+		for _, sourceType := range filters.SourceTypes {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceType))
+		}
+		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	query += ` WHERE ` + strings.Join(conditions, " AND ")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -875,6 +1024,10 @@ func (m *MemoryStore) RecordChange(change ResourceChange) error {
 }
 
 func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
+	return m.GetRecentChangesFiltered(canonicalID, since, limit, ResourceChangeFilters{})
+}
+
+func (m *MemoryStore) GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
@@ -887,6 +1040,9 @@ func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limi
 		if !since.IsZero() && change.ObservedAt.Before(since) {
 			continue
 		}
+		if !filters.matches(change) {
+			continue
+		}
 		out = append(out, change)
 		if limit > 0 && len(out) >= limit {
 			break
@@ -896,6 +1052,10 @@ func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limi
 }
 
 func (m *MemoryStore) CountRecentChanges(canonicalID string, since time.Time) (int, error) {
+	return m.CountRecentChangesFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (m *MemoryStore) CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
@@ -905,6 +1065,9 @@ func (m *MemoryStore) CountRecentChanges(canonicalID string, since time.Time) (i
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
+			continue
+		}
+		if !filters.matches(change) {
 			continue
 		}
 		count++

@@ -46,10 +46,12 @@ describe('ResourceAPI', () => {
     const result = await ResourceAPI.getFacetBundle('vm:42', {
       since: '2026-03-18T12:00:00Z',
       limit: 25,
+      kind: 'restart',
+      sourceType: 'platform_event',
     });
 
     expect(apiFetchJSON).toHaveBeenCalledWith(
-      '/api/resources/vm%3A42/facets?since=2026-03-18T12%3A00%3A00.000Z&limit=25',
+      '/api/resources/vm%3A42/facets?since=2026-03-18T12%3A00%3A00.000Z&limit=25&kind=restart&sourceType=platform_event',
       {
         cache: 'no-store',
       },
@@ -82,10 +84,37 @@ describe('ResourceAPI', () => {
     await ResourceAPI.getTimeline('vm:42', {
       since: 'not-a-date',
       limit: -1,
+      kind: 'metric_anomaly',
+      sourceType: 'pulse_diff',
     });
 
-    expect(apiFetchJSON).toHaveBeenCalledWith('/api/resources/vm%3A42/timeline', {
-      cache: 'no-store',
+    expect(apiFetchJSON).toHaveBeenCalledWith(
+      '/api/resources/vm%3A42/timeline?kind=metric_anomaly&sourceType=pulse_diff',
+      {
+        cache: 'no-store',
+      },
+    );
+  });
+
+  it('preserves timeline filters when the time window is valid', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      resourceId: 'vm:42',
+      recentChanges: [],
+      count: 0,
+    } as any);
+
+    await ResourceAPI.getTimeline('vm:42', {
+      since: '2026-03-18T12:00:00Z',
+      limit: 10,
+      kind: 'state_transition',
+      sourceType: 'platform_event',
     });
+
+    expect(apiFetchJSON).toHaveBeenCalledWith(
+      '/api/resources/vm%3A42/timeline?since=2026-03-18T12%3A00%3A00.000Z&limit=10&kind=state_transition&sourceType=platform_event',
+      {
+        cache: 'no-store',
+      },
+    );
   });
 });

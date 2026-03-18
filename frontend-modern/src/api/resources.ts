@@ -2,6 +2,8 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import type {
   ResourceCapability,
   ResourceChange,
+  ResourceChangeKind,
+  ResourceChangeSourceType,
   ResourceFacetCounts,
   ResourceRelationship,
 } from '@/types/resource';
@@ -21,6 +23,8 @@ export interface ResourceRelationshipsResponse {
 export interface ResourceTimelineQueryOptions {
   since?: string | number | Date;
   limit?: number;
+  kind?: ResourceChangeKind;
+  sourceType?: ResourceChangeSourceType;
 }
 
 export interface ResourceTimelineResponse {
@@ -51,6 +55,12 @@ const buildTimelineQuery = (options?: ResourceTimelineQueryOptions): string => {
   }
   if (Number.isFinite(options?.limit ?? NaN) && (options?.limit ?? 0) > 0) {
     params.set('limit', String(Math.trunc(options?.limit ?? 0)));
+  }
+  if (options?.kind) {
+    params.set('kind', options.kind);
+  }
+  if (options?.sourceType) {
+    params.set('sourceType', options.sourceType);
   }
   const query = params.toString();
   return query ? `?${query}` : '';
