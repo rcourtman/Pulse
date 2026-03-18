@@ -356,6 +356,11 @@ func (r *Router) setupRoutes() {
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
+	if r.resourceHandlers != nil {
+		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {
+			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+		}
+	}
 	if mock.IsMockEnabled() {
 		truenas.SetFeatureEnabled(true)
 		mockTrueNASProvider := truenas.NewDefaultProvider()
@@ -1051,7 +1056,13 @@ func (r *Router) monitorAdapterForMonitor(m *monitoring.Monitor) *unifiedresourc
 		return existing
 	}
 
-	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	store := unifiedresources.ResourceStore(nil)
+	if r.resourceHandlers != nil {
+		if resolved, err := r.resourceHandlers.getStore(orgID); err == nil {
+			store = resolved
+		}
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
 	r.monitorResourceAdapters[orgID] = adapter
 	return adapter
 }

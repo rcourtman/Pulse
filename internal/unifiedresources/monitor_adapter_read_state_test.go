@@ -149,3 +149,63 @@ func TestMonitorAdapterReadStateReturnsClonedIncidents(t *testing.T) {
 		t.Fatalf("expected truenas storage risk to be cloned, got %q", got)
 	}
 }
+
+func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+
+	source := SourceAgent
+	sourceID := "xcp-host-1"
+	firstSeen := time.Date(2026, 3, 8, 11, 0, 0, 0, time.UTC)
+	adapter.PopulateSupplementalRecords(source, []IngestRecord{
+		{
+			SourceID: sourceID,
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "xcp-host-1",
+				Status:   StatusOnline,
+				LastSeen: firstSeen,
+			},
+		},
+	})
+
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("expected 1 resource after initial ingest, got %d", len(resources))
+	}
+	resourceID := resources[0].ID
+
+	changes, err := store.GetRecentChanges(resourceID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges initial: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change after initial ingest, got %d", len(changes))
+	}
+	if changes[0].Kind != ChangeStateTransition {
+		t.Fatalf("expected creation to record a state transition, got %q", changes[0].Kind)
+	}
+
+	adapter.PopulateSupplementalRecords(source, []IngestRecord{
+		{
+			SourceID: sourceID,
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "xcp-host-1",
+				Status:   StatusWarning,
+				LastSeen: firstSeen.Add(time.Minute),
+			},
+		},
+	})
+
+	changes, err = store.GetRecentChanges(resourceID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after update: %v", err)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("expected 2 changes after status update, got %d", len(changes))
+	}
+	if changes[0].Kind != ChangeStateTransition {
+		t.Fatalf("expected latest change to be a state transition, got %q", changes[0].Kind)
+	}
+}

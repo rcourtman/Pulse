@@ -1,0 +1,999 @@
+# Agent Lifecycle Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "agent-lifecycle",
+  "lane": "L16",
+  "contract_file": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": [
+    "api-contracts"
+  ]
+}
+```
+
+## Purpose
+
+Own unified agent installation, registration, update continuity, profile
+management, and fleet control surfaces.
+
+## Canonical Files
+
+1. `internal/api/agent_install_command_shared.go`
+2. `internal/api/config_setup_handlers.go`
+3. `internal/api/unified_agent.go`
+4. `internal/agentupdate/update.go`
+5. `internal/hostagent/agent.go`
+6. `scripts/install.sh`
+7. `scripts/install.ps1`
+8. `frontend-modern/src/api/agentProfiles.ts`
+9. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`
+10. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
+11. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+12. `frontend-modern/src/components/Settings/NodeModal.tsx`
+13. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+14. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+15. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+16. `frontend-modern/src/utils/agentInstallCommand.ts`
+17. `frontend-modern/src/api/nodes.ts`
+
+## Shared Boundaries
+
+1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
+2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
+3. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `api-contracts`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+4. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
+5. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+6. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+7. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+8. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+9. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+10. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+
+## Extension Points
+
+1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
+2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
+3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
+4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
+5. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
+6. Add or change profile management, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
+
+## Forbidden Paths
+
+1. New install or update continuity behavior hidden only inside broad monitoring ownership.
+2. Agent profile or fleet-control behavior implemented outside the canonical agent settings/profile surfaces.
+3. Installer or update flows that depend on branch-tip, dev-only, or non-release asset behavior for supported RC/stable paths.
+
+## Completion Obligations
+
+1. Update this contract when agent lifecycle ownership changes.
+2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
+3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
+4. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+
+## Current State
+
+This subsystem now sits under the dedicated agent lifecycle and fleet
+operations lane so install, registration, update continuity, profile
+management, and fleet safety stop hiding inside architecture, migration, or
+monitoring work.
+
+Agent lifecycle owns the install/register/update continuity surfaces, but it
+does not own unified-resource history or control-plane timeline persistence.
+Those runtime changes now travel through the shared API and unified-resource
+contracts, which keeps fleet bootstrap and identity continuity separate from
+resource-change recording and historical inspection.
+
+The owned backend API surfaces must preserve the exact-release installer
+fallback, canonical /api/auto-register behavior, and hosted org install-command
+contracts instead of leaving those guarantees implied by generic API ownership.
+That canonical /api/auto-register behavior now also includes hostname/IP continuity:
+reruns that arrive through a different canonical host form must reuse the same
+Pulse-managed node record and token instead of forking duplicate fleet entries.
+That same canonical behavior also includes one auth transport for Proxmox
+completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
+authentication through a one-time setup token in the request-body
+`authToken` field instead of keeping either a header-auth compatibility path
+or a long-lived admin-token completion path alive.
+That same first-session lifecycle boundary also owns bootstrap-token
+recovery: the supported operator path is `pulse bootstrap-token`, and the
+runtime may not keep `.bootstrap_token` as an unstructured plaintext secret
+file after startup. Canonical persistence must encrypt the bootstrap token at
+rest and rewrite any legacy plaintext bootstrap-token file immediately into
+the encrypted canonical format on load.
+That same shared `internal/api/` lifecycle boundary also assumes tenant-scoped
+resource helpers stay on canonical unified-resource seeds: adjacent fleet and
+install surfaces may not revive raw tenant `StateSnapshot` fallback through
+shared API resource wiring once `UnifiedResourceSnapshotForTenant` exists.
+That same shared `internal/api/` boundary now also assumes tenant AI services
+stay on canonical Patrol runtime wiring: adjacent fleet and install surfaces
+must not revive tenant snapshot-provider bridges through shared AI handler
+setup once Patrol can initialize from tenant `ReadState` and unified-resource
+providers directly.
+That same canonical /api/auto-register response must stay on one completion
+truth: caller-supplied Proxmox credentials complete registration with a
+direct-use action, and the runtime no longer preserves a dead pending-secret
+placeholder state. That same response
+must also stay truthful
+about lifecycle state: it may not claim the node is already registered
+successfully while local token creation is still outstanding.
+That same first-hop lifecycle boundary must validate that response shape
+instead of trusting HTTP success alone: runtime-side Unified Agent and installer callers must
+require the canonical `status="success"` plus `action="use_token"` response
+contract before treating registration as complete.
+That same canonical response contract must also carry the runtime-owned
+identity truth back to those callers: `type`, `source`, normalized `host`, and
+matching `nodeId`/`nodeName` must describe the resolved stored node record, and
+installer/runtime-side Unified Agent success reporting must use that returned canonical node
+identity instead of the caller's pre-registration `serverName`.
+The canonical /api/auto-register response must preserve canonical
+node identity: `nodeId` must carry the resolved stored node name rather than
+the raw host URL or requested `serverName`, so every live registration caller
+stays aligned with saved fleet state.
+That same /api/auto-register boundary must also preserve canonical
+live-event identity: the `node_auto_registered` WebSocket payload must emit the
+normalized stored host plus the resolved stored node name in `name`, `nodeId`,
+and `nodeName`, rather than broadcasting raw request fields that can drift
+from the saved node record.
+That same runtime-side Unified Agent boundary also owns one canonical ingest
+name through `internal/api/agent_ingest.go` and `internal/api/router*.go`:
+the primary runtime surface is the Unified Agent report/config boundary, while
+the `/api/agents/host/*` routes remain compatibility aliases only and may not
+re-emerge as the primary lifecycle concept in router state, handlers, or
+proofs.
+That same canonical /api/auto-register path must also complete the live
+post-registration contract after persistence: it must trigger discovery refresh
+and emit the canonical `node_auto_registered` WebSocket payload instead of
+stopping at a backend-only save/response path.
+That same post-registration discovery update must keep structured error
+ownership in discovery runtime state: lifecycle handlers may broadcast the
+deprecated string `errors` list only as a compatibility field derived from
+canonical `structured_errors`, not as a second live discovery owner path.
+That same canonical /api/auto-register path must also accept caller-supplied Proxmox token
+completion for confirmed runtime-side Unified Agent or script flows, so live registration
+surfaces stay on one governed completion contract instead of inventing a
+second explicit-token endpoint outside /api/auto-register.
+On the PVE side, only tokens that previously came back through a completed
+`source="agent"` or `source="script"` auto-register flow count as reusable
+confirmed credentials, so interrupted runs cannot harden a false `use_token`
+state from any non-canonical token placeholder.
+The canonical setup-script path must stamp that same `source="script"` marker
+on /api/auto-register payloads, and canonical registration callers must send
+that source explicitly, so confirmed script-created tokens stay distinguishable
+from agent-created tokens across later canonical reruns.
+That same canonical request contract must also reject any non-canonical source
+marker: `/api/auto-register` accepts only `source="agent"` and
+`source="script"` so v6 does not preserve arbitrary caller labels as a hidden
+compatibility surface.
+That same canonical request contract must also reject any non-canonical node
+type: `/api/auto-register` accepts only `type="pve"` and `type="pbs"` so
+unsupported runtime labels cannot slip through as fake successful fleet
+registrations.
+That same canonical request contract must also reject non-canonical token
+identities: `/api/auto-register` accepts only Pulse-managed
+`pulse-monitor@{pve|pbs}!pulse-...` token ids, so v6 does not preserve
+arbitrary, cross-type, or non-Pulse-managed token labels as successful
+registration state.
+That same canonical token identity must also stay deterministic across live
+callers: `install.sh`, generated setup scripts, and runtime-side Unified Agent-driven Proxmox
+registration must all create the same Pulse-managed `pulse-<canonical-scope-slug>`
+token name for a given Pulse endpoint instead of letting one caller drift into
+timestamp-suffixed or rerun-local token identities.
+The corresponding `NodeModal.tsx` install/setup surface is presentation only
+for those API-managed Proxmox, PBS, and PMG connections. Lifecycle guidance in
+that modal may explain monitored-system caps, but commercial enforcement still
+belongs to the canonical add-node and `/api/auto-register` boundaries instead
+of becoming a second modal-local exemption rule.
+That same deterministic token-identity contract also applies to backend-owned
+turnkey Proxmox token creation: generated setup scripts and the password-based
+PBS add-node path must derive Pulse-managed token names from the canonical
+Pulse endpoint itself rather than request-local `Host` fallbacks, so loopback
+or proxy-facing admin requests cannot fork monitor-token identity for the same
+Pulse instance.
+That same generated setup-script path must now complete registration through
+the canonical /api/auto-register contract itself: locally created Proxmox tokens must
+be submitted directly on the canonical contract instead of diverging into a
+second registration shape.
+That same setup bootstrap surface must also keep canonical request handling
+aligned across `/api/setup-script-url` and `/api/setup-script`: unsupported
+node types may not drift into implicit PBS script generation, and the direct
+setup-script route must normalize the supplied host before emitting script text
+or rerun URLs so the bootstrap artifact and downloaded script stay on the same
+node identity.
+That same setup bootstrap surface must also stay owned by one backend bootstrap
+artifact builder: `/api/setup-script-url` response fields, setup-token hinting,
+download URLs, script filenames, and the generated script's rerun command must
+all derive from the same canonical bootstrap contract instead of being rebuilt
+as separate handler-local shell snippets.
+That same canonical request contract must also keep one-time setup-token auth
+on a single field: `/api/auto-register` accepts `authToken` as the governed
+request payload key and may not preserve a parallel `setupCode` alias.
+That same governed runtime path must also keep its active auth terminology on
+setup tokens instead of setup-code residue: `config_setup_handlers.go`,
+`config_handlers.go`, and their direct proofs must model the one-time
+credential as a setup token in runtime names, logs, and auth failure text.
+That same auth failure contract must also fail specifically on the canonical
+setup-token requirement: missing `authToken` input on `/api/auto-register` may
+not collapse back to a generic authentication message once the route is
+governed as setup-token-only.
+That same canonical request contract must also keep field-validation failures
+specific: mismatched `tokenId`/`tokenValue` input may not collapse into
+generic missing-field output, and other missing canonical fields must return
+explicit `Missing required canonical auto-register fields: ...` guidance.
+That same owned setup and auto-register boundary now also participates in the
+canonical monitored-system commercial cap. A new `/api/auto-register`
+completion may proceed only when it either dedupes onto an already-counted
+top-level monitored system or fits within the deduped monitored-system limit;
+the lifecycle surface may not preserve a special exemption that keeps API-
+backed monitored systems outside the self-hosted commercial cap.
+That same validation contract must stay coherent across the public
+`/api/auto-register` route and the direct canonical handler path used by the
+same runtime surface, so Unified Agent/setup entry points do not inherit divergent
+messages for the same missing-field or token-pair failures.
+That same canonical caller contract must also require explicit node identity
+input from live callers: `/api/auto-register` may not synthesize `serverName`
+from `host` once installer, setup-script, and runtime-side Unified Agent callers all send the
+canonical field directly.
+That same canonical runtime path must also keep overlap and rerun continuity
+wording on the canonical `/api/auto-register` contract itself: active runtime
+messages and helpers may not preserve the deleted "secure auto-register" split
+when describing host-identity, DHCP-continuity, or in-place token-update
+matches.
+That same canonical runtime path must keep token-completion validation wording
+on the canonical contract too: incomplete `tokenId`/`tokenValue` payloads may
+not preserve deleted "secure token completion" wording in live handler
+messages.
+That same migration rule also applies to `scripts/install.sh`: installer-owned
+Proxmox auto-registration must keep local token creation in the installer, but
+submit the resulting token completion through the canonical /api/auto-register
+contract directly as the one supported completion path.
+That same shared `scripts/install.sh` boundary must also keep one canonical
+runtime-argument builder for the service and wrapper launch flags it persists.
+Token-bearing installs, token-file systemd installs, and wrapper-script
+launches may not each rebuild their own shell fragment for `--url`, `--token`,
+feature toggles, identity flags, or disk-exclude transport; they must all
+derive from the same installer-owned argument item list so lifecycle state does
+not drift by install path.
+That same install/setup boundary must also keep setup bootstrap metadata on one
+backend-owned artifact model. Proxmox setup-script downloads, rerun guidance,
+and `/api/setup-script-url` responses may not each carry mirrored local struct
+definitions for the same bootstrap fields.
+That same lifecycle shell transport must also keep one shared render owner for
+generated PVE and PBS setup scripts: the handler may validate inputs and choose
+the artifact, but the shell body itself must come from shared backend render
+helpers rather than an inline handler-local template engine.
+Those install and setup-command paths now also preserve the configured
+canonical `PublicURL` end to end when the admin session originates from the
+local frontend loopback, including the configured HTTPS scheme and path, so
+generated commands do not silently downgrade agent reachability to `http://`.
+That same backend install-command boundary must also normalize trailing slashes
+on canonical base URLs before composing installer asset paths or response
+snippets, so `/api/agent-install-command` and the container-runtime migration
+token path cannot drift onto `//install.sh` or slash-suffixed `PULSE_URL`
+values when `PublicURL` or `AgentConnectURL` is configured with a trailing `/`.
+That shared frontend install-command helper must also stay under explicit proof
+routing on both sides instead of relying only on downstream consumer coverage:
+changes in `frontend-modern/src/utils/agentInstallCommand.ts` must continue to
+carry the direct `frontend-install-command-helper` lifecycle proof together
+with the API-contract helper proof.
+That same shared diagnostics dependency must also preserve canonical
+fallback-reason continuity at the API boundary: when
+`internal/api/diagnostics.go` serializes monitoring memory-source breakdowns
+for lifecycle-adjacent diagnostics surfaces, legacy aliases and empty
+fallback-reason fields must still normalize onto the governed canonical reason
+contract instead of depending on monitor-owned snapshot accessors to have run
+first.
+That same shared `internal/api/` dependency now also assumes auth persistence
+compatibility is handled as an explicit migration/import boundary: legacy
+raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade
+continuity, but `session_store.go` and `csrf_store.go` must immediately
+rewrite hashed canonical persistence during load instead of leaving raw-token
+files on the primary runtime path until a later save side effect happens to
+run.
+That same shared `internal/api/` dependency also assumes session-carried OIDC
+refresh tokens stay fail-closed at rest: `session_store.go` may only persist
+or recover those tokens through encrypted-at-rest session payloads, and any
+missing-crypto or invalid-ciphertext path must drop the refresh token instead
+of leaving plaintext-at-rest session state on the lifecycle runtime path.
+That same shared `internal/api/` dependency also assumes notification test
+handlers stay decode-and-delegate only: `internal/api/notifications.go` may
+surface adjacent operator test actions, but service-template selection and
+generic webhook-test payload fallback must remain notifications-owned instead
+of becoming a second API-layer owner under the shared helper surface.
+That same shared API boundary also assumes legacy service-specific webhook
+aliases are rewritten at ingress only: `internal/api/notifications.go` may
+accept compatibility keys like Pushover `app_token` / `user_token`, but it
+must return and forward only canonical `token` / `user` fields so agent-
+adjacent shared `internal/api/` surfaces do not inherit a second live alias
+contract.
+That same shared `internal/api/` dependency now also assumes recovery-token
+persistence follows the same rule: raw recovery secrets may be minted for
+immediate operator use, but `recovery_tokens.go` must persist only token hashes
+and treat any legacy plaintext-token file as a one-time migration input that
+is rewritten immediately into hashed canonical persistence on load.
+That same shared `internal/api/` dependency now also assumes those auth stores
+stay owned by the configured router data path: session, CSRF, and
+recovery-token runtime state may not silently bind themselves to hidden
+`/etc/pulse` fallback initialization or retain old-path state after a
+reconfiguration.
+That same path-ownership rule also applies to bootstrap-token recovery and
+adjacent hosted billing side effects that share the `internal/api/` boundary:
+CLI/bootstrap retrieval, webhook dedupe state, and customer-index persistence
+must all route through the shared runtime data-dir helper instead of carrying
+private `/etc/pulse` fallbacks in neighboring entry points.
+That same shared `internal/api/` boundary also assumes manual auth env writes
+and first-session status reads resolve the `.env` path through the shared
+auth-path helper, so lifecycle-adjacent setup and password flows do not each
+reconstruct their own `/etc/pulse/.env` fallback logic.
+Those same lifecycle-adjacent setup and password flows must now also route
+`.env` writes through the shared writable auth-env helper instead of
+re-implementing config-path writes plus data-path fallback ordering inline.
+The same agent-lifecycle boundary now also fails closed on profile assignment:
+assigning an agent to a non-existent profile must return a not-found contract
+instead of persisting an orphan profile reference through the API.
+That same missing-profile assignment contract must survive the shared frontend
+control surface: `frontend-modern/src/api/agentProfiles.ts` must preserve the
+canonical missing-profile message for assignment 404s, and
+`AgentProfilesPanel.tsx` and `InfrastructureOperationsController.tsx` must resync profile state after
+that rejection instead of flattening it into a generic assignment failure while
+leaving stale profile options visible.
+That same shared profile-management boundary must also fail closed on malformed
+list payloads: `frontend-modern/src/api/agentProfiles.ts` may not silently
+reinterpret non-array profile or assignment responses as an empty state, and
+`AgentProfilesPanel.tsx` / `InfrastructureOperationsController.tsx` must surface that load failure
+instead of pretending no profiles exist.
+That same shared profile-management boundary must also fail closed on malformed
+profile-object, suggestion, schema, and validation payloads: the shared
+`agentProfiles` client may not trust partial profile objects, malformed schema
+definitions, or malformed validation/suggestion bodies, and the profile editor
+plus suggestion modal must surface those canonical contract failures instead of
+flattening them into generic save/delete/schema/validation fallback copy.
+Canonical Proxmox auto-register must also preserve the legacy DHCP continuity
+contract: when a node reruns registration from a new IP but presents the
+same canonical node name and deterministic Pulse-managed token identity, Pulse
+must update the existing node in place instead of duplicating it as a second
+inventory record.
+That same profile-management UI boundary must also stay on the direct
+`agent-profiles-surface` proof path, rather than relying only on the shared
+API client coverage to catch lifecycle drift in `AgentProfilesPanel.tsx`.
+That same profile-management presentation helper must also stay on that direct
+`agent-profiles-surface` proof path, rather than relying only on panel-level
+tests to catch lifecycle drift in
+`frontend-modern/src/utils/agentProfilesPresentation.ts`.
+Shared `internal/api/` recovery transport helpers now also preserve normalized
+filter coherence across rollup, point-history, series, and facet views so
+agent-adjacent protected-resource drill-downs do not fork between protected
+items and history slices under the same active recovery filter set.
+
+The updater/runtime surfaces must preserve the one-shot `updated_from`
+continuity handoff and the non-TLS continuity path for supported self-hosted
+installs, so upgrade-safe agent behavior does not drift between install,
+restart, and reconnect paths.
+That same runtime continuity must stay on direct lifecycle proof routes too:
+changes under `internal/hostagent/` must continue to carry the explicit
+`unified-agent-runtime` proof, and changes under `internal/agentupdate/` must
+continue to carry the explicit `agent-update-runtime` proof, instead of
+relying on broad owned-prefix coverage to catch lifecycle regressions in the
+Unified Agent runtime and updater boundaries.
+
+The settings/profile surfaces must keep unified v6 agent identity and profile
+assignment behavior canonical, rather than falling back to host-era or
+module-local assumptions. That includes copied shell install and upgrade
+commands in the unified settings surface: privilege-escalation wrappers must
+preserve the full installer argument list exactly, so selecting target profile,
+token, and command-execution flags cannot be dropped at the last clipboard hop.
+That same target-profile continuity must hold for PowerShell transport as well:
+when the selected profile enables Proxmox mode, copied Windows install commands
+must preserve both `PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE`, and
+`scripts/install.ps1` must persist those flags into the managed service
+arguments instead of silently collapsing back to generic host monitoring.
+The same lifecycle ownership now also covers manual node setup command
+presentation in `NodeModal`: the copied PVE permission snippet must stay
+aligned with the canonical backend setup script, including comma-joined
+privilege transport and non-destructive `PulseMonitor` role updates, instead
+of shipping a stale local fork.
+That same `NodeModal` boundary must also route Proxmox agent-install command
+generation through the canonical `NodesAPI.getAgentInstallCommand` client for
+both PVE and PBS, instead of mixing client-mediated and ad hoc raw POST
+transport for the same backend lifecycle command surface. That same settings
+surface must consume the shared validated response uniformly for both node
+types, surfacing canonical install-command errors inline instead of collapsing
+one pane back to generic notification-only failure.
+That same `NodeModal` boundary must also route Proxmox quick-setup command
+generation and manual setup-script download through canonical `NodesAPI`
+helpers for both PVE and PBS, preserving the shared setup-token and expiry
+contract instead of letting one node type drift onto a raw fetch-only path.
+That same `NodeModal` boundary must also stay on the direct
+`node-setup-settings-surface` proof path, rather than relying only on broad
+lane ownership or downstream command tests to catch lifecycle drift in the
+settings surface.
+That same Proxmox lifecycle transport now explicitly includes the shared
+`frontend-modern/src/api/nodes.ts` client boundary itself: changes to setup
+command or install-command request transport must carry both lifecycle proof
+and the shared API contract instead of staying implicit behind downstream
+consumer tests alone.
+That same lifecycle ownership also covers the setup completion preview's copied Unix
+install handoff in `SetupCompletionPanel`: the first-session install snippet must use the
+same shell-safe URL/token quoting, `curl -fsSL` failure behavior, and
+root-or-sudo privilege wrapper contract as the governed unified install
+surface instead of carrying a stale inline transport variant.
+That same setup-completion install transport must also preserve the canonical
+plain-HTTP continuity rule: when the configured Pulse URL is `http://`, the
+copied Unix install command must carry `--insecure` through the shared host
+install command builder instead of bypassing the lifecycle transport contract
+with local inline shell assembly.
+That same Unix install-command contract also governs backend-generated Proxmox
+install transport in `internal/api/agent_install_command_shared.go`: the
+canonical `/api/agent-install-command` and hosted Proxmox install-command
+surfaces must emit the same root-or-sudo privilege wrapper already required by
+the shared frontend Unix builder, instead of returning a raw `| bash -s --`
+pipeline that drifts from the lane's governed install shape.
+The same lifecycle shell-transport contract also applies to the diagnostics
+container-runtime migration install command in `internal/api/router.go`: that
+response must emit the canonical `--enable-host=false` flag and the governed
+root-or-sudo wrapper, rather than falling back to the stale `--disable-host`
+alias or a raw `curl | sudo bash` pipe that drifts from the managed install
+surface.
+That same diagnostics migration command must stay on the shared backend
+install-command helper path in `internal/api/agent_install_command_shared.go`,
+rather than rebuilding a local shell formatter in `router.go`, so optional
+token omission, plain-HTTP `--insecure`, trailing-slash normalization, and the
+governed privilege wrapper stay aligned with the rest of the lifecycle install
+surface.
+That same lifecycle shell transport also governs the quick setup command
+returned by `/api/setup-script-url`: `config_setup_handlers.go` must emit a
+shell-quoted `curl -fsSL` fetch for the generated setup script, and the
+token-bearing and tokenless variants must come through a shared helper instead
+of open-coding a stale `curl -sSL` pipeline in the handler.
+That same bootstrap route must also stay on one canonical request shape:
+`/api/setup-script-url` accepts a single JSON object with only the supported
+request fields, and the handler must fail closed on unknown fields or trailing
+JSON instead of tolerating typo-compatible or concatenated payloads.
+That same request contract also keeps backup-permission semantics explicit:
+`backup_perms` / `backupPerms` is a PVE-only bootstrap option, and both
+`/api/setup-script` and `/api/setup-script-url` must reject it for PBS instead
+of quietly carrying a no-op flag through the canonical setup surface.
+That same bootstrap request boundary must stay canonical on host identity too:
+`/api/setup-script` no longer generates placeholder-host scripts for later
+repair, and both setup routes must reject missing `host` input instead of
+minting artifacts that can only fail closed after download.
+That same request boundary must stay canonical on Pulse identity too:
+`/api/setup-script` no longer reconstructs `pulse_url` from the request-local
+origin, and both setup routes must require the explicit canonical Pulse URL
+that the rest of the bootstrap envelope already carries through `url`,
+`command*`, and downstream auto-register state.
+That same bootstrap boundary must now also stay canonical on identity: the
+request must carry a supported `type` and non-empty `host`, the backend must
+normalize that host before minting the one-time setup token, and both
+installer-owned and runtime-side Unified Agent callers must validate the returned
+bootstrap `type`, normalized `host`, and live `expires` metadata before they
+trust the returned `setupToken`. That consumer-side validation must fail closed
+on already-expired bootstrap responses rather than treating any non-empty
+`expires` field as usable. That same `/api/setup-script-url` request boundary
+must also stay truthful about auth: setup tokens only bootstrap the later
+`/api/setup-script` and `/api/auto-register` flows, while the setup-script-url
+request itself remains a normal authenticated request once Pulse auth exists.
+Those same installer-owned and runtime-side Unified Agent callers must also require the
+full canonical bootstrap artifact, including token-bearing `downloadURL` and
+masked `tokenHint`, so they do not keep accepting an older reduced setup-token
+response shape after the runtime and shared settings client have moved to the
+full envelope.
+The shared settings/frontend consumer in `frontend-modern/src/api/nodes.ts`
+must stay on that same canonical bootstrap contract too, normalizing and
+validating the returned setup-script-url identity fields instead of exposing a
+raw JSON passthrough to `NodeModal` and related quick-setup surfaces. That
+shared frontend consumer must also reject already-expired setup-script-url
+responses instead of treating any positive `expires` value as sufficient, and
+it must validate the returned `setupToken` without retaining that raw secret
+beyond the shared client boundary.
+`NodeModal.tsx` must then consume that canonicalized response directly,
+including copying the token-bearing `commandWithEnv` field while rendering the
+non-secret `commandWithoutEnv` preview instead of re-interpreting the
+bootstrap payload through local nullable fallbacks.
+Operator-facing quick-setup display must also stay on the runtime-owned token
+boundary: the shared frontend client must require masked `tokenHint`, and
+`NodeModal.tsx` must render that hint rather than the full returned
+`setupToken` once the bootstrap artifact itself already carries the live
+secret. That non-secret preview contract applies to both the PVE and PBS
+quick-setup panes; the settings surface may not let one path keep rendering
+the token-bearing command after the other has switched to the governed
+`commandWithoutEnv` preview. Operator guidance on those panes must stay
+truthful too: once the visible UI only shows a masked hint, copy-success text
+may not instruct the operator to paste a token "shown below" and must instead
+state that the copied command already embeds the one-time setup token. The same settings quick-setup surface must also trim and validate the Endpoint URL
+before manual setup-script download, so download and copy paths stay on the
+same canonical host-input contract. That same manual download path must also
+stay on one shell-script artifact contract: `/api/setup-script` responses must
+ship with canonical `text/x-shellscript` attachment headers and deterministic
+`pulse-setup-*.sh` filenames, while `frontend-modern/src/api/nodes.ts` and
+`NodeModal.tsx` must validate and use the returned content type and filename
+instead of inventing local text/plain download metadata.
+Manual download must also stay non-interactive without re-exposing raw setup
+tokens in UI state: `/api/setup-script-url` must return a dedicated
+token-bearing `downloadURL`, and the shared frontend client plus `NodeModal`
+must use that runtime-owned download artifact instead of fetching the plain
+script `url` and then relying on a separately displayed token value.
+That same settings quick-setup surface must also treat `/api/setup-script-url`
+as one canonical bootstrap artifact per active host/type/mode: copy and manual
+download must reuse the returned `url`, `downloadURL`, `scriptFileName`,
+`commandWithEnv`, `tokenHint`, and `expires` until the artifact expires or the
+operator changes the endpoint, instead of re-fetching and rebuilding a second
+local download path or caching the raw setup token past the shared frontend
+client.
+That same public/operator guidance must also describe that canonical bootstrap
+artifact truthfully: API docs and Proxmox/PBS setup guides may not fall back to
+stale raw `curl -sSL ... | bash` examples or omit the returned bootstrap
+artifact fields once the runtime and settings surfaces are contractually using
+`url`, `scriptFileName`, `command*`, `setupToken`, and `expires`.
+That same bootstrap response boundary must also own the setup-script filename
+before download happens: `/api/setup-script-url` must return the canonical
+`scriptFileName`, and the settings quick-setup surface must use that runtime
+metadata for operator guidance instead of hardcoded PVE/PBS script names that
+can drift from the downloaded artifact.
+That same setup-token bootstrap response must also stay coherent for the
+non-frontend consumers: the runtime-side Unified Agent and installer Proxmox registration must
+reject missing or mismatched canonical `url`, `scriptFileName`, `command`,
+`commandWithEnv`, and `commandWithoutEnv` fields instead of consuming
+`/api/setup-script-url` as a token-only response.
+That same quick-setup transport must also preserve the governed root-or-sudo
+continuity used by the install surface: `/api/setup-script-url` commands must
+execute `bash` directly when already root and fall back to `sudo` otherwise,
+including preserving `PULSE_SETUP_TOKEN` through the sudo path instead of
+assuming operators are already in a root shell.
+That same transport rule also applies to the generated PVE and PBS setup
+scripts themselves: operator-facing retry and off-host rerun guidance printed
+by `HandleSetupScript` must advertise the same fail-fast `curl -fsSL` fetch
+shape instead of drifting back to stale `curl -sSL` examples inside the script
+body.
+That embedded guidance must preserve the same root-or-sudo continuity too, so
+the script body does not hand operators a direct-root-only retry command after
+the API response itself already supports both execution paths.
+That same retry guidance must also preserve `PULSE_SETUP_TOKEN` continuity
+through both the direct-root and sudo paths, so reruns from the generated PVE
+and PBS setup scripts stay on the same non-interactive setup-token contract
+instead of silently falling back to an interactive prompt.
+That same rerun-token contract must also hydrate `PULSE_SETUP_TOKEN` from any
+embedded setup token before the script prints rerun guidance, so generated
+PVE/PBS scripts issued with canonical `setup_token` transport do not drop back
+to prompt mode on the next hop.
+That same setup-script bootstrap boundary must keep one token name end to end:
+`/api/setup-script` accepts only the canonical `setup_token` query when a token
+is embedded into the script payload, and the rendered PVE/PBS script body uses
+only `PULSE_SETUP_TOKEN` instead of lane-local alias variables.
+The same generated PVE setup-script boundary must also preserve cleanup
+continuity for discovered legacy tokens: when the script offers to remove old
+Pulse tokens from the same server scope, it must iterate the actual discovered
+`pve` and `pam` token lists instead of falling through an undefined placeholder
+loop variable that turns cleanup into a no-op. That discovery path must also
+reuse the canonical Pulse-managed token prefix for the active Pulse URL, while
+still matching legacy timestamp-suffixed variants, instead of rebuilding a
+lane-local IP-pattern guess that drifts from `buildPulseMonitorTokenName`.
+The generated PBS setup-script boundary must preserve that same cleanup
+discovery contract instead of keeping a separate IP-pattern matcher for old
+token cleanup.
+That same generated setup-script boundary must also use exact token-name
+matching when it decides whether to rotate an existing Pulse-managed token, so
+reruns do not treat partial-name collisions as the canonical managed token.
+The generated PBS setup-script branch must also keep token-copy guidance
+truthful: it may only print the one-time token-copy banner after token creation
+has actually succeeded, not ahead of a failure path that produced no token.
+That same generated PBS setup-script branch must also keep auto-register
+attempt guidance truthful: it may only print the attempt banner on the real
+request path, after token-availability and setup-token gating are resolved,
+rather than before a skip branch that never sends a registration request.
+That same rerun path must also preserve the backend-owned encoded setup-script
+request URL: embedded `SETUP_SCRIPT_URL` values in generated setup scripts must
+keep the canonical `host`, `pulse_url`, and `backup_perms` query contract
+instead of rebuilding a lossy raw query string inside the shell.
+That same off-host fallback path must not invent a second manual token-creation
+workflow either: when the script is run outside a Proxmox host, it must direct
+the operator back to rerun on the host through the canonical generated command
+instead of teaching a separate `pveum` + Pulse Settings flow that can drift
+from the backend-owned lifecycle contract.
+That same runtime boundary must also preserve canonical privilege guidance when
+the script is launched directly: generated setup scripts may not fall back to
+the stale "Please run this script as root" wording, and must instead use the
+same root requirement language already carried by the governed retry wrapper.
+That same manual-follow-up surface must also preserve one canonical token
+placeholder contract across its adjacent branches: generated PVE and PBS setup
+scripts may not drift between "[See above]", "Check the output above...", and
+other local variants when the token value is only available in prior output.
+That same completion boundary must also preserve one canonical success message
+across generated PVE and PBS setup scripts, so identical successful
+auto-register outcomes do not surface different node-type-specific wording for
+the same finished lifecycle state.
+That same auto-register boundary must also fail closed when token extraction
+fails after token creation: generated PVE and PBS setup scripts may not
+continue into prompt or request assembly with an empty token value, and must
+instead stop on the canonical "token value unavailable" branch before any
+registration attempt is formed.
+That same PBS auto-register path must also report skipped states truthfully:
+when setup-token input is absent or token extraction never produced a usable
+secret, the script may not relabel that skip as a failed request before
+success confirmation.
+The generated PVE and PBS setup scripts must also fail closed on
+auto-register success detection: their runtime branch may only treat a
+response as successful when it contains an explicit `success:true` signal,
+rather than any broad `success` substring match that could misclassify
+`success:false` payloads as a completed registration.
+That same auto-register path must also fail closed on HTTP and transport
+errors: the generated scripts must use fail-fast `curl -fsS` transport and
+gate success parsing on a successful curl exit code instead of interpreting
+arbitrary error output as a registrable response body.
+That same generated setup-script boundary must also preserve setup-token
+messaging continuity: when auto-register authentication fails, operator
+guidance must point back to the one-time Pulse setup token flow rather than
+telling the user to provide or validate an API token that this script path no
+longer uses.
+That same auth-failure guidance must also stay truthful once the generated
+setup script has already sent a registration request: it may not branch back
+into a missing-token explanation after the request path proves a setup token
+was present, and must instead direct the operator to mint a fresh setup token
+from Pulse Settings → Nodes and rerun. That same auth-failure state must also
+block the later manual-details footer, so the script does not immediately
+contradict itself by offering manual completion with the current token details.
+That same completion boundary must also preserve outcome truth: generated PVE
+and PBS setup scripts may only claim successful Pulse registration when
+auto-register actually succeeded, and must otherwise present the result as
+token setup plus manual registration follow-up instead of announcing a false
+successful onboarding state.
+That same manual-follow-up path must also stay on the canonical node-add
+contract: generated setup scripts may not redirect operators onto a stale
+secondary registration-token rerun flow, and must instead point them to finish
+registration with the emitted token details in Pulse Settings → Nodes.
+That same manual-follow-up path must also keep its failure summary on that
+canonical node-add contract: generated setup scripts may not fall back to
+vague "manual configuration may be needed" copy when the emitted token details
+already define the exact Pulse Settings → Nodes completion path.
+That same manual-follow-up path must also preserve the canonical node host
+identity already in scope for the script, rather than falling back to a stale
+placeholder host string that forces the operator to reconstruct the node
+address by hand.
+That same host continuity rule applies to PBS as well: generated setup scripts
+may not replace the requested canonical PBS host with runtime-local interface
+discovery in the manual-add footer, because DHCP or multi-NIC nodes can make
+that fallback diverge from the host the operator actually intended to register.
+That same PBS host continuity must survive auth-skip and token-skip fallback
+branches too: the generated script must bind the canonical PBS host before any
+auto-register gating that can short-circuit into manual completion, so the
+manual footer never emits a blank or lost host URL when setup-token input is
+missing.
+That same fail-closed host rule must also apply when the script never received
+any canonical host at all: generated PVE and PBS scripts may not fall back to
+placeholder host values in manual completion and must instead direct the
+operator to regenerate the script with a valid host URL.
+That same PBS host binding must exist before token-creation failure fallback as
+well, so the final manual footer still preserves the canonical requested host
+even when the script cannot mint a usable PBS token and never reaches the
+auto-register branch at all.
+Generated PVE and PBS setup scripts must also fail closed on token-creation
+failure truth: if Proxmox token minting fails, the script may not continue into
+fake manual token details or claim token setup completed. It must skip
+auto-register, surface the token-creation failure explicitly, and direct the
+operator to rerun after fixing the node-local token error.
+That same failure-truth contract also applies to token extraction errors after
+creation output is returned: generated setup scripts may not tell operators
+that manual registration might still work from that broken output. They must
+keep the flow on rerun-after-fix guidance until a usable token value actually
+exists, and the final completion footer/manual-details branch must key off that
+usable-token state rather than raw token-create success.
+That same manual-follow-up path must also preserve canonical Settings-surface
+language across both PVE and PBS setup scripts, so the operator is always
+directed back to Pulse Settings → Nodes with the emitted token details instead
+of drifting onto lane-local wording for one node type.
+That same canonical path must also hold inside the immediate auto-register
+failure branch itself, so generated scripts do not fall back to a shorter
+"Pulse Settings" variant before the final manual-completion footer repeats the
+correct Settings → Nodes destination or diverge into a separate numbered
+manual-setup detour instead of reusing the same "use the token details below"
+completion contract. That includes transport/request failures before the
+backend ever returns a response body, not just explicit error payloads.
+That same `SetupCompletionPanel` transport must also preserve the governed self-signed
+and private-CA continuity controls used by the shared lifecycle command
+surface: the first-session setup-completion install handoff must pass explicit
+`--insecure` and `--cacert` choices through the shared Unix install builder so
+the very first installer fetch and the installer runtime stay aligned with the
+same transport contract as `InfrastructureOperationsController.tsx`. In explicit insecure mode, that
+means the outer `curl` fetch must widen to `-kfsSL` instead of preserving
+strict TLS until `install.sh` starts.
+That same first-session install surface must also preserve canonical
+agent-to-Pulse addressing, not just browser-local origin: `SetupCompletionPanel` must
+default to the governed security status `agentUrl` when available and allow an
+operator override for agent connectivity, so setup-completion commands do not
+silently hand out loopback or wrong-origin install transport.
+That same first-session surface must also preserve Windows install parity:
+`SetupCompletionPanel` may not stop at Unix-only shell transport while claiming Windows
+coverage. Its PowerShell install command must route through the shared
+transport helper so URL, token, insecure-TLS, and custom-CA behavior stay
+aligned with `InfrastructureOperationsController.tsx`.
+That same first-session setup-completion surface also owns the operator's v6
+mental model for Unified Agent onboarding: `SetupCompletionPanel` must teach that one
+Unified Agent install creates one canonical Pulse system resource first, then
+layers workload discovery and API-linked platform context onto that same
+inventory. It may not present Docker, Kubernetes, Proxmox, or TrueNAS as
+competing primary onboarding paths, nor fall back to logo-led feature
+brochure copy that obscures the unified-resource contract the wizard is
+supposed to introduce.
+That same first-session setup-completion surface must also honor the lane's
+optional-auth install contract: when Pulse does not require API tokens, the
+wizard may switch to tokenless install commands only after an explicit operator
+confirmation, but it must preserve the generated token by default and keep that
+explicit token path available instead of collapsing onboarding into tokenless-only
+transport. Once the operator has explicitly chosen tokenless mode, repeated
+wizard copies must preserve that tokenless choice instead of silently rotating
+back onto token-auth transport after the first clipboard action. That same
+tokenless choice must also survive the wizard's background "agent connected"
+token-rotation path: new agent arrivals may not regenerate a token or flip the
+surface back to token-auth mode while explicit tokenless onboarding remains the
+active contract.
+That same wizard boundary must also keep its credentials drawer and exported
+credentials file aligned with the current rotated install token, rather than
+continuing to display or download the stale bootstrap token after the install
+command surface has already moved on. It must do that without erasing the
+stable bootstrap admin API credential: the wizard needs to preserve both the
+admin token and the current rotated install token as separate operator-visible
+surfaces instead of collapsing them into one mutable credential slot. The saved
+credentials handoff must also preserve the current agent-install URL and the
+matching install command shape for both Unix and Windows onboarding, so
+exported first-session material cannot drift back to browser-local login
+context or Unix-only transport while the live wizard command surface is using
+a governed or operator-overridden agent endpoint. When the operator explicitly
+confirms tokenless optional-auth mode, those same credential surfaces must stop
+claiming a current install token and instead present tokenless install mode as
+the active onboarding contract. The primary install guidance text in the wizard
+must switch with that mode as well: tokenless onboarding may not keep
+advertising automatic token rotation after each copy once the active transport
+is explicitly tokenless.
+That same `SetupCompletionPanel` boundary must also stay on the direct
+`setup-completion-install-surface` proof path, rather than relying only on shared
+helper coverage or downstream install tests to catch lifecycle drift in the
+setup completion surface.
+The same ownership also covers manual install fallback in the infrastructure
+settings surface: active and ignored Connected infrastructure rows must now
+come from the backend-owned `connectedInfrastructure` projection instead of a
+frontend-local merge of raw unified-resource facets and removed runtime arrays,
+and v6 clients no longer treat those removed runtime arrays as a parallel
+settings contract, so lifecycle scope and reconnect behavior stay canonical
+across host, Docker, and Kubernetes reporting.
+deploy results surface: `ResultsStep` must request the canonical backend
+install command from `/api/agent-install-command` for failed deploy targets
+instead of rebuilding a local shell snippet that can drift from the governed
+installer contract. That fallback surface must consume the shared validated
+`NodesAPI.getAgentInstallCommand` response, so malformed backend payloads fail
+closed and the raw backend install token stays inside the shared client
+boundary rather than leaking into deploy UI state.
+That same `ResultsStep` boundary must also stay on the direct
+`deploy-fallback-install-surface` proof path, rather than relying only on the
+shared install helper or downstream deploy tests to catch lifecycle drift in
+the infrastructure fallback surface.
+The same Windows install, upgrade, and uninstall copies must also preserve
+operator-selected transport and capability toggles: if the settings surface
+enables insecure TLS mode or Pulse command execution, the PowerShell path must
+carry `PULSE_INSECURE_SKIP_VERIFY` and `PULSE_ENABLE_COMMANDS` through to the
+installer where those settings apply, so Windows agents do not diverge from the
+governed shell transport.
+That same copied install transport must also normalize canonical base URLs
+before composing installer asset paths: when operators enter a trailing-slash
+Pulse URL, shell and PowerShell install commands must trim it before appending
+`/install.sh` or `/install.ps1` so lifecycle transport does not drift onto
+double-slash asset paths.
+That same shared install-command transport must also fail closed on blank local
+overrides: whitespace-only custom Pulse endpoint input in `InfrastructureOperationsController.tsx`
+or `SetupCompletionPanel.tsx` may not override the canonical backend-governed
+endpoint, and shared command builders must reject blank endpoint URLs instead
+of composing `/install.sh` or `/install.ps1` from an empty base.
+That same copied upgrade boundary must preserve canonical runtime identity when
+inventory already knows it: shell upgrade payloads must carry `--agent-id` and
+`--hostname`, and PowerShell upgrade payloads must carry `PULSE_AGENT_ID` and
+`PULSE_HOSTNAME`, so rerunning an upgrade does not silently collapse back to
+local-machine identity.
+Copied per-agent uninstall commands must also preserve the selected agent's
+canonical identity instead of relying on local fallback discovery alone: when
+inventory already knows the agent ID for the chosen row, the shell and
+PowerShell uninstall payloads must carry that ID through to the installer so
+managed removal deregisters the intended agent record even if local state or
+hostname lookup is stale.
+That same uninstall continuity must preserve canonical hostname fallback too:
+copied shell uninstall payloads must carry `--hostname`, copied PowerShell
+uninstall payloads must carry `PULSE_HOSTNAME`, and both installer runtimes
+must prefer that explicit hostname during lookup fallback before querying local
+machine identity.
+That governed hostname lookup fallback must also normalize query transport:
+both installer runtimes must percent-encode the resolved hostname before
+calling `/api/agents/agent/lookup`, so canonical identity recovery does not
+drift on hostnames that contain spaces or other query-significant characters.
+That same copied uninstall transport must also fail closed under required auth:
+when Pulse requires API tokens, shell and PowerShell uninstall commands must
+carry the same resolved token contract as install and upgrade instead of
+silently degrading to tokenless deregistration transport.
+That same copied Unix lifecycle transport must also preserve shell-safe
+canonical identity: shell uninstall and upgrade commands must quote the
+selected URL, token, agent ID, and hostname as command arguments instead of
+interpolating raw inventory values into the shell line.
+That same copied Windows lifecycle transport must also preserve
+PowerShell-safe canonical identity: uninstall and upgrade commands must escape
+selected URL, token, agent ID, and hostname values before placing them into
+PowerShell env assignments or command text.
+The same transport rule applies to copied install commands: shell install
+payloads must quote canonical URL/token transport, and PowerShell install
+payloads must escape URL/token values before they enter env assignments or
+`irm` command text. The same Windows upgrade boundary must quote the resolved
+PowerShell script URL as well, so canonical URLs with spaces or other
+PowerShell-significant characters do not break copied upgrade transport after
+the env assignments have already been escaped.
+That same copied lifecycle transport must also preserve explicit custom CA
+trust whenever the operator provides it: shell install, upgrade, and uninstall
+commands must pass `--cacert` to both the outer installer download and the
+installer runtime, while Windows install, upgrade, and uninstall commands must
+emit `PULSE_CACERT` and fetch `install.ps1` through a transport-aware
+PowerShell bootstrap that honors insecure-TLS or custom-CA settings on the
+first script download instead of only after the installer has already started.
+That bootstrap parity must match the installer's accepted trust formats too:
+Windows copied commands must treat `PULSE_CACERT` as the same PEM/CRT/CER
+certificate input that `scripts/install.ps1` accepts, rather than narrowing
+the first-hop bootstrap to constructor-only certificate formats.
+That same unified settings shell install and upgrade transport must also
+preserve plain-HTTP continuity automatically: when the selected Pulse URL uses
+`http://`, copied Unix commands must append `--insecure` even without the
+manual TLS-skip toggle, while only the explicit TLS-skip toggle may widen curl
+itself to `-k`.
+That same unified settings installer surface must not drift between preview and
+clipboard transport: the rendered Linux/macOS/BSD and Windows install snippets
+must already include the active token choice, custom-CA trust, insecure/plain-
+HTTP handling, install-profile flags, and command-execution mode instead of
+displaying one command and mutating it only during copy.
+That same Windows install boundary must preserve the canonical server URL even
+for the interactive PowerShell snippet: copied commands that still prompt for a
+token must export `PULSE_URL` before invoking `install.ps1`, so the selected
+agent-to-Pulse address cannot drift back to a default prompt target.
+When the operator has already generated or selected a token, that same
+interactive Windows install snippet must preserve the selected token in copied
+transport as well, rather than silently dropping back to a second manual token
+prompt while every other lifecycle command stays bound to the chosen credential.
+The inverse must also hold: token-required instances without a selected token
+must keep that interactive Windows snippet prompt-driven instead of exporting a
+placeholder `PULSE_TOKEN` value into copied transport.
+That same rule applies to copied Windows uninstall transport: after `PULSE_URL`
+is escaped into env assignments, the uninstall path must still quote the
+resolved `install.ps1` URL so canonical URLs with spaces remain valid
+PowerShell transport during deregistration and removal.
+For the shell installer, that continuity must also survive beyond the original
+clipboard command: when install or upgrade runs with explicit `--agent-id` or
+`--hostname`, `scripts/install.sh` must persist those values into its saved
+connection state and recover them during later offline uninstall instead of
+dropping back to ambient local discovery.
+That same lifecycle-owned `connection.env` contract must also stay on one
+installer-owned helper path: `scripts/install.sh` may not write the state file
+one way and then recover it through a separate field-by-field inline parser,
+because lifecycle ownership requires one canonical reader/writer for persisted
+install identity and trust metadata.
+That same lifecycle ownership must cover service control too: the installer may
+still choose different platform adapters, but stop/restart semantics for the
+managed agent must route through shared installer helpers instead of being
+re-authored in each upgrade, systemd, OpenRC, SysV, or FreeBSD branch.
+That same rule applies to teardown: uninstall and reinstall cleanup may not
+rebuild disable/remove flows inline per platform. Shared installer helpers
+must own service stop/disable/remove semantics for systemd, OpenRC, SysV, and
+service-command runtimes so lifecycle cleanup stays canonical.
+The same lifecycle rule applies to TrueNAS bootstrap too: boot-time recovery
+for SCALE and CORE may only vary at the service-manager adapter, while binary
+sync, service-link recreation, and startup sequencing stay on one
+installer-owned renderer instead of drifting across separate embedded scripts.
+That same lifecycle ownership must also cover service definition rendering:
+systemd and FreeBSD rc.d files may not preserve parallel heredoc definitions
+for the same agent runtime contract. Shared installer renderers must own the
+common service shape, with platform branches only choosing the correct runtime
+path, dependency targets, and logging adapter.
+That same lifecycle rule also applies to installer completion: success,
+unhealthy, and upgrade result handling may not drift by platform branch.
+Shared installer helpers must own the save-state handoff, health verification,
+canonical completion `json_event` output, and uninstall guidance instead of
+letting each service-manager branch narrate those outcomes separately.
+The same lifecycle rule applies to FreeBSD enablement too: direct rc.d install
+and TrueNAS CORE boot recovery may not mutate `pulse_agent_enable` through
+separate inline snippets. A shared installer-owned rc.conf enablement helper
+must own that contract so lifecycle recovery and direct installs do not drift,
+and that helper must execute the shared snippet in-process instead of defining
+it in a discarded subshell.
+The same rule applies to SysV registration: direct install may not keep its own
+inline `update-rc.d` / `chkconfig` / manual symlink block while teardown owns a
+separate canonical removal path. Shared installer helpers must own SysV
+enablement and disablement semantics as one lifecycle contract.
+The same durability rule applies to `scripts/install.ps1`: when Windows install
+or upgrade runs with explicit agent or hostname identity, the installer must
+persist that connection state under ProgramData and recover it during later
+uninstall before falling back to machine-local discovery.
+That Windows installer-owned continuity state is only valid for the currently
+installed agent. After a successful uninstall, `scripts/install.ps1` must clear
+its ProgramData state so later reruns cannot inherit stale identity or transport
+context from a removed node.
+That persisted installer-owned state must also retain self-signed transport
+intent: when install or upgrade ran in insecure TLS mode, later offline
+uninstall must recover that mode from saved state instead of silently
+reverting to strict certificate validation.
+For the shell installer, the same offline transport continuity also applies to
+custom CA trust: when install or upgrade ran with `--cacert`, later offline
+uninstall must recover that saved CA bundle path before reaching for governed
+lookup or deregistration transport.
+The Windows installer must now preserve the same installer-owned custom CA
+transport continuity for its own network calls: when install or upgrade ran
+with `PULSE_CACERT`, later offline uninstall must recover that saved CA
+certificate path before governed lookup or deregistration falls back to
+strict default trust.
+That same Windows custom-CA continuity must also reach the long-lived unified
+agent runtime: `scripts/install.ps1` must persist `--cacert` into the managed
+service arguments, and `pulse-agent` must apply that bundle to updater,
+remote-config, Unified Agent report, and command-channel HTTPS transport instead
+of limiting `PULSE_CACERT` to installer-owned download and uninstall traffic.
+That saved shell uninstall recovery must not depend only on a missing URL or
+token. When the operator reruns uninstall with only partial CLI context, the
+installer must still reload any missing persisted agent, hostname, insecure-TLS,
+or custom-CA continuity before governed lookup or deregistration falls back to
+ambient local state.
+That same insecure-TLS continuity must hold during the Windows installer's own
+network traffic, not only in the persisted service args: when the operator
+selects insecure mode, `scripts/install.ps1` must also relax certificate
+validation for its binary download and uninstall deregistration requests so
+PowerShell transport can reach self-signed Pulse instances end to end.
+The same copied install and upgrade commands must also fail closed on
+token-optional Pulse instances: when the server does not require API tokens,
+the command builder must omit token arguments entirely instead of serializing a
+fake sentinel token value into shell or PowerShell install transport.
+That token-optional settings path must still preserve explicit governed token
+selection when the operator generates one anyway: optional auth widens the
+contract to allow tokenless transport, but it must not erase or suppress a real
+selected token and force copied install commands back to tokenless-only mode.
+The installer scripts themselves must honor that same optional-auth contract:
+`scripts/install.sh` and `scripts/install.ps1` must accept a missing token and
+persist service arguments without `--token` on token-optional Pulse instances,
+instead of advertising a no-token flow in settings while the installer still
+fails validation at runtime.
+That same optional-auth install contract also applies to backend-generated
+Proxmox install commands in `internal/api/config_setup_handlers.go` and
+`internal/api/agent_install_command_shared.go`: when Pulse auth is not
+configured, the canonical agent-install-command API must return tokenless
+install transport and must not persist a new API token record just because an
+operator opened a backend-driven install surface.
+The same optional-auth continuity must hold after install as well: Unified Agent
+runtime startup may not reject a blank token unless enrollment is explicitly
+enabled, agent report transport must omit auth headers when no token is
+configured, and Proxmox auto-register flows must still complete without
+serializing an empty token header on token-optional Pulse instances.
+That same runtime-side reporting boundary must keep its product terminology
+canonical in active comments and operator-facing logs: `internal/hostagent/`
+may remain a package-location fact, but successful and failed report transport
+must describe the runtime as the Unified Agent rather than reintroducing
+"host agent" wording into v6 operator guidance.
+That same post-install optional-auth contract must also hold during managed
+removal: uninstall and deregistration flows must still notify Pulse with the
+canonical agent-uninstall payload when URL and agent identity are known, and
+must only attach API-token headers when a real token exists instead of
+silently skipping deregistration on token-optional installs.
+The same settings/profile boundary must also preserve assigned-profile
+continuity when a referenced profile is no longer present in the fetched
+profile list: assignment controls must keep the missing profile visible as the
+current state instead of collapsing the agent back to a false default-looking
+selection.
+That same uninstall-command boundary must also preserve platform-canonical
+transport in copied utility actions: Windows agents must receive the
+PowerShell uninstall flow, and copied uninstall payloads must never substitute
+an API token record ID where the runtime expects the real token secret for
+server-side deregistration.
+The same rule applies to Unix shell uninstall commands in the shared fleet
+settings surface: copied uninstall payloads may include only a real token
+secret when one is available, and must never fall back to token record IDs or
+other settings-only identifiers that the installer runtime cannot authenticate.
+Token-optional Windows uninstall commands must also preserve the canonical
+server URL in `PULSE_URL`; otherwise the PowerShell installer can remove the
+service locally while losing the deregistration path back to Pulse.
+
+Shared `internal/api/` resource helpers now also expose governed
+policy-aware resource metadata. Agent lifecycle and fleet-control surfaces may
+consume canonical `policy` and `aiSafeSummary` fields from unified resource
+payloads when they need resource context, but they must not fork their own
+sensitivity-classification or local-vs-cloud routing heuristics on the same
+runtime boundary.

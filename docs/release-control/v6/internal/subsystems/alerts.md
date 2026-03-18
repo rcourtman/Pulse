@@ -1,0 +1,112 @@
+# Alerts Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "alerts",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/internal/subsystems/alerts.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own alert identity, alert specs, evaluation, persistence semantics, and
+operator-facing alert routing behavior for live runtime alerts.
+
+## Canonical Files
+
+1. `internal/alerts/specs/types.go`
+2. `internal/alerts/specs/evaluator.go`
+3. `internal/alerts/canonical_metric.go`
+4. `internal/alerts/canonical_lifecycle.go`
+5. `internal/alerts/unified_incidents.go`
+
+## Shared Boundaries
+
+1. None.
+
+## Extension Points
+
+1. Add new alert rule kinds in `internal/alerts/specs/`
+2. Add typed collector/builders in `internal/alerts/alerts.go`
+3. Add identity/persistence updates through canonical alert helpers only
+
+## Forbidden Paths
+
+1. New ad hoc `Check*`-local evaluator logic
+2. Reintroducing runtime legacy alert-ID contracts
+3. Reintroducing per-family threshold/override merge logic outside the shared path
+
+## Completion Obligations
+
+1. Update alert spec/evaluator tests when a new rule kind is added
+2. Update this contract if alert truth or identity rules change
+3. Route runtime changes through the explicit alert proof policies in `registry.json`; default fallback proof routing is not allowed
+4. Tighten or add guardrails when an old alert path is removed
+
+## Current State
+
+Canonical alert identity and evaluation are the live runtime model. Remaining
+legacy references should exist only in explicit migration or negative test
+boundaries.
+
+Notification transport, provider delivery, queue safety, and notification API
+transport now live under the explicit `notifications` subsystem inside the
+current architecture lane. The alerts surface still owns operator-facing alert
+pages and routing UX, but it does not implicitly own the delivery engine.
+That includes the webhook settings editor: alert UI may present provider setup,
+but canonical service-field ownership such as Pushover `token` / `user`
+normalization belongs to `internal/notifications/` and persistence boundaries,
+not to alert-surface runtime delivery code.
+
+Frontend alert surfaces and backend alert-support files now require explicit
+registry path-policy coverage, so new alert-owned runtime files must be mapped
+to a concrete proof route instead of silently inheriting subsystem-default
+verification.
+
+The alerts schedule surface now also routes quiet-hour suppress-category card
+styling through `frontend-modern/src/utils/alertSchedulePresentation.ts`
+instead of leaving that selectable-card presentation inline in
+`frontend-modern/src/pages/Alerts.tsx`.
+
+Incident-event filter chip and filter-action styling now routes through
+`frontend-modern/src/utils/alertIncidentPresentation.ts` for both
+`frontend-modern/src/pages/Alerts.tsx` and
+`frontend-modern/src/features/alerts/OverviewTab.tsx` instead of allowing
+those alert timeline surfaces to fork their own filter presentation.
+
+Alert incident acknowledged badges, timeline event cards, and note-editor
+presentation now also route through
+`frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
+duplicated inline across the alerts page and overview timeline surfaces.
+
+Alert incident event meta rows and detail text treatments now also route
+through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
+keeping duplicate summary/detail typography inline in the alerts page and
+overview timelines.
+
+Resource incident panel cards, summary rows, and toggle-button presentation
+now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
+instead of remaining inline inside `frontend-modern/src/pages/Alerts.tsx`.
+
+Active alert card state, acknowledged badge, and primary/secondary action
+button presentation now route through
+`frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
+inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+
+Alert threshold and schedule surfaces must now also treat
+`discoveryTarget` as optional frontend input and keep grouping-card state on
+the canonical `node` group-header contract. Frontend alert pages may not
+assume discovery metadata is always present when deriving override IDs or
+toggle styling.
+
+Alert filter metadata and grouped header consumers must also preserve the
+canonical `agent` and `node` header boundary when reusing shared filter
+primitives. Frontend alert tables may not drift back to ad hoc host-key
+grouping or narrow filter key predicates that drop optional hostname values
+before alert group metadata is derived.

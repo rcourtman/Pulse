@@ -47,6 +47,7 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 		return
 	}
 
+	before := registry.List()
 	rebuilt := NewRegistry(registry.store)
 	rebuilt.IngestSnapshot(snapshot)
 	for source, records := range recordsBySource {
@@ -59,6 +60,13 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 	if !snapshot.LastUpdate.IsZero() && snapshot.LastUpdate.After(rebuiltAt) {
 		rebuiltAt = snapshot.LastUpdate
 	}
+
+	var occurredAt *time.Time
+	if !snapshot.LastUpdate.IsZero() {
+		occ := snapshot.LastUpdate
+		occurredAt = &occ
+	}
+	recordRegistryChanges(registry.store, before, rebuilt.List(), rebuiltAt, occurredAt, SourcePulseDiff, "")
 
 	a.mu.Lock()
 	a.registry = rebuilt
@@ -235,9 +243,12 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	if registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return
 	}
+	before := registry.List()
 	registry.IngestRecords(source, records)
+	rebuiltAt := time.Now().UTC()
+	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	a.mu.Lock()
-	a.lastRebuiltAt = time.Now().UTC()
+	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
 }
 

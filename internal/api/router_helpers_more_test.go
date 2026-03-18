@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -218,6 +219,50 @@ func TestRouterConfigureMonitorDependencies_UsesTenantSpecificResourceAdapters(t
 	router.configureMonitorDependencies(tenantMonitor)
 	if second := tenantMonitor.GetUnifiedReadState(); second != tenantReadState {
 		t.Fatal("expected tenant monitor to reuse stable adapter for same org")
+	}
+}
+
+func TestRouterMonitorAdapterForMonitorUsesPersistentStore(t *testing.T) {
+	router := &Router{
+		resourceHandlers:        NewResourceHandlers(&config.Config{DataPath: t.TempDir()}),
+		monitorResourceAdapters: make(map[string]*unifiedresources.MonitorAdapter),
+	}
+
+	monitor := &monitoring.Monitor{}
+	monitor.SetOrgID("tenant-1")
+
+	adapter := router.monitorAdapterForMonitor(monitor)
+	if adapter == nil {
+		t.Fatal("expected monitor adapter")
+	}
+
+	adapter.PopulateSupplementalRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "docker-host-1",
+			Resource: unifiedresources.Resource{
+				Type:   unifiedresources.ResourceTypeDockerService,
+				Name:   "svc-1",
+				Status: unifiedresources.StatusOnline,
+			},
+		},
+	})
+
+	store, err := router.resourceHandlers.getStore("tenant-1")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("expected 1 resource from adapter, got %d", len(resources))
+	}
+
+	changes, err := store.GetRecentChanges(resources[0].ID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 stored change, got %d", len(changes))
 	}
 }
 

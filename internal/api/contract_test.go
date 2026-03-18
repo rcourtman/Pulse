@@ -3417,6 +3417,156 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	}
 }
 
+func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T) {
+	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	occurredAt := now.Add(-2 * time.Minute)
+
+	payload := ResourcesResponse{
+		Data: []unifiedresources.Resource{
+			{
+				ID:       "vm-42",
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "web-42",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Capabilities: []unifiedresources.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unifiedresources.CapabilityTypeCommon,
+						Description:          "Restart the VM",
+						MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+						Params: []unifiedresources.CapabilityParam{
+							{
+								Name:        "force",
+								Type:        "boolean",
+								Required:    false,
+								Description: "Restart without graceful shutdown",
+							},
+						},
+					},
+				},
+				Relationships: []unifiedresources.ResourceRelationship{
+					{
+						SourceID:   "vm-42",
+						TargetID:   "node-1",
+						Type:       unifiedresources.RelRunsOn,
+						Confidence: 1,
+						Active:     true,
+						Discoverer: "proxmox_adapter",
+						ObservedAt: now,
+						LastSeenAt: now,
+						Metadata: map[string]any{
+							"source": "live",
+						},
+					},
+				},
+				RecentChanges: []unifiedresources.ResourceChange{
+					{
+						ID:               "chg-42",
+						ObservedAt:       now,
+						OccurredAt:       &occurredAt,
+						ResourceID:       "vm-42",
+						Kind:             unifiedresources.ChangeStateTransition,
+						From:             "offline",
+						To:               "online",
+						SourceType:       unifiedresources.SourcePlatformEvent,
+						SourceAdapter:    unifiedresources.AdapterProxmox,
+						Confidence:       unifiedresources.ConfidenceHigh,
+						RelatedResources: []string{"node-1"},
+						Reason:           "vm started",
+						Metadata: map[string]any{
+							"source": "snapshot",
+						},
+					},
+				},
+			},
+		},
+		Meta: ResourcesMeta{
+			Page:       1,
+			Limit:      50,
+			Total:      1,
+			TotalPages: 1,
+		},
+		Aggregations: unifiedresources.ResourceStats{
+			Total:    1,
+			ByType:   map[unifiedresources.ResourceType]int{unifiedresources.ResourceTypeVM: 1},
+			ByStatus: map[unifiedresources.ResourceStatus]int{unifiedresources.StatusOnline: 1},
+			BySource: map[unifiedresources.DataSource]int{unifiedresources.SourceProxmox: 1},
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource response: %v", err)
+	}
+
+	const want = `{
+		"data":[
+			{
+				"id":"vm-42",
+				"type":"vm",
+				"name":"web-42",
+				"status":"online",
+				"lastSeen":"2026-03-18T12:00:00Z",
+				"updatedAt":"0001-01-01T00:00:00Z",
+				"sources":null,
+				"identity":{},
+				"capabilities":[
+					{
+						"name":"restart",
+						"type":"common",
+						"description":"Restart the VM",
+						"minimumApprovalLevel":"admin",
+						"params":[
+							{
+								"name":"force",
+								"type":"boolean",
+								"required":false,
+								"isSensitive":false,
+								"description":"Restart without graceful shutdown"
+							}
+						]
+					}
+				],
+				"relationships":[
+					{
+						"sourceId":"vm-42",
+						"targetId":"node-1",
+						"type":"runs_on",
+						"confidence":1,
+						"active":true,
+						"discoverer":"proxmox_adapter",
+						"observedAt":"2026-03-18T12:00:00Z",
+						"lastSeenAt":"2026-03-18T12:00:00Z",
+						"metadata":{"source":"live"}
+					}
+				],
+				"recentChanges":[
+					{
+						"id":"chg-42",
+						"observedAt":"2026-03-18T12:00:00Z",
+						"occurredAt":"2026-03-18T11:58:00Z",
+						"resourceId":"vm-42",
+						"kind":"state_transition",
+						"from":"offline",
+						"to":"online",
+						"sourceType":"platform_event",
+						"sourceAdapter":"proxmox_adapter",
+						"confidence":"high",
+						"relatedResources":["node-1"],
+						"reason":"vm started",
+						"metadata":{"source":"snapshot"}
+					}
+				]
+			}
+		],
+		"meta":{"page":1,"limit":50,"total":1,"totalPages":1},
+		"aggregations":{"total":1,"byType":{"vm":1},"byStatus":{"online":1},"bySource":{"proxmox":1}}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

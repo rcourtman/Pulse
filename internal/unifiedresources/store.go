@@ -504,6 +504,7 @@ type MemoryStore struct {
 	mu         sync.RWMutex
 	links      []ResourceLink
 	exclusions []ResourceExclusion
+	changes    []ResourceChange
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -552,15 +553,29 @@ func (m *MemoryStore) Close() error {
 func (m *MemoryStore) RecordChange(change ResourceChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// No-op for now in memory store
+	m.changes = append(m.changes, change)
 	return nil
 }
 
 func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	// Return empty list for now in memory store
-	return []ResourceChange{}, nil
+	canonicalID = CanonicalResourceID(canonicalID)
+	var out []ResourceChange
+	for i := len(m.changes) - 1; i >= 0; i-- {
+		change := m.changes[i]
+		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+			continue
+		}
+		if !since.IsZero() && change.ObservedAt.Before(since) {
+			continue
+		}
+		out = append(out, change)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
 }
 
 func normalizePair(a, b string) (string, string) {

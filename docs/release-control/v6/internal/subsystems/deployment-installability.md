@@ -1,0 +1,352 @@
+# Deployment Installability Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "deployment-installability",
+  "lane": "L1",
+  "contract_file": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own server installation, deployment bootstrap behavior, update planning, and
+server-side update execution surfaces.
+
+## Canonical Files
+
+1. `internal/updates/`
+2. `internal/api/updates.go`
+3. `frontend-modern/src/api/updates.ts`
+4. `scripts/build-release.sh`
+5. `scripts/release_ldflags.sh`
+6. `scripts/install.ps1`
+7. `scripts/install.sh`
+8. `scripts/install-container-agent.sh`
+9. `scripts/pulse-auto-update.sh`
+
+## Shared Boundaries
+
+1. `frontend-modern/src/api/updates.ts` shared with `api-contracts`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
+2. `internal/api/updates.go` shared with `api-contracts`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+3. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+4. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+
+## Extension Points
+
+1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
+2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
+3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
+4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
+
+## Forbidden Paths
+
+1. Leaving deployment bootstrap, installer, or update-runtime files unowned under broad monitoring or generic API ownership
+2. Duplicating deployment-type update planning, installer release resolution, or updater handoff behavior outside the canonical update engine and installer scripts
+3. Treating update transport as payload-only contract work when it also defines live deployment and upgrade behavior
+
+## Completion Obligations
+
+1. Update this contract when canonical deployment or installer entry points move
+2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
+3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change
+
+## Current State
+
+This subsystem now makes deployment planning, updater orchestration, and the
+non-shell installer/update scripts explicit inside the current self-hosted
+release-confidence lane instead of leaving them as implied behavior around the
+core runtime.
+
+`internal/updates/` is the live deployment and upgrade planner. It owns
+deployment-type detection, update-plan generation, adapter selection, server
+update sequencing, and rollback-aware update state for supported Pulse
+deployments.
+That same boundary also owns the canonical running-version contract for
+release binaries: `internal/updates/version.go` must prefer the build-injected
+version string provided by the runtime entrypoint over git or working-tree
+fallbacks, so shipped release builds report the exact promoted version even
+when the install path has no `.git` metadata or a stale `VERSION` file nearby.
+Runtime bootstrap must seed that build version before the server starts rather
+than leaving version detection to deployment-local filesystem guesses.
+That release-build metadata path is now explicit too: `scripts/release_ldflags.sh`
+is the canonical owner for server and agent build ldflags, and release artifact
+assembly must route through it instead of hand-writing overlapping `main.Version`,
+`internal/updates.BuildVersion`, `internal/dockeragent.Version`, or license-key
+injection fragments across `scripts/build-release.sh`, `Dockerfile`, and the
+demo-deploy workflow. Shipped binaries, installable container images, and
+governed deployment-build workflows must all carry the same build metadata
+contract rather than depending on whichever local ldflags string happened to be
+updated last.
+The same governed promotion path must now stay explicit too:
+`scripts/release_control/resolve_release_promotion.py` is the canonical owner
+for stable-versus-RC metadata validation shared by `.github/workflows/release-dry-run.yml`
+and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
+RC lineage, soak checks, and GA/v5 notice metadata may not drift between those
+two workflows through duplicated inline shell validation.
+That same `internal/updates/` boundary now also owns runtime data-dir
+authority for temp, backup, and cleanup behavior: `manager.go` must resolve
+its working directories through the shared runtime data-dir helper instead of
+rebuilding `PULSE_DATA_DIR` plus `/etc/pulse` fallback logic inside each
+update stage.
+That same boundary also governs install.sh rollback restore targets:
+`adapter_installsh.go` may not hardcode `/etc/pulse` for rollback safety
+backups or config restore, and must derive the rollback config directory
+through that same shared runtime data-dir helper.
+That same runtime env contract also governs `pulse mock`: the CLI may not keep
+writing a separate `mock.env` sidecar when supported runtime installs already
+carry mock-mode ownership through `.env`. Mock enable/disable/status must use
+the canonical runtime `.env` path, with any install-dir `.env` probe treated as
+compatibility only.
+That same rule applies to live runtime behavior too: config loading and reload
+watching may not treat `mock.env` as a parallel primary-path control surface.
+Supported mock-mode runtime state must come from the canonical `.env` contract,
+and `.env` reload handling must own `PULSE_MOCK_*` updates and monitor reload
+triggers directly.
+
+The shell installer, Windows installer, container-agent installer, and
+unattended auto-update scripts are part of the same runtime boundary, not just
+release artifacts. `scripts/install.sh`, `scripts/install.ps1`,
+`scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
+define supported deployment entry points and update behavior, even when the
+shell and Windows installers also sit on the shared agent-lifecycle boundary.
+That shared `scripts/install.sh` boundary must also keep one canonical service
+argument builder for the runtime flags it persists. Token-bearing install
+paths, token-file systemd paths, wrapper-script launches, and later service
+materialization must all derive their flag set from the same installer-owned
+argument item list instead of rebuilding overlapping `--url`, `--token`,
+feature toggles, identity flags, and disk-exclude transport in separate shell
+blocks.
+That shared `scripts/install.sh` boundary must also stay aligned with the
+canonical auto-register contract: when the installer performs Proxmox
+auto-registration after creating a local token, it must submit that token
+completion on the canonical /api/auto-register contract using the canonical
+`tokenId`/`tokenValue` payload shape and the explicit `source="script"`
+marker, that marker must stay exactly `script` rather than a lane-local alias,
+the node `type` must stay on the supported `pve` or `pbs` set,
+the `tokenId` must stay on the canonical Pulse-managed
+`pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` identity matching the
+selected node type, and the locally created Proxmox token name must stay on the same
+deterministic Pulse-managed `pulse-<canonical-scope-slug>` contract used by the
+other v6 registration callers instead of appending timestamp or rerun-local
+entropy,
+and it must fail closed unless the response comes back on the canonical
+`status="success"` plus `action="use_token"` completion shape. That same
+installer response handling must also use the returned canonical
+`nodeId`/`nodeName` identity instead of continuing to report the caller's local
+hostname after Pulse stores a disambiguated node record.
+That same installer-owned bootstrap step against `/api/setup-script-url` must
+also validate the returned canonical `type`, normalized `host`, and live
+`expires` metadata before using the one-time setup token, so install-time
+registration cannot drift onto a stale or mismatched bootstrap response. A
+non-empty `expires` field alone is not sufficient; the installer must reject
+bootstrap responses whose expiry is already in the past. That same bootstrap
+consumer must also fail closed unless the runtime-owned setup metadata is
+present and coherent: installer-side Proxmox auto-register must reject missing
+or mismatched `url`, `scriptFileName`, `command`, `commandWithEnv`, or
+`commandWithoutEnv` fields instead of treating `/api/setup-script-url` as a
+setup-token-only side channel. It must also require the canonical
+token-bearing `downloadURL` and masked `tokenHint` fields, so the installer is
+validating the same full bootstrap artifact contract as the governed settings
+surface instead of accepting an older reduced response shape. Those installer
+checks must also validate command transport coherence, not just field presence:
+the returned token-bearing commands must reference the canonical setup-script
+URL and carry the setup token through the governed root-or-sudo wrapper, while
+the preview `commandWithoutEnv` transport must stay on the same canonical URL
+without leaking the setup token back into the non-secret path. That bootstrap
+request itself must stay on the real setup-script-url auth boundary too:
+install-time Proxmox auto-register must not model `/api/setup-script-url` as a
+setup-token-authenticated endpoint or depend on scraping a plaintext
+`.bootstrap_token` file just to call it. The supported operator retrieval path
+for first-session bootstrap is `pulse bootstrap-token`, and runtime bootstrap
+token persistence must stay encrypted at rest.
+That same bootstrap artifact contract must now be backend-owned as one
+canonical install artifact model rather than a handler-local bootstrap struct
+plus a second response envelope. Shell downloads, setup-script-url responses,
+and rerun guidance must all read from that same backend artifact shape.
+Generated PVE and PBS setup-script bodies must also render through shared
+backend install helpers instead of a handler-local shell template engine in
+`config_setup_handlers.go`, so installability ownership stays at the shared
+artifact/render boundary rather than inside one route handler.
+That same post-install discovery refresh path must treat discovery string
+errors as compatibility-only output derived from canonical structured runtime
+errors, so setup/install handlers do not become a second owner of legacy
+discovery payload state.
+That shared `scripts/install.ps1` boundary must also stay under explicit proof
+routing on both sides instead of relying only on broad installer-script
+coverage: Windows installer changes must continue to carry the direct
+`windows-agent-installer-runtime` lifecycle proof together with the direct
+`deployment-script-runtime` installability proof.
+That same installability proof rule also applies to
+`scripts/install-container-agent.sh`: changes to the container-agent installer
+must stay on the direct `deployment-script-runtime` proof path instead of
+relying only on broad script ownership.
+That same rule also applies to `scripts/pulse-auto-update.sh`: changes to the
+unattended auto-update script must stay on the direct
+`deployment-script-runtime` proof path instead of relying only on broad script
+ownership.
+That Windows installer boundary must also stay aligned with token-optional
+Pulse deployments: when the server does not require API tokens, the installer
+must accept a missing token and persist service arguments without `--token`
+instead of advertising an optional-auth install path that still fails local
+parameter validation.
+The same Windows installer boundary must also preserve profile-target parity
+with the governed settings surface: when PowerShell install transport sets
+`PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE`, `scripts/install.ps1` must
+validate and persist those Proxmox flags into the service command line rather
+than discarding the selected profile at install time.
+That same Windows installer boundary must also preserve governed transport and
+runtime toggles from the settings surface: when PowerShell install transport
+sets `PULSE_INSECURE_SKIP_VERIFY` or `PULSE_ENABLE_COMMANDS`,
+`scripts/install.ps1` must persist those settings into the service command line
+instead of dropping TLS-mode or command-execution intent on Windows installs.
+The same insecure-TLS boundary must also affect installer-owned network calls:
+when `PULSE_INSECURE_SKIP_VERIFY` is enabled, `scripts/install.ps1` must use
+that relaxed certificate policy for its own agent download and uninstall
+deregistration requests so self-signed deployments do not fail before the
+persisted Windows service ever starts.
+Copied PowerShell uninstall commands must preserve that same
+`PULSE_INSECURE_SKIP_VERIFY` setting so the governed deregistration request can
+still reach self-signed Pulse deployments during removal.
+Copied per-agent uninstall commands must also preserve the canonical agent
+identity when the settings surface already knows it, so `scripts/install.sh`
+and `scripts/install.ps1` do not have to fall back to local state-file recovery
+or hostname lookup just to deregister the selected agent.
+Those copied uninstall commands must also preserve the canonical hostname as
+the fallback identity and the installer runtimes must honor it first during
+lookup recovery, so removal stays bound to the selected Pulse inventory row
+instead of drifting to the local machine name.
+That same identity continuity must persist across later shell-managed removal:
+the saved `connection.env` state must retain explicit agent and hostname
+identity when install or upgrade supplied them, so offline uninstall does not
+lose the selected node identity just because the runtime state file is absent.
+That same saved shell artifact must now stay installer-owned as one canonical
+writer/reader path: `scripts/install.sh` may not keep a heredoc writer plus a
+second inline field parser for the same `connection.env` contract, because
+offline uninstall must consume the same persisted install-state artifact the
+installer wrote instead of reconstructing it ad hoc.
+That same installer ownership now also applies to service lifecycle control:
+upgrade, reinstall, and platform-specific start/restart flows may not each
+carry their own stop/start command sequence for the same agent runtime.
+`scripts/install.sh` must route systemd, OpenRC, SysV, and service-command
+control through explicit installer-owned helpers so service behavior does not
+drift by platform block.
+The same canonical ownership must cover teardown and removal too: uninstall,
+reinstall cleanup, and platform-specific disable/remove flows may not each
+re-author stop, disable, remove, and daemon-reload sequences inline.
+`scripts/install.sh` must route service teardown through shared installer
+helpers so removal semantics stay consistent across systemd, OpenRC, SysV,
+and service-command runtimes.
+TrueNAS boot recovery must follow the same rule: SCALE and CORE bootstrap
+scripts may differ only in their service-manager adapter, while binary sync,
+service-link recreation, and boot-time start flow stay on one installer-owned
+renderer instead of two separate heredocs.
+That same ownership rule applies to persisted service definitions: DSM, Linux,
+TrueNAS, and FreeBSD service/unit files may not keep re-authoring the same
+runtime contract in separate heredocs. `scripts/install.sh` must route shared
+systemd and FreeBSD rc.d rendering through canonical installer-owned helpers,
+with platform branches only supplying the adapter-specific inputs.
+That same installer ownership must also cover completion reporting: platform
+branches may not each rebuild their own health-verification result handling,
+`json_event` completion payloads, or uninstall guidance. `scripts/install.sh`
+must route final save-state, healthy/unhealthy status output, and completion
+event emission through one canonical installer-owned helper.
+FreeBSD enablement must follow the same rule: direct rc.d installs and
+TrueNAS CORE bootstrap may not keep separate inline `pulse_agent_enable`
+mutation logic. `scripts/install.sh` must own one canonical rc.conf enablement
+snippet/helper and reuse it across runtime and boot-recovery paths. That helper
+must execute the shared snippet in-process before applying it, rather than
+defining the function in a throwaway subshell that leaves the enable step
+silently undone.
+SysV enable-on-boot registration must follow the same rule: install-time
+`update-rc.d`, `chkconfig`, and manual rc.d symlink fallback may not live as a
+separate inline block when teardown already has a canonical owner. The
+installer must route SysV registration through one shared helper so service
+registration semantics do not drift between install and removal paths.
+Windows installability must follow the same rule: installer-owned state under
+ProgramData must retain explicit connection identity from install or upgrade so
+later PowerShell uninstall can still deregister the intended agent record when
+runtime-local state is missing or stale.
+The same uninstall lookup transport rule applies across both canonical
+installers: when fallback identity recovery calls `/api/agents/agent/lookup`,
+the resolved hostname must be percent-encoded before it is placed in the query
+string.
+The same copied uninstall commands must also fail closed on token-required
+deployments: when auth is required, command builders must preserve the required
+token contract instead of silently emitting tokenless removal transport.
+The same copied Unix lifecycle commands must also preserve shell-safe argument
+transport, so canonical URL, token, agent ID, and hostname values survive copy
+and paste without being re-tokenized by the local shell.
+The same copied Windows lifecycle commands must preserve PowerShell-safe
+argument transport, so canonical URL, token, agent ID, and hostname values do
+not get reinterpreted by PowerShell during uninstall or upgrade. That same
+Windows upgrade transport must also quote the resolved `install.ps1` URL, so
+custom canonical URLs with spaces still survive copied PowerShell reruns.
+The same uninstall transport must quote that resolved script URL as well, so
+Windows removal on custom canonical URLs does not regress back to unquoted
+PowerShell invocation.
+The same copied install commands must preserve shell-safe and PowerShell-safe
+transport for canonical URL/token values, so copy-paste install flows do not
+reinterpret those inputs before the installer even starts.
+That same Windows interactive install transport must preserve the selected
+canonical server URL in `PULSE_URL`, so a copied PowerShell install command
+cannot drift back to a different prompted target after downloading the script.
+When the settings surface already has a selected token, that same interactive
+Windows install transport must preserve it in `PULSE_TOKEN` as well, so copied
+PowerShell installs do not regress to a second credential prompt after the user
+already generated the governed token.
+Before a real token exists, the same interactive Windows transport must stay
+prompt-based instead of exporting a placeholder token value into `PULSE_TOKEN`.
+On token-optional Pulse instances, that same governed install surface must
+support both valid paths: no-token transport after explicit confirmation, and
+credentialed transport when the operator still generates a real token. Optional
+auth may not silently downgrade the settings surface to tokenless-only mode.
+That Windows installer-owned state must also be cleared after successful
+PowerShell uninstall, so a removed installation does not leave stale ProgramData
+identity or transport continuity behind for later lifecycle commands.
+The same saved uninstall state must preserve insecure/self-signed transport
+mode for both canonical installers, so an offline uninstall on a self-signed
+Pulse deployment does not regress from the original operator-approved transport
+policy back to strict TLS.
+For the shell installer, saved uninstall state must also preserve custom CA
+bundle transport so offline removal can still reach Pulse when trust depends on
+an explicit `--cacert` path instead of insecure mode.
+The Windows installer must preserve the same installer-owned custom CA
+transport continuity: when install or upgrade ran with `PULSE_CACERT`,
+`scripts/install.ps1` must validate that certificate file, use it for its own
+download and uninstall-time API transport, and persist the path so later
+offline uninstall can recover governed trust without falling back to insecure
+mode or strict default trust.
+That same installer-owned custom-CA continuity must also reach the Windows
+service it provisions: `scripts/install.ps1` must persist `--cacert` into the
+created `pulse-agent` service command line so the installed agent keeps using
+the same governed trust chain for runtime update, remote-config, and reporting
+transport instead of narrowing `PULSE_CACERT` to installer-only HTTPS.
+That offline shell uninstall recovery must trigger on partial operator-supplied
+context, not only when URL or token are absent, so persisted identity and
+transport continuity still reload when a later uninstall command provides only
+part of the canonical connection tuple.
+The same copied-upgrade path must preserve canonical agent and hostname
+identity when the settings surface already knows them, so rerunning the
+installer for an outdated node does not reset service/runtime identity back to
+ambient local machine defaults.
+The same Windows installer boundary must keep uninstall deregistration aligned
+with token-optional deployments: when URL and agent identity are known, the
+PowerShell uninstall path must still call the canonical agent-uninstall API
+without requiring an API token, adding `X-API-Token` only when a real token is
+available.
+
+`internal/api/updates.go` and `frontend-modern/src/api/updates.ts` are shared
+boundaries with `api-contracts`: they are the product-facing update transport
+surface while canonical payload-shape governance remains explicit in the API
+contract boundary.
+That shared update transport boundary must also stay under explicit proof
+routing on both sides instead of relying only on generic API fallback
+coverage: update transport changes must continue to carry the direct
+`updates-api-surface` installability proof together with a direct
+API-contract proof path.
