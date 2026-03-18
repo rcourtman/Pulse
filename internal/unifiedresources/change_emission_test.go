@@ -43,6 +43,56 @@ func TestBuildResourceChange_ClassifiesStateTransition(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_IncludesRelatedResourcesOnCreation(t *testing.T) {
+	parentID := "node:1"
+	after := Resource{
+		ID:       "vm:1",
+		Type:     ResourceTypeVM,
+		Name:     "vm-1",
+		Status:   StatusOnline,
+		ParentID: &parentID,
+		Relationships: []ResourceRelationship{
+			{SourceID: "vm:1", TargetID: "db:1", Type: RelDependsOn, Confidence: 1},
+		},
+	}
+
+	change := buildResourceChange(Resource{}, false, after, true, time.Now().UTC(), nil, SourcePlatformEvent, "")
+	if change == nil {
+		t.Fatal("expected creation change, got nil")
+	}
+	if change.Kind != ChangeStateTransition {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeStateTransition)
+	}
+	if !sameStringSet(change.RelatedResources, []string{"node:1", "db:1"}) {
+		t.Fatalf("RelatedResources = %+v, want node:1 and db:1", change.RelatedResources)
+	}
+}
+
+func TestBuildResourceChange_IncludesRelatedResourcesOnRemoval(t *testing.T) {
+	parentID := "node:1"
+	before := Resource{
+		ID:       "vm:1",
+		Type:     ResourceTypeVM,
+		Name:     "vm-1",
+		Status:   StatusOnline,
+		ParentID: &parentID,
+		Relationships: []ResourceRelationship{
+			{SourceID: "vm:1", TargetID: "db:1", Type: RelDependsOn, Confidence: 1},
+		},
+	}
+
+	change := buildResourceChange(before, true, Resource{}, false, time.Now().UTC(), nil, SourcePlatformEvent, "")
+	if change == nil {
+		t.Fatal("expected removal change, got nil")
+	}
+	if change.Kind != ChangeStateTransition {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeStateTransition)
+	}
+	if !sameStringSet(change.RelatedResources, []string{"node:1", "db:1"}) {
+		t.Fatalf("RelatedResources = %+v, want node:1 and db:1", change.RelatedResources)
+	}
+}
+
 func TestBuildResourceChange_ClassifiesRelationshipChangeAndIncludesEndpoints(t *testing.T) {
 	before := Resource{
 		ID:     "vm:1",
@@ -224,11 +274,17 @@ func TestBuildResourceChange_ClassifiesIncidentAnomalyChange(t *testing.T) {
 }
 
 func TestBuildResourceChange_ClassifiesConfigUpdate(t *testing.T) {
+	parentID := "node:1"
 	before := Resource{
-		ID:     "vm:1",
-		Type:   ResourceTypeVM,
-		Name:   "vm-1",
-		Status: StatusOnline,
+		ID:       "vm:1",
+		Type:     ResourceTypeVM,
+		Name:     "vm-1",
+		Status:   StatusOnline,
+		ParentID: &parentID,
+		Relationships: []ResourceRelationship{
+			{SourceID: "vm:1", TargetID: "db:1", Type: RelDependsOn, Confidence: 1},
+			{SourceID: "vm:1", TargetID: "service:1", Type: RelDependsOn, Confidence: 1},
+		},
 	}
 	after := before
 	after.Name = "vm-1-renamed"
@@ -246,6 +302,14 @@ func TestBuildResourceChange_ClassifiesConfigUpdate(t *testing.T) {
 	}
 	if !sameStringSet(mustChangedFields(t, change), []string{"name", "customUrl"}) {
 		t.Fatalf("changedFields = %+v, want name and customUrl", mustChangedFields(t, change))
+	}
+	if !sameStringSet(change.RelatedResources, []string{"node:1", "db:1", "service:1"}) {
+		t.Fatalf("RelatedResources = %+v, want node:1, db:1, and service:1", change.RelatedResources)
+	}
+	for _, id := range change.RelatedResources {
+		if id == change.ResourceID {
+			t.Fatalf("RelatedResources unexpectedly included primary resource ID %q", id)
+		}
 	}
 }
 

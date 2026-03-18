@@ -85,6 +85,7 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		if change.SourceAdapter == "" {
 			change.SourceAdapter = resourceChangeSourceAdapter(&after)
 		}
+		change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 		return change
 	}
 
@@ -97,6 +98,7 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		if change.SourceAdapter == "" {
 			change.SourceAdapter = resourceChangeSourceAdapter(&before)
 		}
+		change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 		return change
 	}
 
@@ -128,7 +130,6 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		change.From = resourceRelationSummary(before)
 		change.To = resourceRelationSummary(after)
 		change.Reason = "resource relationship changed"
-		change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 	case !reflect.DeepEqual(before.Capabilities, after.Capabilities):
 		change.Kind = ChangeCapability
 		change.From = fmt.Sprintf("%d", len(before.Capabilities))
@@ -144,6 +145,7 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 	if change.SourceAdapter == "" {
 		change.SourceAdapter = resourceChangeSourceAdapter(&after)
 	}
+	change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 
 	return change
 }

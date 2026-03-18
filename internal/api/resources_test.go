@@ -959,14 +959,15 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			sourceAdapter = unified.AdapterDocker
 		}
 		if err := store.RecordChange(unified.ResourceChange{
-			ID:            fmt.Sprintf("chg-42-extra-%d", i+1),
-			ResourceID:    "vm:42",
-			ObservedAt:    now.Add(-offset),
-			Kind:          unified.ChangeAnomaly,
-			SourceType:    unified.SourcePulseDiff,
-			SourceAdapter: sourceAdapter,
-			Confidence:    unified.ConfidenceMedium,
-			Reason:        "history backfill",
+			ID:               fmt.Sprintf("chg-42-extra-%d", i+1),
+			ResourceID:       "vm:42",
+			ObservedAt:       now.Add(-offset),
+			Kind:             unified.ChangeAnomaly,
+			SourceType:       unified.SourcePulseDiff,
+			SourceAdapter:    sourceAdapter,
+			Confidence:       unified.ConfidenceMedium,
+			Reason:           "history backfill",
+			RelatedResources: []string{"node-1"},
 		}); err != nil {
 			t.Fatalf("RecordChange extra %d: %v", i+1, err)
 		}
@@ -1078,6 +1079,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		if got := payload.RecentChanges[0].Metadata["ticket"]; got != "INC-1234" {
 			t.Fatalf("unexpected timeline metadata: %#v", payload.RecentChanges[0].Metadata)
 		}
+		if got := payload.RecentChanges[0].RelatedResources; len(got) != 1 || got[0] != "node-1" {
+			t.Fatalf("unexpected timeline related resources: %#v", got)
+		}
 	})
 
 	t.Run("filtered timeline", func(t *testing.T) {
@@ -1123,6 +1127,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.RecentChanges[0].ID != "chg-42-extra-2" {
 			t.Fatalf("unexpected adapter-filtered change: %#v", payload.RecentChanges[0])
+		}
+		if got := payload.RecentChanges[0].RelatedResources; len(got) != 1 || got[0] != "node-1" {
+			t.Fatalf("unexpected adapter-filtered related resources: %#v", got)
 		}
 	})
 

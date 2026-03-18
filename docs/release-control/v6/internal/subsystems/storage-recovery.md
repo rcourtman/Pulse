@@ -120,6 +120,10 @@ consume now also carries grouped `recentChangeKinds` counts by canonical change
 kind, so storage and recovery surfaces can show the distribution of restarts,
 anomalies, relationships, and capability changes without re-deriving their own
 timeline breakdowns.
+Those same resource timeline records also preserve `relatedResources` graph
+context for non-relationship changes, so storage and recovery views can still
+link neighboring resources when the timeline entry is a restart, anomaly, or
+config update rather than only when the edge itself changes.
 Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so adjacent recovery and storage workflows do not turn
 bounded history reads into unbounded collection scans.

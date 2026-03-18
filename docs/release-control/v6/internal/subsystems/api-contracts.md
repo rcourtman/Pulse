@@ -131,10 +131,11 @@ The same facet bundle contract now also returns grouped `recentChangeKinds`
 counts by canonical `ChangeKind`, so the shared drawer and summary chips can
 show the distribution of restarts, anomalies, state transitions, and other
 timeline classes without guessing from the loaded slice.
-Relationship-change timeline entries also preserve the affected graph endpoints
-in `relatedResources`, so the canonical history keeps enough context for the
-detail drawer and audit views to explain which neighboring resources moved with
-the change.
+Canonical timeline entries now also preserve graph context in
+`relatedResources`, so the history surface can explain which neighboring
+resources moved with restart, anomaly, config, state transition, and
+relationship changes instead of only exposing graph endpoints when the edge
+itself changed.
 Restart timeline entries are also a first-class contract now: `restart` change
 kinds can serialize Docker and Kubernetes restart metadata instead of being
 folded into generic state transitions.

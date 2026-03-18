@@ -84,10 +84,11 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 `internal/unifiedresources/store.go` persists those changes so `RecentChanges`
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
-Relationship-change timeline records now keep the affected graph endpoints in
-`relatedResources`, so the durable history preserves the same graph context the
-detail drawer can surface later instead of collapsing relationship changes down
-to parent-only hints.
+Timeline records now keep graph context in `relatedResources` for every
+meaningful canonical change kind, so the durable history preserves the same
+cross-resource context the detail drawer can surface later instead of
+collapsing state, restart, anomaly, or config changes down to resource-only
+hints.
 Those same relationship changes now summarize the actual edge(s) in `from` and
 `to`, so the canonical timeline keeps the graph transition readable without
 needing the drawer to reconstruct an edge summary from raw endpoints.

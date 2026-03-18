@@ -289,7 +289,7 @@ func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"relatedResourceIDs(change.ResourceID, before, after)",
+		"change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)",
 		"case resourceRestartChanged(before, after):",
 		"case resourceIncidentChanged(before, after):",
 		"if !reflect.DeepEqual(before.Relationships, after.Relationships) {",
