@@ -290,8 +290,72 @@ func TestNewSQLiteResourceStore_InitializesCanonicalResourceChangesSchema(t *tes
 	}
 }
 
+func TestNewSQLiteResourceStore_InitializesCanonicalAuditSchemas(t *testing.T) {
+	dataDir := t.TempDir()
+
+	store, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	auditTables := []struct {
+		name    string
+		columns []string
+		indexes []string
+	}{
+		{
+			name: "action_audits",
+			columns: []string{
+				"id", "action_id", "canonical_id", "request_id", "created_at", "updated_at",
+				"state", "request_json", "plan_json", "approvals_json", "result_json",
+			},
+			indexes: []string{
+				"idx_action_audits_canonical_created",
+				"idx_action_audits_action_id",
+			},
+		},
+		{
+			name:    "action_lifecycle_events",
+			columns: []string{"id", "action_id", "timestamp", "state", "actor", "message"},
+			indexes: []string{"idx_action_lifecycle_events_action"},
+		},
+		{
+			name:    "export_audits",
+			columns: []string{"id", "timestamp", "actor", "envelope_hash", "decision", "destination", "redactions_json"},
+			indexes: []string{"idx_export_audits_timestamp"},
+		},
+	}
+
+	for _, tt := range auditTables {
+		columns, err := tableColumns(store.db, tt.name)
+		if err != nil {
+			t.Fatalf("tableColumns(%q): %v", tt.name, err)
+		}
+		for _, want := range tt.columns {
+			if _, ok := columns[want]; !ok {
+				t.Fatalf("expected %s column %q, got %#v", tt.name, want, columns)
+			}
+		}
+
+		indexes, err := tableIndexes(store.db, tt.name)
+		if err != nil {
+			t.Fatalf("tableIndexes(%q): %v", tt.name, err)
+		}
+		for _, want := range tt.indexes {
+			if _, ok := indexes[want]; !ok {
+				t.Fatalf("expected %s index %q, got %#v", tt.name, want, indexes)
+			}
+		}
+	}
+}
+
 func resourceChangeColumns(db *sql.DB) (map[string]struct{}, error) {
-	rows, err := db.Query(`PRAGMA table_info(resource_changes)`)
+	return tableColumns(db, "resource_changes")
+}
+
+func tableColumns(db *sql.DB, tableName string) (map[string]struct{}, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + tableName + `)`)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +383,11 @@ func resourceChangeColumns(db *sql.DB) (map[string]struct{}, error) {
 }
 
 func resourceChangesIndexes(db *sql.DB) (map[string]struct{}, error) {
-	rows, err := db.Query(`PRAGMA index_list(resource_changes)`)
+	return tableIndexes(db, "resource_changes")
+}
+
+func tableIndexes(db *sql.DB, tableName string) (map[string]struct{}, error) {
+	rows, err := db.Query(`PRAGMA index_list(` + tableName + `)`)
 	if err != nil {
 		return nil, err
 	}
