@@ -1546,6 +1546,23 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </div>
               </div>
             </div>
+            <Show
+              when={
+                historyCapabilities().length > 0 ||
+                historyRelationships().length > 0 ||
+                historyTimeline().length > 0
+              }
+            >
+              <div class="mt-2 flex flex-col gap-1">
+                <span class="text-muted">Facet chips</span>
+                <ResourceFacetSummary
+                  capabilities={historyCapabilities()}
+                  relationships={historyRelationships()}
+                  recentChanges={historyTimeline()}
+                  counts={historyFacetCounts()}
+                />
+              </div>
+            </Show>
           </div>
 
           <div class="rounded border border-border bg-surface p-3">

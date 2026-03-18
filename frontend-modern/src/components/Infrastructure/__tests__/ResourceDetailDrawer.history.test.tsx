@@ -133,15 +133,15 @@ describe('ResourceDetailDrawer history tab', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(await screen.findByText('Capabilities 1')).toBeInTheDocument();
-    expect(screen.getByText('Relationships 1')).toBeInTheDocument();
-    expect(screen.getByText('Timeline 3')).toBeInTheDocument();
-    expect(screen.getByText('Restart 2')).toBeInTheDocument();
-    expect(screen.getByText('Anomaly 1')).toBeInTheDocument();
-    expect(screen.getByText('Platform event 1')).toBeInTheDocument();
-    expect(screen.getByText('Pulse diff 2')).toBeInTheDocument();
-    expect(screen.getByText('Docker adapter 2')).toBeInTheDocument();
-    expect(screen.getByText('Proxmox adapter 1')).toBeInTheDocument();
+    expect(await screen.findAllByText('Capabilities 1')).toHaveLength(2);
+    expect(screen.getAllByText('Relationships 1')).toHaveLength(2);
+    expect(screen.getAllByText('Timeline 3')).toHaveLength(2);
+    expect(screen.getAllByText('Restart 2')).toHaveLength(2);
+    expect(screen.getAllByText('Anomaly 1')).toHaveLength(2);
+    expect(screen.getAllByText('Platform event 1')).toHaveLength(2);
+    expect(screen.getAllByText('Pulse diff 2')).toHaveLength(2);
+    expect(screen.getAllByText('Docker adapter 2')).toHaveLength(2);
+    expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(2);
   });
 
   it('renders resource capability, relationship, and timeline facets', async () => {
@@ -237,7 +237,9 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(panel.getAllByText('Capabilities')).toHaveLength(2);
     expect(panel.getAllByText('Relationships')).toHaveLength(2);
     expect(panel.getByText('Timeline')).toBeInTheDocument();
-    expect(screen.getByText('Timeline 3')).toBeInTheDocument();
+    expect(panel.getByText('Timeline 3')).toBeInTheDocument();
+    expect(panel.getByText('Docker adapter 1')).toBeInTheDocument();
+    expect(panel.getByText('Proxmox adapter 2')).toBeInTheDocument();
     expect(
       panel.getByRole('link', { name: 'Open source resource node:pve-1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
