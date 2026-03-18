@@ -240,6 +240,56 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	}
 }
 
+func TestNewSQLiteResourceStore_InitializesCanonicalResourceChangesSchema(t *testing.T) {
+	dataDir := t.TempDir()
+
+	store, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	columns, err := resourceChangeColumns(store.db)
+	if err != nil {
+		t.Fatalf("resourceChangeColumns: %v", err)
+	}
+	if _, ok := columns["timestamp"]; ok {
+		t.Fatalf("fresh resource_changes schema unexpectedly contains legacy timestamp column: %#v", columns)
+	}
+	for _, want := range []string{"observed_at", "occurred_at", "source_type", "source_adapter", "actor", "related_resources", "metadata_json"} {
+		if _, ok := columns[want]; !ok {
+			t.Fatalf("expected canonical resource_changes column %q, got %#v", want, columns)
+		}
+	}
+
+	change := ResourceChange{
+		ID:            "chg-fresh",
+		ResourceID:    "vm:fresh",
+		ObservedAt:    time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC),
+		Kind:          ChangeRestart,
+		SourceType:    SourcePlatformEvent,
+		SourceAdapter: AdapterProxmox,
+		Confidence:    ConfidenceHigh,
+		Reason:        "fresh schema write",
+	}
+	if err := store.RecordChange(change); err != nil {
+		t.Fatalf("RecordChange on fresh schema failed: %v", err)
+	}
+	results, err := store.GetRecentChanges("vm:fresh", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges on fresh schema returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("GetRecentChanges on fresh schema returned %d rows, want 1", len(results))
+	}
+	if results[0].ID != change.ID {
+		t.Fatalf("unexpected fresh row after write: %+v", results[0])
+	}
+	if !results[0].ObservedAt.Equal(change.ObservedAt) {
+		t.Fatalf("fresh observed_at = %v, want %v", results[0].ObservedAt, change.ObservedAt)
+	}
+}
+
 func resourceChangeColumns(db *sql.DB) (map[string]struct{}, error) {
 	rows, err := db.Query(`PRAGMA table_info(resource_changes)`)
 	if err != nil {
