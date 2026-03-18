@@ -260,6 +260,24 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	}
 }
 
+func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("store.go"))
+	if err != nil {
+		t.Fatalf("failed to read store.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"idx_resource_changes_kind_time",
+		"idx_resource_changes_source_type_time",
+		"ensureResourceChangesIndexes",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/store.go must pin filtered timeline index snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	typesData, err := os.ReadFile(filepath.Join("types.go"))
 	if err != nil {

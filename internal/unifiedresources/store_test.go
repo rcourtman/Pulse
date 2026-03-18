@@ -208,6 +208,47 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 	if len(results) != 2 {
 		t.Fatalf("GetRecentChanges after migration write returned %d rows, want 2", len(results))
 	}
+
+	indexes, err := resourceChangesIndexes(store.db)
+	if err != nil {
+		t.Fatalf("resourceChangesIndexes: %v", err)
+	}
+	for _, want := range []string{
+		"idx_resource_changes_canonical_time",
+		"idx_resource_changes_kind_time",
+		"idx_resource_changes_source_type_time",
+	} {
+		if _, ok := indexes[want]; !ok {
+			t.Fatalf("expected migrated resource_changes index %q, got %#v", want, indexes)
+		}
+	}
+}
+
+func resourceChangesIndexes(db *sql.DB) (map[string]struct{}, error) {
+	rows, err := db.Query(`PRAGMA index_list(resource_changes)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	indexes := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			seq    int
+			name   string
+			uniq   int
+			origin string
+			part   int
+		)
+		if err := rows.Scan(&seq, &name, &uniq, &origin, &part); err != nil {
+			return nil, err
+		}
+		indexes[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return indexes, nil
 }
 
 func newTestStore(t *testing.T) *SQLiteResourceStore {

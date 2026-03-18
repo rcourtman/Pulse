@@ -89,6 +89,10 @@ in memory or adapter-local state.
 and `/api/resources/{id}/relationships` expose the current graph facets as
 separate queryable surfaces instead of forcing consumers to parse the full
 resource payload.
+Those filtered timeline reads are backed by dedicated `resource_changes`
+indexes on `canonical_id`, `kind`, `source_type`, and `observed_at`, so the
+canonical history path stays fast as the filtered timeline grows instead of
+falling back to a consumer-local scan.
 The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API

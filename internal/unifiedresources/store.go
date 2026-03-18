@@ -350,6 +350,9 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.migrateResourceChangesSchema(); err != nil {
 		return err
 	}
+	if err := s.ensureResourceChangesIndexes(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -377,6 +380,20 @@ func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
 
 	if err := s.normalizeResourceChangeRows(columns); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) ensureResourceChangesIndexes() error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_kind_time ON resource_changes(kind, observed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_source_type_time ON resource_changes(source_type, observed_at DESC)`,
+	}
+	for _, stmt := range indexes {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("ensure resource_changes index: %w", err)
+		}
 	}
 	return nil
 }
