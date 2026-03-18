@@ -127,6 +127,10 @@ Those history reads now also accept governed `kind`, `sourceType`, and
 `sourceAdapter` query filters, and the backend store owns the corresponding
 filtered counts, so the timeline contract can narrow by change class and
 adapter provenance without inventing a frontend-only slice of the graph.
+Relationship-change timeline entries also preserve the affected graph endpoints
+in `relatedResources`, so the canonical history keeps enough context for the
+detail drawer and audit views to explain which neighboring resources moved with
+the change.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the filter
 contract stays aligned with the canonical adapter set rather than silently
 falling back to an empty slice.

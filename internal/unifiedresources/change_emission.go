@@ -117,7 +117,7 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		change.From = resourceRelationSummary(before)
 		change.To = resourceRelationSummary(after)
 		change.Reason = "resource relationship changed"
-		change.RelatedResources = relatedResourceIDs(before, after)
+		change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 	case !reflect.DeepEqual(before.Capabilities, after.Capabilities):
 		change.Kind = ChangeCapability
 		change.From = fmt.Sprintf("%d", len(before.Capabilities))
@@ -154,6 +154,12 @@ func resourceChangedFields(before, after Resource) []string {
 	}
 	if !equalStringPtr(before.ParentID, after.ParentID) {
 		changed = append(changed, "parentId")
+	}
+	if !reflect.DeepEqual(before.Relationships, after.Relationships) {
+		changed = append(changed, "relationships")
+	}
+	if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {
+		changed = append(changed, "capabilities")
 	}
 	if !sameStringSet(before.Tags, after.Tags) {
 		changed = append(changed, "tags")
@@ -262,12 +268,13 @@ func resourceStatusString(status ResourceStatus) string {
 	return strings.TrimSpace(string(status))
 }
 
-func relatedResourceIDs(before, after Resource) []string {
+func relatedResourceIDs(primaryID string, before, after Resource) []string {
+	primaryID = CanonicalResourceID(primaryID)
 	seen := make(map[string]struct{}, 2)
 	var out []string
 	appendID := func(id string) {
 		id = CanonicalResourceID(id)
-		if id == "" {
+		if id == "" || id == primaryID {
 			return
 		}
 		if _, ok := seen[id]; ok {
@@ -281,6 +288,14 @@ func relatedResourceIDs(before, after Resource) []string {
 	}
 	if after.ParentID != nil {
 		appendID(*after.ParentID)
+	}
+	for _, relationship := range before.Relationships {
+		appendID(relationship.SourceID)
+		appendID(relationship.TargetID)
+	}
+	for _, relationship := range after.Relationships {
+		appendID(relationship.SourceID)
+		appendID(relationship.TargetID)
 	}
 	return out
 }

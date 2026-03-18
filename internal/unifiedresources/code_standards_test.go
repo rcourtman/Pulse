@@ -281,6 +281,26 @@ func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	}
 }
 
+func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("change_emission.go"))
+	if err != nil {
+		t.Fatalf("failed to read change_emission.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"relatedResourceIDs(change.ResourceID, before, after)",
+		"if !reflect.DeepEqual(before.Relationships, after.Relationships) {",
+		"changed = append(changed, \"relationships\")",
+		"if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {",
+		"changed = append(changed, \"capabilities\")",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/change_emission.go must pin canonical relationship/capability change detection snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	typesData, err := os.ReadFile(filepath.Join("types.go"))
 	if err != nil {

@@ -3747,6 +3747,67 @@ func TestContract_ResourceTimelineJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceTimelineRelationshipJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 5, 0, 0, time.UTC)
+	payload := struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Count         int                               `json:"count"`
+	}{
+		ResourceID: "vm:42",
+		RecentChanges: []unifiedresources.ResourceChange{
+			{
+				ID:               "chg-relationship-42",
+				ObservedAt:       now,
+				OccurredAt:       &now,
+				ResourceID:       "vm:42",
+				Kind:             unifiedresources.ChangeRelationship,
+				From:             "node-1",
+				To:               "node-2",
+				SourceType:       unifiedresources.SourcePulseDiff,
+				SourceAdapter:    unifiedresources.AdapterProxmox,
+				Confidence:       unifiedresources.ConfidenceHigh,
+				RelatedResources: []string{"db:alpha", "service:beta"},
+				Reason:           "dependency graph updated",
+				Metadata: map[string]any{
+					"edgeType": "depends_on",
+					"active":   true,
+				},
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource timeline relationship response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"vm:42",
+		"recentChanges":[
+			{
+				"id":"chg-relationship-42",
+				"observedAt":"2026-03-18T17:05:00Z",
+				"occurredAt":"2026-03-18T17:05:00Z",
+				"resourceId":"vm:42",
+				"kind":"relationship_change",
+				"from":"node-1",
+				"to":"node-2",
+				"sourceType":"pulse_diff",
+				"sourceAdapter":"proxmox_adapter",
+				"confidence":"high",
+				"relatedResources":["db:alpha","service:beta"],
+				"reason":"dependency graph updated",
+				"metadata":{"active":true,"edgeType":"depends_on"}
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {

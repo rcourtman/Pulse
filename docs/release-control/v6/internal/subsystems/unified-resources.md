@@ -84,6 +84,10 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 `internal/unifiedresources/store.go` persists those changes so `RecentChanges`
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
+Relationship-change timeline records now keep the affected graph endpoints in
+`relatedResources`, so the durable history preserves the same graph context the
+detail drawer can surface later instead of collapsing relationship changes down
+to parent-only hints.
 That store also now migrates legacy `resource_changes` tables that still carry
 the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
 adding the newer `occurred_at` field, and preserving the legacy timestamp on
