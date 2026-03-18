@@ -79,6 +79,10 @@ performance-owned runtime, with shared ownership against the unified-resource
 consumer boundary. The remaining performance work is no longer top-level
 ownership ambiguity on the main dashboard or infrastructure tables.
 That hot-path contract now includes policy badge rendering on resource rows.
+It now also includes the compact resource-facet summary chips rendered next
+to policy metadata, and those chips must stay within the same bounded
+windowing and mounted-row budget proved by
+`UnifiedResourceTable.performance.contract.test.tsx`.
 Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather

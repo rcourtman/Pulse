@@ -123,6 +123,65 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);
       });
     });
+
+    it('renders facet summary badges without changing the Profile S row budget', async () => {
+      const resources = makeResources(PROFILES.S, (i) =>
+        i === 0
+          ? {
+              capabilities: [
+                {
+                  name: 'restart',
+                  type: 'native',
+                  description: 'Restart the host',
+                  minimumApprovalLevel: 'admin',
+                },
+              ],
+              relationships: [
+                {
+                  sourceId: 'resource-0',
+                  targetId: 'storage-1',
+                  type: 'depends_on',
+                  confidence: 0.91,
+                  active: true,
+                  discoverer: 'proxmox_adapter',
+                  observedAt: new Date().toISOString(),
+                  lastSeenAt: new Date().toISOString(),
+                },
+              ],
+              recentChanges: [
+                {
+                  id: 'change-0',
+                  observedAt: new Date().toISOString(),
+                  resourceId: 'resource-0',
+                  kind: 'state_transition',
+                  sourceType: 'pulse_diff',
+                  confidence: 'high',
+                },
+              ],
+            }
+          : {},
+      );
+      const { container, getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(getByText('Capabilities 1')).toBeInTheDocument();
+        expect(getByText('Relationships 1')).toBeInTheDocument();
+        expect(getByText('Timeline 1')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(getBodyRowCount(container)).toBe(PROFILES.S);
+      });
+    });
   });
 
   describe('Row windowing contracts', () => {

@@ -46,6 +46,42 @@ const resource: Resource = {
       redact: ['hostname', 'alias'],
     },
   },
+  capabilities: [
+    {
+      name: 'restart',
+      type: 'native',
+      description: 'Restart the host',
+      minimumApprovalLevel: 'admin',
+    },
+    {
+      name: 'drain',
+      type: 'common',
+      description: 'Drain services safely',
+      minimumApprovalLevel: 'dry_run_only',
+    },
+  ],
+  relationships: [
+    {
+      sourceId: 'resource-1',
+      targetId: 'storage-1',
+      type: 'depends_on',
+      confidence: 0.94,
+      active: true,
+      discoverer: 'proxmox_adapter',
+      observedAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+    },
+  ],
+  recentChanges: [
+    {
+      id: 'change-1',
+      observedAt: new Date().toISOString(),
+      resourceId: 'resource-1',
+      kind: 'state_transition',
+      sourceType: 'pulse_diff',
+      confidence: 'high',
+    },
+  ],
 };
 
 describe('UnifiedResourceTable governance presentation', () => {
@@ -61,5 +97,20 @@ describe('UnifiedResourceTable governance presentation', () => {
 
     expect(getByText('Restricted')).toBeInTheDocument();
     expect(getByText('Local Only')).toBeInTheDocument();
+  });
+
+  it('surfaces resource facet counts in the resource row', () => {
+    const { getByText } = render(() => (
+      <UnifiedResourceTable
+        resources={[resource]}
+        expandedResourceId={null}
+        onExpandedResourceChange={vi.fn()}
+        groupingMode="flat"
+      />
+    ));
+
+    expect(getByText('Capabilities 2')).toBeInTheDocument();
+    expect(getByText('Relationships 1')).toBeInTheDocument();
+    expect(getByText('Timeline 1')).toBeInTheDocument();
   });
 });
