@@ -85,6 +85,11 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
 
+That same shared store now also persists append-only action lifecycle, action
+audit, and export audit records, giving the control-plane verbs a durable home
+next to the resource timeline instead of leaving those records isolated in
+memory-only models.
+
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.
 

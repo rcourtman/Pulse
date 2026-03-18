@@ -270,6 +270,160 @@ func TestRecordChange_PreservesTimelineMetadata(t *testing.T) {
 	}
 }
 
+func TestActionAuditRecord_RoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 13, 0, 0, 0, time.UTC)
+	expires := now.Add(15 * time.Minute)
+	approvedAt := now.Add(2 * time.Minute)
+	result := &ExecutionResult{Success: true, Output: "completed"}
+
+	record := ActionAuditRecord{
+		ID:        "action-1",
+		CreatedAt: now,
+		UpdatedAt: now.Add(5 * time.Minute),
+		State:     ActionStateCompleted,
+		Request: ActionRequest{
+			RequestID:      "req-1",
+			ResourceID:     "vm:300",
+			CapabilityName: "restart",
+			Params: map[string]any{
+				"force": true,
+			},
+			Reason:      "restart for maintenance",
+			RequestedBy: "agent:oncall-helper",
+		},
+		Plan: ActionPlan{
+			ActionID:             "action-1",
+			RequestID:            "req-1",
+			Allowed:              true,
+			RequiresApproval:     true,
+			ApprovalPolicy:       ApprovalAdmin,
+			PredictedBlastRadius: []string{"node:1", "storage:1"},
+			RollbackAvailable:    true,
+			Message:              "allowed",
+			PlannedAt:            now,
+			ExpiresAt:            expires,
+			ResourceVersion:      "rv-1",
+			PolicyVersion:        "pv-1",
+			GraphVersion:         "gv-1",
+			PlanHash:             "plan-hash-1",
+		},
+		Approvals: []ActionApprovalRecord{
+			{
+				Actor:     "admin@example.com",
+				Method:    MethodUI,
+				Timestamp: approvedAt,
+				Outcome:   OutcomeApproved,
+				Reason:    "approved for maintenance window",
+			},
+		},
+		Result: result,
+	}
+
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	results, err := store.GetActionAudits("vm:300", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 action audit, got %d", len(results))
+	}
+
+	got := results[0]
+	if got.ID != record.ID || got.State != record.State {
+		t.Fatalf("unexpected audit headers: %+v", got)
+	}
+	if got.Request.RequestID != record.Request.RequestID || got.Request.RequestedBy != record.Request.RequestedBy {
+		t.Fatalf("request round-trip failed: %+v", got.Request)
+	}
+	if got.Plan.PolicyVersion != record.Plan.PolicyVersion || got.Plan.GraphVersion != record.Plan.GraphVersion {
+		t.Fatalf("plan round-trip failed: %+v", got.Plan)
+	}
+	if len(got.Approvals) != 1 || got.Approvals[0].Actor != record.Approvals[0].Actor || got.Approvals[0].Outcome != record.Approvals[0].Outcome {
+		t.Fatalf("approvals round-trip failed: %+v", got.Approvals)
+	}
+	if got.Result == nil || !got.Result.Success || got.Result.Output != result.Output {
+		t.Fatalf("result round-trip failed: %+v", got.Result)
+	}
+}
+
+func TestActionLifecycleEvent_RoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)
+
+	events := []ActionLifecycleEvent{
+		{
+			ActionID:  "action-2",
+			Timestamp: now,
+			State:     ActionStatePlanned,
+			Actor:     "system",
+			Message:   "planned",
+		},
+		{
+			ActionID:  "action-2",
+			Timestamp: now.Add(1 * time.Minute),
+			State:     ActionStateApproved,
+			Actor:     "admin@example.com",
+			Message:   "approved",
+		},
+	}
+
+	for _, event := range events {
+		if err := store.RecordActionLifecycleEvent(event); err != nil {
+			t.Fatalf("RecordActionLifecycleEvent: %v", err)
+		}
+	}
+
+	results, err := store.GetActionLifecycleEvents("action-2", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionLifecycleEvents: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 lifecycle events, got %d", len(results))
+	}
+	if results[0].State != ActionStateApproved || results[1].State != ActionStatePlanned {
+		t.Fatalf("unexpected lifecycle ordering: %+v", results)
+	}
+}
+
+func TestExportAuditRecord_RoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 15, 0, 0, 0, time.UTC)
+
+	record := ExportAuditRecord{
+		ID:           "export-1",
+		Timestamp:    now,
+		Actor:        "agent:context-router",
+		EnvelopeHash: "sha256:deadbeef",
+		Decision:     ExportRedacted,
+		Destination:  "local-llama",
+		Redactions:   []string{"metadata.hostname", "identity.ipAddresses"},
+	}
+
+	if err := store.RecordExportAudit(record); err != nil {
+		t.Fatalf("RecordExportAudit: %v", err)
+	}
+
+	results, err := store.GetExportAudits(now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetExportAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 export audit, got %d", len(results))
+	}
+
+	got := results[0]
+	if got.ID != record.ID || got.Decision != record.Decision || got.Destination != record.Destination {
+		t.Fatalf("unexpected export audit round-trip: %+v", got)
+	}
+	if len(got.Redactions) != len(record.Redactions) || got.Redactions[0] != record.Redactions[0] || got.Redactions[1] != record.Redactions[1] {
+		t.Fatalf("redactions round-trip failed: %+v", got.Redactions)
+	}
+}
+
 func TestGetRecentChanges_RespectsTimeFilter(t *testing.T) {
 	store := newTestStore(t)
 	base := time.Now().UTC().Truncate(time.Second)

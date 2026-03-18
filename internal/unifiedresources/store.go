@@ -26,6 +26,12 @@ type ResourceStore interface {
 	GetExclusions() ([]ResourceExclusion, error)
 	RecordChange(change ResourceChange) error
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error)
+	RecordActionAudit(record ActionAuditRecord) error
+	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
+	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
+	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error)
+	RecordExportAudit(record ExportAuditRecord) error
+	GetExportAudits(since time.Time, limit int) ([]ExportAuditRecord, error)
 	Close() error
 }
 
@@ -295,6 +301,43 @@ func (s *SQLiteResourceStore) initSchema() error {
 		metadata_json TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC);
+
+	CREATE TABLE IF NOT EXISTS action_audits (
+		id TEXT PRIMARY KEY,
+		action_id TEXT NOT NULL,
+		canonical_id TEXT NOT NULL,
+		request_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		state TEXT NOT NULL,
+		request_json TEXT NOT NULL,
+		plan_json TEXT NOT NULL,
+		approvals_json TEXT,
+		result_json TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_action_audits_canonical_created ON action_audits(canonical_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_action_audits_action_id ON action_audits(action_id);
+
+	CREATE TABLE IF NOT EXISTS action_lifecycle_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		action_id TEXT NOT NULL,
+		timestamp DATETIME NOT NULL,
+		state TEXT NOT NULL,
+		actor TEXT,
+		message TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_action_lifecycle_events_action ON action_lifecycle_events(action_id, timestamp DESC);
+
+	CREATE TABLE IF NOT EXISTS export_audits (
+		id TEXT PRIMARY KEY,
+		timestamp DATETIME NOT NULL,
+		actor TEXT NOT NULL,
+		envelope_hash TEXT NOT NULL,
+		decision TEXT NOT NULL,
+		destination TEXT NOT NULL,
+		redactions_json TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_export_audits_timestamp ON export_audits(timestamp DESC);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -499,12 +542,236 @@ func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Ti
 	return changes, nil
 }
 
+func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	requestJSON, err := json.Marshal(record.Request)
+	if err != nil {
+		return fmt.Errorf("marshal action request: %w", err)
+	}
+	planJSON, err := json.Marshal(record.Plan)
+	if err != nil {
+		return fmt.Errorf("marshal action plan: %w", err)
+	}
+	approvalsJSON, err := json.Marshal(record.Approvals)
+	if err != nil {
+		return fmt.Errorf("marshal action approvals: %w", err)
+	}
+	resultJSON, err := json.Marshal(record.Result)
+	if err != nil {
+		return fmt.Errorf("marshal action result: %w", err)
+	}
+
+	_, err = s.db.Exec(`
+		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			action_id=excluded.action_id,
+			canonical_id=excluded.canonical_id,
+			request_id=excluded.request_id,
+			created_at=excluded.created_at,
+			updated_at=excluded.updated_at,
+			state=excluded.state,
+			request_json=excluded.request_json,
+			plan_json=excluded.plan_json,
+			approvals_json=excluded.approvals_json,
+			result_json=excluded.result_json
+	`, record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON))
+	if err != nil {
+		return fmt.Errorf("insert action audit: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
+	query := `
+		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json
+		FROM action_audits
+		WHERE canonical_id = ? AND created_at >= ?
+		ORDER BY created_at DESC`
+
+	args := []any{CanonicalResourceID(canonicalID), since}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query action audits: %w", err)
+	}
+	defer rows.Close()
+
+	var records []ActionAuditRecord
+	for rows.Next() {
+		var record ActionAuditRecord
+		var stateStr string
+		var actionID, requestID string
+		var requestJSON, planJSON, approvalsJSON, resultJSON sql.NullString
+		if err := rows.Scan(&record.ID, &actionID, &requestID, &record.CreatedAt, &record.UpdatedAt, &stateStr, &requestJSON, &planJSON, &approvalsJSON, &resultJSON); err != nil {
+			return nil, fmt.Errorf("scan action audit row: %w", err)
+		}
+
+		record.State = ActionState(stateStr)
+		if requestJSON.Valid && requestJSON.String != "" {
+			if err := json.Unmarshal([]byte(requestJSON.String), &record.Request); err != nil {
+				return nil, fmt.Errorf("unmarshal action request: %w", err)
+			}
+		}
+		if planJSON.Valid && planJSON.String != "" {
+			if err := json.Unmarshal([]byte(planJSON.String), &record.Plan); err != nil {
+				return nil, fmt.Errorf("unmarshal action plan: %w", err)
+			}
+		}
+		if approvalsJSON.Valid && approvalsJSON.String != "" {
+			if err := json.Unmarshal([]byte(approvalsJSON.String), &record.Approvals); err != nil {
+				return nil, fmt.Errorf("unmarshal action approvals: %w", err)
+			}
+		}
+		if resultJSON.Valid && resultJSON.String != "" && resultJSON.String != "null" {
+			var result ExecutionResult
+			if err := json.Unmarshal([]byte(resultJSON.String), &result); err != nil {
+				return nil, fmt.Errorf("unmarshal action result: %w", err)
+			}
+			record.Result = &result
+		}
+		record.Request.RequestID = requestID
+		record.Request.ResourceID = CanonicalResourceID(record.Request.ResourceID)
+		_ = actionID
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate action audit rows: %w", err)
+	}
+	return records, nil
+}
+
+func (s *SQLiteResourceStore) RecordActionLifecycleEvent(event ActionLifecycleEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(`
+		INSERT INTO action_lifecycle_events (action_id, timestamp, state, actor, message)
+		VALUES (?, ?, ?, ?, ?)
+	`, event.ActionID, event.Timestamp, string(event.State), event.Actor, event.Message)
+	if err != nil {
+		return fmt.Errorf("insert action lifecycle event: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error) {
+	query := `
+		SELECT action_id, timestamp, state, actor, message
+		FROM action_lifecycle_events
+		WHERE action_id = ? AND timestamp >= ?
+		ORDER BY timestamp DESC`
+
+	args := []any{actionID, since}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query action lifecycle events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []ActionLifecycleEvent
+	for rows.Next() {
+		var event ActionLifecycleEvent
+		var stateStr string
+		if err := rows.Scan(&event.ActionID, &event.Timestamp, &stateStr, &event.Actor, &event.Message); err != nil {
+			return nil, fmt.Errorf("scan action lifecycle row: %w", err)
+		}
+		event.State = ActionState(stateStr)
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate action lifecycle rows: %w", err)
+	}
+	return events, nil
+}
+
+func (s *SQLiteResourceStore) RecordExportAudit(record ExportAuditRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	redactionsJSON, err := json.Marshal(record.Redactions)
+	if err != nil {
+		return fmt.Errorf("marshal export redactions: %w", err)
+	}
+
+	_, err = s.db.Exec(`
+		INSERT INTO export_audits (id, timestamp, actor, envelope_hash, decision, destination, redactions_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			timestamp=excluded.timestamp,
+			actor=excluded.actor,
+			envelope_hash=excluded.envelope_hash,
+			decision=excluded.decision,
+			destination=excluded.destination,
+			redactions_json=excluded.redactions_json
+	`, record.ID, record.Timestamp, record.Actor, record.EnvelopeHash, string(record.Decision), record.Destination, string(redactionsJSON))
+	if err != nil {
+		return fmt.Errorf("insert export audit: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) GetExportAudits(since time.Time, limit int) ([]ExportAuditRecord, error) {
+	query := `
+		SELECT id, timestamp, actor, envelope_hash, decision, destination, redactions_json
+		FROM export_audits
+		WHERE timestamp >= ?
+		ORDER BY timestamp DESC`
+
+	args := []any{since}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query export audits: %w", err)
+	}
+	defer rows.Close()
+
+	var records []ExportAuditRecord
+	for rows.Next() {
+		var record ExportAuditRecord
+		var decisionStr string
+		var redactionsJSON sql.NullString
+		if err := rows.Scan(&record.ID, &record.Timestamp, &record.Actor, &record.EnvelopeHash, &decisionStr, &record.Destination, &redactionsJSON); err != nil {
+			return nil, fmt.Errorf("scan export audit row: %w", err)
+		}
+		record.Decision = ExportDecision(decisionStr)
+		if redactionsJSON.Valid && redactionsJSON.String != "" {
+			if err := json.Unmarshal([]byte(redactionsJSON.String), &record.Redactions); err != nil {
+				return nil, fmt.Errorf("unmarshal export redactions: %w", err)
+			}
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate export audit rows: %w", err)
+	}
+	return records, nil
+}
+
 // MemoryStore is an in-memory implementation for tests.
 type MemoryStore struct {
-	mu         sync.RWMutex
-	links      []ResourceLink
-	exclusions []ResourceExclusion
-	changes    []ResourceChange
+	mu                    sync.RWMutex
+	links                 []ResourceLink
+	exclusions            []ResourceExclusion
+	changes               []ResourceChange
+	actionAudits          []ActionAuditRecord
+	actionLifecycleEvents []ActionLifecycleEvent
+	exportAudits          []ExportAuditRecord
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -571,6 +838,85 @@ func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limi
 			continue
 		}
 		out = append(out, change)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.actionAudits = append(m.actionAudits, record)
+	return nil
+}
+
+func (m *MemoryStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	canonicalID = CanonicalResourceID(canonicalID)
+	var out []ActionAuditRecord
+	for i := len(m.actionAudits) - 1; i >= 0; i-- {
+		record := m.actionAudits[i]
+		if canonicalID != "" && CanonicalResourceID(record.Request.ResourceID) != canonicalID {
+			continue
+		}
+		if !since.IsZero() && record.CreatedAt.Before(since) {
+			continue
+		}
+		out = append(out, record)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (m *MemoryStore) RecordActionLifecycleEvent(event ActionLifecycleEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.actionLifecycleEvents = append(m.actionLifecycleEvents, event)
+	return nil
+}
+
+func (m *MemoryStore) GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []ActionLifecycleEvent
+	for i := len(m.actionLifecycleEvents) - 1; i >= 0; i-- {
+		event := m.actionLifecycleEvents[i]
+		if actionID != "" && event.ActionID != actionID {
+			continue
+		}
+		if !since.IsZero() && event.Timestamp.Before(since) {
+			continue
+		}
+		out = append(out, event)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (m *MemoryStore) RecordExportAudit(record ExportAuditRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exportAudits = append(m.exportAudits, record)
+	return nil
+}
+
+func (m *MemoryStore) GetExportAudits(since time.Time, limit int) ([]ExportAuditRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []ExportAuditRecord
+	for i := len(m.exportAudits) - 1; i >= 0; i-- {
+		record := m.exportAudits[i]
+		if !since.IsZero() && record.Timestamp.Before(since) {
+			continue
+		}
+		out = append(out, record)
 		if limit > 0 && len(out) >= limit {
 			break
 		}
