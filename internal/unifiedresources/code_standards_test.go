@@ -293,6 +293,7 @@ func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing
 		"changed = append(changed, \"relationships\")",
 		"if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {",
 		"changed = append(changed, \"capabilities\")",
+		"resourceRelationshipSummary(relationships []ResourceRelationship)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

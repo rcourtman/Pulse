@@ -88,6 +88,9 @@ Relationship-change timeline records now keep the affected graph endpoints in
 `relatedResources`, so the durable history preserves the same graph context the
 detail drawer can surface later instead of collapsing relationship changes down
 to parent-only hints.
+Those same relationship changes now summarize the actual edge(s) in `from` and
+`to`, so the canonical timeline keeps the graph transition readable without
+needing the drawer to reconstruct an edge summary from raw endpoints.
 That store also now migrates legacy `resource_changes` tables that still carry
 the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
 adding the newer `occurred_at` field, and preserving the legacy timestamp on

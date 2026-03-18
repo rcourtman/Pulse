@@ -65,6 +65,9 @@ func TestBuildResourceChange_ClassifiesRelationshipChangeAndIncludesEndpoints(t 
 	if change.Kind != ChangeRelationship {
 		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeRelationship)
 	}
+	if change.From != "vm:1->db:1[depends_on]" || change.To != "vm:1->db:2[depends_on]" {
+		t.Fatalf("From/To = %q/%q, want vm:1->db:1[depends_on]/vm:1->db:2[depends_on]", change.From, change.To)
+	}
 	if !sameStringSet(change.RelatedResources, []string{"db:1", "db:2"}) {
 		t.Fatalf("RelatedResources = %+v, want db:1 and db:2", change.RelatedResources)
 	}
