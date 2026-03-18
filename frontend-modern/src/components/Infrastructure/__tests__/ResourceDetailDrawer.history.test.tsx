@@ -94,6 +94,11 @@ describe('ResourceDetailDrawer history tab', () => {
           reason: 'Routine restart requested',
         },
       ],
+      counts: {
+        capabilities: 1,
+        relationships: 1,
+        recentChanges: 3,
+      },
     });
 
     const resource = baseResource({
@@ -110,7 +115,7 @@ describe('ResourceDetailDrawer history tab', () => {
 
     expect(await screen.findByText('Capabilities 1')).toBeInTheDocument();
     expect(screen.getByText('Relationships 1')).toBeInTheDocument();
-    expect(screen.getByText('Timeline 1')).toBeInTheDocument();
+    expect(screen.getByText('Timeline 3')).toBeInTheDocument();
   });
 
   it('renders resource capability, relationship, and timeline facets', async () => {
@@ -162,6 +167,11 @@ describe('ResourceDetailDrawer history tab', () => {
           reason: 'Routine restart requested',
         },
       ],
+      counts: {
+        capabilities: 1,
+        relationships: 1,
+        recentChanges: 3,
+      },
     });
 
     const resource = baseResource({
@@ -185,6 +195,7 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(panel.getAllByText('Capabilities')).toHaveLength(2);
     expect(panel.getAllByText('Relationships')).toHaveLength(2);
     expect(panel.getByText('Timeline')).toBeInTheDocument();
+    expect(screen.getByText('Timeline 3')).toBeInTheDocument();
     expect(panel.getByText('node:pve-1 → vm:42')).toBeInTheDocument();
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
   });

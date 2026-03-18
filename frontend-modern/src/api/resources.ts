@@ -28,10 +28,17 @@ export interface ResourceTimelineResponse {
   count: number;
 }
 
+export interface ResourceFacetCounts {
+  capabilities: number;
+  relationships: number;
+  recentChanges: number;
+}
+
 export interface ResourceFacetBundle {
   capabilities: ResourceCapability[];
   relationships: ResourceRelationship[];
   recentChanges: ResourceChange[];
+  counts: ResourceFacetCounts;
 }
 
 const normalizeResourceId = (resourceId: string): string => resourceId.trim();
@@ -91,6 +98,11 @@ export class ResourceAPI {
       capabilities: capabilities.capabilities ?? [],
       relationships: relationships.relationships ?? [],
       recentChanges: recentChanges.recentChanges ?? [],
+      counts: {
+        capabilities: capabilities.count ?? 0,
+        relationships: relationships.count ?? 0,
+        recentChanges: recentChanges.count ?? 0,
+      },
     };
   }
 }

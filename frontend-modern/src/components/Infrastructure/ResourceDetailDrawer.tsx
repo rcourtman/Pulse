@@ -292,6 +292,16 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const resourceTimeline = createMemo(
     () => resourceFacets()?.recentChanges ?? props.resource.recentChanges ?? [],
   );
+  const resourceFacetCounts = createMemo(() => resourceFacets()?.counts ?? null);
+  const resourceCapabilityCount = createMemo(
+    () => resourceFacetCounts()?.capabilities ?? resourceCapabilities().length,
+  );
+  const resourceRelationshipCount = createMemo(
+    () => resourceFacetCounts()?.relationships ?? resourceRelationships().length,
+  );
+  const resourceTimelineCount = createMemo(
+    () => resourceFacetCounts()?.recentChanges ?? resourceTimeline().length,
+  );
   const sortedResourceTimeline = createMemo(() =>
     [...resourceTimeline()].sort((left, right) => {
       const leftTime = Date.parse(left.observedAt || '');
@@ -750,6 +760,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     capabilities={resourceCapabilities()}
                     relationships={resourceRelationships()}
                     recentChanges={resourceTimeline()}
+                    counts={resourceFacetCounts()}
                   />
                 </div>
               </Show>
@@ -1341,19 +1352,19 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
                 <div class="text-[10px] text-muted">Capabilities</div>
                 <div class="text-sm font-semibold text-base-content">
-                  {resourceCapabilities().length}
+                  {resourceCapabilityCount()}
                 </div>
               </div>
               <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
                 <div class="text-[10px] text-muted">Relationships</div>
                 <div class="text-sm font-semibold text-base-content">
-                  {resourceRelationships().length}
+                  {resourceRelationshipCount()}
                 </div>
               </div>
               <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
                 <div class="text-[10px] text-muted">Timeline Events</div>
                 <div class="text-sm font-semibold text-base-content">
-                  {sortedResourceTimeline().length}
+                  {resourceTimelineCount()}
                 </div>
               </div>
             </div>

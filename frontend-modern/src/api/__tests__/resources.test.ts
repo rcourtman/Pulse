@@ -78,6 +78,11 @@ describe('ResourceAPI', () => {
       capabilities: [{ name: 'restart' }],
       relationships: [{ sourceId: 'node:1', targetId: 'vm:42' }],
       recentChanges: [{ id: 'change-1' }],
+      counts: {
+        capabilities: 1,
+        relationships: 1,
+        recentChanges: 1,
+      },
     });
   });
 

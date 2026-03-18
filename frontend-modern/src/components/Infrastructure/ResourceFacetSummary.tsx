@@ -11,10 +11,17 @@ type FacetBadge = {
   className: string;
 };
 
+export interface ResourceFacetSummaryCounts {
+  capabilities?: number | null;
+  relationships?: number | null;
+  recentChanges?: number | null;
+}
+
 export interface ResourceFacetSummaryProps {
   capabilities?: readonly ResourceCapability[] | null;
   relationships?: readonly ResourceRelationship[] | null;
   recentChanges?: readonly ResourceChange[] | null;
+  counts?: ResourceFacetSummaryCounts | null;
   class?: string;
   testId?: string;
 }
@@ -29,11 +36,12 @@ const buildFacetBadges = (
   capabilities?: readonly ResourceCapability[] | null,
   relationships?: readonly ResourceRelationship[] | null,
   recentChanges?: readonly ResourceChange[] | null,
+  counts?: ResourceFacetSummaryCounts | null,
 ): FacetBadge[] => {
   const badges: FacetBadge[] = [];
-  const capabilityCount = capabilities?.length ?? 0;
-  const relationshipCount = relationships?.length ?? 0;
-  const changeCount = recentChanges?.length ?? 0;
+  const capabilityCount = counts?.capabilities ?? capabilities?.length ?? 0;
+  const relationshipCount = counts?.relationships ?? relationships?.length ?? 0;
+  const changeCount = counts?.recentChanges ?? recentChanges?.length ?? 0;
 
   if (capabilityCount > 0) {
     badges.push({
@@ -64,7 +72,7 @@ const buildFacetBadges = (
 
 export const ResourceFacetSummary: Component<ResourceFacetSummaryProps> = (props) => {
   const badges = createMemo(() =>
-    buildFacetBadges(props.capabilities, props.relationships, props.recentChanges),
+    buildFacetBadges(props.capabilities, props.relationships, props.recentChanges, props.counts),
   );
 
   return (

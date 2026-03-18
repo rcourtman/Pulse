@@ -182,6 +182,10 @@ table instead of diverging by resource class. The same facet summary now also
 appears in the resource drawer's runtime overview card through a shared
 `ResourceFacetSummary` component, so table and detail views stay aligned on a
 single canonical rendering path for the resource graph counts.
+The drawer's shared facet bundle also preserves the backend counts for the
+loaded capabilities, relationships, and timeline slice, so the overview card
+and history summary can report the total facet history instead of collapsing to
+the currently loaded page when the timeline endpoint is paginated.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client
