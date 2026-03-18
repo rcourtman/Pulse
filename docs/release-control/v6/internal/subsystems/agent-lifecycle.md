@@ -87,6 +87,11 @@ does not own unified-resource history or control-plane timeline persistence.
 Those runtime changes now travel through the shared API and unified-resource
 contracts, which keeps fleet bootstrap and identity continuity separate from
 resource-change recording and historical inspection.
+The shared API runtime now also exposes unified-resource action, lifecycle,
+and export audit reads alongside the enterprise audit surface. That read path
+belongs to the API and unified-resource contracts, not to lifecycle ownership,
+so the agent-install and registration lane stays focused on fleet continuity
+instead of adopting execution-history persistence as a side effect.
 
 The owned backend API surfaces must preserve the exact-release installer
 fallback, canonical /api/auto-register behavior, and hosted org install-command

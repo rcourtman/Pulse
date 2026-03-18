@@ -496,12 +496,22 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 
 func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
 	query := `
-		SELECT id, observed_at, occurred_at, kind, from_state, to_state, source_type, source_adapter, actor, confidence, reason, related_resources, metadata_json 
-		FROM resource_changes 
-		WHERE canonical_id = ? AND observed_at >= ? 
-		ORDER BY observed_at DESC`
+		SELECT id, canonical_id, observed_at, occurred_at, kind, from_state, to_state, source_type, source_adapter, actor, confidence, reason, related_resources, metadata_json 
+		FROM resource_changes`
 
-	args := []any{CanonicalResourceID(canonicalID), since}
+	args := []any{}
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID != "" {
+		query += `
+		WHERE canonical_id = ? AND observed_at >= ?`
+		args = append(args, canonicalID, since)
+	} else {
+		query += `
+		WHERE observed_at >= ?`
+		args = append(args, since)
+	}
+	query += `
+		ORDER BY observed_at DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -518,11 +528,11 @@ func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Ti
 		var c ResourceChange
 		var conf, kindStr string
 		var relText, metaText sql.NullString
-		c.ResourceID = canonicalID
 
-		if err := rows.Scan(&c.ID, &c.ObservedAt, &c.OccurredAt, &kindStr, &c.From, &c.To, &c.SourceType, &c.SourceAdapter, &c.Actor, &conf, &c.Reason, &relText, &metaText); err != nil {
+		if err := rows.Scan(&c.ID, &c.ResourceID, &c.ObservedAt, &c.OccurredAt, &kindStr, &c.From, &c.To, &c.SourceType, &c.SourceAdapter, &c.Actor, &conf, &c.Reason, &relText, &metaText); err != nil {
 			return nil, fmt.Errorf("scan resource change row: %w", err)
 		}
+		c.ResourceID = CanonicalResourceID(c.ResourceID)
 
 		c.Kind = ChangeKind(kindStr)
 		c.Confidence = ChangeConfidence(conf)
@@ -587,11 +597,21 @@ func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error 
 func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
 	query := `
 		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json
-		FROM action_audits
-		WHERE canonical_id = ? AND created_at >= ?
-		ORDER BY created_at DESC`
+		FROM action_audits`
 
-	args := []any{CanonicalResourceID(canonicalID), since}
+	args := []any{}
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID != "" {
+		query += `
+		WHERE canonical_id = ? AND created_at >= ?`
+		args = append(args, canonicalID, since)
+	} else {
+		query += `
+		WHERE created_at >= ?`
+		args = append(args, since)
+	}
+	query += `
+		ORDER BY created_at DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -664,11 +684,21 @@ func (s *SQLiteResourceStore) RecordActionLifecycleEvent(event ActionLifecycleEv
 func (s *SQLiteResourceStore) GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error) {
 	query := `
 		SELECT action_id, timestamp, state, actor, message
-		FROM action_lifecycle_events
-		WHERE action_id = ? AND timestamp >= ?
-		ORDER BY timestamp DESC`
+		FROM action_lifecycle_events`
 
-	args := []any{actionID, since}
+	args := []any{}
+	actionID = strings.TrimSpace(actionID)
+	if actionID != "" {
+		query += `
+		WHERE action_id = ? AND timestamp >= ?`
+		args = append(args, actionID, since)
+	} else {
+		query += `
+		WHERE timestamp >= ?`
+		args = append(args, since)
+	}
+	query += `
+		ORDER BY timestamp DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)

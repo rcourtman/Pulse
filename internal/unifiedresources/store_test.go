@@ -393,6 +393,103 @@ func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
 	}
 }
 
+func TestSQLiteStore_GetActionAudits_AllWhenResourceIDBlank(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 13, 45, 0, 0, time.UTC)
+
+	records := []ActionAuditRecord{
+		{
+			ID:        "action-3",
+			CreatedAt: now.Add(-2 * time.Minute),
+			UpdatedAt: now.Add(-2 * time.Minute),
+			State:     ActionStatePlanned,
+			Request: ActionRequest{
+				RequestID:      "req-3",
+				ResourceID:     "vm:400",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:test",
+			},
+		},
+		{
+			ID:        "action-4",
+			CreatedAt: now.Add(-time.Minute),
+			UpdatedAt: now.Add(-time.Minute),
+			State:     ActionStateCompleted,
+			Request: ActionRequest{
+				RequestID:      "req-4",
+				ResourceID:     "vm:401",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:test",
+			},
+		},
+	}
+
+	for _, record := range records {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+		}
+	}
+
+	results, err := store.GetActionAudits("", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 action audits without resource filter, got %d", len(results))
+	}
+	if results[0].ID != "action-4" || results[1].ID != "action-3" {
+		t.Fatalf("unexpected action audit order: %+v", results)
+	}
+}
+
+func TestSQLiteStore_GetRecentChanges_AllWhenResourceIDBlank(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 18, 13, 50, 0, 0, time.UTC)
+
+	changes := []ResourceChange{
+		{
+			ID:            "change-1",
+			ResourceID:    "vm:500",
+			ObservedAt:    now.Add(-2 * time.Minute),
+			Kind:          ChangeRestart,
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceHigh,
+			Reason:        "restart detected",
+		},
+		{
+			ID:            "change-2",
+			ResourceID:    "vm:501",
+			ObservedAt:    now.Add(-time.Minute),
+			Kind:          ChangeConfigUpdate,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceMedium,
+			Reason:        "configuration drift",
+		},
+	}
+
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	results, err := store.GetRecentChanges("", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 recent changes without resource filter, got %d", len(results))
+	}
+	if results[0].ID != "change-2" || results[1].ID != "change-1" {
+		t.Fatalf("unexpected recent change order: %+v", results)
+	}
+	if results[0].ResourceID != "vm:501" || results[1].ResourceID != "vm:500" {
+		t.Fatalf("expected canonical resource IDs to round-trip, got %+v", results)
+	}
+}
+
 func TestActionLifecycleEvent_RoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)

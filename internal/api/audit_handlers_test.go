@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/stretchr/testify/assert"
 )
@@ -663,4 +664,159 @@ func TestHandleAuditSummary(t *testing.T) {
 		h.HandleAuditSummary(w, req)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+}
+
+func TestHandleListUnifiedActionAudits(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	records := []unifiedresources.ActionAuditRecord{
+		{
+			ID:        "action-1",
+			CreatedAt: now.Add(-2 * time.Minute),
+			UpdatedAt: now.Add(-2 * time.Minute),
+			State:     unifiedresources.ActionStateCompleted,
+			Request: unifiedresources.ActionRequest{
+				RequestID:      "req-1",
+				ResourceID:     "vm:100",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:ops",
+			},
+		},
+		{
+			ID:        "action-2",
+			CreatedAt: now.Add(-time.Minute),
+			UpdatedAt: now.Add(-time.Minute),
+			State:     unifiedresources.ActionStateFailed,
+			Request: unifiedresources.ActionRequest{
+				RequestID:      "req-2",
+				ResourceID:     "vm:101",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:ops",
+			},
+		},
+	}
+	for _, record := range records {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit: %v", err)
+		}
+	}
+
+	handler := NewAuditHandlers()
+	handler.SetResourceStoreProvider(func(string) (unifiedresources.ResourceStore, error) {
+		return store, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/actions?limit=10", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListUnifiedActionAudits(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payload struct {
+		Audits []unifiedresources.ActionAuditRecord `json:"audits"`
+		Count  int                                  `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal action audits: %v", err)
+	}
+	if payload.Count != 2 {
+		t.Fatalf("expected count 2, got %d", payload.Count)
+	}
+	if len(payload.Audits) != 2 {
+		t.Fatalf("expected 2 action audits, got %d", len(payload.Audits))
+	}
+	if payload.Audits[0].ID != "action-2" || payload.Audits[1].ID != "action-1" {
+		t.Fatalf("unexpected action audit order: %#v", payload.Audits)
+	}
+}
+
+func TestHandleListUnifiedActionLifecycleEvents(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	events := []unifiedresources.ActionLifecycleEvent{
+		{ActionID: "action-1", Timestamp: now.Add(-2 * time.Minute), State: unifiedresources.ActionStatePlanned},
+		{ActionID: "action-1", Timestamp: now.Add(-time.Minute), State: unifiedresources.ActionStateCompleted},
+	}
+	for _, event := range events {
+		if err := store.RecordActionLifecycleEvent(event); err != nil {
+			t.Fatalf("RecordActionLifecycleEvent: %v", err)
+		}
+	}
+
+	handler := NewAuditHandlers()
+	handler.SetResourceStoreProvider(func(string) (unifiedresources.ResourceStore, error) {
+		return store, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/actions/action-1/events?limit=10", nil)
+	req.SetPathValue("id", "action-1")
+	rec := httptest.NewRecorder()
+	handler.HandleListUnifiedActionLifecycleEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payload struct {
+		ActionID string                                  `json:"actionId"`
+		Events   []unifiedresources.ActionLifecycleEvent `json:"events"`
+		Count    int                                     `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal action lifecycle events: %v", err)
+	}
+	if payload.ActionID != "action-1" {
+		t.Fatalf("expected action-1, got %q", payload.ActionID)
+	}
+	if payload.Count != 2 || len(payload.Events) != 2 {
+		t.Fatalf("unexpected lifecycle event payload: %#v", payload)
+	}
+	if payload.Events[0].State != unifiedresources.ActionStateCompleted || payload.Events[1].State != unifiedresources.ActionStatePlanned {
+		t.Fatalf("unexpected lifecycle order: %#v", payload.Events)
+	}
+}
+
+func TestHandleListUnifiedExportAudits(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordExportAudit(unifiedresources.ExportAuditRecord{
+		ID:           "export-1",
+		Timestamp:    now.Add(-time.Minute),
+		Actor:        "agent:ops",
+		EnvelopeHash: "hash-1",
+		Decision:     unifiedresources.ExportAllowed,
+		Destination:  "gpt-4o",
+		Redactions:   []string{"metadata.hostname"},
+	}); err != nil {
+		t.Fatalf("RecordExportAudit: %v", err)
+	}
+
+	handler := NewAuditHandlers()
+	handler.SetResourceStoreProvider(func(string) (unifiedresources.ResourceStore, error) {
+		return store, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/exports?limit=10", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListUnifiedExportAudits(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payload struct {
+		Audits []unifiedresources.ExportAuditRecord `json:"audits"`
+		Count  int                                  `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal export audits: %v", err)
+	}
+	if payload.Count != 1 || len(payload.Audits) != 1 {
+		t.Fatalf("unexpected export payload: %#v", payload)
+	}
+	if payload.Audits[0].ID != "export-1" {
+		t.Fatalf("unexpected export audit id: %q", payload.Audits[0].ID)
+	}
 }

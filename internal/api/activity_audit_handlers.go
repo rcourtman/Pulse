@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
 
@@ -21,11 +22,28 @@ var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 
 // AuditHandlers provides HTTP handlers for audit log endpoints.
-type AuditHandlers struct{}
+type AuditHandlers struct {
+	resourceStoreProvider func(orgID string) (unifiedresources.ResourceStore, error)
+}
 
 // NewAuditHandlers creates a new AuditHandlers instance.
 func NewAuditHandlers() *AuditHandlers {
 	return &AuditHandlers{}
+}
+
+// SetResourceStoreProvider configures the store used for unified-resource audit history.
+func (h *AuditHandlers) SetResourceStoreProvider(provider func(orgID string) (unifiedresources.ResourceStore, error)) {
+	if h == nil {
+		return
+	}
+	h.resourceStoreProvider = provider
+}
+
+func (h *AuditHandlers) getResourceStore(orgID string) (unifiedresources.ResourceStore, error) {
+	if h == nil || h.resourceStoreProvider == nil {
+		return nil, fmt.Errorf("resource audit store unavailable")
+	}
+	return h.resourceStoreProvider(orgID)
 }
 
 // HandleListAuditEvents handles GET /api/audit
@@ -471,6 +489,142 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
+}
+
+// HandleListUnifiedActionAudits handles GET /api/audit/actions.
+func (h *AuditHandlers) HandleListUnifiedActionAudits(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getResourceStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "audit_unavailable", "Unified resource audit history is not available", nil)
+		return
+	}
+
+	query := r.URL.Query()
+	resourceID := unifiedresources.CanonicalResourceID(query.Get("resourceId"))
+	since := parseAuditSince(query)
+	limit := parseAuditLimit(query.Get("limit"), 100)
+
+	audits, err := store.GetActionAudits(resourceID, since, limit)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query action audits", nil)
+		return
+	}
+
+	response := map[string]any{
+		"audits": audits,
+		"count":  len(audits),
+	}
+	if resourceID != "" {
+		response["resourceId"] = resourceID
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleListUnifiedActionLifecycleEvents handles GET /api/audit/actions/{id}/events.
+func (h *AuditHandlers) HandleListUnifiedActionLifecycleEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Missing action ID", nil)
+		return
+	}
+	if !validAuditEventID.MatchString(actionID) || len(actionID) > 64 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format", nil)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getResourceStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "audit_unavailable", "Unified resource audit history is not available", nil)
+		return
+	}
+
+	query := r.URL.Query()
+	since := parseAuditSince(query)
+	limit := parseAuditLimit(query.Get("limit"), 100)
+
+	events, err := store.GetActionLifecycleEvents(actionID, since, limit)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query action lifecycle events", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"actionId": actionID,
+		"events":   events,
+		"count":    len(events),
+	})
+}
+
+// HandleListUnifiedExportAudits handles GET /api/audit/exports.
+func (h *AuditHandlers) HandleListUnifiedExportAudits(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	store, err := h.getResourceStore(orgID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "audit_unavailable", "Unified resource audit history is not available", nil)
+		return
+	}
+
+	query := r.URL.Query()
+	since := parseAuditSince(query)
+	limit := parseAuditLimit(query.Get("limit"), 100)
+
+	records, err := store.GetExportAudits(since, limit)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query export audits", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"audits": records,
+		"count":  len(records),
+	})
+}
+
+func parseAuditSince(query url.Values) time.Time {
+	for _, key := range []string{"since", "startTime"} {
+		raw := strings.TrimSpace(query.Get(key))
+		if raw == "" {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+func parseAuditLimit(raw string, defaultLimit int) int {
+	limit := defaultLimit
+	if trimmed := strings.TrimSpace(raw); trimmed != "" {
+		if parsed, err := strconv.Atoi(trimmed); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit <= 0 {
+		return defaultLimit
+	}
+	return limit
 }
 
 func getLoggerForOrg(orgID string) audit.Logger {

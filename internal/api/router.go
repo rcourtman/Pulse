@@ -422,6 +422,7 @@ func (r *Router) setupRoutes() {
 	stripeWebhookHandlers := r.stripeWebhookHandlers
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor, r.defaultReadState())
 	auditHandlers := NewAuditHandlers()
+	auditHandlers.SetResourceStoreProvider(r.resourceHandlers.getStore)
 
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)

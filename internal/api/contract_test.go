@@ -3567,6 +3567,199 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
+	payload := struct {
+		Audits     []unifiedresources.ActionAuditRecord `json:"audits"`
+		Count      int                                  `json:"count"`
+		ResourceID string                               `json:"resourceId,omitempty"`
+	}{
+		Audits: []unifiedresources.ActionAuditRecord{
+			{
+				ID:        "action-1",
+				CreatedAt: now,
+				UpdatedAt: now,
+				State:     unifiedresources.ActionStateCompleted,
+				Request: unifiedresources.ActionRequest{
+					RequestID:      "req-1",
+					ResourceID:     "vm:42",
+					CapabilityName: "restart",
+					Reason:         "maintenance",
+					RequestedBy:    "agent:ops",
+				},
+				Plan: unifiedresources.ActionPlan{
+					ActionID:          "action-1",
+					RequestID:         "req-1",
+					Allowed:           true,
+					RequiresApproval:  false,
+					ApprovalPolicy:    unifiedresources.ApprovalNone,
+					RollbackAvailable: false,
+					PlannedAt:         now,
+					ExpiresAt:         now.Add(5 * time.Minute),
+					ResourceVersion:   "rv-1",
+					PolicyVersion:     "pv-1",
+					GraphVersion:      "gv-1",
+					PlanHash:          "hash-1",
+				},
+				Approvals: []unifiedresources.ActionApprovalRecord{
+					{
+						Actor:     "admin@example.com",
+						Method:    unifiedresources.MethodUI,
+						Timestamp: now.Add(time.Minute),
+						Outcome:   unifiedresources.OutcomeApproved,
+						Reason:    "approved",
+					},
+				},
+				Result: &unifiedresources.ExecutionResult{
+					Success: true,
+					Output:  "done",
+				},
+			},
+		},
+		Count:      1,
+		ResourceID: "vm:42",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal action audits response: %v", err)
+	}
+
+	const want = `{
+		"audits":[
+			{
+				"id":"action-1",
+				"createdAt":"2026-03-18T16:00:00Z",
+				"updatedAt":"2026-03-18T16:00:00Z",
+				"state":"completed",
+				"request":{
+					"requestId":"req-1",
+					"resourceId":"vm:42",
+					"capabilityName":"restart",
+					"reason":"maintenance",
+					"requestedBy":"agent:ops"
+				},
+				"plan":{
+					"actionId":"action-1",
+					"requestId":"req-1",
+					"allowed":true,
+					"requiresApproval":false,
+					"approvalPolicy":"none",
+					"rollbackAvailable":false,
+					"plannedAt":"2026-03-18T16:00:00Z",
+					"expiresAt":"2026-03-18T16:05:00Z",
+					"resourceVersion":"rv-1",
+					"policyVersion":"pv-1",
+					"graphVersion":"gv-1",
+					"planHash":"hash-1"
+				},
+				"approvals":[
+					{
+						"actor":"admin@example.com",
+						"method":"ui",
+						"timestamp":"2026-03-18T16:01:00Z",
+						"outcome":"approved",
+						"reason":"approved"
+					}
+				],
+				"result":{
+					"success":true,
+					"output":"done"
+				}
+			}
+		],
+		"count":1,
+		"resourceId":"vm:42"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_UnifiedActionLifecycleEventsJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
+	payload := struct {
+		ActionID string                                  `json:"actionId"`
+		Events   []unifiedresources.ActionLifecycleEvent `json:"events"`
+		Count    int                                     `json:"count"`
+	}{
+		ActionID: "action-1",
+		Events: []unifiedresources.ActionLifecycleEvent{
+			{
+				ActionID:  "action-1",
+				Timestamp: now,
+				State:     unifiedresources.ActionStatePlanned,
+				Actor:     "system",
+				Message:   "planned",
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal action lifecycle response: %v", err)
+	}
+
+	const want = `{
+		"actionId":"action-1",
+		"events":[
+			{
+				"actionId":"action-1",
+				"timestamp":"2026-03-18T16:00:00Z",
+				"state":"planned",
+				"actor":"system",
+				"message":"planned"
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_UnifiedExportAuditsJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
+	payload := struct {
+		Audits []unifiedresources.ExportAuditRecord `json:"audits"`
+		Count  int                                  `json:"count"`
+	}{
+		Audits: []unifiedresources.ExportAuditRecord{
+			{
+				ID:           "export-1",
+				Timestamp:    now,
+				Actor:        "agent:ops",
+				EnvelopeHash: "hash-1",
+				Decision:     unifiedresources.ExportRedacted,
+				Destination:  "local-llama",
+				Redactions:   []string{"metadata.hostname"},
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal export audits response: %v", err)
+	}
+
+	const want = `{
+		"audits":[
+			{
+				"id":"export-1",
+				"timestamp":"2026-03-18T16:00:00Z",
+				"actor":"agent:ops",
+				"envelopeHash":"hash-1",
+				"decision":"redacted",
+				"destination":"local-llama",
+				"redactions":["metadata.hostname"]
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

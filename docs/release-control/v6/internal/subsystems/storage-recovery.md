@@ -109,6 +109,12 @@ handlers stay on canonical Patrol runtime wiring: recovery- and
 storage-adjacent API helpers must not revive tenant snapshot-provider bridges
 through `internal/api/ai_handlers.go` once Patrol can initialize from tenant
 `ReadState` and unified-resource providers directly.
+The same shared API runtime also exposes unified-resource action, lifecycle,
+and export audit reads, but storage and recovery must continue to treat that
+as adjacent governed API ownership rather than timeline-store ownership. The
+storage and recovery lanes still own their own persistence and query
+contracts, while the control-plane execution trail remains governed by the
+unified-resource and audit contracts.
 
 The frontend storage and recovery surfaces are also first-class runtime entry
 points. `frontend-modern/src/components/Storage/` plus

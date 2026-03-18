@@ -138,3 +138,6 @@ The same runtime boundary now also owns durable action execution auditing.
 startup, and the write-action tool paths under `internal/ai/tools/` persist
 append-only action lifecycle and action audit records through that shared
 store instead of leaving command execution state in memory-only tool helpers.
+Those unified-resource action and export audit records are now also exposed
+through the enterprise audit read surface so operators can inspect the
+execution trail without reaching into storage internals.
