@@ -3,7 +3,10 @@ import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
   assertAPIResponseOKOrThrowStatus,
+  arrayOrEmpty,
+  objectArrayFieldOrEmpty,
   parseRequiredAPIResponse,
+  parseRequiredJSON,
   withAPIErrorStatusFallback,
   withAPIErrorStatusNull,
 } from './responseUtils';
@@ -231,7 +234,7 @@ export class AgentProfilesAPI {
       402,
       [],
     );
-    return this.requireArrayResponse<unknown>(response, INVALID_AGENT_PROFILE_LIST_MESSAGE).map(
+    return arrayOrEmpty<AgentProfile>(response).map(
       (profile) =>
         this.requireAgentProfileResponse(profile, INVALID_AGENT_PROFILE_LIST_MESSAGE),
     );
@@ -320,10 +323,7 @@ export class AgentProfilesAPI {
       402,
       [],
     );
-    return this.requireArrayResponse<unknown>(
-      response,
-      INVALID_AGENT_PROFILE_ASSIGNMENT_LIST_MESSAGE,
-    ).map((assignment) =>
+    return arrayOrEmpty<AgentProfileAssignment>(response).map((assignment) =>
       this.requireAgentProfileAssignmentResponse(
         assignment,
         INVALID_AGENT_PROFILE_ASSIGNMENT_LIST_MESSAGE,
@@ -416,9 +416,11 @@ export class AgentProfilesAPI {
   static async getConfigSchema(): Promise<ConfigKeyDefinition[]> {
     const response = await apiFetch(`${this.baseUrl}/schema`);
     await assertAPIResponseOK(response, 'Failed to fetch profile schema');
-    const defs = this.requireArrayResponse<ConfigKeyDefinitionResponse>(
-      await response.json(),
-      INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+    const defs = arrayOrEmpty<ConfigKeyDefinitionResponse>(
+      await parseRequiredJSON<ConfigKeyDefinitionResponse[]>(
+        response,
+        INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+      ),
     );
     return defs.map((def) => {
       if (!this.isRecord(def)) {
@@ -471,7 +473,10 @@ export class AgentProfilesAPI {
       },
     );
     await assertAPIResponseOK(response, 'Failed to validate profile config');
-    const parsed = (await response.json()) as ConfigValidationResultResponse;
+    const parsed = await parseRequiredJSON<ConfigValidationResultResponse>(
+      response,
+      INVALID_AGENT_PROFILE_VALIDATION_MESSAGE,
+    );
 
     if (!this.isRecord(parsed) || typeof parsed.Valid !== 'boolean') {
       throw new Error(INVALID_AGENT_PROFILE_VALIDATION_MESSAGE);
@@ -483,14 +488,14 @@ export class AgentProfilesAPI {
         parsed.Errors === undefined
           ? []
           : this.requireConfigValidationItems(
-              parsed.Errors,
+              objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(parsed, 'Errors'),
               INVALID_AGENT_PROFILE_VALIDATION_MESSAGE,
             ),
       warnings:
         parsed.Warnings === undefined
           ? []
           : this.requireConfigValidationItems(
-              parsed.Warnings,
+              objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(parsed, 'Warnings'),
               INVALID_AGENT_PROFILE_VALIDATION_MESSAGE,
             ),
     };

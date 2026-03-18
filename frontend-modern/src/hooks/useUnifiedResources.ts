@@ -6,6 +6,8 @@ import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
+  ResourceCapability,
+  ResourceChange,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourcePBSMeta,
@@ -15,6 +17,7 @@ import type {
   ResourceSensitivity,
   ResourceStatus,
   ResourceStorageMeta,
+  ResourceRelationship,
   ResourceType,
 } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
@@ -302,6 +305,9 @@ type APIResource = {
     lastUpdated?: string;
   };
   kubernetes?: APIKubernetesData;
+  capabilities?: ResourceCapability[];
+  relationships?: ResourceRelationship[];
+  recentChanges?: ResourceChange[];
   physicalDisk?: {
     devPath?: string;
     model?: string;
@@ -705,6 +711,9 @@ const toResource = (v2: APIResource): Resource => {
     canonicalIdentity: v2.canonicalIdentity,
     policy,
     aiSafeSummary,
+    capabilities: v2.capabilities,
+    relationships: v2.relationships,
+    recentChanges: v2.recentChanges,
     platformData: {
       sources,
       sourceStatus: v2.sourceStatus,

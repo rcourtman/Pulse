@@ -19,6 +19,16 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
+
 const buildKubernetesResource = (): Resource => ({
   id: 'k8s-cluster-1',
   type: 'k8s-cluster',

@@ -96,6 +96,10 @@ The same shared API runtime now also exposes dedicated unified-resource
 capability, relationship, and timeline reads through
 `internal/api/resources.go`, but those query surfaces remain owned by the API
 and unified-resource contracts rather than by lifecycle continuity.
+The dedicated profile client now also routes list, schema, and validation
+parsing through shared response helpers in `frontend-modern/src/api/agentProfiles.ts`,
+so profile transport stays aligned with the governed API contract instead of
+reintroducing local array or JSON parsing rules.
 
 The owned backend API surfaces must preserve the exact-release installer
 fallback, canonical /api/auto-register behavior, and hosted org install-command

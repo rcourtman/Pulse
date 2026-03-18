@@ -120,6 +120,11 @@ The same shared API runtime now also exposes dedicated
 `/api/resources/{id}/timeline` reads, but storage and recovery must continue
 to treat those as adjacent governed API ownership rather than storage/recovery
 timeline ownership.
+The shared unified-resource consumer hook now also preserves `capabilities`,
+`relationships`, `recentChanges`, `policy`, and `aiSafeSummary` fields when
+storage and recovery surfaces read unified resources, so those pages see the
+same control-plane facets as the dedicated resource drawer instead of
+flattening them away locally.
 
 The frontend storage and recovery surfaces are also first-class runtime entry
 points. `frontend-modern/src/components/Storage/` plus

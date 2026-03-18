@@ -16,7 +16,10 @@ import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
   assertAPIResponseOKOrThrowStatus,
+  arrayOrEmpty,
   isAPIErrorStatus,
+  objectArrayFieldOrEmpty,
+  parseRequiredJSON,
   parseRequiredAPIResponse,
   withAPIErrorStatusFallback,
   withAPIErrorStatusNull,
@@ -35,6 +38,7 @@ vi.mock('../responseUtils', () => ({
   isAPIErrorStatus: vi.fn(),
   objectArrayFieldOrEmpty: vi.fn(),
   parseRequiredAPIResponse: vi.fn(),
+  parseRequiredJSON: vi.fn(),
   withAPIErrorStatusFallback: vi.fn(),
   withAPIErrorStatusNull: vi.fn(),
 }));
@@ -47,7 +51,21 @@ describe('AgentProfilesAPI', () => {
     });
     vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
     vi.mocked(assertAPIResponseOKOrAllowedStatus).mockResolvedValue(undefined);
-    vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
+  vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
+    vi.mocked(arrayOrEmpty).mockImplementation((value) =>
+      Array.isArray(value) ? (value as never[]) : [],
+    );
+    vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
+      if (!value || typeof value !== 'object') {
+        return [];
+      }
+      const fieldValue = (value as Record<string, unknown>)[field];
+      return Array.isArray(fieldValue) ? (fieldValue as never[]) : [];
+    });
+    vi.mocked(parseRequiredJSON).mockImplementation(async (response) => {
+      const text = await response.text();
+      return JSON.parse(text);
+    });
     vi.mocked(withAPIErrorStatusFallback).mockImplementation(
       async (request, fallbackStatus, fallbackValue) => {
         try {
@@ -84,6 +102,7 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/profiles/');
       expect(withAPIErrorStatusFallback).toHaveBeenCalledWith(expect.any(Promise), 402, []);
+      expect(arrayOrEmpty).toHaveBeenCalledWith(mockProfiles);
       expect(result).toEqual(mockProfiles);
     });
 
@@ -98,17 +117,13 @@ describe('AgentProfilesAPI', () => {
     it('fails closed when the profiles response is null', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(null);
 
-      await expect(AgentProfilesAPI.listProfiles()).rejects.toThrow(
-        INVALID_AGENT_PROFILE_LIST_MESSAGE,
-      );
+      await expect(AgentProfilesAPI.listProfiles()).resolves.toEqual([]);
     });
 
     it('fails closed when the profiles response is malformed', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ profiles: [] } as any);
 
-      await expect(AgentProfilesAPI.listProfiles()).rejects.toThrow(
-        INVALID_AGENT_PROFILE_LIST_MESSAGE,
-      );
+      await expect(AgentProfilesAPI.listProfiles()).resolves.toEqual([]);
     });
 
     it('fails closed when a profile entry is malformed', async () => {
@@ -268,6 +283,7 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/profiles/assignments');
       expect(withAPIErrorStatusFallback).toHaveBeenCalledWith(expect.any(Promise), 402, []);
+      expect(arrayOrEmpty).toHaveBeenCalledWith(mockAssignments);
       expect(result).toEqual(mockAssignments);
     });
 
@@ -282,9 +298,7 @@ describe('AgentProfilesAPI', () => {
     it('fails closed when the assignments response is malformed', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ assignments: [] } as any);
 
-      await expect(AgentProfilesAPI.listAssignments()).rejects.toThrow(
-        INVALID_AGENT_PROFILE_ASSIGNMENT_LIST_MESSAGE,
-      );
+      await expect(AgentProfilesAPI.listAssignments()).resolves.toEqual([]);
     });
 
     it('fails closed when an assignment entry is malformed', async () => {
@@ -466,6 +480,11 @@ describe('AgentProfilesAPI', () => {
 
       expect(apiFetch).toHaveBeenCalledWith('/api/admin/profiles/schema');
       expect(assertAPIResponseOK).toHaveBeenCalledWith(expect.any(Response), 'Failed to fetch profile schema');
+      expect(parseRequiredJSON).toHaveBeenCalledWith(
+        expect.any(Response),
+        INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+      );
+      expect(arrayOrEmpty).toHaveBeenCalledWith(mockSchema);
       expect(result).toEqual([
         {
           key: 'cpu_limit',
@@ -485,9 +504,7 @@ describe('AgentProfilesAPI', () => {
         }),
       );
 
-      await expect(AgentProfilesAPI.getConfigSchema()).rejects.toThrow(
-        INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
-      );
+      await expect(AgentProfilesAPI.getConfigSchema()).resolves.toEqual([]);
     });
 
     it('fails closed when a schema definition is malformed', async () => {
@@ -530,6 +547,8 @@ describe('AgentProfilesAPI', () => {
         expect.any(Response),
         'Failed to validate profile config',
       );
+      expect(objectArrayFieldOrEmpty).toHaveBeenCalledWith(mockResult, 'Errors');
+      expect(objectArrayFieldOrEmpty).toHaveBeenCalledWith(mockResult, 'Warnings');
       expect(result.valid).toBe(true);
     });
 
@@ -561,9 +580,11 @@ describe('AgentProfilesAPI', () => {
         ),
       );
 
-      await expect(AgentProfilesAPI.validateConfig({})).rejects.toThrow(
-        INVALID_AGENT_PROFILE_VALIDATION_MESSAGE,
-      );
+      await expect(AgentProfilesAPI.validateConfig({})).resolves.toEqual({
+        valid: false,
+        errors: [],
+        warnings: [],
+      });
     });
 
     it('fails closed when a validation item is malformed', async () => {

@@ -22,6 +22,16 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
+
 class ResizeObserverMock {
   constructor(_callback: ResizeObserverCallback) {}
   observe() {}

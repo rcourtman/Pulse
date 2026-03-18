@@ -1,4 +1,4 @@
-import { Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
+import { Show, Suspense, createMemo, For, createSignal, createEffect, createResource } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
@@ -38,6 +38,7 @@ import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
+import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
@@ -71,6 +72,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     | 'namespaces'
     | 'deployments'
     | 'swarm'
+    | 'history'
     | 'discovery'
     | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
@@ -200,6 +202,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
 
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
+  const resourceFacetId = createMemo(() => props.resource.id.trim());
+  const [resourceFacets, { refetch: refetchResourceFacets }] = createResource(
+    resourceFacetId,
+    async (id) => {
+      if (!id) return null;
+      return ResourceAPI.getFacetBundle(id, { limit: 25 });
+    },
+    { initialValue: null },
+  );
 
   const pbsData = createMemo(() => platformData()?.pbs);
   const pmgData = createMemo(() => platformData()?.pmg);
@@ -270,6 +281,27 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const all = pmgMailBreakdown();
     const nonZero = all.filter((entry) => entry.value > 0);
     return nonZero.length > 0 ? nonZero : all;
+  });
+  const resourceCapabilities = createMemo(
+    () => resourceFacets()?.capabilities ?? props.resource.capabilities ?? [],
+  );
+  const resourceRelationships = createMemo(
+    () => resourceFacets()?.relationships ?? props.resource.relationships ?? [],
+  );
+  const resourceTimeline = createMemo(
+    () => resourceFacets()?.recentChanges ?? props.resource.recentChanges ?? [],
+  );
+  const sortedResourceTimeline = createMemo(() =>
+    [...resourceTimeline()].sort((left, right) => {
+      const leftTime = Date.parse(left.observedAt || '');
+      const rightTime = Date.parse(right.observedAt || '');
+      return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    }),
+  );
+  const facetBundleError = createMemo(() => {
+    const error = resourceFacets.error;
+    if (!error) return '';
+    return (error as Error)?.message || 'Failed to load resource facets';
   });
   const mergedSources = createMemo(() => platformData()?.sources ?? []);
   const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
@@ -425,6 +457,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
         ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
+      { id: 'history' as DrawerTab, label: 'History' },
       { id: 'discovery' as DrawerTab, label: 'Discovery' },
     ];
     if (debugEnabled()) {
@@ -444,6 +477,46 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const formatSourceTime = (value?: string | number) => {
     if (!value) return '';
     const timestamp = typeof value === 'number' ? value : Date.parse(value);
+    if (!Number.isFinite(timestamp)) return '';
+    return formatRelativeTime(timestamp);
+  };
+
+  const humanizeFacetToken = (value?: string) => {
+    const normalized = (value || '').trim();
+    if (!normalized) return '—';
+    if (normalized === normalized.toUpperCase() && normalized.length <= 4) {
+      return normalized;
+    }
+    return normalized
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const formatApprovalLevel = (value?: string) => {
+    switch ((value || '').trim()) {
+      case 'none':
+        return 'None';
+      case 'dry_run_only':
+        return 'Dry Run Only';
+      case 'admin':
+        return 'Admin';
+      case 'mfa':
+        return 'MFA';
+      default:
+        return humanizeFacetToken(value);
+    }
+  };
+
+  const formatConfidence = (value?: string | number) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${Math.round(value * 100)}%`;
+    }
+    return humanizeFacetToken(typeof value === 'string' ? value : undefined);
+  };
+
+  const formatFacetTimestamp = (value?: string) => {
+    if (!value) return '';
+    const timestamp = Date.parse(value);
     if (!Number.isFinite(timestamp)) return '';
     return formatRelativeTime(timestamp);
   };
@@ -1213,6 +1286,275 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           )}
         </Show>
+      </div>
+
+      {/* History Tab */}
+      <div
+        data-testid="resource-history-tab"
+        class={activeTab() === 'history' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
+        <div class="space-y-3">
+          <div class="rounded border border-border bg-surface p-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                Resource History
+              </div>
+              <span class="text-[10px] text-muted">
+                {resourceFacets.loading ? 'Refreshing facet data...' : 'Facet data loaded'}
+              </span>
+            </div>
+
+            <Show when={facetBundleError()}>
+              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                <div class="flex items-start justify-between gap-2">
+                  <span>{facetBundleError()}</span>
+                  <button
+                    type="button"
+                    class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
+                    onClick={() => refetchResourceFacets()}
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            </Show>
+
+            <div class="mt-3 grid gap-2 sm:grid-cols-3">
+              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                <div class="text-[10px] text-muted">Capabilities</div>
+                <div class="text-sm font-semibold text-base-content">
+                  {resourceCapabilities().length}
+                </div>
+              </div>
+              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                <div class="text-[10px] text-muted">Relationships</div>
+                <div class="text-sm font-semibold text-base-content">
+                  {resourceRelationships().length}
+                </div>
+              </div>
+              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                <div class="text-[10px] text-muted">Timeline Events</div>
+                <div class="text-sm font-semibold text-base-content">
+                  {sortedResourceTimeline().length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded border border-border bg-surface p-3">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              Capabilities
+            </div>
+            <Show
+              when={resourceCapabilities().length > 0}
+              fallback={
+                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                  No capability records are available for this resource yet.
+                </div>
+              }
+            >
+              <div class="space-y-2">
+                <For each={resourceCapabilities()}>
+                  {(capability) => (
+                    <details class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                      <summary class="flex cursor-pointer list-none items-center justify-between gap-2 text-[10px] font-medium text-base-content">
+                        <span class="truncate" title={capability.name}>
+                          {capability.name}
+                        </span>
+                        <span class="text-muted">{humanizeFacetToken(capability.type)}</span>
+                      </summary>
+                      <div class="mt-2 space-y-1.5 border-t border-border pt-2 text-[10px]">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Approval</span>
+                          <span class="font-medium text-base-content">
+                            {formatApprovalLevel(capability.minimumApprovalLevel)}
+                          </span>
+                        </div>
+                        <Show when={capability.platform}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Platform</span>
+                            <span class="font-medium text-base-content">
+                              {capability.platform}
+                            </span>
+                          </div>
+                        </Show>
+                        <Show when={capability.description}>
+                          <div class="rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                            {capability.description}
+                          </div>
+                        </Show>
+                        <Show when={capability.params && capability.params.length > 0}>
+                          <div class="space-y-1">
+                            <div class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                              Params
+                            </div>
+                            <For each={capability.params ?? []}>
+                              {(param) => (
+                                <div class="rounded border border-border bg-base px-2 py-1 text-[10px]">
+                                  <div class="flex items-center justify-between gap-2">
+                                    <span class="font-medium text-base-content">{param.name}</span>
+                                    <span class="text-muted">
+                                      {param.type}
+                                      {param.required ? ' • required' : ''}
+                                    </span>
+                                  </div>
+                                  <Show when={param.description}>
+                                    <div class="mt-1 text-muted">{param.description}</div>
+                                  </Show>
+                                  <Show when={param.enum && param.enum.length > 0}>
+                                    <div class="mt-1 text-muted">
+                                      Allowed: {param.enum?.join(', ')}
+                                    </div>
+                                  </Show>
+                                  <Show when={param.pattern}>
+                                    <div class="mt-1 text-muted">Pattern: {param.pattern}</div>
+                                  </Show>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                    </details>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          <div class="rounded border border-border bg-surface p-3">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              Relationships
+            </div>
+            <Show
+              when={resourceRelationships().length > 0}
+              fallback={
+                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                  No relationship edges are available for this resource yet.
+                </div>
+              }
+            >
+              <div class="space-y-2">
+                <For each={resourceRelationships()}>
+                  {(relationship) => (
+                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-base-content">
+                          {relationship.sourceId} → {relationship.targetId}
+                        </span>
+                        <span class="text-muted">{humanizeFacetToken(relationship.type)}</span>
+                      </div>
+                      <div class="mt-1 grid gap-1 sm:grid-cols-2">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Confidence</span>
+                          <span class="font-medium text-base-content">
+                            {formatConfidence(relationship.confidence)}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">State</span>
+                          <span class="font-medium text-base-content">
+                            {relationship.active ? 'Active' : 'Historical'}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Discoverer</span>
+                          <span class="font-medium text-base-content">
+                            {relationship.discoverer || '—'}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Observed</span>
+                          <span class="font-medium text-base-content">
+                            {formatFacetTimestamp(relationship.observedAt) ||
+                              formatRelativeTime(relationship.observedAt)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          <div class="rounded border border-border bg-surface p-3">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+              Timeline
+            </div>
+            <Show
+              when={sortedResourceTimeline().length > 0}
+              fallback={
+                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                  No timeline records are available for this resource yet.
+                </div>
+              }
+            >
+              <div class="space-y-2">
+                <For each={sortedResourceTimeline()}>
+                  {(change) => (
+                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="font-medium text-base-content">
+                            {humanizeFacetToken(change.kind)}
+                          </div>
+                          <div class="mt-0.5 text-muted">
+                            {formatFacetTimestamp(change.observedAt)}
+                            <Show when={change.occurredAt}>
+                              <span class="mx-1">•</span>
+                              <span>Occurred {formatFacetTimestamp(change.occurredAt)}</span>
+                            </Show>
+                          </div>
+                        </div>
+                        <span class="text-muted">{humanizeFacetToken(change.sourceType)}</span>
+                      </div>
+                      <div class="mt-1 grid gap-1 sm:grid-cols-2">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Confidence</span>
+                          <span class="font-medium text-base-content">
+                            {formatConfidence(change.confidence)}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Adapter</span>
+                          <span class="font-medium text-base-content">
+                            {change.sourceAdapter || '—'}
+                          </span>
+                        </div>
+                        <Show when={change.actor}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Actor</span>
+                            <span class="font-medium text-base-content">{change.actor}</span>
+                          </div>
+                        </Show>
+                        <Show when={change.from || change.to}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Transition</span>
+                            <span class="font-medium text-base-content">
+                              {change.from || '—'} → {change.to || '—'}
+                            </span>
+                          </div>
+                        </Show>
+                      </div>
+                      <Show when={change.reason}>
+                        <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                          {change.reason}
+                        </div>
+                      </Show>
+                      <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                        <div class="mt-1 text-muted">
+                          Related: {change.relatedResources?.join(', ')}
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+        </div>
       </div>
 
       {/* Discovery Tab */}

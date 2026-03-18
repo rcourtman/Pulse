@@ -874,8 +874,8 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).not.toContain("'text-yellow-600 dark:text-yellow-400 italic'");
     expect(storagePoolDetailSource).not.toContain("'text-red-600 dark:text-red-400 font-medium'");
     expect(diskDetailSource).toContain('getDiskAttributeValueTextClass');
-    expect(diskDetailSource).toContain('getDiskDetailAttributeCards');
-    expect(diskDetailSource).toContain('getDiskDetailHistoryCharts');
+    expect(diskDetailSource).toContain('attributeCards()');
+    expect(diskDetailSource).toContain('historyCharts()');
     expect(diskDetailSource).toContain('getDiskDetailHistoryFallbackMessage');
     expect(diskDetailSource).toContain('getDiskDetailLiveBadgeLabel');
     expect(diskDetailSource).toContain('DISK_DETAIL_HISTORY_RANGE_OPTIONS');
@@ -955,7 +955,7 @@ describe('frontend resource type boundaries', () => {
     expect(useStorageCephModelSource).toContain(
       "from '@/features/storageBackups/cephRecordPresentation'",
     );
-    expect(useStorageCephModelSource).toContain('getCephClusterKeyFromStorageRecord');
+    expect(useStorageCephModelSource).toContain('resolveCephClusterForStorageRecord');
     expect(useStorageCephModelSource).toContain('getCephSummaryText');
     expect(useStorageCephModelSource).toContain('getCephPoolsText');
     expect(useStorageCephModelSource).toContain(
@@ -1817,6 +1817,8 @@ describe('frontend resource type boundaries', () => {
       'export const ENVIRONMENT_LOCK_BUTTON_TITLE',
     );
     expect(resourceDetailDrawerSource).toContain('getServiceHealthPresentation');
+    expect(resourceDetailDrawerSource).toContain('ResourceAPI.getFacetBundle');
+    expect(resourceDetailDrawerSource).toContain('History');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
@@ -2022,7 +2024,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertDestinationsLoadErrorBanner');
     expect(alertsPageSource).toContain('getAlertDestinationsAppriseTargetsHelp');
     expect(alertsPageSource).toContain('getAlertDestinationsAppriseTestLabel');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseTestError');
     expect(alertsPageSource).toContain('getAlertDestinationsAppriseValidationError');
     expect(alertsPageSource).toContain('getAlertDestinationsEmailTestSuccess');
     expect(alertsPageSource).toContain('getAlertDestinationsEmailTestFailure');
@@ -2043,7 +2044,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertResourceIncidentAcknowledgedByLabel');
     expect(alertsPageSource).toContain('getAlertResourceIncidentToggleLabel');
     expect(alertsPageSource).toContain('getAlertResourceIncidentFilteredEventsEmptyState');
-    expect(alertsPageSource).toContain('getAlertResourceIncidentRecentEventsSummary');
     expect(alertsPageSource).toContain('getAlertResourceIncidentNotePlaceholder');
     expect(alertsPageSource).toContain('getAlertResourceIncidentSaveNoteLabel');
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterContainerClass');

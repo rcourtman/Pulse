@@ -143,6 +143,84 @@ export interface ResourcePolicy {
   routing: ResourceRoutingPolicy;
 }
 
+export type ResourceCapabilityType = 'common' | 'native';
+export type ResourceApprovalLevel = 'none' | 'dry_run_only' | 'admin' | 'mfa';
+export type ResourceRelationshipType =
+  | 'runs_on'
+  | 'depends_on'
+  | 'mounted_to'
+  | 'exposed_by'
+  | 'owned_by';
+export type ResourceChangeConfidence = 'high' | 'medium' | 'low';
+export type ResourceChangeKind =
+  | 'state_transition'
+  | 'restart'
+  | 'config_update'
+  | 'metric_anomaly'
+  | 'relationship_change'
+  | 'capability_change';
+export type ResourceChangeSourceType =
+  | 'platform_event'
+  | 'pulse_diff'
+  | 'heuristic'
+  | 'user_action'
+  | 'agent_action';
+export type ResourceChangeSourceAdapter =
+  | 'docker_adapter'
+  | 'proxmox_adapter'
+  | 'truenas_adapter'
+  | 'agent:ops-helper'
+  | string;
+
+export interface ResourceCapabilityParam {
+  name: string;
+  type: string;
+  required: boolean;
+  enum?: string[];
+  pattern?: string;
+  defaultValue?: unknown;
+  isSensitive: boolean;
+  description?: string;
+}
+
+export interface ResourceCapability {
+  name: string;
+  type: ResourceCapabilityType;
+  description: string;
+  minimumApprovalLevel: ResourceApprovalLevel;
+  platform?: string;
+  params?: ResourceCapabilityParam[];
+}
+
+export interface ResourceRelationship {
+  sourceId: string;
+  targetId: string;
+  type: ResourceRelationshipType;
+  confidence: number;
+  active: boolean;
+  discoverer: string;
+  observedAt: string;
+  lastSeenAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResourceChange {
+  id: string;
+  observedAt: string;
+  occurredAt?: string;
+  resourceId: string;
+  kind: ResourceChangeKind;
+  from?: string;
+  to?: string;
+  sourceType: ResourceChangeSourceType;
+  sourceAdapter?: ResourceChangeSourceAdapter;
+  confidence: ResourceChangeConfidence;
+  actor?: string;
+  relatedResources?: string[];
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export type MetricsHistoryTargetResourceType =
   | 'agent'
   | 'vm'
@@ -405,6 +483,9 @@ export interface Resource {
   canonicalIdentity?: ResourceCanonicalIdentity;
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
+  capabilities?: ResourceCapability[];
+  relationships?: ResourceRelationship[];
+  recentChanges?: ResourceChange[];
 
   // Common source facets (optional; not all backends/state payloads include these).
   // Prefer these over casting `platformData` when available.

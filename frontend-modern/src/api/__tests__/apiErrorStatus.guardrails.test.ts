@@ -12,6 +12,7 @@ import nodesSource from '@/api/nodes.ts?raw';
 import patrolSource from '@/api/patrol.ts?raw';
 import guestMetadataSource from '@/api/guestMetadata.ts?raw';
 import metadataClientSource from '@/api/metadataClient.ts?raw';
+import resourcesSource from '@/api/resources.ts?raw';
 import responseUtilsSource from '@/api/responseUtils.ts?raw';
 import securitySource from '@/api/security.ts?raw';
 import streamingSource from '@/api/streaming.ts?raw';
@@ -59,6 +60,9 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function promoteLegacyAlertIdentifier');
     expect(metadataClientSource).toContain('export function buildMetadataAPI');
     expect(metadataClientSource).toContain('export interface ResourceMetadataRecord');
+    expect(resourcesSource).toContain('export class ResourceAPI');
+    expect(resourcesSource).toContain('apiFetchJSON');
+    expect(resourcesSource).not.toContain('response.json()');
     expect(streamingSource).toContain('export async function consumeJSONEventStream');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
@@ -147,7 +151,7 @@ describe('API error-status guardrails', () => {
     ).toHaveLength(3);
     expect(
       monitoringSource.match(/await runManagedResourceAction\(url\);/g) ?? [],
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? [],
     ).toHaveLength(1);
@@ -211,22 +215,22 @@ describe('API error-status guardrails', () => {
     expect(patrolSource).toContain('promoteLegacyAlertIdentifier(');
     expect(patrolSource).toContain('async function fetchPatrolRunHistory(search: URLSearchParams)');
     expect(patrolSource).not.toContain('runs || []');
-    expect(patrolSource).not.toContain('normalizePatrolRunRecord(');
     expect(
       patrolSource.match(
         /apiFetchJSON<PatrolRunRecord\[\]>\(`\/api\/ai\/patrol\/runs\?\$\{search\.toString\(\)\}`\)/g,
       ) ?? [],
     ).toHaveLength(1);
-    expect(patrolSource.match(/arrayOrEmpty<PatrolRunRecord>\(runs\)\.map\(/g) ?? []).toHaveLength(
-      1,
-    );
+    expect(
+      patrolSource.match(/arrayOrEmpty<PatrolRunRecord>\(runs\)\s*\.map\(/g) ?? [],
+    ).toHaveLength(1);
     expect(patrolSource.match(/return fetchPatrolRunHistory\(search\);/g) ?? []).toHaveLength(2);
 
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfile>(response)');
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfileAssignment>(response)');
-    expect(agentProfilesSource).toContain('arrayOrEmpty<ConfigKeyDefinitionResponse>(response)');
+    expect(agentProfilesSource).toContain('parseRequiredJSON<ConfigKeyDefinitionResponse[]>');
+    expect(agentProfilesSource).toContain('arrayOrEmpty<ConfigKeyDefinitionResponse>(');
     expect(agentProfilesSource).toContain(
-      "objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(response, 'Errors')",
+      "objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(parsed, 'Errors')",
     );
     expect(agentProfilesSource).not.toContain('response || []');
     expect(agentProfilesSource).not.toContain('response.Errors || []');
@@ -289,7 +293,7 @@ describe('API error-status guardrails', () => {
       /\/(?:ai|patrol)\.ts$/.test(path),
     );
     const duplicateAlertIdentifierPattern =
-      /(?:normalizeUnifiedFinding\(|normalizePatrolRunRecord\(|alert_identifier:\s*_alertIdentifier|const\s+alertIdentifier\s*=\s*.+alert_identifier)/;
+      /(?:normalizeUnifiedFinding\(|alert_identifier:\s*_alertIdentifier|const\s+alertIdentifier\s*=\s*.+alert_identifier)/;
     const governedAiAliasEntries = runtimeEntries.filter(([path]) =>
       /\/(?:ai|aiChat)\.ts$/.test(path),
     );

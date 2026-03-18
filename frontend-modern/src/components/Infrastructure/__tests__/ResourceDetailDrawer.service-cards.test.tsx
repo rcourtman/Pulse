@@ -22,6 +22,16 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
+
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
   type: 'agent',

@@ -713,6 +713,101 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('preserves resource facets from backend payloads', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'node-facets',
+            capabilities: [
+              {
+                name: 'restart',
+                type: 'common',
+                description: 'Restart the resource safely.',
+                minimumApprovalLevel: 'admin',
+                platform: 'proxmox',
+              },
+            ],
+            relationships: [
+              {
+                sourceId: 'node:pve-1',
+                targetId: 'node-facets',
+                type: 'runs_on',
+                confidence: 0.98,
+                active: true,
+                discoverer: 'proxmox_adapter',
+                observedAt: '2026-03-18T12:00:00Z',
+                lastSeenAt: '2026-03-18T12:05:00Z',
+              },
+            ],
+            recentChanges: [
+              {
+                id: 'change-1',
+                observedAt: '2026-03-18T12:06:00Z',
+                resourceId: 'node-facets',
+                kind: 'capability_change',
+                from: 'none',
+                to: 'restart',
+                sourceType: 'platform_event',
+                sourceAdapter: 'proxmox_adapter',
+                confidence: 'high',
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(result!.resources()[0]?.capabilities).toEqual([
+      {
+        name: 'restart',
+        type: 'common',
+        description: 'Restart the resource safely.',
+        minimumApprovalLevel: 'admin',
+        platform: 'proxmox',
+      },
+    ]);
+    expect(result!.resources()[0]?.relationships).toEqual([
+      {
+        sourceId: 'node:pve-1',
+        targetId: 'node-facets',
+        type: 'runs_on',
+        confidence: 0.98,
+        active: true,
+        discoverer: 'proxmox_adapter',
+        observedAt: '2026-03-18T12:00:00Z',
+        lastSeenAt: '2026-03-18T12:05:00Z',
+      },
+    ]);
+    expect(result!.resources()[0]?.recentChanges).toEqual([
+      {
+        id: 'change-1',
+        observedAt: '2026-03-18T12:06:00Z',
+        resourceId: 'node-facets',
+        kind: 'capability_change',
+        from: 'none',
+        to: 'restart',
+        sourceType: 'platform_event',
+        sourceAdapter: 'proxmox_adapter',
+        confidence: 'high',
+      },
+    ]);
+
+    dispose();
+  });
+
   it('filters malformed source entries from backend payloads', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

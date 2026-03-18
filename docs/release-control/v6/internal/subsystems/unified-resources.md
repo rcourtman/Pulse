@@ -89,6 +89,10 @@ in memory or adapter-local state.
 and `/api/resources/{id}/relationships` expose the current graph facets as
 separate queryable surfaces instead of forcing consumers to parse the full
 resource payload.
+The frontend now also consumes those facet reads through
+`frontend-modern/src/api/resources.ts` and the dedicated resource detail
+drawer, which keeps the presentation surface aligned with the governed API
+contract instead of rebuilding the graph and timeline inline.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

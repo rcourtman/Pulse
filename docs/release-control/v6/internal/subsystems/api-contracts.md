@@ -32,7 +32,8 @@ Own canonical runtime payload shapes between backend and frontend.
 11. `frontend-modern/src/api/nodes.ts`
 12. `frontend-modern/src/api/license.ts`
 13. `frontend-modern/src/api/monitoredSystemLedger.ts`
-14. `internal/api/monitored_system_ledger.go`
+14. `frontend-modern/src/api/resources.ts`
+15. `internal/api/monitored_system_ledger.go`
 
 ## Shared Boundaries
 
@@ -71,11 +72,12 @@ Own canonical runtime payload shapes between backend and frontend.
 3. Add dedicated contract tests for new stable payloads
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
-6. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
-7. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
-8. Add or change infrastructure operations token generation, lookup, assignment, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
-9. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
-10. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
+6. Route dedicated unified-resource capability, relationship, and timeline facet reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one governed surface
+7. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+8. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
+9. Add or change infrastructure operations token generation, lookup, assignment, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
+10. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
+11. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 
 ## Forbidden Paths
 
@@ -126,6 +128,10 @@ export history endpoints live in `internal/api/activity_audit_handlers.go` and
 `internal/api/router_routes_licensing.go`, and the contract tests now pin their
 response shapes so the execution trail remains queryable through the governed
 API surface rather than only through the underlying store.
+The same API contract now also owns the dedicated frontend resource facet
+client in `frontend-modern/src/api/resources.ts`, which fetches the governed
+capability, relationship, and timeline surfaces from `internal/api/resources.go`
+instead of teaching the drawer or list views to reconstruct them inline.
 The tenant-scoped unified resource API now also stays on canonical
 unified-resource seeds end to end: `internal/api/resources.go`,
 `internal/api/router_helpers.go`, and `internal/api/state_provider.go` no
