@@ -131,6 +131,9 @@ Relationship-change timeline entries also preserve the affected graph endpoints
 in `relatedResources`, so the canonical history keeps enough context for the
 detail drawer and audit views to explain which neighboring resources moved with
 the change.
+Restart timeline entries are also a first-class contract now: `restart` change
+kinds can serialize Docker and Kubernetes restart metadata instead of being
+folded into generic state transitions.
 For relationship changes, the `from` and `to` fields now summarize the actual
 edge(s) rather than only the parent pointer, so the API contract keeps the
 graph transition legible even before the frontend expands the related-resource

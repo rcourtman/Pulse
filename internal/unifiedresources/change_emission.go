@@ -108,6 +108,11 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 	change.Metadata = map[string]any{"changedFields": changedFields}
 
 	switch {
+	case resourceRestartChanged(before, after):
+		change.Kind = ChangeRestart
+		change.From = resourceRestartSummary(before)
+		change.To = resourceRestartSummary(after)
+		change.Reason = "resource restart detected"
 	case before.Status != after.Status || dockerCommandChanged(before, after) || dockerUpdateStatusChanged(before, after) || proxmoxLifecycleChanged(before, after):
 		change.Kind = ChangeStateTransition
 		change.From = resourceStateSummary(before)
@@ -171,6 +176,12 @@ func resourceChangedFields(before, after Resource) []string {
 	if !reflect.DeepEqual(before.Identity, after.Identity) {
 		changed = append(changed, "identity")
 	}
+	if dockerRestartChanged(before, after) {
+		changed = append(changed, "docker.restartCount", "docker.uptimeSeconds")
+	}
+	if kubernetesRestartChanged(before, after) {
+		changed = append(changed, "kubernetes.restarts", "kubernetes.uptimeSeconds")
+	}
 	if dockerCommandChanged(before, after) {
 		changed = append(changed, "docker.command")
 	}
@@ -204,6 +215,30 @@ func dockerUpdateStatusChanged(before, after Resource) bool {
 		afterStatus = after.Docker.UpdateStatus
 	}
 	return !reflect.DeepEqual(beforeStatus, afterStatus)
+}
+
+func dockerRestartChanged(before, after Resource) bool {
+	if before.Docker == nil || after.Docker == nil {
+		return false
+	}
+	if after.Docker.RestartCount > before.Docker.RestartCount {
+		return true
+	}
+	return before.Docker.UptimeSeconds > 0 && after.Docker.UptimeSeconds > 0 && after.Docker.UptimeSeconds < before.Docker.UptimeSeconds
+}
+
+func resourceRestartChanged(before, after Resource) bool {
+	return dockerRestartChanged(before, after) || kubernetesRestartChanged(before, after)
+}
+
+func kubernetesRestartChanged(before, after Resource) bool {
+	if before.Kubernetes == nil || after.Kubernetes == nil {
+		return false
+	}
+	if after.Kubernetes.Restarts > before.Kubernetes.Restarts {
+		return true
+	}
+	return before.Kubernetes.UptimeSeconds > 0 && after.Kubernetes.UptimeSeconds > 0 && after.Kubernetes.UptimeSeconds < before.Kubernetes.UptimeSeconds
 }
 
 func proxmoxLifecycleChanged(before, after Resource) bool {
@@ -248,6 +283,23 @@ func resourceStateSummary(resource Resource) string {
 		status = "unknown"
 	}
 	return status
+}
+
+func resourceRestartSummary(resource Resource) string {
+	parts := []string{resourceStateSummary(resource)}
+	if resource.Docker != nil {
+		parts = append(parts, fmt.Sprintf("docker.restartCount=%d", resource.Docker.RestartCount))
+		if resource.Docker.UptimeSeconds > 0 {
+			parts = append(parts, fmt.Sprintf("docker.uptimeSeconds=%d", resource.Docker.UptimeSeconds))
+		}
+	}
+	if resource.Kubernetes != nil {
+		parts = append(parts, fmt.Sprintf("kubernetes.restarts=%d", resource.Kubernetes.Restarts))
+		if resource.Kubernetes.UptimeSeconds > 0 {
+			parts = append(parts, fmt.Sprintf("kubernetes.uptimeSeconds=%d", resource.Kubernetes.UptimeSeconds))
+		}
+	}
+	return strings.Join(parts, "|")
 }
 
 func resourceRelationSummary(resource Resource) string {

@@ -91,6 +91,10 @@ to parent-only hints.
 Those same relationship changes now summarize the actual edge(s) in `from` and
 `to`, so the canonical timeline keeps the graph transition readable without
 needing the drawer to reconstruct an edge summary from raw endpoints.
+The change emitter now also classifies canonical restart changes for Docker
+and Kubernetes resources when restart counters increase or uptime resets, so
+the timeline can distinguish restarts from generic state transitions instead
+of flattening them into status-only noise.
 That store also now migrates legacy `resource_changes` tables that still carry
 the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
 adding the newer `occurred_at` field, and preserving the legacy timestamp on

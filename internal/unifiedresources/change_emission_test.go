@@ -106,6 +106,90 @@ func TestBuildResourceChange_ClassifiesCapabilityChange(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_ClassifiesDockerRestartChange(t *testing.T) {
+	before := Resource{
+		ID:     "container:1",
+		Type:   ResourceTypeAppContainer,
+		Name:   "container-1",
+		Status: StatusOnline,
+		Docker: &DockerData{
+			RestartCount:  1,
+			UptimeSeconds: 3600,
+			Image:         "example/app:1",
+			UpdateStatus:  &DockerUpdateStatusMeta{UpdateAvailable: false},
+		},
+	}
+	after := before
+	after.Docker = &DockerData{
+		RestartCount:  2,
+		UptimeSeconds: 120,
+		Image:         "example/app:1",
+		UpdateStatus:  &DockerUpdateStatusMeta{UpdateAvailable: false},
+	}
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePlatformEvent, "")
+	if change == nil {
+		t.Fatal("expected docker restart change, got nil")
+	}
+	if change.Kind != ChangeRestart {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeRestart)
+	}
+	if change.From != "online|docker.restartCount=1|docker.uptimeSeconds=3600" || change.To != "online|docker.restartCount=2|docker.uptimeSeconds=120" {
+		t.Fatalf("From/To = %q/%q, want docker restart summaries", change.From, change.To)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"docker.restartCount", "docker.uptimeSeconds"}) {
+		t.Fatalf("changedFields = %+v, want docker restart counters", mustChangedFields(t, change))
+	}
+}
+
+func TestBuildResourceChange_ClassifiesKubernetesRestartChange(t *testing.T) {
+	before := Resource{
+		ID:     "pod:1",
+		Type:   ResourceTypePod,
+		Name:   "pod-1",
+		Status: StatusOnline,
+		Kubernetes: &K8sData{
+			PodPhase:                "Running",
+			Restarts:                1,
+			UptimeSeconds:           1800,
+			Namespace:               "default",
+			PodUID:                  "pod-uid-1",
+			PodReason:               "Running",
+			PodMessage:              "",
+			OwnerKind:               "Deployment",
+			OwnerName:               "app",
+			ContainerRuntimeVersion: "containerd://1.7.0",
+		},
+	}
+	after := before
+	after.Kubernetes = &K8sData{
+		PodPhase:                "Running",
+		Restarts:                2,
+		UptimeSeconds:           75,
+		Namespace:               "default",
+		PodUID:                  "pod-uid-1",
+		PodReason:               "Running",
+		PodMessage:              "",
+		OwnerKind:               "Deployment",
+		OwnerName:               "app",
+		ContainerRuntimeVersion: "containerd://1.7.0",
+	}
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePlatformEvent, "")
+	if change == nil {
+		t.Fatal("expected kubernetes restart change, got nil")
+	}
+	if change.Kind != ChangeRestart {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeRestart)
+	}
+	if change.From != "online|kubernetes.restarts=1|kubernetes.uptimeSeconds=1800" || change.To != "online|kubernetes.restarts=2|kubernetes.uptimeSeconds=75" {
+		t.Fatalf("From/To = %q/%q, want kubernetes restart summaries", change.From, change.To)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"kubernetes.restarts", "kubernetes.uptimeSeconds"}) {
+		t.Fatalf("changedFields = %+v, want kubernetes restart counters", mustChangedFields(t, change))
+	}
+}
+
 func TestBuildResourceChange_ClassifiesConfigUpdate(t *testing.T) {
 	before := Resource{
 		ID:     "vm:1",

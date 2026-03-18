@@ -3808,6 +3808,64 @@ func TestContract_ResourceTimelineRelationshipJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceTimelineRestartJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 10, 0, 0, time.UTC)
+	payload := struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Count         int                               `json:"count"`
+	}{
+		ResourceID: "container:7",
+		RecentChanges: []unifiedresources.ResourceChange{
+			{
+				ID:            "chg-restart-7",
+				ObservedAt:    now,
+				OccurredAt:    &now,
+				ResourceID:    "container:7",
+				Kind:          unifiedresources.ChangeRestart,
+				From:          "online|docker.restartCount=1|docker.uptimeSeconds=3600",
+				To:            "online|docker.restartCount=2|docker.uptimeSeconds=120",
+				SourceType:    unifiedresources.SourcePlatformEvent,
+				SourceAdapter: unifiedresources.AdapterDocker,
+				Confidence:    unifiedresources.ConfidenceHigh,
+				Reason:        "resource restart detected",
+				Metadata: map[string]any{
+					"changedFields": []string{"docker.restartCount", "docker.uptimeSeconds"},
+				},
+			},
+		},
+		Count: 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal resource timeline restart response: %v", err)
+	}
+
+	const want = `{
+		"resourceId":"container:7",
+		"recentChanges":[
+			{
+				"id":"chg-restart-7",
+				"observedAt":"2026-03-18T17:10:00Z",
+				"occurredAt":"2026-03-18T17:10:00Z",
+				"resourceId":"container:7",
+				"kind":"restart",
+				"from":"online|docker.restartCount=1|docker.uptimeSeconds=3600",
+				"to":"online|docker.restartCount=2|docker.uptimeSeconds=120",
+				"sourceType":"platform_event",
+				"sourceAdapter":"docker_adapter",
+				"confidence":"high",
+				"reason":"resource restart detected",
+				"metadata":{"changedFields":["docker.restartCount","docker.uptimeSeconds"]}
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {

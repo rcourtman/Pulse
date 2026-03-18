@@ -289,11 +289,17 @@ func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing
 	source := string(data)
 	requiredSnippets := []string{
 		"relatedResourceIDs(change.ResourceID, before, after)",
+		"case resourceRestartChanged(before, after):",
 		"if !reflect.DeepEqual(before.Relationships, after.Relationships) {",
 		"changed = append(changed, \"relationships\")",
+		"if dockerRestartChanged(before, after) {",
+		"changed = append(changed, \"docker.restartCount\", \"docker.uptimeSeconds\")",
+		"if kubernetesRestartChanged(before, after) {",
+		"changed = append(changed, \"kubernetes.restarts\", \"kubernetes.uptimeSeconds\")",
 		"if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {",
 		"changed = append(changed, \"capabilities\")",
 		"resourceRelationshipSummary(relationships []ResourceRelationship)",
+		"resourceRestartSummary(resource Resource) string",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
