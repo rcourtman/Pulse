@@ -4494,17 +4494,30 @@ func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) strin
 	store := s.incidentStore
 	s.mu.RUnlock()
 
-	if store == nil {
-		return ""
+	var sections []string
+
+	if store != nil {
+		if alertIdentifier != "" {
+			if text := store.FormatForAlert(alertIdentifier, 8); text != "" {
+				sections = append(sections, text)
+			}
+		} else if resourceID != "" {
+			if text := store.FormatForResource(resourceID, 4); text != "" {
+				sections = append(sections, text)
+			}
+		}
 	}
 
-	if alertIdentifier != "" {
-		return store.FormatForAlert(alertIdentifier, 8)
+	if alertIdentifier == "" && resourceID != "" {
+		if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
+			sections = append(sections, recentChanges)
+		}
 	}
-	if resourceID != "" {
-		return store.FormatForResource(resourceID, 4)
+
+	if len(sections) == 0 {
+		return ""
 	}
-	return ""
+	return strings.Join(sections, "")
 }
 
 // RecordIncidentAnalysis stores an AI analysis event for an alert.

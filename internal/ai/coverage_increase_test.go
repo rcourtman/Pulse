@@ -419,7 +419,48 @@ func TestService_BuildIncidentContext(t *testing.T) {
 		t.Logf("Resource context: %s", ctx)
 	}
 
-	// Case 4: both empty
+	// Case 4: canonical resource timeline fallback
+	canonicalStore := unifiedresources.NewMemoryStore()
+	if err := canonicalStore.RecordChange(unifiedresources.ResourceChange{
+		ID:               "change-incident-1",
+		ObservedAt:       time.Now().Add(-time.Hour),
+		ResourceID:       "res1",
+		Kind:             unifiedresources.ChangeConfigUpdate,
+		From:             "old",
+		To:               "new",
+		SourceType:       unifiedresources.SourcePulseDiff,
+		SourceAdapter:    unifiedresources.AdapterOpsAgent,
+		Confidence:       unifiedresources.ConfidenceMedium,
+		RelatedResources: []string{"related-1"},
+		Reason:           "Config refresh",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	s.mu.Lock()
+	s.orgID = "org-1"
+	s.resourceExportStore = canonicalStore
+	s.resourceExportStoreOrgID = s.orgID
+	s.mu.Unlock()
+
+	ctx = s.buildIncidentContext("res1", "")
+	if !strings.Contains(ctx, "Recent Changes") {
+		t.Fatalf("expected canonical recent changes in incident context, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "Config update") {
+		t.Fatalf("expected canonical change kind in incident context, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "agent:ops-helper") {
+		t.Fatalf("expected canonical adapter provenance in incident context, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "related-1") {
+		t.Fatalf("expected canonical related resource in incident context, got %q", ctx)
+	}
+	s.mu.Lock()
+	s.resourceExportStore = nil
+	s.resourceExportStoreOrgID = ""
+	s.mu.Unlock()
+
+	// Case 5: both empty
 	ctx = s.buildIncidentContext("", "")
 	if ctx != "" {
 		t.Error("Expected empty context when both IDs are empty")

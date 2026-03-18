@@ -139,6 +139,10 @@ context should come from the shared resource store first so AI prompts reflect
 the same change record that powers the resource API, with patrol-local change
 detectors only serving as fallback coverage when the canonical store is not
 available.
+Resource-only incident context should follow the same rule: if an alert
+timeline is absent, the incident prompt path should fall back to the canonical
+unified-resource timeline rather than depending only on patrol-local change
+memory.
 
 The same runtime boundary now also owns durable action execution auditing.
 `internal/ai/chat/service.go` initializes the unified-resource audit store on
