@@ -49,8 +49,9 @@ const (
 // ResourceChangeFilters narrows the resource timeline to specific change kinds
 // and source origins while preserving the canonical change record shape.
 type ResourceChangeFilters struct {
-	Kinds       []ChangeKind       `json:"kinds,omitempty"`
-	SourceTypes []ChangeSourceType `json:"sourceTypes,omitempty"`
+	Kinds          []ChangeKind          `json:"kinds,omitempty"`
+	SourceTypes    []ChangeSourceType    `json:"sourceTypes,omitempty"`
+	SourceAdapters []ChangeSourceAdapter `json:"sourceAdapters,omitempty"`
 }
 
 func (filters ResourceChangeFilters) matches(change ResourceChange) bool {
@@ -70,6 +71,18 @@ func (filters ResourceChangeFilters) matches(change ResourceChange) bool {
 		match := false
 		for _, sourceType := range filters.SourceTypes {
 			if sourceType == change.SourceType {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	if len(filters.SourceAdapters) > 0 {
+		match := false
+		for _, sourceAdapter := range filters.SourceAdapters {
+			if sourceAdapter == change.SourceAdapter {
 				match = true
 				break
 			}

@@ -3,6 +3,7 @@ import type {
   ResourceCapability,
   ResourceChange,
   ResourceChangeKind,
+  ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
   ResourceFacetCounts,
   ResourceRelationship,
@@ -25,6 +26,7 @@ export interface ResourceTimelineQueryOptions {
   limit?: number;
   kind?: ResourceChangeKind;
   sourceType?: ResourceChangeSourceType;
+  sourceAdapter?: ResourceChangeSourceAdapter;
 }
 
 export interface ResourceTimelineResponse {
@@ -61,6 +63,9 @@ const buildTimelineQuery = (options?: ResourceTimelineQueryOptions): string => {
   }
   if (options?.sourceType) {
     params.set('sourceType', options.sourceType);
+  }
+  if (options?.sourceAdapter) {
+    params.set('sourceAdapter', options.sourceAdapter);
   }
   const query = params.toString();
   return query ? `?${query}` : '';

@@ -301,6 +301,11 @@ func parseResourceChangeFilters(values url.Values) (unified.ResourceChangeFilter
 	} else {
 		filters.SourceTypes = sourceTypes
 	}
+	if sourceAdapters, err := parseResourceChangeSourceAdapters(values["sourceAdapter"]); err != nil {
+		return unified.ResourceChangeFilters{}, err
+	} else {
+		filters.SourceAdapters = sourceAdapters
+	}
 	return filters, nil
 }
 
@@ -351,6 +356,20 @@ func parseResourceChangeSourceTypes(values []string) ([]unified.ChangeSourceType
 			default:
 				return nil, fmt.Errorf("invalid sourceType value %q", token)
 			}
+		}
+	}
+	return parsed, nil
+}
+
+func parseResourceChangeSourceAdapters(values []string) ([]unified.ChangeSourceAdapter, error) {
+	parsed := make([]unified.ChangeSourceAdapter, 0, len(values))
+	for _, value := range values {
+		for _, token := range strings.Split(value, ",") {
+			normalized := strings.TrimSpace(token)
+			if normalized == "" {
+				continue
+			}
+			parsed = append(parsed, unified.ChangeSourceAdapter(normalized))
 		}
 	}
 	return parsed, nil

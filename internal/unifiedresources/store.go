@@ -389,6 +389,7 @@ func (s *SQLiteResourceStore) ensureResourceChangesIndexes() error {
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_kind_time ON resource_changes(kind, observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_source_type_time ON resource_changes(source_type, observed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_source_adapter_time ON resource_changes(source_adapter, observed_at DESC)`,
 	}
 	for _, stmt := range indexes {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -651,6 +652,14 @@ func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since
 		}
 		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
 	}
+	if len(filters.SourceAdapters) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceAdapters))
+		for _, sourceAdapter := range filters.SourceAdapters {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceAdapter))
+		}
+		conditions = append(conditions, "source_adapter IN ("+strings.Join(placeholders, ", ")+")")
+	}
 	if len(conditions) > 0 {
 		query += "\n\t\tWHERE " + strings.Join(conditions, " AND ")
 	}
@@ -725,6 +734,14 @@ func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, sin
 			args = append(args, string(sourceType))
 		}
 		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(filters.SourceAdapters) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceAdapters))
+		for _, sourceAdapter := range filters.SourceAdapters {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceAdapter))
+		}
+		conditions = append(conditions, "source_adapter IN ("+strings.Join(placeholders, ", ")+")")
 	}
 	query += ` WHERE ` + strings.Join(conditions, " AND ")
 

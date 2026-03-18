@@ -217,6 +217,7 @@ func TestNewSQLiteResourceStore_MigratesLegacyResourceChangesTable(t *testing.T)
 		"idx_resource_changes_canonical_time",
 		"idx_resource_changes_kind_time",
 		"idx_resource_changes_source_type_time",
+		"idx_resource_changes_source_adapter_time",
 	} {
 		if _, ok := indexes[want]; !ok {
 			t.Fatalf("expected migrated resource_changes index %q, got %#v", want, indexes)
@@ -400,36 +401,40 @@ func TestCountRecentChanges_RespectsFilters(t *testing.T) {
 	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
 	changes := []ResourceChange{
 		{
-			ID:         "chg-count-1",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-30 * time.Minute),
-			Kind:       ChangeStateTransition,
-			SourceType: SourcePlatformEvent,
-			Confidence: ConfidenceHigh,
+			ID:            "chg-count-1",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-30 * time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceHigh,
 		},
 		{
-			ID:         "chg-count-2",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-20 * time.Minute),
-			Kind:       ChangeAnomaly,
-			SourceType: SourcePulseDiff,
-			Confidence: ConfidenceMedium,
+			ID:            "chg-count-2",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-20 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceMedium,
 		},
 		{
-			ID:         "chg-count-3",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-10 * time.Minute),
-			Kind:       ChangeRelationship,
-			SourceType: SourcePulseDiff,
-			Confidence: ConfidenceLow,
+			ID:            "chg-count-3",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-10 * time.Minute),
+			Kind:          ChangeRelationship,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceLow,
 		},
 		{
-			ID:         "chg-count-4",
-			ResourceID: "vm:2",
-			ObservedAt: base.Add(-5 * time.Minute),
-			Kind:       ChangeCapability,
-			SourceType: SourcePulseDiff,
-			Confidence: ConfidenceLow,
+			ID:            "chg-count-4",
+			ResourceID:    "vm:2",
+			ObservedAt:    base.Add(-5 * time.Minute),
+			Kind:          ChangeCapability,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceLow,
 		},
 	}
 	for _, change := range changes {
@@ -473,6 +478,16 @@ func TestCountRecentChanges_RespectsFilters(t *testing.T) {
 	if sourceFilteredCount != 3 {
 		t.Fatalf("CountRecentChangesFiltered source types = %d, want 3", sourceFilteredCount)
 	}
+
+	adapterFilteredCount, err := store.CountRecentChangesFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		SourceAdapters: []ChangeSourceAdapter{AdapterProxmox},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesFiltered source adapters: %v", err)
+	}
+	if adapterFilteredCount != 2 {
+		t.Fatalf("CountRecentChangesFiltered source adapters = %d, want 2", adapterFilteredCount)
+	}
 }
 
 func TestGetRecentChanges_RespectsFilters(t *testing.T) {
@@ -480,28 +495,31 @@ func TestGetRecentChanges_RespectsFilters(t *testing.T) {
 	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
 	changes := []ResourceChange{
 		{
-			ID:         "chg-1",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-30 * time.Minute),
-			Kind:       ChangeStateTransition,
-			SourceType: SourcePlatformEvent,
-			Confidence: ConfidenceHigh,
+			ID:            "chg-1",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-30 * time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceHigh,
 		},
 		{
-			ID:         "chg-2",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-20 * time.Minute),
-			Kind:       ChangeAnomaly,
-			SourceType: SourcePulseDiff,
-			Confidence: ConfidenceMedium,
+			ID:            "chg-2",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-20 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceMedium,
 		},
 		{
-			ID:         "chg-3",
-			ResourceID: "vm:1",
-			ObservedAt: base.Add(-10 * time.Minute),
-			Kind:       ChangeRelationship,
-			SourceType: SourcePulseDiff,
-			Confidence: ConfidenceLow,
+			ID:            "chg-3",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-10 * time.Minute),
+			Kind:          ChangeRelationship,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceLow,
 		},
 	}
 	for _, change := range changes {
@@ -528,6 +546,16 @@ func TestGetRecentChanges_RespectsFilters(t *testing.T) {
 	}
 	if len(sourceResults) != 2 || sourceResults[0].ID != "chg-3" || sourceResults[1].ID != "chg-2" {
 		t.Fatalf("GetRecentChangesFiltered source types = %#v, want chg-3 then chg-2", sourceResults)
+	}
+
+	adapterResults, err := store.GetRecentChangesFiltered("vm:1", base.Add(-35*time.Minute), 10, ResourceChangeFilters{
+		SourceAdapters: []ChangeSourceAdapter{AdapterProxmox},
+	})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered source adapters: %v", err)
+	}
+	if len(adapterResults) != 2 || adapterResults[0].ID != "chg-3" || adapterResults[1].ID != "chg-1" {
+		t.Fatalf("GetRecentChangesFiltered source adapters = %#v, want chg-3 then chg-1", adapterResults)
 	}
 }
 

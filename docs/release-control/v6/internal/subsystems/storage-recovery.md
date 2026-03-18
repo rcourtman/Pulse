@@ -121,9 +121,9 @@ The same shared API runtime now also exposes dedicated
 to treat those as adjacent governed API ownership rather than storage/recovery
 timeline ownership.
 Those resource timeline reads now also accept governed kind and source-type
-filters, with filtered history counts owned by the unified-resource store so
-storage and recovery views can consume the same canonical history contract
-without re-deriving their own timeline slices.
+filters plus source-adapter filters, with filtered history counts owned by the
+unified-resource store so storage and recovery views can consume the same
+canonical history contract without re-deriving their own timeline slices.
 The shared unified-resource consumer hook now also preserves `capabilities`,
 `relationships`, `recentChanges`, `facetCounts`, `policy`, and `aiSafeSummary`
 fields when storage and recovery surfaces read unified resources, so those

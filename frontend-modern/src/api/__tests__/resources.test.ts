@@ -48,10 +48,11 @@ describe('ResourceAPI', () => {
       limit: 25,
       kind: 'restart',
       sourceType: 'platform_event',
+      sourceAdapter: 'proxmox_adapter',
     });
 
     expect(apiFetchJSON).toHaveBeenCalledWith(
-      '/api/resources/vm%3A42/facets?since=2026-03-18T12%3A00%3A00.000Z&limit=25&kind=restart&sourceType=platform_event',
+      '/api/resources/vm%3A42/facets?since=2026-03-18T12%3A00%3A00.000Z&limit=25&kind=restart&sourceType=platform_event&sourceAdapter=proxmox_adapter',
       {
         cache: 'no-store',
       },
@@ -86,10 +87,11 @@ describe('ResourceAPI', () => {
       limit: -1,
       kind: 'metric_anomaly',
       sourceType: 'pulse_diff',
+      sourceAdapter: 'docker_adapter',
     });
 
     expect(apiFetchJSON).toHaveBeenCalledWith(
-      '/api/resources/vm%3A42/timeline?kind=metric_anomaly&sourceType=pulse_diff',
+      '/api/resources/vm%3A42/timeline?kind=metric_anomaly&sourceType=pulse_diff&sourceAdapter=docker_adapter',
       {
         cache: 'no-store',
       },
@@ -108,10 +110,11 @@ describe('ResourceAPI', () => {
       limit: 10,
       kind: 'state_transition',
       sourceType: 'platform_event',
+      sourceAdapter: 'proxmox_adapter',
     });
 
     expect(apiFetchJSON).toHaveBeenCalledWith(
-      '/api/resources/vm%3A42/timeline?since=2026-03-18T12%3A00%3A00.000Z&limit=10&kind=state_transition&sourceType=platform_event',
+      '/api/resources/vm%3A42/timeline?since=2026-03-18T12%3A00%3A00.000Z&limit=10&kind=state_transition&sourceType=platform_event&sourceAdapter=proxmox_adapter',
       {
         cache: 'no-store',
       },

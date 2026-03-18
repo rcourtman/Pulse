@@ -954,13 +954,17 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		t.Fatalf("RecordChange: %v", err)
 	}
 	for i, offset := range []time.Duration{2 * time.Minute, 4 * time.Minute} {
+		sourceAdapter := unified.AdapterProxmox
+		if i == 1 {
+			sourceAdapter = unified.AdapterDocker
+		}
 		if err := store.RecordChange(unified.ResourceChange{
 			ID:            fmt.Sprintf("chg-42-extra-%d", i+1),
 			ResourceID:    "vm:42",
 			ObservedAt:    now.Add(-offset),
 			Kind:          unified.ChangeAnomaly,
 			SourceType:    unified.SourcePulseDiff,
-			SourceAdapter: unified.AdapterProxmox,
+			SourceAdapter: sourceAdapter,
 			Confidence:    unified.ConfidenceMedium,
 			Reason:        "history backfill",
 		}); err != nil {
@@ -1095,6 +1099,29 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 	})
 
+	t.Run("filtered timeline by source adapter", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/timeline?sourceAdapter=docker_adapter", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Count         int                      `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode filtered timeline adapter: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected filtered timeline adapter payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42-extra-2" {
+			t.Fatalf("unexpected adapter-filtered change: %#v", payload.RecentChanges[0])
+		}
+	})
+
 	t.Run("filtered facets", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/facets?kind=restart&sourceType=platform_event", nil)
@@ -1120,6 +1147,34 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {
 			t.Fatalf("unexpected filtered facets change: %#v", payload.RecentChanges[0])
+		}
+	})
+
+	t.Run("filtered facets by source adapter", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/facets?sourceAdapter=docker_adapter", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                         `json:"resourceId"`
+			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+			Relationships []unified.ResourceRelationship `json:"relationships"`
+			Counts        struct {
+				Capabilities  int `json:"capabilities"`
+				Relationships int `json:"relationships"`
+				RecentChanges int `json:"recentChanges"`
+			} `json:"counts"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode filtered facets adapter: %v", err)
+		}
+		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected filtered facets adapter payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42-extra-2" {
+			t.Fatalf("unexpected adapter-filtered facets change: %#v", payload.RecentChanges[0])
 		}
 	})
 }

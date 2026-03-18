@@ -358,4 +358,138 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(await panel.findByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.queryByText('CPU spike detected')).toBeNull();
   });
+
+  it('filters timeline entries by source adapter', async () => {
+    facetBundleMock.getFacetBundle
+      .mockResolvedValueOnce({
+        capabilities: [
+          {
+            name: 'restart',
+            type: 'common',
+            description: 'Restart the resource safely.',
+            minimumApprovalLevel: 'admin',
+          },
+        ],
+        relationships: [
+          {
+            sourceId: 'node:pve-1',
+            targetId: 'vm:42',
+            type: 'runs_on',
+            confidence: 1,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: '2026-03-18T12:00:00Z',
+            lastSeenAt: '2026-03-18T12:05:00Z',
+            metadata: {
+              cluster: 'pve-prod',
+              source: 'live',
+            },
+          },
+        ],
+        recentChanges: [
+          {
+            id: 'change-1',
+            observedAt: '2026-03-18T12:06:00Z',
+            occurredAt: '2026-03-18T12:04:00Z',
+            resourceId: 'vm:42',
+            kind: 'restart',
+            sourceType: 'platform_event',
+            sourceAdapter: 'proxmox_adapter',
+            confidence: 'high',
+            actor: 'agent:oncall-helper',
+            relatedResources: ['node:pve-1'],
+            reason: 'Routine restart requested',
+            metadata: {
+              ticket: 'INC-1234',
+            },
+          },
+          {
+            id: 'change-2',
+            observedAt: '2026-03-18T12:02:00Z',
+            resourceId: 'vm:42',
+            kind: 'metric_anomaly',
+            sourceType: 'pulse_diff',
+            sourceAdapter: 'docker_adapter',
+            confidence: 'medium',
+            reason: 'CPU spike detected',
+          },
+        ],
+        counts: {
+          capabilities: 1,
+          relationships: 1,
+          recentChanges: 2,
+        },
+      })
+      .mockResolvedValueOnce({
+        capabilities: [
+          {
+            name: 'restart',
+            type: 'common',
+            description: 'Restart the resource safely.',
+            minimumApprovalLevel: 'admin',
+          },
+        ],
+        relationships: [
+          {
+            sourceId: 'node:pve-1',
+            targetId: 'vm:42',
+            type: 'runs_on',
+            confidence: 1,
+            active: true,
+            discoverer: 'proxmox_adapter',
+            observedAt: '2026-03-18T12:00:00Z',
+            lastSeenAt: '2026-03-18T12:05:00Z',
+            metadata: {
+              cluster: 'pve-prod',
+              source: 'live',
+            },
+          },
+        ],
+        recentChanges: [
+          {
+            id: 'change-2',
+            observedAt: '2026-03-18T12:02:00Z',
+            resourceId: 'vm:42',
+            kind: 'metric_anomaly',
+            sourceType: 'pulse_diff',
+            sourceAdapter: 'docker_adapter',
+            confidence: 'medium',
+            reason: 'CPU spike detected',
+          },
+        ],
+        counts: {
+          capabilities: 1,
+          relationships: 1,
+          recentChanges: 1,
+        },
+      });
+
+    const resource = baseResource({
+      id: 'vm:42',
+      type: 'vm',
+      name: 'vm-42',
+      displayName: 'VM 42',
+      platformId: 'vm-42',
+      platformType: 'proxmox-pve',
+      platformData: { sources: ['proxmox'] },
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+
+    await screen.findByText('Resource History');
+    const historyPanel = screen.getByTestId('resource-history-tab');
+    const panel = within(historyPanel);
+    expect(await panel.findByText('restart')).toBeInTheDocument();
+    expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
+
+    fireEvent.change(panel.getByLabelText('Source adapter'), {
+      target: { value: 'docker_adapter' },
+    });
+
+    expect(await panel.findByText('Filtered facet data loaded')).toBeInTheDocument();
+    expect(await panel.findByText('CPU spike detected')).toBeInTheDocument();
+    expect(panel.queryByText('Routine restart requested')).toBeNull();
+  });
 });

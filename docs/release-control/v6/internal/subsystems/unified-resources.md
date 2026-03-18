@@ -202,8 +202,9 @@ optional metadata blocks, and timeline cards surface change metadata when it
 is present, so the graph history view preserves the richer provenance already
 carried by the unified-resource model instead of flattening those fields away.
 The same timeline and facet-bundle reads now also accept governed `kind` and
-`sourceType` filters, so drill-down history can narrow by canonical change
-class while the store still owns the filtered total counts.
+`sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
+provenance drill-down, so history can narrow by canonical change class and
+integration source while the store still owns the filtered total counts.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client

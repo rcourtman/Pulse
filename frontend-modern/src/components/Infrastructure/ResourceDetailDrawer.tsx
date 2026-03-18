@@ -3,6 +3,7 @@ import type { Component } from 'solid-js';
 import type {
   Resource,
   ResourceChangeKind,
+  ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
 } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
@@ -97,6 +98,15 @@ const timelineSourceTypeOptions: Array<{ label: string; value: ResourceChangeSou
   { label: 'User action', value: 'user_action' },
   { label: 'Agent action', value: 'agent_action' },
 ];
+
+const timelineSourceAdapterOptions: Array<{ label: string; value: ResourceChangeSourceAdapter | '' }> =
+  [
+    { label: 'All adapters', value: '' },
+    { label: 'Docker adapter', value: 'docker_adapter' },
+    { label: 'Proxmox adapter', value: 'proxmox_adapter' },
+    { label: 'TrueNAS adapter', value: 'truenas_adapter' },
+    { label: 'Ops agent', value: 'agent:ops-helper' },
+  ];
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab =
@@ -239,6 +249,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
   const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] =
     createSignal<ResourceChangeSourceType | ''>('');
+  const [timelineSourceAdapterFilter, setTimelineSourceAdapterFilter] =
+    createSignal<ResourceChangeSourceAdapter | ''>('');
   const resourceFacetRequest = createMemo(() => {
     const id = resourceFacetId();
     return id ? { id } : null;
@@ -256,8 +268,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     if (!id) return null;
     const kind = timelineKindFilter();
     const sourceType = timelineSourceTypeFilter();
-    if (!kind && !sourceType) return null;
-    return { id, kind, sourceType };
+    const sourceAdapter = timelineSourceAdapterFilter();
+    if (!kind && !sourceType && !sourceAdapter) return null;
+    return { id, kind, sourceType, sourceAdapter };
   });
   const [timelineFacets, { refetch: refetchTimelineFacets }] = createResource(
     timelineFacetRequest,
@@ -267,6 +280,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         limit: 25,
         kind: request.kind || undefined,
         sourceType: request.sourceType || undefined,
+        sourceAdapter: request.sourceAdapter || undefined,
       });
     },
     { initialValue: null },
@@ -368,7 +382,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     () => historyFacetBundle()?.counts ?? resourceFacetCounts(),
   );
   const hasTimelineFilters = createMemo(
-    () => Boolean(timelineKindFilter() || timelineSourceTypeFilter()),
+    () =>
+      Boolean(
+        timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter(),
+      ),
   );
   const resourceCapabilityCount = createMemo(
     () => resourceFacetCounts()?.capabilities ?? resourceCapabilities().length,
@@ -1446,9 +1463,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </label>
               <label class="space-y-1 text-[10px]">
                 <span class="text-muted">Source type</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineSourceTypeFilter()}
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={timelineSourceTypeFilter()}
                   onChange={(event) =>
                     setTimelineSourceTypeFilter(
                       (event.currentTarget.value || '') as ResourceChangeSourceType | '',
@@ -1456,6 +1473,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   }
                 >
                   <For each={timelineSourceTypeOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                  </select>
+                </label>
+              <label class="space-y-1 text-[10px]">
+                <span class="text-muted">Source adapter</span>
+                <select
+                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={timelineSourceAdapterFilter()}
+                  onChange={(event) =>
+                    setTimelineSourceAdapterFilter(
+                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                    )
+                  }
+                >
+                  <For each={timelineSourceAdapterOptions}>
                     {(option) => <option value={option.value}>{option.label}</option>}
                   </For>
                 </select>
@@ -1470,6 +1503,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   onClick={() => {
                     setTimelineKindFilter('');
                     setTimelineSourceTypeFilter('');
+                    setTimelineSourceAdapterFilter('');
                   }}
                 >
                   Clear filters

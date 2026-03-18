@@ -248,6 +248,7 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 		"parseResourceChangeFilters(r.URL.Query())",
 		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
 		"CountRecentChangesFiltered(resourceID, since, filters)",
+		"sourceAdapter",
 		"strings.HasSuffix(r.URL.Path, \"/facets\")",
 		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
 		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
@@ -269,6 +270,7 @@ func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	requiredSnippets := []string{
 		"idx_resource_changes_kind_time",
 		"idx_resource_changes_source_type_time",
+		"idx_resource_changes_source_adapter_time",
 		"ensureResourceChangesIndexes",
 	}
 	for _, snippet := range requiredSnippets {
