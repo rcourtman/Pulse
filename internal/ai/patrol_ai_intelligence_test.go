@@ -389,6 +389,55 @@ func TestSeedPrecomputeIntelligenceState_UsesRuntimeReadState(t *testing.T) {
 	}
 }
 
+func TestSeedPrecomputeIntelligenceState_UsesCanonicalResourceTimeline(t *testing.T) {
+	now := time.Now()
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:               "change-1",
+		ObservedAt:       now.Add(-time.Hour),
+		ResourceID:       "res-1",
+		Kind:             ur.ChangeConfigUpdate,
+		SourceType:       ur.SourcePulseDiff,
+		SourceAdapter:    ur.AdapterOpsAgent,
+		Actor:            "agent:ops-helper",
+		RelatedResources: []string{"related-1"},
+		Reason:           "Config refresh",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+
+	svc := &Service{
+		orgID:                    "org-1",
+		resourceExportStore:      canonicalStore,
+		resourceExportStoreOrgID: "org-1",
+	}
+	ps := NewPatrolService(svc, nil)
+
+	intel := ps.seedPrecomputeIntelligenceState(
+		patrolRuntimeStateForTest(ps, models.StateSnapshot{}),
+		map[string]bool{"res-1": true},
+		now,
+	)
+
+	if len(intel.recentChanges) != 1 {
+		t.Fatalf("expected 1 canonical recent change, got %d", len(intel.recentChanges))
+	}
+	change := intel.recentChanges[0]
+	if change.ResourceID != "res-1" {
+		t.Fatalf("expected canonical resource ID res-1, got %q", change.ResourceID)
+	}
+	for _, part := range []string{
+		"Config update",
+		"source: pulse_diff via agent:ops-helper",
+		"actor: agent:ops-helper",
+		"related: related-1",
+	} {
+		if !strings.Contains(change.Description, part) {
+			t.Fatalf("expected canonical description to contain %q, got %q", part, change.Description)
+		}
+	}
+}
+
 func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)

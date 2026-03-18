@@ -1606,7 +1606,9 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 	}
 
 	// Recent changes
-	if cd != nil {
+	if canonicalChanges, ok := p.loadCanonicalRecentChanges(scopedSet, now.Add(-24*time.Hour), 20); ok {
+		intel.recentChanges = append(intel.recentChanges, canonicalChanges...)
+	} else if cd != nil {
 		allChanges := cd.GetRecentChanges(20, now.Add(-24*time.Hour))
 		for _, c := range allChanges {
 			if seedIsInScope(scopedSet, c.ResourceID) {
@@ -1641,6 +1643,118 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 		len(intel.predictions) == 0 && len(intel.recentChanges) == 0 && len(snap.ActiveAlerts) == 0
 
 	return intel
+}
+
+func (p *PatrolService) loadCanonicalRecentChanges(scopedSet map[string]bool, since time.Time, limit int) ([]memory.Change, bool) {
+	if p == nil || p.aiService == nil {
+		return nil, false
+	}
+
+	p.aiService.mu.RLock()
+	store := p.aiService.resourceExportStore
+	orgID := strings.TrimSpace(p.aiService.orgID)
+	storeOrgID := strings.TrimSpace(p.aiService.resourceExportStoreOrgID)
+	p.aiService.mu.RUnlock()
+
+	if store == nil {
+		return nil, false
+	}
+	if storeOrgID != "" && storeOrgID != orgID {
+		return nil, false
+	}
+
+	changes, err := store.GetRecentChanges("", since, limit)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Msg("failed to load canonical patrol resource timeline")
+		return nil, false
+	}
+	if len(changes) == 0 {
+		return nil, false
+	}
+
+	result := make([]memory.Change, 0, len(changes))
+	for _, change := range changes {
+		if !seedIsInScope(scopedSet, change.ResourceID) {
+			continue
+		}
+		result = append(result, patrolRecentChangeFromUnified(change))
+		if len(result) >= limit {
+			break
+		}
+	}
+	if len(result) == 0 {
+		return nil, false
+	}
+	return result, true
+}
+
+func patrolRecentChangeFromUnified(change unifiedresources.ResourceChange) memory.Change {
+	return memory.Change{
+		ResourceID:   strings.TrimSpace(change.ResourceID),
+		ResourceName: strings.TrimSpace(change.ResourceID),
+		ChangeType:   memory.ChangeType(formatResourceChangeKindLabel(change.Kind)),
+		DetectedAt:   patrolRecentChangeDetectedAt(change),
+		Description:  patrolFormatCanonicalRecentChangeDescription(change),
+	}
+}
+
+func patrolRecentChangeDetectedAt(change unifiedresources.ResourceChange) time.Time {
+	if !change.ObservedAt.IsZero() {
+		return change.ObservedAt
+	}
+	if change.OccurredAt != nil && !change.OccurredAt.IsZero() {
+		return *change.OccurredAt
+	}
+	return time.Now()
+}
+
+func patrolFormatCanonicalRecentChangeDescription(change unifiedresources.ResourceChange) string {
+	parts := []string{formatResourceChangeKindLabel(change.Kind)}
+
+	if from := strings.TrimSpace(change.From); from != "" || strings.TrimSpace(change.To) != "" {
+		switch {
+		case from != "" && strings.TrimSpace(change.To) != "":
+			parts = append(parts, fmt.Sprintf("%s -> %s", from, strings.TrimSpace(change.To)))
+		case from != "":
+			parts = append(parts, fmt.Sprintf("from %s", from))
+		default:
+			parts = append(parts, fmt.Sprintf("to %s", strings.TrimSpace(change.To)))
+		}
+	}
+
+	if sourceType := strings.TrimSpace(string(change.SourceType)); sourceType != "" {
+		if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+			parts = append(parts, fmt.Sprintf("source: %s via %s", sourceType, sourceAdapter))
+		} else {
+			parts = append(parts, fmt.Sprintf("source: %s", sourceType))
+		}
+	} else if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+		parts = append(parts, fmt.Sprintf("source: %s", sourceAdapter))
+	}
+
+	if actor := strings.TrimSpace(change.Actor); actor != "" {
+		parts = append(parts, fmt.Sprintf("actor: %s", actor))
+	}
+
+	if reason := strings.TrimSpace(change.Reason); reason != "" {
+		parts = append(parts, reason)
+	}
+
+	if len(change.RelatedResources) > 0 {
+		related := make([]string, 0, len(change.RelatedResources))
+		for _, resourceID := range change.RelatedResources {
+			if trimmed := strings.TrimSpace(resourceID); trimmed != "" {
+				related = append(related, trimmed)
+			}
+		}
+		if len(related) > 0 {
+			parts = append(parts, fmt.Sprintf("related: %s", strings.Join(related, ", ")))
+		}
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.
@@ -3227,7 +3341,11 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 				name = c.ResourceID
 			}
 			ago := seedFormatTimeAgo(now, c.DetectedAt)
-			sb.WriteString(fmt.Sprintf("- %s (%s): %s (%s)\n", name, c.ResourceType, c.Description, ago))
+			if strings.TrimSpace(c.ResourceType) != "" {
+				sb.WriteString(fmt.Sprintf("- %s (%s): %s (%s)\n", name, c.ResourceType, c.Description, ago))
+			} else {
+				sb.WriteString(fmt.Sprintf("- %s: %s (%s)\n", name, c.Description, ago))
+			}
 		}
 		sb.WriteString("\n")
 	}

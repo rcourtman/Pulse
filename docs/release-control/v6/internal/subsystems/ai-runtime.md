@@ -152,3 +152,7 @@ store instead of leaving command execution state in memory-only tool helpers.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
+The Patrol intelligence seed context now also prefers the canonical
+unified-resource timeline before falling back to the patrol-local change
+detector, so deterministic patrol context and resource detail context share
+the same change source of truth.

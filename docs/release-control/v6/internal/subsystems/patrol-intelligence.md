@@ -70,3 +70,7 @@ Patrol finding state must now also consume the canonical camelCase
 Frontend Patrol helpers may not keep shadow `alert_identifier` fallbacks or
 drop `expiresAt` when deciding whether queued investigation fixes still need
 operator attention.
+Patrol intelligence seed context should also prefer the canonical
+unified-resource timeline before falling back to the patrol-local change
+detector so recent-change context stays aligned with the resource timeline
+that powers the shared resource API.
