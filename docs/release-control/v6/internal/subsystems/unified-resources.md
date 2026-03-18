@@ -205,6 +205,9 @@ The same timeline and facet-bundle reads now also accept governed `kind` and
 `sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
 provenance drill-down, so history can narrow by canonical change class and
 integration source while the store still owns the filtered total counts.
+Invalid `sourceAdapter` values are rejected at the API boundary, keeping the
+timeline query contract aligned with the canonical adapter set instead of
+silently accepting arbitrary strings.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client

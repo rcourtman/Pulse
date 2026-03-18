@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -3847,6 +3848,15 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_ResourceTimelineRejectsInvalidSourceAdapter(t *testing.T) {
+	_, err := parseResourceChangeFilters(url.Values{
+		"sourceAdapter": []string{"unsupported_adapter"},
+	})
+	if err == nil {
+		t.Fatal("expected invalid sourceAdapter to be rejected")
+	}
 }
 
 func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {

@@ -365,11 +365,22 @@ func parseResourceChangeSourceAdapters(values []string) ([]unified.ChangeSourceA
 	parsed := make([]unified.ChangeSourceAdapter, 0, len(values))
 	for _, value := range values {
 		for _, token := range strings.Split(value, ",") {
-			normalized := strings.TrimSpace(token)
+			normalized := strings.TrimSpace(strings.ToLower(token))
 			if normalized == "" {
 				continue
 			}
-			parsed = append(parsed, unified.ChangeSourceAdapter(normalized))
+			switch normalized {
+			case string(unified.AdapterDocker):
+				parsed = append(parsed, unified.AdapterDocker)
+			case string(unified.AdapterProxmox):
+				parsed = append(parsed, unified.AdapterProxmox)
+			case string(unified.AdapterTrueNAS):
+				parsed = append(parsed, unified.AdapterTrueNAS)
+			case string(unified.AdapterOpsAgent):
+				parsed = append(parsed, unified.AdapterOpsAgent)
+			default:
+				return nil, fmt.Errorf("invalid sourceAdapter value %q", token)
+			}
 		}
 	}
 	return parsed, nil

@@ -100,6 +100,9 @@ Those same dedicated reads also accept governed timeline filters for change
 kind, source type, and source adapter, and the underlying store owns the
 filtered counts so agent lifecycle routing still stays on canonical
 fleet-continuity ownership instead of re-deriving resource history locally.
+Invalid `sourceAdapter` values are rejected at the API boundary, so the fleet
+lane continues to consume only the canonical adapter set rather than
+introducing a broader compatibility escape hatch.
 The dedicated profile client now also routes list, schema, and validation
 parsing through shared response helpers in `frontend-modern/src/api/agentProfiles.ts`,
 so profile transport stays aligned with the governed API contract instead of

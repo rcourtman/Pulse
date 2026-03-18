@@ -1177,6 +1177,15 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			t.Fatalf("unexpected adapter-filtered facets change: %#v", payload.RecentChanges[0])
 		}
 	})
+
+	t.Run("invalid source adapter filter", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/timeline?sourceAdapter=unknown_adapter", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	})
 }
 
 func containsSource(sources []unified.DataSource, target unified.DataSource) bool {

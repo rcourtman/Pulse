@@ -127,6 +127,9 @@ Those history reads now also accept governed `kind`, `sourceType`, and
 `sourceAdapter` query filters, and the backend store owns the corresponding
 filtered counts, so the timeline contract can narrow by change class and
 adapter provenance without inventing a frontend-only slice of the graph.
+Invalid `sourceAdapter` values are rejected at the API boundary, so the filter
+contract stays aligned with the canonical adapter set rather than silently
+falling back to an empty slice.
 The same API contract now also exposes the unified-resource control-plane
 history through dedicated enterprise audit reads. The action, lifecycle, and
 export history endpoints live in `internal/api/activity_audit_handlers.go` and

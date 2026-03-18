@@ -249,6 +249,7 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
 		"CountRecentChangesFiltered(resourceID, since, filters)",
 		"sourceAdapter",
+		"invalid sourceAdapter value",
 		"strings.HasSuffix(r.URL.Path, \"/facets\")",
 		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
 		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
