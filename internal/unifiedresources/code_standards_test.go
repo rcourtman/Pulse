@@ -241,9 +241,11 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	source := string(data)
 
 	requiredSnippets := []string{
+		"HandleGetResourceFacets",
 		"HandleGetResourceCapabilities",
 		"HandleGetResourceRelationships",
 		"HandleGetResourceTimeline",
+		"strings.HasSuffix(r.URL.Path, \"/facets\")",
 		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
 		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
 		"strings.HasSuffix(r.URL.Path, \"/timeline\")",
