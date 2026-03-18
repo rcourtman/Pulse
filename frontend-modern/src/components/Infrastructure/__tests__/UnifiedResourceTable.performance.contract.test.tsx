@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
+import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
 import {
   buildStatusOptions,
   filterResources,
@@ -122,6 +123,20 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);
       });
+    });
+
+    it('renders the shared facet summary component for canonical resource counts', async () => {
+      const { getByText } = render(() => (
+        <ResourceFacetSummary
+          capabilities={[{ id: 'capability-1' }]}
+          relationships={[{ id: 'relationship-1' }]}
+          recentChanges={[{ id: 'change-1' }]}
+        />
+      ));
+
+      expect(getByText('Capabilities 1')).toBeInTheDocument();
+      expect(getByText('Relationships 1')).toBeInTheDocument();
+      expect(getByText('Timeline 1')).toBeInTheDocument();
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {

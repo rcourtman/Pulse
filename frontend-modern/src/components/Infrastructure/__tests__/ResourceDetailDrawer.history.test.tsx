@@ -55,6 +55,64 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer history tab', () => {
+  it('surfaces compact facet summary chips in the overview runtime card', async () => {
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      capabilities: [
+        {
+          name: 'restart',
+          type: 'common',
+          description: 'Restart the resource safely.',
+          minimumApprovalLevel: 'admin',
+        },
+      ],
+      relationships: [
+        {
+          sourceId: 'node:pve-1',
+          targetId: 'vm:42',
+          type: 'runs_on',
+          confidence: 1,
+          active: true,
+          discoverer: 'proxmox_adapter',
+          observedAt: '2026-03-18T12:00:00Z',
+          lastSeenAt: '2026-03-18T12:05:00Z',
+        },
+      ],
+      recentChanges: [
+        {
+          id: 'change-1',
+          observedAt: '2026-03-18T12:06:00Z',
+          occurredAt: '2026-03-18T12:04:00Z',
+          resourceId: 'vm:42',
+          kind: 'restart',
+          from: 'running',
+          to: 'restarting',
+          sourceType: 'platform_event',
+          sourceAdapter: 'proxmox_adapter',
+          confidence: 'high',
+          actor: 'agent:oncall-helper',
+          relatedResources: ['node:pve-1'],
+          reason: 'Routine restart requested',
+        },
+      ],
+    });
+
+    const resource = baseResource({
+      id: 'vm:42',
+      type: 'vm',
+      name: 'vm-42',
+      displayName: 'VM 42',
+      platformId: 'vm-42',
+      platformType: 'proxmox-pve',
+      platformData: { sources: ['proxmox'] },
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(await screen.findByText('Capabilities 1')).toBeInTheDocument();
+    expect(screen.getByText('Relationships 1')).toBeInTheDocument();
+    expect(screen.getByText('Timeline 1')).toBeInTheDocument();
+  });
+
   it('renders resource capability, relationship, and timeline facets', async () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [

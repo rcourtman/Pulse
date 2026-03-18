@@ -45,6 +45,7 @@ import {
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
+import { ResourceFacetSummary } from './ResourceFacetSummary';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -734,6 +735,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   >
                     {sourceSummary()!.label}
                   </span>
+                </div>
+              </Show>
+              <Show
+                when={
+                  resourceCapabilities().length > 0 ||
+                  resourceRelationships().length > 0 ||
+                  resourceTimeline().length > 0
+                }
+              >
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted">Facets</span>
+                  <ResourceFacetSummary
+                    capabilities={resourceCapabilities()}
+                    relationships={resourceRelationships()}
+                    recentChanges={resourceTimeline()}
+                  />
                 </div>
               </Show>
               <div class="flex items-center justify-between gap-2">

@@ -40,6 +40,7 @@ import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
 import { useTableWindowing } from './useTableWindowing';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
+import { ResourceFacetSummary } from './ResourceFacetSummary';
 
 interface UnifiedResourceTableProps {
   resources: Resource[];
@@ -113,48 +114,6 @@ type HostTableItem = HostTableHeaderItem | HostTableResourceItem;
 
 const HOST_TABLE_ESTIMATED_ROW_HEIGHT = 40;
 const HOST_TABLE_WINDOW_SIZE = 137;
-const facetBadgeBase =
-  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
-
-type ResourceFacetBadge = {
-  label: string;
-  classes: string;
-  title: string;
-};
-
-const describeCount = (count: number, singular: string, plural = `${singular}s`) =>
-  `${count} ${count === 1 ? singular : plural}`;
-
-const getResourceFacetBadges = (resource: Resource): ResourceFacetBadge[] => {
-  const capabilities = resource.capabilities?.length ?? 0;
-  const relationships = resource.relationships?.length ?? 0;
-  const changes = resource.recentChanges?.length ?? 0;
-  const badges: ResourceFacetBadge[] = [];
-
-  if (capabilities > 0) {
-    badges.push({
-      label: `Capabilities ${capabilities}`,
-      classes: `${facetBadgeBase} bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300`,
-      title: describeCount(capabilities, 'capability', 'capabilities'),
-    });
-  }
-  if (relationships > 0) {
-    badges.push({
-      label: `Relationships ${relationships}`,
-      classes: `${facetBadgeBase} bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300`,
-      title: describeCount(relationships, 'relationship'),
-    });
-  }
-  if (changes > 0) {
-    badges.push({
-      label: `Timeline ${changes}`,
-      classes: `${facetBadgeBase} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`,
-      title: describeCount(changes, 'timeline event'),
-    });
-  }
-
-  return badges;
-};
 
 const isResourceOnline = (resource: Resource) => {
   const status = resource.status?.toLowerCase();
@@ -659,7 +618,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     );
                     const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                     const policyBadges = createMemo(() => getResourcePolicyBadges(resource.policy));
-                    const facetBadges = createMemo(() => getResourceFacetBadges(resource));
                     const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
 
                     return (
@@ -728,17 +686,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     </For>
                                   </div>
                                 </Show>
-                                <Show when={facetBadges().length > 0}>
-                                  <div class="mt-0.5 flex flex-wrap gap-1">
-                                    <For each={facetBadges()}>
-                                      {(badge) => (
-                                        <span class={badge.classes} title={badge.title}>
-                                          {badge.label}
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
+                                <ResourceFacetSummary
+                                  capabilities={resource.capabilities}
+                                  relationships={resource.relationships}
+                                  recentChanges={resource.recentChanges}
+                                  class="mt-0.5"
+                                />
                               </div>
                               <Show when={workloadsHref()}>
                                 {(href) => (
@@ -1105,7 +1058,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const facetBadges = createMemo(() => getResourceFacetBadges(resource));
                       const healthClass = createMemo(() =>
                         getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
                           .textClass,
@@ -1186,17 +1138,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     ({resource.name})
                                   </span>
                                 </Show>
-                                <Show when={facetBadges().length > 0}>
-                                  <div class="mt-0.5 flex flex-wrap gap-1">
-                                    <For each={facetBadges()}>
-                                      {(badge) => (
-                                        <span class={badge.classes} title={badge.title}>
-                                          {badge.label}
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
+                                <ResourceFacetSummary
+                                  capabilities={resource.capabilities}
+                                  relationships={resource.relationships}
+                                  recentChanges={resource.recentChanges}
+                                  class="mt-0.5"
+                                />
                               </div>
                             </TableCell>
 
@@ -1413,7 +1360,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const facetBadges = createMemo(() => getResourceFacetBadges(resource));
                       const healthClass = createMemo(() =>
                         getServiceHealthSummaryPresentation(resource.status, pmgRow()?.health)
                           .textClass,
@@ -1499,17 +1445,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     ({resource.name})
                                   </span>
                                 </Show>
-                                <Show when={facetBadges().length > 0}>
-                                  <div class="mt-0.5 flex flex-wrap gap-1">
-                                    <For each={facetBadges()}>
-                                      {(badge) => (
-                                        <span class={badge.classes} title={badge.title}>
-                                          {badge.label}
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
+                                <ResourceFacetSummary
+                                  capabilities={resource.capabilities}
+                                  relationships={resource.relationships}
+                                  recentChanges={resource.recentChanges}
+                                  class="mt-0.5"
+                                />
                               </div>
                             </TableCell>
 
