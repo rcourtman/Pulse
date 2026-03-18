@@ -4545,12 +4545,141 @@ func extractAlertIdentifier(ctx map[string]interface{}) string {
 	return ""
 }
 
+func (s *Service) buildRecentResourceChangesContext(resourceID string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return ""
+	}
+
+	s.mu.RLock()
+	store := s.resourceExportStore
+	orgID := strings.TrimSpace(s.orgID)
+	storeOrgID := strings.TrimSpace(s.resourceExportStoreOrgID)
+	patrol := s.patrolService
+	s.mu.RUnlock()
+
+	if store != nil && (storeOrgID == "" || storeOrgID == orgID) {
+		changes, err := store.GetRecentChanges(resourceID, time.Now().Add(-24*time.Hour), 5)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", resourceID).
+				Msg("failed to load canonical resource timeline context")
+		} else if len(changes) > 0 {
+			var changeInfo []string
+			for _, change := range changes {
+				if len(changeInfo) >= 3 {
+					break
+				}
+				changeInfo = append(changeInfo, formatResourceChangeContext(change))
+			}
+			if len(changeInfo) > 0 {
+				return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
+			}
+		}
+	}
+
+	if patrol == nil {
+		return ""
+	}
+
+	changeDetector := patrol.GetChangeDetector()
+	if changeDetector == nil {
+		return ""
+	}
+
+	changes := changeDetector.GetChangesForResource(resourceID, 5)
+	if len(changes) == 0 {
+		return ""
+	}
+
+	var changeInfo []string
+	for _, c := range changes {
+		if len(changeInfo) >= 3 {
+			break
+		}
+		ago := time.Since(c.DetectedAt).Truncate(time.Minute)
+		changeInfo = append(changeInfo, fmt.Sprintf("**%s** %s (%s ago)", c.ChangeType, c.Description, ago))
+	}
+	if len(changeInfo) == 0 {
+		return ""
+	}
+	return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
+}
+
 // truncateString truncates a string to maxLen characters
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func formatResourceChangeContext(change unifiedresources.ResourceChange) string {
+	label := formatResourceChangeKindLabel(change.Kind)
+	summary := fmt.Sprintf("**%s**", label)
+
+	if from := strings.TrimSpace(change.From); from != "" || strings.TrimSpace(change.To) != "" {
+		to := strings.TrimSpace(change.To)
+		if from == "" {
+			summary += fmt.Sprintf(" → %s", to)
+		} else if to == "" {
+			summary += fmt.Sprintf(" %s →", from)
+		} else {
+			summary += fmt.Sprintf(" %s → %s", from, to)
+		}
+	}
+
+	provenance := make([]string, 0, 2)
+	if sourceType := strings.TrimSpace(string(change.SourceType)); sourceType != "" {
+		provenance = append(provenance, sourceType)
+	}
+	if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+		provenance = append(provenance, sourceAdapter)
+	}
+	if len(provenance) > 0 {
+		summary += fmt.Sprintf(" [%s]", strings.Join(provenance, "/"))
+	}
+
+	if actor := strings.TrimSpace(change.Actor); actor != "" {
+		summary += fmt.Sprintf("; actor %s", actor)
+	}
+	if reason := strings.TrimSpace(change.Reason); reason != "" {
+		summary += fmt.Sprintf("; %s", reason)
+	}
+	if len(change.RelatedResources) > 0 {
+		summary += fmt.Sprintf("; related: %s", strings.Join(change.RelatedResources, ", "))
+	}
+
+	ago := "recently"
+	if !change.ObservedAt.IsZero() {
+		ago = formatDuration(time.Since(change.ObservedAt).Truncate(time.Minute))
+	}
+	summary += fmt.Sprintf(" (%s ago)", ago)
+	return summary
+}
+
+func formatResourceChangeKindLabel(kind unifiedresources.ChangeKind) string {
+	switch kind {
+	case unifiedresources.ChangeStateTransition:
+		return "State transition"
+	case unifiedresources.ChangeRestart:
+		return "Restart"
+	case unifiedresources.ChangeConfigUpdate:
+		return "Config update"
+	case unifiedresources.ChangeAnomaly:
+		return "Metric anomaly"
+	case unifiedresources.ChangeRelationship:
+		return "Relationship change"
+	case unifiedresources.ChangeCapability:
+		return "Capability change"
+	default:
+		raw := strings.TrimSpace(strings.ReplaceAll(string(kind), "_", " "))
+		if raw == "" {
+			return "Change"
+		}
+		return strings.ToUpper(raw[:1]) + raw[1:]
+	}
 }
 
 // buildEnrichedResourceContext adds historical intelligence to regular AI chat
@@ -4723,22 +4852,8 @@ func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetr
 	}
 
 	// Get change detector for recent changes
-	changeDetector := patrol.GetChangeDetector()
-	if changeDetector != nil {
-		changes := changeDetector.GetChangesForResource(resourceID, 5)
-		if len(changes) > 0 {
-			var changeInfo []string
-			for _, c := range changes {
-				if len(changeInfo) >= 3 { // Limit to 3 recent changes
-					break
-				}
-				ago := time.Since(c.DetectedAt).Truncate(time.Minute)
-				changeInfo = append(changeInfo, fmt.Sprintf("**%s** %s (%s ago)", c.ChangeType, c.Description, ago))
-			}
-			if len(changeInfo) > 0 {
-				sections = append(sections, "### Recent Changes\n"+strings.Join(changeInfo, "\n"))
-			}
-		}
+	if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
+		sections = append(sections, recentChanges)
 	}
 
 	// Get correlation detector for related resources

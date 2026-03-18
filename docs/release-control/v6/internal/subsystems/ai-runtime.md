@@ -53,6 +53,7 @@ runtime cost control, and shared AI transport surfaces.
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
 4. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
+5. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
 
 ## Current State
 
@@ -132,6 +133,12 @@ boundary. When the AI service assembles unified-resource context for a model
 request, it must record a durable export audit with the active destination
 model and governed redaction decision instead of treating the prompt boundary
 as a transient formatting step.
+The same AI runtime boundary now also consumes the canonical unified-resource
+timeline when it assembles rich resource or incident context. Recent-change
+context should come from the shared resource store first so AI prompts reflect
+the same change record that powers the resource API, with patrol-local change
+detectors only serving as fallback coverage when the canonical store is not
+available.
 
 The same runtime boundary now also owns durable action execution auditing.
 `internal/ai/chat/service.go` initializes the unified-resource audit store on

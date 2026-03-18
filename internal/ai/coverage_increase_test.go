@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestPatrolService_BroadcastFullChannel(t *testing.T) {
@@ -298,7 +299,52 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 		t.Error("Expected 'Past 30 days' history in context")
 	}
 
-	// Case 7: With Change Logic
+	// Case 7: With canonical resource timeline history
+	canonicalStore := unifiedresources.NewMemoryStore()
+	if err := canonicalStore.RecordChange(unifiedresources.ResourceChange{
+		ID:               "change-1",
+		ObservedAt:       now.Add(-2 * time.Hour),
+		ResourceID:       "res1",
+		Kind:             unifiedresources.ChangeRestart,
+		From:             "running",
+		To:               "restarting",
+		SourceType:       unifiedresources.SourcePlatformEvent,
+		SourceAdapter:    unifiedresources.AdapterProxmox,
+		Confidence:       unifiedresources.ConfidenceHigh,
+		Actor:            "agent:oncall-helper",
+		RelatedResources: []string{"node-1"},
+		Reason:           "Routine restart requested",
+	}); err != nil {
+		t.Fatalf("record canonical resource change: %v", err)
+	}
+	s.mu.Lock()
+	s.orgID = "org-1"
+	s.resourceExportStore = canonicalStore
+	s.resourceExportStoreOrgID = s.orgID
+	s.mu.Unlock()
+
+	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
+	t.Logf("Enriched context (canonical changes): %s", ctx)
+
+	if !strings.Contains(ctx, "Recent Changes") {
+		t.Error("Expected canonical recent changes section in context")
+	}
+	if !strings.Contains(ctx, "Restart") {
+		t.Error("Expected canonical restart change in context")
+	}
+	if !strings.Contains(ctx, "proxmox_adapter") {
+		t.Error("Expected canonical adapter provenance in context")
+	}
+	if !strings.Contains(ctx, "node-1") {
+		t.Error("Expected canonical related resource in context")
+	}
+
+	s.mu.Lock()
+	s.resourceExportStore = nil
+	s.resourceExportStoreOrgID = ""
+	s.mu.Unlock()
+
+	// Case 8: With Change Logic
 	cd := NewChangeDetector(memory.ChangeDetectorConfig{})
 	// Simulate a "created" change
 	cd.DetectChanges([]memory.ResourceSnapshot{
@@ -324,7 +370,7 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 		t.Error("Expected creation event in context")
 	}
 
-	// Case 8: With Correlation Logic
+	// Case 9: With Correlation Logic
 	// We need correlation package or just use the alias
 	cord := NewCorrelationDetector(DefaultCorrelationConfig())
 	// Record an event that should contribute to correlation
