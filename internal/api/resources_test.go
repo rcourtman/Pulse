@@ -985,9 +985,10 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Counts        struct {
-				Capabilities  int `json:"capabilities"`
-				Relationships int `json:"relationships"`
-				RecentChanges int `json:"recentChanges"`
+				Capabilities      int                        `json:"capabilities"`
+				Relationships     int                        `json:"relationships"`
+				RecentChanges     int                        `json:"recentChanges"`
+				RecentChangeKinds map[unified.ChangeKind]int `json:"recentChangeKinds"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -998,6 +999,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.Counts.Capabilities != 1 || payload.Counts.Relationships != 1 {
 			t.Fatalf("unexpected facet counts: %#v", payload.Counts)
+		}
+		if got := payload.Counts.RecentChangeKinds; len(got) != 2 || got[unified.ChangeRestart] != 1 || got[unified.ChangeAnomaly] != 2 {
+			t.Fatalf("unexpected recent change kind counts: %#v", got)
 		}
 		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
 			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
@@ -1134,9 +1138,10 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			Counts        struct {
-				Capabilities  int `json:"capabilities"`
-				Relationships int `json:"relationships"`
-				RecentChanges int `json:"recentChanges"`
+				Capabilities      int                        `json:"capabilities"`
+				Relationships     int                        `json:"relationships"`
+				RecentChanges     int                        `json:"recentChanges"`
+				RecentChangeKinds map[unified.ChangeKind]int `json:"recentChangeKinds"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -1144,6 +1149,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 1 || len(payload.RecentChanges) != 1 {
 			t.Fatalf("unexpected filtered facets payload: %#v", payload)
+		}
+		if got := payload.Counts.RecentChangeKinds; len(got) != 1 || got[unified.ChangeRestart] != 1 {
+			t.Fatalf("unexpected filtered facet kind counts: %#v", got)
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {
 			t.Fatalf("unexpected filtered facets change: %#v", payload.RecentChanges[0])
@@ -1162,9 +1170,10 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
 			Relationships []unified.ResourceRelationship `json:"relationships"`
 			Counts        struct {
-				Capabilities  int `json:"capabilities"`
-				Relationships int `json:"relationships"`
-				RecentChanges int `json:"recentChanges"`
+				Capabilities      int                        `json:"capabilities"`
+				Relationships     int                        `json:"relationships"`
+				RecentChanges     int                        `json:"recentChanges"`
+				RecentChangeKinds map[unified.ChangeKind]int `json:"recentChangeKinds"`
 			} `json:"counts"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -1172,6 +1181,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 1 || len(payload.RecentChanges) != 1 {
 			t.Fatalf("unexpected filtered facets adapter payload: %#v", payload)
+		}
+		if got := payload.Counts.RecentChangeKinds; len(got) != 1 || got[unified.ChangeAnomaly] != 1 {
+			t.Fatalf("unexpected adapter-filtered facet kind counts: %#v", got)
 		}
 		if payload.RecentChanges[0].ID != "chg-42-extra-2" {
 			t.Fatalf("unexpected adapter-filtered facets change: %#v", payload.RecentChanges[0])

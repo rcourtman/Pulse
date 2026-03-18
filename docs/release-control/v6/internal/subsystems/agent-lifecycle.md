@@ -139,6 +139,10 @@ That same boundary now also assumes canonical resource payloads preserve
 shared facet totals through `facetCounts`, so the resource list and detail
 surfaces can keep row summaries aligned without re-inferring totals from
 consumer-local slices.
+That same shared facet bundle now also carries grouped `recentChangeKinds`
+counts by canonical change kind, so the lifecycle-adjacent detail surfaces can
+report restart, anomaly, relationship, and capability distribution without
+rebuilding timeline math in the browser.
 That same shared `internal/api/` boundary now also assumes tenant AI services
 stay on canonical Patrol runtime wiring: adjacent fleet and install surfaces
 must not revive tenant snapshot-provider bridges through shared AI handler

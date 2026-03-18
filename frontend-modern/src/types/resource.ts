@@ -124,12 +124,7 @@ export type ResourceSensitivity = 'public' | 'internal' | 'sensitive' | 'restric
 
 export type ResourceRoutingScope = 'cloud-summary' | 'local-first' | 'local-only';
 
-export type ResourceRedactionHint =
-  | 'hostname'
-  | 'ip-address'
-  | 'platform-id'
-  | 'alias'
-  | 'path';
+export type ResourceRedactionHint = 'hostname' | 'ip-address' | 'platform-id' | 'alias' | 'path';
 
 export interface ResourceRoutingPolicy {
   scope: ResourceRoutingScope;
@@ -196,6 +191,7 @@ export interface ResourceFacetCounts {
   capabilities: number;
   relationships: number;
   recentChanges: number;
+  recentChangeKinds?: Partial<Record<ResourceChangeKind, number>>;
 }
 
 export interface ResourceRelationship {

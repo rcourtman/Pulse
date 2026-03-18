@@ -29,6 +29,8 @@ type ResourceStore interface {
 	GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error)
 	CountRecentChanges(canonicalID string, since time.Time) (int, error)
 	CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error)
+	CountRecentChangesByKind(canonicalID string, since time.Time) (map[ChangeKind]int, error)
+	CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error)
 	RecordActionAudit(record ActionAuditRecord) error
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -777,40 +779,7 @@ func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.
 }
 
 func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error) {
-	query := `SELECT COUNT(*) FROM resource_changes`
-	args := []any{}
-	conditions := []string{"observed_at >= ?"}
-	args = append(args, since)
-	canonicalID = CanonicalResourceID(canonicalID)
-	if canonicalID != "" {
-		conditions = append(conditions, "canonical_id = ?")
-		args = append(args, canonicalID)
-	}
-	if len(filters.Kinds) > 0 {
-		placeholders := make([]string, 0, len(filters.Kinds))
-		for _, kind := range filters.Kinds {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(kind))
-		}
-		conditions = append(conditions, "kind IN ("+strings.Join(placeholders, ", ")+")")
-	}
-	if len(filters.SourceTypes) > 0 {
-		placeholders := make([]string, 0, len(filters.SourceTypes))
-		for _, sourceType := range filters.SourceTypes {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(sourceType))
-		}
-		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
-	}
-	if len(filters.SourceAdapters) > 0 {
-		placeholders := make([]string, 0, len(filters.SourceAdapters))
-		for _, sourceAdapter := range filters.SourceAdapters {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(sourceAdapter))
-		}
-		conditions = append(conditions, "source_adapter IN ("+strings.Join(placeholders, ", ")+")")
-	}
-	query += ` WHERE ` + strings.Join(conditions, " AND ")
+	query, args := buildRecentChangeCountQuery(canonicalID, since, filters, "SELECT COUNT(*) FROM resource_changes")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -820,6 +789,41 @@ func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, sin
 		return 0, fmt.Errorf("count resource changes: %w", err)
 	}
 	return count, nil
+}
+
+func (s *SQLiteResourceStore) CountRecentChangesByKind(canonicalID string, since time.Time) (map[ChangeKind]int, error) {
+	return s.CountRecentChangesByKindFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (s *SQLiteResourceStore) CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error) {
+	query, args := buildRecentChangeCountQuery(canonicalID, since, filters, "SELECT COALESCE(kind, ''), COUNT(*) FROM resource_changes")
+	query += ` GROUP BY kind`
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query resource change counts by kind: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[ChangeKind]int)
+	for rows.Next() {
+		var kind string
+		var count int
+		if err := rows.Scan(&kind, &count); err != nil {
+			return nil, fmt.Errorf("scan resource change kind count row: %w", err)
+		}
+		if kind == "" {
+			continue
+		}
+		counts[ChangeKind(kind)] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate resource change kind count rows: %w", err)
+	}
+	return counts, nil
 }
 
 func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error {
@@ -1174,6 +1178,71 @@ func (m *MemoryStore) CountRecentChangesFiltered(canonicalID string, since time.
 		count++
 	}
 	return count, nil
+}
+
+func (m *MemoryStore) CountRecentChangesByKind(canonicalID string, since time.Time) (map[ChangeKind]int, error) {
+	return m.CountRecentChangesByKindFiltered(canonicalID, since, ResourceChangeFilters{})
+}
+
+func (m *MemoryStore) CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	canonicalID = CanonicalResourceID(canonicalID)
+	counts := make(map[ChangeKind]int)
+	for _, change := range m.changes {
+		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+			continue
+		}
+		if !since.IsZero() && change.ObservedAt.Before(since) {
+			continue
+		}
+		if !filters.matches(change) {
+			continue
+		}
+		counts[change.Kind]++
+	}
+	if len(counts) == 0 {
+		return nil, nil
+	}
+	return counts, nil
+}
+
+func buildRecentChangeCountQuery(canonicalID string, since time.Time, filters ResourceChangeFilters, selectClause string) (string, []any) {
+	query := selectClause
+	args := []any{}
+	conditions := []string{"observed_at >= ?"}
+	args = append(args, since)
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID != "" {
+		conditions = append(conditions, "canonical_id = ?")
+		args = append(args, canonicalID)
+	}
+	if len(filters.Kinds) > 0 {
+		placeholders := make([]string, 0, len(filters.Kinds))
+		for _, kind := range filters.Kinds {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(kind))
+		}
+		conditions = append(conditions, "kind IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(filters.SourceTypes) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceTypes))
+		for _, sourceType := range filters.SourceTypes {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceType))
+		}
+		conditions = append(conditions, "source_type IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	if len(filters.SourceAdapters) > 0 {
+		placeholders := make([]string, 0, len(filters.SourceAdapters))
+		for _, sourceAdapter := range filters.SourceAdapters {
+			placeholders = append(placeholders, "?")
+			args = append(args, string(sourceAdapter))
+		}
+		conditions = append(conditions, "source_adapter IN ("+strings.Join(placeholders, ", ")+")")
+	}
+	query += ` WHERE ` + strings.Join(conditions, " AND ")
+	return query, args
 }
 
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {

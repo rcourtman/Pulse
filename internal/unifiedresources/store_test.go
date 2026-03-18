@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -648,6 +649,86 @@ func TestCountRecentChanges_RespectsFilters(t *testing.T) {
 	}
 	if adapterFilteredCount != 2 {
 		t.Fatalf("CountRecentChangesFiltered source adapters = %d, want 2", adapterFilteredCount)
+	}
+}
+
+func TestCountRecentChangesByKind_RespectsFilters(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:            "chg-kind-1",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-30 * time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceHigh,
+		},
+		{
+			ID:            "chg-kind-2",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-20 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceMedium,
+		},
+		{
+			ID:            "chg-kind-3",
+			ResourceID:    "vm:1",
+			ObservedAt:    base.Add(-10 * time.Minute),
+			Kind:          ChangeAnomaly,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceLow,
+		},
+		{
+			ID:            "chg-kind-4",
+			ResourceID:    "vm:2",
+			ObservedAt:    base.Add(-5 * time.Minute),
+			Kind:          ChangeCapability,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterDocker,
+			Confidence:    ConfidenceLow,
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	counts, err := store.CountRecentChangesByKind("vm:1", base.Add(-35*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChangesByKind vm:1: %v", err)
+	}
+	wantCounts := map[ChangeKind]int{
+		ChangeStateTransition: 1,
+		ChangeAnomaly:         2,
+	}
+	if !reflect.DeepEqual(counts, wantCounts) {
+		t.Fatalf("CountRecentChangesByKind vm:1 = %#v, want %#v", counts, wantCounts)
+	}
+
+	filteredCounts, err := store.CountRecentChangesByKindFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		SourceTypes: []ChangeSourceType{SourcePulseDiff},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesByKindFiltered source types: %v", err)
+	}
+	if !reflect.DeepEqual(filteredCounts, map[ChangeKind]int{ChangeAnomaly: 2}) {
+		t.Fatalf("CountRecentChangesByKindFiltered source types = %#v, want %#v", filteredCounts, map[ChangeKind]int{ChangeAnomaly: 2})
+	}
+
+	adapterCounts, err := store.CountRecentChangesByKindFiltered("vm:1", base.Add(-35*time.Minute), ResourceChangeFilters{
+		SourceAdapters: []ChangeSourceAdapter{AdapterProxmox},
+	})
+	if err != nil {
+		t.Fatalf("CountRecentChangesByKindFiltered source adapters: %v", err)
+	}
+	if !reflect.DeepEqual(adapterCounts, map[ChangeKind]int{ChangeStateTransition: 1, ChangeAnomaly: 1}) {
+		t.Fatalf("CountRecentChangesByKindFiltered source adapters = %#v, want %#v", adapterCounts, map[ChangeKind]int{ChangeStateTransition: 1, ChangeAnomaly: 1})
 	}
 }
 

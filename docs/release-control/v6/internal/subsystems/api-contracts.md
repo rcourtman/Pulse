@@ -127,6 +127,10 @@ Those history reads now also accept governed `kind`, `sourceType`, and
 `sourceAdapter` query filters, and the backend store owns the corresponding
 filtered counts, so the timeline contract can narrow by change class and
 adapter provenance without inventing a frontend-only slice of the graph.
+The same facet bundle contract now also returns grouped `recentChangeKinds`
+counts by canonical `ChangeKind`, so the shared drawer and summary chips can
+show the distribution of restarts, anomalies, state transitions, and other
+timeline classes without guessing from the loaded slice.
 Relationship-change timeline entries also preserve the affected graph endpoints
 in `relatedResources`, so the canonical history keeps enough context for the
 detail drawer and audit views to explain which neighboring resources moved with

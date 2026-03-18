@@ -116,6 +116,10 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the graph and timeline inline.
+The same facet bundle now also returns grouped recent-change counts by
+canonical change kind, so the detail drawer can surface the distribution of
+state transitions, restarts, config updates, anomalies, relationships, and
+capabilities without recomputing timeline history in the browser.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

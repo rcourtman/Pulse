@@ -40,6 +40,10 @@ describe('ResourceAPI', () => {
         capabilities: 1,
         relationships: 1,
         recentChanges: 3,
+        recentChangeKinds: {
+          metric_anomaly: 2,
+          restart: 1,
+        },
       },
     } as any);
 
@@ -66,12 +70,20 @@ describe('ResourceAPI', () => {
         capabilities: 1,
         relationships: 1,
         recentChanges: 3,
+        recentChangeKinds: {
+          metric_anomaly: 2,
+          restart: 1,
+        },
       },
     });
     expect(result.counts).toStrictEqual({
       capabilities: 1,
       relationships: 1,
       recentChanges: 3,
+      recentChangeKinds: {
+        metric_anomaly: 2,
+        restart: 1,
+      },
     });
   });
 

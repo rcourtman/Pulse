@@ -106,6 +106,10 @@ describe('ResourceDetailDrawer history tab', () => {
         capabilities: 1,
         relationships: 1,
         recentChanges: 3,
+        recentChangeKinds: {
+          restart: 2,
+          metric_anomaly: 1,
+        },
       },
     });
 
@@ -124,6 +128,8 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(await screen.findByText('Capabilities 1')).toBeInTheDocument();
     expect(screen.getByText('Relationships 1')).toBeInTheDocument();
     expect(screen.getByText('Timeline 3')).toBeInTheDocument();
+    expect(screen.getByText('Restart 2')).toBeInTheDocument();
+    expect(screen.getByText('Anomaly 1')).toBeInTheDocument();
   });
 
   it('renders resource capability, relationship, and timeline facets', async () => {
@@ -187,6 +193,10 @@ describe('ResourceDetailDrawer history tab', () => {
         capabilities: 1,
         relationships: 1,
         recentChanges: 3,
+        recentChangeKinds: {
+          restart: 2,
+          metric_anomaly: 1,
+        },
       },
     });
 
@@ -286,6 +296,10 @@ describe('ResourceDetailDrawer history tab', () => {
         capabilities: 1,
         relationships: 1,
         recentChanges: 2,
+        recentChangeKinds: {
+          restart: 1,
+          metric_anomaly: 1,
+        },
       },
     };
     const filteredFacetBundle = {
@@ -418,6 +432,10 @@ describe('ResourceDetailDrawer history tab', () => {
           capabilities: 1,
           relationships: 1,
           recentChanges: 2,
+          recentChangeKinds: {
+            restart: 1,
+            metric_anomaly: 1,
+          },
         },
       })
       .mockResolvedValueOnce({
@@ -461,6 +479,9 @@ describe('ResourceDetailDrawer history tab', () => {
           capabilities: 1,
           relationships: 1,
           recentChanges: 1,
+          recentChangeKinds: {
+            metric_anomaly: 1,
+          },
         },
       });
 
