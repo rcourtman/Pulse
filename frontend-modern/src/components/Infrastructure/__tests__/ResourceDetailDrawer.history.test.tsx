@@ -196,7 +196,15 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(panel.getAllByText('Relationships')).toHaveLength(2);
     expect(panel.getByText('Timeline')).toBeInTheDocument();
     expect(screen.getByText('Timeline 3')).toBeInTheDocument();
-    expect(panel.getByText('node:pve-1 → vm:42')).toBeInTheDocument();
+    expect(
+      panel.getByRole('link', { name: 'Open source resource node:pve-1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    expect(
+      panel.getByRole('link', { name: 'Open target resource vm:42 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm%3A42');
+    expect(
+      panel.getByRole('link', { name: 'Open related resource node:pve-1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
   });
 });

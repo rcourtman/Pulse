@@ -91,7 +91,10 @@ future summary changes must preserve the same bounded row budget instead of
 forking separate table-only presentation logic. Row summaries now also prefer
 canonical `facetCounts` on each resource when they are available, so the hot
 path can stay within the same budget while still reading totals from the
-shared resource contract.
+shared resource contract. The drawer history surface reuses the same governed
+resource route helpers for relationship and related-resource links, so cross-
+resource navigation stays within the existing infrastructure surface rather
+than branching into custom detail-only routing.
 Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather

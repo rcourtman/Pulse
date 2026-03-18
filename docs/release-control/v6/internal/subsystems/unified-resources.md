@@ -189,7 +189,10 @@ fetches those facets through one backend bundle endpoint, and that shared
 facet bundle preserves backend counts for capabilities, relationships, and the
 timeline slice so the overview card and history summary can report the total
 facet history instead of collapsing to the currently loaded page when the
-timeline endpoint is paginated.
+timeline endpoint is paginated. Relationship and timeline references in that
+drawer now route through the canonical infrastructure resource filter, so the
+resource graph remains navigable from the history surface instead of being
+purely descriptive text.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client

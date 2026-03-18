@@ -39,6 +39,7 @@ import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { ResourceAPI } from '@/api/resources';
+import { buildInfrastructurePath } from '@/routing/resourceLinks';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
@@ -65,6 +66,11 @@ import {
   ALIAS_COLLAPSE_THRESHOLD,
   formatSourceType,
 } from './resourceDetailMappers';
+
+const buildInfrastructureResourceHref = (resourceId: string): string | null => {
+  const trimmed = resourceId.trim();
+  return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
+};
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab =
@@ -1471,7 +1477,35 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                       <div class="flex items-center justify-between gap-2">
                         <span class="font-medium text-base-content">
-                          {relationship.sourceId} → {relationship.targetId}
+                          <Show
+                            when={buildInfrastructureResourceHref(relationship.sourceId)}
+                            fallback={<span>{relationship.sourceId}</span>}
+                          >
+                            {(href) => (
+                              <a
+                                class="rounded px-0.5 text-blue-700 hover:underline dark:text-blue-300"
+                                href={href()}
+                                aria-label={`Open source resource ${relationship.sourceId} in Infrastructure`}
+                              >
+                                {relationship.sourceId}
+                              </a>
+                            )}
+                          </Show>
+                          {' → '}
+                          <Show
+                            when={buildInfrastructureResourceHref(relationship.targetId)}
+                            fallback={<span>{relationship.targetId}</span>}
+                          >
+                            {(href) => (
+                              <a
+                                class="rounded px-0.5 text-blue-700 hover:underline dark:text-blue-300"
+                                href={href()}
+                                aria-label={`Open target resource ${relationship.targetId} in Infrastructure`}
+                              >
+                                {relationship.targetId}
+                              </a>
+                            )}
+                          </Show>
                         </span>
                         <span class="text-muted">{humanizeFacetToken(relationship.type)}</span>
                       </div>
@@ -1574,8 +1608,26 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         </div>
                       </Show>
                       <Show when={change.relatedResources && change.relatedResources.length > 0}>
-                        <div class="mt-1 text-muted">
-                          Related: {change.relatedResources?.join(', ')}
+                        <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
+                          <span>Related:</span>
+                          <For each={change.relatedResources ?? []}>
+                            {(relatedResource) => {
+                              const href = buildInfrastructureResourceHref(relatedResource);
+                              return href ? (
+                                <a
+                                  class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                  href={href}
+                                  aria-label={`Open related resource ${relatedResource} in Infrastructure`}
+                                >
+                                  {relatedResource}
+                                </a>
+                              ) : (
+                                <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                  {relatedResource}
+                                </span>
+                              );
+                            }}
+                          </For>
                         </div>
                       </Show>
                     </div>
