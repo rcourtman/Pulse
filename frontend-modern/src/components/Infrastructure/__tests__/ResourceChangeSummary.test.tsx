@@ -28,6 +28,7 @@ describe('ResourceChangeSummary', () => {
             kind: 'restart',
             from: 'running',
             to: 'restarting',
+            reason: 'Restart after maintenance',
             observedAt: '2026-03-18T12:00:00Z',
             sourceType: 'platform_event',
             sourceAdapter: 'docker_adapter',
@@ -51,6 +52,7 @@ describe('ResourceChangeSummary', () => {
       screen.getByRole('link', { name: 'Open related resource vm-200 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=vm-200');
     expect(screen.getByText('By agent:ops-helper')).toBeInTheDocument();
+    expect(screen.getByText('Restart after maintenance')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open resource storage-1 in Infrastructure' })).toBeNull();
   });
 

@@ -112,6 +112,9 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                       <Show when={change.actor}>
                         <p class={`mt-1 ${itemText()} text-muted`}>By {change.actor}</p>
                       </Show>
+                      <Show when={change.reason}>
+                        <p class={`mt-1 ${itemText()} text-muted`}>{change.reason}</p>
+                      </Show>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-1.5">

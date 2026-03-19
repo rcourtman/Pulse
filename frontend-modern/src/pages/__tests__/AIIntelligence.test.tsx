@@ -589,6 +589,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
     expect(screen.getByText(/Recent changes 1/)).toBeInTheDocument();
     expect(screen.getByText('Config update: Updated guest configuration')).toBeInTheDocument();
+    expect(screen.getByText('Updated guest configuration')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Open resource vm-100 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=vm-100');

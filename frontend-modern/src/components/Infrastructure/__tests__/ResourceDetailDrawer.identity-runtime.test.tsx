@@ -354,6 +354,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Latest canonical change')).toBeInTheDocument();
     const latestChangeItem = getByText('Config update: Updated canonical config').closest('li');
     expect(latestChangeItem).not.toBeNull();
+    expect(getByText('Updated canonical config')).toBeInTheDocument();
     expect(latestChangeItem).toHaveTextContent(/just now|m ago|h ago|d ago/);
   });
 });
