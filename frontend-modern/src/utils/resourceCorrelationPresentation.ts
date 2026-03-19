@@ -1,7 +1,7 @@
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatDurationMs } from '@/utils/patrolFormat';
 import { formatConfidencePercentage } from '@/utils/confidencePresentation';
-import { humanizeToken } from '@/utils/textPresentation';
+import { humanizeArrowDelimitedLabel } from '@/utils/textPresentation';
 
 const parseGoDurationMs = (value: string): number | null => {
   const normalized = value.trim();
@@ -28,7 +28,7 @@ const parseGoDurationMs = (value: string): number | null => {
 };
 
 const humanizeCorrelationToken = (value?: string): string => {
-  return humanizeToken((value || '').replace(/\s*->\s*/g, ' → '), { fallback: 'Correlation' });
+  return humanizeArrowDelimitedLabel(value, { fallback: 'Correlation' });
 };
 
 const formatResourceCorrelationEndpointLabel = (value?: string): string => {

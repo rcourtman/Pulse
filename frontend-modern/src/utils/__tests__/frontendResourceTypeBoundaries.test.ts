@@ -1916,6 +1916,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
+    expect(resourceCorrelationPresentationSource).toContain('humanizeArrowDelimitedLabel');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
@@ -1923,7 +1924,10 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
-    expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
+    expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
+    expect(resourceCorrelationPresentationSource).not.toContain(
+      "replace(/\\s*->\\s*/g, ' → ')",
+    );
     expect(resourceDetailDrawerSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('formatIdentifierLabel');

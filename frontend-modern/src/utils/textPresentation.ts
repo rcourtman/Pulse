@@ -82,3 +82,10 @@ export function titleCaseDelimitedLabel(
     })
     .join(' ');
 }
+
+export function humanizeArrowDelimitedLabel(
+  value?: string,
+  options?: HumanizeTokenOptions,
+): string {
+  return humanizeToken((value || '').replace(/\s*->\s*/g, ' → '), options);
+}

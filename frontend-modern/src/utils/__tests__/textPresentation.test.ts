@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatIdentifierLabel,
+  humanizeArrowDelimitedLabel,
   humanizeToken,
   titleCaseDelimitedLabel,
 } from '@/utils/textPresentation';
@@ -42,5 +43,12 @@ describe('textPresentation', () => {
       }),
     ).toBe('Agent Profile Suggestion');
     expect(titleCaseDelimitedLabel('', { fallback: 'Unknown' })).toBe('Unknown');
+  });
+
+  it('humanizes arrow-delimited labels', () => {
+    expect(humanizeArrowDelimitedLabel('disk_full -> restart', { fallback: 'Correlation' })).toBe(
+      'Disk Full → Restart',
+    );
+    expect(humanizeArrowDelimitedLabel('', { fallback: 'Correlation' })).toBe('Correlation');
   });
 });
