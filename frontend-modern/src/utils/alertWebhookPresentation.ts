@@ -153,13 +153,24 @@ export const ALERT_WEBHOOK_ENABLE_ALL_LABEL = 'Enable All';
 export function getAlertWebhookServices(templates: AlertWebhookTemplate[] = []) {
   return templates.map((template) => ({
     id: template.service,
-    label: getAlertWebhookServiceLabel(template.service),
+    label: template.label || getAlertWebhookServiceLabel(template.service),
     description: template.description || template.name,
   }));
 }
 
 export function getAlertWebhookServiceLabel(service: string) {
   return ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.label || service;
+}
+
+export function getAlertWebhookServiceLabelFromTemplates(
+  service: string,
+  templates: AlertWebhookTemplate[] = [],
+) {
+  const template = templates.find((item) => item.service === service);
+  if (template?.label?.trim()) {
+    return template.label.trim();
+  }
+  return getAlertWebhookServiceLabel(service);
 }
 
 export function getAlertWebhookCustomFieldPresets(service: string) {

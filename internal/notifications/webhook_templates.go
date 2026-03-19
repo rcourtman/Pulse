@@ -3,6 +3,7 @@ package notifications
 // WebhookTemplate represents a webhook template for popular services
 type WebhookTemplate struct {
 	Service                 string            `json:"service"`
+	Label                   string            `json:"label"`
 	Name                    string            `json:"name"`
 	Description             string            `json:"description"`
 	URLPattern              string            `json:"urlPattern"`
@@ -18,6 +19,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 	return []WebhookTemplate{
 		{
 			Service:     "discord",
+			Label:       "Discord",
 			Name:        "Discord Webhook",
 			Description: "Discord server webhook",
 			URLPattern:  "https://discord.com/api/webhooks/{webhook_id}/{webhook_token}",
@@ -67,6 +69,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "telegram",
+			Label:       "Telegram",
 			Name:        "Telegram Bot",
 			Description: "Telegram bot notifications",
 			URLPattern:  "https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -88,6 +91,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "slack",
+			Label:       "Slack",
 			Name:        "Slack Incoming Webhook",
 			Description: "Slack incoming webhook",
 			URLPattern:  "https://hooks.slack.com/services/{webhook_path}",
@@ -183,6 +187,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "teams",
+			Label:       "Microsoft Teams",
 			Name:        "Microsoft Teams",
 			Description: "Microsoft Teams webhook",
 			URLPattern:  "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
@@ -239,6 +244,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "pagerduty",
+			Label:       "PagerDuty",
 			Name:        "PagerDuty Events API v2",
 			Description: "PagerDuty Events API v2",
 			URLPattern:  "https://events.pagerduty.com/v2/enqueue",
@@ -284,6 +290,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "teams-adaptive",
+			Label:       "Teams (Adaptive)",
 			Name:        "Microsoft Teams (Adaptive Card)",
 			Description: "Teams with Adaptive Cards",
 			URLPattern:  "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
@@ -373,6 +380,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "pushover",
+			Label:       "Pushover",
 			Name:        "Pushover",
 			Description: "Mobile push notifications",
 			URLPattern:  "https://api.pushover.net/1/messages.json",
@@ -401,6 +409,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "gotify",
+			Label:       "Gotify",
 			Name:        "Gotify",
 			Description: "Self-hosted push notifications",
 			URLPattern:  "https://{your-gotify-server}/message?token={your-app-token}",
@@ -449,6 +458,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 		},
 		{
 			Service:     "ntfy",
+			Label:       "ntfy",
 			Name:        "ntfy.sh",
 			Description: "Push notifications via ntfy.sh",
 			URLPattern:  "https://ntfy.sh/{topic}",
@@ -476,6 +486,7 @@ View in Pulse: {{.Instance}}`,
 		},
 		{
 			Service:     "mattermost",
+			Label:       "Mattermost",
 			Name:        "Mattermost Incoming Webhook",
 			Description: "Mattermost incoming webhook",
 			URLPattern:  "https://{your-mattermost-server}/hooks/{webhook_id}",
@@ -495,6 +506,7 @@ View in Pulse: {{.Instance}}`,
 		},
 		{
 			Service:     "generic",
+			Label:       "Generic",
 			Name:        "Generic JSON Webhook",
 			Description: "Custom webhook endpoint",
 			URLPattern:  "",

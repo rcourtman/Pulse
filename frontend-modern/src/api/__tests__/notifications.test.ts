@@ -87,4 +87,31 @@ describe('NotificationsAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks');
     expect(result).toEqual([]);
   });
+
+  it('surfaces webhook template labels from the API', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce([
+      {
+        service: 'discord',
+        label: 'Discord',
+        name: 'Discord Webhook',
+        description: 'Discord server webhook',
+        urlPattern: 'https://discord.com/api/webhooks/.../...',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        payloadTemplate: '',
+        instructions: '',
+      },
+    ] as any);
+
+    const templates = await NotificationsAPI.getWebhookTemplates();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhook-templates');
+    expect(templates).toEqual([
+      expect.objectContaining({
+        service: 'discord',
+        label: 'Discord',
+        description: 'Discord server webhook',
+      }),
+    ]);
+  });
 });

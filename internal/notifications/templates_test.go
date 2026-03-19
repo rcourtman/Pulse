@@ -179,6 +179,11 @@ func TestGetWebhookTemplates(t *testing.T) {
 				t.Errorf("Template %q has empty Name", tmpl.Service)
 			}
 
+			// Label must be non-empty so the frontend can derive the canonical service chooser
+			if tmpl.Label == "" {
+				t.Errorf("Template %q has empty Label", tmpl.Service)
+			}
+
 			// Description must be non-empty so the frontend can derive the service chooser
 			if tmpl.Description == "" {
 				t.Errorf("Template %q has empty Description", tmpl.Service)
@@ -257,6 +262,9 @@ func TestGetWebhookTemplates_DiscordSettings(t *testing.T) {
 		t.Fatal("Discord template not found")
 	}
 
+	if discord.Label != "Discord" {
+		t.Errorf("Discord Label = %q, want Discord", discord.Label)
+	}
 	if !strings.Contains(discord.URLPattern, "discord.com") {
 		t.Errorf("Discord URLPattern should contain discord.com, got %q", discord.URLPattern)
 	}
@@ -287,6 +295,9 @@ func TestGetWebhookTemplates_SlackSettings(t *testing.T) {
 		t.Fatal("Slack template not found")
 	}
 
+	if slack.Label != "Slack" {
+		t.Errorf("Slack Label = %q, want Slack", slack.Label)
+	}
 	if !strings.Contains(slack.URLPattern, "hooks.slack.com") {
 		t.Errorf("Slack URLPattern should contain hooks.slack.com, got %q", slack.URLPattern)
 	}
@@ -314,6 +325,9 @@ func TestGetWebhookTemplates_TelegramSettings(t *testing.T) {
 		t.Fatal("Telegram template not found")
 	}
 
+	if telegram.Label != "Telegram" {
+		t.Errorf("Telegram Label = %q, want Telegram", telegram.Label)
+	}
 	if !strings.Contains(telegram.URLPattern, "api.telegram.org") {
 		t.Errorf("Telegram URLPattern should contain api.telegram.org, got %q", telegram.URLPattern)
 	}
@@ -344,6 +358,9 @@ func TestGetWebhookTemplates_PagerDutySettings(t *testing.T) {
 		t.Fatal("PagerDuty template not found")
 	}
 
+	if pagerduty.Label != "PagerDuty" {
+		t.Errorf("PagerDuty Label = %q, want PagerDuty", pagerduty.Label)
+	}
 	if !strings.Contains(pagerduty.URLPattern, "pagerduty.com") {
 		t.Errorf("PagerDuty URLPattern should contain pagerduty.com, got %q", pagerduty.URLPattern)
 	}
@@ -384,6 +401,9 @@ func TestGetWebhookTemplates_GenericSettings(t *testing.T) {
 		t.Fatal("Generic template not found")
 	}
 
+	if generic.Label != "Generic" {
+		t.Errorf("Generic Label = %q, want Generic", generic.Label)
+	}
 	// Generic should have empty URL pattern (user fills it in)
 	if generic.URLPattern != "" {
 		t.Errorf("Generic URLPattern = %q, want empty", generic.URLPattern)
@@ -458,6 +478,7 @@ func TestEmailProviderConfig_Fields(t *testing.T) {
 func TestWebhookTemplate_Fields(t *testing.T) {
 	tmpl := WebhookTemplate{
 		Service:         "test",
+		Label:           "Test",
 		Name:            "Test Webhook",
 		URLPattern:      "https://example.com/webhook",
 		Method:          "POST",
@@ -468,6 +489,9 @@ func TestWebhookTemplate_Fields(t *testing.T) {
 
 	if tmpl.Service != "test" {
 		t.Errorf("Service = %q, want test", tmpl.Service)
+	}
+	if tmpl.Label != "Test" {
+		t.Errorf("Label = %q, want Test", tmpl.Label)
 	}
 	if tmpl.Name != "Test Webhook" {
 		t.Errorf("Name = %q, want Test Webhook", tmpl.Name)

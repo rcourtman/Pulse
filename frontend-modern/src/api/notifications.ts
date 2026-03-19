@@ -24,6 +24,7 @@ export interface EmailProvider {
 export interface WebhookTemplate {
   id?: string;
   service: string;
+  label?: string;
   name: string;
   urlPattern: string;
   method: string;

@@ -485,6 +485,9 @@ func TestNotificationHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.GetWebhookTemplates(w, req)
 		assert.Equal(t, 200, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, `"label":"Discord"`)
+		assert.Contains(t, body, `"label":"Generic"`)
 	})
 
 	t.Run("GetWebhookHistory", func(t *testing.T) {

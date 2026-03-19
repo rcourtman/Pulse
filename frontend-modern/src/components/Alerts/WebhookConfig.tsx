@@ -31,7 +31,7 @@ import {
   getAlertWebhookMentionPlaceholder,
   getAlertWebhookCustomFieldPresets,
   getAlertWebhookNamePlaceholder,
-  getAlertWebhookServiceLabel,
+  getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookServices,
   getAlertWebhookSetupInstructionsTitle,
   getAlertWebhookSubmitLabel,
@@ -52,6 +52,7 @@ import {
 
 interface WebhookTemplate {
   service: string;
+  label?: string;
   name: string;
   description?: string;
   urlPattern: string;
@@ -393,7 +394,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 </div>
                 <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
                   <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                    {getAlertWebhookServiceLabel(webhook.service || 'generic')}
+                    {getAlertWebhookServiceLabelFromTemplates(webhook.service || 'generic', templates())}
                   </span>
                   <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     {webhook.method}
@@ -441,7 +442,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 onClick={() => setShowServiceDropdown(!showServiceDropdown())}
                 class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
               >
-                {getAlertWebhookServiceLabel(formData().service)} →
+                {getAlertWebhookServiceLabelFromTemplates(formData().service, templates())} →
               </button>
             </div>
 

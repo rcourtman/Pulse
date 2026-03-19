@@ -4,6 +4,7 @@ import {
   ALERT_WEBHOOK_TEST_SUCCESS,
   getAlertWebhookServices,
   getAlertWebhookCustomFieldPresets,
+  getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookTestFailure,
   getAlertWebhookTestSuccess,
   normalizeAlertWebhookCustomFields,
@@ -61,6 +62,7 @@ describe('alertWebhookPresentation', () => {
       getAlertWebhookServices([
         {
           service: 'discord',
+          label: 'Discord',
           name: 'Discord Webhook',
           description: 'Discord server webhook',
           urlPattern: 'https://discord.com/api/webhooks/.../...',
@@ -71,6 +73,7 @@ describe('alertWebhookPresentation', () => {
         },
         {
           service: 'generic',
+          label: 'Generic',
           name: 'Generic Webhook',
           description: 'Custom webhook endpoint',
           urlPattern: '',
@@ -92,5 +95,25 @@ describe('alertWebhookPresentation', () => {
         description: 'Custom webhook endpoint',
       },
     ]);
+  });
+
+  it('prefers backend template labels for service presentation', () => {
+    expect(
+      getAlertWebhookServiceLabelFromTemplates('discord', [
+        {
+          service: 'discord',
+          label: 'Discord',
+          name: 'Discord Webhook',
+          description: 'Discord server webhook',
+          urlPattern: 'https://discord.com/api/webhooks/.../...',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          payloadTemplate: '',
+          instructions: '',
+        },
+      ]),
+    ).toBe('Discord');
+
+    expect(getAlertWebhookServiceLabelFromTemplates('custom-service', [])).toBe('custom-service');
   });
 });

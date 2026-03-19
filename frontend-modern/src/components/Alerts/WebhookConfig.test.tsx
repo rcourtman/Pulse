@@ -39,6 +39,7 @@ function makeWebhook(overrides: Partial<Webhook> = {}): Webhook {
 
 const discordTemplate = {
   service: 'discord',
+  label: 'Discord',
   name: 'Discord Webhook',
   description: 'Discord server webhook',
   urlPattern: 'https://discord.com/api/webhooks/...',
@@ -50,6 +51,7 @@ const discordTemplate = {
 
 const slackTemplate = {
   service: 'slack',
+  label: 'Slack',
   name: 'Slack Webhook',
   description: 'Slack incoming webhook',
   urlPattern: 'https://hooks.slack.com/services/...',
@@ -61,6 +63,7 @@ const slackTemplate = {
 
 const genericTemplate = {
   service: 'generic',
+  label: 'Generic',
   name: 'Generic Webhook',
   description: 'Custom webhook endpoint',
   urlPattern: 'https://example.com/webhook',
@@ -72,6 +75,7 @@ const genericTemplate = {
 
 const pushoverTemplate = {
   service: 'pushover',
+  label: 'Pushover',
   name: 'Pushover',
   description: 'Mobile push notifications',
   urlPattern: 'https://api.pushover.net/1/messages.json',
