@@ -7,11 +7,11 @@ import {
   formatResourceCorrelationHeadline,
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
-  formatResourceGraphSummaryText,
+  formatResourceCorrelationSummaryText,
   sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
 
-interface ResourceGraphSummaryProps {
+interface ResourceCorrelationSummaryProps {
   correlations?: ResourceCorrelation[] | null;
   dependencies?: string[] | null;
   dependents?: string[] | null;
@@ -23,7 +23,7 @@ interface ResourceGraphSummaryProps {
   maxCorrelations?: number;
 }
 
-export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props) => {
+export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryProps> = (props) => {
   const className = () => props.class?.trim() ?? '';
   const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
   const dependencies = () => props.dependencies ?? [];
@@ -33,7 +33,7 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
   const hasContent = () =>
     dependencies().length > 0 || dependents().length > 0 || correlations().length > 0;
   const summaryText = () =>
-    formatResourceGraphSummaryText({
+    formatResourceCorrelationSummaryText({
       dependenciesCount: dependencies().length,
       dependentsCount: dependents().length,
       correlationsCount: correlations().length,
@@ -182,4 +182,4 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
   );
 };
 
-export default ResourceGraphSummary;
+export default ResourceCorrelationSummary;

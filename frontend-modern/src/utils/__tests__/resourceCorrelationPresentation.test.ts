@@ -5,7 +5,7 @@ import {
   formatResourceCorrelationHeadline,
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
-  formatResourceGraphSummaryText,
+  formatResourceCorrelationSummaryText,
   sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
 
@@ -89,14 +89,14 @@ describe('resourceCorrelationPresentation utils', () => {
 
   it('formats canonical graph summary text', () => {
     expect(
-      formatResourceGraphSummaryText({
+      formatResourceCorrelationSummaryText({
         dependenciesCount: 2,
         dependentsCount: 1,
         correlationsCount: 3,
       }),
     ).toBe('2 dependencies · 1 dependent · 3 correlations');
     expect(
-      formatResourceGraphSummaryText({
+      formatResourceCorrelationSummaryText({
         dependenciesCount: 0,
         dependentsCount: 0,
         correlationsCount: 0,

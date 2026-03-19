@@ -123,15 +123,15 @@ The resource drawer now carries the same canonical posture snapshot through
 the resource-intelligence payload, so the resource-level AI card can show the
 org posture context without introducing a separate posture endpoint.
 That same resource-intelligence payload also carries canonical dependency and
-dependent graph context plus canonical correlation evidence, so the resource
+dependent correlation context plus canonical correlation evidence, so the resource
 drawer can surface relationship reachability and learned edge patterns
-directly from the AI contract instead of inventing a second graph summary.
+directly from the AI contract instead of inventing a second correlation summary.
 The Patrol intelligence page now also consumes the learned correlation list
 from the canonical AI correlations endpoint through the shared
 `frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
 and the resource drawer both reflect the same learned edge evidence instead
 of each page fetching its own copy. Both surfaces now render that evidence
-through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the correlation layout stays governed by one component instead of
 two page-local card implementations. That shared card also owns the
 correlation ordering and truncation rule, so the page and drawer hand it raw
@@ -146,7 +146,7 @@ repeating the individual summary, findings, approval, and correlation fetches
 inline.
 The shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and
-`frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 cards now own the canonical Infrastructure resource-link default, so the
 Patrol page and resource drawer inherit resource-filter href construction
 through the shared summary cards instead of rebuilding local wrappers in each

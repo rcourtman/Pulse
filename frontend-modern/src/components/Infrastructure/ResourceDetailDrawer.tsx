@@ -60,7 +60,7 @@ import {
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
-import { ResourceGraphSummary } from './ResourceGraphSummary';
+import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
@@ -822,7 +822,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     compact
                   />
                   <ResourcePolicySummary posture={policyPosture()} title="Policy posture" />
-                  <ResourceGraphSummary
+                  <ResourceCorrelationSummary
                     title="Correlation context"
                     dependencies={resourceDependencies()}
                     dependents={resourceDependents()}

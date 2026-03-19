@@ -1,12 +1,12 @@
 import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it } from 'vitest';
 
-import { ResourceGraphSummary } from '../ResourceGraphSummary';
+import { ResourceCorrelationSummary } from '../ResourceCorrelationSummary';
 
-describe('ResourceGraphSummary', () => {
+describe('ResourceCorrelationSummary', () => {
   it('renders learned correlations with canonical labels and totals', () => {
     render(() => (
-      <ResourceGraphSummary
+      <ResourceCorrelationSummary
         title="Learned correlations"
         correlations={[
           {
@@ -42,7 +42,7 @@ describe('ResourceGraphSummary', () => {
 
   it('renders correlation context with dependency and dependent links', () => {
     render(() => (
-      <ResourceGraphSummary
+      <ResourceCorrelationSummary
         title="Correlation context"
         dependencies={['storage-1']}
         dependents={['vm-child']}

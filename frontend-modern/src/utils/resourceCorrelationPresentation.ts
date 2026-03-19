@@ -95,7 +95,7 @@ const formatPluralCount = (count: number, singular: string, plural: string): str
 const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
   parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
 
-export function formatResourceGraphSummaryText(options: {
+export function formatResourceCorrelationSummaryText(options: {
   dependenciesCount: number;
   dependentsCount: number;
   correlationsCount: number;

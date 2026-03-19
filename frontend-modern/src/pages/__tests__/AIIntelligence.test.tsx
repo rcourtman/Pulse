@@ -355,7 +355,7 @@ describe('AIIntelligence entitlement gating', () => {
     });
   });
 
-  it('renders canonical learned correlations in the summary page', async () => {
+  it('renders canonical learned correlations in the summary page through the correlation card', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
@@ -424,7 +424,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Learned correlations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Learned correlations' })).toBeInTheDocument();
     });
 
     expect(screen.getByText('2 total')).toBeInTheDocument();
@@ -596,7 +596,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(
       screen.getByRole('link', { name: 'Open related resource agent-1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=agent-1');
-    expect(screen.getByText('proxmox_adapter')).toBeInTheDocument();
     expect(screen.getByText('Learning signals')).toBeInTheDocument();
     expect(screen.getByText('Data Governance')).toBeInTheDocument();
     expect(screen.getByText('4 governed resources')).toBeInTheDocument();

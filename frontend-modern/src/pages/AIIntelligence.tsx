@@ -90,7 +90,7 @@ import {
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
-import { ResourceGraphSummary } from '@/components/Infrastructure/ResourceGraphSummary';
+import { ResourceCorrelationSummary } from '@/components/Infrastructure/ResourceCorrelationSummary';
 import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
 import {
   getProTrialStartedMessage,
@@ -1328,11 +1328,11 @@ export function AIIntelligence() {
                     </div>
 
                     <Show when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}>
-                    <ResourceGraphSummary
-                      title="Learned correlations"
-                      correlations={aiIntelligenceStore.correlations?.correlations ?? []}
-                      summaryText={`${correlationTotal()} total`}
-                    />
+                      <ResourceCorrelationSummary
+                        title="Learned correlations"
+                        correlations={aiIntelligenceStore.correlations?.correlations ?? []}
+                        summaryText={`${correlationTotal()} total`}
+                      />
                     </Show>
 
                     <ResourcePolicySummary posture={policyPosture()} title="Data Governance" />

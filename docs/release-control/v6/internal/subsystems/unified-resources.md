@@ -138,9 +138,9 @@ rendered inline by the drawer.
 That same helper also owns the drawer's `Cloud Summary` and `Raw Signals`
 routing rows, so the detail view no longer reconstructs the row structure or
 decision labels locally.
-The backend AI and Patrol graph context renderers now derive their canonical
+The backend AI and Patrol correlation context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
-from `internal/unifiedresources/relationship_presentation.go`, so the graph
+from `internal/unifiedresources/relationship_presentation.go`, so the correlation
 semantics live with the resource model instead of being duplicated in prompt
 helpers or drawer-specific markdown.
 That same resource model now also owns the canonical
@@ -156,7 +156,7 @@ correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency graph without rebuilding correlation
 reasoning from raw events. The Patrol intelligence page now also renders that
 correlation evidence through the shared
-`frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the same learned-edge list stays governed by one frontend surface
 instead of separate page-local implementations. That shared card also owns
 the correlation ordering and truncation rule, so callers pass raw correlation
@@ -378,7 +378,7 @@ is present, so the graph history view preserves the richer provenance already
 carried by the unified-resource model instead of flattening those fields away.
 The same Infrastructure resource-only links now also default through the
 shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-and `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 cards from the Patrol page, resource drawer, and problem-resource dashboard
 panels, so canonical resource-filter path construction stays owned by the
 shared summary cards rather than being duplicated per surface.

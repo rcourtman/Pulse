@@ -164,9 +164,9 @@ lifecycle-adjacent detail surfaces can distinguish Docker, Proxmox, TrueNAS,
 and ops-helper provenance without re-inferencing the integration mix in the
 browser.
 Timeline entries surfaced through that same boundary also preserve
-`relatedResources` graph context for non-relationship changes, so adjacent
+`relatedResources` correlation context for non-relationship changes, so adjacent
 fleet and install surfaces can link the affected neighbors without trying to
-reconstruct graph context from the raw resource payload alone.
+reconstruct correlation context from the raw resource payload alone.
 That same shared `internal/api/` boundary now also assumes tenant AI services
 stay on canonical Patrol runtime wiring: adjacent fleet and install surfaces
 must not revive tenant snapshot-provider bridges through shared AI handler

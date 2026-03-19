@@ -289,7 +289,7 @@ The Patrol intelligence page now also fetches the learned correlation list
 from the canonical AI correlations endpoint, so the global AI surface and the
 resource drawer both expose the same learned edge evidence instead of only
 showing a correlation count. The same page and drawer now render that list
-through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the learned-correlation layout and edge wording stay aligned across
 both surfaces. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
@@ -332,8 +332,8 @@ The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.
 That same resource-intelligence payload also carries dependency and
-dependent graph context from unified-resource correlations, so the drawer
-can show canonical graph relationships without reconstructing them from the
+dependent correlation context from unified-resource correlations, so the drawer
+can show canonical correlation relationships without reconstructing them from the
 relationship timeline alone.
 The shared AI resource and infrastructure prompt contexts should also surface
 the same canonical recent changes section before any patrol-local fallback so

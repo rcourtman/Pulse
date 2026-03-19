@@ -85,9 +85,9 @@ Own canonical runtime payload shapes between backend and frontend.
    and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the shared `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx` card, so the AI summary page and resource drawer render the same governed policy-posture counts instead of carrying duplicate posture UI loops
-   and the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx` card, so learned correlations and graph context stay rendered through one governed frontend card instead of separate page-local list loops
-   and the same shared graph card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
-   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
+   and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
+   and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
+   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
 10. Add or change infrastructure operations token generation, lookup, assignment, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
@@ -159,10 +159,10 @@ The same facet bundle contract now also returns grouped
 `recentChangeSourceAdapters` counts by canonical source adapter, so the
 shared drawer and summary chips can distinguish Docker, Proxmox, TrueNAS, and
 ops-helper provenance without inventing frontend-local integration heuristics.
-Canonical timeline entries now also preserve graph context in
+Canonical timeline entries now also preserve correlation context in
 `relatedResources`, so the history surface can explain which neighboring
 resources moved with restart, anomaly, config, state transition, and
-relationship changes instead of only exposing graph endpoints when the edge
+relationship changes instead of only exposing correlation endpoints when the edge
 itself changed.
 Restart timeline entries are also a first-class contract now: `restart` change
 kinds can serialize Docker and Kubernetes restart metadata instead of being
@@ -195,14 +195,14 @@ client in `frontend-modern/src/api/resources.ts`, which fetches the governed
 capability, relationship, and timeline surfaces from `internal/api/resources.go`
 instead of teaching the drawer or list views to reconstruct them inline.
 The same AI resource-intelligence payload now also carries dependency and
-dependent graph arrays plus correlation evidence, so the drawer can render
-canonical graph context from the shared AI contract instead of inferring it
+dependent correlation arrays plus correlation evidence, so the drawer can render
+canonical correlation context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
 The same AI frontend client now also loads `/api/ai/intelligence/correlations`
 through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
 the Patrol intelligence page and the AI summary page, so the
 learned-correlation list is governed by the same API contract that backs the
-resource drawer's graph evidence instead of being fetched as page-local state.
+resource drawer's correlation evidence instead of being fetched as page-local state.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation
