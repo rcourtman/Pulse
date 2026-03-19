@@ -278,7 +278,7 @@ func TestIntelligence_summarizePolicyPosture(t *testing.T) {
 		t.Fatal("expected hostname redaction count")
 	}
 
-	labels := policyPostureRedactionLabels(summary)
+	labels := ur.ResourcePolicyRedactionLabelsFromCounts(summary.RedactionCounts)
 	if !reflect.DeepEqual(labels, []string{"Hostname", "IP Address", "Platform ID", "Alias"}) {
 		t.Fatalf("redaction labels = %#v, want %#v", labels, []string{"Hostname", "IP Address", "Platform ID", "Alias"})
 	}

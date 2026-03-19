@@ -195,6 +195,10 @@ Its sensitivity and routing counts must also follow the canonical
 unified-resource order and shared human-readable count summaries, so both the
 backend summary and the frontend policy card stay aligned on the same
 presentation sequence.
+The unified AI resource data-governance block must also use the shared
+unified-resource redaction-label helper directly, so the same canonical
+policy labels back both the posture summary and the governed prompt context
+without an AI-local wrapper.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.

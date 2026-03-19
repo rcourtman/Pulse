@@ -129,7 +129,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			routingParts := unifiedresources.ResourcePolicyRoutingSummaryFromCounts(routingCounts)
 			sections = append(sections, fmt.Sprintf("- Routing: %s", strings.Join(routingParts, ", ")))
 			sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
-			if redactionLabels := policyPostureRedactionLabels(policyPosture); len(redactionLabels) > 0 {
+			if redactionLabels := unifiedresources.ResourcePolicyRedactionLabelsFromCounts(policyPosture.RedactionCounts); len(redactionLabels) > 0 {
 				sections = append(sections, "\n### Policy Redaction Hints")
 				sections = append(sections, fmt.Sprintf("- Redactions in use: %s", strings.Join(redactionLabels, ", ")))
 			}

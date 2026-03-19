@@ -46,10 +46,3 @@ func summarizePolicyPosture(resources []unifiedresources.Resource) *PolicyPostur
 
 	return summary
 }
-
-func policyPostureRedactionLabels(summary *PolicyPostureSummary) []string {
-	if summary == nil || len(summary.RedactionCounts) == 0 {
-		return nil
-	}
-	return unifiedresources.ResourcePolicyRedactionLabelsFromCounts(summary.RedactionCounts)
-}
