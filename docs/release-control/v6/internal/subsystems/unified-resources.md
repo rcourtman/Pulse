@@ -236,10 +236,10 @@ shared unified-resource contract, and their governed labels now flow through
 shared `ResourcePolicyLabel(...)` and `ResourcePolicyRedactedValue(...)`
 helpers instead of through AI-local presentation shims, so policy copying and
 policy-bound labels both stay centralized in the resource model.
-The frontend unified-resource hook also trims `aiSafeSummary` through the
-shared policy normalization helper, so the canonical summary value stays
+The frontend unified-resource hook now trusts backend canonical `policy` and
+`aiSafeSummary` values directly, so the canonical summary value stays
 aligned with the same policy-aware contract that governs sensitivity and
-routing metadata.
+routing metadata without re-normalizing locally.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the connected-infrastructure / monitored-system
