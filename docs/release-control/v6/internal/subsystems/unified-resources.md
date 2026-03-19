@@ -290,6 +290,9 @@ repeating a raw display-name fork.
 The resource drawer's Kubernetes namespace and deployment tabs use the
 canonical cluster-name helper for backend fetch keys, keeping lookup identity
 separate from the governed display-label contract.
+The shared workloads projection in `useWorkloads` also uses that helper for
+pod context labels, so dashboard Kubernetes grouping follows the same
+canonical cluster-name contract instead of re-encoding the fallback locally.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the shared resource selectors instead of being

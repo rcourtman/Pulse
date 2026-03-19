@@ -160,6 +160,41 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('uses the canonical Kubernetes cluster name for pod context labels', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'pod-1',
+          type: 'pod',
+          name: 'pod-1',
+          kubernetes: {
+            clusterName: 'cluster-a',
+            context: 'cluster-context',
+            namespace: 'default',
+            podUid: 'pod-uid-1',
+          },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    expect(result!.workloads()[0]?.contextLabel).toBe('cluster-a');
+
+    dispose();
+  });
+
   it('keeps workload reference stable when polling returns identical payload', async () => {
     let dispose = () => {};
     let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;

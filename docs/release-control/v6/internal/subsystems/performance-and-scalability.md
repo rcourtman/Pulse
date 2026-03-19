@@ -142,6 +142,9 @@ resource display contract, so navigation context does not leak raw
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.
+The workloads projection in `useWorkloads` also uses that same helper for pod
+context labels, keeping the dashboard's Kubernetes grouping aligned with the
+same canonical cluster-name boundary.
 The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its

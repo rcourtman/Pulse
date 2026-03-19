@@ -20,6 +20,23 @@ export type ResourceIdentityRow = {
   value: string;
 };
 
+type ResourceClusterNameLike = {
+  name?: string | null;
+  clusterId?: string | null;
+  platformData?: {
+    kubernetes?: {
+      clusterName?: string | null;
+      context?: string | null;
+      clusterId?: string | null;
+    } | null;
+  } | null;
+  kubernetes?: {
+    clusterName?: string | null;
+    context?: string | null;
+    clusterId?: string | null;
+  } | null;
+};
+
 type APINormalizedIdentityResource = {
   id: string;
   name?: string;
@@ -301,16 +318,14 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
   );
 };
 
-export const getPreferredResourceClusterName = (resource: Resource): string | undefined =>
+export const getPreferredResourceClusterName = (
+  resource: ResourceClusterNameLike,
+): string | undefined =>
   (() => {
-    const platformData = getPlatformDataRecord(resource);
-    const kubernetes = platformData?.kubernetes as Record<string, unknown> | undefined;
+    const kubernetes = resource.kubernetes || resource.platformData?.kubernetes;
     return (
-      asTrimmedString(resource.kubernetes?.clusterName) ||
       asTrimmedString(kubernetes?.clusterName) ||
-      asTrimmedString(resource.kubernetes?.context) ||
       asTrimmedString(kubernetes?.context) ||
-      asTrimmedString(resource.kubernetes?.clusterId) ||
       asTrimmedString(kubernetes?.clusterId) ||
       asTrimmedString(resource.clusterId) ||
       asTrimmedString(resource.name)

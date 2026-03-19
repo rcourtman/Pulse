@@ -12,6 +12,7 @@ import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { normalizeDiskArray } from '@/utils/format';
 import { resolveWorkloadTypeFromString } from '@/utils/workloads';
+import { getPreferredResourceClusterName } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
@@ -411,7 +412,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : workloadType === 'app-container'
           ? resource.parentName || resource.docker?.hostname
           : workloadType === 'pod'
-            ? resource.kubernetes?.clusterName || resource.kubernetes?.context
+            ? getPreferredResourceClusterName(resource)
             : undefined,
     clusterName:
       (resource.proxmox?.clusterName || resource.identity?.clusterName || '').trim() || undefined,
