@@ -141,6 +141,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
+  const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
   const kubernetesClusterName = createMemo(() =>
@@ -307,6 +308,27 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
+  const hasInvestigationContext = createMemo(
+    () => Boolean(resourceIntelligence()) || hasGovernanceData(),
+  );
+  const investigationContextSummary = createMemo(() => {
+    const intel = resourceIntelligence();
+    const summary: string[] = [];
+
+    if (intel) {
+      summary.push(`AI health ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
+    }
+    if (resourceCorrelations().length > 0) {
+      summary.push(
+        `${resourceCorrelations().length} correlation${resourceCorrelations().length === 1 ? '' : 's'}`,
+      );
+    }
+    if (props.resource.policy?.routing.scope) {
+      summary.push(`Routing ${getResourceRoutingScopeLabel(props.resource.policy.routing.scope)}`);
+    }
+
+    return summary.join(' · ');
+  });
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
     if (!id) return null;
@@ -791,56 +813,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
-          <Show when={resourceIntelligence()}>
-            {(intel) => (
-              <div class="rounded border border-border bg-surface p-3">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                  AI Intelligence
-                </div>
-                <div class="space-y-1.5 text-[11px]">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Health</span>
-                    <span class="font-medium text-base-content">
-                      {intel().health.grade} · {Math.round(intel().health.score)}/100
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Trend</span>
-                    <span class="font-medium text-base-content capitalize">
-                      {intel().health.trend}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Notes</span>
-                    <span class="font-medium text-base-content">{intel().note_count}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Recent Changes</span>
-                    <span class="font-medium text-base-content">
-                      {intel().recent_changes?.length ?? 0}
-                    </span>
-                  </div>
-                  <ResourceChangeSummary
-                    class="space-y-0"
-                    title="Latest canonical change"
-                    changes={intel().recent_changes}
-                    resolveResourceLabel={resolveResourceLabel}
-                    maxChanges={1}
-                    compact
-                  />
-                  <ResourceCorrelationSummary
-                    title="Correlation context"
-                    dependencies={resourceDependencies()}
-                    dependents={resourceDependents()}
-                    correlations={resourceCorrelations()}
-                    resolveResourceLabel={resolveResourceLabel}
-                    showLastSeen
-                  />
-                </div>
-              </div>
-            )}
-          </Show>
-
           <div class="rounded border border-border bg-surface p-3">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Runtime
@@ -1002,52 +974,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
             </div>
           </div>
-
-          <Show when={hasGovernanceData()}>
-            <div class="rounded border border-border bg-surface p-3">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                Data Governance
-              </div>
-              <div class="space-y-1.5 text-[11px]">
-                <Show when={props.resource.policy}>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Sensitivity</span>
-                    <span class="font-medium text-base-content">
-                      {getResourceSensitivityLabel(props.resource.policy?.sensitivity)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Routing</span>
-                    <span class="font-medium text-base-content">
-                      {getResourceRoutingScopeLabel(props.resource.policy?.routing.scope)}
-                    </span>
-                  </div>
-                </Show>
-                <Show when={policyRedactions().length > 0}>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-muted">Redactions</span>
-                    <div class="flex flex-wrap gap-1">
-                      <For each={policyRedactions()}>
-                        {(label) => (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                            {label}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-                <Show when={governanceSummary()}>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-muted">AI-Safe Summary</span>
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
-                      {governanceSummary()}
-                    </div>
-                  </div>
-                </Show>
-              </div>
-            </div>
-          </Show>
 
           <Show when={props.resource.type === 'docker-host'}>
             <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
@@ -1416,6 +1342,131 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             }}
           </Show>
         </div>
+
+        <Show when={hasInvestigationContext()}>
+          <div
+            data-testid="resource-investigation-context"
+            class="mt-3 rounded border border-border bg-surface p-3"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  Investigation context
+                </div>
+                <div class="mt-1 text-[10px] text-muted">
+                  Secondary AI and policy signals for deeper investigation.
+                </div>
+                <Show when={investigationContextSummary()}>
+                  <div class="mt-1 text-[10px] text-base-content">
+                    {investigationContextSummary()}
+                  </div>
+                </Show>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowInvestigationContext((value) => !value)}
+                class="inline-flex items-center rounded-md border border-border bg-surface-hover px-3 py-1.5 text-[11px] font-medium text-base-content transition-colors hover:bg-surface"
+              >
+                {showInvestigationContext() ? 'Hide context' : 'Show context'}
+              </button>
+            </div>
+
+            <Show when={showInvestigationContext()}>
+              <div class="mt-3 grid gap-3 md:grid-cols-2">
+                <Show when={resourceIntelligence()}>
+                  {(intel) => (
+                    <div class="rounded border border-border bg-surface p-3">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                        AI Intelligence
+                      </div>
+                      <div class="space-y-1.5 text-[11px]">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Health</span>
+                          <span class="font-medium text-base-content">
+                            {intel().health.grade} · {Math.round(intel().health.score)}/100
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Trend</span>
+                          <span class="font-medium text-base-content capitalize">
+                            {intel().health.trend}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Notes</span>
+                          <span class="font-medium text-base-content">{intel().note_count}</span>
+                        </div>
+                        <ResourceChangeSummary
+                          class="space-y-0"
+                          title="Latest canonical change"
+                          changes={intel().recent_changes}
+                          resolveResourceLabel={resolveResourceLabel}
+                          maxChanges={1}
+                          compact
+                        />
+                        <ResourceCorrelationSummary
+                          title="Correlation context"
+                          dependencies={resourceDependencies()}
+                          dependents={resourceDependents()}
+                          correlations={resourceCorrelations()}
+                          resolveResourceLabel={resolveResourceLabel}
+                          showLastSeen
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Show>
+
+                <Show when={hasGovernanceData()}>
+                  <div class="rounded border border-border bg-surface p-3">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                      Data Governance
+                    </div>
+                    <div class="space-y-1.5 text-[11px]">
+                      <Show when={props.resource.policy}>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Sensitivity</span>
+                          <span class="font-medium text-base-content">
+                            {getResourceSensitivityLabel(props.resource.policy?.sensitivity)}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Routing</span>
+                          <span class="font-medium text-base-content">
+                            {getResourceRoutingScopeLabel(props.resource.policy?.routing.scope)}
+                          </span>
+                        </div>
+                      </Show>
+                      <Show when={policyRedactions().length > 0}>
+                        <div class="flex flex-col gap-1">
+                          <span class="text-muted">Redactions</span>
+                          <div class="flex flex-wrap gap-1">
+                            <For each={policyRedactions()}>
+                              {(label) => (
+                                <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                                  {label}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      </Show>
+                      <Show when={governanceSummary()}>
+                        <div class="flex flex-col gap-1">
+                          <span class="text-muted">AI-Safe Summary</span>
+                          <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
+                            {governanceSummary()}
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </Show>
 
         <Show when={discoveryConfig()}>
           {(config) => (
