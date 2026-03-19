@@ -564,8 +564,11 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('Data Governance')).toBeInTheDocument();
     expect(screen.getByText('4 governed resources')).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
+    expect(screen.getByText('Internal')).toBeInTheDocument();
+    expect(screen.getByText('Sensitive')).toBeInTheDocument();
     expect(screen.getByText('Restricted')).toBeInTheDocument();
     expect(screen.getByText('Cloud Summary')).toBeInTheDocument();
+    expect(screen.getByText('Local First')).toBeInTheDocument();
     expect(screen.getByText('Local Only')).toBeInTheDocument();
     expect(screen.getByText('Hostname 2')).toBeInTheDocument();
     expect(screen.getByText('IP Address 1')).toBeInTheDocument();

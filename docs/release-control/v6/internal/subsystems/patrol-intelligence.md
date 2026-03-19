@@ -108,6 +108,10 @@ That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches
 inline.
+The Patrol intelligence page and resource drawer now also share the canonical
+`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+card, so the data-governance posture counts stay rendered from one governed
+frontend component across both surfaces.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical
