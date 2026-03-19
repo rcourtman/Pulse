@@ -259,6 +259,7 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(panel.getAllByText('Relationships')).toHaveLength(2);
     expect(panel.getByText('Timeline')).toBeInTheDocument();
     expect(panel.getByText('Timeline 3')).toBeInTheDocument();
+    expect(panel.getByText('Runs on')).toBeInTheDocument();
     expect(panel.getByText('Docker adapter 1')).toBeInTheDocument();
     expect(panel.getByText('Proxmox adapter 2')).toBeInTheDocument();
     expect(

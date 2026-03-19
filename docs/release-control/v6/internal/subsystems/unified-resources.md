@@ -127,6 +127,10 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the graph and timeline inline.
+That drawer now also uses a shared frontend relationship-presentation helper
+for graph labels and provenance wording, so the UI stays aligned with the
+canonical relationship semantics instead of keeping drawer-local token
+humanization.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, anomalies, relationships, and

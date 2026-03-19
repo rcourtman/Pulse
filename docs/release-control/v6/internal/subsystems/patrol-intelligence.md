@@ -92,6 +92,10 @@ The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical
 timeline is surfaced.
+The Patrol page and resource drawer now also share a frontend relationship
+presentation helper for graph labels and provenance wording, so the same
+canonical relationship semantics render consistently across the resource and
+intelligence surfaces.
 The backend Patrol and AI runtime summaries now also share
 `internal/unifiedresources/change_presentation.go` for the canonical
 change-kind and provenance mapping, so the same resource-model semantics

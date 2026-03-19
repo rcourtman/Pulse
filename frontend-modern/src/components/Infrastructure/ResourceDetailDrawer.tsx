@@ -53,6 +53,7 @@ import {
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
 import { formatResourceChangeKind } from '@/utils/resourceChangePresentation';
+import { describeResourceRelationship } from '@/utils/resourceRelationshipPresentation';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 
@@ -1726,7 +1727,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             >
               <div class="space-y-2">
                 <For each={historyRelationships()}>
-                  {(relationship) => (
+                  {(relationship) => {
+                    const presentation = describeResourceRelationship(relationship);
+                    return (
                     <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                       <div class="flex items-center justify-between gap-2">
                         <span class="font-medium text-base-content">
@@ -1760,7 +1763,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             )}
                           </Show>
                         </span>
-                        <span class="text-muted">{humanizeFacetToken(relationship.type)}</span>
+                        <span class="text-muted">{presentation.typeLabel}</span>
                       </div>
                       <div class="mt-1 grid gap-1 sm:grid-cols-2">
                         <div class="flex items-center justify-between gap-2">
@@ -1778,7 +1781,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-muted">Discoverer</span>
                           <span class="font-medium text-base-content">
-                            {relationship.discoverer || '—'}
+                            {presentation.provenance || '—'}
                           </span>
                         </div>
                         <div class="flex items-center justify-between gap-2">
@@ -1808,7 +1811,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         </details>
                       </Show>
                     </div>
-                  )}
+                    );
+                  }}
                 </For>
               </div>
             </Show>
