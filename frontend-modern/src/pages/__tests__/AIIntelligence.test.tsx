@@ -596,7 +596,12 @@ describe('AIIntelligence entitlement gating', () => {
     expect(
       screen.getByRole('link', { name: 'Open related resource agent-1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=agent-1');
-    expect(screen.getByText('Learning signals')).toBeInTheDocument();
+    expect(screen.getByText('Derived signal coverage')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Coverage from baselines, knowledge, patterns, learned correlations, incidents, and predictions\./,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Data Governance')).toBeInTheDocument();
     expect(screen.getByText('4 governed resources')).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();

@@ -1281,11 +1281,17 @@ export function AIIntelligence() {
                   <div class="space-y-4">
                     <div class="rounded-md border border-border-subtle bg-base p-4">
                       <div class="flex items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold text-base-content">Learning signals</h3>
+                        <h3 class="text-sm font-semibold text-base-content">
+                          Derived signal coverage
+                        </h3>
                         <span class="text-xs text-muted">
                           {summary().learning.resources_with_baselines} baselined
                         </span>
                       </div>
+                      <p class="mt-1 text-xs text-muted">
+                        Coverage from baselines, knowledge, patterns, learned correlations,
+                        incidents, and predictions.
+                      </p>
 
                       <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
                         <div class="rounded-md bg-surface px-3 py-2">
