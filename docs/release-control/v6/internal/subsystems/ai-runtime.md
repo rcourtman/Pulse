@@ -252,6 +252,10 @@ The canonical recent-change sentence formatting also lives in
 `internal/unifiedresources.FormatResourceChangeSummary`, so AI runtime prompt
 sections and Patrol seed context reuse the same change wording instead of
 keeping another lane-local formatter.
+The confidence percentage wording used by the drawer's relationship and
+change timeline rows also flows through a shared frontend formatter, so the
+same `50%`-style labels stay consistent across resource-graph surfaces
+instead of being re-derived in the component.
 The canonical recent-change section wrapper also lives in
 `internal/unifiedresources.FormatResourceRecentChangesContext`, so the AI
 summary and resource-specific context share the same heading and prefix rules

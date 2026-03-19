@@ -1,4 +1,5 @@
 import type { ResourceRelationship, ResourceRelationshipType } from '@/types/resource';
+import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 export interface ResourceRelationshipPresentation {
   typeLabel: string;
@@ -39,8 +40,7 @@ export function describeResourceRelationship(
     direction: `${relationship.sourceId.trim()} → ${relationship.targetId.trim()}`,
     provenance: relationship.discoverer.trim(),
     stateLabel: relationship.active ? 'Active' : 'Historical',
-    confidence:
-      relationship.confidence > 0 ? `${Math.round(relationship.confidence * 100)}%` : '',
+    confidence: relationship.confidence > 0 ? formatConfidencePercentage(relationship.confidence) : '',
     hasMetadata: Boolean(relationship.metadata && Object.keys(relationship.metadata).length > 0),
   };
 }

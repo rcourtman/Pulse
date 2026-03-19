@@ -64,6 +64,7 @@ import {
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
+import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
@@ -638,7 +639,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
   const formatConfidence = (value?: string | number) => {
     if (typeof value === 'number' && Number.isFinite(value)) {
-      return `${Math.round(value * 100)}%`;
+      return formatConfidencePercentage(value);
     }
     return humanizeFacetToken(typeof value === 'string' ? value : undefined);
   };

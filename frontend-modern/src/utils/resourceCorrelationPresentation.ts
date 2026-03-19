@@ -1,5 +1,6 @@
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatDurationMs } from '@/utils/patrolFormat';
+import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 const parseGoDurationMs = (value: string): number | null => {
   const normalized = value.trim();
@@ -76,7 +77,7 @@ export function formatResourceCorrelationSummary(correlation: ResourceCorrelatio
   }
 
   if (typeof correlation.confidence === 'number' && Number.isFinite(correlation.confidence)) {
-    parts.push(`${Math.round(correlation.confidence * 100)}% confidence`);
+    parts.push(`${formatConfidencePercentage(correlation.confidence)} confidence`);
   }
 
   return parts.join(' · ');

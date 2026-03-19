@@ -8,6 +8,7 @@ import {
   getResourceChangeSourceTypePresentation,
   sortResourceChangesByObservedAt,
 } from '@/utils/resourceChangePresentation';
+import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 describe('resourceChangePresentation utils', () => {
   it('formats canonical resource change kinds', () => {
@@ -52,6 +53,12 @@ describe('resourceChangePresentation utils', () => {
       label: 'Proxmox adapter',
       plural: 'Proxmox adapters',
     });
+  });
+
+  it('formats shared confidence percentages', () => {
+    expect(formatConfidencePercentage(0.5)).toBe('50%');
+    expect(formatConfidencePercentage(0.875)).toBe('88%');
+    expect(formatConfidencePercentage(0)).toBe('0%');
   });
 
   it('sorts recent changes canonically', () => {

@@ -153,6 +153,10 @@ The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
 maintaining its own "time ago" implementation.
+The drawer's relationship and change timeline confidence labels now also use
+a shared frontend formatter, so the same percentage wording is emitted across
+resource-graph surfaces instead of each consumer rounding confidence values on
+its own.
 The same resource-change contract now also owns the canonical filter parser
 used by `/api/resources/{id}/timeline`, so `kind`, `sourceType`, and
 `sourceAdapter` validation stays with the change model instead of being

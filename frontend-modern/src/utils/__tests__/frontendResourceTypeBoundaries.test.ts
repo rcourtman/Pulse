@@ -67,6 +67,9 @@ import dashboardKpiPresentationSource from '@/utils/dashboardKpiPresentation.ts?
 import dashboardEmptyStatePresentationSource from '@/utils/dashboardEmptyStatePresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
+import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
+import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
+import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
 import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
@@ -1854,6 +1857,9 @@ describe('frontend resource type boundaries', () => {
     expect(resourceChangePresentationSource).toContain(
       'getResourceChangeSourceAdapterPresentation',
     );
+    expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
+    expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
+    expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');
