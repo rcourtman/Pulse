@@ -536,6 +536,20 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	_ = knowledgeStore.SaveNote("vm-intel", "vm-intel", "vm", "general", "Note", "Content")
 
 	intel.SetSubsystems(findings, patternDetector, correlationDetector, baselineStore, incidentStore, knowledgeStore, nil, nil)
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:            "change-intel",
+		ObservedAt:    time.Now().Add(-30 * time.Minute),
+		ResourceID:    "vm-intel",
+		Kind:          ur.ChangeRestart,
+		SourceType:    ur.SourcePlatformEvent,
+		SourceAdapter: ur.AdapterProxmox,
+		Reason:        "guest rebooted",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
+
 	res := intel.GetResourceIntelligence("vm-intel")
 	if len(res.ActiveFindings) == 0 {
 		t.Error("expected active findings")
@@ -554,6 +568,12 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	}
 	if len(res.RecentIncidents) == 0 {
 		t.Error("expected incidents")
+	}
+	if len(res.RecentChanges) == 0 {
+		t.Error("expected recent changes")
+	}
+	if res.RecentChanges[0].Kind != ur.ChangeRestart {
+		t.Fatalf("expected restart change kind, got %s", res.RecentChanges[0].Kind)
 	}
 	if res.Knowledge == nil || res.NoteCount == 0 {
 		t.Error("expected knowledge")

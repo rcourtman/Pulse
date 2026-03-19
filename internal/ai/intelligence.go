@@ -69,6 +69,7 @@ type ResourceIntelligence struct {
 	Baselines       map[string]*baseline.FlatBaseline `json:"baselines,omitempty"`
 	Anomalies       []AnomalyReport                   `json:"anomalies,omitempty"`
 	RecentIncidents []*memory.Incident                `json:"recent_incidents,omitempty"`
+	RecentChanges   []unifiedresources.ResourceChange `json:"recent_changes,omitempty"`
 	Knowledge       *knowledge.GuestKnowledge         `json:"knowledge,omitempty"`
 	NoteCount       int                               `json:"note_count"`
 }
@@ -321,6 +322,11 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 	// Recent incidents
 	if i.incidents != nil {
 		intel.RecentIncidents = i.incidents.ListIncidentsByResource(resourceID, 5)
+	}
+
+	// Recent changes
+	if recentChanges := i.getRecentChangesForResource(resourceID, 5); len(recentChanges) > 0 {
+		intel.RecentChanges = recentChanges
 	}
 
 	// Knowledge
@@ -1053,6 +1059,79 @@ func (i *Intelligence) detectCurrentAnomalies(resourceID string) []AnomalyReport
 	// This would be called with current metrics from state
 	// For now, return empty - will be integrated with patrol
 	return nil
+}
+
+func (i *Intelligence) getRecentChangesForResource(resourceID string, limit int) []unifiedresources.ResourceChange {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" || limit <= 0 {
+		return nil
+	}
+
+	since := time.Now().Add(-24 * time.Hour)
+
+	i.mu.RLock()
+	resourceTimelineStore := i.resourceTimelineStore
+	changesDetector := i.changes
+	i.mu.RUnlock()
+
+	if resourceTimelineStore != nil {
+		if recent, err := resourceTimelineStore.GetRecentChanges(resourceID, since, limit); err == nil && len(recent) > 0 {
+			return recent
+		}
+	}
+
+	if changesDetector == nil {
+		return nil
+	}
+
+	recent := changesDetector.GetChangesForResource(resourceID, limit)
+	if len(recent) == 0 {
+		return nil
+	}
+
+	converted := make([]unifiedresources.ResourceChange, 0, len(recent))
+	for _, change := range recent {
+		converted = append(converted, convertMemoryChangeToResourceChange(change))
+	}
+	return converted
+}
+
+func convertMemoryChangeToResourceChange(change memory.Change) unifiedresources.ResourceChange {
+	return unifiedresources.ResourceChange{
+		ID:         change.ID,
+		ObservedAt: change.DetectedAt,
+		ResourceID: change.ResourceID,
+		Kind:       memoryChangeTypeToUnifiedChangeKind(change.ChangeType),
+		SourceType: unifiedresources.SourceHeuristic,
+		Confidence: unifiedresources.ConfidenceMedium,
+		RelatedResources: func() []string {
+			if change.ResourceName == "" {
+				return nil
+			}
+			return []string{change.ResourceName}
+		}(),
+		Reason: change.Description,
+		Metadata: map[string]any{
+			"memoryChangeType": string(change.ChangeType),
+		},
+	}
+}
+
+func memoryChangeTypeToUnifiedChangeKind(changeType memory.ChangeType) unifiedresources.ChangeKind {
+	switch changeType {
+	case memory.ChangeCreated, memory.ChangeDeleted, memory.ChangeStatus:
+		return unifiedresources.ChangeStateTransition
+	case memory.ChangeConfig:
+		return unifiedresources.ChangeConfigUpdate
+	case memory.ChangeMigrated:
+		return unifiedresources.ChangeRelationship
+	case memory.ChangeRestarted:
+		return unifiedresources.ChangeRestart
+	case memory.ChangeBackedUp:
+		return unifiedresources.ChangeConfigUpdate
+	default:
+		return unifiedresources.ChangeAnomaly
+	}
 }
 
 func (i *Intelligence) formatBaselinesForContext(resourceID string) string {

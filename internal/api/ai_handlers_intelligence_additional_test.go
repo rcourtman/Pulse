@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestHandleGetIntelligence_MethodNotAllowed(t *testing.T) {
@@ -110,6 +112,19 @@ func TestHandleGetIntelligence_WithPatrolService(t *testing.T) {
 func TestHandleGetIntelligence_WithResourceID(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:         "change-api",
+		ObservedAt: time.Now().Add(-15 * time.Minute),
+		ResourceID: "vm-1",
+		Kind:       ur.ChangeConfigUpdate,
+		SourceType: ur.SourcePulseDiff,
+		Reason:     "configuration drift reconciled",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
+	setUnexportedField(t, svc.GetPatrolService(), "aiService", svc)
 	handler := &AISettingsHandler{defaultAIService: svc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence?resource_id=vm-1", nil)
@@ -126,6 +141,13 @@ func TestHandleGetIntelligence_WithResourceID(t *testing.T) {
 	}
 	if payload["resource_id"] != "vm-1" {
 		t.Fatalf("expected resource_id=vm-1 in response, got %v", payload["resource_id"])
+	}
+	recentChanges, ok := payload["recent_changes"].([]interface{})
+	if !ok {
+		t.Fatalf("expected recent_changes array in response, got %T", payload["recent_changes"])
+	}
+	if len(recentChanges) != 1 {
+		t.Fatalf("expected 1 recent change, got %d", len(recentChanges))
 	}
 }
 

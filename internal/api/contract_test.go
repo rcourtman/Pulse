@@ -283,6 +283,46 @@ func TestContract_NotificationPushoverWebhookResponseJSONSnapshot(t *testing.T) 
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceIntelligenceIncludesRecentChanges(t *testing.T) {
+	svc := newEnabledAIService(t)
+	canonicalStore := unifiedresources.NewMemoryStore()
+	observedAt := time.Now().Add(-15 * time.Minute)
+	if err := canonicalStore.RecordChange(unifiedresources.ResourceChange{
+		ID:         "change-contract",
+		ObservedAt: observedAt,
+		ResourceID: "vm-100",
+		Kind:       unifiedresources.ChangeRestart,
+		SourceType: unifiedresources.SourcePlatformEvent,
+		Reason:     "guest restarted",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
+	setUnexportedField(t, svc.GetPatrolService(), "aiService", svc)
+
+	handlers := &AISettingsHandler{defaultAIService: svc}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence?resource_id=vm-100", nil)
+	rec := httptest.NewRecorder()
+
+	handlers.HandleGetIntelligence(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	recentChanges, ok := payload["recent_changes"].([]interface{})
+	if !ok {
+		t.Fatalf("expected recent_changes array in response, got %T", payload["recent_changes"])
+	}
+	if len(recentChanges) != 1 {
+		t.Fatalf("expected 1 recent change, got %d", len(recentChanges))
+	}
+}
+
 func TestContract_ResolveAuthEnvPathUsesCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)

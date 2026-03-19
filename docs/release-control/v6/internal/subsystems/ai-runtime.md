@@ -163,3 +163,7 @@ The shared AI resource and infrastructure prompt contexts should also surface
 the same canonical recent changes section before any patrol-local fallback so
 the model sees the same timeline entries that power the resource API and
 intelligence summary counts.
+The per-resource intelligence payload returned from
+`/api/ai/intelligence?resource_id=...` should also include the canonical
+`recent_changes` history so UI and API consumers can read the same timeline
+slice that the prompt context uses.

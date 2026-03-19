@@ -289,6 +289,18 @@ func TestIntelligence_GetResourceIntelligence_WithSubsystems(t *testing.T) {
 	correlationDetector := correlation.NewDetector(correlation.DefaultConfig())
 
 	intel.SetSubsystems(findings, nil, correlationDetector, nil, nil, nil, nil, nil)
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:         "change-1",
+		ObservedAt: time.Now().Add(-time.Hour),
+		ResourceID: "vm-200",
+		Kind:       ur.ChangeRestart,
+		SourceType: ur.SourcePlatformEvent,
+		Reason:     "restarted after maintenance",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
 
 	resourceIntel := intel.GetResourceIntelligence("vm-200")
 
@@ -305,9 +317,31 @@ func TestIntelligence_GetResourceIntelligence_WithSubsystems(t *testing.T) {
 		t.Error("Expected reduced health score due to critical finding")
 	}
 
+	if len(resourceIntel.RecentChanges) == 0 {
+		t.Error("expected canonical recent changes")
+	}
+
 	// Grade should be less than A
 	if resourceIntel.Health.Grade == HealthGradeA {
 		t.Error("Expected health grade less than A due to critical finding")
+	}
+}
+
+func TestIntelligence_GetResourceIntelligence_FallsBackToChangeDetector(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "vm-rc", Name: "resource-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+
+	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
+
+	resourceIntel := intel.GetResourceIntelligence("vm-rc")
+	if len(resourceIntel.RecentChanges) == 0 {
+		t.Fatal("expected fallback recent changes")
+	}
+	if resourceIntel.RecentChanges[0].SourceType != ur.SourceHeuristic {
+		t.Fatalf("expected heuristic fallback change source, got %s", resourceIntel.RecentChanges[0].SourceType)
 	}
 }
 
