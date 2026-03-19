@@ -2,6 +2,7 @@ import { createSignal, onCleanup } from 'solid-js';
 import { AIChatAPI, type ChatMention, type StreamEvent } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { normalizeChatToolName } from '@/utils/chatIdentifiers';
 import type {
   ChatMessage,
   ToolExecution,
@@ -224,14 +225,12 @@ export function useChat(options: UseChatOptions = {}) {
               const pendingTools = msg.pendingTools || [];
               const events = msg.streamEvents || [];
 
-              // Normalize tool name for matching - strip MCP server prefix (pulse_) which may be doubled
-              const normalizeToolName = (name: string) => (name || '').replace(/^(pulse_)+/, '');
-              const normalizedEndName = normalizeToolName(data.name || '');
+              const normalizedEndName = normalizeChatToolName(data.name || '');
 
               // Find the matching pending tool (prefer tool ID, then fall back to name).
               const resolvedPendingIndex = data.id
                 ? pendingTools.findIndex((t) => t.id === data.id)
-                : pendingTools.findIndex((t) => normalizeToolName(t.name) === normalizedEndName);
+                : pendingTools.findIndex((t) => normalizeChatToolName(t.name) === normalizedEndName);
               const updatedPending =
                 resolvedPendingIndex >= 0
                   ? [
@@ -255,7 +254,7 @@ export function useChat(options: UseChatOptions = {}) {
                   evt.type === 'approval' &&
                   (data.id
                     ? evt.approval?.toolId === data.id
-                    : normalizeToolName(evt.approval?.toolName || '') === normalizedEndName),
+                    : normalizeChatToolName(evt.approval?.toolName || '') === normalizedEndName),
               );
 
               let updatedEvents: typeof events;
@@ -266,7 +265,7 @@ export function useChat(options: UseChatOptions = {}) {
                     evt.type === 'pending_tool' &&
                     (data.id
                       ? evt.toolId === data.id
-                      : normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName)
+                      : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
                   ) {
                     return false;
                   }
@@ -274,7 +273,7 @@ export function useChat(options: UseChatOptions = {}) {
                     evt.type === 'approval' &&
                     (data.id
                       ? evt.approval?.toolId === data.id
-                      : normalizeToolName(evt.approval?.toolName || '') === normalizedEndName)
+                      : normalizeChatToolName(evt.approval?.toolName || '') === normalizedEndName)
                   ) {
                     return false;
                   }
@@ -290,7 +289,7 @@ export function useChat(options: UseChatOptions = {}) {
                     evt.type === 'pending_tool' &&
                     (data.id
                       ? evt.toolId === data.id
-                      : normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName)
+                      : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
                   ) {
                     updatedEvents[i] = { type: 'tool', tool: newToolCall };
                     break;
@@ -302,7 +301,7 @@ export function useChat(options: UseChatOptions = {}) {
               const updatedApprovals = (msg.pendingApprovals || []).filter((a) =>
                 data.id
                   ? a.toolId !== data.id
-                  : normalizeToolName(a.toolName || '') !== normalizedEndName,
+                  : normalizeChatToolName(a.toolName || '') !== normalizedEndName,
               );
 
               return {

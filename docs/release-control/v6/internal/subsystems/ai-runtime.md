@@ -356,3 +356,7 @@ AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from
 the rest of the governed presentation helpers.
+AI chat stream matching and mention dedupe now route through the shared
+frontend chat identifier helper, so tool-name prefix stripping and mention-key
+normalization stay aligned across the chat runtime instead of being redefined
+inline in the stream processor or container component.

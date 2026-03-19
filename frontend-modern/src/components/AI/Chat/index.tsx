@@ -27,6 +27,7 @@ import {
   getActionableAgentIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
+import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -323,10 +324,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onCleanup(() => document.removeEventListener('click', handleClickOutside));
   });
 
-  const normalizeMentionKeyPart = (value?: string | null) => (value || '').trim().toLowerCase();
-
   const mentionStatusRank = (status?: string) => {
-    switch (normalizeMentionKeyPart(status || '')) {
+    switch (normalizeChatMentionKeyPart(status || '')) {
       case 'running':
       case 'online':
         return 3;
@@ -352,7 +351,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         continue;
       }
 
-      const key = `${normalizeMentionKeyPart(resource.name)}:${resource.type}`;
+      const key = `${normalizeChatMentionKeyPart(resource.name)}:${resource.type}`;
       const existing = byKey.get(key);
       if (!existing) {
         const index = out.length;
