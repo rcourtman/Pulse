@@ -272,6 +272,11 @@ The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary value stays
 aligned with the same policy-aware contract that governs sensitivity and
 routing metadata without re-normalizing locally.
+The resource detail drawer and unified resource table now also render that
+governed display label through the same policy-aware helper, and they suppress
+the raw alternate name when policy requires governed handling, so the visible
+label stays aligned with the backend redaction boundary instead of
+reconstructing a local name fallback.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the connected-infrastructure / monitored-system

@@ -1,6 +1,6 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
+import { getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
 import { formatBytes, formatUptime, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
@@ -25,7 +25,11 @@ import {
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getAgentStatusIndicator } from '@/utils/status';
 import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
-import { getResourcePolicyBadges } from '@/utils/resourcePolicyPresentation';
+import {
+  getResourcePolicyBadges,
+  getResourcePolicyDisplayLabel,
+  shouldShowResourceAlternateName,
+} from '@/utils/resourcePolicyPresentation';
 import type { Disk } from '@/types/api';
 import {
   splitPrimaryAndServiceResources,
@@ -118,13 +122,6 @@ const HOST_TABLE_WINDOW_SIZE = 137;
 const isResourceOnline = (resource: Resource) => {
   const status = resource.status?.toLowerCase();
   return status !== 'offline' && status !== 'stopped';
-};
-
-const hasAlternateName = (resource: Resource) => {
-  if (!resource.displayName || !resource.name) return false;
-  const display = resource.displayName.trim().toLowerCase();
-  const name = resource.name.trim().toLowerCase();
-  return display !== name;
 };
 
 const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
@@ -540,7 +537,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     const isHighlighted = createMemo(
                       () => props.highlightedResourceId === resource.id,
                     );
-                    const displayName = createMemo(() => getDisplayName(resource));
+                    const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
                     const statusIndicator = createMemo(() =>
                       getAgentStatusIndicator({ status: resource.status }),
                     );
@@ -667,7 +664,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   >
                                     {displayName()}
                                   </span>
-                                  <Show when={hasAlternateName(resource)}>
+                                  <Show when={shouldShowResourceAlternateName(resource)}>
                                     <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
                                       ({resource.name})
                                     </span>
@@ -1039,7 +1036,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       const isHighlighted = createMemo(
                         () => props.highlightedResourceId === resource.id,
                       );
-                      const displayName = createMemo(() => getDisplayName(resource));
+                      const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
                       const serviceLink = createMemo(
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
@@ -1131,7 +1128,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 >
                                   {displayName()}
                                 </span>
-                                <Show when={hasAlternateName(resource)}>
+                                <Show when={shouldShowResourceAlternateName(resource)}>
                                   <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>
@@ -1341,7 +1338,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       const isHighlighted = createMemo(
                         () => props.highlightedResourceId === resource.id,
                       );
-                      const displayName = createMemo(() => getDisplayName(resource));
+                      const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
                       const serviceLink = createMemo(
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
@@ -1438,7 +1435,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 >
                                   {displayName()}
                                 </span>
-                                <Show when={hasAlternateName(resource)}>
+                                <Show when={shouldShowResourceAlternateName(resource)}>
                                   <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                                     ({resource.name})
                                   </span>

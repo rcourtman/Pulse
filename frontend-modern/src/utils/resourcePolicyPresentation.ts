@@ -1,4 +1,5 @@
 import type {
+  Resource,
   ResourcePolicy,
   ResourceRedactionHint,
   ResourceRoutingScope,
@@ -16,6 +17,11 @@ export type ResourcePolicyCountSummary = {
   label: string;
   count: number;
 };
+
+export type ResourcePolicyDisplayResource = Pick<
+  Resource,
+  'name' | 'displayName' | 'policy' | 'aiSafeSummary'
+>;
 
 export const RESOURCE_POLICY_SENSITIVITY_ORDER: ResourceSensitivity[] = [
   'public',
@@ -164,3 +170,38 @@ export const getResourcePolicyRedactionSummaries = (
     getResourceRedactionHintLabel,
     false,
   );
+
+export const getResourcePolicyDisplayLabel = (
+  resource?: ResourcePolicyDisplayResource | null,
+): string => {
+  if (!resource) return '';
+
+  const summary = resource.aiSafeSummary?.trim() ?? '';
+  const policy = resource.policy;
+  if (!policy) {
+    return resource.displayName?.trim() || resource.name?.trim() || '';
+  }
+  const requiresGovernedDisplay =
+    (policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0);
+
+  if (requiresGovernedDisplay) {
+    return summary || 'redacted by policy';
+  }
+
+  return resource.displayName?.trim() || resource.name?.trim() || '';
+};
+
+export const shouldShowResourceAlternateName = (
+  resource?: ResourcePolicyDisplayResource | null,
+): boolean => {
+  if (!resource?.displayName || !resource.name) return false;
+
+  if (
+    resource.policy &&
+    (resource.policy.routing.scope === 'local-only' || (resource.policy.routing.redact?.length ?? 0) > 0)
+  ) {
+    return false;
+  }
+
+  return resource.displayName.trim().toLowerCase() !== resource.name.trim().toLowerCase();
+};

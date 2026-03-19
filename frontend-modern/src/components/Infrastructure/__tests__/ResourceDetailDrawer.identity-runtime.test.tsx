@@ -277,6 +277,10 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
   it('surfaces policy governance details and AI-safe summary', () => {
     const resource = baseResource({
+      id: 'sensitive-resource-1',
+      name: 'sensitive-host',
+      displayName: 'Sensitive Host',
+      platformId: 'platform-1',
       policy: {
         sensitivity: 'restricted',
         routing: {
@@ -287,18 +291,22 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       aiSafeSummary: 'restricted host summary safe for remote AI consumption',
     });
 
-    const { getAllByText, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getAllByText, getByText, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getAllByText('Restricted').length).toBeGreaterThan(0);
     expect(getAllByText('Local Only').length).toBeGreaterThan(0);
+    expect(
+      getAllByText('restricted host summary safe for remote AI consumption').length,
+    ).toBeGreaterThan(0);
     expect(getByText('Data Governance')).toBeInTheDocument();
     expect(getByText('Redactions')).toBeInTheDocument();
     expect(getByText('Hostname')).toBeInTheDocument();
     expect(getByText('IP Address')).toBeInTheDocument();
     expect(getByText('AI-Safe Summary')).toBeInTheDocument();
-    expect(
-      getByText('restricted host summary safe for remote AI consumption'),
-    ).toBeInTheDocument();
+    expect(queryByText('Sensitive Host')).toBeNull();
+    expect(queryByText('sensitive-host')).toBeNull();
   });
 
   it('surfaces canonical AI intelligence for the resource overview', async () => {

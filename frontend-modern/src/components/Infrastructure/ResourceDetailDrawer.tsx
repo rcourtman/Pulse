@@ -14,7 +14,6 @@ import type {
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
 } from '@/types/resource';
-import { getDisplayName } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
@@ -55,6 +54,7 @@ import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation'
 import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
+  getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -139,7 +139,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
 
-  const displayName = createMemo(() => getDisplayName(props.resource));
+  const displayName = createMemo(() => getResourcePolicyDisplayLabel(props.resource));
   const statusIndicator = createMemo(() =>
     getAgentStatusIndicator({ status: props.resource.status }),
   );
@@ -1706,7 +1706,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           >
             <PMGInstanceDrawer
               resourceId={props.resource.id}
-              resourceName={props.resource.name || props.resource.displayName || props.resource.id}
+              resourceName={displayName() || props.resource.id}
             />
           </Show>
         </Show>

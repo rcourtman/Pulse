@@ -4,6 +4,7 @@ import {
   RESOURCE_POLICY_REDACTION_ORDER,
   RESOURCE_POLICY_ROUTING_ORDER,
   RESOURCE_POLICY_SENSITIVITY_ORDER,
+  getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionSummaries,
   getResourcePolicyRoutingSummaries,
   getResourcePolicySensitivitySummaries,
@@ -11,6 +12,7 @@ import {
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
+  shouldShowResourceAlternateName,
 } from '@/utils/resourcePolicyPresentation';
 
 describe('resourcePolicyPresentation utils', () => {
@@ -30,6 +32,60 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toEqual(['Hostname', 'IP Address']);
+  });
+
+  it('uses the governed aiSafeSummary for redacted resources', () => {
+    expect(
+      getResourcePolicyDisplayLabel({
+        name: 'sensitive-host',
+        displayName: 'Sensitive Host',
+        policy: {
+          sensitivity: 'restricted',
+          routing: {
+            scope: 'local-only',
+            redact: ['hostname', 'ip-address'],
+          },
+        },
+        aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+      }),
+    ).toBe('restricted host summary safe for remote AI consumption');
+
+    expect(
+      getResourcePolicyDisplayLabel({
+        name: 'storage-1',
+        displayName: 'Storage 1',
+        policy: {
+          sensitivity: 'sensitive',
+          routing: {
+            scope: 'local-first',
+            redact: ['path'],
+          },
+        },
+      }),
+    ).toBe('redacted by policy');
+  });
+
+  it('hides raw alternate names when policy requires governed handling', () => {
+    expect(
+      shouldShowResourceAlternateName({
+        name: 'sensitive-host',
+        displayName: 'Sensitive Host',
+        policy: {
+          sensitivity: 'restricted',
+          routing: {
+            scope: 'local-only',
+            redact: ['hostname'],
+          },
+        },
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldShowResourceAlternateName({
+        name: 'host-1',
+        displayName: 'Host 1',
+      }),
+    ).toBe(true);
   });
 
   it('formats canonical policy count summaries', () => {

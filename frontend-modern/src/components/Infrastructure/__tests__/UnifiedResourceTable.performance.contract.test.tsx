@@ -334,19 +334,34 @@ describe('UnifiedResourceTable performance contract', () => {
 
   describe('Row windowing contracts', () => {
     it('Profile M: preserves row windowing with policy badge rendering enabled', async () => {
-      const resources = makeResources(PROFILES.M, (i) => ({
-        policy: {
-          sensitivity: i % 2 === 0 ? 'restricted' : 'internal',
-          routing: {
-            scope: i % 3 === 0 ? 'local-only' : 'local-first',
-            redact: ['hostname', 'alias'],
-          },
-        },
-      }));
-      const { container, getAllByText } = render(() => (
+      const resources = makeResources(PROFILES.M, (i) =>
+        i === 0
+          ? {
+              displayName: 'Sensitive Host',
+              name: 'sensitive-host',
+              aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+              policy: {
+                sensitivity: 'restricted',
+                routing: {
+                  scope: 'local-only',
+                  redact: ['hostname', 'alias'],
+                },
+              },
+            }
+          : {
+              policy: {
+                sensitivity: i % 2 === 0 ? 'restricted' : 'internal',
+                routing: {
+                  scope: i % 3 === 0 ? 'local-only' : 'local-first',
+                  redact: ['hostname', 'alias'],
+                },
+              },
+            },
+      );
+      const { container, getAllByText, getByTitle, queryByText } = render(() => (
         <UnifiedResourceTable
           resources={resources}
-          expandedResourceId={null}
+          expandedResourceId={resources[0]?.id ?? null}
           onExpandedResourceChange={vi.fn()}
           groupingMode="flat"
         />
@@ -363,6 +378,9 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getAllByText('Restricted').length).toBeGreaterThan(0);
       });
+      expect(getByTitle('restricted host summary safe for remote AI consumption')).toBeInTheDocument();
+      expect(queryByText('Sensitive Host')).toBeNull();
+      expect(queryByText('sensitive-host')).toBeNull();
     });
 
     it('Profile M: caps mounted rows when windowing is active', async () => {

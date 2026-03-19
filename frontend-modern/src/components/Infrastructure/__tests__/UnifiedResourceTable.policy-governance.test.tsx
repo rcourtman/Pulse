@@ -29,8 +29,8 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
 const resource: Resource = {
   id: 'resource-1',
   type: 'agent',
-  name: 'host-1',
-  displayName: 'Host 1',
+  name: 'sensitive-host',
+  displayName: 'Sensitive Host',
   platformId: 'platform-1',
   platformType: 'agent',
   sourceType: 'agent',
@@ -44,6 +44,7 @@ const resource: Resource = {
       redact: ['hostname', 'alias'],
     },
   },
+  aiSafeSummary: 'restricted host summary safe for remote AI consumption',
   recentChanges: [
     {
       id: 'change-1',
@@ -58,7 +59,7 @@ const resource: Resource = {
 
 describe('UnifiedResourceTable governance presentation', () => {
   it('surfaces canonical policy badges in the resource row', () => {
-    const { getByText } = render(() => (
+    const { getByText, queryByText } = render(() => (
       <UnifiedResourceTable
         resources={[resource]}
         expandedResourceId={null}
@@ -69,6 +70,9 @@ describe('UnifiedResourceTable governance presentation', () => {
 
     expect(getByText('Restricted')).toBeInTheDocument();
     expect(getByText('Local Only')).toBeInTheDocument();
+    expect(getByText('restricted host summary safe for remote AI consumption')).toBeInTheDocument();
+    expect(queryByText('(sensitive-host)')).toBeNull();
+    expect(queryByText('Sensitive Host')).toBeNull();
   });
 
   it('surfaces resource facet counts in the resource row', () => {
