@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatIdentifierLabel,
-  formatTrimmedLabel,
   humanizeArrowDelimitedLabel,
   humanizeToken,
   titleCaseDelimitedLabel,
@@ -30,11 +29,6 @@ describe('textPresentation', () => {
       maxLength: 12,
     })).toBe('very long un');
     expect(formatIdentifierLabel(undefined, { fallback: 'Unknown' })).toBe('Unknown');
-  });
-
-  it('formats trimmed labels with a fallback', () => {
-    expect(formatTrimmedLabel('  endpoint  ', { fallback: 'Unknown resource' })).toBe('endpoint');
-    expect(formatTrimmedLabel('', { fallback: 'Unknown resource' })).toBe('Unknown resource');
   });
 
   it('title-cases delimited labels with configurable separators', () => {

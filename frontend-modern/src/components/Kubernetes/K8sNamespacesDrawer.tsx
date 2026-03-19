@@ -22,6 +22,7 @@ import {
   getK8sNamespacesLoadingState,
 } from '@/utils/k8sNamespacePresentation';
 import { getNamespaceCountsIndicator, type NamespaceCounts } from '@/utils/k8sStatusPresentation';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 type NamespaceRow = {
   namespace: string;
@@ -33,8 +34,6 @@ type NamespacesResponse = {
   cluster: string;
   data: NamespaceRow[];
 };
-
-const normalize = (value?: string | null) => (value || '').trim();
 
 const formatInteger = (value?: number | null): string => {
   const n = Number(value ?? 0);
@@ -50,7 +49,7 @@ export const K8sNamespacesDrawer: Component<{
   const [search, setSearch] = createSignal('');
   const drawerPresentation = getK8sNamespacesDrawerPresentation();
 
-  const clusterName = createMemo(() => normalize(props.cluster));
+  const clusterName = createMemo(() => asTrimmedString(props.cluster) ?? '');
 
   const [namespaces] = createResource(
     clusterName,
@@ -75,7 +74,7 @@ export const K8sNamespacesDrawer: Component<{
   const rows = createMemo(() => (Array.isArray(namespaces()?.data) ? namespaces()!.data : []));
 
   const filteredRows = createMemo(() => {
-    const term = normalize(search()).toLowerCase();
+    const term = (asTrimmedString(search()) ?? '').toLowerCase();
     if (!term) return rows();
     return rows().filter((row) => row.namespace.toLowerCase().includes(term));
   });
@@ -87,7 +86,7 @@ export const K8sNamespacesDrawer: Component<{
       buildWorkloadsPath({
         type: 'pod',
         context: cluster,
-        namespace: namespace ? normalize(namespace) : null,
+        namespace: asTrimmedString(namespace) ?? null,
       }),
     );
   };

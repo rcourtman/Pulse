@@ -14,6 +14,7 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   getPMGDetailsDrawerPresentation,
   PMG_DETAILS_FAILURE_STATE_TITLE,
@@ -121,8 +122,6 @@ type PMGInstanceDrawerProps = {
   resourceName?: string;
 };
 
-const normalize = (value?: string | null) => (value || '').trim();
-
 const formatCompact = (value?: number | null): string => {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -135,7 +134,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
   const [searchDomain, setSearchDomain] = createSignal('');
   const drawerPresentation = getPMGDetailsDrawerPresentation();
 
-  const resourceId = createMemo(() => normalize(props.resourceId));
+  const resourceId = createMemo(() => asTrimmedString(props.resourceId) ?? '');
 
   const [resource] = createResource(
     resourceId,
@@ -174,7 +173,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
   const relayDomains = createMemo(() => {
     const rows = pmg()?.relayDomains ?? [];
-    const term = normalize(searchRelay()).toLowerCase();
+    const term = (asTrimmedString(searchRelay()) ?? '').toLowerCase();
     if (!term) return rows;
     return rows.filter(
       (row) =>
@@ -184,7 +183,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
   const domainStats = createMemo(() => {
     const rows = pmg()?.domainStats ?? [];
-    const term = normalize(searchDomain()).toLowerCase();
+    const term = (asTrimmedString(searchDomain()) ?? '').toLowerCase();
     const filtered = term ? rows.filter((row) => row.domain.toLowerCase().includes(term)) : rows;
     return [...filtered].sort((a, b) => (b.mailCount || 0) - (a.mailCount || 0));
   });
@@ -192,7 +191,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
   const spamBuckets = createMemo(() => {
     const rows = pmg()?.spamDistribution ?? [];
     const parsed = rows
-      .map((row) => ({ bucket: normalize(row.bucket), count: Number(row.count || 0) }))
+      .map((row) => ({ bucket: asTrimmedString(row.bucket) ?? '', count: Number(row.count || 0) }))
       .filter((row) => row.bucket.length > 0);
     return parsed.sort((a, b) => a.bucket.localeCompare(b.bucket));
   });
@@ -240,7 +239,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
                     <div class="text-sm font-semibold text-base-content truncate">
-                      {normalize(props.resourceName) ||
+                      {asTrimmedString(props.resourceName) ||
                         resource()?.name ||
                         drawerPresentation.defaultResourceName}
                     </div>

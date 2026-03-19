@@ -22,6 +22,7 @@ import {
   getK8sDeploymentsLoadingState,
 } from '@/utils/k8sDeploymentPresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 20;
@@ -45,8 +46,6 @@ type ResourcesListResponse = {
     totalPages?: number;
   };
 };
-
-const normalize = (value?: string | null) => (value || '').trim();
 
 const buildDeploymentsUrl = (cluster: string, page: number) => {
   const params = new URLSearchParams();
@@ -100,7 +99,7 @@ export const K8sDeploymentsDrawer: Component<{
   const [lastAppliedNamespace, setLastAppliedNamespace] = createSignal('');
   const drawerPresentation = getK8sDeploymentsDrawerPresentation();
 
-  const clusterName = createMemo(() => normalize(props.cluster));
+  const clusterName = createMemo(() => asTrimmedString(props.cluster) ?? '');
 
   const [deployments] = createResource(
     clusterName,
@@ -114,7 +113,7 @@ export const K8sDeploymentsDrawer: Component<{
   const namespaceOptions = createMemo(() => {
     const set = new Set<string>();
     for (const dep of deployments()) {
-      const ns = normalize(dep.kubernetes?.namespace);
+      const ns = asTrimmedString(dep.kubernetes?.namespace) ?? '';
       if (ns) set.add(ns);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -122,9 +121,10 @@ export const K8sDeploymentsDrawer: Component<{
 
   createEffect(() => {
     // Allow other drawer tabs (e.g., Namespaces) to prefill the namespace filter.
-    const next = normalize(props.initialNamespace);
+    const next = asTrimmedString(props.initialNamespace) ?? '';
     if (!next) return;
-    if (next.toLowerCase() === normalize(lastAppliedNamespace()).toLowerCase()) return;
+    if (next.toLowerCase() === (asTrimmedString(lastAppliedNamespace()) ?? '').toLowerCase())
+      return;
     const exists = namespaceOptions().some((ns) => ns.toLowerCase() === next.toLowerCase());
     if (exists) {
       setNamespace(next);
@@ -133,7 +133,7 @@ export const K8sDeploymentsDrawer: Component<{
   });
 
   createEffect(() => {
-    const current = normalize(namespace());
+    const current = asTrimmedString(namespace()) ?? '';
     if (!current) return;
     const exists = namespaceOptions().some((ns) => ns.toLowerCase() === current.toLowerCase());
     if (!exists) {
@@ -142,19 +142,19 @@ export const K8sDeploymentsDrawer: Component<{
   });
 
   const filteredDeployments = createMemo(() => {
-    const ns = normalize(namespace());
-    const term = normalize(search()).toLowerCase();
+    const ns = asTrimmedString(namespace()) ?? '';
+    const term = (asTrimmedString(search()) ?? '').toLowerCase();
 
     return deployments()
       .filter((dep) => {
-        if (ns && normalize(dep.kubernetes?.namespace) !== ns) return false;
+        if (ns && (asTrimmedString(dep.kubernetes?.namespace) ?? '') !== ns) return false;
         if (!term) return true;
-        const name = normalize(dep.name) || dep.id;
+        const name = asTrimmedString(dep.name) || dep.id;
         return name.toLowerCase().includes(term);
       })
       .sort((a, b) => {
-        const aName = (normalize(a.name) || a.id).toLowerCase();
-        const bName = (normalize(b.name) || b.id).toLowerCase();
+        const aName = (asTrimmedString(a.name) || a.id).toLowerCase();
+        const bName = (asTrimmedString(b.name) || b.id).toLowerCase();
         if (aName !== bName) return aName < bName ? -1 : 1;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
@@ -167,7 +167,7 @@ export const K8sDeploymentsDrawer: Component<{
       buildWorkloadsPath({
         type: 'pod',
         context: cluster,
-        namespace: normalize(ns) || null,
+        namespace: asTrimmedString(ns) || null,
       }),
     );
   };
@@ -256,8 +256,8 @@ export const K8sDeploymentsDrawer: Component<{
                   <TableBody class="divide-y divide-border-subtle">
                     <For each={filteredDeployments()}>
                       {(dep) => {
-                        const name = () => normalize(dep.name) || dep.id;
-                        const ns = () => normalize(dep.kubernetes?.namespace) || '—';
+                        const name = () => asTrimmedString(dep.name) || dep.id;
+                        const ns = () => asTrimmedString(dep.kubernetes?.namespace) || '—';
                         const desired = () => dep.kubernetes?.desiredReplicas ?? 0;
                         const updated = () => dep.kubernetes?.updatedReplicas ?? 0;
                         const ready = () => dep.kubernetes?.readyReplicas ?? 0;

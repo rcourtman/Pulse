@@ -15,10 +15,6 @@ export interface TitleCaseLabelOptions {
   separators?: RegExp;
 }
 
-export interface TrimmedLabelOptions {
-  fallback?: string;
-}
-
 export function humanizeToken(value?: string, options?: HumanizeTokenOptions): string {
   const normalized = (value || '').trim();
   if (!normalized) {
@@ -85,14 +81,6 @@ export function titleCaseDelimitedLabel(
       return part.charAt(0).toUpperCase() + part.slice(1);
     })
     .join(' ');
-}
-
-export function formatTrimmedLabel(
-  value?: string,
-  options?: TrimmedLabelOptions,
-): string {
-  const normalized = (value || '').trim();
-  return normalized || options?.fallback || '';
 }
 
 export function humanizeArrowDelimitedLabel(

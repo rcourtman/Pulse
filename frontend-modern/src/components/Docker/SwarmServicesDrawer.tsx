@@ -14,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   formatSwarmClusterId,
   formatSwarmClusterSummary,
@@ -77,8 +78,6 @@ type ResourcesListResponse = {
   };
 };
 
-const normalize = (value?: string | null) => (value || '').trim();
-
 const buildServicesUrl = (cluster: string, page: number) => {
   const params = new URLSearchParams();
   params.set('type', 'docker-service');
@@ -120,8 +119,8 @@ const fetchAllServices = async (cluster: string): Promise<DockerServiceResource[
 };
 
 const formatUpdate = (update?: DockerServiceUpdate) => {
-  const state = normalize(update?.state);
-  const message = normalize(update?.message);
+  const state = asTrimmedString(update?.state) ?? '';
+  const message = asTrimmedString(update?.message) ?? '';
   if (!state && !message) return '—';
   if (state && message) return `${state}: ${message}`;
   return state || message;
@@ -133,7 +132,7 @@ const formatPorts = (ports?: DockerServicePort[]) => {
     .map((p) => {
       const target = typeof p.targetPort === 'number' ? String(p.targetPort) : '';
       const published = typeof p.publishedPort === 'number' ? String(p.publishedPort) : '';
-      const proto = normalize(p.protocol) || 'tcp';
+      const proto = asTrimmedString(p.protocol) || 'tcp';
       if (published && target) return `${published}->${target}/${proto}`;
       if (target) return `${target}/${proto}`;
       return '';
@@ -146,7 +145,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
   const [search, setSearch] = createSignal('');
   const drawerPresentation = getSwarmDrawerPresentation();
 
-  const clusterKey = createMemo(() => normalize(props.cluster));
+  const clusterKey = createMemo(() => asTrimmedString(props.cluster) ?? '');
 
   const [services] = createResource(
     clusterKey,
@@ -158,18 +157,18 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
   );
 
   const filteredServices = createMemo(() => {
-    const term = normalize(search()).toLowerCase();
+    const term = (asTrimmedString(search()) ?? '').toLowerCase();
     return services()
       .filter((svc) => {
         if (!term) return true;
-        const name = normalize(svc.name) || svc.id;
-        const stack = normalize(svc.docker?.stack);
-        const image = normalize(svc.docker?.image);
+        const name = asTrimmedString(svc.name) || svc.id;
+        const stack = asTrimmedString(svc.docker?.stack) ?? '';
+        const image = asTrimmedString(svc.docker?.image) ?? '';
         return [name, stack, image].some((value) => value.toLowerCase().includes(term));
       })
       .sort((a, b) => {
-        const aName = (normalize(a.name) || a.id).toLowerCase();
-        const bName = (normalize(b.name) || b.id).toLowerCase();
+        const aName = (asTrimmedString(a.name) || a.id).toLowerCase();
+        const bName = (asTrimmedString(b.name) || b.id).toLowerCase();
         if (aName !== bName) return aName < bName ? -1 : 1;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
@@ -177,9 +176,9 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
 
   const swarm = createMemo(() => props.swarm);
   const clusterName = createMemo(
-    () => normalize(swarm()?.clusterName) || normalize(swarm()?.clusterId) || clusterKey(),
+    () => asTrimmedString(swarm()?.clusterName) || asTrimmedString(swarm()?.clusterId) || clusterKey(),
   );
-  const clusterId = createMemo(() => normalize(swarm()?.clusterId));
+  const clusterId = createMemo(() => asTrimmedString(swarm()?.clusterId) ?? '');
 
   return (
     <div class="space-y-3">
@@ -211,20 +210,20 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
 
         <Show
           when={
-            normalize(swarm()?.nodeRole) ||
-            normalize(swarm()?.localState) ||
+            asTrimmedString(swarm()?.nodeRole) ||
+            asTrimmedString(swarm()?.localState) ||
             typeof swarm()?.controlAvailable === 'boolean'
           }
         >
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
-            <Show when={normalize(swarm()?.nodeRole)}>
+            <Show when={asTrimmedString(swarm()?.nodeRole)}>
               <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                {formatSwarmRoleLabel(normalize(swarm()?.nodeRole))}
+                {formatSwarmRoleLabel(asTrimmedString(swarm()?.nodeRole))}
               </span>
             </Show>
-            <Show when={normalize(swarm()?.localState)}>
+            <Show when={asTrimmedString(swarm()?.localState)}>
               <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                {formatSwarmStateLabel(normalize(swarm()?.localState))}
+                {formatSwarmStateLabel(asTrimmedString(swarm()?.localState))}
               </span>
             </Show>
             <Show when={typeof swarm()?.controlAvailable === 'boolean'}>
@@ -235,9 +234,9 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           </div>
         </Show>
 
-        <Show when={normalize(swarm()?.error)}>
+        <Show when={asTrimmedString(swarm()?.error)}>
           <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-            {normalize(swarm()?.error)}
+            {asTrimmedString(swarm()?.error)}
           </div>
         </Show>
       </Card>
@@ -287,10 +286,10 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                   <TableBody class="divide-y divide-border-subtle">
                     <For each={filteredServices()}>
                       {(svc) => {
-                        const name = () => normalize(svc.name) || svc.id;
-                        const stack = () => normalize(svc.docker?.stack) || '—';
-                        const image = () => normalize(svc.docker?.image) || '—';
-                        const mode = () => normalize(svc.docker?.mode) || '—';
+                        const name = () => asTrimmedString(svc.name) || svc.id;
+                        const stack = () => asTrimmedString(svc.docker?.stack) || '—';
+                        const image = () => asTrimmedString(svc.docker?.image) || '—';
+                        const mode = () => asTrimmedString(svc.docker?.mode) || '—';
                         const desired = () => svc.docker?.desiredTasks ?? 0;
                         const running = () => svc.docker?.runningTasks ?? 0;
                         const update = () => formatUpdate(svc.docker?.serviceUpdate);

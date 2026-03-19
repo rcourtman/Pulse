@@ -1917,7 +1917,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('humanizeArrowDelimitedLabel');
-    expect(resourceCorrelationPresentationSource).toContain('formatTrimmedLabel');
+    expect(resourceCorrelationPresentationSource).toContain('asTrimmedString');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
@@ -1926,7 +1926,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
-    expect(textPresentationSource).toContain('formatTrimmedLabel');
     expect(resourceCorrelationPresentationSource).not.toContain('formatResourceCorrelationEndpointLabel');
     expect(resourceCorrelationPresentationSource).not.toContain(
       "replace(/\\s*->\\s*/g, ' → ')",
@@ -1934,6 +1933,15 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('formatIdentifierLabel');
+    expect(resourceCorrelationPresentationSource).not.toContain('formatTrimmedLabel');
+    expect(swarmServicesDrawerSource).toContain('asTrimmedString');
+    expect(swarmServicesDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(pmgInstanceDrawerSource).toContain('asTrimmedString');
+    expect(pmgInstanceDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(k8sNamespacesDrawerSource).toContain('asTrimmedString');
+    expect(k8sNamespacesDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(k8sDeploymentsDrawerSource).toContain('asTrimmedString');
+    expect(k8sDeploymentsDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
     expect(messageItemSource).toContain('formatIdentifierLabel');
     expect(toolExecutionBlockSource).toContain('formatIdentifierLabel');
     expect(aiChatSource).toContain('formatIdentifierLabel');
