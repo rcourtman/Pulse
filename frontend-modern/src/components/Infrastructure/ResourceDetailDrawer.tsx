@@ -143,6 +143,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
+  const [showHostDetails, setShowHostDetails] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
   const kubernetesClusterName = createMemo(() =>
@@ -550,6 +551,38 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
     return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
   });
+  const hostDetailCards = createMemo(() => {
+    const cards: string[] = [];
+
+    if (proxmoxNode()) {
+      cards.push('system', 'hardware', 'storage');
+    }
+
+    const agent = agentInfo();
+    if (agent) {
+      cards.push('system', 'hardware');
+      if ((agent.networkInterfaces?.length ?? 0) > 0) cards.push('network');
+      if ((agent.disks?.length ?? 0) > 0) cards.push('disks');
+      if ((agentMeta()?.raid?.length ?? 0) > 0) cards.push('raid');
+      if (temperatureRows().length > 0) cards.push('temperatures');
+    }
+
+    return cards;
+  });
+  const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
+  const hostDetailSummary = createMemo(() => {
+    const labels = Array.from(new Set(hostDetailCards()));
+    if (labels.length === 0) return null;
+
+    const categories =
+      labels.length === 1
+        ? labels[0]
+        : labels.length === 2
+          ? `${labels[0]} and ${labels[1]}`
+          : `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+
+    return `${hostDetailCards().length} detail card${hostDetailCards().length === 1 ? '' : 's'} covering ${categories}.`;
+  });
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
@@ -769,33 +802,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Overview Tab */}
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
-        <Show when={proxmoxNode() || agentInfo()}>
-          <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
-            <Show when={proxmoxNode()}>
-              {(node) => (
-                <>
-                  <SystemInfoCard variant="node" node={node()} />
-                  <HardwareCard variant="node" node={node()} />
-                  <RootDiskCard node={node()} />
-                </>
-              )}
-            </Show>
-            <Show when={agentInfo()}>
-              {(agent) => (
-                <>
-                  <SystemInfoCard variant="agent" agent={agent()} />
-                  <HardwareCard variant="agent" agent={agent()} />
-                  <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
-                  <DisksCard disks={agent().disks} />
-                  <RaidCard arrays={agentMeta()?.raid} />
-                  <TemperaturesCard rows={temperatureRows()} />
-                </>
-              )}
-            </Show>
-          </div>
-        </Show>
-
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
+        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <div class="rounded border border-border bg-surface p-3">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Runtime
@@ -1348,6 +1355,58 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             }}
           </Show>
         </div>
+
+        <Show when={hasHostDetails()}>
+          <div class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  Host details
+                </div>
+                <div class="mt-1 text-[10px] text-muted">
+                  Secondary system and hardware detail for deeper inspection.
+                </div>
+                <Show when={hostDetailSummary()}>
+                  <div class="mt-1 text-[10px] text-base-content">{hostDetailSummary()}</div>
+                </Show>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowHostDetails((value) => !value)}
+                class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+              >
+                {showHostDetails() ? 'Hide host details' : 'Show host details'}
+              </button>
+            </div>
+
+            <Show when={showHostDetails()}>
+              <div class="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
+                <Show when={proxmoxNode()}>
+                  {(node) => (
+                    <>
+                      <SystemInfoCard variant="node" node={node()} />
+                      <HardwareCard variant="node" node={node()} />
+                      <RootDiskCard node={node()} />
+                    </>
+                  )}
+                </Show>
+                <Show when={agentInfo()}>
+                  {(agent) => (
+                    <>
+                      <SystemInfoCard variant="agent" agent={agent()} />
+                      <HardwareCard variant="agent" agent={agent()} />
+                      <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
+                      <DisksCard disks={agent().disks} />
+                      <RaidCard arrays={agentMeta()?.raid} />
+                      <TemperaturesCard rows={temperatureRows()} />
+                    </>
+                  )}
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </Show>
 
         <Show when={hasInvestigationContext()}>
           <div

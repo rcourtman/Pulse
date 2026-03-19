@@ -264,6 +264,10 @@ That discovery surface is now a compact support row with a one-line summary and
 an on-demand metadata panel, so the actionable web-interface path stays primary
 while deeper discovery inspection remains available without reading like a
 second peer overview surface.
+Host and node system or hardware cards now also live behind a collapsed
+`Host details` support block instead of rendering before the primary overview
+cards, so runtime status, identity, and next investigation steps stay first
+while deeper machine detail remains available on demand.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

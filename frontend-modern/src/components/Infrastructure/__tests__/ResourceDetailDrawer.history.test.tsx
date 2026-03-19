@@ -187,6 +187,7 @@ describe('ResourceDetailDrawer change history section', () => {
     const changeHistorySection = screen.getByTestId('resource-change-history-section');
     expect(screen.queryByRole('button', { name: 'Discovery' })).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
+    expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.getByText('Discovery context')).toBeInTheDocument();
     expect(
       screen.getByText('Supporting metadata only. The web interface path above stays primary.'),

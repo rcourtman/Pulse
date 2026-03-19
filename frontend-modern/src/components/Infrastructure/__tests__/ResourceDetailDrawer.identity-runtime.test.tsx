@@ -147,6 +147,61 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
   });
 
+  it('keeps host detail cards behind a secondary overview disclosure', async () => {
+    const resource = baseResource({
+      platformData: {
+        sources: ['agent'],
+        agent: {
+          agentId: 'agent-1',
+          hostname: 'host-1',
+          platform: 'linux',
+          osName: 'Ubuntu',
+          osVersion: '24.04',
+          kernelVersion: '6.8.0',
+          architecture: 'x86_64',
+          uptimeSeconds: 7200,
+          cpuCount: 8,
+          agentVersion: '1.2.3',
+          memory: { total: 16 * 1024 * 1024 * 1024 },
+          networkInterfaces: [
+            {
+              name: 'eth0',
+              mac: '00:11:22:33:44:55',
+              addresses: ['192.0.2.10'],
+            },
+          ],
+          disks: [
+            {
+              mountpoint: '/',
+              total: 100 * 1024 * 1024 * 1024,
+              used: 50 * 1024 * 1024 * 1024,
+            },
+          ],
+        },
+      },
+    });
+
+    const { getByRole, getByText, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByText('Host details')).toBeInTheDocument();
+    expect(
+      getByText('4 detail cards covering system, hardware, network, and disks.'),
+    ).toBeInTheDocument();
+    expect(queryByText('Hardware')).toBeNull();
+    expect(queryByText('Network')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Show host details' }));
+
+    await waitFor(() => {
+      expect(getByText('Hardware')).toBeInTheDocument();
+    });
+    expect(getByText('Network')).toBeInTheDocument();
+    expect(getByText('Disks')).toBeInTheDocument();
+    expect(getByText('eth0')).toBeInTheDocument();
+  });
+
   it('falls back to source list summary when per-source health is unavailable', () => {
     const resource = baseResource({
       sourceType: 'api',
