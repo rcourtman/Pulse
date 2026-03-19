@@ -90,46 +90,16 @@ import {
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import {
+  formatResourceChangeHeadline,
+  formatResourceChangeKind,
+} from '@/utils/resourceChangePresentation';
+import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
-import type { ResourceChange } from '@/types/resource';
-
 type PatrolTab = 'findings' | 'history';
-
-function formatRecentChangeKind(kind: ResourceChange['kind']): string {
-  switch (kind) {
-    case 'state_transition':
-      return 'State transition';
-    case 'restart':
-      return 'Restart';
-    case 'config_update':
-      return 'Config change';
-    case 'metric_anomaly':
-      return 'Metric anomaly';
-    case 'relationship_change':
-      return 'Relationship change';
-    case 'capability_change':
-      return 'Capability change';
-    default:
-      return String(kind).replace(/_/g, ' ');
-  }
-}
-
-function formatRecentChangeHeadline(change: ResourceChange): string {
-  if (change.kind === 'state_transition' && change.from && change.to) {
-    return `${formatRecentChangeKind(change.kind)}: ${change.from} → ${change.to}`;
-  }
-  if (change.kind === 'restart' && change.from && change.to) {
-    return `${formatRecentChangeKind(change.kind)}: ${change.from} → ${change.to}`;
-  }
-  if (change.reason) {
-    return `${formatRecentChangeKind(change.kind)}: ${change.reason}`;
-  }
-  return `${formatRecentChangeKind(change.kind)}: ${change.resourceId}`;
-}
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -1321,7 +1291,7 @@ export function AIIntelligence() {
                               <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div class="min-w-0">
                                   <p class="text-sm font-medium text-base-content">
-                                    {formatRecentChangeHeadline(change)}
+                                    {formatResourceChangeHeadline(change)}
                                   </p>
                                   <p class="mt-1 text-xs text-muted">
                                     <span class="font-mono">{change.resourceId}</span>
@@ -1335,7 +1305,7 @@ export function AIIntelligence() {
 
                                 <div class="flex flex-wrap items-center gap-1.5">
                                   <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                                    {formatRecentChangeKind(change.kind)}
+                                    {formatResourceChangeKind(change.kind)}
                                   </span>
                                   <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
                                     {change.sourceType}

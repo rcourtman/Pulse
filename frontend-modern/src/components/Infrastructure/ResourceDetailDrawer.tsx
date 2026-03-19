@@ -52,6 +52,7 @@ import {
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
+import { formatResourceChangeKind } from '@/utils/resourceChangePresentation';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 
@@ -854,7 +855,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         Latest canonical change
                       </div>
                       <div class="mt-0.5 text-[11px] text-base-content">
-                        {intel().recent_changes?.[0]?.kind.replace(/_/g, ' ')} ·{' '}
+                        {formatResourceChangeKind(
+                          intel().recent_changes?.[0]?.kind as ResourceChangeKind,
+                        )}{' '}
+                        ·{' '}
                         {intel().recent_changes?.[0]?.reason ||
                           intel().recent_changes?.[0]?.resourceId}
                       </div>

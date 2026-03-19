@@ -84,3 +84,7 @@ unified-resource timeline.
 The Patrol page also now renders the canonical intelligence summary card
 through the governed AI client and store, so the visible page summary and the
 resource/timeline sections stay aligned on the same shared backend slice.
+The Patrol page and resource drawer now also share the canonical
+`frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
+recent-change kind and headline wording stays aligned wherever the canonical
+timeline is surfaced.

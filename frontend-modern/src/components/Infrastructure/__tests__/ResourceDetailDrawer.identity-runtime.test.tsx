@@ -300,7 +300,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('1')).toBeInTheDocument();
     const latestChange = getByText('Latest canonical change').parentElement;
     expect(latestChange).not.toBeNull();
-    expect(latestChange).toHaveTextContent('config update');
+    expect(latestChange).toHaveTextContent('Config update');
     expect(latestChange).toHaveTextContent('Updated canonical config');
     expect(latestChange).toHaveTextContent(/just now|m ago|h ago|d ago/);
   });
