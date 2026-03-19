@@ -39,7 +39,7 @@
       "profile_id": "v6",
       "kind": "stabilization",
       "status": "active",
-      "summary": "Keep Pulse v6 centered on the proven monitoring-and-alerting RC floor, using timeline/change intelligence only where it materially improves investigation or safe AI flows while broader control-plane expansion stays out of the default target until it is proven.",
+      "summary": "Keep Pulse v6 centered on the proven monitoring-and-alerting RC floor, using resource-change intelligence only where it materially improves investigation or safe AI flows while broader control-plane expansion stays out of the default target until it is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },
