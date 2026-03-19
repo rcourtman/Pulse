@@ -1388,8 +1388,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </div>
                                 <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                                   <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Job breakdown</span>
-                                    <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
+                                    <span>Types</span>
+                                    <span class="text-muted">{pbsVisibleJobBreakdown().length}</span>
                                   </summary>
                                   <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
                                     <For each={pbsVisibleJobBreakdown()}>
@@ -1487,8 +1487,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </div>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                   <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Queue breakdown</span>
-                                    <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
+                                    <span>Queue detail</span>
+                                    <span class="text-muted">{pmgVisibleQueueBreakdown().length}</span>
                                   </summary>
                                   <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={pmgVisibleQueueBreakdown()}>
@@ -1507,8 +1507,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </details>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                   <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Mail processing</span>
-                                    <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
+                                    <span>Mail detail</span>
+                                    <span class="text-muted">{pmgVisibleMailBreakdown().length}</span>
                                   </summary>
                                   <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={pmgVisibleMailBreakdown()}>

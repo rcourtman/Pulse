@@ -101,11 +101,12 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(serviceDetails.getAllByText('pbs-main.local').length).toBeGreaterThan(0);
     expect(queryByText('Backup summary')).toBeNull();
     expect(queryByText('Job breakdown')).toBeNull();
+    expect(queryByText('Types')).toBeNull();
     expect(queryByText('Show job detail')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show jobs' }));
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Jobs')).toBeInTheDocument();
-    expect(getByText('Job breakdown')).toBeInTheDocument();
+    expect(getByText('Types')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pbs backups/i })).toHaveAttribute(
       'href',
       '/recovery?provider=proxmox-pbs&mode=remote',
@@ -152,12 +153,14 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(queryByText('Mail flow summary')).toBeNull();
     expect(queryByText('Queue breakdown')).toBeNull();
     expect(queryByText('Mail processing')).toBeNull();
+    expect(queryByText('Queue detail')).toBeNull();
+    expect(queryByText('Mail detail')).toBeNull();
     expect(queryByText('Show mail flow detail')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
     expect(getByText('Queue')).toBeInTheDocument();
     expect(getByText('Backlog')).toBeInTheDocument();
-    expect(getByText('Queue breakdown')).toBeInTheDocument();
-    expect(getByText('Mail processing')).toBeInTheDocument();
+    expect(getByText('Queue detail')).toBeInTheDocument();
+    expect(getByText('Mail detail')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(
       'href',
       '/alerts/thresholds/mail-gateway',

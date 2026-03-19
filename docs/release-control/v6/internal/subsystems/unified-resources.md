@@ -297,8 +297,10 @@ operations.
 That same ownership rule now keeps the service-summary sentence in the
 `Service details` disclosure header instead of repeating a second summary box
 inside PBS or PMG cards, and the service-local reveal labels stay terse
-(`Show jobs`, `Show mail flow`, `Jobs`, `Queue`) so opened cards read like
-current state instead of descriptive chrome.
+(`Show jobs`, `Show mail flow`, `Jobs`, `Queue`), while the opened accordions
+also use shorter section labels (`Types`, `Queue detail`, `Mail detail`) and
+count-only summary badges so opened cards read like current state instead of
+descriptive chrome.
 The Docker service card now follows the same rule: its opened state uses
 compact labels (`Docker runtime`, `Updates`, `Checked`, `Show actions`,
 `Check now`, `Update all`) and short queued/confirm feedback so action

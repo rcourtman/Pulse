@@ -378,9 +378,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(serviceDetails.queryByText('Connection')).toBeNull();
     expect(screen.queryByText('Backup summary')).toBeNull();
     expect(screen.queryByText('Job breakdown')).toBeNull();
+    expect(screen.queryByText('Types')).toBeNull();
     expect(screen.queryByText('Show job detail')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));
-    expect(screen.getByText('Job breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Types')).toBeInTheDocument();
   });
 
   it('filters timeline entries by kind and source type', async () => {
