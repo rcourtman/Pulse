@@ -385,6 +385,26 @@ func TestExportDecisionHelpersCanonicalInUnifiedResources(t *testing.T) {
 	}
 }
 
+func TestRootCauseEngineUsesCanonicalRelationshipModel(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "ai", "correlation", "rootcause.go"))
+	if err != nil {
+		t.Fatalf("failed to read rootcause.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"type RelationshipType = unifiedresources.RelationshipType",
+		"type ResourceRelationship = unifiedresources.ResourceRelationship",
+		"GetRelationships(resourceID string) []ResourceRelationship",
+		"score += relationshipScore(rel.Type)",
+		"func relationshipScore(t RelationshipType) float64",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/ai/correlation/rootcause.go must pin canonical relationship snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "monitoring", "connected_infrastructure.go"): {

@@ -440,6 +440,10 @@ The AI runtime now also uses the canonical policy presentation helpers to
 surface those routing and redaction labels in shared context output, so the
 same policy model is reflected in prompt summaries instead of being
 re-described independently per surface.
+The AI correlation root-cause engine also consumes the canonical unified-
+resource relationship model directly, so graph reasoning and relationship
+scoring stay on the same owned edge vocabulary instead of keeping a separate
+AI-local relationship struct.
 Those helpers now own the canonical redaction-hint order and count-to-label
 projection, so the AI summary and any other backend policy posture surface do
 not re-sort redaction labels locally.

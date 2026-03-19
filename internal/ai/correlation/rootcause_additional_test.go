@@ -46,7 +46,7 @@ func TestRootCauseEngine_AnalyzeAndFormat(t *testing.T) {
 	triggerTime := time.Now()
 	topology := &stubTopologyProvider{
 		relationships: []ResourceRelationship{
-			{SourceID: "node-1", TargetID: "vm-1", Relationship: RelationshipRunsOn},
+			{SourceID: "node-1", TargetID: "vm-1", Type: RelationshipRunsOn},
 		},
 		types: map[string]string{
 			"node-1": "node",
@@ -115,7 +115,7 @@ func TestRootCauseEngine_ScoringAndHelpers(t *testing.T) {
 
 	trigger := RelatedEvent{ResourceID: "vm-1", ResourceType: "vm", Metric: "cpu", Timestamp: time.Now()}
 	candidate := RelatedEvent{ResourceID: "node-1", ResourceType: "node", Metric: "cpu", Timestamp: time.Now().Add(-30 * time.Second)}
-	relationships := []ResourceRelationship{{SourceID: "node-1", TargetID: "vm-1", Relationship: RelationshipRunsOn}}
+	relationships := []ResourceRelationship{{SourceID: "node-1", TargetID: "vm-1", Type: RelationshipRunsOn}}
 
 	score := engine.scoreAsRootCause(&candidate, trigger, relationships)
 	if score <= 0 {

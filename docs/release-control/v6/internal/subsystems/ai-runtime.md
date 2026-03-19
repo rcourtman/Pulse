@@ -153,6 +153,10 @@ detectors only serving as fallback coverage when the canonical store is not
 available. When that patrol-local fallback is used, it must render through the
 shared memory change presentation helper so the same heading, scope prefix, and
 change-type labels are reused instead of being rebuilt ad hoc in AI-local code.
+The AI correlation root-cause engine also consumes the canonical unified-
+resource relationship model directly, so cross-resource reasoning stays aligned
+with the same graph edges that back the resource API instead of maintaining a
+parallel relationship vocabulary inside AI correlation.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly

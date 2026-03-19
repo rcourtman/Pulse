@@ -9,29 +9,24 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// RelationshipType describes how resources are related
-type RelationshipType string
+// RelationshipType and ResourceRelationship are aliases to the canonical
+// unified-resource graph model so root-cause correlation consumes the same
+// edge vocabulary as the rest of the platform.
+type RelationshipType = unifiedresources.RelationshipType
+
+type ResourceRelationship = unifiedresources.ResourceRelationship
 
 const (
-	RelationshipRunsOn      RelationshipType = "runs_on"      // VM runs on Node
-	RelationshipUsesStorage RelationshipType = "uses_storage" // VM uses Storage
-	RelationshipUsesNetwork RelationshipType = "uses_network" // Guest uses Network
-	RelationshipContains    RelationshipType = "contains"     // Node contains VMs
-	RelationshipBackedBy    RelationshipType = "backed_by"    // Storage backed by disks
-	RelationshipHosted      RelationshipType = "hosted"       // Container hosted on Docker
-	RelationshipDepends     RelationshipType = "depends_on"   // Generic dependency
+	RelationshipRunsOn    = unifiedresources.RelRunsOn
+	RelationshipDepends   = unifiedresources.RelDependsOn
+	RelationshipMountedTo = unifiedresources.RelMountedTo
+	RelationshipExposedBy = unifiedresources.RelExposedBy
+	RelationshipOwnedBy   = unifiedresources.RelOwnedBy
 )
-
-// ResourceRelationship describes a relationship between two resources
-type ResourceRelationship struct {
-	SourceID     string           `json:"source_id"`
-	SourceType   string           `json:"source_type"`
-	TargetID     string           `json:"target_id"`
-	TargetType   string           `json:"target_type"`
-	Relationship RelationshipType `json:"relationship"`
-}
 
 // RelatedEvent represents an event on a related resource
 type RelatedEvent struct {
@@ -245,19 +240,7 @@ func (e *RootCauseEngine) scoreAsRootCause(candidate *RelatedEvent, trigger Rela
 	// Check if there's a direct relationship
 	for _, rel := range relationships {
 		if rel.SourceID == candidate.ResourceID || rel.TargetID == candidate.ResourceID {
-			// Strong relationship types
-			switch rel.Relationship {
-			case RelationshipRunsOn:
-				score += 0.4 // VM problems often caused by host
-			case RelationshipUsesStorage:
-				score += 0.35 // Storage issues propagate
-			case RelationshipBackedBy:
-				score += 0.3
-			case RelationshipContains:
-				score += 0.25
-			default:
-				score += 0.2
-			}
+			score += relationshipScore(rel.Type)
 			break
 		}
 	}
@@ -290,6 +273,23 @@ func (e *RootCauseEngine) scoreAsRootCause(candidate *RelatedEvent, trigger Rela
 	}
 
 	return score
+}
+
+func relationshipScore(t RelationshipType) float64 {
+	switch t {
+	case unifiedresources.RelRunsOn:
+		return 0.4
+	case unifiedresources.RelMountedTo:
+		return 0.35
+	case unifiedresources.RelDependsOn:
+		return 0.3
+	case unifiedresources.RelOwnedBy:
+		return 0.25
+	case unifiedresources.RelExposedBy:
+		return 0.2
+	default:
+		return 0.2
+	}
 }
 
 // buildCausalChain builds a chain of causation from root cause to trigger
