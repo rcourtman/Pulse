@@ -804,6 +804,39 @@ func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	}
 }
 
+func TestCanonicalIdentityIsCanonicalResourceField(t *testing.T) {
+	typesData, err := os.ReadFile(filepath.Join("types.go"))
+	if err != nil {
+		t.Fatalf("failed to read types.go: %v", err)
+	}
+	typesSource := string(typesData)
+	requiredSnippets := []string{
+		"json:\"canonicalIdentity,omitempty\"",
+		"type CanonicalIdentity struct {",
+		"DisplayName string   `json:\"displayName,omitempty\"`",
+		"Aliases     []string `json:\"aliases,omitempty\"`",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(typesSource, snippet) {
+			t.Fatalf("internal/unifiedresources/types.go must keep the canonical identity contract snippet %q", snippet)
+		}
+	}
+
+	cloneData, err := os.ReadFile(filepath.Join("clone.go"))
+	if err != nil {
+		t.Fatalf("failed to read clone.go: %v", err)
+	}
+	cloneSource := string(cloneData)
+	requiredCloneSnippets := []string{
+		"RefreshCanonicalMetadata(&out)",
+	}
+	for _, snippet := range requiredCloneSnippets {
+		if !strings.Contains(cloneSource, snippet) {
+			t.Fatalf("internal/unifiedresources/clone.go must preserve canonical identity via %q", snippet)
+		}
+	}
+}
+
 // TestNoLegacyHostResourceTypeSymbol prevents reintroducing the removed
 // ResourceTypeHost symbol. v6 code must use ResourceTypeAgent and
 // CanonicalResourceType() for legacy normalization.

@@ -59,19 +59,6 @@ type EventCorrelation struct {
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// TopologyProvider provides access to resource relationships
-type TopologyProvider interface {
-	GetRelatedResources(resourceID string, depth int) []RelatedResource
-}
-
-// RelatedResource represents a resource related to another resource
-type RelatedResource struct {
-	ResourceID   string `json:"resource_id"`
-	ResourceName string `json:"resource_name"`
-	ResourceType string `json:"resource_type"`
-	Relationship string `json:"relationship"`
-}
-
 // KnowledgeStoreProvider provides access to stored knowledge/notes
 type KnowledgeStoreProvider interface {
 	SaveNote(resourceID, note, category string) error
@@ -100,21 +87,19 @@ Actions:
 - recall: Retrieve saved notes about a resource
 - incidents: Get high-resolution incident recording data
 - correlate: Get correlated events around a timestamp
-- relationships: Get resource dependency graph
 
 Examples:
 - Save note: action="remember", resource_id="101", note="Production database server", category="purpose"
 - Recall: action="recall", resource_id="101"
 - Get incidents: action="incidents", resource_id="101"
-- Correlate events: action="correlate", resource_id="101", window_minutes=30
-- Get relationships: action="relationships", resource_id="101"`,
+- Correlate events: action="correlate", resource_id="101", window_minutes=30`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
 						Description: "Knowledge action to perform",
-						Enum:        []string{"remember", "recall", "incidents", "correlate", "relationships"},
+						Enum:        []string{"remember", "recall", "incidents", "correlate"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -139,10 +124,6 @@ Examples:
 					"window_minutes": {
 						Type:        "integer",
 						Description: "For correlate: time window in minutes (default: 15)",
-					},
-					"depth": {
-						Type:        "integer",
-						Description: "For relationships: levels to traverse (default: 1, max: 3)",
 					},
 					"limit": {
 						Type:        "integer",
@@ -170,10 +151,8 @@ func (e *PulseToolExecutor) executeKnowledge(ctx context.Context, args map[strin
 		return e.executeGetIncidentWindow(ctx, args)
 	case "correlate":
 		return e.executeCorrelateEvents(ctx, args)
-	case "relationships":
-		return e.executeGetRelationshipGraph(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: remember, recall, incidents, correlate, relationships", action)), nil
+		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: remember, recall, incidents, correlate", action)), nil
 	}
 }
 
@@ -255,39 +234,6 @@ func (e *PulseToolExecutor) executeCorrelateEvents(_ context.Context, args map[s
 		"window_minutes": windowMinutes,
 		"events":         correlations,
 		"count":          len(correlations),
-	}), nil
-}
-
-func (e *PulseToolExecutor) executeGetRelationshipGraph(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	resourceID, _ := args["resource_id"].(string)
-	depth := intArg(args, "depth", 1)
-
-	if resourceID == "" {
-		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
-	}
-
-	// Cap depth to prevent excessive traversal
-	if depth < 1 {
-		depth = 1
-	}
-	if depth > 3 {
-		depth = 3
-	}
-
-	if e.topologyProvider == nil {
-		return NewTextResult("Topology information not available."), nil
-	}
-
-	related := e.topologyProvider.GetRelatedResources(resourceID, depth)
-	if len(related) == 0 {
-		return NewTextResult(fmt.Sprintf("No relationships found for resource '%s'.", resourceID)), nil
-	}
-
-	return NewJSONResult(map[string]interface{}{
-		"resource_id":       resourceID,
-		"depth":             depth,
-		"related_resources": related,
-		"count":             len(related),
 	}), nil
 }
 

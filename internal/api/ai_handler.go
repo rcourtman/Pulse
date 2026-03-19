@@ -64,7 +64,6 @@ type AIService interface {
 	SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)
 	SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
-	SetTopologyProvider(provider chat.TopologyProvider)
 	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
 	SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider)
 	UpdateControlSettings(cfg *config.AIConfig)

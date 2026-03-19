@@ -3810,8 +3810,6 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 					},
 				},
 				FacetCounts: unifiedresources.ResourceFacetCounts{
-					Capabilities:  1,
-					Relationships: 1,
 					RecentChanges: 1,
 				},
 			},
@@ -3894,8 +3892,6 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 					}
 				],
 				"facetCounts":{
-					"capabilities":1,
-					"relationships":1,
 					"recentChanges":1
 				}
 			}
@@ -4258,13 +4254,9 @@ func TestContract_ResourceTimelineAnomalyJSONSnapshot(t *testing.T) {
 func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {
-		ResourceID    string                                  `json:"resourceId"`
-		Capabilities  []unifiedresources.ResourceCapability   `json:"capabilities"`
-		Relationships []unifiedresources.ResourceRelationship `json:"relationships"`
-		RecentChanges []unifiedresources.ResourceChange       `json:"recentChanges"`
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
 		Counts        struct {
-			Capabilities               int                                          `json:"capabilities"`
-			Relationships              int                                          `json:"relationships"`
 			RecentChanges              int                                          `json:"recentChanges"`
 			RecentChangeKinds          map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
 			RecentChangeSourceTypes    map[unifiedresources.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
@@ -4272,30 +4264,6 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 		} `json:"counts"`
 	}{
 		ResourceID: "vm:42",
-		Capabilities: []unifiedresources.ResourceCapability{
-			{
-				Name:                 "restart",
-				Type:                 unifiedresources.CapabilityTypeCommon,
-				Description:          "Restart the VM",
-				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
-			},
-		},
-		Relationships: []unifiedresources.ResourceRelationship{
-			{
-				SourceID:   "vm:42",
-				TargetID:   "node-1",
-				Type:       unifiedresources.RelRunsOn,
-				Confidence: 1,
-				Active:     true,
-				Discoverer: "proxmox_adapter",
-				ObservedAt: now,
-				LastSeenAt: now,
-				Metadata: map[string]any{
-					"source":  "live",
-					"cluster": "pve-prod",
-				},
-			},
-		},
 		RecentChanges: []unifiedresources.ResourceChange{
 			{
 				ID:               "chg-42",
@@ -4316,15 +4284,11 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 			},
 		},
 		Counts: struct {
-			Capabilities               int                                          `json:"capabilities"`
-			Relationships              int                                          `json:"relationships"`
 			RecentChanges              int                                          `json:"recentChanges"`
 			RecentChangeKinds          map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
 			RecentChangeSourceTypes    map[unifiedresources.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
 			RecentChangeSourceAdapters map[unifiedresources.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
 		}{
-			Capabilities:      1,
-			Relationships:     1,
 			RecentChanges:     3,
 			RecentChangeKinds: map[unifiedresources.ChangeKind]int{unifiedresources.ChangeRestart: 1, unifiedresources.ChangeAnomaly: 2},
 			RecentChangeSourceTypes: map[unifiedresources.ChangeSourceType]int{
@@ -4345,27 +4309,6 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"resourceId":"vm:42",
-		"capabilities":[
-			{
-				"name":"restart",
-				"type":"common",
-				"description":"Restart the VM",
-				"minimumApprovalLevel":"admin"
-			}
-		],
-		"relationships":[
-			{
-				"sourceId":"vm:42",
-				"targetId":"node-1",
-				"type":"runs_on",
-				"confidence":1,
-				"active":true,
-				"discoverer":"proxmox_adapter",
-				"observedAt":"2026-03-18T17:00:00Z",
-				"lastSeenAt":"2026-03-18T17:00:00Z",
-				"metadata":{"cluster":"pve-prod","source":"live"}
-			}
-		],
 		"recentChanges":[
 			{
 				"id":"chg-42",
@@ -4383,8 +4326,6 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 			}
 		],
 		"counts":{
-			"capabilities":1,
-			"relationships":1,
 			"recentChanges":3,
 			"recentChangeKinds":{
 				"metric_anomaly":2,

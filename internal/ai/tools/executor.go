@@ -362,7 +362,6 @@ type ExecutorConfig struct {
 	// Optional providers - intelligence
 	IncidentRecorderProvider IncidentRecorderProvider
 	EventCorrelatorProvider  EventCorrelatorProvider
-	TopologyProvider         TopologyProvider
 	KnowledgeStoreProvider   KnowledgeStoreProvider
 
 	// Optional providers - discovery
@@ -414,7 +413,6 @@ type PulseToolExecutor struct {
 	// Intelligence providers
 	incidentRecorderProvider IncidentRecorderProvider
 	eventCorrelatorProvider  EventCorrelatorProvider
-	topologyProvider         TopologyProvider
 	knowledgeStoreProvider   KnowledgeStoreProvider
 
 	// Discovery provider
@@ -493,7 +491,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		agentProfileManager:      cfg.AgentProfileManager,
 		incidentRecorderProvider: cfg.IncidentRecorderProvider,
 		eventCorrelatorProvider:  cfg.EventCorrelatorProvider,
-		topologyProvider:         cfg.TopologyProvider,
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
 		discoveryProvider:        cfg.DiscoveryProvider,
 		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
@@ -684,11 +681,6 @@ func (e *PulseToolExecutor) SetEventCorrelatorProvider(provider EventCorrelatorP
 	e.eventCorrelatorProvider = provider
 }
 
-// SetTopologyProvider sets the topology provider for relationship graphs
-func (e *PulseToolExecutor) SetTopologyProvider(provider TopologyProvider) {
-	e.topologyProvider = provider
-}
-
 // SetKnowledgeStoreProvider sets the knowledge store provider for notes
 func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 	e.knowledgeStoreProvider = provider
@@ -785,7 +777,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_discovery":
 		return e.discoveryProvider != nil
 	case "pulse_knowledge":
-		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil || e.topologyProvider != nil
+		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil
 	case "pulse_pmg":
 		return e.hasReadState()
 	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":

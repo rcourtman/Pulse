@@ -151,8 +151,8 @@ surfaces can keep row summaries aligned without re-inferring totals from
 consumer-local slices.
 That same shared facet bundle now also carries grouped `recentChangeKinds`
 counts by canonical change kind, so the lifecycle-adjacent detail surfaces can
-report restart, anomaly, relationship, and capability distribution without
-rebuilding timeline math in the browser.
+report restart, anomaly, and other timeline distribution without rebuilding
+timeline math in the browser.
 That same shared facet bundle now also carries grouped
 `recentChangeSourceTypes` counts by canonical source type, so the
 lifecycle-adjacent detail surfaces can distinguish platform events, pulse

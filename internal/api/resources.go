@@ -278,11 +278,9 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 type resourceFacetCountsResponse = unified.ResourceFacetCounts
 
 type resourceFacetBundleResponse struct {
-	ResourceID    string                         `json:"resourceId"`
-	Capabilities  []unified.ResourceCapability   `json:"capabilities"`
-	Relationships []unified.ResourceRelationship `json:"relationships"`
-	RecentChanges []unified.ResourceChange       `json:"recentChanges"`
-	Counts        resourceFacetCountsResponse    `json:"counts"`
+	ResourceID    string                      `json:"resourceId"`
+	RecentChanges []unified.ResourceChange    `json:"recentChanges"`
+	Counts        resourceFacetCountsResponse `json:"counts"`
 }
 
 // HandleResourceRoutes dispatches nested resource routes.
@@ -346,7 +344,7 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resource, ok := registry.Get(resourceID)
+	_, ok := registry.Get(resourceID)
 	if !ok {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return
@@ -402,24 +400,11 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		return
 	}
 
-	capabilities := resource.Capabilities
-	if capabilities == nil {
-		capabilities = []unified.ResourceCapability{}
-	}
-	relationships := resource.Relationships
-	if relationships == nil {
-		relationships = []unified.ResourceRelationship{}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceFacetBundleResponse{
 		ResourceID:    resourceID,
-		Capabilities:  capabilities,
-		Relationships: relationships,
 		RecentChanges: recentChanges,
 		Counts: resourceFacetCountsResponse{
-			Capabilities:               resource.FacetCounts.Capabilities,
-			Relationships:              resource.FacetCounts.Relationships,
 			RecentChanges:              changeCount,
 			RecentChangeKinds:          changeKindCounts,
 			RecentChangeSourceTypes:    sourceTypeCounts,

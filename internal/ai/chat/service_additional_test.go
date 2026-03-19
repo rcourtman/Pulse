@@ -17,7 +17,6 @@ func TestServiceSettersAndAutonomousMode(t *testing.T) {
 
 	service.SetIncidentRecorderProvider(nil)
 	service.SetEventCorrelatorProvider(nil)
-	service.SetTopologyProvider(nil)
 	service.SetKnowledgeStoreProvider(nil)
 
 	service.SetAutonomousMode(true)

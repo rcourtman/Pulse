@@ -146,7 +146,6 @@ func (m *MockAIService) SetIncidentRecorderProvider(provider chat.IncidentRecord
 func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetTopologyProvider(provider chat.TopologyProvider) { m.Called(provider) }
 func (m *MockAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider) {
 	m.Called(provider)
 }

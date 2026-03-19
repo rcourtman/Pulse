@@ -47,8 +47,6 @@ func cloneResource(in *Resource) Resource {
 
 func resourceFacetCounts(resource Resource) ResourceFacetCounts {
 	return ResourceFacetCounts{
-		Capabilities:  len(resource.Capabilities),
-		Relationships: len(resource.Relationships),
 		RecentChanges: len(resource.RecentChanges),
 	}
 }

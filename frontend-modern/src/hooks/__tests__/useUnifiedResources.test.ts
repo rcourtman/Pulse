@@ -16,6 +16,9 @@ const v2Resource = {
   status: 'online',
   lastSeen: '2026-02-06T12:00:00Z',
   sources: ['agent'],
+  facetCounts: {
+    recentChanges: 1,
+  },
   metrics: {
     cpu: { percent: 15 },
     memory: { used: 4 * 1024 * 1024, total: 8 * 1024 * 1024, percent: 50 },
@@ -192,6 +195,9 @@ describe('useUnifiedResources', () => {
       agentId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1',
+    });
+    expect(result!.resources()[0].facetCounts).toEqual({
+      recentChanges: 1,
     });
 
     dispose();

@@ -73,7 +73,6 @@ import dashboardEmptyStatePresentationSource from '@/utils/dashboardEmptyStatePr
 import throughputPresentationSource from '@/utils/throughputPresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
-import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
 import approvalPresentationSource from '@/utils/approvalPresentation.ts?raw';
@@ -1914,7 +1913,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceChangePresentationSource).toContain(
       'getResourceChangeSourceAdapterPresentation',
     );
-    expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('humanizeArrowDelimitedLabel');
     expect(resourceCorrelationPresentationSource).toContain('asTrimmedString');
@@ -1924,13 +1922,11 @@ describe('frontend resource type boundaries', () => {
     expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
-    expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
     expect(resourceCorrelationPresentationSource).not.toContain('formatResourceCorrelationEndpointLabel');
     expect(resourceCorrelationPresentationSource).not.toContain(
       "replace(/\\s*->\\s*/g, ' → ')",
     );
-    expect(resourceDetailDrawerSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('formatIdentifierLabel');
     expect(resourceCorrelationPresentationSource).not.toContain('formatTrimmedLabel');

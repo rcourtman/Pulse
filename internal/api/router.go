@@ -2229,7 +2229,6 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	// Wire intelligence providers for MCP tools
 	// - IncidentRecorderProvider: high-frequency incident data (pulse_get_incident_window)
 	// - EventCorrelatorProvider: Proxmox events (pulse_correlate_events)
-	// - TopologyProvider: relationship graph (pulse_get_relationship_graph)
 	// - KnowledgeStoreProvider: notes (pulse_remember, pulse_recall)
 
 	// Wire incident recorder provider (high-frequency incident data)

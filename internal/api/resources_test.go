@@ -246,8 +246,8 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	if strings.TrimSpace(resp.Data[0].AISafeSummary) == "" {
 		t.Fatal("expected aiSafeSummary on seeded resource")
 	}
-	if got := resp.Data[0].FacetCounts; got.Capabilities != 1 || got.Relationships != 1 || got.RecentChanges != 1 {
-		t.Fatalf("facetCounts = %+v, want 1/1/1", got)
+	if got := resp.Data[0].FacetCounts; got.RecentChanges != 1 {
+		t.Fatalf("facetCounts = %+v, want recentChanges=1", got)
 	}
 }
 
@@ -981,13 +981,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			ResourceID    string                         `json:"resourceId"`
-			Capabilities  []unified.ResourceCapability   `json:"capabilities"`
-			Relationships []unified.ResourceRelationship `json:"relationships"`
-			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
 			Counts        struct {
-				Capabilities               int                                 `json:"capabilities"`
-				Relationships              int                                 `json:"relationships"`
 				RecentChanges              int                                 `json:"recentChanges"`
 				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
 				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
@@ -1000,9 +996,6 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		if payload.ResourceID != "vm:42" || payload.Counts.RecentChanges != 3 || len(payload.RecentChanges) != 1 {
 			t.Fatalf("unexpected facets payload: %#v", payload)
 		}
-		if payload.Counts.Capabilities != 1 || payload.Counts.Relationships != 1 {
-			t.Fatalf("unexpected facet counts: %#v", payload.Counts)
-		}
 		if got := payload.Counts.RecentChangeKinds; len(got) != 2 || got[unified.ChangeRestart] != 1 || got[unified.ChangeAnomaly] != 2 {
 			t.Fatalf("unexpected recent change kind counts: %#v", got)
 		}
@@ -1011,9 +1004,6 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.Counts.RecentChangeSourceAdapters; len(got) != 2 || got[unified.AdapterProxmox] != 2 || got[unified.AdapterDocker] != 1 {
 			t.Fatalf("unexpected recent change source adapter counts: %#v", got)
-		}
-		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
-			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
 		}
 		if got := payload.RecentChanges[0].Metadata["ticket"]; got != "INC-1234" {
 			t.Fatalf("unexpected change metadata: %#v", payload.RecentChanges[0].Metadata)
@@ -1106,12 +1096,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			ResourceID    string                         `json:"resourceId"`
-			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
-			Relationships []unified.ResourceRelationship `json:"relationships"`
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
 			Counts        struct {
-				Capabilities               int                                 `json:"capabilities"`
-				Relationships              int                                 `json:"relationships"`
 				RecentChanges              int                                 `json:"recentChanges"`
 				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
 				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`
@@ -1146,12 +1133,9 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			ResourceID    string                         `json:"resourceId"`
-			RecentChanges []unified.ResourceChange       `json:"recentChanges"`
-			Relationships []unified.ResourceRelationship `json:"relationships"`
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
 			Counts        struct {
-				Capabilities               int                                 `json:"capabilities"`
-				Relationships              int                                 `json:"relationships"`
 				RecentChanges              int                                 `json:"recentChanges"`
 				RecentChangeKinds          map[unified.ChangeKind]int          `json:"recentChangeKinds"`
 				RecentChangeSourceTypes    map[unified.ChangeSourceType]int    `json:"recentChangeSourceTypes"`

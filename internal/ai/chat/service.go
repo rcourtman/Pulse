@@ -51,7 +51,6 @@ type (
 	MetadataUpdater            = tools.MetadataUpdater
 	IncidentRecorderProvider   = tools.IncidentRecorderProvider
 	EventCorrelatorProvider    = tools.EventCorrelatorProvider
-	TopologyProvider           = tools.TopologyProvider
 	KnowledgeStoreProvider     = tools.KnowledgeStoreProvider
 	MCPDiscoveryProvider       = tools.DiscoveryProvider
 	MCPUnifiedResourceProvider = tools.UnifiedResourceProvider
@@ -1215,14 +1214,6 @@ func (s *Service) SetEventCorrelatorProvider(provider EventCorrelatorProvider) {
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetEventCorrelatorProvider(provider)
-	}
-}
-
-func (s *Service) SetTopologyProvider(provider TopologyProvider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.executor != nil {
-		s.executor.SetTopologyProvider(provider)
 	}
 }
 

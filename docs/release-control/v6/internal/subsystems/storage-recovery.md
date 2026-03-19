@@ -167,8 +167,8 @@ pages do not hit a missing-provider 500 before the monitor is fully wired.
 The shared unified-resource consumer hook now also preserves `recentChanges`,
 `facetCounts`, `policy`, and `aiSafeSummary` fields when storage and recovery
 surfaces read unified resources, so those pages see the same control-plane
-timeline facets as the dedicated resource drawer instead of flattening them
-away locally.
+timeline facets and recent-change totals as the dedicated resource drawer
+instead of flattening them away locally.
 The same storage-facing runtime paths now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
