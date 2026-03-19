@@ -21,6 +21,7 @@ import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getProblemResourceStatusVariant } from '@/utils/problemResourcePresentation';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
 interface ProblemResourcesTableProps {
@@ -78,9 +79,9 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
                     <a
                       href={resourceLink(pr)}
                       class="text-xs font-medium text-base-content hover:underline truncate block max-w-[200px]"
-                      title={pr.resource.displayName || pr.resource.name}
+                      title={getPreferredResourceDisplayName(pr.resource)}
                     >
-                      {pr.resource.displayName || pr.resource.name}
+                      {getPreferredResourceDisplayName(pr.resource)}
                     </a>
                   </TableCell>
                   <TableCell class="hidden sm:table-cell">

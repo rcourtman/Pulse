@@ -158,6 +158,8 @@ describe('computeDashboardOverview', () => {
       'infra-5',
       'infra-1',
     ]);
+    expect(overview.infrastructure.topCPU[0]?.name).toBe('Node 2');
+    expect(overview.infrastructure.topMemory[0]?.name).toBe('Cluster 6');
 
     expect(overview.workloads.total).toBe(0);
     expect(overview.storage.total).toBe(0);
@@ -184,6 +186,37 @@ describe('computeDashboardOverview', () => {
     });
     expect(overview.infrastructure.total).toBe(0);
     expect(overview.storage.total).toBe(0);
+  });
+
+  it('uses governed labels in dashboard summary rows when policy requires them', () => {
+    const resources: Resource[] = [
+      createResource({
+        id: 'infra-sensitive',
+        type: 'agent',
+        displayName: 'Sensitive Host',
+        name: 'sensitive-host',
+        aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+        policy: {
+          sensitivity: 'restricted',
+          routing: {
+            scope: 'local-only',
+            redact: ['hostname', 'alias'],
+          },
+        },
+        status: 'online',
+        cpu: { current: 95 },
+        memory: { current: 88 },
+      }),
+    ];
+
+    const overview = computeDashboardOverview(resources, []);
+
+    expect(overview.infrastructure.topCPU[0]?.name).toBe(
+      'restricted host summary safe for remote AI consumption',
+    );
+    expect(overview.infrastructure.topMemory[0]?.name).toBe(
+      'restricted host summary safe for remote AI consumption',
+    );
   });
 
   it('handles full mixed resources including storage thresholds and byte totals', () => {

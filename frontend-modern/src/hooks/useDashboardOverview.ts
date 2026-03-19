@@ -4,6 +4,7 @@ import type { Resource, ResourceMetric, ResourceStatus } from '@/types/resource'
 import { isInfrastructure, isStorage, isWorkload } from '@/types/resource';
 import { METRIC_THRESHOLDS, getMetricSeverity } from '@/utils/metricThresholds';
 import { OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 
 export interface ProblemResource {
   resource: Resource;
@@ -99,7 +100,7 @@ function buildTopInfrastructureMetrics(
 
       return {
         id: resource.id,
-        name: resource.displayName || resource.name,
+        name: getPreferredResourceDisplayName(resource),
         percent,
       };
     })

@@ -54,4 +54,38 @@ describe('ProblemResourcesTable', () => {
     expect(storageLink.tagName).toBe('A');
     expect(storageLink.getAttribute('href')).toBe('/storage');
   });
+
+  it('renders governed labels for policy-aware problem resources', () => {
+    render(() => (
+      <ProblemResourcesTable
+        problems={[
+          {
+            resource: makeResource({
+              id: 'governed-1',
+              name: 'sensitive-host',
+              displayName: 'Sensitive Host',
+              aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+              policy: {
+                sensitivity: 'restricted',
+                routing: {
+                  scope: 'local-only',
+                  redact: ['hostname', 'alias'],
+                },
+              },
+            }),
+            problems: ['Offline'],
+            worstValue: 200,
+          },
+        ]}
+      />
+    ));
+
+    const resourceLink = screen.getByText('restricted host summary safe for remote AI consumption');
+    expect(resourceLink.tagName).toBe('A');
+    expect(resourceLink.getAttribute('title')).toBe(
+      'restricted host summary safe for remote AI consumption',
+    );
+    expect(screen.queryByText('Sensitive Host')).toBeNull();
+    expect(screen.queryByText('sensitive-host')).toBeNull();
+  });
 });
