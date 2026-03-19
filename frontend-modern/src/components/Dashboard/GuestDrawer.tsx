@@ -6,6 +6,7 @@ import { DiskList } from './DiskList';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import {
   getDiscoveryResourceTypeForWorkload,
+  getCanonicalWorkloadId,
   getWebInterfaceTargetLabelForWorkload,
   resolveWorkloadType,
 } from '@/utils/workloads';
@@ -28,10 +29,7 @@ interface GuestDrawerProps {
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const navigate = useNavigate();
-  const guestId = () => {
-    if (props.guest.id) return props.guest.id;
-    return `${props.guest.instance}:${props.guest.node}:${props.guest.vmid}`;
-  };
+  const guestId = () => getCanonicalWorkloadId(props.guest);
   const infrastructureHref = () => buildInfrastructureHrefForWorkload(props.guest);
 
   const isVM = (guest: Guest): boolean => {

@@ -316,6 +316,10 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
+    expect(guestRowSource).toContain('getCanonicalWorkloadId');
+    expect(guestRowSource).not.toContain('buildGuestId');
+    expect(guestDrawerSource).toContain('getCanonicalWorkloadId');
+    expect(guestDrawerSource).not.toContain('const guestId = () => {');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

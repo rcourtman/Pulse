@@ -110,10 +110,6 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
 const GROUPED_FIRST_CELL_INDENT = 'pl-3 sm:pl-5 lg:pl-8';
 const DEFAULT_FIRST_CELL_INDENT = 'pl-2 sm:pl-3';
 
-const buildGuestId = (guest: Guest) => {
-  return getCanonicalWorkloadId(guest);
-};
-
 // Type guard for VM vs Container
 const isVM = (guest: Guest): guest is VM => {
   return resolveWorkloadType(guest) === 'vm';
@@ -771,7 +767,7 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const navigate = useNavigate();
-  const guestId = createMemo(() => buildGuestId(props.guest));
+  const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
   const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
 
   // Use breakpoint hook directly for responsive behavior

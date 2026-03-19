@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
+import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -507,19 +508,23 @@ describe('GuestDrawer', () => {
   // ── WebInterfaceUrlField ──
 
   describe('WebInterfaceUrlField', () => {
-    it('passes correct metadataId using guest.id', () => {
+    it('passes canonical metadataId using shared workload identity', () => {
       render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
-      expect(screen.getByTestId('url-id').textContent).toBe('my-guest-id');
+      expect(screen.getByTestId('url-id').textContent).toBe(
+        getCanonicalWorkloadId(makeGuest({ id: 'my-guest-id' })),
+      );
     });
 
-    it('builds fallback id from instance:node:vmid when id is empty', () => {
+    it('builds canonical id from instance:node:vmid when id is empty', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-id').textContent).toBe('pve:n1:200');
+      expect(screen.getByTestId('url-id').textContent).toBe(
+        getCanonicalWorkloadId(makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })),
+      );
     });
 
     it('labels app-container guests as "container"', () => {
