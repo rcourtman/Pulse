@@ -399,15 +399,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const historyFacetCounts = createMemo(
     () => historyFacetBundle()?.counts ?? resourceFacetCounts(),
   );
-  const sortedResourceCorrelations = createMemo(() =>
-    [...resourceCorrelations()].sort((left, right) => {
-      const confidenceDiff = (right.confidence || 0) - (left.confidence || 0);
-      if (confidenceDiff !== 0) return confidenceDiff;
-      const leftTime = Date.parse(left.last_seen || '');
-      const rightTime = Date.parse(right.last_seen || '');
-      return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
-    }),
-  );
   const hasTimelineFilters = createMemo(
     () =>
       Boolean(
@@ -891,7 +882,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     title="Graph context"
                     dependencies={resourceDependencies()}
                     dependents={resourceDependents()}
-                    correlations={sortedResourceCorrelations()}
+                    correlations={resourceCorrelations()}
                     buildResourceHref={buildInfrastructureResourceHref}
                     showLastSeen
                   />

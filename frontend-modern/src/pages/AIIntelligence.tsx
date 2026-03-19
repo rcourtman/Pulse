@@ -545,11 +545,11 @@ export function AIIntelligence() {
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
-  const correlationHighlights = createMemo(
-    () => aiIntelligenceStore.correlations?.correlations?.slice(0, 3) ?? [],
-  );
   const correlationTotal = createMemo(
-    () => aiIntelligenceStore.correlations?.count ?? correlationHighlights().length,
+    () =>
+      aiIntelligenceStore.correlations?.count ??
+      aiIntelligenceStore.correlations?.correlations?.length ??
+      0,
   );
 
   // Live in-progress run entry for history list
@@ -1387,10 +1387,10 @@ export function AIIntelligence() {
                       </dl>
                     </div>
 
-                    <Show when={correlationHighlights().length > 0}>
+                    <Show when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}>
                       <ResourceGraphSummary
                         title="Learned correlations"
-                        correlations={correlationHighlights()}
+                        correlations={aiIntelligenceStore.correlations?.correlations ?? []}
                         summaryText={`${correlationTotal()} total`}
                         buildResourceHref={(resourceId) =>
                           buildInfrastructurePath({ resource: resourceId })

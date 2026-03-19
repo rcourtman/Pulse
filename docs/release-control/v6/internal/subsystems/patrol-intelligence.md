@@ -106,7 +106,9 @@ and the resource drawer both reflect the same learned edge evidence instead
 of each page fetching its own copy. Both surfaces now render that evidence
 through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
 card, so the correlation layout stays governed by one component instead of
-two page-local card implementations.
+two page-local card implementations. That shared card also owns the
+correlation ordering and truncation rule, so the page and drawer hand it raw
+correlation lists instead of slicing or re-sorting them locally.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches

@@ -109,7 +109,9 @@ reasoning from raw events. The Patrol intelligence page now also renders that
 correlation evidence through the shared
 `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
 card, so the same learned-edge list stays governed by one frontend surface
-instead of separate page-local implementations.
+instead of separate page-local implementations. That shared card also owns
+the correlation ordering and truncation rule, so callers pass raw correlation
+lists instead of encoding their own sort or top-N behavior.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

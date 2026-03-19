@@ -1,4 +1,4 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -26,9 +26,18 @@ const formatPluralCount = (count: number, singular: string, plural: string): str
 const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
   parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
 
+const sortResourceCorrelations = (correlations: ResourceCorrelation[]): ResourceCorrelation[] =>
+  [...correlations].sort((left, right) => {
+    const confidenceDiff = (right.confidence || 0) - (left.confidence || 0);
+    if (confidenceDiff !== 0) return confidenceDiff;
+    const leftTime = Date.parse(left.last_seen || '');
+    const rightTime = Date.parse(right.last_seen || '');
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  });
+
 export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props) => {
   const className = () => props.class?.trim() ?? '';
-  const correlations = () => props.correlations ?? [];
+  const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
   const dependencies = () => props.dependencies ?? [];
   const dependents = () => props.dependents ?? [];
   const maxCorrelations = () => props.maxCorrelations ?? 3;

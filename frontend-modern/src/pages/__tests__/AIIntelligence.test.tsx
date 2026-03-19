@@ -390,21 +390,35 @@ describe('AIIntelligence entitlement gating', () => {
     getCorrelationsMock.mockResolvedValue({
       correlations: [
         {
+          source_id: 'storage-2',
+          source_name: 'Storage 2',
+          source_type: 'storage',
+          target_id: 'vm-200',
+          target_name: 'VM 200',
+          target_type: 'vm',
+          event_pattern: 'disk_full -> restart',
+          occurrences: 2,
+          avg_delay: '1m30s',
+          confidence: 0.95,
+          last_seen: '2026-03-01T00:05:00Z',
+          description: 'Disk pressure often precedes restarts',
+        },
+        {
           source_id: 'storage-1',
           source_name: 'Storage 1',
           source_type: 'storage',
           target_id: 'vm-100',
           target_name: 'VM 100',
           target_type: 'vm',
-          event_pattern: 'disk_full -> restart',
-          occurrences: 2,
-          avg_delay: '1m30s',
-          confidence: 0.875,
-          last_seen: '2026-03-01T00:05:00Z',
-          description: 'Disk pressure often precedes restarts',
+          event_pattern: 'cpu_high -> restart',
+          occurrences: 1,
+          avg_delay: '3m',
+          confidence: 0.5,
+          last_seen: '2026-03-01T00:03:00Z',
+          description: 'Lower-confidence backup pattern',
         },
       ],
-      count: 1,
+      count: 2,
     });
 
     render(() => <AIIntelligence />);
@@ -413,21 +427,28 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('Learned correlations')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('1 total')).toBeInTheDocument();
+    expect(screen.getByText('2 total')).toBeInTheDocument();
+    const storage2Link = screen.getByRole('link', {
+      name: 'Open source resource Storage 2 in Infrastructure',
+    });
+    const storage1Link = screen.getByRole('link', {
+      name: 'Open source resource Storage 1 in Infrastructure',
+    });
+    expect(storage2Link).toHaveAttribute('href', '/infrastructure?resource=storage-2');
+    expect(screen.getByRole('link', { name: 'Open target resource VM 200 in Infrastructure' }))
+      .toHaveAttribute('href', '/infrastructure?resource=vm-200');
+    expect(screen.getByRole('link', { name: 'Open target resource VM 100 in Infrastructure' }))
+      .toHaveAttribute('href', '/infrastructure?resource=vm-100');
     expect(
-      screen.getByRole('link', {
-        name: 'Open source resource Storage 1 in Infrastructure',
-      }),
-    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
-    expect(
-      screen.getByRole('link', {
-        name: 'Open target resource VM 100 in Infrastructure',
-      }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
+      storage2Link.compareDocumentPosition(storage1Link) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText('Storage 1')).toBeInTheDocument();
     expect(screen.getByText('VM 100')).toBeInTheDocument();
+    expect(screen.getByText('Cpu High → Restart')).toBeInTheDocument();
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
-    expect(screen.getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
+    expect(screen.getByText(/2 occurrences .* 95% confidence/)).toBeInTheDocument();
+    expect(screen.getByText(/1 occurrence .* 50% confidence/)).toBeInTheDocument();
     expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
   });
 

@@ -166,7 +166,9 @@ resource drawer both expose the same learned edge evidence instead of only
 showing a correlation count. The same page and drawer now render that list
 through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
 card, so the learned-correlation layout and edge wording stay aligned across
-both surfaces.
+both surfaces. That shared card also owns the correlation ordering and
+truncation rule, so callers pass raw learned edges instead of page-specific
+top-N slices.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share
