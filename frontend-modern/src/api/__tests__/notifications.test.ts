@@ -93,6 +93,8 @@ describe('NotificationsAPI', () => {
       {
         service: 'discord',
         label: 'Discord',
+        mentionPlaceholder: '@everyone or <@USER_ID> or <@&ROLE_ID>',
+        mentionHelp: 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>',
         name: 'Discord Webhook',
         description: 'Discord server webhook',
         urlPattern: 'https://discord.com/api/webhooks/.../...',

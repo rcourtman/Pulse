@@ -173,6 +173,30 @@ export function getAlertWebhookServiceLabelFromTemplates(
   return getAlertWebhookServiceLabel(service);
 }
 
+export function getAlertWebhookMentionPlaceholderFromTemplates(
+  service: string,
+  templates: AlertWebhookTemplate[] = [],
+) {
+  const template = templates.find((item) => item.service === service);
+  return template?.mentionPlaceholder?.trim() || ALERT_WEBHOOK_MENTION_FALLBACK_PLACEHOLDER;
+}
+
+export function getAlertWebhookMentionHelpFromTemplates(
+  service: string,
+  templates: AlertWebhookTemplate[] = [],
+) {
+  const template = templates.find((item) => item.service === service);
+  return template?.mentionHelp?.trim() || '';
+}
+
+export function hasAlertWebhookMentionSupportFromTemplates(
+  service: string,
+  templates: AlertWebhookTemplate[] = [],
+) {
+  const template = templates.find((item) => item.service === service);
+  return Boolean(template?.mentionPlaceholder?.trim() || template?.mentionHelp?.trim());
+}
+
 export function getAlertWebhookCustomFieldPresets(service: string) {
   return ALERT_WEBHOOK_CUSTOM_FIELD_PRESETS[service.trim().toLowerCase()];
 }

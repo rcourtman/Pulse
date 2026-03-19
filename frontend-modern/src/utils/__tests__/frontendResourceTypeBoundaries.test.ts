@@ -2984,8 +2984,9 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).toContain('getAlertWebhookToggleLabel');
     expect(webhookConfigSource).toContain('getAlertWebhookNamePlaceholder');
     expect(webhookConfigSource).toContain('getAlertWebhookUrlPlaceholder');
-    expect(webhookConfigSource).toContain('getAlertWebhookMentionPlaceholder');
-    expect(webhookConfigSource).toContain('getAlertWebhookMentionHelp');
+    expect(webhookConfigSource).toContain('getAlertWebhookMentionPlaceholderFromTemplates');
+    expect(webhookConfigSource).toContain('getAlertWebhookMentionHelpFromTemplates');
+    expect(webhookConfigSource).toContain('hasAlertWebhookMentionSupportFromTemplates');
     expect(webhookConfigSource).toContain('getAlertWebhookTestLabel');
     expect(webhookConfigSource).toContain('getAlertWebhookSubmitLabel');
     expect(webhookConfigSource).not.toContain('Custom webhook endpoint');
@@ -2993,6 +2994,8 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).not.toContain('My Webhook');
     expect(webhookConfigSource).not.toContain('https://example.com/webhook');
     expect(webhookConfigSource).not.toContain('Optional — tag users or groups');
+    expect(webhookConfigSource).not.toContain('getAlertWebhookMentionPlaceholder(');
+    expect(webhookConfigSource).not.toContain('getAlertWebhookMentionHelp(');
     expect(webhookConfigSource).not.toContain('Your Pushover application token');
     expect(webhookConfigSource).not.toContain('Primary user key or group key');
     expect(webhookConfigSource).not.toContain('app_token');
@@ -3007,6 +3010,15 @@ describe('frontend resource type boundaries', () => {
       'export function getAlertWebhookServices',
     );
     expect(alertWebhookPresentationSource).not.toContain('ALERT_WEBHOOK_SERVICES');
+    expect(alertWebhookPresentationSource).toContain(
+      'export function getAlertWebhookMentionPlaceholderFromTemplates',
+    );
+    expect(alertWebhookPresentationSource).toContain(
+      'export function getAlertWebhookMentionHelpFromTemplates',
+    );
+    expect(alertWebhookPresentationSource).toContain(
+      'export function hasAlertWebhookMentionSupportFromTemplates',
+    );
     expect(alertWebhookPresentationSource).toContain(
       'export function getAlertWebhookCustomFieldPresets',
     );

@@ -4,6 +4,9 @@ import {
   ALERT_WEBHOOK_TEST_SUCCESS,
   getAlertWebhookServices,
   getAlertWebhookCustomFieldPresets,
+  getAlertWebhookMentionHelpFromTemplates,
+  getAlertWebhookMentionPlaceholderFromTemplates,
+  hasAlertWebhookMentionSupportFromTemplates,
   getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookTestFailure,
   getAlertWebhookTestSuccess,
@@ -115,5 +118,34 @@ describe('alertWebhookPresentation', () => {
     ).toBe('Discord');
 
     expect(getAlertWebhookServiceLabelFromTemplates('custom-service', [])).toBe('custom-service');
+  });
+
+  it('prefers backend template mention copy for service presentation', () => {
+    const templates = [
+      {
+        service: 'discord',
+        label: 'Discord',
+        mentionPlaceholder: '@everyone or <@USER_ID> or <@&ROLE_ID>',
+        mentionHelp: 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>',
+        name: 'Discord Webhook',
+        description: 'Discord server webhook',
+        urlPattern: 'https://discord.com/api/webhooks/.../...',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        payloadTemplate: '',
+        instructions: '',
+      },
+    ];
+
+    expect(getAlertWebhookMentionPlaceholderFromTemplates('discord', templates as any)).toBe(
+      '@everyone or <@USER_ID> or <@&ROLE_ID>',
+    );
+    expect(getAlertWebhookMentionHelpFromTemplates('discord', templates as any)).toBe(
+      'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>',
+    );
+    expect(getAlertWebhookMentionPlaceholderFromTemplates('custom-service', [])).toBe('@everyone');
+    expect(getAlertWebhookMentionHelpFromTemplates('custom-service', [])).toBe('');
+    expect(hasAlertWebhookMentionSupportFromTemplates('discord', templates as any)).toBe(true);
+    expect(hasAlertWebhookMentionSupportFromTemplates('custom-service', [])).toBe(false);
   });
 });

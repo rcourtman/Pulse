@@ -25,6 +25,8 @@ export interface WebhookTemplate {
   id?: string;
   service: string;
   label?: string;
+  mentionPlaceholder?: string;
+  mentionHelp?: string;
   name: string;
   urlPattern: string;
   method: string;

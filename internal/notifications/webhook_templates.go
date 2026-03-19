@@ -4,6 +4,8 @@ package notifications
 type WebhookTemplate struct {
 	Service                 string            `json:"service"`
 	Label                   string            `json:"label"`
+	MentionPlaceholder      string            `json:"mentionPlaceholder"`
+	MentionHelp             string            `json:"mentionHelp"`
 	Name                    string            `json:"name"`
 	Description             string            `json:"description"`
 	URLPattern              string            `json:"urlPattern"`
@@ -18,13 +20,15 @@ type WebhookTemplate struct {
 func GetWebhookTemplates() []WebhookTemplate {
 	return []WebhookTemplate{
 		{
-			Service:     "discord",
-			Label:       "Discord",
-			Name:        "Discord Webhook",
-			Description: "Discord server webhook",
-			URLPattern:  "https://discord.com/api/webhooks/{webhook_id}/{webhook_token}",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Service:            "discord",
+			Label:              "Discord",
+			MentionPlaceholder: "@everyone or <@USER_ID> or <@&ROLE_ID>",
+			MentionHelp:        "Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>",
+			Name:               "Discord Webhook",
+			Description:        "Discord server webhook",
+			URLPattern:         "https://discord.com/api/webhooks/{webhook_id}/{webhook_token}",
+			Method:             "POST",
+			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				{{if .Mention}}"content": "{{.Mention}}",{{end}}
@@ -90,13 +94,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. Create a bot with @BotFather on Telegram\n2. Get your bot token\n3. Get your chat ID by messaging the bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates\n4. URL format: https://api.telegram.org/bot<BOT_TOKEN>/sendMessage?chat_id=<CHAT_ID>\n5. IMPORTANT: You MUST include ?chat_id=YOUR_CHAT_ID in the URL",
 		},
 		{
-			Service:     "slack",
-			Label:       "Slack",
-			Name:        "Slack Incoming Webhook",
-			Description: "Slack incoming webhook",
-			URLPattern:  "https://hooks.slack.com/services/{webhook_path}",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Service:            "slack",
+			Label:              "Slack",
+			MentionPlaceholder: "@channel, @here, or <@USER_ID>",
+			MentionHelp:        "Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>",
+			Name:               "Slack Incoming Webhook",
+			Description:        "Slack incoming webhook",
+			URLPattern:         "https://hooks.slack.com/services/{webhook_path}",
+			Method:             "POST",
+			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"text": "{{if .Mention}}{{.Mention}} {{end}}Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
 				"blocks": [
@@ -186,13 +192,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In Slack, go to Apps > Incoming Webhooks\n2. Add to Slack and choose a channel\n3. Copy the webhook URL and paste it here (format: https://hooks.slack.com/services/...)\n4. Optional: Add a mention in the Mention field (e.g., @channel, @here, <@USER_ID>, <!subteam^ID>)",
 		},
 		{
-			Service:     "teams",
-			Label:       "Microsoft Teams",
-			Name:        "Microsoft Teams",
-			Description: "Microsoft Teams webhook",
-			URLPattern:  "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Service:            "teams",
+			Label:              "Microsoft Teams",
+			MentionPlaceholder: "@General or user email",
+			MentionHelp:        "Teams: Use channel names like @General",
+			Name:               "Microsoft Teams",
+			Description:        "Microsoft Teams webhook",
+			URLPattern:         "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
+			Method:             "POST",
+			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"@type": "MessageCard",
 				"@context": "http://schema.org/extensions",
@@ -289,13 +297,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In PagerDuty, go to Configuration > Services\n2. Add an integration > Events API V2\n3. Copy the Integration Key\n4. Add the key as a custom field named 'routing_key'\n\nNote: PagerDuty recommends using Events API v2 for new integrations.",
 		},
 		{
-			Service:     "teams-adaptive",
-			Label:       "Teams (Adaptive)",
-			Name:        "Microsoft Teams (Adaptive Card)",
-			Description: "Teams with Adaptive Cards",
-			URLPattern:  "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Service:            "teams-adaptive",
+			Label:              "Teams (Adaptive)",
+			MentionPlaceholder: "@General or user email",
+			MentionHelp:        "Teams: Use channel names like @General",
+			Name:               "Microsoft Teams (Adaptive Card)",
+			Description:        "Teams with Adaptive Cards",
+			URLPattern:         "https://{tenant}.webhook.office.com/webhookb2/{webhook_path}",
+			Method:             "POST",
+			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"type": "message",
 				"attachments": [{
@@ -485,13 +495,15 @@ View in Pulse: {{.Instance}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
-			Service:     "mattermost",
-			Label:       "Mattermost",
-			Name:        "Mattermost Incoming Webhook",
-			Description: "Mattermost incoming webhook",
-			URLPattern:  "https://{your-mattermost-server}/hooks/{webhook_id}",
-			Method:      "POST",
-			Headers:     map[string]string{"Content-Type": "application/json"},
+			Service:            "mattermost",
+			Label:              "Mattermost",
+			MentionPlaceholder: "@channel, @all, or @username",
+			MentionHelp:        "Mattermost: Use @channel, @all, or @username",
+			Name:               "Mattermost Incoming Webhook",
+			Description:        "Mattermost incoming webhook",
+			URLPattern:         "https://{your-mattermost-server}/hooks/{webhook_id}",
+			Method:             "POST",
+			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",

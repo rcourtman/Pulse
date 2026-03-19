@@ -485,9 +485,24 @@ func TestNotificationHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.GetWebhookTemplates(w, req)
 		assert.Equal(t, 200, w.Code)
-		body := w.Body.String()
-		assert.Contains(t, body, `"label":"Discord"`)
-		assert.Contains(t, body, `"label":"Generic"`)
+		var templates []notifications.WebhookTemplate
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &templates))
+
+		findTemplate := func(service string) notifications.WebhookTemplate {
+			for _, tmpl := range templates {
+				if tmpl.Service == service {
+					return tmpl
+				}
+			}
+			return notifications.WebhookTemplate{}
+		}
+
+		discord := findTemplate("discord")
+		generic := findTemplate("generic")
+		assert.Equal(t, "Discord", discord.Label)
+		assert.Equal(t, "Generic", generic.Label)
+		assert.Equal(t, "@everyone or <@USER_ID> or <@&ROLE_ID>", discord.MentionPlaceholder)
+		assert.Equal(t, "Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>", discord.MentionHelp)
 	})
 
 	t.Run("GetWebhookHistory", func(t *testing.T) {

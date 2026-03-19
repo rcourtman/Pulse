@@ -80,7 +80,10 @@ The webhook template registry is also the canonical source of truth for the
 alert webhook service set and the metadata the frontend uses to build its
 service chooser. Frontend presentation may format the options, but it must
 derive the available services, labels, and descriptions from the backend
-template registry instead of keeping a second hardcoded service list.
+template registry instead of keeping a second hardcoded service list. Mention
+field visibility plus mention-placeholder/help copy for supported services
+must also come from the same backend registry so the editor does not carry a
+second service-specific presentation map.
 Email single-alert, grouped, resolved, and HTML send paths must follow that
 same ownership rule: they may expose different calling surfaces, but they must
 all route through one canonical enhanced email executor instead of rebuilding

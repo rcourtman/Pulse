@@ -40,6 +40,8 @@ function makeWebhook(overrides: Partial<Webhook> = {}): Webhook {
 const discordTemplate = {
   service: 'discord',
   label: 'Discord',
+  mentionPlaceholder: '@everyone or <@USER_ID> or <@&ROLE_ID>',
+  mentionHelp: 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>',
   name: 'Discord Webhook',
   description: 'Discord server webhook',
   urlPattern: 'https://discord.com/api/webhooks/...',
@@ -52,6 +54,8 @@ const discordTemplate = {
 const slackTemplate = {
   service: 'slack',
   label: 'Slack',
+  mentionPlaceholder: '@channel, @here, or <@USER_ID>',
+  mentionHelp: 'Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>',
   name: 'Slack Webhook',
   description: 'Slack incoming webhook',
   urlPattern: 'https://hooks.slack.com/services/...',

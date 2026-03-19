@@ -358,8 +358,9 @@ stay in `internal/notifications/` rather than becoming a second API-layer owner
 for the same transport contract.
 The notifications API boundary also carries the canonical webhook template
 shape used by the frontend service chooser: `frontend-modern/src/api/notifications.ts`
-must expose the registry's service label and description metadata, and it may
-not invent a second frontend-only service taxonomy for the chooser.
+must expose the registry's service label, description, and mention-copy
+metadata, and it may not invent a second frontend-only service taxonomy for
+the chooser.
 That same notifications boundary must also canonicalize legacy service-specific
 input aliases at ingress instead of leaving them as a live runtime contract:
 Pushover `app_token` / `user_token` may be accepted only at config/API/UI input

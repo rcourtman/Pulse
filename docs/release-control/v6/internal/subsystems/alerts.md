@@ -71,7 +71,7 @@ normalization fork.
 
 The alert webhook service chooser also now derives its service set from the
 backend webhook template registry, rather than keeping a second frontend-only
-list of services, labels, and descriptions.
+list of services, labels, descriptions, and mention-copy metadata.
 
 Frontend alert surfaces and backend alert-support files now require explicit
 registry path-policy coverage, so new alert-owned runtime files must be mapped

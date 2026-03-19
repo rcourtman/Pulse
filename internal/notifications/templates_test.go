@@ -160,6 +160,13 @@ func TestGetWebhookTemplates(t *testing.T) {
 
 	// Track seen services to ensure uniqueness
 	seenServices := make(map[string]bool)
+	mentionServices := map[string]bool{
+		"discord":        true,
+		"slack":          true,
+		"teams":          true,
+		"teams-adaptive": true,
+		"mattermost":     true,
+	}
 
 	for i, tmpl := range templates {
 		t.Run(tmpl.Name, func(t *testing.T) {
@@ -182,6 +189,15 @@ func TestGetWebhookTemplates(t *testing.T) {
 			// Label must be non-empty so the frontend can derive the canonical service chooser
 			if tmpl.Label == "" {
 				t.Errorf("Template %q has empty Label", tmpl.Service)
+			}
+
+			if mentionServices[tmpl.Service] {
+				if tmpl.MentionPlaceholder == "" {
+					t.Errorf("Template %q has empty MentionPlaceholder", tmpl.Service)
+				}
+				if tmpl.MentionHelp == "" {
+					t.Errorf("Template %q has empty MentionHelp", tmpl.Service)
+				}
 			}
 
 			// Description must be non-empty so the frontend can derive the service chooser
@@ -268,6 +284,9 @@ func TestGetWebhookTemplates_DiscordSettings(t *testing.T) {
 	if !strings.Contains(discord.URLPattern, "discord.com") {
 		t.Errorf("Discord URLPattern should contain discord.com, got %q", discord.URLPattern)
 	}
+	if discord.MentionPlaceholder == "" || discord.MentionHelp == "" {
+		t.Fatal("Discord mention metadata should be present")
+	}
 	if discord.Method != "POST" {
 		t.Errorf("Discord Method = %q, want POST", discord.Method)
 	}
@@ -300,6 +319,9 @@ func TestGetWebhookTemplates_SlackSettings(t *testing.T) {
 	}
 	if !strings.Contains(slack.URLPattern, "hooks.slack.com") {
 		t.Errorf("Slack URLPattern should contain hooks.slack.com, got %q", slack.URLPattern)
+	}
+	if slack.MentionPlaceholder == "" || slack.MentionHelp == "" {
+		t.Fatal("Slack mention metadata should be present")
 	}
 	if slack.Method != "POST" {
 		t.Errorf("Slack Method = %q, want POST", slack.Method)
@@ -403,6 +425,9 @@ func TestGetWebhookTemplates_GenericSettings(t *testing.T) {
 
 	if generic.Label != "Generic" {
 		t.Errorf("Generic Label = %q, want Generic", generic.Label)
+	}
+	if generic.MentionPlaceholder != "" || generic.MentionHelp != "" {
+		t.Fatal("Generic template should not carry mention metadata")
 	}
 	// Generic should have empty URL pattern (user fills it in)
 	if generic.URLPattern != "" {

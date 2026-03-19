@@ -27,8 +27,9 @@ import {
   ALERT_WEBHOOK_URL_HELP_PATH,
   ALERT_WEBHOOK_URL_HELP_QUERY,
   ALERT_WEBHOOK_URL_HELP_TEMPLATE_VARIABLE,
-  getAlertWebhookMentionHelp,
-  getAlertWebhookMentionPlaceholder,
+  getAlertWebhookMentionHelpFromTemplates,
+  getAlertWebhookMentionPlaceholderFromTemplates,
+  hasAlertWebhookMentionSupportFromTemplates,
   getAlertWebhookCustomFieldPresets,
   getAlertWebhookNamePlaceholder,
   getAlertWebhookServiceLabelFromTemplates,
@@ -527,9 +528,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
 
           {/* Mention Field - show for supported services */}
           <Show
-            when={['discord', 'slack', 'teams', 'teams-adaptive', 'mattermost'].includes(
-              formData().service,
-            )}
+            when={hasAlertWebhookMentionSupportFromTemplates(formData().service, templates())}
           >
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
@@ -540,12 +539,17 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 type="text"
                 value={formData().mention || ''}
                 onInput={(e) => setFormData({ ...formData(), mention: e.currentTarget.value })}
-                placeholder={getAlertWebhookMentionPlaceholder(formData().service)}
+                placeholder={getAlertWebhookMentionPlaceholderFromTemplates(
+                  formData().service,
+                  templates(),
+                )}
                 class={controlClass('px-2 py-1.5')}
               />
-              <Show when={getAlertWebhookMentionHelp(formData().service)}>
+              <Show
+                when={getAlertWebhookMentionHelpFromTemplates(formData().service, templates())}
+              >
                 <p class={formHelpText + ' mt-1'}>
-                  {getAlertWebhookMentionHelp(formData().service)}
+                  {getAlertWebhookMentionHelpFromTemplates(formData().service, templates())}
                 </p>
               </Show>
             </div>
