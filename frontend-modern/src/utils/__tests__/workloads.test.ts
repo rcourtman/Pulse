@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeWorkloadFilterType,
   getDiscoveryResourceTypeForWorkload,
+  normalizeWorkloadViewModeParam,
   resolveWorkloadType,
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
@@ -235,5 +236,24 @@ describe('getWebInterfaceTargetLabelForWorkload', () => {
   it('labels vm workloads as workload', () => {
     const guest = { workloadType: 'vm' as const, type: 'qemu' };
     expect(getWebInterfaceTargetLabelForWorkload(guest)).toBe('workload');
+  });
+});
+
+describe('normalizeWorkloadViewModeParam', () => {
+  it('normalizes supported dashboard view mode aliases', () => {
+    expect(normalizeWorkloadViewModeParam('all')).toBe('all');
+    expect(normalizeWorkloadViewModeParam('VM')).toBe('vm');
+    expect(normalizeWorkloadViewModeParam('system-container')).toBe('system-container');
+    expect(normalizeWorkloadViewModeParam('docker')).toBe('app-container');
+    expect(normalizeWorkloadViewModeParam('app-container')).toBe('app-container');
+    expect(normalizeWorkloadViewModeParam('k8s')).toBe('pod');
+    expect(normalizeWorkloadViewModeParam('Kubernetes')).toBe('pod');
+    expect(normalizeWorkloadViewModeParam('pod')).toBe('pod');
+  });
+
+  it('rejects unsupported dashboard view mode aliases', () => {
+    expect(normalizeWorkloadViewModeParam('host')).toBeNull();
+    expect(normalizeWorkloadViewModeParam('container')).toBeNull();
+    expect(normalizeWorkloadViewModeParam('')).toBeNull();
   });
 });

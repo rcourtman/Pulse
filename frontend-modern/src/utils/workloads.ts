@@ -1,4 +1,4 @@
-import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
@@ -36,6 +36,16 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
 export const canonicalizeWorkloadFilterType = (value?: string | null): string => {
   const normalized = (value || '').trim().toLowerCase();
   return canonicalizeFrontendResourceType(normalized) || normalized;
+};
+
+export const normalizeWorkloadViewModeParam = (value: string): ViewMode | null => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'all') return 'all';
+  if (normalized === 'vm') return 'vm';
+  if (normalized === 'system-container') return 'system-container';
+  if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
+  if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'pod';
+  return null;
 };
 
 export const resolveWorkloadType = (

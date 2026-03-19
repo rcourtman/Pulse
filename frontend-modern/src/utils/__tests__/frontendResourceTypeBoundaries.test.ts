@@ -312,6 +312,9 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTypePresentationSource).toContain('canonicalizeFrontendResourceType');
     expect(workloadTypeBadgesSource).not.toContain('canonicalizeFrontendResourceType');
     expect(workloadTypeBadgesSource).toContain('getWorkloadTypePresentation');
+    expect(workloadsSource).toContain('export const normalizeWorkloadViewModeParam');
+    expect(dashboardSource).toContain('normalizeWorkloadViewModeParam');
+    expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

@@ -52,7 +52,11 @@ import {
   getDashboardInfrastructureEmptyState,
   getDashboardLoadingState,
 } from '@/utils/dashboardEmptyStatePresentation';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getCanonicalWorkloadId,
+  normalizeWorkloadViewModeParam,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import {
   WorkloadsSummary,
   type WorkloadSummarySnapshot,
@@ -542,19 +546,9 @@ export function Dashboard(props: DashboardProps) {
     return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
   });
 
-  function normalizeViewModeParam(value: string): ViewMode | null {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'all') return 'all';
-    if (normalized === 'vm') return 'vm';
-    if (normalized === 'system-container') return 'system-container';
-    if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
-    if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'pod';
-    return null;
-  }
-
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
-    deserialize: (raw) => normalizeViewModeParam(raw) ?? 'all',
+    deserialize: (raw) => normalizeWorkloadViewModeParam(raw) ?? 'all',
   });
 
   const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
@@ -618,7 +612,7 @@ export function Dashboard(props: DashboardProps) {
     // Context/namespace implies pod view; ignore conflicting type params.
     const hasK8sScope =
       Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
-    const nextMode = normalizeViewModeParam(normalizedType);
+    const nextMode = normalizeWorkloadViewModeParam(normalizedType);
     if (!nextMode) {
       setHandledTypeParam(normalizedType);
       return;
@@ -704,7 +698,7 @@ export function Dashboard(props: DashboardProps) {
     const hasContext = Boolean(urlContext.trim());
     const hasNamespace = Boolean((parsed.namespace ?? '').trim());
     const urlType = parsed.type ?? '';
-    const nextMode = normalizeViewModeParam(urlType);
+    const nextMode = normalizeWorkloadViewModeParam(urlType);
     const runtimeRelevant =
       !hasContext && !hasNamespace && (nextMode === 'app-container' || !urlType.trim());
 

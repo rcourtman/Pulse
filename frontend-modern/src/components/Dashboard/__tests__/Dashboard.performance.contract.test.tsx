@@ -8,6 +8,7 @@ import {
   groupWorkloads,
   computeWorkloadStats,
 } from '../workloadSelectors';
+import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -375,6 +376,13 @@ describe('Dashboard performance contract', () => {
   });
 
   describe('Workload derivation contracts', () => {
+    it('normalizes dashboard view mode aliases through the shared workload helper', () => {
+      expect(normalizeWorkloadViewModeParam('all')).toBe('all');
+      expect(normalizeWorkloadViewModeParam('docker')).toBe('app-container');
+      expect(normalizeWorkloadViewModeParam('Kubernetes')).toBe('pod');
+      expect(normalizeWorkloadViewModeParam('host')).toBeNull();
+    });
+
     it('filterWorkloads returns all guests when no filters active', () => {
       const guests = makeGuests(PROFILES.S);
       const result = filterWorkloads({
