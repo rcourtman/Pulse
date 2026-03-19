@@ -438,7 +438,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const vmid = parseLegacyVmid(vm, platformData);
       mentionCandidates.push({
         id: `vm:${node}:${vmid}`,
-        name: getPreferredResourceDisplayName(vm),
+        displayName: getPreferredResourceDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
         node,
@@ -453,7 +453,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const vmid = parseLegacyVmid(container, platformData);
       mentionCandidates.push({
         id: `system-container:${node}:${vmid}`,
-        name: getPreferredResourceDisplayName(container),
+        displayName: getPreferredResourceDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
         node,
@@ -482,7 +482,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : runtime.status || 'online';
       mentionCandidates.push({
         id: `agent:${dockerActionId}`,
-        name: displayName,
+        displayName,
         type: 'agent',
         status: runtimeStatus,
       });
@@ -494,7 +494,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : container.id;
         mentionCandidates.push({
           id: `docker:${dockerActionId}:${originalContainerId}`,
-          name: getPreferredResourceDisplayName(container),
+          displayName: getPreferredResourceDisplayName(container),
           type: 'app-container',
           status: container.status === 'running' ? 'running' : 'exited',
           node: hostnameOrId,
@@ -506,7 +506,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const node of nodes) {
       mentionCandidates.push({
         id: `node:${node.platformId || ''}:${node.name}`,
-        name: getPreferredResourceDisplayName(node),
+        displayName: getPreferredResourceDisplayName(node),
         type: 'agent',
         status: node.status,
       });
@@ -522,7 +522,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : agentResource.status;
       mentionCandidates.push({
         id: `agent:${agentActionId}`,
-        name,
+        displayName: name,
         type: 'agent',
         status: agentStatus,
       });
@@ -537,7 +537,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const prompt = input().trim();
     if (!prompt) return;
     const mentions = accumulatedMentions();
-    const mentionsForAPI = mentions.length > 0 ? mentions : undefined;
+    const mentionsForAPI =
+      mentions.length > 0
+        ? mentions.map((mention) => ({
+            id: mention.id,
+            name: mention.displayName,
+            type: mention.type,
+            node: mention.node,
+          }))
+        : undefined;
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
@@ -589,7 +597,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Replace @query with the resource name
     const before = currentInput.slice(0, startIndex);
     const after = currentInput.slice(cursorPos);
-    const newValue = `${before}@${resource.name} ${after}`;
+    const newValue = `${before}@${resource.displayName} ${after}`;
 
     setInput(newValue);
     setMentionActive(false);
@@ -605,7 +613,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setTimeout(() => {
       if (textareaRef) {
         textareaRef.focus();
-        const newCursorPos = startIndex + resource.name.length + 2; // +2 for @ and space
+        const newCursorPos = startIndex + resource.displayName.length + 2; // +2 for @ and space
         textareaRef.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);

@@ -127,15 +127,15 @@ vi.mock('../MentionAutocomplete', () => ({
   MentionAutocomplete: (props: {
     visible: boolean;
     query: string;
-    resources: Array<{ id: string; name: string }>;
-    onSelect: (resource: { id: string; name: string }) => void;
+    resources: Array<{ id: string; displayName: string }>;
+    onSelect: (resource: { id: string; displayName: string }) => void;
   }) => (
     <div
       data-testid="mention-autocomplete"
       data-visible={String(props.visible)}
       data-query={props.query}
       data-resource-count={String(props.resources.length)}
-      data-resource-labels={props.resources.map((resource) => resource.name).join('|')}
+      data-resource-labels={props.resources.map((resource) => resource.displayName).join('|')}
     >
       <button
         type="button"
@@ -528,7 +528,7 @@ describe('AIChat', () => {
         {
           id: 'agent-1',
           name: 'secret-node-1',
-          displayName: 'secret-node-1',
+          displayName: 'redacted by policy',
           type: 'agent' as const,
           status: 'online',
           policy: governedPolicy,
@@ -537,7 +537,7 @@ describe('AIChat', () => {
         {
           id: 'agent-2',
           name: 'secret-node-2',
-          displayName: 'secret-node-2',
+          displayName: 'redacted by policy',
           type: 'agent' as const,
           status: 'online',
           policy: governedPolicy,
@@ -571,7 +571,7 @@ describe('AIChat', () => {
         {
           id: 'agent-1',
           name: 'secret-node-1',
-          displayName: 'secret-node-1',
+          displayName: 'redacted by policy',
           type: 'agent' as const,
           status: 'online',
           policy: governedPolicy,

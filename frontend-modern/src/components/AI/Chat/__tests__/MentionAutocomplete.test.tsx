@@ -8,7 +8,7 @@ afterEach(cleanup);
 function makeResource(overrides?: Partial<MentionResource>): MentionResource {
   return {
     id: 'vm-100',
-    name: 'web-server',
+    displayName: 'web-server',
     type: 'vm',
     status: 'running',
     node: 'pve1',
@@ -17,25 +17,31 @@ function makeResource(overrides?: Partial<MentionResource>): MentionResource {
 }
 
 const defaultResources: MentionResource[] = [
-  makeResource({ id: 'vm-100', name: 'web-server', type: 'vm', status: 'running', node: 'pve1' }),
+  makeResource({
+    id: 'vm-100',
+    displayName: 'web-server',
+    type: 'vm',
+    status: 'running',
+    node: 'pve1',
+  }),
   makeResource({
     id: 'ct-200',
-    name: 'db-container',
+    displayName: 'db-container',
     type: 'system-container',
     status: 'running',
     node: 'pve2',
   }),
-  makeResource({ id: 'node-1', name: 'pve1', type: 'agent', status: 'running' }),
+  makeResource({ id: 'node-1', displayName: 'pve1', type: 'agent', status: 'running' }),
   makeResource({
     id: 'docker-1',
-    name: 'nginx-proxy',
+    displayName: 'nginx-proxy',
     type: 'app-container',
     status: 'running',
     node: 'docker-host',
   }),
   makeResource({
     id: 'host-1',
-    name: 'bare-metal-01',
+    displayName: 'bare-metal-01',
     type: 'agent',
     status: 'stopped',
     node: undefined,
@@ -79,7 +85,7 @@ describe('MentionAutocomplete', () => {
     it('shows all resources (up to 10) when query is empty', () => {
       renderAutocomplete({ query: '' });
       for (const r of defaultResources) {
-        expect(screen.getByText(r.name)).toBeInTheDocument();
+        expect(screen.getByText(r.displayName)).toBeInTheDocument();
       }
     });
 
@@ -97,7 +103,7 @@ describe('MentionAutocomplete', () => {
 
     it('limits results to 10 items', () => {
       const manyResources = Array.from({ length: 15 }, (_, i) =>
-        makeResource({ id: `vm-${i}`, name: `server-${i}` }),
+        makeResource({ id: `vm-${i}`, displayName: `server-${i}` }),
       );
       renderAutocomplete({ resources: manyResources, query: '' });
 

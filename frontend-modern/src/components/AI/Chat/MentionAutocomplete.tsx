@@ -4,7 +4,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 
 export interface MentionResource {
   id: string;
-  name: string;
+  displayName: string;
   type: 'vm' | 'system-container' | 'app-container' | 'agent';
   status?: string;
   node?: string;
@@ -27,7 +27,9 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     const q = props.query.toLowerCase();
     if (!q) return props.resources.slice(0, 10); // Show first 10 if no query
 
-    return props.resources.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 10); // Limit to 10 results
+    return props.resources
+      .filter((r) => r.displayName.toLowerCase().includes(q))
+      .slice(0, 10); // Limit to 10 results
   };
 
   // Reset selection when query changes
@@ -153,7 +155,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                 <span class="text-muted">{getTypeIcon(resource.type)}</span>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="font-medium text-base-content truncate">{resource.name}</span>
+                    <span class="font-medium text-base-content truncate">{resource.displayName}</span>
                     <Show when={resource.status}>
                       <StatusDot
                         variant={getSimpleStatusIndicator(resource.status).variant}
