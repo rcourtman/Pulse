@@ -236,6 +236,15 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const sortedResources = createMemo(() =>
     sortResources(primaryResources(), sortKey(), sortDirection()),
   );
+  const resourceLabelById = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const resource of props.resources) {
+      map.set(resource.id, getPreferredResourceDisplayName(resource));
+    }
+    return map;
+  });
+  const resolveResourceLabel = (resourceId: string): string | undefined =>
+    resourceLabelById().get(resourceId);
 
   const groupedResources = createMemo<ResourceGroup[]>(() =>
     groupResources(sortedResources(), props.groupingMode ?? 'grouped'),
@@ -954,6 +963,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             >
                               <ResourceDetailDrawer
                                 resource={resource}
+                                resolveResourceLabel={resolveResourceLabel}
                                 onClose={() => setExpandedResourceId(null)}
                               />
                             </TableCell>
@@ -1260,6 +1270,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               >
                                 <ResourceDetailDrawer
                                   resource={resource}
+                                  resolveResourceLabel={resolveResourceLabel}
                                   onClose={() => setExpandedResourceId(null)}
                                 />
                               </TableCell>
@@ -1595,6 +1606,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               >
                                 <ResourceDetailDrawer
                                   resource={resource}
+                                  resolveResourceLabel={resolveResourceLabel}
                                   onClose={() => setExpandedResourceId(null)}
                                 />
                               </TableCell>

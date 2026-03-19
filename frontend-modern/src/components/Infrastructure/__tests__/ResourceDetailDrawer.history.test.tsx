@@ -150,7 +150,14 @@ describe('ResourceDetailDrawer history tab', () => {
       platformData: { sources: ['proxmox'] },
     });
 
-    render(() => <ResourceDetailDrawer resource={resource} />);
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource}
+        resolveResourceLabel={(resourceId) =>
+          resourceId === 'node:pve-1' ? 'PVE Node 1' : resourceId
+        }
+      />
+    ));
 
     await screen.findByText('History loaded');
     expect(screen.getAllByText('Timeline 3')).toHaveLength(2);
@@ -244,7 +251,14 @@ describe('ResourceDetailDrawer history tab', () => {
       platformData: { sources: ['proxmox'] },
     });
 
-    render(() => <ResourceDetailDrawer resource={resource} />);
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource}
+        resolveResourceLabel={(resourceId) =>
+          resourceId === 'node:pve-1' ? 'PVE Node 1' : resourceId
+        }
+      />
+    ));
 
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
 
@@ -260,8 +274,9 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(panel.getByText('Docker adapter 1')).toBeInTheDocument();
     expect(panel.getByText('Proxmox adapter 2')).toBeInTheDocument();
     expect(
-      panel.getByRole('link', { name: 'Open related resource node:pve-1 in Infrastructure' }),
+      panel.getByRole('link', { name: 'Open related resource PVE Node 1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
+    expect(panel.getByText('PVE Node 1')).toBeInTheDocument();
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.getByText('Confidence')).toBeInTheDocument();
     expect(panel.getByText('Adapter')).toBeInTheDocument();

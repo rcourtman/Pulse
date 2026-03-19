@@ -78,6 +78,7 @@ import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 interface ResourceDetailDrawerProps {
   resource: Resource;
   onClose?: () => void;
+  resolveResourceLabel?: (resourceId: string) => string | null | undefined;
 }
 
 import {
@@ -140,6 +141,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [showReportModal, setShowReportModal] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
+  const resolveResourceLabel = (resourceId: string): string =>
+    props.resolveResourceLabel?.(resourceId)?.trim() || resourceId;
   const statusIndicator = createMemo(() =>
     getAgentStatusIndicator({ status: props.resource.status }),
   );
@@ -812,6 +815,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     class="space-y-0"
                     title="Latest canonical change"
                     changes={intel().recent_changes}
+                    resolveResourceLabel={resolveResourceLabel}
                     maxChanges={1}
                     compact
                   />
@@ -1631,18 +1635,19 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             <span>Related:</span>
                             <For each={change.relatedResources ?? []}>
                               {(relatedResource) => {
+                                const label = resolveResourceLabel(relatedResource);
                                 const href = buildInfrastructureResourceHref(relatedResource);
                                 return href ? (
                                   <a
                                     class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                                     href={href}
-                                    aria-label={`Open related resource ${relatedResource} in Infrastructure`}
+                                    aria-label={`Open related resource ${label} in Infrastructure`}
                                   >
-                                    {relatedResource}
+                                    {label}
                                   </a>
                                 ) : (
                                   <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
-                                    {relatedResource}
+                                    {label}
                                   </span>
                                 );
                               }}
@@ -1880,7 +1885,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 };
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
-  return <DrawerContent resource={props.resource} onClose={props.onClose} />;
+  return (
+    <DrawerContent
+      resource={props.resource}
+      onClose={props.onClose}
+      resolveResourceLabel={props.resolveResourceLabel}
+    />
+  );
 };
 
 export default ResourceDetailDrawer;

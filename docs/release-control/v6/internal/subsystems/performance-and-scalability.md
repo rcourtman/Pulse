@@ -124,6 +124,10 @@ alternate name when policy requires governed handling. That keeps the
 policy-aware label path inside the same hot-row rendering budget instead of
 adding a second display branch for redacted fleets, and the proof for that
 behavior lives in `UnifiedResourceTable.performance.contract.test.tsx`.
+The shared table now also passes the same canonical resource-label resolver
+into the detail drawer so related-resource chips in the timeline/history path
+can resolve through the canonical catalog without adding a separate
+detail-only lookup branch to the hot-row path.
 The shared infrastructure selector search path now also routes through that
 same policy-aware display contract, so governed resources do not reappear via
 raw-name search candidates while the selector stays on the same hot-path

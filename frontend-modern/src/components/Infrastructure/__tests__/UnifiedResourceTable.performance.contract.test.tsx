@@ -14,6 +14,7 @@ import {
   splitPrimaryAndServiceResources,
   computeIOScale,
 } from '@/components/Infrastructure/infrastructureSelectors';
+const resourceDetailDrawerMock = vi.hoisted(() => vi.fn());
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -21,6 +22,9 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
+}
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = vi.fn();
 }
 
 vi.mock('@/hooks/useBreakpoint', () => ({
@@ -35,7 +39,10 @@ vi.mock('@/components/shared/responsive', () => ({
 }));
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: () => <div data-testid="resource-drawer">drawer</div>,
+  ResourceDetailDrawer: (props: Record<string, unknown>) => {
+    resourceDetailDrawerMock(props);
+    return <div data-testid="resource-drawer">drawer</div>;
+  },
 }));
 
 const makeResource = (i: number, overrides?: Partial<Resource>): Resource => ({
@@ -346,6 +353,38 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(row.queryByText('Capabilities 1')).toBeNull();
         expect(row.queryByText('Relationships 1')).toBeNull();
       }
+    });
+
+    it('passes the canonical resource-label resolver into the drawer for related-resource chips', async () => {
+      resourceDetailDrawerMock.mockClear();
+      const resources = [
+        makeResource(0, {
+          id: 'resource-0',
+          displayName: 'Host 0',
+          name: 'host-0',
+        }),
+      ];
+      const { container } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId="resource-0"
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(resourceDetailDrawerMock).toHaveBeenCalled();
+      });
+
+      const drawerProps = resourceDetailDrawerMock.mock.calls.at(-1)?.[0] as {
+        resolveResourceLabel?: (resourceId: string) => string | undefined;
+      };
+
+      expect(drawerProps.resolveResourceLabel?.('resource-0')).toBe('Host 0');
     });
   });
 

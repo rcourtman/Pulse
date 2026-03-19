@@ -10,6 +10,9 @@ describe('ResourceChangeSummary', () => {
         class="mt-2"
         title="Recent changes"
         subtitle="Canonical 24h timeline"
+        resolveResourceLabel={(resourceId) =>
+          resourceId === 'vm-200' ? 'VM 200' : resourceId === 'vm-300' ? 'VM 300' : resourceId
+        }
         changes={[
           {
             id: 'older-change',
@@ -50,8 +53,9 @@ describe('ResourceChangeSummary', () => {
       screen.getByRole('link', { name: 'Open resource storage-2 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=storage-2');
     expect(
-      screen.getByRole('link', { name: 'Open related resource vm-200 in Infrastructure' }),
+      screen.getByRole('link', { name: 'Open related resource VM 200 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=vm-200');
+    expect(screen.getByText('VM 200')).toBeInTheDocument();
     expect(screen.getByText('By agent:ops-helper')).toBeInTheDocument();
     expect(screen.getByText('Restart after maintenance')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open resource storage-1 in Infrastructure' })).toBeNull();

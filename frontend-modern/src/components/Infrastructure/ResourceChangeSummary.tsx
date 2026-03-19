@@ -16,6 +16,7 @@ interface ResourceChangeSummaryProps {
   subtitle?: string;
   emptyText?: string;
   buildResourceHref?: (resourceId: string) => string | null | undefined;
+  resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   maxChanges?: number;
   compact?: boolean;
   class?: string;
@@ -28,6 +29,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const hasChanges = () => visibleChanges().length > 0;
   const compact = () => props.compact ?? false;
   const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
+  const resolveResourceLabel = props.resolveResourceLabel;
   const itemPadding = () => (compact() ? 'p-2.5' : 'p-3');
   const itemText = () => (compact() ? 'text-[11px]' : 'text-xs');
   const headlineText = () => (compact() ? 'text-[11px]' : 'text-sm');
@@ -35,6 +37,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const gapSize = () => (compact() ? 'gap-2' : 'gap-3');
 
   const renderRelatedResource = (resourceId: string) => {
+    const label = resolveResourceLabel?.(resourceId)?.trim() || resourceId;
     const href = buildResourceHref(resourceId);
     const className =
       'rounded-full border border-border-subtle bg-surface px-2 py-0.5 font-medium text-muted transition-colors hover:border-border hover:text-base-content';
@@ -43,12 +46,12 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
       <a
         href={href}
         class={className}
-        aria-label={`Open related resource ${resourceId} in Infrastructure`}
+        aria-label={`Open related resource ${label} in Infrastructure`}
       >
-        {resourceId}
+        {label}
       </a>
     ) : (
-      <span class={className}>{resourceId}</span>
+      <span class={className}>{label}</span>
     );
   };
 
