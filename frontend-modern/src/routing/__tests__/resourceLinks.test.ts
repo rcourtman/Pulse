@@ -138,6 +138,7 @@ describe('resource link routing contract', () => {
   it('builds and parses recovery query params', () => {
     const href = buildRecoveryPath({
       provider: 'proxmox-pbs',
+      stale: '1',
       range: '7',
       cluster: 'cluster-main',
       day: '2026-02-13',
@@ -207,7 +208,7 @@ describe('resource link routing contract', () => {
 
   it('canonicalizes stale-only recovery route flags to the owned query shape', () => {
     expect(buildRecoveryPath({ stale: 'true', provider: 'proxmox-pve' })).toBe(
-      '/recovery?provider=proxmox-pve&stale=true',
+      '/recovery?provider=proxmox-pve&stale=1',
     );
     expect(parseRecoveryLinkSearch('?stale=%201%20')).toMatchObject({ stale: '1' });
   });
