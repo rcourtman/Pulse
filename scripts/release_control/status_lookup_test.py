@@ -16,7 +16,7 @@ REPORT = {
     },
     "coverage_gaps": [
         {
-            "id": "resource-graph-and-change-timeline",
+            "id": "resource-change-and-timeline",
             "summary": "Resource change and timeline are still under-modeled.",
             "status": "planned",
             "proposed_resolution": "lane-split",
@@ -28,14 +28,14 @@ REPORT = {
     ],
     "candidate_lanes": [
         {
-            "id": "resource-graph-change-intelligence",
+            "id": "resource-change-intelligence",
             "summary": "Promote canonical resource relationships and cross-resource timelines into an explicit lane.",
             "status": "planned",
             "target_id": "v6-product-lane-expansion",
             "repo_ids": ["pulse", "pulse-enterprise"],
             "current_lane_ids": ["L6", "L13"],
             "subsystem_ids": ["alerts", "api-contracts", "monitoring", "unified-resources"],
-            "coverage_gap_ids": ["resource-graph-and-change-timeline"],
+            "coverage_gap_ids": ["resource-change-and-timeline"],
         }
     ],
     "lanes": [
@@ -56,7 +56,7 @@ REPORT = {
     ],
     "candidate_lane_queue": [
         {
-            "candidate_lane_id": "resource-graph-change-intelligence",
+            "candidate_lane_id": "resource-change-intelligence",
             "rank": 1,
             "available": True,
             "available_rank": 1,
@@ -125,8 +125,8 @@ class StatusLookupTest(unittest.TestCase):
         self.assertTrue(args.pretty)
 
     def test_parse_args_accepts_candidate_lane_selector(self) -> None:
-        args = parse_args(["--candidate-lane", "resource-graph-change-intelligence", "--pretty"])
-        self.assertEqual(args.candidate_lane, "resource-graph-change-intelligence")
+        args = parse_args(["--candidate-lane", "resource-change-intelligence", "--pretty"])
+        self.assertEqual(args.candidate_lane, "resource-change-intelligence")
         self.assertTrue(args.pretty)
 
     def test_lookup_status_entry_returns_lane(self) -> None:
@@ -135,14 +135,14 @@ class StatusLookupTest(unittest.TestCase):
         self.assertEqual(result["control_plane"]["active_profile_id"], "v6")
 
     def test_lookup_status_entry_returns_candidate_lane(self) -> None:
-        result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-graph-change-intelligence")
+        result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-change-intelligence")
         self.assertEqual(result["entry"]["target_id"], "v6-product-lane-expansion")
         self.assertEqual(result["queue_item"]["rank"], 1)
 
     def test_lookup_status_entry_returns_coverage_gap(self) -> None:
-        result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-graph-and-change-timeline")
+        result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-change-and-timeline")
         self.assertEqual(result["entry"]["coverage_impact"], 15)
-        self.assertEqual(result["linked_candidate_lane_ids"], ["resource-graph-change-intelligence"])
+        self.assertEqual(result["linked_candidate_lane_ids"], ["resource-change-intelligence"])
 
     def test_lookup_status_entry_returns_release_gate(self) -> None:
         result = lookup_status_entry(
@@ -170,17 +170,17 @@ class StatusLookupTest(unittest.TestCase):
         self.assertIn("agent=codex", rendered)
 
     def test_render_pretty_includes_candidate_lane_queue_details(self) -> None:
-        result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-graph-change-intelligence")
+        result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-change-intelligence")
         rendered = render_pretty(result)
-        self.assertIn("candidate_lane resource-graph-change-intelligence", rendered)
+        self.assertIn("candidate_lane resource-change-intelligence", rendered)
         self.assertIn("target=v6-product-lane-expansion", rendered)
         self.assertIn("queue: rank=1 available=True available_rank=1", rendered)
 
     def test_render_pretty_includes_coverage_gap_links(self) -> None:
-        result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-graph-and-change-timeline")
+        result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-change-and-timeline")
         rendered = render_pretty(result)
         self.assertIn("resolution=lane-split impact=15", rendered)
-        self.assertIn("linked_candidate_lanes=resource-graph-change-intelligence", rendered)
+        self.assertIn("linked_candidate_lanes=resource-change-intelligence", rendered)
 
 
 if __name__ == "__main__":
