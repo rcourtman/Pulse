@@ -26,6 +26,14 @@ type AlertWebhookCustomFieldPreset = {
   required?: boolean;
 };
 
+export interface AlertWebhookCustomFieldInput {
+  key: string;
+  value: string;
+  label?: string;
+  placeholder?: string;
+  required?: boolean;
+}
+
 const ALERT_WEBHOOK_SERVICE_PRESENTATION: Record<
   AlertWebhookService,
   AlertWebhookServicePresentation
@@ -199,6 +207,40 @@ export function hasAlertWebhookMentionSupportFromTemplates(
 
 export function getAlertWebhookCustomFieldPresets(service: string) {
   return ALERT_WEBHOOK_CUSTOM_FIELD_PRESETS[service.trim().toLowerCase()];
+}
+
+export function getAlertWebhookCustomFieldInputs(
+  service: string,
+  existing: Record<string, string> = {},
+): AlertWebhookCustomFieldInput[] {
+  const presets = getAlertWebhookCustomFieldPresets(service);
+  const normalizedExisting = normalizeAlertWebhookCustomFields(service, existing);
+
+  if (!presets) {
+    return Object.entries(normalizedExisting).map(([key, value]) => ({
+      key,
+      value,
+    }));
+  }
+
+  const inputs: AlertWebhookCustomFieldInput[] = presets.map((preset) => ({
+    key: preset.key,
+    value: normalizedExisting[preset.key] ?? '',
+    label: preset.label,
+    placeholder: preset.placeholder,
+    required: preset.required,
+  }));
+
+  Object.entries(normalizedExisting)
+    .filter(([key]) => !presets.some((preset) => preset.key === key))
+    .forEach(([key, value]) => {
+      inputs.push({
+        key,
+        value,
+      });
+    });
+
+  return inputs;
 }
 
 export function normalizeAlertWebhookCustomFields(

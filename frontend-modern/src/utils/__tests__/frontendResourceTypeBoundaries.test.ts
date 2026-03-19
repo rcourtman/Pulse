@@ -3065,7 +3065,7 @@ describe('frontend resource type boundaries', () => {
   it('keeps alert webhook service vocabulary and action copy in a shared presentation utility', () => {
     expect(webhookConfigSource).toContain('getAlertWebhookServices(templates())');
     expect(webhookConfigSource).toContain('getAlertWebhookServiceLabelFromTemplates');
-    expect(webhookConfigSource).toContain('getAlertWebhookCustomFieldPresets');
+    expect(webhookConfigSource).toContain('getAlertWebhookCustomFieldInputs');
     expect(webhookConfigSource).toContain('normalizeAlertWebhookCustomFields');
     expect(webhookConfigSource).toContain('getAlertWebhookSummaryLabel');
     expect(webhookConfigSource).toContain('getAlertWebhookToggleAllLabel');
@@ -3089,6 +3089,8 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).not.toContain('Primary user key or group key');
     expect(webhookConfigSource).not.toContain('app_token');
     expect(webhookConfigSource).not.toContain('user_token');
+    expect(webhookConfigSource).not.toContain('createCustomFieldInputs');
+    expect(webhookConfigSource).not.toContain('ensurePresetCustomFields');
     expect(webhookConfigSource).not.toContain('Enable All');
     expect(webhookConfigSource).not.toContain('Disable All');
     expect(webhookConfigSource).not.toContain('Enable this webhook');
@@ -3110,6 +3112,9 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertWebhookPresentationSource).toContain(
       'export function getAlertWebhookCustomFieldPresets',
+    );
+    expect(alertWebhookPresentationSource).toContain(
+      'export function getAlertWebhookCustomFieldInputs',
     );
     expect(alertWebhookPresentationSource).toContain(
       'export function normalizeAlertWebhookCustomFields',

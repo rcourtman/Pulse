@@ -182,6 +182,18 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Proxmox adapter 1')).toBeInTheDocument();
     });
 
+    it('keeps source filtering on the shared canonical source-platform helper', () => {
+      const resources = [
+        makeResource(0, { platformData: { sources: ['proxmox'] } }),
+        makeResource(1, { platformData: { sources: ['docker'] } }),
+      ];
+
+      const filtered = filterResources(resources, new Set(['proxmox-pve']), new Set(), []);
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0]?.platformData?.sources).toEqual(['proxmox']);
+    });
+
     it('renders facet summary badges without changing the Profile S row budget', async () => {
       const resources = makeResources(PROFILES.S, (i) =>
         i === 0

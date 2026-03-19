@@ -1183,6 +1183,8 @@ describe('WebhookConfig', () => {
       (el) => (el as HTMLInputElement).value === 'my-app-token',
     );
     expect(tokenInput).toBeTruthy();
+    expect(screen.getByDisplayValue('my-app-token')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('my-user-key')).toBeInTheDocument();
   });
 
   it('shows shared pushover custom fields when creating a webhook', async () => {

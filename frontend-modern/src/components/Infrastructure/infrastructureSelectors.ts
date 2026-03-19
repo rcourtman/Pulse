@@ -65,8 +65,6 @@ const buildIODistribution = (values: number[]): IODistributionStats => {
   return { median, mad, max, p97, p99, count: valid.length };
 };
 
-export const normalizeInfrastructureSource = normalizeSourcePlatformKey;
-
 const getSortValue = (resource: Resource, key: string): number | string | null => {
   switch (key) {
     case 'name':
@@ -149,7 +147,7 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
 export const getResourceSources = (resource: Resource): KnownSourcePlatform[] => {
   const platformData = resource.platformData as { sources?: string[] } | undefined;
   const normalized = (platformData?.sources ?? [])
-    .map((source) => normalizeInfrastructureSource(source))
+    .map((source) => normalizeSourcePlatformKey(source))
     .filter((source): source is KnownSourcePlatform => Boolean(source));
   return Array.from(new Set(normalized));
 };

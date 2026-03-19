@@ -30,7 +30,7 @@ import {
   getAlertWebhookMentionHelpFromTemplates,
   getAlertWebhookMentionPlaceholderFromTemplates,
   hasAlertWebhookMentionSupportFromTemplates,
-  getAlertWebhookCustomFieldPresets,
+  getAlertWebhookCustomFieldInputs,
   getAlertWebhookNamePlaceholder,
   getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookServices,
@@ -80,44 +80,6 @@ const buildMapFromInputs = (
   return map;
 };
 
-const createCustomFieldInputs = (
-  service: string,
-  existing: Record<string, string> = {},
-): CustomFieldInput[] => {
-  const presets = getAlertWebhookCustomFieldPresets(service);
-  const normalizedExisting = normalizeAlertWebhookCustomFields(service, existing);
-  const timestamp = Date.now();
-
-  if (!presets) {
-    return Object.entries(normalizedExisting).map(([key, value], index) => ({
-      id: `custom-${key}-${timestamp}-${index}`,
-      key,
-      value,
-    }));
-  }
-
-  const inputs: CustomFieldInput[] = presets.map((preset, index) => ({
-    id: `custom-${preset.key}-${timestamp}-${index}`,
-    key: preset.key,
-    value: normalizedExisting[preset.key] ?? '',
-    label: preset.label,
-    placeholder: preset.placeholder,
-    required: preset.required,
-  }));
-
-  Object.entries(normalizedExisting)
-    .filter(([key]) => !presets.some((preset) => preset.key === key))
-    .forEach(([key, value], index) => {
-      inputs.push({
-        id: `custom-${key}-${timestamp}-${presets.length + index}`,
-        key,
-        value,
-      });
-    });
-
-  return inputs;
-};
-
 export function WebhookConfig(props: WebhookConfigProps) {
   const [adding, setAdding] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
@@ -160,15 +122,6 @@ export function WebhookConfig(props: WebhookConfigProps) {
     });
   };
 
-  const ensurePresetCustomFields = (service: string) => {
-    if (!getAlertWebhookCustomFieldPresets(service)) {
-      return;
-    }
-    const existing = normalizeAlertWebhookCustomFields(service, formData().customFields || {});
-    const inputs = createCustomFieldInputs(service, existing);
-    setCustomFieldInputs(inputs);
-  };
-
   // Load webhook templates
   createEffect(async () => {
     try {
@@ -190,10 +143,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers[input.key] = input.value;
       }
     });
-    const customFields = normalizeAlertWebhookCustomFields(
-      data.service,
-      buildMapFromInputs(customFieldInputs()),
-    );
+    const customFields = buildMapFromInputs(customFieldInputs());
+    const normalizedCustomFields = normalizeAlertWebhookCustomFields(data.service, customFields);
 
     if (editingId()) {
       props.onUpdate({
@@ -202,7 +153,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers,
         service: data.service,
         template: data.payloadTemplate,
-        customFields,
+        customFields: normalizedCustomFields,
         mention: data.mention,
       });
       setEditingId(null);
@@ -219,7 +170,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         enabled: data.enabled,
         service: data.service,
         template: data.payloadTemplate,
-        customFields,
+        customFields: normalizedCustomFields,
         mention: data.mention,
       };
       props.onAdd(newWebhook);
@@ -267,10 +218,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       ...webhook,
       service: webhook.service || 'generic',
       payloadTemplate: webhook.template || '',
-      customFields: normalizeAlertWebhookCustomFields(
-        webhook.service || 'generic',
-        webhook.customFields || {},
-      ),
+      customFields: normalizeAlertWebhookCustomFields(webhook.service || 'generic', webhook.customFields || {}),
       mention: webhook.mention || '',
     });
     // Set up header inputs for editing
@@ -284,15 +232,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
     );
 
     const service = webhook.service || 'generic';
-    const existingCustomFields = normalizeAlertWebhookCustomFields(
-      service,
-      webhook.customFields || {},
+    const existingCustomFields = webhook.customFields || {};
+    setCustomFieldInputs(
+      getAlertWebhookCustomFieldInputs(service, existingCustomFields).map((field, index) => ({
+        id: `custom-${field.key}-${Date.now()}-${index}`,
+        ...field,
+      })),
     );
-    if (getAlertWebhookCustomFieldPresets(service) || Object.keys(existingCustomFields).length > 0) {
-      setCustomFieldInputs(createCustomFieldInputs(service, existingCustomFields));
-    } else {
-      setCustomFieldInputs([]);
-    }
     setAdding(true);
   };
 
@@ -324,7 +270,12 @@ export function WebhookConfig(props: WebhookConfigProps) {
         service,
       });
     }
-    ensurePresetCustomFields(service);
+    setCustomFieldInputs(
+      getAlertWebhookCustomFieldInputs(service, formData().customFields || {}).map((field, index) => ({
+        id: `custom-${field.key}-${Date.now()}-${index}`,
+        ...field,
+      })),
+    );
     setShowServiceDropdown(false);
   };
 

@@ -11,11 +11,11 @@ import {
   getResourceSources,
   groupResources,
   matchesSearch,
-  normalizeInfrastructureSource,
   sortResources,
   splitPrimaryAndServiceResources,
   tokenizeSearch,
 } from '@/components/Infrastructure/infrastructureSelectors';
+import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 
 const makeResource = (i: number, overrides: Partial<Resource> = {}): Resource => ({
   id: `resource-${i}`,
@@ -67,10 +67,10 @@ describe('infrastructureSelectors', () => {
 
   describe('getResourceSources and collectors', () => {
     it('normalizes legacy infrastructure source aliases to canonical platform keys', () => {
-      expect(normalizeInfrastructureSource('proxmox')).toBe('proxmox-pve');
-      expect(normalizeInfrastructureSource('pbs')).toBe('proxmox-pbs');
-      expect(normalizeInfrastructureSource('pmg')).toBe('proxmox-pmg');
-      expect(normalizeInfrastructureSource('k8s')).toBe('kubernetes');
+      expect(normalizeSourcePlatformKey('proxmox')).toBe('proxmox-pve');
+      expect(normalizeSourcePlatformKey('pbs')).toBe('proxmox-pbs');
+      expect(normalizeSourcePlatformKey('pmg')).toBe('proxmox-pmg');
+      expect(normalizeSourcePlatformKey('k8s')).toBe('kubernetes');
     });
 
     it('normalizes and deduplicates resource sources', () => {

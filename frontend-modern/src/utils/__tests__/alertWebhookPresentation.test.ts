@@ -7,6 +7,7 @@ import {
   getAlertWebhookMentionHelpFromTemplates,
   getAlertWebhookMentionPlaceholderFromTemplates,
   hasAlertWebhookMentionSupportFromTemplates,
+  getAlertWebhookCustomFieldInputs,
   getAlertWebhookServiceLabelFromTemplates,
   getAlertWebhookTestFailure,
   getAlertWebhookTestSuccess,
@@ -58,6 +59,39 @@ describe('alertWebhookPresentation', () => {
       app_token: 'legacy-token',
       user_token: 'legacy-user',
     });
+  });
+
+  it('builds pushover custom-field inputs from canonical aliases and extra fields', () => {
+    expect(
+      getAlertWebhookCustomFieldInputs('pushover', {
+        app_token: 'legacy-token',
+        user_token: 'legacy-user',
+        priority: '2',
+      }),
+    ).toEqual([
+      {
+        key: 'token',
+        value: 'legacy-token',
+        label: 'Application Token',
+        placeholder: 'Your Pushover application token',
+        required: true,
+      },
+      {
+        key: 'user',
+        value: 'legacy-user',
+        label: 'User Key',
+        placeholder: 'Primary user key or group key',
+        required: true,
+      },
+      {
+        key: 'priority',
+        value: '2',
+      },
+    ]);
+
+    expect(getAlertWebhookCustomFieldInputs('discord', { foo: 'bar' })).toEqual([
+      { key: 'foo', value: 'bar' },
+    ]);
   });
 
   it('derives webhook service options from the backend template registry', () => {

@@ -462,8 +462,8 @@ contracts that feed the infrastructure table and workload links.
 The same source-filter boundary now also applies to infrastructure filter UI
 options: `frontend-modern/src/pages/Infrastructure.tsx` may render friendly
 string keys, but membership checks against available sources must normalize
-through the canonical selector helper before consulting `KnownSourcePlatform`
-sets.
+through the shared `frontend-modern/src/utils/sourcePlatforms.ts` helper
+before consulting `KnownSourcePlatform` sets.
 Canonical monitored-system counting now also depends on this subsystem. The
 counted commercial unit is a deduped top-level monitored system assembled from
 canonical unified-resource roots, so read-state helpers that derive

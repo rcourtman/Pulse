@@ -28,9 +28,9 @@ import {
   collectAvailableSources,
   collectAvailableStatuses,
   buildStatusOptions,
-  normalizeInfrastructureSource,
 } from '@/components/Infrastructure/infrastructureSelectors';
 import { DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS } from '@/utils/sourcePlatformOptions';
+import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import {
   buildInfrastructurePath,
   INFRASTRUCTURE_PATH,
@@ -165,7 +165,7 @@ export function Infrastructure() {
       return;
     }
     if (sourceParam === handledSourceParam()) return;
-    const normalized = normalizeInfrastructureSource(sourceParam) ?? '';
+    const normalized = normalizeSourcePlatformKey(sourceParam) ?? '';
     setSelectedSource(normalized);
     setHandledSourceParam(sourceParam);
   });
@@ -390,7 +390,7 @@ export function Infrastructure() {
                       <option value="">All</option>
                       <For
                         each={sourceOptions.filter((source) => {
-                          const normalized = normalizeInfrastructureSource(source.key);
+                          const normalized = normalizeSourcePlatformKey(source.key);
                           return normalized ? availableSources().has(normalized) : false;
                         })}
                       >

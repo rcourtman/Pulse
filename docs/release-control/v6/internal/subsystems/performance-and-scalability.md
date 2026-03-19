@@ -116,6 +116,11 @@ must sort after the governed status order instead of forcing the selector path
 to abandon the typed canonical order used by the infrastructure table and its
 performance proof surface.
 
+The Infrastructure page now also normalizes source filter keys through the
+shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
+selector boundary keeps using the canonical source-platform contract instead of
+maintaining a local source-normalization alias.
+
 GitHub-hosted runner proof for the API performance surface now intentionally
 uses a looser budget envelope than local/staging benchmark runs for the
 mixed-endpoint load test and the infrastructure/workload chart p95 checks.
