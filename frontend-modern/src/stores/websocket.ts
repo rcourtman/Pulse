@@ -352,7 +352,7 @@ export function createWebSocketStore(url: string) {
 
               // Canonical resource contract:
               // `state.resources` is the authoritative frontend model.
-              // `state.connectedInfrastructure` is the authoritative reporting/ignore projection.
+              // `state.connectedInfrastructure` is the authoritative reporting projection.
               const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
                 ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
                 : [];
