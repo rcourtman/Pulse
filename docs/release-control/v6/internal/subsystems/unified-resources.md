@@ -104,6 +104,10 @@ section-specific headings are applied.
 The same helper also owns `FormatResourceRecentChangesContext`, so AI runtime
 callers share the canonical recent-change section heading and resource
 prefixing instead of rebuilding that wrapper locally.
+The patrol-local memory conversion helpers also live in
+`internal/ai/memory/presentation.go`, so the canonical change timeline and
+the Patrol memory fallback both translate through the same adapter boundary
+instead of carrying duplicate mapping code.
 The backend AI and Patrol graph context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph

@@ -204,6 +204,10 @@ The canonical recent-change section wrapper also lives in
 `internal/unifiedresources.FormatResourceRecentChangesContext`, so the AI
 summary and resource-specific context share the same heading and prefix rules
 instead of rebuilding that section layout locally.
+The canonical memory conversion helpers also live in
+`internal/ai/memory/presentation.go`, so the Patrol fallback feed and the
+AI summary path translate between unified-resource changes and memory.Change
+through one shared adapter boundary instead of keeping local shims.
 The related-resource correlation section now also comes from the shared
 correlation formatter in `internal/ai/correlation`, so resource chat and
 incident prompts reuse the same learned-edge wording instead of rebuilding a

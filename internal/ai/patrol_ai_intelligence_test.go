@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -452,6 +453,9 @@ func TestSeedPrecomputeIntelligenceState_UsesCanonicalResourceTimeline(t *testin
 
 func TestPatrolRecentChangeFromUnified_UsesCanonicalChangePresentation(t *testing.T) {
 	change := ur.ResourceChange{
+		ID:               "change-1",
+		ObservedAt:       time.Date(2026, time.March, 19, 12, 30, 0, 0, time.UTC),
+		ResourceID:       "res-1",
 		Kind:             ur.ChangeAnomaly,
 		From:             " old-state ",
 		To:               " new-state ",
@@ -462,7 +466,16 @@ func TestPatrolRecentChangeFromUnified_UsesCanonicalChangePresentation(t *testin
 		RelatedResources: []string{"", " related-1 "},
 	}
 
-	memoryChange := patrolRecentChangeFromUnified(change)
+	memoryChange := memory.ChangeFromUnifiedResourceChange(change)
+	if memoryChange.ID != "change-1" {
+		t.Fatalf("unexpected memory change ID: %q", memoryChange.ID)
+	}
+	if memoryChange.ResourceName != "res-1" {
+		t.Fatalf("unexpected memory change resource name: %q", memoryChange.ResourceName)
+	}
+	if !memoryChange.DetectedAt.Equal(change.ObservedAt) {
+		t.Fatalf("unexpected memory change detectedAt: %v", memoryChange.DetectedAt)
+	}
 	if memoryChange.ChangeType != "Metric anomaly" {
 		t.Fatalf("unexpected change type: %q", memoryChange.ChangeType)
 	}

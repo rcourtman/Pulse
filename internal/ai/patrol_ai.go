@@ -1680,7 +1680,7 @@ func (p *PatrolService) loadCanonicalRecentChanges(scopedSet map[string]bool, si
 		if !seedIsInScope(scopedSet, change.ResourceID) {
 			continue
 		}
-		result = append(result, patrolRecentChangeFromUnified(change))
+		result = append(result, memory.ChangeFromUnifiedResourceChange(change))
 		if len(result) >= limit {
 			break
 		}
@@ -1689,26 +1689,6 @@ func (p *PatrolService) loadCanonicalRecentChanges(scopedSet map[string]bool, si
 		return nil, false
 	}
 	return result, true
-}
-
-func patrolRecentChangeFromUnified(change unifiedresources.ResourceChange) memory.Change {
-	return memory.Change{
-		ResourceID:   strings.TrimSpace(change.ResourceID),
-		ResourceName: strings.TrimSpace(change.ResourceID),
-		ChangeType:   memory.ChangeType(unifiedresources.ChangeKindLabel(change.Kind)),
-		DetectedAt:   patrolRecentChangeDetectedAt(change),
-		Description:  unifiedresources.FormatResourceChangeSummary(change),
-	}
-}
-
-func patrolRecentChangeDetectedAt(change unifiedresources.ResourceChange) time.Time {
-	if !change.ObservedAt.IsZero() {
-		return change.ObservedAt
-	}
-	if change.OccurredAt != nil && !change.OccurredAt.IsZero() {
-		return *change.OccurredAt
-	}
-	return time.Now()
 }
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.

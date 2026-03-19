@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -72,4 +73,65 @@ func FormatRecentChangesContext(changes []Change, includeResourcePrefix bool, he
 		lines = append(lines, fmt.Sprintf("- %s (%s)", entry, utils.FormatDurationAgo(ago)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ChangeFromUnifiedResourceChange converts a canonical unified-resource change
+// into the patrol-local memory representation.
+func ChangeFromUnifiedResourceChange(change unifiedresources.ResourceChange) Change {
+	detectedAt := change.ObservedAt
+	if detectedAt.IsZero() && change.OccurredAt != nil {
+		detectedAt = *change.OccurredAt
+	}
+	if detectedAt.IsZero() {
+		detectedAt = time.Now()
+	}
+
+	return Change{
+		ID:           strings.TrimSpace(change.ID),
+		ResourceID:   strings.TrimSpace(change.ResourceID),
+		ResourceName: strings.TrimSpace(change.ResourceID),
+		ChangeType:   ChangeType(unifiedresources.ChangeKindLabel(change.Kind)),
+		DetectedAt:   detectedAt,
+		Description:  unifiedresources.FormatResourceChangeSummary(change),
+	}
+}
+
+// ResourceChangeFromMemoryChange converts a patrol-local memory change back
+// into the canonical unified-resource change shape.
+func ResourceChangeFromMemoryChange(change Change) unifiedresources.ResourceChange {
+	var related []string
+	if resourceName := strings.TrimSpace(change.ResourceName); resourceName != "" {
+		related = []string{resourceName}
+	}
+
+	return unifiedresources.ResourceChange{
+		ID:               strings.TrimSpace(change.ID),
+		ObservedAt:       change.DetectedAt,
+		ResourceID:       strings.TrimSpace(change.ResourceID),
+		Kind:             memoryChangeTypeToUnifiedChangeKind(change.ChangeType),
+		SourceType:       unifiedresources.SourceHeuristic,
+		Confidence:       unifiedresources.ConfidenceMedium,
+		RelatedResources: related,
+		Reason:           change.Description,
+		Metadata: map[string]any{
+			"memoryChangeType": string(change.ChangeType),
+		},
+	}
+}
+
+func memoryChangeTypeToUnifiedChangeKind(changeType ChangeType) unifiedresources.ChangeKind {
+	switch changeType {
+	case ChangeCreated, ChangeDeleted, ChangeStatus:
+		return unifiedresources.ChangeStateTransition
+	case ChangeConfig:
+		return unifiedresources.ChangeConfigUpdate
+	case ChangeMigrated:
+		return unifiedresources.ChangeRelationship
+	case ChangeRestarted:
+		return unifiedresources.ChangeRestart
+	case ChangeBackedUp:
+		return unifiedresources.ChangeConfigUpdate
+	default:
+		return unifiedresources.ChangeAnomaly
+	}
 }

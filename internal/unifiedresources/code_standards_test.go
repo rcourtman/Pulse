@@ -528,7 +528,7 @@ func TestPatrolSeedCorrelationContextUsesCanonicalSummaryFormatter(t *testing.T)
 	requiredSnippets := []string{
 		"# Known Resource Correlations",
 		"correlation.FormatCorrelationSummary(c)",
-		"unifiedresources.FormatResourceChangeSummary(change)",
+		"memory.ChangeFromUnifiedResourceChange(change)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -549,6 +549,34 @@ func TestIntelligenceRecentChangesUseCanonicalSummaryFormatter(t *testing.T) {
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("internal/ai/intelligence.go must pin canonical recent-change snippet %q", snippet)
+		}
+	}
+}
+
+func TestMemoryChangeConversionHelpersAreSharedAcrossAIConsumers(t *testing.T) {
+	requiredFiles := map[string][]string{
+		filepath.Join("..", "ai", "patrol_ai.go"): {
+			"memory.ChangeFromUnifiedResourceChange(change)",
+		},
+		filepath.Join("..", "ai", "intelligence.go"): {
+			"memory.ResourceChangeFromMemoryChange(change)",
+		},
+		filepath.Join("..", "ai", "memory", "presentation.go"): {
+			"func ChangeFromUnifiedResourceChange(change unifiedresources.ResourceChange) Change",
+			"func ResourceChangeFromMemoryChange(change Change) unifiedresources.ResourceChange",
+		},
+	}
+
+	for path, snippets := range requiredFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must pin canonical memory conversion snippet %q", path, snippet)
+			}
 		}
 	}
 }

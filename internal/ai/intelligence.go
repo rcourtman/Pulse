@@ -274,7 +274,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 		if len(recent) > 0 {
 			converted := make([]unifiedresources.ResourceChange, 0, len(recent))
 			for _, change := range recent {
-				converted = append(converted, convertMemoryChangeToResourceChange(change))
+				converted = append(converted, memory.ResourceChangeFromMemoryChange(change))
 			}
 			summary.RecentChanges = append([]unifiedresources.ResourceChange{}, converted[:min(len(converted), 5)]...)
 		}
@@ -1049,47 +1049,9 @@ func (i *Intelligence) getRecentChangesForResource(resourceID string, limit int)
 
 	converted := make([]unifiedresources.ResourceChange, 0, len(recent))
 	for _, change := range recent {
-		converted = append(converted, convertMemoryChangeToResourceChange(change))
+		converted = append(converted, memory.ResourceChangeFromMemoryChange(change))
 	}
 	return converted
-}
-
-func convertMemoryChangeToResourceChange(change memory.Change) unifiedresources.ResourceChange {
-	return unifiedresources.ResourceChange{
-		ID:         change.ID,
-		ObservedAt: change.DetectedAt,
-		ResourceID: change.ResourceID,
-		Kind:       memoryChangeTypeToUnifiedChangeKind(change.ChangeType),
-		SourceType: unifiedresources.SourceHeuristic,
-		Confidence: unifiedresources.ConfidenceMedium,
-		RelatedResources: func() []string {
-			if change.ResourceName == "" {
-				return nil
-			}
-			return []string{change.ResourceName}
-		}(),
-		Reason: change.Description,
-		Metadata: map[string]any{
-			"memoryChangeType": string(change.ChangeType),
-		},
-	}
-}
-
-func memoryChangeTypeToUnifiedChangeKind(changeType memory.ChangeType) unifiedresources.ChangeKind {
-	switch changeType {
-	case memory.ChangeCreated, memory.ChangeDeleted, memory.ChangeStatus:
-		return unifiedresources.ChangeStateTransition
-	case memory.ChangeConfig:
-		return unifiedresources.ChangeConfigUpdate
-	case memory.ChangeMigrated:
-		return unifiedresources.ChangeRelationship
-	case memory.ChangeRestarted:
-		return unifiedresources.ChangeRestart
-	case memory.ChangeBackedUp:
-		return unifiedresources.ChangeConfigUpdate
-	default:
-		return unifiedresources.ChangeAnomaly
-	}
 }
 
 func (i *Intelligence) formatBaselinesForContext(resourceID string) string {
