@@ -761,14 +761,7 @@ export function AIIntelligence() {
   async function loadAllData() {
     setIsRefreshing(true);
     try {
-      await Promise.all([
-        aiIntelligenceStore.loadIntelligenceSummary(),
-        aiIntelligenceStore.loadFindings(),
-        aiIntelligenceStore.loadCircuitBreakerStatus(),
-        aiIntelligenceStore.loadPendingApprovals(),
-        aiIntelligenceStore.loadCorrelations(),
-        refetchPatrolStatus(),
-      ]);
+      await Promise.all([aiIntelligenceStore.loadDashboardData(), refetchPatrolStatus()]);
       // Trigger refresh of patrol status bar
       setActivityRefreshTrigger((prev) => prev + 1);
     } finally {

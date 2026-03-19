@@ -104,6 +104,10 @@ from the canonical AI correlations endpoint through the shared
 `frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
 and the resource drawer both reflect the same learned edge evidence instead
 of each page fetching its own copy.
+That same store now owns the Patrol dashboard load bundle as well, so the
+page refresh path stays aligned on a single orchestrated AI bundle instead of
+repeating the individual summary, findings, approval, and correlation fetches
+inline.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

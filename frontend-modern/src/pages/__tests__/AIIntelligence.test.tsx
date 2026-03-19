@@ -144,8 +144,8 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
-vi.mock('@/stores/aiIntelligence', () => ({
-  aiIntelligenceStore: {
+vi.mock('@/stores/aiIntelligence', () => {
+  const store = {
     findings: [],
     loadFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
@@ -157,14 +157,27 @@ vi.mock('@/stores/aiIntelligence', () => ({
       setCorrelationsState(response);
       return response;
     }),
+    loadDashboardData: vi.fn().mockImplementation(async () => {
+      await Promise.all([
+        store.loadFindings(),
+        store.loadIntelligenceSummary(),
+        store.loadCircuitBreakerStatus(),
+        store.loadPendingApprovals(),
+        store.loadCorrelations(),
+      ]);
+    }),
     get intelligenceSummary() {
       return intelligenceState.summary;
     },
     get correlations() {
       return correlationsState();
     },
-  },
-}));
+  };
+
+  return {
+    aiIntelligenceStore: store,
+  };
+});
 
 vi.mock('@/components/AI/FindingsPanel', () => ({
   FindingsPanel: (props: Record<string, unknown>) => {

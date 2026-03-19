@@ -522,6 +522,16 @@ export const aiIntelligenceStore = {
     }
   },
 
+  async loadDashboardData() {
+    await Promise.all([
+      this.loadIntelligenceSummary(),
+      this.loadFindings(),
+      this.loadCircuitBreakerStatus(),
+      this.loadPendingApprovals(),
+      this.loadCorrelations(),
+    ]);
+  },
+
   async loadIntelligenceSummary() {
     try {
       const summary = await AIAPI.getIntelligenceSummary();
@@ -546,12 +556,8 @@ export const aiIntelligenceStore = {
   // Initialize - load all data
   async initialize() {
     await Promise.all([
-      this.loadIntelligenceSummary(),
-      this.loadFindings(),
+      this.loadDashboardData(),
       this.loadRemediationPlans(),
-      this.loadCircuitBreakerStatus(),
-      this.loadPendingApprovals(),
-      this.loadCorrelations(),
     ]);
   },
 

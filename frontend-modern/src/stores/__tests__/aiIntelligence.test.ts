@@ -166,6 +166,48 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.correlations?.correlations).toHaveLength(1);
   });
 
+  it('loads the canonical AI dashboard bundle', async () => {
+    vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
+      timestamp: '2026-03-01T00:00:00Z',
+      overall_health: {
+        score: 87,
+        grade: 'B',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      recent_changes: [],
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    });
+    vi.mocked(AIAPI.getCorrelations).mockResolvedValueOnce({
+      correlations: [],
+      count: 0,
+    });
+
+    await aiIntelligenceStore.loadDashboardData();
+
+    expect(AIAPI.getIntelligenceSummary).toHaveBeenCalledTimes(1);
+    expect(AIAPI.getCorrelations).toHaveBeenCalledTimes(1);
+    expect(aiIntelligenceStore.intelligenceSummary?.findings_count.total).toBe(0);
+    expect(aiIntelligenceStore.correlations?.count).toBe(0);
+  });
+
   it('treats queued fixes without a live approval as findings needing attention', async () => {
     vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
       findings: [

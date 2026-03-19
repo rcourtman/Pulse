@@ -80,6 +80,7 @@ Own canonical runtime payload shapes between backend and frontend.
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the governed posture snapshot remains visible on the resource-detail surface without introducing a separate posture endpoint
    and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
+   and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
 10. Add or change infrastructure operations token generation, lookup, assignment, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
@@ -184,6 +185,9 @@ through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
 the Patrol intelligence page and the AI summary page, so the
 learned-correlation list is governed by the same API contract that backs the
 resource drawer's graph evidence instead of being fetched as page-local state.
+That store now also owns the dashboard load bundle used by the Patrol page,
+so the page refresh path stays aligned on one store-owned orchestration layer
+instead of re-encoding the AI bundle inline.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history
