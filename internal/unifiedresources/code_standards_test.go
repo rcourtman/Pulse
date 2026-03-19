@@ -596,6 +596,9 @@ func TestIntelligenceRecentChangesUseCanonicalSummaryFormatter(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
+		"func (i *Intelligence) GetRecentChanges(since time.Time, limit int) []unifiedresources.ResourceChange",
+		"func (i *Intelligence) DescribeResource(resourceID string) (string, string)",
+		"func (i *Intelligence) HasRecentChangesSource() bool",
 		"unifiedresources.FormatResourceRecentChangesContext(recent, includeResourcePrefix, \"##\")",
 	}
 	for _, snippet := range requiredSnippets {
@@ -629,6 +632,27 @@ func TestMemoryChangeConversionHelpersAreSharedAcrossAIConsumers(t *testing.T) {
 			if !strings.Contains(source, snippet) {
 				t.Fatalf("%s must pin canonical memory conversion snippet %q", path, snippet)
 			}
+		}
+	}
+}
+
+func TestAIRecentChangesHandlerUsesCanonicalIntelligencePath(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "ai_intelligence_handlers.go"))
+	if err != nil {
+		t.Fatalf("failed to read ai_intelligence_handlers.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"intel := patrol.GetIntelligence()",
+		"intel.HasRecentChangesSource()",
+		"intel.GetRecentChanges(since, 100)",
+		"intel.DescribeResource(change.ResourceID)",
+		"unifiedresources.FormatResourceChangeSummary(change)",
+		"Recent changes not initialized",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/ai_intelligence_handlers.go must pin canonical recent-changes snippet %q", snippet)
 		}
 	}
 }

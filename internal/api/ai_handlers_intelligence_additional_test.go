@@ -171,6 +171,27 @@ func TestHandleGetIntelligence_WithResourceID(t *testing.T) {
 	}
 }
 
+func TestHandleGetRecentChanges_NoSource(t *testing.T) {
+	t.Parallel()
+	handler := &AISettingsHandler{defaultAIService: newEnabledAIService(t)}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/changes", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetRecentChanges(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["message"] != "Recent changes not initialized" {
+		t.Fatalf("unexpected message: %#v", payload["message"])
+	}
+}
+
 func TestHandleGetIntelligence_ResourceIDAtLimit(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)

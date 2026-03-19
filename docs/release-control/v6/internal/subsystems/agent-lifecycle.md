@@ -167,6 +167,10 @@ stay on canonical Patrol runtime wiring: adjacent fleet and install surfaces
 must not revive tenant snapshot-provider bridges through shared AI handler
 setup once Patrol can initialize from tenant `ReadState` and unified-resource
 providers directly.
+That same boundary now also assumes the Patrol-backed recent-changes API
+surface reads through the canonical intelligence facade first, so adjacent
+fleet and install surfaces do not bypass the shared unified timeline through
+the old detector-only handler path.
 That same canonical /api/auto-register response must stay on one completion
 truth: caller-supplied Proxmox credentials complete registration with a
 direct-use action, and the runtime no longer preserves a dead pending-secret

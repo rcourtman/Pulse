@@ -345,6 +345,73 @@ func TestIntelligence_GetResourceIntelligence_FallsBackToChangeDetector(t *testi
 	}
 }
 
+func TestIntelligence_GetRecentChanges_UsesCanonicalTimeline(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:         "change-1",
+		ObservedAt: time.Now().Add(-time.Minute),
+		ResourceID: "vm-1",
+		Kind:       ur.ChangeRestart,
+		SourceType: ur.SourcePlatformEvent,
+		Reason:     "guest restarted",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
+
+	recent := intel.GetRecentChanges(time.Now().Add(-time.Hour), 100)
+	if len(recent) != 1 {
+		t.Fatalf("expected 1 canonical recent change, got %d", len(recent))
+	}
+	if recent[0].Kind != ur.ChangeRestart {
+		t.Fatalf("expected canonical change kind %q, got %q", ur.ChangeRestart, recent[0].Kind)
+	}
+	if recent[0].Reason != "guest restarted" {
+		t.Fatalf("expected canonical reason, got %#v", recent[0].Reason)
+	}
+}
+
+func TestIntelligence_GetRecentChanges_FallsBackToMemoryDetector(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "vm-fallback", Name: "resource-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
+
+	recent := intel.GetRecentChanges(time.Now().Add(-time.Hour), 100)
+	if len(recent) != 1 {
+		t.Fatalf("expected 1 fallback recent change, got %d", len(recent))
+	}
+	if recent[0].SourceType != ur.SourceHeuristic {
+		t.Fatalf("expected heuristic fallback source, got %s", recent[0].SourceType)
+	}
+}
+
+func TestIntelligence_DescribeResource_UsesUnifiedProvider(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	intel.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getAllFunc: func() []ur.Resource {
+			return []ur.Resource{
+				{
+					ID:   "vm-1",
+					Name: "canonical-vm",
+					Type: ur.ResourceTypeVM,
+				},
+			}
+		},
+	})
+
+	name, resourceType := intel.DescribeResource("vm-1")
+	if name != "canonical-vm" {
+		t.Fatalf("expected canonical display name, got %q", name)
+	}
+	if resourceType != string(ur.ResourceTypeVM) {
+		t.Fatalf("expected resource type vm, got %q", resourceType)
+	}
+}
+
 func TestIntelligence_FormatContext_WithKnowledge(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 

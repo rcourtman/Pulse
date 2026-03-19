@@ -238,8 +238,6 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	findings := i.findings
 	patternsDetector := i.patterns
 	remediations := i.remediations
-	changes := i.changes
-	resourceTimelineStore := i.resourceTimelineStore
 	unifiedResourceProvider := i.unifiedResourceProvider
 	i.mu.RUnlock()
 
@@ -258,26 +256,9 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	}
 
 	// Aggregate recent activity
-	usedCanonicalRecentChanges := false
-	if resourceTimelineStore != nil {
-		if recent, err := resourceTimelineStore.GetRecentChanges("", time.Now().Add(-24*time.Hour), 100); err == nil {
-			summary.RecentChangesCount = len(recent)
-			if len(recent) > 0 {
-				summary.RecentChanges = append([]unifiedresources.ResourceChange{}, recent[:min(len(recent), 5)]...)
-			}
-			usedCanonicalRecentChanges = true
-		}
-	}
-	if !usedCanonicalRecentChanges && changes != nil {
-		recent := changes.GetRecentChanges(100, time.Now().Add(-24*time.Hour))
+	if recent := i.GetRecentChanges(time.Now().Add(-24*time.Hour), 100); len(recent) > 0 {
 		summary.RecentChangesCount = len(recent)
-		if len(recent) > 0 {
-			converted := make([]unifiedresources.ResourceChange, 0, len(recent))
-			for _, change := range recent {
-				converted = append(converted, memory.ResourceChangeFromMemoryChange(change))
-			}
-			summary.RecentChanges = append([]unifiedresources.ResourceChange{}, converted[:min(len(converted), 5)]...)
-		}
+		summary.RecentChanges = append([]unifiedresources.ResourceChange{}, recent[:min(len(recent), 5)]...)
 	}
 
 	if remediations != nil {
@@ -385,6 +366,73 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 	intel.Health = i.calculateResourceHealth(intel)
 
 	return intel
+}
+
+// HasRecentChangesSource reports whether the intelligence layer has any source
+// available for recent infrastructure changes.
+func (i *Intelligence) HasRecentChangesSource() bool {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	return i.resourceTimelineStore != nil || i.changes != nil
+}
+
+// DescribeResource returns the canonical display name and type for a resource
+// when the unified resource provider is available.
+func (i *Intelligence) DescribeResource(resourceID string) (string, string) {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return "", ""
+	}
+
+	i.mu.RLock()
+	unifiedResourceProvider := i.unifiedResourceProvider
+	i.mu.RUnlock()
+	if unifiedResourceProvider == nil {
+		return "", ""
+	}
+
+	for _, resource := range normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()) {
+		if strings.TrimSpace(resource.ID) != resourceID {
+			continue
+		}
+		return unifiedresources.ResourceDisplayName(resource), string(resource.Type)
+	}
+
+	return "", ""
+}
+
+// GetRecentChanges returns the most recent infrastructure changes across the
+// canonical unified-resource timeline, with patrol-local memory as fallback.
+func (i *Intelligence) GetRecentChanges(since time.Time, limit int) []unifiedresources.ResourceChange {
+	if limit <= 0 {
+		return nil
+	}
+
+	i.mu.RLock()
+	resourceTimelineStore := i.resourceTimelineStore
+	changesDetector := i.changes
+	i.mu.RUnlock()
+
+	if resourceTimelineStore != nil {
+		if recent, err := resourceTimelineStore.GetRecentChanges("", since, limit); err == nil && len(recent) > 0 {
+			return recent
+		}
+	}
+
+	if changesDetector == nil {
+		return nil
+	}
+
+	recent := changesDetector.GetRecentChanges(limit, since)
+	if len(recent) == 0 {
+		return nil
+	}
+
+	converted := make([]unifiedresources.ResourceChange, 0, len(recent))
+	for _, change := range recent {
+		converted = append(converted, memory.ResourceChangeFromMemoryChange(change))
+	}
+	return converted
 }
 
 // FormatContext builds a comprehensive context string for AI prompts

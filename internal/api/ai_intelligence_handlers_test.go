@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // createTestAIHandler creates a test AI handler with minimal setup
@@ -271,6 +274,75 @@ func TestHandleGetRecentChanges_NoPatrolService(t *testing.T) {
 	}
 	if resp["message"] != "Pulse Patrol is not enabled" {
 		t.Fatalf("unexpected message: %v", resp["message"])
+	}
+}
+
+func TestHandleGetRecentChanges_WithCanonicalTimeline(t *testing.T) {
+	t.Parallel()
+	svc := newEnabledAIService(t)
+	canonicalStore := unifiedresources.NewMemoryStore()
+	if err := canonicalStore.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-canonical",
+		ObservedAt:    time.Now().Add(-25 * time.Minute),
+		ResourceID:    "vm-canonical",
+		Kind:          unifiedresources.ChangeRestart,
+		From:          "running",
+		To:            "restarting",
+		SourceType:    unifiedresources.SourcePlatformEvent,
+		SourceAdapter: unifiedresources.AdapterProxmox,
+		Reason:        "guest restarted after maintenance",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
+	patrol := svc.GetPatrolService()
+	setUnexportedField(t, patrol, "aiService", svc)
+	patrol.SetUnifiedResourceProvider(stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
+			{
+				ID:   "vm-canonical",
+				Name: "canonical-vm",
+				Type: unifiedresources.ResourceTypeVM,
+			},
+		},
+	})
+	handler := &AISettingsHandler{defaultAIService: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/changes?hours=1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetRecentChanges(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	changes, ok := payload["changes"].([]interface{})
+	if !ok {
+		t.Fatalf("expected changes array in response, got %T", payload["changes"])
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 recent change, got %d", len(changes))
+	}
+	change, ok := changes[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected object change, got %#v", changes[0])
+	}
+	if change["resource_name"] != "canonical-vm" {
+		t.Fatalf("expected canonical resource name, got %#v", change["resource_name"])
+	}
+	if change["resource_type"] != string(unifiedresources.ResourceTypeVM) {
+		t.Fatalf("expected resource type vm, got %#v", change["resource_type"])
+	}
+	if change["change_type"] != string(unifiedresources.ChangeRestart) {
+		t.Fatalf("expected canonical change type, got %#v", change["change_type"])
+	}
+	if desc, ok := change["description"].(string); !ok || !strings.Contains(desc, "Restart") {
+		t.Fatalf("expected canonical change description, got %#v", change["description"])
 	}
 }
 

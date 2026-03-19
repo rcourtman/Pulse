@@ -266,6 +266,10 @@ The shared AI resource and infrastructure prompt contexts should also surface
 the same canonical recent changes section before any patrol-local fallback so
 the model sees the same timeline entries that power the resource API and
 intelligence summary counts.
+The `/api/ai/intelligence/changes` endpoint should also route through the
+canonical unified-intelligence recent-change accessor before any
+patrol-local detector fallback, so the API surface reads the same unified
+timeline source that powers the summary payload.
 Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model

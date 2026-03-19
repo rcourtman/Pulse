@@ -375,11 +375,11 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		return
 	}
 
-	detector := patrol.GetChangeDetector()
-	if detector == nil {
+	intel := patrol.GetIntelligence()
+	if intel == nil || !intel.HasRecentChangesSource() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"changes": []interface{}{},
-			"message": "Change detector not initialized",
+			"message": "Recent changes not initialized",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write changes response")
 		}
@@ -396,20 +396,24 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 	}
 
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
-	changes := detector.GetRecentChanges(100, since)
+	changes := intel.GetRecentChanges(since, 100)
 
 	var result []map[string]interface{}
 	for _, change := range changes {
+		resourceName, resourceType := intel.DescribeResource(change.ResourceID)
+		if strings.TrimSpace(resourceName) == "" {
+			resourceName = change.ResourceID
+		}
 		result = append(result, map[string]interface{}{
 			"id":            change.ID,
 			"resource_id":   change.ResourceID,
-			"resource_name": change.ResourceName,
-			"resource_type": change.ResourceType,
-			"change_type":   change.ChangeType,
-			"before":        change.Before,
-			"after":         change.After,
-			"detected_at":   change.DetectedAt,
-			"description":   change.Description,
+			"resource_name": resourceName,
+			"resource_type": resourceType,
+			"change_type":   string(change.Kind),
+			"before":        change.From,
+			"after":         change.To,
+			"detected_at":   change.ObservedAt,
+			"description":   unifiedresources.FormatResourceChangeSummary(change),
 		})
 	}
 

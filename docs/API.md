@@ -938,7 +938,7 @@ Request bodies:
 - `GET /api/ai/intelligence/patterns`
 - `GET /api/ai/intelligence/predictions`
 - `GET /api/ai/intelligence/correlations`
-- `GET /api/ai/intelligence/changes`
+- `GET /api/ai/intelligence/changes` (canonical unified-resource timeline first, patrol-local memory fallback)
 - `GET /api/ai/intelligence/baselines`
 - `GET /api/ai/intelligence/remediations`
 - `GET /api/ai/intelligence/anomalies`

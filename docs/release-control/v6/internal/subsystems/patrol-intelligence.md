@@ -77,6 +77,10 @@ that powers the shared resource API.
 Patrol-owned intelligence summaries should keep their recent-change counts
 backed by the same canonical timeline when available instead of only counting
 Patrol-local detector history.
+The Patrol-backed `/api/ai/intelligence/changes` endpoint should also read
+through the canonical intelligence facade first and only fall back to the
+local detector when the unified timeline is unavailable, so the API payload
+stays aligned with the same governed recent-change source.
 Patrol-owned resource and global intelligence prompt contexts should also
 render the canonical recent changes section before any patrol-local change
 detector fallback so the prompt surface stays aligned with the shared
