@@ -424,33 +424,6 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 	}
 }
 
-func TestResourceMentionRequiresGovernedSummaryUsesSharedHelper(t *testing.T) {
-	if (ResourceMention{}).requiresGovernedSummary() {
-		t.Fatal("expected empty mention to not require governed summary")
-	}
-
-	if !(ResourceMention{
-		Policy: &unifiedresources.ResourcePolicy{
-			Routing: unifiedresources.ResourceRoutingPolicy{
-				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
-			},
-		},
-	}).requiresGovernedSummary() {
-		t.Fatal("expected local-only policy to require governed summary")
-	}
-
-	if !(ResourceMention{
-		Policy: &unifiedresources.ResourcePolicy{
-			Routing: unifiedresources.ResourceRoutingPolicy{
-				Scope:  unifiedresources.ResourceRoutingScopeLocalFirst,
-				Redact: []unifiedresources.ResourceRedactionHint{unifiedresources.ResourceRedactionHostname},
-			},
-		},
-	}).requiresGovernedSummary() {
-		t.Fatal("expected redacted policy to require governed summary")
-	}
-}
-
 func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 

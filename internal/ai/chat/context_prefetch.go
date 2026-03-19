@@ -134,7 +134,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	var discoveries []*tools.ResourceDiscoveryInfo
 	if p.discoveryProvider != nil {
 		for _, mention := range mentions {
-			if mention.requiresGovernedSummary() {
+			if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
 				continue
 			}
 			discovery, err := p.getOrTriggerDiscovery(ctx, mention)
@@ -193,7 +193,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      vm.Node(),
 						MatchedText:   name,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 					})
 				}
 			}
@@ -219,7 +219,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      ct.Node(),
 						MatchedText:   name,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 					})
 				}
 			}
@@ -277,7 +277,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:       hostID,
 						MatchedText:    name,
 						Policy:         unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary:  mentionAISafeSummary(resolved.Resource),
+						AISafeSummary:  strings.TrimSpace(resolved.Resource.AISafeSummary),
 						BindMounts:     mounts,
 						DockerHostName: loc.DockerHostName,
 						DockerHostType: loc.DockerHostType,
@@ -310,7 +310,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      name,
 						MatchedText:   name,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 						TargetHost:    loc.TargetHost,
 					})
 				}
@@ -340,7 +340,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      hostID,
 						MatchedText:   hostname,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 						TargetHost:    loc.TargetHost,
 					})
 				}
@@ -374,7 +374,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      clusterSourceID,
 						MatchedText:   clusterName,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 						TargetHost:    loc.TargetHost,
 					})
 				}
@@ -404,7 +404,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      hostID,
 						MatchedText:   podName,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 						TargetHost:    loc.TargetHost,
 					})
 				}
@@ -434,7 +434,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						TargetID:      hostID,
 						MatchedText:   deployName,
 						Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-						AISafeSummary: mentionAISafeSummary(resolved.Resource),
+						AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 						TargetHost:    loc.TargetHost,
 					})
 				}
@@ -487,7 +487,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:      node,
 				MatchedText:   sm.Name,
 				Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 				TargetHost:    loc.TargetHost,
 			})
 
@@ -505,7 +505,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:      node,
 				MatchedText:   sm.Name,
 				Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 				TargetHost:    loc.TargetHost,
 			})
 
@@ -540,7 +540,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:       hostID,
 				MatchedText:    sm.Name,
 				Policy:         unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary:  mentionAISafeSummary(resolved.Resource),
+				AISafeSummary:  strings.TrimSpace(resolved.Resource.AISafeSummary),
 				BindMounts:     mounts,
 				DockerHostName: loc.DockerHostName,
 				DockerHostType: loc.DockerHostType,
@@ -557,7 +557,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:      sm.Name,
 				MatchedText:   sm.Name,
 				Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 				TargetHost:    loc.TargetHost,
 			})
 
@@ -573,7 +573,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:      hostID,
 				MatchedText:   sm.Name,
 				Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 				TargetHost:    loc.TargetHost,
 			})
 
@@ -596,7 +596,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetID:      sm.Node,
 				MatchedText:   sm.Name,
 				Policy:        unifiedresources.CloneResourcePolicy(resolved.Resource.Policy),
-				AISafeSummary: mentionAISafeSummary(resolved.Resource),
+				AISafeSummary: strings.TrimSpace(resolved.Resource.AISafeSummary),
 				TargetHost:    loc.TargetHost,
 			})
 		}
@@ -743,7 +743,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	for _, mention := range mentions {
-		if mention.requiresGovernedSummary() {
+		if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
 			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
 			continue
 		}
@@ -896,17 +896,6 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	return sb.String()
-}
-
-func mentionAISafeSummary(resource *unifiedresources.Resource) string {
-	if resource == nil {
-		return ""
-	}
-	return strings.TrimSpace(resource.AISafeSummary)
-}
-
-func (m ResourceMention) requiresGovernedSummary() bool {
-	return unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)
 }
 
 // extractWords extracts words (3+ characters) from a message for matching
