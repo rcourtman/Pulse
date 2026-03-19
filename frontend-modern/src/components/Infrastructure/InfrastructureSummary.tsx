@@ -25,6 +25,7 @@ import {
   getResourceIdentityAliases,
   getNormalizedIdentityLookupVariants,
 } from '@/utils/resourceIdentity';
+import { formatThroughputRate } from '@/utils/throughputPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
@@ -46,14 +47,6 @@ const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
   asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId) ||
   null;
-
-// Format bytes/sec to human-readable rate
-const formatRate = (bytesPerSec: number): string => {
-  if (bytesPerSec >= 1e9) return `${(bytesPerSec / 1e9).toFixed(1)} GB/s`;
-  if (bytesPerSec >= 1e6) return `${(bytesPerSec / 1e6).toFixed(1)} MB/s`;
-  if (bytesPerSec >= 1e3) return `${(bytesPerSec / 1e3).toFixed(0)} KB/s`;
-  return `${Math.round(bytesPerSec)} B/s`;
-};
 
 // Combine a resource's net in/out into a single throughput series.
 // Buckets points into 30-second windows and sums rates from both directions.
@@ -645,7 +638,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               series={diskioSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
-              formatValue={formatRate}
+              formatValue={formatThroughputRate}
             />
           </SummaryMetricCard>
 
@@ -711,7 +704,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 series={networkSeries()}
                 rangeLabel={rangeLabel()}
                 timeRange={props.timeRange}
-                formatValue={formatRate}
+                formatValue={formatThroughputRate}
               />
             </SummaryMetricCard>
           </Show>

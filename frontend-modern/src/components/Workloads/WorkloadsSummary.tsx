@@ -16,6 +16,7 @@ import {
 import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
+import { formatThroughputRate } from '@/utils/throughputPresentation';
 
 interface WorkloadsSummaryProps {
   timeRange?: TimeRange;
@@ -289,13 +290,6 @@ const clampNonNegative = (value: number): number => {
   if (!Number.isFinite(value)) return 0;
   if (value < 0) return 0;
   return value;
-};
-
-const formatRate = (bytesPerSec: number): string => {
-  if (bytesPerSec >= 1e9) return `${(bytesPerSec / 1e9).toFixed(1)} GB/s`;
-  if (bytesPerSec >= 1e6) return `${(bytesPerSec / 1e6).toFixed(1)} MB/s`;
-  if (bytesPerSec >= 1e3) return `${(bytesPerSec / 1e3).toFixed(0)} KB/s`;
-  return `${Math.round(bytesPerSec)} B/s`;
 };
 
 const workloadPointLimitForCount = (count: number): number => {
@@ -789,7 +783,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           series={diskioSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
-          formatValue={formatRate}
+          formatValue={formatThroughputRate}
         />
       </SummaryMetricCard>
 
@@ -804,7 +798,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           series={networkSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
-          formatValue={formatRate}
+          formatValue={formatThroughputRate}
         />
       </SummaryMetricCard>
     </SummaryPanel>

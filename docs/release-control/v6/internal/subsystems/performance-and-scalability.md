@@ -110,6 +110,10 @@ The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
 store-backed mixed-workload benchmark coverage drifts.
+The infrastructure and workload summary cards now share a canonical
+throughput-rate formatter in `frontend-modern/src/utils/throughputPresentation.ts`,
+so bytes-per-second labels stay consistent between the two summary surfaces
+instead of each component carrying its own rate string builder.
 
 Infrastructure selector status ordering must now tolerate arbitrary filter-set
 strings without widening the canonical hot-path order tuple. Unknown statuses

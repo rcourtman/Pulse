@@ -70,6 +70,7 @@ import dashboardStoragePresentationSource from '@/utils/dashboardStoragePresenta
 import dashboardRecoveryPresentationSource from '@/utils/dashboardRecoveryPresentation.ts?raw';
 import dashboardKpiPresentationSource from '@/utils/dashboardKpiPresentation.ts?raw';
 import dashboardEmptyStatePresentationSource from '@/utils/dashboardEmptyStatePresentation.ts?raw';
+import throughputPresentationSource from '@/utils/throughputPresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
 import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
@@ -1918,6 +1919,7 @@ describe('frontend resource type boundaries', () => {
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
+    expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
