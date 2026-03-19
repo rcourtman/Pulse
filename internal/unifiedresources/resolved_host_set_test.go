@@ -395,6 +395,35 @@ func TestEnrichK8sNodeIdentity_NormalizesHostname(t *testing.T) {
 	}
 }
 
+func TestEnrichK8sNodeIdentity_ExactHostnameMatchWinsOverAmbiguity(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "h1", Hostname: "k8s-node1.local", MachineID: "machine-abc"},
+		{ID: "h2", Hostname: "k8s-node1.other", MachineID: "machine-def"},
+	}
+	identity := ResourceIdentity{Hostnames: []string{"k8s-node1.local"}}
+	enrichK8sNodeIdentity(&identity, "k8s-node1.local", hosts)
+
+	if identity.MachineID != "machine-abc" {
+		t.Fatalf("expected exact hostname match to enrich identity, got %q", identity.MachineID)
+	}
+}
+
+func TestEnrichK8sNodeIdentity_AmbiguousNormalizedHostnameSkipsEnrichment(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "h1", Hostname: "k8s-node1.local", MachineID: "machine-abc"},
+		{ID: "h2", Hostname: "k8s-node1.other", MachineID: "machine-def"},
+	}
+	identity := ResourceIdentity{Hostnames: []string{"k8s-node1"}}
+	enrichK8sNodeIdentity(&identity, "k8s-node1", hosts)
+
+	if identity.MachineID != "" {
+		t.Fatalf("expected ambiguous normalized hostname to skip enrichment, got %q", identity.MachineID)
+	}
+	if len(identity.MACAddresses) != 0 {
+		t.Fatalf("expected no MAC enrichment on ambiguous normalized hostname, got %v", identity.MACAddresses)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // End-to-end dedup scenario
 // ---------------------------------------------------------------------------

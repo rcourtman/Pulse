@@ -79,9 +79,9 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface.
 Kubernetes node identity enrichment remains intentionally hostname-based when
 the API cannot supply machine-level identity signals; the code may borrow
-machine-id and MAC evidence from a matched host agent, but duplicate short
-hostnames across domains or clusters stay an unresolved ambiguity rather than
-being force-merged into a stronger canonical identity.
+machine-id and MAC evidence from a uniquely matched host agent, but duplicate
+short hostnames across domains or clusters stay an unresolved ambiguity rather
+than being force-merged into a stronger canonical identity.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds

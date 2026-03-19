@@ -461,26 +461,49 @@ func k8sCandidates(cluster models.KubernetesCluster, hosts []models.Host) []Host
 	return candidates
 }
 
-// enrichK8sNodeIdentity attempts to find a host agent with a matching hostname
-// and copies its machine-id and MAC addresses to strengthen the K8s node's identity.
+// enrichK8sNodeIdentity attempts to find a uniquely matched host agent with a
+// matching hostname and copies its machine-id and MAC addresses to strengthen
+// the K8s node's identity.
 func enrichK8sNodeIdentity(identity *ResourceIdentity, nodeName string, hosts []models.Host) {
 	if nodeName == "" || len(hosts) == 0 {
 		return
 	}
-	normName := NormalizeHostname(nodeName)
-	if normName == "" {
-		return
-	}
-	for _, h := range hosts {
-		if NormalizeHostname(h.Hostname) == normName {
-			if h.MachineID != "" && identity.MachineID == "" {
-				identity.MachineID = strings.TrimSpace(h.MachineID)
+
+	for i := range hosts {
+		host := &hosts[i]
+		if strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) {
+			if host.MachineID != "" && identity.MachineID == "" {
+				identity.MachineID = strings.TrimSpace(host.MachineID)
 			}
-			_, macs := collectInterfaceIDs(h.NetworkInterfaces)
+			_, macs := collectInterfaceIDs(host.NetworkInterfaces)
 			identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
 			return
 		}
 	}
+
+	normName := NormalizeHostname(nodeName)
+	if normName == "" {
+		return
+	}
+
+	var matched *models.Host
+	for i := range hosts {
+		host := &hosts[i]
+		if NormalizeHostname(host.Hostname) == normName {
+			if matched != nil {
+				return
+			}
+			matched = host
+		}
+	}
+	if matched == nil {
+		return
+	}
+	if matched.MachineID != "" && identity.MachineID == "" {
+		identity.MachineID = strings.TrimSpace(matched.MachineID)
+	}
+	_, macs := collectInterfaceIDs(matched.NetworkInterfaces)
+	identity.MACAddresses = uniqueStrings(append(identity.MACAddresses, macs...))
 }
 
 // ---------------------------------------------------------------------------
