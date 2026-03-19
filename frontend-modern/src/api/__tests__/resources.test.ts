@@ -16,8 +16,6 @@ describe('ResourceAPI', () => {
       resourceId: 'vm:42',
       recentChanges: [{ id: 'change-1' }],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 3,
         recentChangeKinds: {
           metric_anomaly: 2,
@@ -52,8 +50,6 @@ describe('ResourceAPI', () => {
       resourceId: 'vm:42',
       recentChanges: [{ id: 'change-1' }],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 3,
         recentChangeKinds: {
           metric_anomaly: 2,
@@ -70,8 +66,6 @@ describe('ResourceAPI', () => {
       },
     });
     expect(result.counts).toStrictEqual({
-      capabilities: 1,
-      relationships: 1,
       recentChanges: 3,
       recentChangeKinds: {
         metric_anomaly: 2,

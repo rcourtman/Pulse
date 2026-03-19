@@ -124,8 +124,6 @@ describe('ResourceDetailDrawer history tab', () => {
         },
       ],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 3,
         recentChangeKinds: {
           restart: 2,
@@ -224,8 +222,6 @@ describe('ResourceDetailDrawer history tab', () => {
         },
       ],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 3,
         recentChangeKinds: {
           restart: 2,
@@ -331,8 +327,6 @@ describe('ResourceDetailDrawer history tab', () => {
         },
       ],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 2,
         recentChangeKinds: {
           restart: 1,
@@ -373,8 +367,6 @@ describe('ResourceDetailDrawer history tab', () => {
         },
       ],
       counts: {
-        capabilities: 1,
-        relationships: 1,
         recentChanges: 1,
       },
     };
@@ -471,8 +463,6 @@ describe('ResourceDetailDrawer history tab', () => {
           },
         ],
         counts: {
-          capabilities: 1,
-          relationships: 1,
           recentChanges: 2,
           recentChangeKinds: {
             restart: 1,
@@ -522,8 +512,6 @@ describe('ResourceDetailDrawer history tab', () => {
           },
         ],
         counts: {
-          capabilities: 1,
-          relationships: 1,
           recentChanges: 1,
           recentChangeKinds: {
             metric_anomaly: 1,

@@ -758,8 +758,6 @@ describe('useUnifiedResources', () => {
               },
             ],
             facetCounts: {
-              capabilities: 1,
-              relationships: 1,
               recentChanges: 1,
             },
           },
@@ -812,8 +810,6 @@ describe('useUnifiedResources', () => {
       },
     ]);
     expect(result!.resources()[0]?.facetCounts).toEqual({
-      capabilities: 1,
-      relationships: 1,
       recentChanges: 1,
     });
 

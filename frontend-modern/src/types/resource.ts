@@ -194,8 +194,6 @@ export interface ResourceCapability {
 }
 
 export interface ResourceFacetCounts {
-  capabilities: number;
-  relationships: number;
   recentChanges: number;
   recentChangeKinds?: Partial<Record<ResourceChangeKind, number>>;
   recentChangeSourceTypes?: Partial<Record<ResourceChangeSourceType, number>>;

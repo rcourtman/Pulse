@@ -347,27 +347,21 @@ The infrastructure table, selector, and detail-mapper frontend consumers are
 now governed as explicit shared boundaries with the performance lane rather
 than implicit downstream usage. That means future fleet-scale table changes
 must preserve both canonical unified-resource semantics and the table
-performance proof route. The shared resource table now also surfaces compact
-facet summary chips for capabilities, relationships, and timeline events, so
-facet presentation changes must continue to flow through the same governed
-resource-row surface rather than inventing a separate ad hoc summary path.
-Those row summaries now prefer canonical `facetCounts` on the resource object
-when available, so the backend list/read shapes remain the source of truth
-instead of forcing the frontend to infer totals only from loaded slices.
-Those chips now appear on both the primary fleet rows and the PBS/PMG service
-rows, so the unified consumer surface must remain consistent across the full
-table instead of diverging by resource class. The same facet summary now also
-appears in the resource drawer's runtime overview card through a shared
-`ResourceFacetSummary` component, so table and detail views stay aligned on a
-single canonical rendering path for the resource graph counts. The drawer now
-fetches those facets through one backend bundle endpoint, and that shared
-facet bundle preserves backend counts for capabilities, relationships, and the
+performance proof route. The shared resource table and resource drawer now
+surface compact timeline summary chips, so facet presentation changes must
+continue to flow through the same governed resource-row surface rather than
+inventing a separate ad hoc summary path. Those row summaries now prefer
+canonical `facetCounts` on the resource object when available, so the backend
+list/read shapes remain the source of truth instead of forcing the frontend to
+infer totals only from loaded slices. The drawer now fetches those facets
+through one backend bundle endpoint, and that shared facet bundle preserves
+backend counts for the hidden capability and relationship model alongside the
 timeline slice so the overview card and history summary can report the total
 facet history instead of collapsing to the currently loaded page when the
-timeline endpoint is paginated. Relationship and timeline references in that
-drawer now route through the canonical infrastructure resource filter, so the
-resource graph remains navigable from the history surface instead of being
-purely descriptive text.
+timeline endpoint is paginated. Timeline references in that drawer now route
+through the canonical infrastructure resource filter, so the resource history
+remains navigable from the history surface instead of being purely
+descriptive text.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip

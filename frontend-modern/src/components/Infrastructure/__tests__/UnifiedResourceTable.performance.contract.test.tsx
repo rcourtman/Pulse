@@ -128,13 +128,11 @@ describe('UnifiedResourceTable performance contract', () => {
 
     it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {
       const { getByText, queryByText } = render(() => (
-        <ResourceFacetSummary
-          counts={{
-            capabilities: 1,
-            relationships: 1,
-            recentChanges: 3,
-            recentChangeKinds: {
-              restart: 2,
+      <ResourceFacetSummary
+        counts={{
+          recentChanges: 3,
+          recentChangeKinds: {
+            restart: 2,
               config_update: 1,
               metric_anomaly: 1,
             },
@@ -205,8 +203,6 @@ describe('UnifiedResourceTable performance contract', () => {
                 },
               ],
               facetCounts: {
-                capabilities: 1,
-                relationships: 1,
                 recentChanges: 3,
                 recentChangeKinds: {
                   restart: 2,
