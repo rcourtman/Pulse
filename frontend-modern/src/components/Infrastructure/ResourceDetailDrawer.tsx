@@ -65,6 +65,7 @@ import {
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
 import { formatConfidencePercentage } from '@/utils/confidencePresentation';
+import { humanizeToken } from '@/utils/textPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
@@ -612,14 +613,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   };
 
   const humanizeFacetToken = (value?: string) => {
-    const normalized = (value || '').trim();
-    if (!normalized) return '—';
-    if (normalized === normalized.toUpperCase() && normalized.length <= 4) {
-      return normalized;
-    }
-    return normalized
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (char) => char.toUpperCase());
+    return humanizeToken(value, { fallback: '—', preserveShortAllCaps: true });
   };
 
   const formatApprovalLevel = (value?: string) => {

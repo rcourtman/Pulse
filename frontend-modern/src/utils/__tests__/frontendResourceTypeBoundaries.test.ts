@@ -70,6 +70,7 @@ import resourceChangePresentationSource from '@/utils/resourceChangePresentation
 import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
+import textPresentationSource from '@/utils/textPresentation.ts?raw';
 import resourcePolicyNormalizationSource from '@/utils/resourcePolicyNormalization.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
@@ -1861,6 +1862,11 @@ describe('frontend resource type boundaries', () => {
     expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
+    expect(resourceChangePresentationSource).toContain('humanizeToken');
+    expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
+    expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
+    expect(resourceDetailDrawerSource).toContain('humanizeToken');
+    expect(textPresentationSource).toContain('humanizeToken');
     expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicyAISafeSummary(');
     expect(resourcePolicyNormalizationSource).toContain(
       'normalizeResourcePolicyAISafeSummary',

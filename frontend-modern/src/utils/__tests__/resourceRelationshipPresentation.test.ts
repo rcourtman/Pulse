@@ -9,7 +9,7 @@ describe('resourceRelationshipPresentation', () => {
     expect(formatResourceRelationshipType('mounted_to')).toBe('Mounted to');
     expect(formatResourceRelationshipType('exposed_by')).toBe('Exposed by');
     expect(formatResourceRelationshipType('owned_by')).toBe('Owned by');
-    expect(formatResourceRelationshipType('custom_link')).toBe('Custom link');
+    expect(formatResourceRelationshipType('custom_link')).toBe('Custom Link');
     expect(formatResourceRelationshipType('')).toBe('Related to');
   });
 

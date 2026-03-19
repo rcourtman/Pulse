@@ -1,5 +1,6 @@
 import type { ResourceRelationship, ResourceRelationshipType } from '@/types/resource';
 import { formatConfidencePercentage } from '@/utils/confidencePresentation';
+import { humanizeToken } from '@/utils/textPresentation';
 
 export interface ResourceRelationshipPresentation {
   typeLabel: string;
@@ -23,11 +24,7 @@ export function formatResourceRelationshipType(type: ResourceRelationshipType | 
     case 'owned_by':
       return 'Owned by';
     default: {
-      const raw = String(type).trim().replace(/_/g, ' ');
-      if (!raw) {
-        return 'Related to';
-      }
-      return raw[0].toUpperCase() + raw.slice(1);
+      return humanizeToken(String(type), { fallback: 'Related to' });
     }
   }
 }

@@ -1,5 +1,6 @@
 import type { ResourceChange } from '@/types/resource';
 import type { ResourceChangeKind, ResourceFacetSourceAdapter } from '@/types/resource';
+import { humanizeToken } from '@/utils/textPresentation';
 
 export interface ResourceChangeLabelPresentation {
   label: string;
@@ -132,13 +133,7 @@ const RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS: Record<
 };
 
 const humanizeResourceChangeToken = (value: string): string => {
-  const normalized = value.trim();
-  if (!normalized) {
-    return 'Unknown';
-  }
-  return normalized
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return humanizeToken(value, { fallback: 'Unknown' });
 };
 
 const fallbackResourceChangePresentation = (value: string): ResourceChangeLabelPresentation => {
@@ -189,7 +184,7 @@ export function formatResourceChangeKind(kind: ResourceChange['kind']): string {
     case 'capability_change':
       return 'Capability change';
     default:
-      return String(kind).replace(/_/g, ' ');
+      return humanizeToken(String(kind), { fallback: String(kind) });
   }
 }
 

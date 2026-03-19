@@ -157,6 +157,9 @@ The drawer's relationship and change timeline confidence labels now also use
 a shared frontend formatter, so the same percentage wording is emitted across
 resource-graph surfaces instead of each consumer rounding confidence values on
 its own.
+Those same resource-graph surfaces now also share a token-humanization helper
+for fallback labels, so underscore cleanup and title-casing for relationship,
+change, and drawer labels stay aligned without local copies.
 The same resource-change contract now also owns the canonical filter parser
 used by `/api/resources/{id}/timeline`, so `kind`, `sourceType`, and
 `sourceAdapter` validation stays with the change model instead of being
