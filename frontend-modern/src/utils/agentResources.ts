@@ -36,6 +36,25 @@ type KubernetesContextLike = {
   } | null;
 };
 
+type ResourceClusterNameLike = KubernetesContextLike & {
+  identity?: {
+    clusterName?: string | null;
+  } | null;
+  proxmox?: {
+    clusterName?: string | null;
+  } | null;
+  platformData?: {
+    kubernetes?: {
+      clusterName?: string | null;
+      context?: string | null;
+      clusterId?: string | null;
+    } | null;
+    proxmox?: {
+      clusterName?: string | null;
+    } | null;
+  } | null;
+};
+
 export const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
   resource.platformData ? (resource.platformData as Record<string, unknown>) : undefined;
 
@@ -122,9 +141,13 @@ export const getPreferredResourceKubernetesContext = (
 };
 
 export const getPreferredResourceClusterName = (
-  resource: KubernetesContextLike,
+  resource: ResourceClusterNameLike,
 ): string | undefined =>
-  getPreferredResourceKubernetesContext(resource) || asTrimmedString(resource.name);
+  getPreferredResourceKubernetesContext(resource) ||
+  asTrimmedString(resource.identity?.clusterName) ||
+  asTrimmedString(resource.proxmox?.clusterName) ||
+  asTrimmedString(resource.platformData?.proxmox?.clusterName) ||
+  asTrimmedString(resource.name);
 
 export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): string[] => {
   const candidates = [

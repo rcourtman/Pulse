@@ -170,6 +170,17 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('cluster-by-name');
+
+    expect(
+      getPreferredResourceClusterName(
+        makeResource({
+          type: 'vm',
+          proxmox: {
+            clusterName: 'proxmox-cluster',
+          },
+        }),
+      ),
+    ).toBe('proxmox-cluster');
   });
 
   it('detects docker workloads scope from explicit docker facets instead of source lists', () => {

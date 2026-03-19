@@ -184,6 +184,19 @@ describe('resourceIdentity', () => {
     expect(getPreferredResourceClusterName(resource)).toBe('cluster-a');
   });
 
+  it('prefers proxmox cluster names when kubernetes context is unavailable', () => {
+    const resource = makeResource({
+      type: 'vm',
+      name: 'proxmox-node',
+      displayName: 'Governed Node',
+      proxmox: {
+        clusterName: 'proxmox-cluster',
+      },
+    });
+
+    expect(getPreferredResourceClusterName(resource)).toBe('proxmox-cluster');
+  });
+
   it('prefers the canonical Kubernetes context prefix without display fallbacks', () => {
     const resource = makeResource({
       type: 'k8s-node',

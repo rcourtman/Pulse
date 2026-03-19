@@ -196,6 +196,42 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('uses the shared cluster-name helper for proxmox workload labels', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vm-1',
+          type: 'vm',
+          name: 'vm-1',
+          instance: undefined,
+          proxmox: {
+            clusterName: 'cluster-b',
+          },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    expect(result!.workloads()[0]?.clusterName).toBe('cluster-b');
+    expect(result!.workloads()[0]?.contextLabel).toBe('pve1 (cluster-b)');
+    expect(result!.workloads()[0]?.instance).toBe('cluster-b');
+    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve1:101');
+
+    dispose();
+  });
+
   it('keeps workload reference stable when polling returns identical payload', async () => {
     let dispose = () => {};
     let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;

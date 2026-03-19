@@ -172,10 +172,10 @@ The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops.
-The same shared agent-resource module now also owns the canonical Kubernetes
-cluster helpers, so cluster-name labels and Kubernetes context prefixes stay
-aligned instead of each surface rebuilding its own pod and namespace routing
-fallbacks.
+The same shared agent-resource module now also owns the canonical cluster-name
+helpers, so Kubernetes context prefixes, Proxmox cluster labels, and
+cluster-name fetch keys stay aligned instead of each surface rebuilding its
+own pod, namespace, and VM routing fallbacks.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter

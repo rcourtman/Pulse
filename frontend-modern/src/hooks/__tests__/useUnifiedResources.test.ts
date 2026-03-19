@@ -237,6 +237,38 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('projects proxmox clusterId from the shared cluster helper', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            type: 'vm',
+            proxmox: {
+              nodeName: 'pve1',
+              clusterName: 'cluster-b',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(result!.resources()[0]?.clusterId).toBe('cluster-b');
+
+    dispose();
+  });
+
   it('falls back to proxmox temperature when agent temperature is unavailable', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

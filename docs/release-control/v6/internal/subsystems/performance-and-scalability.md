@@ -140,10 +140,10 @@ also routes its Kubernetes-cluster fallback through the same preferred
 resource display contract, so navigation context does not leak raw
 `displayName` values for governed clusters.
 That same workloads-link path and the dashboard workload projection now also
-share the canonical Kubernetes cluster helpers in the shared agent-resource
-layer, so route labels, pod grouping, and cluster-name fetch keys keep using
-the same cluster-context source of truth instead of rebuilding the
-`clusterName`/`context`/`clusterId` prefix locally.
+share the canonical cluster-name helpers in the shared agent-resource layer,
+so route labels, pod grouping, and cluster-name fetch keys keep using the
+same source of truth instead of rebuilding the `clusterName`/`context`/
+`clusterId` prefix locally.
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.

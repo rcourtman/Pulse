@@ -285,12 +285,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const name = (resource.name || resource.id || '').toString().trim();
   const node = resource.node ?? resource.proxmox?.nodeName ?? resource.kubernetes?.nodeName ?? '';
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
+  const preferredClusterName = getPreferredResourceClusterName(resource);
   const instance =
     resource.instance ??
     resource.proxmox?.instance ??
     kubernetesContext ??
-    resource.proxmox?.clusterName ??
-    resource.identity?.clusterName ??
+    preferredClusterName ??
     '';
   const vmid =
     typeof resource.vmid === 'number'
@@ -405,7 +405,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'vm' || workloadType === 'system-container'
         ? node
           ? (() => {
-              const cluster = resource.proxmox?.clusterName || resource.identity?.clusterName || '';
+              const cluster = preferredClusterName || '';
               if (cluster && cluster !== node) return `${node} (${cluster})`;
               if (instance && instance !== node) return `${node} (${instance})`;
               return node;
@@ -414,10 +414,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : workloadType === 'app-container'
           ? resource.parentName || resource.docker?.hostname
           : workloadType === 'pod'
-            ? getPreferredResourceClusterName(resource)
+            ? preferredClusterName
             : undefined,
-    clusterName:
-      (resource.proxmox?.clusterName || resource.identity?.clusterName || '').trim() || undefined,
+    clusterName: preferredClusterName || undefined,
     containerRuntime:
       workloadType === 'app-container'
         ? (resource.docker?.runtime || '').trim() || undefined

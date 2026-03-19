@@ -23,7 +23,7 @@ import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   getPreferredNormalizedPlatformId,
-  getPreferredResourceKubernetesContext,
+  getPreferredResourceClusterName,
 } from '@/utils/resourceIdentity';
 import {
   resolvePlatformTypeFromSources,
@@ -558,10 +558,7 @@ const toResource = (v2: APIResource): Resource => {
     sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,
-    clusterId:
-      getPreferredResourceKubernetesContext(v2) ||
-      v2.identity?.clusterName ||
-      v2.proxmox?.clusterName,
+    clusterId: getPreferredResourceClusterName(v2),
     status: resolveStatus(v2.status),
     incidentCount: v2.incidentCount,
     incidentCode: v2.incidentCode,
