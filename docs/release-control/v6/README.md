@@ -31,6 +31,7 @@ the current lane map does not model a durable surface cleanly enough yet.
 Use `status.json.candidate_lanes` for the machine-readable promotion plan that
 turns durable coverage gaps into explicit future lane splits, additions, or
 expansions.
+The current highest-ranked surfaced candidate is policy-aware data governance.
 Use `status.json.work_claims` for the active lease-style reservation list that
 keeps multiple agents from picking the same governed slice at the same time.
 Record the claim immediately once the slice is chosen, and if an agent rolls
