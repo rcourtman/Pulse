@@ -101,6 +101,9 @@ That same change-presentation helper now also owns the one-line
 `FormatResourceChangeSummary` used by AI runtime recent-change sections and
 Patrol seed context, so the change wording itself stays canonical before any
 section-specific headings are applied.
+The same helper also owns `FormatResourceRecentChangesContext`, so AI runtime
+callers share the canonical recent-change section heading and resource
+prefixing instead of rebuilding that wrapper locally.
 The backend AI and Patrol graph context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph

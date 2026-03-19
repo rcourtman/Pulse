@@ -374,7 +374,7 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 		"func (s *Service) buildResourceGraphContext(resourceID string) string",
 		"if graphContext := s.buildResourceGraphContext(resourceID); graphContext != \"\" {",
 		"unifiedresources.FormatResourceGraphContext(resource, 3)",
-		"unifiedresources.FormatResourceChangeSummary(change)",
+		"unifiedresources.FormatResourceRecentChangesContext(changes, false, \"###\")",
 		"type canonicalResourceGetter interface {",
 		"correlationDetector.FormatForContext(resourceID)",
 	}
@@ -410,8 +410,7 @@ func TestIntelligenceRecentChangesUseCanonicalSummaryFormatter(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"unifiedresources.FormatResourceChangeSummary(change)",
-		"formatCanonicalRecentChangesContext(recent, includeResourcePrefix)",
+		"unifiedresources.FormatResourceRecentChangesContext(recent, includeResourcePrefix, \"##\")",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

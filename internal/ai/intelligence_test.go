@@ -458,6 +458,33 @@ func TestIntelligence_FormatGlobalContext_FallsBackToChangeDetector(t *testing.T
 	}
 }
 
+func TestIntelligence_BuildRecentChangesContext_UsesCanonicalSectionFormatter(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	store := ur.NewMemoryStore()
+	if err := store.RecordChange(ur.ResourceChange{
+		ID:            "change-1",
+		ObservedAt:    time.Now().Add(-time.Hour),
+		ResourceID:    "node-1",
+		Kind:          ur.ChangeRestart,
+		SourceType:    ur.SourcePlatformEvent,
+		SourceAdapter: ur.AdapterProxmox,
+		Reason:        "node restarted after maintenance",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+
+	ctx := intel.buildRecentChangesContext("node-1", store, nil, true, 5)
+	for _, want := range []string{
+		"## Recent Changes Across Infrastructure",
+		"node-1: **Restart**",
+		"platform_event/proxmox_adapter",
+	} {
+		if !strings.Contains(ctx, want) {
+			t.Fatalf("expected canonical recent-changes context %q to contain %q", ctx, want)
+		}
+	}
+}
+
 func TestIntelligence_CreatePredictionFinding_LowSeverity(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 

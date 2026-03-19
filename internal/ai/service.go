@@ -4582,15 +4582,11 @@ func (s *Service) buildRecentResourceChangesContext(resourceID string) string {
 				Str("resource_id", resourceID).
 				Msg("failed to load canonical resource timeline context")
 		} else if len(changes) > 0 {
-			var changeInfo []string
-			for _, change := range changes {
-				if len(changeInfo) >= 3 {
-					break
-				}
-				changeInfo = append(changeInfo, unifiedresources.FormatResourceChangeSummary(change))
+			if len(changes) > 3 {
+				changes = changes[:3]
 			}
-			if len(changeInfo) > 0 {
-				return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
+			if section := unifiedresources.FormatResourceRecentChangesContext(changes, false, "###"); section != "" {
+				return section
 			}
 		}
 	}

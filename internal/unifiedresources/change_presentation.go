@@ -114,3 +114,31 @@ func FormatResourceChangeSummary(change ResourceChange) string {
 	}
 	return summary + fmt.Sprintf(" (%s ago)", ago)
 }
+
+// FormatResourceRecentChangesContext returns the canonical markdown section
+// used by AI prompt surfaces for recent unified-resource changes.
+func FormatResourceRecentChangesContext(changes []ResourceChange, includeResourcePrefix bool, headingLevel string) string {
+	if len(changes) == 0 {
+		return ""
+	}
+	if strings.TrimSpace(headingLevel) == "" {
+		headingLevel = "##"
+	}
+
+	heading := fmt.Sprintf("\n%s Recent Changes", headingLevel)
+	if includeResourcePrefix {
+		heading = fmt.Sprintf("\n%s Recent Changes Across Infrastructure", headingLevel)
+	}
+
+	lines := []string{heading, "What changed recently:"}
+	for _, change := range changes {
+		entry := FormatResourceChangeSummary(change)
+		if includeResourcePrefix {
+			if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" {
+				entry = fmt.Sprintf("%s: %s", resourceID, entry)
+			}
+		}
+		lines = append(lines, "- "+entry)
+	}
+	return strings.Join(lines, "\n")
+}

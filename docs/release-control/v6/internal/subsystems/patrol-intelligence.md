@@ -152,6 +152,9 @@ That same helper now also owns the one-line recent-change summary text used
 by the AI runtime prompt sections and Patrol seed context, so the change
 wording itself stays canonical before the surrounding section headers are
 applied.
+The same helper now also owns the canonical recent-change section wrapper,
+so the Patrol page and AI runtime can share the same heading and resource
+prefix rules instead of rebuilding that section locally.
 The canonical shared AI resource context now also surfaces policy routing and
 redaction hints from unified resources, so the Patrol page and resource drawer
 see the same governance posture that the runtime uses for export boundaries.

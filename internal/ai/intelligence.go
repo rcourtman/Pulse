@@ -518,7 +518,7 @@ func (i *Intelligence) buildRecentChangesContext(resourceID string, resourceTime
 
 	if resourceTimelineStore != nil {
 		if recent, err := resourceTimelineStore.GetRecentChanges(resourceID, since, limit); err == nil && len(recent) > 0 {
-			return formatCanonicalRecentChangesContext(recent, includeResourcePrefix)
+			return unifiedresources.FormatResourceRecentChangesContext(recent, includeResourcePrefix, "##")
 		}
 	}
 
@@ -536,29 +536,6 @@ func (i *Intelligence) buildRecentChangesContext(resourceID string, resourceTime
 		return ""
 	}
 	return formatMemoryRecentChangesContext(recent, includeResourcePrefix)
-}
-
-func formatCanonicalRecentChangesContext(changes []unifiedresources.ResourceChange, includeResourcePrefix bool) string {
-	if len(changes) == 0 {
-		return ""
-	}
-
-	heading := "\n## Recent Changes"
-	if includeResourcePrefix {
-		heading = "\n## Recent Changes Across Infrastructure"
-	}
-
-	lines := []string{heading, "What changed recently:"}
-	for _, change := range changes {
-		entry := unifiedresources.FormatResourceChangeSummary(change)
-		if includeResourcePrefix {
-			if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" {
-				entry = fmt.Sprintf("%s: %s", resourceID, entry)
-			}
-		}
-		lines = append(lines, "- "+entry)
-	}
-	return strings.Join(lines, "\n")
 }
 
 func formatMemoryRecentChangesContext(changes []memory.Change, includeResourcePrefix bool) string {

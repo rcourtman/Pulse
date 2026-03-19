@@ -172,6 +172,10 @@ The canonical recent-change sentence formatting also lives in
 `internal/unifiedresources.FormatResourceChangeSummary`, so AI runtime prompt
 sections and Patrol seed context reuse the same change wording instead of
 keeping another lane-local formatter.
+The canonical recent-change section wrapper also lives in
+`internal/unifiedresources.FormatResourceRecentChangesContext`, so the AI
+summary and resource-specific context share the same heading and prefix rules
+instead of rebuilding that section layout locally.
 The related-resource correlation section now also comes from the shared
 correlation formatter in `internal/ai/correlation`, so resource chat and
 incident prompts reuse the same learned-edge wording instead of rebuilding a

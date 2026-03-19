@@ -92,3 +92,27 @@ func TestFormatResourceChangeSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatResourceRecentChangesContext(t *testing.T) {
+	changes := []ResourceChange{
+		{
+			Kind:          ChangeRestart,
+			ResourceID:    "vm-1",
+			SourceType:    SourcePlatformEvent,
+			SourceAdapter: AdapterProxmox,
+			Reason:        "maintenance",
+			ObservedAt:    time.Now().Add(-time.Hour),
+		},
+	}
+
+	ctx := FormatResourceRecentChangesContext(changes, true, "###")
+	for _, want := range []string{
+		"### Recent Changes Across Infrastructure",
+		"vm-1: **Restart**",
+		"platform_event/proxmox_adapter",
+	} {
+		if !strings.Contains(ctx, want) {
+			t.Fatalf("expected recent changes context %q to contain %q", ctx, want)
+		}
+	}
+}
