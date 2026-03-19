@@ -1,5 +1,6 @@
 import type { WorkloadType } from '@/types/workloads';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export interface WorkloadTypePresentation {
   label: string;
@@ -54,13 +55,6 @@ const DEFAULT_PRESENTATION: WorkloadTypePresentation = {
   className: 'bg-surface-alt text-base-content',
 };
 
-const toTitleCase = (value: string): string =>
-  value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
 export const normalizeWorkloadTypePresentationKey = (
   value: string | null | undefined,
 ): WorkloadTypePresentationKey | null => {
@@ -85,7 +79,9 @@ export const getWorkloadTypePresentation = (
 ): WorkloadTypePresentation => {
   const normalized = normalizeWorkloadTypePresentationKey(rawType);
   const fallbackLabel =
-    overrides?.label || toTitleCase((rawType || '').toString()) || DEFAULT_PRESENTATION.label;
+    overrides?.label ||
+    titleCaseDelimitedLabel((rawType || '').toString()) ||
+    DEFAULT_PRESENTATION.label;
 
   if (!normalized) {
     return {

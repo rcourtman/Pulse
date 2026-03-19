@@ -6,6 +6,7 @@ import {
 } from '@/utils/workloadTypePresentation';
 import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
@@ -20,13 +21,6 @@ export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
 export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
-
-const titleize = (value: string): string =>
-  (value || '')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 
 export function getRecoveryEventTimeTextClass(
   timestamp: number,
@@ -115,11 +109,11 @@ export function getRecoverySubjectTypeLabel(point: RecoveryPoint): string {
       presentation.label === normalizeRecoverySubjectTypeKey(raw) &&
       presentation.badgeClasses === 'bg-surface-alt text-base-content'
     ) {
-      return titleize(normalizeRecoverySubjectTypeKey(raw));
+      return titleCaseDelimitedLabel(normalizeRecoverySubjectTypeKey(raw));
     }
     return presentation.label;
   }
-  return titleize(normalizeRecoverySubjectTypeKey(raw));
+  return titleCaseDelimitedLabel(normalizeRecoverySubjectTypeKey(raw));
 }
 
 export function getRecoveryArtifactColumnHeaderClass(id: string): string {

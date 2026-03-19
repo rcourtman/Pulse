@@ -1,6 +1,7 @@
 import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin';
 import type { CommercialMigrationStatus, LicenseStatus } from '@/api/license';
 import { CLOUD_PLAN_LABELS } from '@/utils/cloudPlans';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Community',
@@ -69,19 +70,16 @@ const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
   v5_pro_annual_grandfathered: 'V5 Pro Annual (Grandfathered)',
 };
 
-const formatTitleCase = (value: string) =>
-  value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
-
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
-  return TIER_LABELS[normalized] || formatTitleCase(normalized);
+  return TIER_LABELS[normalized] || titleCaseDelimitedLabel(normalized);
 };
 
 export const getLicenseFeatureLabel = (feature?: string | null): string => {
   const normalized = (feature || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
-  return FEATURE_LABELS[normalized] || formatTitleCase(normalized);
+  return FEATURE_LABELS[normalized] || titleCaseDelimitedLabel(normalized);
 };
 
 export const getFeatureMinTierLabel = (feature?: string | null): string => {
@@ -97,7 +95,7 @@ export const formatLicensePlanVersion = (value?: string | null): string | null =
   if (grandfathered) return grandfathered;
   const canonical = CLOUD_PLAN_LABELS[normalized.toLowerCase()];
   if (canonical) return canonical;
-  return formatTitleCase(normalized);
+  return titleCaseDelimitedLabel(normalized);
 };
 
 export const getGrandfatheredPriceContinuityNotice = (

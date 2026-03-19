@@ -1,5 +1,6 @@
 import type { Storage } from '@/types/api';
 import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type StorageSourceTone = 'slate' | 'orange' | 'indigo' | 'rose' | 'violet' | 'cyan';
 
@@ -46,13 +47,6 @@ const slugifySource = (value: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-
-const titleCaseLabel = (value: string): string =>
-  value
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 
 export const normalizeStorageSourceKey = (value: string | null | undefined): string => {
   const normalized = slugifySource(value || '');
@@ -108,7 +102,9 @@ export const getStorageSourceOption = (value: string | null | undefined): Storag
   return {
     key,
     label:
-      (key === 'ceph' ? 'Ceph' : getSourcePlatformLabel(key)) || titleCaseLabel(key) || 'Other',
+      (key === 'ceph' ? 'Ceph' : getSourcePlatformLabel(key)) ||
+      titleCaseDelimitedLabel(key) ||
+      'Other',
     tone: STORAGE_SOURCE_TONES[key] || 'slate',
   };
 };

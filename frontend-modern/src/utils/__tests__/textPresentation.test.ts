@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatIdentifierLabel, humanizeToken } from '@/utils/textPresentation';
+import {
+  formatIdentifierLabel,
+  humanizeToken,
+  titleCaseDelimitedLabel,
+} from '@/utils/textPresentation';
 
 describe('textPresentation', () => {
   it('humanizes underscore-separated tokens with a fallback', () => {
@@ -24,5 +28,19 @@ describe('textPresentation', () => {
       maxLength: 12,
     })).toBe('very long un');
     expect(formatIdentifierLabel(undefined, { fallback: 'Unknown' })).toBe('Unknown');
+  });
+
+  it('title-cases delimited labels with configurable separators', () => {
+    expect(titleCaseDelimitedLabel('docker_host')).toBe('Docker Host');
+    expect(titleCaseDelimitedLabel('IP_address', { preserveShortAllCaps: true })).toBe(
+      'IP Address',
+    );
+    expect(titleCaseDelimitedLabel('k8s-node', { preserveShortAllCaps: true })).toBe('K8s Node');
+    expect(
+      titleCaseDelimitedLabel('agent.profile.suggestion', {
+        separators: /[._]+/,
+      }),
+    ).toBe('Agent Profile Suggestion');
+    expect(titleCaseDelimitedLabel('', { fallback: 'Unknown' })).toBe('Unknown');
   });
 });

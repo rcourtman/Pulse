@@ -9,6 +9,12 @@ export interface IdentifierLabelOptions {
   stripPrefix?: string;
 }
 
+export interface TitleCaseLabelOptions {
+  fallback?: string;
+  preserveShortAllCaps?: boolean;
+  separators?: RegExp;
+}
+
 export function humanizeToken(value?: string, options?: HumanizeTokenOptions): string {
   const normalized = (value || '').trim();
   if (!normalized) {
@@ -47,4 +53,32 @@ export function formatIdentifierLabel(
   }
 
   return label;
+}
+
+export function titleCaseDelimitedLabel(
+  value?: string,
+  options?: TitleCaseLabelOptions,
+): string {
+  const normalized = (value || '').trim();
+  if (!normalized) {
+    return options?.fallback ?? '';
+  }
+
+  const tokens = normalized
+    .split(options?.separators ?? /[\s_-]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return options?.fallback ?? '';
+  }
+
+  return tokens
+    .map((part) => {
+      if (options?.preserveShortAllCaps && part === part.toUpperCase() && part.length <= 4) {
+        return part;
+      }
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(' ');
 }

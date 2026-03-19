@@ -1,3 +1,5 @@
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
+
 export function getAgentProfileSuggestionValueBadgeClass(value: unknown): string {
   if (typeof value === 'boolean') {
     return value
@@ -15,11 +17,7 @@ export const AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS = [
 ] as const;
 
 export function getAgentProfileSuggestionKeyLabel(value: string): string {
-  return value
-    .split('_')
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  return titleCaseDelimitedLabel(value);
 }
 
 export function formatAgentProfileSuggestionValue(value: unknown): string {

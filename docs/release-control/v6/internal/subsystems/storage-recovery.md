@@ -37,6 +37,8 @@ querying, and the operator-facing storage health presentation layer.
 12. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
 13. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
 14. `frontend-modern/src/types/recovery.ts`
+15. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+16. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -174,6 +176,11 @@ points. `frontend-modern/src/components/Storage/` plus
 storage health model and presentation, while
 `frontend-modern/src/components/Recovery/` and the recovery hooks define the
 timeline, protected-item, and recovery-summary UX.
+The recovery table presentation helper now owns the canonical subject-type
+label fallback for recovery rows and delegates its title-casing to the shared
+`frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
+local recovery-only formatter, so subject and outcome labels stay aligned with
+the shared frontend label contract.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,

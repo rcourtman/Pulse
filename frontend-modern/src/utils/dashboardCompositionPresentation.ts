@@ -5,6 +5,7 @@ import Box from 'lucide-solid/icons/box';
 import Container from 'lucide-solid/icons/container';
 import type { ValidComponent } from 'solid-js';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 const COMPOSITION_ICONS: Record<string, ValidComponent> = {
   vm: Server,
@@ -23,13 +24,6 @@ const COMPOSITION_LABELS: Record<string, string> = {
   database: 'Databases',
 };
 
-const titleize = (value: string): string =>
-  value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
 export const DASHBOARD_COMPOSITION_EMPTY_STATE = 'No resources detected';
 
 export const getDashboardCompositionLabel = (resourceType: string): string => {
@@ -38,7 +32,7 @@ export const getDashboardCompositionLabel = (resourceType: string): string => {
   if (COMPOSITION_LABELS[normalized]) return COMPOSITION_LABELS[normalized];
   const sharedLabel = getResourceTypeLabel(normalized);
   if (sharedLabel && sharedLabel !== normalized) return sharedLabel;
-  return titleize(normalized);
+  return titleCaseDelimitedLabel(normalized);
 };
 
 export const getDashboardCompositionIcon = (resourceType: string): ValidComponent => {

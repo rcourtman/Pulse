@@ -14,6 +14,7 @@ import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
+import storageSourcesSource from '@/utils/storageSources.ts?raw';
 import rbacPermissionsSource from '@/utils/rbacPermissions.ts?raw';
 import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
@@ -228,6 +229,7 @@ import rbacPresentationSource from '@/utils/rbacPresentation.ts?raw';
 import upgradePresentationSource from '@/utils/upgradePresentation.ts?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import agentProfilesPresentationSource from '@/utils/agentProfilesPresentation.ts?raw';
+import agentProfileSuggestionPresentationSource from '@/utils/agentProfileSuggestionPresentation.ts?raw';
 import organizationAccessPanelSource from '@/components/Settings/OrganizationAccessPanel.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
@@ -322,8 +324,13 @@ describe('frontend resource type boundaries', () => {
     expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
     expect(resourceBadgesSource).not.toContain('function formatType(');
     expect(workloadTypePresentationSource).toContain('canonicalizeFrontendResourceType');
+    expect(workloadTypePresentationSource).toContain('titleCaseDelimitedLabel');
     expect(workloadTypeBadgesSource).not.toContain('canonicalizeFrontendResourceType');
     expect(workloadTypeBadgesSource).toContain('getWorkloadTypePresentation');
+    expect(sourcePlatformsSource).toContain('titleCaseDelimitedLabel');
+    expect(sourcePlatformsSource).not.toContain('const titleize =');
+    expect(storageSourcesSource).toContain('titleCaseDelimitedLabel');
+    expect(storageSourcesSource).not.toContain('const titleCaseLabel =');
     expect(workloadsSource).toContain('export const normalizeWorkloadViewModeParam');
     expect(dashboardSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
@@ -369,6 +376,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoveryIssuePresentationSource).toContain('export function getRecoveryIssueRailClass');
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
+    expect(recoverySource).not.toContain('const titleize =');
     expect(recoverySource).toContain("segmentedButtonClass(chartRangeDays() === range, false, 'accent')");
     expect(recoverySource).not.toContain('border-blue-200 bg-blue-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-cyan-200 bg-cyan-50 px-2 py-0.5');
@@ -489,6 +497,8 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactColumnHeaderClass',
     );
+    expect(recoveryTablePresentationSource).toContain('titleCaseDelimitedLabel');
+    expect(recoveryTablePresentationSource).not.toContain('const titleize =');
     expect(recoveryDatePresentationSource).toContain(
       'export function recoveryDateKeyFromTimestamp',
     );
@@ -803,6 +813,8 @@ describe('frontend resource type boundaries', () => {
     expect(agentProfilesPresentationSource).toContain(
       'export function getAgentProfileAssignmentsEmptyState',
     );
+    expect(agentProfileSuggestionPresentationSource).toContain('titleCaseDelimitedLabel');
+    expect(agentProfileSuggestionPresentationSource).not.toContain('const titleize =');
     expect(trendChartsSource).toContain("segmentedButtonClass(active(), false, 'accent')");
     expect(trendChartsSource).not.toContain(
       "'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'",
@@ -817,6 +829,8 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardCompositionPresentationSource).toContain(
       'export const DASHBOARD_COMPOSITION_EMPTY_STATE',
     );
+    expect(dashboardCompositionPresentationSource).toContain('titleCaseDelimitedLabel');
+    expect(dashboardCompositionPresentationSource).not.toContain('const titleize =');
     expect(problemResourcesTableSource).toContain('getProblemResourceStatusVariant');
     expect(problemResourcesTableSource).not.toContain(
       'function statusVariant(pr: ProblemResource)',
@@ -1708,6 +1722,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(licensePresentationSource).toContain('export const BILLING_ADMIN_EMPTY_STATE');
     expect(licensePresentationSource).toContain('export const formatLicensePlanVersion');
+    expect(licensePresentationSource).toContain('titleCaseDelimitedLabel');
     expect(licensePresentationSource).toContain('export const getCommercialMigrationNotice');
     expect(licensePresentationSource).toContain('export const getTrialActivationNotice');
     expect(securityPostureSummarySource).toContain('getSecurityScorePresentation');

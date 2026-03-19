@@ -1,4 +1,5 @@
 import type { PlatformType, SourceType } from '@/types/resource';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type KnownSourcePlatform =
   | 'proxmox-pve'
@@ -103,13 +104,6 @@ const PLATFORM_ALIASES: Record<string, KnownSourcePlatform> = {
   k8s: 'kubernetes',
 };
 
-const titleize = (value: string): string =>
-  value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
 export const normalizeSourcePlatformKey = (
   value: string | null | undefined,
 ): KnownSourcePlatform | null => {
@@ -128,7 +122,9 @@ export const getSourcePlatformPresentation = (
 };
 
 export const getSourcePlatformLabel = (value: string | null | undefined): string =>
-  getSourcePlatformPresentation(value)?.label || titleize((value || '').toString()) || 'Unknown';
+  getSourcePlatformPresentation(value)?.label ||
+  titleCaseDelimitedLabel((value || '').toString()) ||
+  'Unknown';
 
 export const normalizeSourcePlatformQueryValue = (value: string | null | undefined): string => {
   const normalized = (value || '').trim().toLowerCase();

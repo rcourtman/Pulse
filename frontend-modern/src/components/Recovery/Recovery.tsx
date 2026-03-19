@@ -97,6 +97,7 @@ import {
   getRecoveryRollupStatusPillLabel,
   getRecoverySpecialOutcomeTextClass,
 } from '@/utils/recoveryStatusPresentation';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import {
   getRecoveryGroupNoTimestampLabel,
   getRecoveryHistorySearchPlaceholder,
@@ -137,13 +138,6 @@ import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
-
-const titleize = (value: string): string =>
-  (value || '')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 
 const isRecoveryDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' =>
@@ -1009,7 +1003,7 @@ const Recovery: Component = () => {
                 <For each={availableOutcomes}>
                   {(outcome) => (
                     <option value={outcome}>
-                      {outcome === 'all' ? 'Any status' : titleize(outcome)}
+                      {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
                     </option>
                   )}
                 </For>
@@ -1190,7 +1184,7 @@ const Recovery: Component = () => {
                           <span
                             class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(outcome)}`}
                           >
-                            {titleize(outcome)}
+                            {titleCaseDelimitedLabel(outcome)}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -1874,7 +1868,7 @@ const Recovery: Component = () => {
                     <For each={availableOutcomes}>
                       {(outcome) => (
                         <option value={outcome}>
-                          {outcome === 'all' ? 'Any status' : titleize(outcome)}
+                          {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
                         </option>
                       )}
                     </For>
@@ -2189,7 +2183,7 @@ const Recovery: Component = () => {
                                                     outcome,
                                                   )}`}
                                                 >
-                                                  {titleize(outcome)}
+                                                  {titleCaseDelimitedLabel(outcome)}
                                                 </span>
                                               </TableCell>
                                             );
