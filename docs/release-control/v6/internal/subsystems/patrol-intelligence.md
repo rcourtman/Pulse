@@ -74,3 +74,6 @@ Patrol intelligence seed context should also prefer the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector so recent-change context stays aligned with the resource timeline
 that powers the shared resource API.
+Patrol-owned intelligence summaries should keep their recent-change counts
+backed by the same canonical timeline when available instead of only counting
+Patrol-local detector history.

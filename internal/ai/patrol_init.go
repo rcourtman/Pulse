@@ -782,6 +782,13 @@ func (p *PatrolService) GetIntelligence() *Intelligence {
 		p.changeDetector,
 		p.remediationLog,
 	)
+	if p.aiService != nil {
+		p.aiService.mu.RLock()
+		store := p.aiService.resourceExportStore
+		orgID := p.aiService.resourceExportStoreOrgID
+		p.aiService.mu.RUnlock()
+		p.intelligence.SetResourceTimelineStore(store, orgID)
+	}
 
 	if p.stateProvider != nil {
 		p.intelligence.SetStateProvider(p.stateProvider)

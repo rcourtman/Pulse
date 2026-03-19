@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/patterns"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestIntelligence_formatBaselinesForContext(t *testing.T) {
@@ -470,6 +471,29 @@ func TestIntelligence_GetSummary_WithSubsystems(t *testing.T) {
 	}
 	if len(summary.ResourcesAtRisk) == 0 {
 		t.Error("expected resources at risk in summary")
+	}
+}
+
+func TestIntelligence_GetSummary_UsesCanonicalResourceTimeline(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:            "change-1",
+		ObservedAt:    time.Now().Add(-time.Hour),
+		ResourceID:    "vm-sum",
+		Kind:          ur.ChangeConfigUpdate,
+		SourceType:    ur.SourcePulseDiff,
+		SourceAdapter: ur.AdapterOpsAgent,
+		Reason:        "Config refresh",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
+
+	summary := intel.GetSummary()
+	if summary.RecentChangesCount != 1 {
+		t.Fatalf("expected canonical recent change count, got %d", summary.RecentChangesCount)
 	}
 }
 

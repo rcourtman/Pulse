@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func patrolRuntimeStateForTest(ps *PatrolService, snap models.StateSnapshot) patrolRuntimeState {
@@ -984,7 +985,23 @@ func TestPatrolService_GetThresholds(t *testing.T) {
 }
 
 func TestPatrolService_GetIntelligence(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
+	svc := &Service{orgID: "org-1"}
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:            "change-1",
+		ObservedAt:    time.Now().Add(-time.Hour),
+		ResourceID:    "vm-intel",
+		Kind:          ur.ChangeConfigUpdate,
+		SourceType:    ur.SourcePulseDiff,
+		SourceAdapter: ur.AdapterOpsAgent,
+		Reason:        "Config refresh",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	svc.resourceExportStore = canonicalStore
+	svc.resourceExportStoreOrgID = "org-1"
+
+	ps := NewPatrolService(svc, nil)
 	ps.stateProvider = &mockStateProvider{}
 
 	intel := ps.GetIntelligence()
@@ -993,6 +1010,10 @@ func TestPatrolService_GetIntelligence(t *testing.T) {
 	}
 	if intel != ps.GetIntelligence() {
 		t.Fatal("Expected GetIntelligence to return cached instance")
+	}
+	summary := intel.GetSummary()
+	if summary.RecentChangesCount != 1 {
+		t.Fatalf("expected canonical timeline count, got %d", summary.RecentChangesCount)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/patterns"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // HealthGrade represents the overall health assessment
@@ -139,14 +140,16 @@ type Intelligence struct {
 	mu sync.RWMutex
 
 	// Core subsystems
-	findings     *FindingsStore
-	patterns     *patterns.Detector
-	correlations *correlation.Detector
-	baselines    *baseline.Store
-	incidents    *memory.IncidentStore
-	knowledge    *knowledge.Store
-	changes      *memory.ChangeDetector
-	remediations *memory.RemediationLog
+	findings                   *FindingsStore
+	patterns                   *patterns.Detector
+	correlations               *correlation.Detector
+	baselines                  *baseline.Store
+	incidents                  *memory.IncidentStore
+	knowledge                  *knowledge.Store
+	changes                    *memory.ChangeDetector
+	remediations               *memory.RemediationLog
+	resourceTimelineStore      unifiedresources.ResourceStore
+	resourceTimelineStoreOrgID string
 
 	// State access
 	stateProvider StateProvider
@@ -194,6 +197,15 @@ func (i *Intelligence) SetSubsystems(
 	i.remediations = remediationsLog
 }
 
+// SetResourceTimelineStore wires the canonical unified-resource timeline used
+// for recent change summaries when available.
+func (i *Intelligence) SetResourceTimelineStore(store unifiedresources.ResourceStore, orgID string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.resourceTimelineStore = store
+	i.resourceTimelineStoreOrgID = strings.TrimSpace(orgID)
+}
+
 // SetStateProvider sets the state provider for current metrics
 func (i *Intelligence) SetStateProvider(sp StateProvider) {
 	i.mu.Lock()
@@ -203,35 +215,47 @@ func (i *Intelligence) SetStateProvider(sp StateProvider) {
 
 // GetSummary returns a comprehensive intelligence summary
 func (i *Intelligence) GetSummary() *IntelligenceSummary {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-
 	summary := &IntelligenceSummary{
 		Timestamp: time.Now(),
 	}
 
+	i.mu.RLock()
+	findings := i.findings
+	patternsDetector := i.patterns
+	remediations := i.remediations
+	changes := i.changes
+	resourceTimelineStore := i.resourceTimelineStore
+	i.mu.RUnlock()
+
 	// Aggregate findings
-	if i.findings != nil {
-		all := i.findings.GetActive(FindingSeverityInfo) // Get all active findings
+	if findings != nil {
+		all := findings.GetActive(FindingSeverityInfo) // Get all active findings
 		summary.FindingsCount = i.countFindings(all)
 		summary.TopFindings = i.getTopFindings(all, 5)
 	}
 
 	// Aggregate predictions
-	if i.patterns != nil {
-		predictions := i.patterns.GetPredictions()
+	if patternsDetector != nil {
+		predictions := patternsDetector.GetPredictions()
 		summary.PredictionsCount = len(predictions)
 		summary.UpcomingRisks = i.getUpcomingRisks(predictions, 5)
 	}
 
 	// Aggregate recent activity
-	if i.changes != nil {
-		recent := i.changes.GetRecentChanges(100, time.Now().Add(-24*time.Hour))
+	usedCanonicalRecentChanges := false
+	if resourceTimelineStore != nil {
+		if recent, err := resourceTimelineStore.GetRecentChanges("", time.Now().Add(-24*time.Hour), 100); err == nil {
+			summary.RecentChangesCount = len(recent)
+			usedCanonicalRecentChanges = true
+		}
+	}
+	if !usedCanonicalRecentChanges && changes != nil {
+		recent := changes.GetRecentChanges(100, time.Now().Add(-24*time.Hour))
 		summary.RecentChangesCount = len(recent)
 	}
 
-	if i.remediations != nil {
-		recent := i.remediations.GetRecentRemediations(5, time.Now().Add(-24*time.Hour))
+	if remediations != nil {
+		recent := remediations.GetRecentRemediations(5, time.Now().Add(-24*time.Hour))
 		summary.RecentRemediations = recent
 	}
 

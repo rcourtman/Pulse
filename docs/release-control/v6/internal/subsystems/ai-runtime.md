@@ -156,3 +156,6 @@ The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share
 the same change source of truth.
+The unified intelligence summary should follow the same rule when it counts
+recent activity, so the shared AI summary and the Patrol seed context stay
+aligned with the canonical timeline.
