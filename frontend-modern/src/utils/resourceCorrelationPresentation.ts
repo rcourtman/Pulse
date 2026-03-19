@@ -81,3 +81,16 @@ export function formatResourceCorrelationSummary(correlation: ResourceCorrelatio
 
   return parts.join(' · ');
 }
+
+export function sortResourceCorrelations(
+  correlations: readonly ResourceCorrelation[],
+): ResourceCorrelation[] {
+  return [...correlations].sort((left, right) => {
+    const confidenceDiff = (right.confidence || 0) - (left.confidence || 0);
+    if (confidenceDiff !== 0) return confidenceDiff;
+
+    const leftTime = Date.parse(left.last_seen || '');
+    const rightTime = Date.parse(right.last_seen || '');
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  });
+}

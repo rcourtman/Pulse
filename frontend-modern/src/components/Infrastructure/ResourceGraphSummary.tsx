@@ -7,6 +7,7 @@ import {
   formatResourceCorrelationHeadline,
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
+  sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
 
 interface ResourceGraphSummaryProps {
@@ -26,15 +27,6 @@ const formatPluralCount = (count: number, singular: string, plural: string): str
 
 const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
   parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
-
-const sortResourceCorrelations = (correlations: ResourceCorrelation[]): ResourceCorrelation[] =>
-  [...correlations].sort((left, right) => {
-    const confidenceDiff = (right.confidence || 0) - (left.confidence || 0);
-    if (confidenceDiff !== 0) return confidenceDiff;
-    const leftTime = Date.parse(left.last_seen || '');
-    const rightTime = Date.parse(right.last_seen || '');
-    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
-  });
 
 export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props) => {
   const className = () => props.class?.trim() ?? '';
