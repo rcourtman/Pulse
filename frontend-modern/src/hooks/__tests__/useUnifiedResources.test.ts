@@ -775,27 +775,6 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     await waitForResourceCount(() => result!.resources().length);
 
-    expect(result!.resources()[0]?.capabilities).toEqual([
-      {
-        name: 'restart',
-        type: 'common',
-        description: 'Restart the resource safely.',
-        minimumApprovalLevel: 'admin',
-        platform: 'proxmox',
-      },
-    ]);
-    expect(result!.resources()[0]?.relationships).toEqual([
-      {
-        sourceId: 'node:pve-1',
-        targetId: 'node-facets',
-        type: 'runs_on',
-        confidence: 0.98,
-        active: true,
-        discoverer: 'proxmox_adapter',
-        observedAt: '2026-03-18T12:00:00Z',
-        lastSeenAt: '2026-03-18T12:05:00Z',
-      },
-    ]);
     expect(result!.resources()[0]?.recentChanges).toEqual([
       {
         id: 'change-1',

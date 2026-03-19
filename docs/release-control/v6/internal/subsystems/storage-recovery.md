@@ -164,11 +164,11 @@ turning the timeline filter into an arbitrary free-text escape hatch.
 The router now wires the tenant resource state provider during initial setup
 when a multi-tenant monitor is present, so tenant-scoped storage and recovery
 pages do not hit a missing-provider 500 before the monitor is fully wired.
-The shared unified-resource consumer hook now also preserves `capabilities`,
-`relationships`, `recentChanges`, `facetCounts`, `policy`, and `aiSafeSummary`
-fields when storage and recovery surfaces read unified resources, so those
-pages see the same control-plane facets as the dedicated resource drawer
-instead of flattening them away locally.
+The shared unified-resource consumer hook now also preserves `recentChanges`,
+`facetCounts`, `policy`, and `aiSafeSummary` fields when storage and recovery
+surfaces read unified resources, so those pages see the same control-plane
+timeline facets as the dedicated resource drawer instead of flattening them
+away locally.
 The same storage-facing runtime paths now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
@@ -734,6 +734,6 @@ publishes. The same hook and the resource-identity helpers it depends on now
 share the canonical trimmed-string utility instead of each surface rebuilding
 its own whitespace cleanup, so storage and recovery identity checks stay
 aligned with the other resource-graph consumers. That same boundary now also
-owns the backend facet-bundle route for capability, relationship, and timeline
-history reads, so storage and recovery surfaces must continue to consume the
-shared bundle rather than issuing separate local resource-detail fetches.
+owns the backend facet-bundle route for timeline history and related change
+counts, so storage and recovery surfaces must continue to consume the shared
+bundle rather than issuing separate local resource-detail fetches.

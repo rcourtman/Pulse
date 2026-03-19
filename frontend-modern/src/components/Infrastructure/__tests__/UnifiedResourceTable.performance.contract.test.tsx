@@ -259,26 +259,6 @@ describe('UnifiedResourceTable performance contract', () => {
               backupJobCount: 1,
             },
           },
-          capabilities: [
-            {
-              name: 'backup',
-              type: 'native',
-              description: 'Create a backup snapshot',
-              minimumApprovalLevel: 'admin',
-            },
-          ],
-          relationships: [
-            {
-              sourceId: 'pbs-service',
-              targetId: 'storage-1',
-              type: 'depends_on',
-              confidence: 0.88,
-              active: true,
-              discoverer: 'proxmox_adapter',
-              observedAt: new Date().toISOString(),
-              lastSeenAt: new Date().toISOString(),
-            },
-          ],
           recentChanges: [
             {
               id: 'pbs-change-1',
@@ -304,26 +284,6 @@ describe('UnifiedResourceTable performance contract', () => {
               nodeCount: 1,
             },
           },
-          capabilities: [
-            {
-              name: 'thresholds',
-              type: 'common',
-              description: 'Adjust mail gateway thresholds',
-              minimumApprovalLevel: 'dry_run_only',
-            },
-          ],
-          relationships: [
-            {
-              sourceId: 'pmg-service',
-              targetId: 'mail-queue-1',
-              type: 'depends_on',
-              confidence: 0.9,
-              active: true,
-              discoverer: 'proxmox_adapter',
-              observedAt: new Date().toISOString(),
-              lastSeenAt: new Date().toISOString(),
-            },
-          ],
           recentChanges: [
             {
               id: 'pmg-change-1',

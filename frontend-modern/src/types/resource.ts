@@ -491,8 +491,6 @@ export interface Resource {
   canonicalIdentity?: ResourceCanonicalIdentity;
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
-  capabilities?: ResourceCapability[];
-  relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
 

@@ -8,7 +8,6 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
-  ResourceCapability,
   ResourceChange,
   ResourceFacetCounts,
   ResourceDiscoveryTarget,
@@ -16,7 +15,6 @@ import type {
   ResourcePBSMeta,
   ResourceStatus,
   ResourceStorageMeta,
-  ResourceRelationship,
   ResourceType,
 } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
@@ -303,8 +301,6 @@ type APIResource = {
     lastUpdated?: string;
   };
   kubernetes?: APIKubernetesData;
-  capabilities?: ResourceCapability[];
-  relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
   physicalDisk?: {
@@ -632,8 +628,6 @@ const toResource = (v2: APIResource): Resource => {
     canonicalIdentity: v2.canonicalIdentity,
     policy: v2.policy as Resource['policy'],
     aiSafeSummary: v2.aiSafeSummary as Resource['aiSafeSummary'],
-    capabilities: v2.capabilities,
-    relationships: v2.relationships,
     recentChanges: v2.recentChanges,
     facetCounts: v2.facetCounts,
     platformData: {
