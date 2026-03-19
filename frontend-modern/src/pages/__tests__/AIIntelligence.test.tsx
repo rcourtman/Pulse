@@ -414,6 +414,16 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.getByText('1 total')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', {
+        name: 'Open source resource Storage 1 in Infrastructure',
+      }),
+    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
+    expect(
+      screen.getByRole('link', {
+        name: 'Open target resource VM 100 in Infrastructure',
+      }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
     expect(screen.getByText('Storage 1')).toBeInTheDocument();
     expect(screen.getByText('VM 100')).toBeInTheDocument();
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();

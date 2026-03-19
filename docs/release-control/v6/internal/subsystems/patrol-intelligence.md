@@ -103,7 +103,10 @@ The Patrol intelligence page now also consumes the learned correlation list
 from the canonical AI correlations endpoint through the shared
 `frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
 and the resource drawer both reflect the same learned edge evidence instead
-of each page fetching its own copy.
+of each page fetching its own copy. Both surfaces now render that evidence
+through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+card, so the correlation layout stays governed by one component instead of
+two page-local card implementations.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches

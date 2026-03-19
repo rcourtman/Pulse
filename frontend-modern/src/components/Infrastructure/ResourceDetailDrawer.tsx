@@ -53,13 +53,8 @@ import {
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
 import { formatResourceChangeKind } from '@/utils/resourceChangePresentation';
-import {
-  formatResourceCorrelationEndpoint,
-  formatResourceCorrelationHeadline,
-  formatResourceCorrelationPattern,
-  formatResourceCorrelationSummary,
-} from '@/utils/resourceCorrelationPresentation';
 import { describeResourceRelationship } from '@/utils/resourceRelationshipPresentation';
+import { ResourceGraphSummary } from './ResourceGraphSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
@@ -892,163 +887,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </Show>
                   <ResourcePolicySummary posture={policyPosture()} title="Policy posture" />
-                  <Show
-                    when={
-                      resourceDependencies().length > 0 ||
-                      resourceDependents().length > 0 ||
-                      resourceCorrelations().length > 0
-                    }
-                  >
-                    <div class="rounded border border-border-subtle bg-base px-2 py-1.5">
-                      <div class="text-[10px] uppercase tracking-wide text-muted">
-                        Graph context
-                      </div>
-                      <div class="mt-0.5 text-[11px] text-base-content">
-                        {resourceDependencies().length} dependencies ·{' '}
-                        {resourceDependents().length} dependents ·{' '}
-                        {resourceCorrelations().length} correlations
-                      </div>
-                      <Show when={resourceDependencies().length > 0}>
-                        <div class="mt-2">
-                          <div class="text-[9px] uppercase tracking-wide text-muted">
-                            Depends on
-                          </div>
-                          <div class="mt-1 flex flex-wrap gap-1">
-                            <For each={resourceDependencies().slice(0, 3)}>
-                              {(dependency) => {
-                                const href = buildInfrastructureResourceHref(dependency);
-                                return href ? (
-                                  <a
-                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                    href={href}
-                                    aria-label={`Open dependency resource ${dependency} in Infrastructure`}
-                                  >
-                                    {dependency}
-                                  </a>
-                                ) : (
-                                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                                    {dependency}
-                                  </span>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                      <Show when={resourceDependents().length > 0}>
-                        <div class="mt-2">
-                          <div class="text-[9px] uppercase tracking-wide text-muted">
-                            Used by
-                          </div>
-                          <div class="mt-1 flex flex-wrap gap-1">
-                            <For each={resourceDependents().slice(0, 3)}>
-                              {(dependent) => {
-                                const href = buildInfrastructureResourceHref(dependent);
-                                return href ? (
-                                  <a
-                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                    href={href}
-                                    aria-label={`Open dependent resource ${dependent} in Infrastructure`}
-                                  >
-                                    {dependent}
-                                  </a>
-                                ) : (
-                                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                                    {dependent}
-                                  </span>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                      <Show when={resourceCorrelations().length > 0}>
-                        <div class="mt-2">
-                          <div class="text-[9px] uppercase tracking-wide text-muted">
-                            Correlations
-                          </div>
-                          <div class="mt-1 space-y-1.5">
-                            <For each={sortedResourceCorrelations().slice(0, 3)}>
-                              {(correlation) => {
-                                const sourceHref = buildInfrastructureResourceHref(
-                                  correlation.source_id,
-                                );
-                                const targetHref = buildInfrastructureResourceHref(
-                                  correlation.target_id,
-                                );
-                                const headline = formatResourceCorrelationHeadline(correlation);
-                                const summary = formatResourceCorrelationSummary(correlation);
-                                const sourceLabel = formatResourceCorrelationEndpoint(
-                                  correlation,
-                                  'source',
-                                );
-                                const targetLabel = formatResourceCorrelationEndpoint(
-                                  correlation,
-                                  'target',
-                                );
-                                const patternLabel = formatResourceCorrelationPattern(correlation);
-                                const lastSeenLabel = correlation.last_seen
-                                  ? formatRelativeTime(correlation.last_seen, {
-                                      compact: true,
-                                      emptyText: 'just now',
-                                    })
-                                  : '';
-                                return (
-                                  <div class="rounded bg-surface px-2 py-1" title={headline}>
-                                    <div class="flex flex-wrap items-center gap-1 text-[10px] text-base-content">
-                                      {sourceHref ? (
-                                        <a
-                                          class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                          href={sourceHref}
-                                          aria-label={`Open source resource ${sourceLabel} in Infrastructure`}
-                                        >
-                                          {sourceLabel}
-                                        </a>
-                                      ) : (
-                                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                                          {sourceLabel}
-                                        </span>
-                                      )}
-                                      <span class="text-muted">→</span>
-                                      {targetHref ? (
-                                        <a
-                                          class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                          href={targetHref}
-                                          aria-label={`Open target resource ${targetLabel} in Infrastructure`}
-                                        >
-                                          {targetLabel}
-                                        </a>
-                                      ) : (
-                                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                                          {targetLabel}
-                                        </span>
-                                      )}
-                                      <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
-                                        {patternLabel}
-                                      </span>
-                                    </div>
-                                    <div class="mt-0.5 text-[10px] text-muted">
-                                      {summary}
-                                      <Show when={lastSeenLabel}>
-                                        <>{' '}· last seen {lastSeenLabel}</>
-                                      </Show>
-                                    </div>
-                                    <Show when={correlation.description}>
-                                      {(description) => (
-                                        <div class="mt-0.5 text-[10px] text-muted">
-                                          {description()}
-                                        </div>
-                                      )}
-                                    </Show>
-                                  </div>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
+                  <ResourceGraphSummary
+                    title="Graph context"
+                    dependencies={resourceDependencies()}
+                    dependents={resourceDependents()}
+                    correlations={sortedResourceCorrelations()}
+                    buildResourceHref={buildInfrastructureResourceHref}
+                    showLastSeen
+                  />
                 </div>
               </div>
             )}

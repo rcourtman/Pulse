@@ -163,7 +163,10 @@ reconstructed from the drawer or prompt helpers.
 The Patrol intelligence page now also fetches the learned correlation list
 from the canonical AI correlations endpoint, so the global AI surface and the
 resource drawer both expose the same learned edge evidence instead of only
-showing a correlation count.
+showing a correlation count. The same page and drawer now render that list
+through the shared `frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+card, so the learned-correlation layout and edge wording stay aligned across
+both surfaces.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share

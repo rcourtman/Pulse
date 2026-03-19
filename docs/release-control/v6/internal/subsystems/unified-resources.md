@@ -105,7 +105,11 @@ helpers or drawer-specific markdown.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency graph without rebuilding correlation
-reasoning from raw events.
+reasoning from raw events. The Patrol intelligence page now also renders that
+correlation evidence through the shared
+`frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+card, so the same learned-edge list stays governed by one frontend surface
+instead of separate page-local implementations.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

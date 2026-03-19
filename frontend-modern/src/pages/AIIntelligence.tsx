@@ -93,12 +93,8 @@ import {
   formatResourceChangeHeadline,
   formatResourceChangeKind,
 } from '@/utils/resourceChangePresentation';
-import {
-  formatResourceCorrelationEndpoint,
-  formatResourceCorrelationPattern,
-  formatResourceCorrelationSummary,
-} from '@/utils/resourceCorrelationPresentation';
 import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
+import { ResourceGraphSummary } from '@/components/Infrastructure/ResourceGraphSummary';
 import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
@@ -1392,57 +1388,14 @@ export function AIIntelligence() {
                     </div>
 
                     <Show when={correlationHighlights().length > 0}>
-                      <div class="rounded-md border border-border-subtle bg-base p-4">
-                        <div class="flex items-center justify-between gap-2">
-                          <h3 class="text-sm font-semibold text-base-content">
-                            Learned correlations
-                          </h3>
-                          <span class="text-xs text-muted">{correlationTotal()} total</span>
-                        </div>
-
-                        <div class="mt-3 space-y-2">
-                          <For each={correlationHighlights()}>
-                            {(correlation) => {
-                              const sourceHref = buildInfrastructurePath({
-                                resource: correlation.source_id,
-                              });
-                              const targetHref = buildInfrastructurePath({
-                                resource: correlation.target_id,
-                              });
-                              return (
-                                <div class="rounded-md bg-surface px-3 py-2">
-                                  <div class="flex flex-wrap items-center gap-1 text-sm">
-                                    <a
-                                      class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-                                      href={sourceHref}
-                                    >
-                                      {formatResourceCorrelationEndpoint(correlation, 'source')}
-                                    </a>
-                                    <span class="text-muted">→</span>
-                                    <a
-                                      class="font-medium text-blue-700 hover:underline dark:text-blue-300"
-                                      href={targetHref}
-                                    >
-                                      {formatResourceCorrelationEndpoint(correlation, 'target')}
-                                    </a>
-                                    <span class="rounded-full border border-border-subtle bg-base px-2 py-0.5 text-[11px] font-medium text-muted">
-                                      {formatResourceCorrelationPattern(correlation)}
-                                    </span>
-                                  </div>
-                                  <p class="mt-1 text-xs text-muted">
-                                    {formatResourceCorrelationSummary(correlation)}
-                                  </p>
-                                  <Show when={correlation.description}>
-                                    <p class="mt-1 text-xs text-muted">
-                                      {correlation.description}
-                                    </p>
-                                  </Show>
-                                </div>
-                              );
-                            }}
-                          </For>
-                        </div>
-                      </div>
+                      <ResourceGraphSummary
+                        title="Learned correlations"
+                        correlations={correlationHighlights()}
+                        summaryText={`${correlationTotal()} total`}
+                        buildResourceHref={(resourceId) =>
+                          buildInfrastructurePath({ resource: resourceId })
+                        }
+                      />
                     </Show>
 
                     <ResourcePolicySummary posture={policyPosture()} title="Data Governance" />

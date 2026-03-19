@@ -335,7 +335,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Public')).toBeInTheDocument();
     expect(getByText('Cloud Summary')).toBeInTheDocument();
     expect(getByText('Graph context')).toBeInTheDocument();
-    expect(getByText('1 dependencies · 1 dependents · 1 correlations')).toBeInTheDocument();
+    expect(getByText('1 dependency · 1 dependent · 1 correlation')).toBeInTheDocument();
     expect(
       getByRole('link', {
         name: 'Open dependency resource storage-1 in Infrastructure',
