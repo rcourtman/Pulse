@@ -7,6 +7,7 @@ import {
   formatResourceCorrelationHeadline,
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
+  formatResourceGraphSummaryText,
   sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
 
@@ -22,12 +23,6 @@ interface ResourceGraphSummaryProps {
   maxCorrelations?: number;
 }
 
-const formatPluralCount = (count: number, singular: string, plural: string): string =>
-  `${count} ${count === 1 ? singular : plural}`;
-
-const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
-  parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
-
 export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props) => {
   const className = () => props.class?.trim() ?? '';
   const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
@@ -37,20 +32,13 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
   const maxCorrelations = () => props.maxCorrelations ?? 3;
   const hasContent = () =>
     dependencies().length > 0 || dependents().length > 0 || correlations().length > 0;
-
   const summaryText = () =>
-    props.summaryText?.trim() ||
-    formatSummaryParts([
-      dependencies().length > 0
-        ? formatPluralCount(dependencies().length, 'dependency', 'dependencies')
-        : null,
-      dependents().length > 0
-        ? formatPluralCount(dependents().length, 'dependent', 'dependents')
-        : null,
-      correlations().length > 0
-        ? formatPluralCount(correlations().length, 'correlation', 'correlations')
-        : null,
-    ]);
+    formatResourceGraphSummaryText({
+      dependenciesCount: dependencies().length,
+      dependentsCount: dependents().length,
+      correlationsCount: correlations().length,
+      summaryText: props.summaryText,
+    });
 
   return (
     <Show when={hasContent()}>

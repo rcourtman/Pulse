@@ -94,3 +94,31 @@ export function sortResourceCorrelations(
     return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
   });
 }
+
+const formatPluralCount = (count: number, singular: string, plural: string): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const formatSummaryParts = (parts: Array<string | null | undefined>): string =>
+  parts.filter((part): part is string => Boolean(part && part.trim())).join(' · ');
+
+export function formatResourceGraphSummaryText(options: {
+  dependenciesCount: number;
+  dependentsCount: number;
+  correlationsCount: number;
+  summaryText?: string | null;
+}): string {
+  return (
+    options.summaryText?.trim() ||
+    formatSummaryParts([
+      options.dependenciesCount > 0
+        ? formatPluralCount(options.dependenciesCount, 'dependency', 'dependencies')
+        : null,
+      options.dependentsCount > 0
+        ? formatPluralCount(options.dependentsCount, 'dependent', 'dependents')
+        : null,
+      options.correlationsCount > 0
+        ? formatPluralCount(options.correlationsCount, 'correlation', 'correlations')
+        : null,
+    ])
+  );
+}

@@ -180,3 +180,17 @@ export function formatResourceChangeHeadline(change: ResourceChange): string {
   }
   return `${formatResourceChangeKind(change.kind)}: ${change.resourceId}`;
 }
+
+export function sortResourceChangesByObservedAt(
+  changes: readonly ResourceChange[],
+): ResourceChange[] {
+  return [...changes].sort((left, right) => {
+    const observedDelta =
+      new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime();
+    if (observedDelta !== 0) {
+      return observedDelta;
+    }
+
+    return right.id.localeCompare(left.id);
+  });
+}

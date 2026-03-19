@@ -5,6 +5,7 @@ import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
   formatResourceChangeHeadline,
   formatResourceChangeKind,
+  sortResourceChangesByObservedAt,
 } from '@/utils/resourceChangePresentation';
 
 interface ResourceChangeSummaryProps {
@@ -18,19 +19,8 @@ interface ResourceChangeSummaryProps {
   class?: string;
 }
 
-const sortRecentChanges = (changes: ResourceChange[]): ResourceChange[] =>
-  [...changes].sort((left, right) => {
-    const observedDelta =
-      new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime();
-    if (observedDelta !== 0) {
-      return observedDelta;
-    }
-
-    return right.id.localeCompare(left.id);
-  });
-
 export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (props) => {
-  const sortedChanges = createMemo(() => sortRecentChanges(props.changes ?? []));
+  const sortedChanges = createMemo(() => sortResourceChangesByObservedAt(props.changes ?? []));
   const maxChanges = () => props.maxChanges ?? sortedChanges().length;
   const visibleChanges = createMemo(() => sortedChanges().slice(0, maxChanges()));
   const hasChanges = () => visibleChanges().length > 0;

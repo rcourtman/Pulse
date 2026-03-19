@@ -6,6 +6,7 @@ import {
   getResourceChangeKindPresentation,
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
+  sortResourceChangesByObservedAt,
 } from '@/utils/resourceChangePresentation';
 
 describe('resourceChangePresentation utils', () => {
@@ -51,5 +52,30 @@ describe('resourceChangePresentation utils', () => {
       label: 'Proxmox adapter',
       plural: 'Proxmox adapters',
     });
+  });
+
+  it('sorts recent changes canonically', () => {
+    const sorted = sortResourceChangesByObservedAt([
+      {
+        id: 'change-b',
+        resourceId: 'vm-42',
+        kind: 'config_update',
+        observedAt: '2026-03-18T12:00:00Z',
+      } as never,
+      {
+        id: 'change-a',
+        resourceId: 'vm-42',
+        kind: 'config_update',
+        observedAt: '2026-03-18T12:05:00Z',
+      } as never,
+      {
+        id: 'change-c',
+        resourceId: 'vm-42',
+        kind: 'config_update',
+        observedAt: '2026-03-18T12:05:00Z',
+      } as never,
+    ]);
+
+    expect(sorted.map((change) => change.id)).toEqual(['change-c', 'change-a', 'change-b']);
   });
 });

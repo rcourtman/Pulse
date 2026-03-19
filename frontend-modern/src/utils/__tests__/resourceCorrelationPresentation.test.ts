@@ -5,6 +5,7 @@ import {
   formatResourceCorrelationHeadline,
   formatResourceCorrelationPattern,
   formatResourceCorrelationSummary,
+  formatResourceGraphSummaryText,
   sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
 
@@ -84,5 +85,23 @@ describe('resourceCorrelationPresentation utils', () => {
     ]);
 
     expect(sorted.map((item) => item.source_id)).toEqual(['storage-3', 'storage-1', 'storage-2']);
+  });
+
+  it('formats canonical graph summary text', () => {
+    expect(
+      formatResourceGraphSummaryText({
+        dependenciesCount: 2,
+        dependentsCount: 1,
+        correlationsCount: 3,
+      }),
+    ).toBe('2 dependencies · 1 dependent · 3 correlations');
+    expect(
+      formatResourceGraphSummaryText({
+        dependenciesCount: 0,
+        dependentsCount: 0,
+        correlationsCount: 0,
+        summaryText: 'custom summary',
+      }),
+    ).toBe('custom summary');
   });
 });
