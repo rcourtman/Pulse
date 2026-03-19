@@ -169,6 +169,10 @@ card, so the learned-correlation layout and edge wording stay aligned across
 both surfaces. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
 top-N slices.
+The same page and drawer now also render their recent-change timeline through
+the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+card, so the canonical recent-change layout and relative-time wording stay
+aligned across both surfaces instead of being rebuilt as page-local feeds.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share

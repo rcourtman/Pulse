@@ -589,7 +589,12 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
     expect(screen.getByText(/Recent changes 1/)).toBeInTheDocument();
     expect(screen.getByText('Config update: Updated guest configuration')).toBeInTheDocument();
-    expect(screen.getByText('vm-100')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open resource vm-100 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
+    expect(
+      screen.getByRole('link', { name: 'Open related resource agent-1 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=agent-1');
     expect(screen.getByText('proxmox_adapter')).toBeInTheDocument();
     expect(screen.getByText('Learning signals')).toBeInTheDocument();
     expect(screen.getByText('Data Governance')).toBeInTheDocument();

@@ -89,12 +89,9 @@ import {
 } from '@/utils/patrolFormat';
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
-import {
-  formatResourceChangeHeadline,
-  formatResourceChangeKind,
-} from '@/utils/resourceChangePresentation';
 import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
 import { ResourceGraphSummary } from '@/components/Infrastructure/ResourceGraphSummary';
+import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
 import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
@@ -102,6 +99,11 @@ import {
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
 import { buildInfrastructurePath } from '@/routing/resourceLinks';
+
+const buildInfrastructureResourceHref = (resourceId: string): string | null => {
+  const trimmed = resourceId.trim();
+  return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
+};
 type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
@@ -1275,68 +1277,13 @@ export function AIIntelligence() {
                 </div>
 
                 <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                  <div>
-                    <div class="flex items-center justify-between gap-2">
-                      <h3 class="text-sm font-semibold text-base-content">Recent changes</h3>
-                      <span class="text-xs text-muted">Canonical 24h timeline</span>
-                    </div>
-                    <Show
-                      when={(summary().recent_changes ?? []).length > 0}
-                      fallback={
-                        <p class="mt-3 text-sm text-muted">
-                          No canonical changes were recorded in the last 24 hours.
-                        </p>
-                      }
-                    >
-                      <ul class="mt-3 space-y-2">
-                        <For each={summary().recent_changes ?? []}>
-                          {(change) => (
-                            <li class="rounded-md border border-border-subtle bg-base p-3">
-                              <div class="flex flex-wrap items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                  <p class="text-sm font-medium text-base-content">
-                                    {formatResourceChangeHeadline(change)}
-                                  </p>
-                                  <p class="mt-1 text-xs text-muted">
-                                    <span class="font-mono">{change.resourceId}</span>
-                                    <span class="mx-1.5">·</span>
-                                    {formatRelativeTime(change.observedAt, {
-                                      compact: true,
-                                      emptyText: 'just now',
-                                    })}
-                                  </p>
-                                </div>
-
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                  <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                                    {formatResourceChangeKind(change.kind)}
-                                  </span>
-                                  <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                                    {change.sourceType}
-                                  </span>
-                                  <Show when={change.sourceAdapter}>
-                                    <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                                      {change.sourceAdapter}
-                                    </span>
-                                  </Show>
-                                </div>
-                              </div>
-
-                              <Show when={change.reason}>
-                                <p class="mt-2 text-xs text-muted">{change.reason}</p>
-                              </Show>
-
-                              <Show when={(change.relatedResources ?? []).length > 0}>
-                                <p class="mt-2 text-xs text-muted">
-                                  Related: {(change.relatedResources ?? []).slice(0, 3).join(', ')}
-                                </p>
-                              </Show>
-                            </li>
-                          )}
-                        </For>
-                      </ul>
-                    </Show>
-                  </div>
+                  <ResourceChangeSummary
+                    class="space-y-0"
+                    title="Recent changes"
+                    subtitle="Canonical 24h timeline"
+                    changes={summary().recent_changes}
+                    buildResourceHref={buildInfrastructureResourceHref}
+                  />
 
                   <div class="space-y-4">
                     <div class="rounded-md border border-border-subtle bg-base p-4">

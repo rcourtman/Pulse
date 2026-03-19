@@ -351,10 +351,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Disk Full → Restart')).toBeInTheDocument();
     expect(getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
     expect(getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
-    const latestChange = getByText('Latest canonical change').parentElement;
-    expect(latestChange).not.toBeNull();
-    expect(latestChange).toHaveTextContent('Config update');
-    expect(latestChange).toHaveTextContent('Updated canonical config');
-    expect(latestChange).toHaveTextContent(/just now|m ago|h ago|d ago/);
+    expect(getByText('Latest canonical change')).toBeInTheDocument();
+    const latestChangeItem = getByText('Config update: Updated canonical config').closest('li');
+    expect(latestChangeItem).not.toBeNull();
+    expect(latestChangeItem).toHaveTextContent(/just now|m ago|h ago|d ago/);
   });
 });

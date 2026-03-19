@@ -52,9 +52,9 @@ import {
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
-import { formatResourceChangeKind } from '@/utils/resourceChangePresentation';
 import { describeResourceRelationship } from '@/utils/resourceRelationshipPresentation';
 import { ResourceGraphSummary } from './ResourceGraphSummary';
+import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
@@ -856,27 +856,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       {intel().recent_changes?.length ?? 0}
                     </span>
                   </div>
-                  <Show when={intel().recent_changes?.[0]}>
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                      <div class="text-[10px] uppercase tracking-wide text-muted">
-                        Latest canonical change
-                      </div>
-                      <div class="mt-0.5 text-[11px] text-base-content">
-                        {formatResourceChangeKind(
-                          intel().recent_changes?.[0]?.kind as ResourceChangeKind,
-                        )}{' '}
-                        ·{' '}
-                        {intel().recent_changes?.[0]?.reason ||
-                          intel().recent_changes?.[0]?.resourceId}
-                      </div>
-                      <div class="mt-0.5 text-[10px] text-muted">
-                        {formatRelativeTime(intel().recent_changes?.[0]?.observedAt, {
-                          compact: true,
-                          emptyText: 'just now',
-                        })}
-                      </div>
-                    </div>
-                  </Show>
+                  <ResourceChangeSummary
+                    class="space-y-0"
+                    title="Latest canonical change"
+                    changes={intel().recent_changes}
+                    buildResourceHref={buildInfrastructureResourceHref}
+                    maxChanges={1}
+                    compact
+                  />
                   <ResourcePolicySummary posture={policyPosture()} title="Policy posture" />
                   <ResourceGraphSummary
                     title="Graph context"

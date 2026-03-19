@@ -109,6 +109,10 @@ card, so the correlation layout stays governed by one component instead of
 two page-local card implementations. That shared card also owns the
 correlation ordering and truncation rule, so the page and drawer hand it raw
 correlation lists instead of slicing or re-sorting them locally.
+The same page and drawer now also share the canonical
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+card for recent changes, so the timeline layout and relative-time wording
+stay governed by one frontend feed instead of separate page-local loops.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches
