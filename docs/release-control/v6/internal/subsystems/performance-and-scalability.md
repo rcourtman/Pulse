@@ -144,6 +144,10 @@ share the canonical cluster-name helpers in the shared agent-resource layer,
 so route labels, pod grouping, and cluster-name fetch keys keep using the
 same source of truth instead of rebuilding the `clusterName`/`context`/
 `clusterId` prefix locally.
+The shared node adapter also uses that same cluster-name helper for the
+infrastructure summary surface, so Proxmox node projections stay aligned with
+the same canonical cluster label instead of carrying a raw adapter-local
+cluster string.
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.

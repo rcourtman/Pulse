@@ -176,6 +176,10 @@ The same shared agent-resource module now also owns the canonical cluster-name
 helpers, so Kubernetes context prefixes, Proxmox cluster labels, and
 cluster-name fetch keys stay aligned instead of each surface rebuilding its
 own pod, namespace, and VM routing fallbacks.
+The shared node-state adapter also routes Proxmox cluster labels through that
+same helper, so infrastructure summary projections keep the same canonical
+cluster name as the rest of the unified resource model instead of rewriting
+the label locally.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter

@@ -23,6 +23,7 @@ import type {
 import type { Resource } from '@/types/resource';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
+  getPreferredResourceClusterName,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
@@ -232,7 +233,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     lastSeen: toISOTime(undefined, resource.lastSeen),
     connectionHealth: asString(proxmox?.connectionHealth) || resource.status || 'unknown',
     isClusterMember: asBoolean(proxmox?.isClusterMember),
-    clusterName: asString(proxmox?.clusterName),
+    clusterName: getPreferredResourceClusterName(resource),
     linkedAgentId,
   };
 };

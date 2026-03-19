@@ -88,6 +88,20 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.displayName).toBe('Tower');
     expect(node?.host).toBe('tower.local');
     expect(node?.instance).toBe('pve-canonical');
+    expect(node?.clusterName).toBeUndefined();
+  });
+
+  it('projects the canonical cluster name through the shared helper', () => {
+    const node = nodeFromResource(
+      createNodeResource({
+        proxmox: {
+          nodeName: 'pve-node-1',
+          clusterName: 'cluster-a',
+        },
+      }),
+    );
+
+    expect(node?.clusterName).toBe('cluster-a');
   });
 
   it('maps PBS display and host identity through shared resource helpers', () => {
