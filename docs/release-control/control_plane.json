@@ -56,7 +56,7 @@
       "profile_id": "v6",
       "kind": "feature",
       "status": "planned",
-      "summary": "Promote the known resource-change, policy-governance, action-governance, and fleet-governance gaps only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven.",
+      "summary": "Promote policy-aware data governance, resource-change intelligence, action-governance, and fleet-governance gaps only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }
