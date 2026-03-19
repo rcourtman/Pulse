@@ -139,6 +139,5 @@ export interface ResourceIntelligence {
   dependents?: string[];
   correlations?: ResourceCorrelation[];
   recent_changes?: ResourceChange[];
-  policy_posture?: IntelligencePolicyPostureSummary;
   note_count: number;
 }

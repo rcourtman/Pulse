@@ -677,15 +677,6 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	if res.RecentChanges[0].Kind != ur.ChangeRestart {
 		t.Fatalf("expected restart change kind, got %s", res.RecentChanges[0].Kind)
 	}
-	if res.PolicyPosture == nil {
-		t.Fatal("expected policy posture summary")
-	}
-	if res.PolicyPosture.TotalResources != 2 {
-		t.Fatalf("expected 2 governed resources, got %d", res.PolicyPosture.TotalResources)
-	}
-	if got := res.PolicyPosture.SensitivityCounts[ur.ResourceSensitivityPublic]; got != 1 {
-		t.Fatalf("expected 1 public resource, got %d", got)
-	}
 	if res.Knowledge == nil || res.NoteCount == 0 {
 		t.Error("expected knowledge")
 	}

@@ -362,12 +362,8 @@ func TestContract_ResourceIntelligenceIncludesRecentChanges(t *testing.T) {
 	if len(recentChanges) != 1 {
 		t.Fatalf("expected 1 recent change, got %d", len(recentChanges))
 	}
-	policyPosture, ok := payload["policy_posture"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected policy_posture object in response, got %T", payload["policy_posture"])
-	}
-	if got := int(policyPosture["total_resources"].(float64)); got != 2 {
-		t.Fatalf("expected total_resources=2, got %d", got)
+	if _, ok := payload["policy_posture"]; ok {
+		t.Fatal("did not expect policy_posture in resource intelligence response")
 	}
 	dependencies, ok := payload["dependencies"].([]interface{})
 	if !ok {

@@ -72,20 +72,6 @@ vi.mock('@/api/ai', () => ({
           description: 'Disk pressure often precedes restarts',
         },
       ],
-      policy_posture: {
-        total_resources: 2,
-        sensitivity_counts: {
-          public: 1,
-          internal: 1,
-        },
-        routing_counts: {
-          'cloud-summary': 1,
-          'local-first': 1,
-        },
-        redaction_counts: {
-          hostname: 1,
-        },
-      },
       note_count: 3,
     }),
   },

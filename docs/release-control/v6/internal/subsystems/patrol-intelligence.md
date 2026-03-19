@@ -119,13 +119,11 @@ That Patrol summary card now also includes the canonical data-governance
 posture snapshot from the shared AI summary payload, so the visible page can
 show the same sensitivity, routing, and redaction distribution that the
 runtime derives from unified resources.
-The resource drawer now carries the same canonical posture snapshot through
-the resource-intelligence payload, so the resource-level AI card can show the
-org posture context without introducing a separate posture endpoint.
-That same resource-intelligence payload also carries canonical dependency and
-dependent correlation context plus canonical correlation evidence, so the resource
-drawer can surface relationship reachability and learned edge patterns
-directly from the AI contract instead of inventing a second correlation summary.
+The resource drawer now carries canonical dependency and dependent
+correlation context plus canonical correlation evidence through the
+resource-intelligence payload, so the resource-level AI card can surface
+relationship reachability and learned edge patterns directly from the AI
+contract instead of inventing a second correlation summary.
 The Patrol intelligence page now also consumes the learned correlation list
 from the canonical AI correlations endpoint through the shared
 `frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
@@ -151,10 +149,11 @@ cards now own the canonical Infrastructure resource-link default, so the
 Patrol page and resource drawer inherit resource-filter href construction
 through the shared summary cards instead of rebuilding local wrappers in each
 surface.
-The Patrol intelligence page and resource drawer now also share the canonical
+The Patrol intelligence page now also renders the canonical
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 card, so the data-governance posture counts stay rendered from one governed
-frontend component across both surfaces.
+frontend component on the page instead of being duplicated in the resource
+drawer.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

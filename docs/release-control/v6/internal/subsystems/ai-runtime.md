@@ -112,12 +112,9 @@ That governed context should also surface the canonical routing posture and
 redaction hints that were derived from the shared policy model, so prompts
 reflect the same sensitivity, routing, and scrub decisions that the runtime
 uses for export boundaries instead of rebuilding privacy posture locally.
-The same shared policy presenter also owns the `Allowed`/`Blocked` routing
-decision labels shown in the resource drawer, so the policy state wording
-stays canonical instead of being rendered inline by the consumer.
-That same presenter also owns the drawer's `Cloud Summary` routing row, so
-the AI-facing resource policy view does not rebuild the row layout or
-decision labels locally.
+The same shared policy presenter also owns the routing-scope labels used in
+the AI-facing policy surfaces, so the policy wording stays canonical instead
+of being rendered inline by the consumer.
 That same policy boundary now applies to chat structured-mention prefetch and
 resource-summary formatting: mention resolution must consume canonical
 unified-resource policy metadata, skip discovery fan-out when governed
@@ -332,9 +329,11 @@ The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary and policy posture
 stay aligned with the same resource-policy boundary that governs
 policy-aware routing and redaction without any frontend-local re-normalization.
-The resource-intelligence payload used by the resource drawer also carries
-the same canonical policy posture snapshot, so the detail surface can show
-governed posture context without inventing a second posture contract.
+The per-resource intelligence payload returned from
+`/api/ai/intelligence?resource_id=...` now carries recent changes,
+dependencies, dependents, correlations, and knowledge only; policy posture
+stays on the system-wide intelligence summary and the Patrol governance card
+instead of riding the resource-detail payload.
 That same resource-intelligence payload also carries dependency and
 dependent correlation context from unified-resource correlations, so the drawer
 can show canonical correlation relationships without reconstructing them from the

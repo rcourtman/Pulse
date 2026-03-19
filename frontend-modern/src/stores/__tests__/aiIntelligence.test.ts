@@ -134,6 +134,7 @@ describe('aiIntelligenceStore', () => {
     });
     expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
     expect(aiIntelligenceStore.intelligenceSummary?.learning.correlations_learned).toBe(1);
+    expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.sensitivity_counts?.public).toBe(1);
     expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only']).toBe(1);
   });
 

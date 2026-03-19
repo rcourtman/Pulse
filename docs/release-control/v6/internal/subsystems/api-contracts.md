@@ -214,10 +214,11 @@ state.
 That store now also owns the dashboard load bundle used by the Patrol page,
 so the page refresh path stays aligned on one store-owned orchestration layer
 instead of re-encoding the AI bundle inline.
-The AI summary page and resource drawer now also share the canonical
+The AI summary page now also renders the canonical
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 card for policy posture, so sensitivity, routing, and redaction counts are
-presented through one governed frontend component instead of two copies.
+presented through one governed frontend component while the resource drawer
+keeps only the per-resource policy lines.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history

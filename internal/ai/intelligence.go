@@ -57,22 +57,21 @@ type HealthScore struct {
 
 // ResourceIntelligence aggregates all AI knowledge about a single resource
 type ResourceIntelligence struct {
-	ResourceID      string                                 `json:"resource_id"`
-	ResourceName    string                                 `json:"resource_name,omitempty"`
-	ResourceType    string                                 `json:"resource_type,omitempty"`
-	Health          HealthScore                            `json:"health"`
-	ActiveFindings  []*Finding                             `json:"active_findings,omitempty"`
-	Predictions     []patterns.FailurePrediction           `json:"predictions,omitempty"`
-	Dependencies    []string                               `json:"dependencies,omitempty"` // Resources this depends on
-	Dependents      []string                               `json:"dependents,omitempty"`   // Resources that depend on this
-	Correlations    []*correlation.Correlation             `json:"correlations,omitempty"`
-	Baselines       map[string]*baseline.FlatBaseline      `json:"baselines,omitempty"`
-	Anomalies       []AnomalyReport                        `json:"anomalies,omitempty"`
-	RecentIncidents []*memory.Incident                     `json:"recent_incidents,omitempty"`
-	RecentChanges   []unifiedresources.ResourceChange      `json:"recent_changes,omitempty"`
-	PolicyPosture   *unifiedresources.PolicyPostureSummary `json:"policy_posture,omitempty"`
-	Knowledge       *knowledge.GuestKnowledge              `json:"knowledge,omitempty"`
-	NoteCount       int                                    `json:"note_count"`
+	ResourceID      string                            `json:"resource_id"`
+	ResourceName    string                            `json:"resource_name,omitempty"`
+	ResourceType    string                            `json:"resource_type,omitempty"`
+	Health          HealthScore                       `json:"health"`
+	ActiveFindings  []*Finding                        `json:"active_findings,omitempty"`
+	Predictions     []patterns.FailurePrediction      `json:"predictions,omitempty"`
+	Dependencies    []string                          `json:"dependencies,omitempty"` // Resources this depends on
+	Dependents      []string                          `json:"dependents,omitempty"`   // Resources that depend on this
+	Correlations    []*correlation.Correlation        `json:"correlations,omitempty"`
+	Baselines       map[string]*baseline.FlatBaseline `json:"baselines,omitempty"`
+	Anomalies       []AnomalyReport                   `json:"anomalies,omitempty"`
+	RecentIncidents []*memory.Incident                `json:"recent_incidents,omitempty"`
+	RecentChanges   []unifiedresources.ResourceChange `json:"recent_changes,omitempty"`
+	Knowledge       *knowledge.GuestKnowledge         `json:"knowledge,omitempty"`
+	NoteCount       int                               `json:"note_count"`
 }
 
 // AnomalyReport describes a metric that's deviating from baseline
@@ -287,7 +286,6 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 // GetResourceIntelligence returns aggregated intelligence for a specific resource
 func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntelligence {
 	i.mu.RLock()
-	unifiedResourceProvider := i.unifiedResourceProvider
 	defer i.mu.RUnlock()
 
 	intel := &ResourceIntelligence{
@@ -340,12 +338,6 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 	// Recent changes
 	if recentChanges := i.getRecentChangesForResource(resourceID, 5); len(recentChanges) > 0 {
 		intel.RecentChanges = recentChanges
-	}
-
-	if unifiedResourceProvider != nil {
-		intel.PolicyPosture = unifiedresources.SummarizePolicyPosture(
-			unifiedresources.RefreshCanonicalMetadataSlice(unifiedResourceProvider.GetAll()),
-		)
 	}
 
 	// Knowledge
