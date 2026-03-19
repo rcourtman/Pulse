@@ -706,6 +706,33 @@ func TestContract_UnifiedAgentReportResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_UnifiedAgentLookupFailsClosedOnAmbiguousHostname(t *testing.T) {
+	handler := newUnifiedAgentHandlerForTests(t,
+		models.Host{ID: "host-1", Hostname: "webserver.corp.example.com", DisplayName: "Web One"},
+		models.Host{ID: "host-2", Hostname: "webserver.other.example.com", DisplayName: "Web Two"},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/lookup?hostname=webserver", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleLookup(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected not found status for ambiguous hostname lookup, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode ambiguous lookup error response: %v", err)
+	}
+	if resp.Code != "agent_not_found" {
+		t.Fatalf("expected agent_not_found code, got %q", resp.Code)
+	}
+}
+
 func TestContract_HostsShareResolvedIdentityTreatsLoopbackAliasAsSameNode(t *testing.T) {
 	if !hostsShareResolvedIdentity("https://localhost:7655", "https://127.0.0.1:7655") {
 		t.Fatal("expected localhost and loopback IP to resolve as the same host identity")

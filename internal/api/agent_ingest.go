@@ -166,16 +166,43 @@ func (h *UnifiedAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Reque
 	}
 
 	if !found && hostname != "" {
-		// First pass: exact match (case-insensitive)
-		for _, candidate := range hosts {
-			if strings.EqualFold(candidate.Hostname, hostname) || strings.EqualFold(candidate.DisplayName, hostname) {
-				host = candidate
+		// First pass: exact hostname match (case-insensitive) when unique.
+		var exactMatch *models.Host
+		for i := range hosts {
+			candidate := &hosts[i]
+			if strings.EqualFold(candidate.Hostname, hostname) {
+				if exactMatch != nil {
+					exactMatch = nil
+					break
+				}
+				exactMatch = candidate
+			}
+		}
+		if exactMatch != nil {
+			host = *exactMatch
+			found = true
+		}
+
+		// Second pass: display-name match, but only when unambiguous.
+		if !found {
+			var displayMatch *models.Host
+			for i := range hosts {
+				candidate := &hosts[i]
+				if strings.EqualFold(candidate.DisplayName, hostname) {
+					if displayMatch != nil {
+						displayMatch = nil
+						break
+					}
+					displayMatch = candidate
+				}
+			}
+			if displayMatch != nil {
+				host = *displayMatch
 				found = true
-				break
 			}
 		}
 
-		// Second pass: short hostname match (if exact match failed)
+		// Third pass: short hostname match, but only when unique.
 		if !found {
 			// Helper to get short hostname (before first dot)
 			getShortName := func(h string) string {
@@ -186,12 +213,20 @@ func (h *UnifiedAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Reque
 			}
 
 			shortLookup := getShortName(hostname)
-			for _, candidate := range hosts {
+			var shortMatch *models.Host
+			for i := range hosts {
+				candidate := &hosts[i]
 				if strings.EqualFold(getShortName(candidate.Hostname), shortLookup) {
-					host = candidate
-					found = true
-					break
+					if shortMatch != nil {
+						shortMatch = nil
+						break
+					}
+					shortMatch = candidate
 				}
+			}
+			if shortMatch != nil {
+				host = *shortMatch
+				found = true
 			}
 		}
 	}

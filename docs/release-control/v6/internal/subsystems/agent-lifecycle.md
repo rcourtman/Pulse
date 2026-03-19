@@ -861,7 +861,10 @@ That same uninstall continuity must preserve canonical hostname fallback too:
 copied shell uninstall payloads must carry `--hostname`, copied PowerShell
 uninstall payloads must carry `PULSE_HOSTNAME`, and both installer runtimes
 must prefer that explicit hostname during lookup fallback before querying local
-machine identity.
+machine identity. That fallback must also fail closed when hostname matches are
+ambiguous: hostname matches may resolve only when they identify one and only
+one agent, and display-name or short-hostname fallbacks must return not found
+otherwise.
 That governed hostname lookup fallback must also normalize query transport:
 both installer runtimes must percent-encode the resolved hostname before
 calling `/api/agents/agent/lookup`, so canonical identity recovery does not

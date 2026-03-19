@@ -620,6 +620,10 @@ Unified Agent route family remains the primary auth/management surface:
 adjacent storage and recovery-linked transport must treat `/api/agents/agent/*`
 as the owned route family, while `/api/agents/host/*` and legacy
 `host-agent:*` scope names remain compatibility aliases only.
+That same owned route family must also fail closed on ambiguous hostname
+lookups: `/api/agents/agent/lookup` may resolve a unique hostname match, but
+it must not pick an arbitrary agent when exact, display-name, or short-hostname
+matches are duplicated across the live inventory.
 That same shared `internal/api/` dependency also assumes adjacent recovery and
 storage-linked transport continues to describe those legacy names as
 compatibility aliases rather than active product surfaces, so route/auth

@@ -180,6 +180,15 @@ func TestHandleLookupByHostname(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
+			name: "ambiguous exact hostname lookup fails closed",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "server.example.com", DisplayName: "Server One"},
+				{ID: "host-2", Hostname: "server.example.com", DisplayName: "Server Two"},
+			},
+			queryHostname:  "server.example.com",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
 			name: "display name match",
 			hosts: []models.Host{
 				{ID: "host-1", Hostname: "srv1", DisplayName: "ProductionServer"},
@@ -226,25 +235,32 @@ func TestHandleLookupByHostname(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "first match wins in sorted order",
+			name: "exact hostname wins over display-name collisions",
 			hosts: []models.Host{
-				// After sorting by Hostname: "aaa" < "zzz", so host-2 is checked first
 				{ID: "host-1", Hostname: "zzz", DisplayName: "target"},
-				{ID: "host-2", Hostname: "aaa", DisplayName: "target"},
+				{ID: "host-2", Hostname: "target", DisplayName: "aaa"},
 			},
 			queryHostname:  "target",
 			expectedHostID: "host-2",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "display name matched before hostname of later host",
+			name: "ambiguous display-name lookup fails closed",
 			hosts: []models.Host{
-				{ID: "host-1", Hostname: "other", DisplayName: "target"},
-				{ID: "host-2", Hostname: "target", DisplayName: "Other"},
+				{ID: "host-1", Hostname: "other-1", DisplayName: "target"},
+				{ID: "host-2", Hostname: "other-2", DisplayName: "target"},
 			},
 			queryHostname:  "target",
-			expectedHostID: "host-1",
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "ambiguous short hostname lookup fails closed",
+			hosts: []models.Host{
+				{ID: "host-1", Hostname: "webserver.corp.example.com", DisplayName: "Web 1"},
+				{ID: "host-2", Hostname: "webserver.other.example.com", DisplayName: "Web 2"},
+			},
+			queryHostname:  "webserver",
+			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name: "short hostname with FQDN query",

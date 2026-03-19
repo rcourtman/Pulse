@@ -526,7 +526,10 @@ command.
 The same uninstall contract applies to hostname fallback identity: shell
 payloads must carry `--hostname`, PowerShell payloads must carry
 `PULSE_HOSTNAME`, and the uninstall scripts must prefer that explicit hostname
-when performing governed `/api/agents/agent/lookup` fallback.
+when performing governed `/api/agents/agent/lookup` fallback. That lookup must
+fail closed on ambiguous hostname matches: installer-driven recovery may only
+resolve a hostname when the match is unique, and display-name or short-hostname
+fallbacks must return not found rather than picking an arbitrary agent.
 That lookup fallback transport must be canonicalized on both installer paths:
 shell and PowerShell uninstall flows must percent-encode the selected hostname
 before issuing `/api/agents/agent/lookup`, so API-owned identity recovery does
