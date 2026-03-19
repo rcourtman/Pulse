@@ -76,6 +76,9 @@ describe('ResourceDetailDrawer service cards', () => {
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
     expect(getByText('PBS Service')).toBeInTheDocument();
     expect(getAllByText('pbs-main.local').length).toBeGreaterThan(0);
+    expect(getByText('Backup summary')).toBeInTheDocument();
+    expect(queryByText('Job breakdown')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show job detail' }));
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Total Jobs')).toBeInTheDocument();
     expect(getByText('Job breakdown')).toBeInTheDocument();
@@ -121,6 +124,10 @@ describe('ResourceDetailDrawer service cards', () => {
       expect(getByText('Mail Gateway')).toBeInTheDocument();
     });
     expect(getAllByText('pmg-main.local').length).toBeGreaterThan(0);
+    expect(getByText('Mail flow summary')).toBeInTheDocument();
+    expect(queryByText('Queue breakdown')).toBeNull();
+    expect(queryByText('Mail processing')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show mail flow detail' }));
     expect(getByText('Queue Total')).toBeInTheDocument();
     expect(getByText('Backlog')).toBeInTheDocument();
     expect(getByText('Queue breakdown')).toBeInTheDocument();
@@ -129,5 +136,40 @@ describe('ResourceDetailDrawer service cards', () => {
       'href',
       '/alerts/thresholds/mail-gateway',
     );
+  });
+
+  it('keeps docker update controls behind a secondary reveal', () => {
+    const resource = baseResource({
+      id: 'docker-host-1',
+      type: 'docker-host',
+      name: 'docker-main',
+      displayName: 'Docker Main',
+      platformId: 'docker-main',
+      platformType: 'docker',
+      sourceType: 'agent',
+      platformData: {
+        sources: ['docker', 'agent'],
+        docker: {
+          hostSourceId: 'docker-host-1',
+          hostname: 'docker-main.local',
+          runtime: 'Docker Engine 28.0',
+          containerCount: 18,
+          updatesAvailableCount: 4,
+        },
+      },
+    });
+
+    const { getByText, getByRole, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByText('Service details')).toBeInTheDocument();
+    expect(getByText('18 containers · 4 updates')).toBeInTheDocument();
+    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    expect(getByText('Container Updates')).toBeInTheDocument();
+    expect(queryByText('Check Updates')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show update controls' }));
+    expect(getByText('Check Updates')).toBeInTheDocument();
+    expect(getByText('Update All (4)')).toBeInTheDocument();
   });
 });

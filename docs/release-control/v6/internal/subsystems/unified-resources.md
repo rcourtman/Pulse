@@ -280,6 +280,10 @@ Type-specific Docker, PBS, and PMG operational panels now also live inside a
 collapsed `Service details` support block, so lane-specific controls and
 breakdowns stay available without displacing the common runtime and identity
 hierarchy on first read.
+When `Service details` is expanded, each service card remains summary-first and
+pushes heavier breakdowns or update controls behind one more service-local
+reveal, so the opened state still scans as current state before deeper
+operations.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

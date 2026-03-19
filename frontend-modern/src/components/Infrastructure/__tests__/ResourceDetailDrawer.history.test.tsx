@@ -324,6 +324,42 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Runs on')).toBeNull();
   });
 
+  it('keeps service details summary-first until the service-local reveal is opened', () => {
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    });
+
+    const resource = baseResource({
+      id: 'pbs-1',
+      type: 'pbs',
+      name: 'pbs-main',
+      displayName: 'PBS Main',
+      platformId: 'pbs-main',
+      platformType: 'proxmox-pbs',
+      platformData: {
+        sources: ['pbs'],
+        pbs: {
+          hostname: 'pbs-main.local',
+          connectionHealth: 'online',
+          datastoreCount: 2,
+          backupJobCount: 3,
+        },
+      },
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(screen.getByText('Service details')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
+    expect(screen.getByText('PBS Service')).toBeInTheDocument();
+    expect(screen.getByText('Backup summary')).toBeInTheDocument();
+    expect(screen.queryByText('Job breakdown')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show job detail' }));
+    expect(screen.getByText('Job breakdown')).toBeInTheDocument();
+  });
+
   it('filters timeline entries by kind and source type', async () => {
     const unfilteredFacetBundle = {
       capabilities: [
