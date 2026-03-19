@@ -264,7 +264,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('maps canonical policy metadata and aiSafeSummary into unified resources', async () => {
+  it('passes canonical policy metadata and aiSafeSummary through unchanged', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -272,15 +272,15 @@ describe('useUnifiedResources', () => {
           {
             ...v2Resource,
             policy: {
-              sensitivity: '  ReStRiCtEd ',
+              sensitivity: 'restricted',
               routing: {
-                scope: 'LOCAL-ONLY',
+                scope: 'local-only',
                 allowCloudSummary: false,
                 allowCloudRawSignals: false,
-                redact: ['HOSTNAME', ' ip-address ', 'Platform-ID', 'ALIAS'],
+                redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
               },
             },
-            aiSafeSummary: '   resource summary safe for remote AI use   ',
+            aiSafeSummary: 'resource summary safe for remote AI use',
           },
         ],
       }),

@@ -1905,11 +1905,11 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).toContain('formatIdentifierLabel');
     expect(patrolRunPresentationSource).not.toContain("normalized.replace(/_/g, ' ')");
     expect(patrolRunPresentationSource).not.toContain("normalized ? normalized.replace(/_/g, ' ') : 'unknown'");
-    expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicyAISafeSummary(');
+    expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(resourcePolicyNormalizationSource).toContain(
       'normalizeResourcePolicyAISafeSummary',
     );
-    expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicy(');
+    expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRedactionHints =');

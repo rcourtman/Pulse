@@ -522,11 +522,9 @@ rebuilding resource-change labels locally.
 
 That frontend consumer rule now applies on the canonical decode path too:
 `frontend-modern/src/hooks/useUnifiedResources.ts` must preserve backend-owned
-policy metadata and AI-safe summaries as first-class `Resource` fields, and
-it now delegates policy string and redaction normalization to the shared
-`frontend-modern/src/utils/resourcePolicyNormalization.ts` helper so the
-canonical frontend decode path does not reimplement sensitivity, routing, or
-redaction parsing locally.
+policy metadata and AI-safe summaries as first-class `Resource` fields, and it
+must treat the backend refresh path as the source of truth instead of
+re-normalizing policy strings or AI-safe summaries locally.
 Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other

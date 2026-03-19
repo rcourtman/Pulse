@@ -23,10 +23,6 @@ import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 import {
-  normalizeResourcePolicy,
-  normalizeResourcePolicyAISafeSummary,
-} from '@/utils/resourcePolicyNormalization';
-import {
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
@@ -565,9 +561,6 @@ const toResource = (v2: APIResource): Resource => {
       : undefined;
 
   const metricsTarget = resolveMetricsTarget(v2.type, v2.metricsTarget);
-  const policy = normalizeResourcePolicy(v2.policy);
-  const aiSafeSummary = normalizeResourcePolicyAISafeSummary(v2.aiSafeSummary);
-
   return {
     id: v2.id,
     type: resolveType(v2.type),
@@ -647,8 +640,8 @@ const toResource = (v2: APIResource): Resource => {
     discoveryTarget,
     metricsTarget,
     canonicalIdentity: v2.canonicalIdentity,
-    policy,
-    aiSafeSummary,
+    policy: v2.policy as Resource['policy'],
+    aiSafeSummary: v2.aiSafeSummary as Resource['aiSafeSummary'],
     capabilities: v2.capabilities,
     relationships: v2.relationships,
     recentChanges: v2.recentChanges,
