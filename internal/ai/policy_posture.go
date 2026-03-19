@@ -1,10 +1,6 @@
 package ai
 
-import (
-	"sort"
-
-	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
-)
+import unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 
 // PolicyPostureSummary captures the canonical data-governance posture derived
 // from the unified resource registry.
@@ -55,15 +51,5 @@ func policyPostureRedactionLabels(summary *PolicyPostureSummary) []string {
 	if summary == nil || len(summary.RedactionCounts) == 0 {
 		return nil
 	}
-
-	labels := make([]string, 0, len(summary.RedactionCounts))
-	for hint := range summary.RedactionCounts {
-		label := unifiedresources.ResourceRedactionHintLabel(hint)
-		if label == "" {
-			continue
-		}
-		labels = append(labels, label)
-	}
-	sort.Strings(labels)
-	return labels
+	return unifiedresources.ResourcePolicyRedactionLabelsFromCounts(summary.RedactionCounts)
 }

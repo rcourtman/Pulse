@@ -104,6 +104,30 @@ func TestResourcePolicyPresentationLabels(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyRedactionLabelsUseCanonicalOrder(t *testing.T) {
+	policy := &ResourcePolicy{
+		Routing: ResourceRoutingPolicy{
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionAlias,
+				ResourceRedactionPath,
+				ResourceRedactionHostname,
+				ResourceRedactionPlatformID,
+			},
+		},
+	}
+
+	got := ResourcePolicyRedactionLabels(policy)
+	want := []string{"Hostname", "Platform ID", "Alias", "Path"}
+	if len(got) != len(want) {
+		t.Fatalf("redaction labels = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("redaction labels = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {

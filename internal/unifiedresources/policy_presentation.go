@@ -2,6 +2,16 @@ package unifiedresources
 
 import "sort"
 
+// ResourceRedactionHintOrder captures the canonical presentation order for
+// redaction hints across backend and frontend policy surfaces.
+var ResourceRedactionHintOrder = []ResourceRedactionHint{
+	ResourceRedactionHostname,
+	ResourceRedactionIPAddress,
+	ResourceRedactionPlatformID,
+	ResourceRedactionAlias,
+	ResourceRedactionPath,
+}
+
 // ResourceSensitivityLabel returns the canonical human-readable sensitivity label.
 func ResourceSensitivityLabel(sensitivity ResourceSensitivity) string {
 	switch sensitivity {
@@ -55,14 +65,49 @@ func ResourcePolicyRedactionLabels(policy *ResourcePolicy) []string {
 	if policy == nil || len(policy.Routing.Redact) == 0 {
 		return nil
 	}
-	labels := make([]string, 0, len(policy.Routing.Redact))
+	counts := make(map[ResourceRedactionHint]int, len(policy.Routing.Redact))
 	for _, hint := range policy.Routing.Redact {
+		counts[hint]++
+	}
+	return ResourcePolicyRedactionLabelsFromCounts(counts)
+}
+
+// ResourcePolicyRedactionLabelsFromCounts returns the canonical labels for the
+// redaction hints present in the provided count map.
+func ResourcePolicyRedactionLabelsFromCounts(counts map[ResourceRedactionHint]int) []string {
+	if len(counts) == 0 {
+		return nil
+	}
+
+	labels := make([]string, 0, len(counts))
+	seen := make(map[ResourceRedactionHint]struct{}, len(counts))
+
+	for _, hint := range ResourceRedactionHintOrder {
+		if counts[hint] <= 0 {
+			continue
+		}
 		label := ResourceRedactionHintLabel(hint)
 		if label == "" {
 			continue
 		}
 		labels = append(labels, label)
+		seen[hint] = struct{}{}
 	}
-	sort.Strings(labels)
-	return labels
+
+	remaining := make([]string, 0, len(counts))
+	for hint, count := range counts {
+		if count <= 0 {
+			continue
+		}
+		if _, ok := seen[hint]; ok {
+			continue
+		}
+		label := ResourceRedactionHintLabel(hint)
+		if label == "" {
+			continue
+		}
+		remaining = append(remaining, label)
+	}
+	sort.Strings(remaining)
+	return append(labels, remaining...)
 }

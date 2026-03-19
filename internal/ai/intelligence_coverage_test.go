@@ -279,8 +279,8 @@ func TestIntelligence_summarizePolicyPosture(t *testing.T) {
 	}
 
 	labels := policyPostureRedactionLabels(summary)
-	if !reflect.DeepEqual(labels, []string{"Alias", "Hostname", "IP Address", "Platform ID"}) {
-		t.Fatalf("redaction labels = %#v, want %#v", labels, []string{"Alias", "Hostname", "IP Address", "Platform ID"})
+	if !reflect.DeepEqual(labels, []string{"Hostname", "IP Address", "Platform ID", "Alias"}) {
+		t.Fatalf("redaction labels = %#v, want %#v", labels, []string{"Hostname", "IP Address", "Platform ID", "Alias"})
 	}
 }
 

@@ -184,6 +184,9 @@ The same unified intelligence summary now also surfaces a canonical policy
 posture snapshot derived from unified resources, so sensitivity, routing, and
 redaction counts stay aligned with the governed resource model that the
 runtime uses for prompt export and context rendering.
+That posture snapshot must render redaction labels through the canonical
+unified-resource hint order, not alphabetically, so the AI summary, drawer,
+and any future policy surfaces all present the same redaction precedence.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.

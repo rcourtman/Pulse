@@ -401,6 +401,9 @@ The AI runtime now also uses the canonical policy presentation helpers to
 surface those routing and redaction labels in shared context output, so the
 same policy model is reflected in prompt summaries instead of being
 re-described independently per surface.
+Those helpers now own the canonical redaction-hint order and count-to-label
+projection, so the AI summary and any other backend policy posture surface do
+not re-sort redaction labels locally.
 Canonical resources now carry first-class graph-expansion fields: `Capabilities`
 (bounded action definitions with approval levels), `Relationships` (typed
 inter-resource links with direction and confidence), and `RecentChanges` (typed
