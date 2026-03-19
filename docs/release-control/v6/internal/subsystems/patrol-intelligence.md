@@ -85,6 +85,10 @@ Those same Patrol-owned prompt contexts now also surface a canonical
 resource-graph section from unified-resource relationships, so edge labels,
 directionality, and provenance stay aligned with the shared graph model
 instead of being reconstructed locally.
+The Patrol seed context and AI runtime prompt path now also share the same
+correlation summary formatter from `internal/ai/correlation`, so learned-edge
+wording and confidence/count annotations stay canonical across the prompt
+surface instead of being rebuilt in each caller.
 The Patrol page also now renders the canonical intelligence summary card
 through the governed AI client and store, so the visible page summary and the
 resource/timeline sections stay aligned on the same shared backend slice.

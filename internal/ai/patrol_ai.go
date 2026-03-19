@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -3355,20 +3356,9 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 	if len(intel.correlations) > 0 {
 		sb.WriteString("# Known Resource Correlations\n")
 		for _, c := range intel.correlations {
-			sourceEvent := c.EventPattern
-			if parts := strings.SplitN(c.EventPattern, " -> ", 2); len(parts) == 2 {
-				sourceEvent = parts[0]
+			if summary := correlation.FormatCorrelationSummary(c); summary != "" {
+				sb.WriteString("- " + summary + "\n")
 			}
-			sourceName := c.SourceName
-			if sourceName == "" {
-				sourceName = c.SourceID
-			}
-			targetName := c.TargetName
-			if targetName == "" {
-				targetName = c.TargetID
-			}
-			sb.WriteString(fmt.Sprintf("- When %s experiences %s, %s usually follows within %s (confidence: %.0f%%, seen %dx)\n",
-				sourceName, sourceEvent, targetName, seedFormatDuration(c.AvgDelay), c.Confidence*100, c.Occurrences))
 		}
 		sb.WriteString("\n")
 	}

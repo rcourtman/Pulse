@@ -375,10 +375,28 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 		"unifiedresources.DescribeRelationship(rel)",
 		"### Resource Graph",
 		"type canonicalResourceGetter interface {",
+		"correlationDetector.FormatForContext(resourceID)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("internal/ai/service.go must pin canonical resource graph presentation snippet %q", snippet)
+		}
+	}
+}
+
+func TestPatrolSeedCorrelationContextUsesCanonicalSummaryFormatter(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "ai", "patrol_ai.go"))
+	if err != nil {
+		t.Fatalf("failed to read patrol_ai.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"# Known Resource Correlations",
+		"correlation.FormatCorrelationSummary(c)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/ai/patrol_ai.go must pin canonical correlation presentation snippet %q", snippet)
 		}
 	}
 }

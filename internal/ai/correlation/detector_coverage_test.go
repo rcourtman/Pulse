@@ -182,6 +182,39 @@ func TestFormatForContext_LimitsAndFallback(t *testing.T) {
 	}
 }
 
+func TestFormatCorrelationSummary(t *testing.T) {
+	summary := FormatCorrelationSummary(&Correlation{
+		SourceID:     "node-1",
+		TargetID:     "vm-1",
+		EventPattern: "high_cpu -> restart",
+		Occurrences:  4,
+		AvgDelay:     10 * time.Minute,
+		Confidence:   0.8,
+	})
+
+	if !strings.Contains(summary, "When node-1 experiences high_cpu, vm-1 usually follows within 10 minutes") {
+		t.Fatalf("expected canonical fallback summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "confidence: 80%") {
+		t.Fatalf("expected confidence annotation, got %q", summary)
+	}
+	if !strings.Contains(summary, "seen 4x") {
+		t.Fatalf("expected occurrence annotation, got %q", summary)
+	}
+
+	described := FormatCorrelationSummary(&Correlation{
+		Description: "Observed pattern",
+		Occurrences: 2,
+		Confidence:  0.5,
+	})
+	if !strings.Contains(described, "Observed pattern") {
+		t.Fatalf("expected provided description to be preserved, got %q", described)
+	}
+	if !strings.Contains(described, "confidence: 50%") {
+		t.Fatalf("expected confidence annotation on described summary, got %q", described)
+	}
+}
+
 func TestSaveToDisk_EmptyDataDir(t *testing.T) {
 	d := NewDetector(DefaultConfig())
 	if err := d.saveToDisk(); err != nil {

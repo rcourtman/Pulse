@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -502,6 +503,26 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 	s.readState = readState
 	s.mu.Unlock()
 
+	corrCfg := DefaultCorrelationConfig()
+	corrCfg.MinOccurrences = 1
+	corrCfg.CorrelationWindow = time.Hour
+	corr := NewCorrelationDetector(corrCfg)
+	corr.RecordEvent(correlation.Event{
+		ResourceID:   resourceID,
+		ResourceName: resourceID,
+		ResourceType: "vm",
+		EventType:    CorrelationEventHighCPU,
+		Timestamp:    now.Add(-30 * time.Minute),
+	})
+	corr.RecordEvent(correlation.Event{
+		ResourceID:   "vm-graph-2",
+		ResourceName: "vm-graph-2",
+		ResourceType: "vm",
+		EventType:    CorrelationEventRestart,
+		Timestamp:    now.Add(-25 * time.Minute),
+	})
+	ps.SetCorrelationDetector(corr)
+
 	resourceCtx := s.buildEnrichedResourceContext(resourceID, "", nil)
 	if !strings.Contains(resourceCtx, "Resource Graph") {
 		t.Fatalf("expected enriched resource context to include graph section, got %q", resourceCtx)
@@ -511,6 +532,12 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 	}
 	if !strings.Contains(resourceCtx, "discoverer proxmox_adapter") {
 		t.Fatalf("expected enriched resource context to include provenance, got %q", resourceCtx)
+	}
+	if !strings.Contains(resourceCtx, "Resource Correlations") {
+		t.Fatalf("expected enriched resource context to include correlation section, got %q", resourceCtx)
+	}
+	if !strings.Contains(resourceCtx, "seen 1x") {
+		t.Fatalf("expected enriched resource context to include shared correlation summary, got %q", resourceCtx)
 	}
 
 	incidentCtx := s.buildIncidentContext(resourceID, "")

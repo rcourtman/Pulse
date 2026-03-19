@@ -164,6 +164,10 @@ AI resource and incident context now also surfaces a canonical resource-graph
 section from unified-resource relationships, so relationship wording and edge
 provenance stay aligned with the same shared resource model instead of being
 reconstructed from the drawer or prompt helpers.
+The related-resource correlation section now also comes from the shared
+correlation formatter in `internal/ai/correlation`, so resource chat and
+incident prompts reuse the same learned-edge wording instead of rebuilding a
+second patrol-local bullet format.
 The Patrol intelligence page now also fetches the learned correlation list
 from the canonical AI correlations endpoint, so the global AI surface and the
 resource drawer both expose the same learned edge evidence instead of only

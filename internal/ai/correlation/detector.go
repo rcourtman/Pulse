@@ -183,7 +183,7 @@ func (d *Detector) detectCorrelations(newEvent Event) {
 			existing.Description = d.formatCorrelationDescription(existing)
 		} else {
 			// Create new correlation
-			d.correlations[key] = &Correlation{
+			correlation := &Correlation{
 				SourceID:     oldEvent.ResourceID,
 				SourceName:   oldEvent.ResourceName,
 				SourceType:   oldEvent.ResourceType,
@@ -196,6 +196,8 @@ func (d *Detector) detectCorrelations(newEvent Event) {
 				Confidence:   0.1, // Low initial confidence
 				LastSeen:     newEvent.Timestamp,
 			}
+			correlation.Description = d.formatCorrelationDescription(correlation)
+			d.correlations[key] = correlation
 		}
 	}
 }
@@ -233,6 +235,51 @@ func (d *Detector) formatCorrelationDescription(c *Correlation) string {
 
 	return "When " + sourceName + " experiences " + sourceEvent +
 		", " + targetName + " often follows within " + delayStr
+}
+
+// FormatCorrelationSummary returns the canonical human-readable correlation
+// summary used by AI context formatting and seed prompts.
+func FormatCorrelationSummary(c *Correlation) string {
+	if c == nil {
+		return ""
+	}
+
+	summary := strings.TrimSpace(c.Description)
+	if summary == "" {
+		sourceName := strings.TrimSpace(c.SourceName)
+		if sourceName == "" {
+			sourceName = strings.TrimSpace(c.SourceID)
+		}
+		targetName := strings.TrimSpace(c.TargetName)
+		if targetName == "" {
+			targetName = strings.TrimSpace(c.TargetID)
+		}
+		sourceEvent := strings.TrimSpace(c.EventPattern)
+		if parts := strings.Split(c.EventPattern, " -> "); len(parts) == 2 {
+			sourceEvent = strings.TrimSpace(parts[0])
+		}
+		if sourceName != "" || targetName != "" || sourceEvent != "" {
+			summary = "When " + sourceName + " experiences " + sourceEvent + ", " + targetName + " usually follows within " + formatDuration(c.AvgDelay)
+		}
+	}
+	if summary == "" {
+		summary = strings.TrimSpace(c.EventPattern)
+	}
+	if summary == "" {
+		return ""
+	}
+
+	details := make([]string, 0, 2)
+	if c.Confidence > 0 {
+		details = append(details, "confidence: "+formatConfidence(c.Confidence))
+	}
+	if c.Occurrences > 0 {
+		details = append(details, fmt.Sprintf("seen %dx", c.Occurrences))
+	}
+	if len(details) > 0 {
+		summary += " (" + strings.Join(details, ", ") + ")"
+	}
+	return summary
 }
 
 // GetCorrelations returns all detected correlations above minimum confidence
@@ -375,10 +422,8 @@ func (d *Detector) FormatForContext(resourceID string) string {
 			result += "\n... and more\n"
 			break
 		}
-		if c.Description != "" {
-			result += "- " + c.Description + "\n"
-		} else {
-			result += "- " + c.EventPattern + " (" + formatConfidence(c.Confidence) + " confidence)\n"
+		if summary := FormatCorrelationSummary(c); summary != "" {
+			result += "- " + summary + "\n"
 		}
 	}
 
