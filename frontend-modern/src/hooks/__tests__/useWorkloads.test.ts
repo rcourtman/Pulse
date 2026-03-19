@@ -1,5 +1,6 @@
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import useWorkloadsSource from '../useWorkloads.ts?raw';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
@@ -263,5 +264,11 @@ describe('useWorkloads', () => {
     expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
 
     dispose();
+  });
+
+  it('normalizes org scope through the shared helper', () => {
+    expect(useWorkloadsSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(useWorkloadsSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
+    expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
   });
 });

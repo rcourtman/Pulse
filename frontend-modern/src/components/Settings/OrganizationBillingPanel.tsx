@@ -2,6 +2,7 @@ import { Component, For, Show, createSignal, onCleanup, onMount } from 'solid-js
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import { OrgsAPI } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
@@ -74,7 +75,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   const loadBillingData = async () => {
     setLoading(true);
     try {
-      const activeOrgID = getOrgID() || 'default';
+      const activeOrgID = normalizeOrgScope(getOrgID());
       const [licenseStatus, orgs, members] = await Promise.all([
         LicenseAPI.getStatus(),
         OrgsAPI.list(),

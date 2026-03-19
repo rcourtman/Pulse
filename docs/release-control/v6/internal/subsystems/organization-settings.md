@@ -98,4 +98,7 @@ hosted subscription state rather than requiring the self-hosted
 `multi_tenant` feature flag. Provisioned hosted workspaces must therefore keep
 `org.OwnerUserID` aligned with the authenticated creator when that actor is
 known, so organization-owner checks stay consistent across runtime auth and the
-settings surfaces.
+settings surfaces. The organization settings panels now also normalize org
+scope through `frontend-modern/src/utils/orgScope.ts` instead of carrying
+their own `getOrgID() || 'default'` fallbacks, so access, overview, and
+sharing views stay aligned with the shared multi-tenant org context contract.

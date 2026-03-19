@@ -25,6 +25,7 @@ import {
   getResourceIdentityAliases,
 } from '@/utils/resourceIdentity';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 
@@ -105,7 +106,7 @@ const MAX_IN_MEMORY_INFRA_ENTRIES = 20;
 const inMemoryChartCache = new Map<string, Map<string, ChartData>>();
 
 function inMemoryCacheKey(range: TimeRange): string {
-  return `${getOrgID() || 'default'}::${range}`;
+  return `${normalizeOrgScope(getOrgID())}::${range}`;
 }
 
 /** @internal Test-only reset for in-memory chart cache. */

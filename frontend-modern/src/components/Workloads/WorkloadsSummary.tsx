@@ -14,6 +14,7 @@ import {
   type WorkloadChartsResponse,
 } from '@/api/charts';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 
 interface WorkloadsSummaryProps {
@@ -91,7 +92,6 @@ const WORKLOAD_COLORS = [
 ];
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
-const DEFAULT_ORG_SCOPE = 'default';
 const WORKLOADS_SUMMARY_CACHE_VERSION = 3;
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
@@ -136,11 +136,6 @@ interface CachedWorkloadsSummary {
   data: Record<string, CachedChartData>;
   dockerData: Record<string, CachedChartData>;
 }
-
-const normalizeOrgScope = (orgID?: string | null): string => {
-  const normalized = (orgID || '').trim();
-  return normalized || DEFAULT_ORG_SCOPE;
-};
 
 const cacheKeyFor = (range: TimeRange, nodeScope: string, orgScope: string) =>
   `${WORKLOADS_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;

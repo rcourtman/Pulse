@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
+import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 
 let mockResources: Resource[] = [];
 
@@ -266,5 +267,10 @@ describe('OrganizationSharingPanel', () => {
         accessRole: 'viewer',
       });
     });
+  });
+
+  it('normalizes org scope through the shared helper', () => {
+    expect(organizationSharingPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationSharingPanelSource).not.toContain("getOrgID() || 'default'");
   });
 });

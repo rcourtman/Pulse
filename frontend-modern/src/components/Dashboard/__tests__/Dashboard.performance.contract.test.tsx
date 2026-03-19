@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Dashboard } from '../Dashboard';
+import dashboardSource from '../Dashboard.tsx?raw';
 import {
   filterWorkloads,
   createWorkloadSortComparator,
@@ -402,6 +403,12 @@ describe('Dashboard performance contract', () => {
         expect(getGuestRowCount(container)).toBe(1);
       });
       expect(canonicalId).toBe('shared:node-x:42');
+    });
+
+    it('routes org scope normalization through the shared helper', () => {
+      expect(dashboardSource).toContain('normalizeOrgScope(getOrgID())');
+      expect(dashboardSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
+      expect(dashboardSource).not.toContain('const normalizeOrgScope =');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {

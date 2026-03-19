@@ -3,6 +3,7 @@ import { createStore, reconcile } from 'solid-js/store';
 import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
@@ -36,7 +37,6 @@ const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
-const DEFAULT_ORG_SCOPE = 'default';
 
 type APIMetricValue = {
   value?: number;
@@ -409,11 +409,6 @@ type UnifiedResourcesCacheEntry = {
 };
 
 const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
-
-const normalizeOrgScope = (orgID?: string | null): string => {
-  const normalized = (orgID || '').trim();
-  return normalized || DEFAULT_ORG_SCOPE;
-};
 
 const buildScopedUnifiedResourcesCacheKey = (cacheKey: string, orgScope: string): string =>
   `${encodeURIComponent(orgScope)}::${cacheKey}`;

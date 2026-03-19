@@ -194,6 +194,10 @@ to `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` must
 carry this contract and the dedicated organization-billing proof file instead
 of remaining an unowned consumer of plan tier, entitlement limits, and
 usage-versus-cap presentation.
+That same billing surface now also normalizes org scope through
+`frontend-modern/src/utils/orgScope.ts` before it builds per-tenant state, so
+cache keys and tenant lookups do not keep a local `getOrgID() || 'default'`
+fallback in the hosted billing UI.
 The self-hosted and hosted billing surfaces now also share a canonical
 commercial page shell and plan/usage model. `ProLicensePanel.tsx` and
 `OrganizationBillingPanel.tsx` may still differ in deployment-specific actions

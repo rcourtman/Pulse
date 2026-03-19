@@ -2,6 +2,7 @@ import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
+import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
 
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
 
@@ -901,5 +902,11 @@ describe('useUnifiedResources', () => {
     expect(byId.get('pmg-1')?.platformType).toBe('proxmox-pmg');
 
     dispose();
+  });
+
+  it('uses the shared org scope helper for cache and fetch state', () => {
+    expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(useUnifiedResourcesSource).not.toContain('const DEFAULT_ORG_SCOPE = \'default\'');
+    expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
   });
 });

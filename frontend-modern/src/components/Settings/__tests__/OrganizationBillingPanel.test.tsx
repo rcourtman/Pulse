@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { OrganizationBillingPanel } from '../OrganizationBillingPanel';
+import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
 
 const getStatusMock = vi.hoisted(() => vi.fn());
 const listOrgsMock = vi.hoisted(() => vi.fn());
@@ -91,5 +92,10 @@ describe('OrganizationBillingPanel', () => {
     expect(screen.getByText('5 / 12')).toBeInTheDocument();
     expect(screen.getByText('2 / 5')).toBeInTheDocument();
     expect(errorMock).not.toHaveBeenCalled();
+  });
+
+  it('normalizes org scope through the shared helper', () => {
+    expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationBillingPanelSource).not.toContain("getOrgID() || 'default'");
   });
 });

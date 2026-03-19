@@ -7,6 +7,7 @@ import {
   type OrganizationRole,
 } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { canManageOrg, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
 import {
@@ -39,7 +40,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
   const [inviteUserID, setInviteUserID] = createSignal('');
   const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
 
-  const activeOrgId = () => getOrgID() || 'default';
+  const activeOrgId = () => normalizeOrgScope(getOrgID());
 
   const loadOrganizationAccess = async () => {
     setLoading(true);

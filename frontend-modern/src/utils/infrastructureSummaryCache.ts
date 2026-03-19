@@ -6,6 +6,7 @@ import {
   type TimeRange,
 } from '@/api/charts';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
@@ -13,7 +14,6 @@ export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const INFRA_SUMMARY_CACHE_VERSION = 1;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
-const DEFAULT_ORG_SCOPE = 'default';
 
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
 
@@ -110,14 +110,6 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
   netin: trimPoints(data.netin ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   netout: trimPoints(data.netout ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
 });
-
-const normalizeOrgScope = (orgID: string | null | undefined): string => {
-  const normalized = orgID?.trim();
-  if (!normalized) {
-    return DEFAULT_ORG_SCOPE;
-  }
-  return normalized;
-};
 
 const inFlightKeyFor = (range: TimeRange, orgScope: string) =>
   `${encodeURIComponent(orgScope)}::${range}`;

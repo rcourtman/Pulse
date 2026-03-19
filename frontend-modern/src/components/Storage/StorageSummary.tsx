@@ -15,6 +15,7 @@ import {
 } from '@/components/shared/summaryTimeRange';
 import { formatBytes } from '@/utils/format';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 
@@ -26,7 +27,7 @@ const POLL_INTERVAL_MS = 30_000;
 const inMemoryCache = new Map<string, StorageSummaryChartsResponse>();
 
 function inMemoryCacheKey(range: TimeRange, nodeId?: string): string {
-  return `${getOrgID() || 'default'}::${range}::${nodeId || '__all__'}`;
+  return `${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;
 }
 
 // Clear in-memory cache on org switch to prevent cross-org data leakage.

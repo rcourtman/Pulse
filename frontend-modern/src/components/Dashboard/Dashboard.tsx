@@ -43,6 +43,7 @@ import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
 import { useKioskMode } from '@/hooks/useKioskMode';
@@ -106,12 +107,6 @@ let pendingPersistMetadata: GuestMetadataRecord | null = null;
 let pendingPersistStorageKey: string | null = null;
 let persistHandle: number | null = null;
 let persistHandleType: 'idle' | 'timeout' | null = null;
-const DEFAULT_ORG_SCOPE = 'default';
-
-const normalizeOrgScope = (orgID?: string | null): string => {
-  const normalized = (orgID || '').trim();
-  return normalized || DEFAULT_ORG_SCOPE;
-};
 
 const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
   `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;

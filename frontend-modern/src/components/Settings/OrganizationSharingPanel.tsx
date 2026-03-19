@@ -16,6 +16,7 @@ import {
   type OrganizationShare,
 } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { canManageOrg, formatOrgDate, roleBadgeClass } from '@/utils/orgUtils';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
@@ -82,7 +83,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const [resourceTypeError, setResourceTypeError] = createSignal('');
   const [resourceIdError, setResourceIdError] = createSignal('');
 
-  const activeOrgId = () => getOrgID() || 'default';
+  const activeOrgId = () => normalizeOrgScope(getOrgID());
   const { resources } = useResources();
 
   const targetOrgOptions = createMemo(() =>

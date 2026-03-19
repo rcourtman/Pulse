@@ -2,6 +2,7 @@ import { Component, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { OrgsAPI, type Organization, type OrganizationMember } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
 import {
   getOrganizationDisplayNameRequiredMessage,
@@ -29,7 +30,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   const [members, setMembers] = createSignal<OrganizationMember[]>([]);
   const [displayNameDraft, setDisplayNameDraft] = createSignal('');
 
-  const activeOrgId = () => getOrgID() || 'default';
+  const activeOrgId = () => normalizeOrgScope(getOrgID());
 
   const loadOrganization = async () => {
     setLoading(true);

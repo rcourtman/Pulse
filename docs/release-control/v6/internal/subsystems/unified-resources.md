@@ -464,6 +464,11 @@ options: `frontend-modern/src/pages/Infrastructure.tsx` may render friendly
 string keys, but membership checks against available sources must normalize
 through the shared `frontend-modern/src/utils/sourcePlatforms.ts` helper
 before consulting `KnownSourcePlatform` sets.
+Shared unified-resource consumers now also normalize org scope through
+`frontend-modern/src/utils/orgScope.ts` before building cache keys or
+multi-tenant resource fetch state, so the canonical resource hooks do not
+keep their own `getOrgID() || 'default'` fallback logic in each runtime
+surface.
 Canonical monitored-system counting now also depends on this subsystem. The
 counted commercial unit is a deduped top-level monitored system assembled from
 canonical unified-resource roots, so read-state helpers that derive

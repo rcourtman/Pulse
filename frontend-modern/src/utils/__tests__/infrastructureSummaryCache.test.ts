@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChartData, TimeRange } from '@/api/charts';
 import { setOrgID } from '@/utils/apiClient';
+import infrastructureSummaryCacheSource from '../infrastructureSummaryCache.ts?raw';
 import {
   __resetInfrastructureSummaryFetchesForTests,
   extractInfrastructureSummaryChartMapFromInfrastructureResponse,
@@ -306,5 +307,11 @@ describe('infrastructureSummaryCache persistence', () => {
     ).toBeUndefined();
     expect(localStorage.getItem(cacheKeyForRange('1h', 'org-a'))).not.toBeNull();
     expect(localStorage.getItem(cacheKeyForRange('1h', 'org-b'))).not.toBeNull();
+  });
+
+  it('normalizes org scope through the shared helper', () => {
+    expect(infrastructureSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(infrastructureSummaryCacheSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
+    expect(infrastructureSummaryCacheSource).not.toContain('const normalizeOrgScope =');
   });
 });

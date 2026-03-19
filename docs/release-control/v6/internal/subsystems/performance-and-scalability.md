@@ -121,6 +121,13 @@ shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
 selector boundary keeps using the canonical source-platform contract instead of
 maintaining a local source-normalization alias.
 
+Dashboard, workload-summary, infrastructure-summary, and org-scoped cache-key
+paths now normalize org scope through the shared
+`frontend-modern/src/utils/orgScope.ts` helper instead of each file carrying
+its own `getOrgID() || 'default'` fallback. That keeps cache isolation and
+multi-tenant row-scoping aligned across the dashboard and resource-summary hot
+paths.
+
 GitHub-hosted runner proof for the API performance surface now intentionally
 uses a looser budget envelope than local/staging benchmark runs for the
 mixed-endpoint load test and the infrastructure/workload chart p95 checks.

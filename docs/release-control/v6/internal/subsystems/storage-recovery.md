@@ -169,6 +169,11 @@ The shared unified-resource consumer hook now also preserves `capabilities`,
 fields when storage and recovery surfaces read unified resources, so those
 pages see the same control-plane facets as the dedicated resource drawer
 instead of flattening them away locally.
+The same storage-facing runtime paths now also normalize org scope through
+`frontend-modern/src/utils/orgScope.ts` before building cache keys or
+multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
+adjacent consumers do not each keep a local `getOrgID() || 'default'`
+fallback.
 
 The frontend storage and recovery surfaces are also first-class runtime entry
 points. `frontend-modern/src/components/Storage/` plus

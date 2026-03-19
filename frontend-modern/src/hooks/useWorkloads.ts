@@ -7,6 +7,7 @@ import {
   type Accessor,
 } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
+import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { normalizeDiskArray } from '@/utils/format';
@@ -17,7 +18,6 @@ const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod
 const WORKLOADS_PAGE_LIMIT = 200;
 const WORKLOADS_MAX_PAGES = 20;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
-const DEFAULT_ORG_SCOPE = 'default';
 
 type APIMetricValue = {
   value?: number;
@@ -139,11 +139,6 @@ type WorkloadsCacheEntry = {
 };
 
 const workloadsCaches = new Map<string, WorkloadsCacheEntry>();
-
-const normalizeOrgScope = (orgID?: string | null): string => {
-  const normalized = (orgID || '').trim();
-  return normalized || DEFAULT_ORG_SCOPE;
-};
 
 const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
   const existing = workloadsCaches.get(orgScope);
