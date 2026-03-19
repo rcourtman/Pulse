@@ -89,6 +89,9 @@ for stable-versus-RC metadata validation shared by `.github/workflows/release-dr
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
 RC lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
+Those same workflows must also fetch and dispatch the governed release branch
+derived from release-control metadata instead of hardcoding `pulse/v6`,
+`pulse/v6-release`, or any later branch literal inline.
 That same `internal/updates/` boundary now also owns runtime data-dir
 authority for temp, backup, and cleanup behavior: `manager.go` must resolve
 its working directories through the shared runtime data-dir helper instead of

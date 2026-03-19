@@ -11,6 +11,7 @@ import json
 
 import record_rc_to_ga_blocked as blocked_record
 from release_promotion_policy_support import (
+    REQUIRED_STAGED_GOVERNANCE_INPUTS,
     promotion_metadata_envelope,
     slice_requires_staged_governance_inputs,
     staged_governance_input_errors,
@@ -24,7 +25,7 @@ def read(rel: str) -> str:
     return read_repo_text(
         rel,
         staged=USE_STAGED_GOVERNANCE,
-        strict_staged=USE_STAGED_GOVERNANCE,
+        strict_staged=USE_STAGED_GOVERNANCE and rel in REQUIRED_STAGED_GOVERNANCE_INPUTS,
     )
 
 
@@ -126,6 +127,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(template))
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
         self.assertIn("control_plane.py --branch-for-version", workflow)
+        self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', workflow)
         self.assertIn("resolve_release_promotion.py", workflow)
         self.assertIn("- Rollback command:", workflow)
         self.assertIn("- Candidate stable tag:", workflow)
@@ -150,6 +152,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         source_of_truth = read("docs/release-control/v6/internal/SOURCE_OF_TRUTH.md")
         resolver = read("scripts/release_control/resolve_release_promotion.py")
         self.assertIn("control_plane.py --branch-for-version", content)
+        self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', content)
         self.assertIn("resolve_release_promotion.py", content)
         self.assertIn("Rollback command:", content)
         self.assertIn("rollback target and exact reinstall command recorded", policy)
@@ -182,6 +185,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         checklist = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
         self.assertIn("default-branch copy of `.github/workflows/release-dry-run.yml`", checklist)
         self.assertIn("workflow_dispatch", checklist)
+        self.assertIn("dispatching `pulse/v6-release`", checklist)
+        self.assertIn("derive the governed release branch from release-control metadata", checklist)
+        template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
+        self.assertIn("governed release line from `control_plane.json`", template)
+        self.assertIn("pulse/v6-release", template)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")
@@ -196,7 +204,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("does not descend from any matching RC tag", publish)
         self.assertIn("does not descend from any matching RC tag", promote)
         self.assertIn("both stable and prerelease releases dispatch", runbook)
-        self.assertIn("Release `6.0.0` from `pulse/v6`", runbook)
+        self.assertIn("Release `6.0.0` from `pulse/v6-release`", runbook)
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:

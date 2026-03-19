@@ -141,7 +141,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch --prune origin main pulse/v6 --tags
+          git fetch --prune origin main "${REQUIRED_BRANCH}" --tags
 
           RELEASE_NOTES_INPUT="$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH")"
           NOTES_FILE="$(mktemp)"

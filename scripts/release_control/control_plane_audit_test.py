@@ -18,8 +18,8 @@ VALID_PAYLOAD = {
             "id": "v6",
             "lifecycle": "active",
             "root": "docs/release-control/v6",
-            "prerelease_branch": "pulse/v6",
-            "stable_branch": "pulse/v6",
+            "prerelease_branch": "pulse/v6-release",
+            "stable_branch": "pulse/v6-release",
             "source_of_truth": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
             "status": "docs/release-control/v6/internal/status.json",
             "status_schema": "docs/release-control/v6/status.schema.json",
@@ -156,8 +156,8 @@ class ControlPlaneAuditTest(unittest.TestCase):
         self.assertFalse(report["summary"]["active_target_completion_met"])
 
     def test_release_branch_for_version_uses_profile_branch_policy(self) -> None:
-        self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6")
-        self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6")
+        self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6-release")
+        self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6-release")
 
     def test_audit_flags_stale_active_target(self) -> None:
         report = audit_control_plane_payload(

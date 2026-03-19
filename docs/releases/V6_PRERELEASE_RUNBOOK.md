@@ -13,7 +13,7 @@ release-control policy wins.
 ## Branch Model (Current)
 
 - `main`: v5 stable (current public/stable line)
-- `pulse/v6`: active v6 prerelease and stable release line until an explicit
+- `pulse/v6-release`: active v6 prerelease and stable release line until an explicit
   post-GA branch cutover is governed
 
 Do not move `main` to v6 during prerelease.
@@ -26,7 +26,7 @@ Release workflows now enforce branch/tag lineage rules:
   - Resolves stable versus prerelease branch requirements from
     `docs/release-control/control_plane.json`.
   - For the current v6 profile, both stable and prerelease releases dispatch
-    from `pulse/v6`.
+    from `pulse/v6-release`.
 - `publish-docker.yml`, `promote-floating-tags.yml`, `publish-helm-chart.yml`,
   and `update-demo-server.yml`
   - Validate the release tag commit is reachable from the governed branch for
@@ -54,34 +54,34 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
 
 ## Preconditions for Each RC
 
-1. `pulse/v6` is pushed and green in CI.
-2. `VERSION` file in `pulse/v6` exactly matches the release input version.
+1. `pulse/v6-release` is pushed and green in CI.
+2. `VERSION` file in `pulse/v6-release` exactly matches the release input version.
 3. Release notes are prepared.
 4. `PULSE_LICENSE_PUBLIC_KEY` secret is present in GitHub Actions.
 
 ## RC Release Steps
 
-1. Update version on `pulse/v6`:
+1. Update version on `pulse/v6-release`:
 
 ```bash
-git checkout pulse/v6
+git checkout pulse/v6-release
 git pull --ff-only
 echo "6.0.0-rc.1" > VERSION
 git add VERSION
 git commit -m "chore(release): bump version to 6.0.0-rc.1"
-git push origin pulse/v6
+git push origin pulse/v6-release
 ```
 
 2. Optional preflight dry run:
    - Run workflow: `Release Dry Run`
-   - Ref: `pulse/v6`
+   - Ref: `pulse/v6-release`
    - Inputs:
      - `version`: `6.0.0-rc.1`
      - optional `note`
 
 3. Create draft prerelease:
    - Run workflow: `Pulse Release Pipeline`
-   - Ref: `pulse/v6`
+   - Ref: `pulse/v6-release`
    - Inputs:
      - `version`: `6.0.0-rc.1`
      - `release_notes`: markdown text
@@ -93,19 +93,19 @@ git push origin pulse/v6
    - Smoke install on a test host/container.
 
 5. Publish prerelease:
-   - Re-run `Pulse Release Pipeline` on `pulse/v6`
+   - Re-run `Pulse Release Pipeline` on `pulse/v6-release`
    - Same `version` and notes
    - `draft_only`: `false`
    - Demo server update is skipped automatically for prereleases.
 
 6. Canary rollout:
    - Upgrade a small user subset first.
-   - Collect regressions, fix on `pulse/v6`, then cut `rc.2`/`rc.3` as needed.
+   - Collect regressions, fix on `pulse/v6-release`, then cut `rc.2`/`rc.3` as needed.
 
 ## Keep v5 Stable During v6 RC
 
 - Continue v5 patch releases from `main` as normal.
-- Do not merge `pulse/v6` into `main` during prerelease.
+- Do not merge `pulse/v6-release` into `main` during prerelease.
 - Keep v5 and v6 changelogs/release notes separate.
 
 ## GA Cutover (Only After RC Confidence)
@@ -121,16 +121,16 @@ git checkout -b pulse/v5-maintenance
 git push -u origin pulse/v5-maintenance
 ```
 
-2. Keep the governed v6 release line on `pulse/v6` for GA:
+2. Keep the governed v6 release line on `pulse/v6-release` for GA:
 
 ```bash
-git checkout pulse/v6
+git checkout pulse/v6-release
 git pull --ff-only
 ```
 
-3. Release `6.0.0` from `pulse/v6` using `Pulse Release Pipeline`.
+3. Release `6.0.0` from `pulse/v6-release` using `Pulse Release Pipeline`.
    Before the real GA publish, run `./scripts/trigger-release-dry-run.sh 6.0.0`
-   from `pulse/v6`. That helper validates the default-branch workflow-dispatch
+   from `pulse/v6-release`. That helper validates the default-branch workflow-dispatch
    contract before calling GitHub so stale `main` workflow inputs fail locally
    instead of returning an opaque 422 from `gh workflow run`.
    The governed `Release Dry Run` must still carry:
@@ -157,7 +157,7 @@ git pull --ff-only
      installer or updater failures, licensing or billing blockers, and safe
      migration blockers are eligible during that window.
    - After that window, v5 is unsupported.
-6. Treat any future move of stable v6 releases away from `pulse/v6` as a
+6. Treat any future move of stable v6 releases away from `pulse/v6-release` as a
    separate post-GA governance change; do not assume an automatic cutover to
    `main`.
 
@@ -166,13 +166,13 @@ git pull --ff-only
 If an RC is bad:
 
 1. Do not promote to GA.
-2. Keep fixing on `pulse/v6`.
+2. Keep fixing on `pulse/v6-release`.
 3. Cut next RC.
 4. Keep v5 users on `main` stable releases.
 
 If GA has a severe regression:
 
-1. Patch quickly on `pulse/v6` (v6.0.1), or
+1. Patch quickly on `pulse/v6-release` (v6.0.1), or
 2. Advise affected users to hold at prior stable while fix ships.
 3. Continue v5 emergency fixes from `pulse/v5-maintenance` only if the
    published maintenance-only window is still active or I explicitly announce

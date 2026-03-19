@@ -196,6 +196,10 @@ docs/release-control/*
 docs/release-control/v6/*
 !docs/release-control/v6/README.md
 !docs/release-control/v6/status.schema.json
+!docs/release-control/v6/internal/
+docs/release-control/v6/internal/*
+!docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md
+!docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md
 # Release control scripts — keep public tooling; internal/ subdir is excluded by the wildcard above
 scripts/release_control/
 !scripts/release_control/

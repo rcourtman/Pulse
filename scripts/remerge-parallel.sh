@@ -16,7 +16,7 @@ set -euo pipefail
 #   ./scripts/remerge-parallel.sh --status     # show progress
 #
 # Prerequisites:
-#   - On the pulse/v6 branch
+#   - On the pulse/v6-release branch
 #   - All parallel branches exist locally
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -175,8 +175,8 @@ fi
 
 if [ "$MODE" = "execute" ]; then
   current_branch=$(git branch --show-current)
-  if [ "$current_branch" != "pulse/v6" ]; then
-    echo "Error: must be on pulse/v6 branch (currently on: $current_branch)"
+  if [ "$current_branch" != "pulse/v6-release" ]; then
+    echo "Error: must be on pulse/v6-release branch (currently on: $current_branch)"
     exit 1
   fi
 
@@ -192,19 +192,19 @@ if [ "$MODE" = "execute" ]; then
   total=$(wc -l < "$TIMELINE_FILE" | tr -d ' ')
 
   echo ""
-  echo "This will reset pulse/v6 to $PRE_MERGE_BASE and cherry-pick $total commits."
+  echo "This will reset pulse/v6-release to $PRE_MERGE_BASE and cherry-pick $total commits."
   echo "Current HEAD: $(git log --oneline -1 HEAD)"
   echo ""
   read -rp "Type 'yes' to proceed: " confirm
   [ "$confirm" = "yes" ] || { echo "Aborted."; exit 1; }
 
   # Save backup
-  git branch -f pulse/v6-pre-remerge-backup HEAD
-  log "Backup saved: pulse/v6-pre-remerge-backup -> $(git rev-parse --short HEAD)"
+  git branch -f pulse/v6-release-pre-remerge-backup HEAD
+  log "Backup saved: pulse/v6-release-pre-remerge-backup -> $(git rev-parse --short HEAD)"
 
   # Reset
   git reset --hard "$PRE_MERGE_BASE"
-  log "Reset pulse/v6 to $PRE_MERGE_BASE"
+  log "Reset pulse/v6-release to $PRE_MERGE_BASE"
 
   save_progress 0
 fi
@@ -347,8 +347,8 @@ log "║  Final build:      PASS"
 log "║  HEAD:             $(git log --oneline -1 HEAD)"
 log "╚══════════════════════════════════════════════════════════╝"
 log ""
-log "Backup of old v6: pulse/v6-pre-remerge-backup"
-log "To delete: git branch -D pulse/v6-pre-remerge-backup"
+log "Backup of old v6: pulse/v6-release-pre-remerge-backup"
+log "To delete: git branch -D pulse/v6-release-pre-remerge-backup"
 
 # Clean up state
 rm -rf "$STATE_DIR"

@@ -10,7 +10,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
-from control_plane import DEFAULT_CONTROL_PLANE
+from control_plane import DEFAULT_CONTROL_PLANE, release_branch_for_version
 from repo_file_io import REPO_ROOT, git_env, read_repo_text
 
 
@@ -166,6 +166,8 @@ def build_blocked_record(*, record_date: str) -> str:
     status = read_json(str(DEFAULT_CONTROL_PLANE["status_path"].relative_to(REPO_ROOT)))
     version = read("VERSION").strip()
     stable_version = stable_candidate_version(version)
+    working_branch = release_branch_for_version(version, control_plane=control_plane)
+    stable_branch = release_branch_for_version(stable_version, control_plane=control_plane)
     version_is_prerelease = stable_version != version
     active_profile = next(
         profile for profile in control_plane["profiles"] if profile["id"] == control_plane["active_profile_id"]
@@ -185,7 +187,7 @@ def build_blocked_record(*, record_date: str) -> str:
     if version_is_prerelease:
         version_fact_lines = [
             [
-                f"The active local `pulse/v6` branch currently reports `VERSION={version}`, so the",
+                f"The active local `{working_branch}` branch currently reports `VERSION={version}`, so the",
                 f"working line is still prerelease and there is not yet a governed local stable",
                 f"`{stable_version}` candidate.",
             ],
@@ -197,7 +199,7 @@ def build_blocked_record(*, record_date: str) -> str:
     else:
         version_fact_lines = [
             [
-                f"The active local `pulse/v6` branch currently reports `VERSION={version}`, so a",
+                f"The active local `{working_branch}` branch currently reports `VERSION={version}`, so a",
                 "local GA candidate exists on the governed stable line.",
             ],
             [
@@ -221,9 +223,9 @@ def build_blocked_record(*, record_date: str) -> str:
             ]
             required_step_lines = [
                 [
-                    "Push the governed `pulse/v6` branch state that is intended to become the",
+                    f"Push the governed `{stable_branch}` branch state that is intended to become the",
                     f"stable `{stable_version}` candidate, including the eventual `VERSION={stable_version}`",
-                    "change and release-control records, to `origin/pulse/v6`.",
+                    f"change and release-control records, to `origin/{stable_branch}`.",
                 ],
             ]
         else:
@@ -235,8 +237,8 @@ def build_blocked_record(*, record_date: str) -> str:
             ]
             required_step_lines = [
                 [
-                    "Push the governed `pulse/v6` branch state, including the current",
-                    f"`VERSION={version}` candidate and release-control records, to `origin/pulse/v6`.",
+                    f"Push the governed `{working_branch}` branch state, including the current",
+                    f"`VERSION={version}` candidate and release-control records, to `origin/{working_branch}`.",
                 ],
             ]
     else:
@@ -259,9 +261,9 @@ def build_blocked_record(*, record_date: str) -> str:
                     "`v6-ga-promotion` only when that change is actually intended.",
                 ],
                 [
-                    "Push the governed `pulse/v6` branch state that is intended to become the",
+                    f"Push the governed `{stable_branch}` branch state that is intended to become the",
                     f"stable `{stable_version}` candidate, including the eventual `VERSION={stable_version}`",
-                    "change and release-control records, to `origin/pulse/v6`.",
+                    f"change and release-control records, to `origin/{stable_branch}`.",
                 ],
             ]
         else:
@@ -278,8 +280,8 @@ def build_blocked_record(*, record_date: str) -> str:
                     "`v6-ga-promotion` only when that change is actually intended.",
                 ],
                 [
-                    "Push the governed `pulse/v6` branch state, including the current",
-                    f"`VERSION={version}` candidate and release-control records, to `origin/pulse/v6`.",
+                    f"Push the governed `{working_branch}` branch state, including the current",
+                    f"`VERSION={version}` candidate and release-control records, to `origin/{working_branch}`.",
                 ],
             ]
 
@@ -366,7 +368,7 @@ def build_blocked_record(*, record_date: str) -> str:
             [
                 f"Land the canonical `{RELEASE_DRY_RUN_WORKFLOW}` workflow-dispatch input",
                 f"contract on the default branch `{default_branch}` so GitHub accepts the",
-                "governed stable rehearsal metadata envelope when dispatching from `pulse/v6`.",
+                f"governed stable rehearsal metadata envelope when dispatching from `{stable_branch}`.",
             ]
         )
     if not rc_tag:
@@ -379,7 +381,7 @@ def build_blocked_record(*, record_date: str) -> str:
         )
         required_blocks.append(
             [
-                "Run `Release Dry Run` from `pulse/v6` using that published RC as",
+                f"Run `Release Dry Run` from `{stable_branch}` using that published RC as",
                 "`promoted_from_tag` with:",
                 f"- `version={stable_version}`",
                 "- an artifact-owned candidate stable tag matching that rehearsal",
@@ -396,7 +398,7 @@ def build_blocked_record(*, record_date: str) -> str:
     else:
         required_blocks.append(
             [
-                "Run `Release Dry Run` from `pulse/v6` with:",
+                f"Run `Release Dry Run` from `{stable_branch}` with:",
                 f"- `version={stable_version}`",
                 f"- `promoted_from_tag={rc_tag}`",
                 "- an artifact-owned candidate stable tag matching that rehearsal",

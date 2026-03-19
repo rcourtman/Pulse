@@ -122,7 +122,7 @@ jobs:
             exit 1
           fi
 
-          git fetch --prune origin main pulse/v6 --tags
+          git fetch --prune origin main "${REQUIRED_BRANCH}" --tags
 
           HELPER_ARGS=(
             --version "${VERSION}"
