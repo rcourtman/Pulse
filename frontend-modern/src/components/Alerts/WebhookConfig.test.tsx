@@ -40,6 +40,7 @@ function makeWebhook(overrides: Partial<Webhook> = {}): Webhook {
 const discordTemplate = {
   service: 'discord',
   name: 'Discord Webhook',
+  description: 'Discord server webhook',
   urlPattern: 'https://discord.com/api/webhooks/...',
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -50,6 +51,7 @@ const discordTemplate = {
 const slackTemplate = {
   service: 'slack',
   name: 'Slack Webhook',
+  description: 'Slack incoming webhook',
   urlPattern: 'https://hooks.slack.com/services/...',
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -60,6 +62,7 @@ const slackTemplate = {
 const genericTemplate = {
   service: 'generic',
   name: 'Generic Webhook',
+  description: 'Custom webhook endpoint',
   urlPattern: 'https://example.com/webhook',
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -67,7 +70,18 @@ const genericTemplate = {
   instructions: '',
 };
 
-const mockTemplates = [genericTemplate, discordTemplate, slackTemplate];
+const pushoverTemplate = {
+  service: 'pushover',
+  name: 'Pushover',
+  description: 'Mobile push notifications',
+  urlPattern: 'https://api.pushover.net/1/messages.json',
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  payloadTemplate: '',
+  instructions: 'Create an application at https://pushover.net/apps',
+};
+
+const mockTemplates = [genericTemplate, discordTemplate, slackTemplate, pushoverTemplate];
 
 // --- Tests ---
 describe('WebhookConfig', () => {
@@ -663,7 +677,7 @@ describe('WebhookConfig', () => {
 
   // --- Service selection ---
 
-  it('toggles service dropdown when service type button is clicked', () => {
+  it('toggles service dropdown when service type button is clicked', async () => {
     render(() => (
       <WebhookConfig
         webhooks={[]}
@@ -680,14 +694,14 @@ describe('WebhookConfig', () => {
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
 
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
+
     // Service options should appear
     expect(screen.getByText('Discord')).toBeInTheDocument();
     expect(screen.getByText('Slack')).toBeInTheDocument();
-    expect(screen.getByText('Telegram')).toBeInTheDocument();
-    expect(screen.getByText('Microsoft Teams')).toBeInTheDocument();
-    expect(screen.getByText('PagerDuty')).toBeInTheDocument();
     expect(screen.getByText('Pushover')).toBeInTheDocument();
-    expect(screen.getByText('Gotify')).toBeInTheDocument();
   });
 
   it('applies template settings when selecting a service', async () => {
@@ -712,6 +726,10 @@ describe('WebhookConfig', () => {
     // Open service dropdown
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
 
     // Select Discord
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
@@ -753,6 +771,10 @@ describe('WebhookConfig', () => {
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
 
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
+
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
     fireEvent.click(discordBtn);
 
@@ -783,6 +805,10 @@ describe('WebhookConfig', () => {
     // Open service dropdown and select Discord
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
 
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
     fireEvent.click(discordBtn);
@@ -850,6 +876,10 @@ describe('WebhookConfig', () => {
     // Switch to Discord
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
 
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
     fireEvent.click(discordBtn);
@@ -1160,6 +1190,9 @@ describe('WebhookConfig', () => {
     });
 
     fireEvent.click(screen.getByText(/Generic →/));
+    await waitFor(() => {
+      expect(screen.getByText('Pushover')).toBeInTheDocument();
+    });
     fireEvent.click(screen.getByText('Pushover').closest('button')!);
 
     expect(screen.getByText('Application Token')).toBeInTheDocument();
@@ -1294,6 +1327,10 @@ describe('WebhookConfig', () => {
     // Switch to Discord to show mention field
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
 
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
     fireEvent.click(discordBtn);
@@ -1431,6 +1468,10 @@ describe('WebhookConfig', () => {
     // Switch to Discord
     const serviceBtn = screen.getByText(/Generic →/);
     fireEvent.click(serviceBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord')).toBeInTheDocument();
+    });
 
     const discordBtn = screen.getByText('Discord server webhook').closest('button')!;
     fireEvent.click(discordBtn);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ALERT_WEBHOOK_TEST_FAILURE,
   ALERT_WEBHOOK_TEST_SUCCESS,
+  getAlertWebhookServices,
   getAlertWebhookCustomFieldPresets,
   getAlertWebhookTestFailure,
   getAlertWebhookTestSuccess,
@@ -53,5 +54,43 @@ describe('alertWebhookPresentation', () => {
       app_token: 'legacy-token',
       user_token: 'legacy-user',
     });
+  });
+
+  it('derives webhook service options from the backend template registry', () => {
+    expect(
+      getAlertWebhookServices([
+        {
+          service: 'discord',
+          name: 'Discord Webhook',
+          description: 'Discord server webhook',
+          urlPattern: 'https://discord.com/api/webhooks/.../...',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          payloadTemplate: '',
+          instructions: '',
+        },
+        {
+          service: 'generic',
+          name: 'Generic Webhook',
+          description: 'Custom webhook endpoint',
+          urlPattern: '',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          payloadTemplate: '',
+          instructions: '',
+        },
+      ]),
+    ).toEqual([
+      {
+        id: 'discord',
+        label: 'Discord',
+        description: 'Discord server webhook',
+      },
+      {
+        id: 'generic',
+        label: 'Generic',
+        description: 'Custom webhook endpoint',
+      },
+    ]);
   });
 });

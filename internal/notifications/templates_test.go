@@ -179,6 +179,11 @@ func TestGetWebhookTemplates(t *testing.T) {
 				t.Errorf("Template %q has empty Name", tmpl.Service)
 			}
 
+			// Description must be non-empty so the frontend can derive the service chooser
+			if tmpl.Description == "" {
+				t.Errorf("Template %q has empty Description", tmpl.Service)
+			}
+
 			// Method must be valid HTTP method
 			validMethods := map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 			if !validMethods[tmpl.Method] {
@@ -224,6 +229,15 @@ func TestGetWebhookTemplates_KnownServices(t *testing.T) {
 	for _, service := range expectedServices {
 		if _, exists := serviceMap[service]; !exists {
 			t.Errorf("Expected service %q not found", service)
+		}
+	}
+}
+
+func TestGetWebhookTemplates_Descriptions(t *testing.T) {
+	templates := GetWebhookTemplates()
+	for _, tmpl := range templates {
+		if tmpl.Description == "" {
+			t.Fatalf("template %q has empty description", tmpl.Service)
 		}
 	}
 }

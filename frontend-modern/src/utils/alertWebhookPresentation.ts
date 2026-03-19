@@ -1,22 +1,20 @@
-export const ALERT_WEBHOOK_SERVICES = [
-  'generic',
-  'discord',
-  'slack',
-  'mattermost',
-  'telegram',
-  'teams',
-  'teams-adaptive',
-  'pagerduty',
-  'pushover',
-  'gotify',
-  'ntfy',
-] as const;
+import type { WebhookTemplate as AlertWebhookTemplate } from '@/api/notifications';
 
-type AlertWebhookService = (typeof ALERT_WEBHOOK_SERVICES)[number];
+type AlertWebhookService =
+  | 'generic'
+  | 'discord'
+  | 'slack'
+  | 'mattermost'
+  | 'telegram'
+  | 'teams'
+  | 'teams-adaptive'
+  | 'pagerduty'
+  | 'pushover'
+  | 'gotify'
+  | 'ntfy';
 
 type AlertWebhookServicePresentation = {
   label: string;
-  description: string;
   mentionPlaceholder?: string;
   mentionHelp?: string;
 };
@@ -34,57 +32,46 @@ const ALERT_WEBHOOK_SERVICE_PRESENTATION: Record<
 > = {
   generic: {
     label: 'Generic',
-    description: 'Custom webhook endpoint',
   },
   discord: {
     label: 'Discord',
-    description: 'Discord server webhook',
     mentionPlaceholder: '@everyone or <@USER_ID> or <@&ROLE_ID>',
     mentionHelp: 'Discord: Use @everyone, @here, <@USER_ID>, or <@&ROLE_ID>',
   },
   slack: {
     label: 'Slack',
-    description: 'Slack incoming webhook',
     mentionPlaceholder: '@channel, @here, or <@USER_ID>',
     mentionHelp: 'Slack: Use @channel, @here, <@USER_ID>, or <!subteam^ID>',
   },
   mattermost: {
     label: 'Mattermost',
-    description: 'Mattermost incoming webhook',
     mentionPlaceholder: '@channel, @all, or @username',
     mentionHelp: 'Mattermost: Use @channel, @all, or @username',
   },
   telegram: {
     label: 'Telegram',
-    description: 'Telegram bot notifications',
   },
   teams: {
     label: 'Microsoft Teams',
-    description: 'Microsoft Teams webhook',
     mentionPlaceholder: '@General or user email',
     mentionHelp: 'Teams: Use channel names like @General',
   },
   'teams-adaptive': {
     label: 'Teams (Adaptive)',
-    description: 'Teams with Adaptive Cards',
     mentionPlaceholder: '@General or user email',
     mentionHelp: 'Teams: Use channel names like @General',
   },
   pagerduty: {
     label: 'PagerDuty',
-    description: 'PagerDuty Events API v2',
   },
   pushover: {
     label: 'Pushover',
-    description: 'Mobile push notifications',
   },
   gotify: {
     label: 'Gotify',
-    description: 'Self-hosted push notifications',
   },
   ntfy: {
     label: 'ntfy',
-    description: 'Push notifications via ntfy.sh',
   },
 };
 
@@ -163,23 +150,16 @@ export const ALERT_WEBHOOK_DISABLED_LABEL = 'Disabled';
 export const ALERT_WEBHOOK_DISABLE_ALL_LABEL = 'Disable All';
 export const ALERT_WEBHOOK_ENABLE_ALL_LABEL = 'Enable All';
 
-export function getAlertWebhookServices() {
-  return ALERT_WEBHOOK_SERVICES.map((service) => ({
-    id: service,
-    label: ALERT_WEBHOOK_SERVICE_PRESENTATION[service].label,
-    description: ALERT_WEBHOOK_SERVICE_PRESENTATION[service].description,
+export function getAlertWebhookServices(templates: AlertWebhookTemplate[] = []) {
+  return templates.map((template) => ({
+    id: template.service,
+    label: getAlertWebhookServiceLabel(template.service),
+    description: template.description || template.name,
   }));
 }
 
 export function getAlertWebhookServiceLabel(service: string) {
   return ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.label || service;
-}
-
-export function getAlertWebhookServiceDescription(service: string) {
-  return (
-    ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.description ||
-    ALERT_WEBHOOK_SERVICE_PRESENTATION.pagerduty.description
-  );
 }
 
 export function getAlertWebhookCustomFieldPresets(service: string) {

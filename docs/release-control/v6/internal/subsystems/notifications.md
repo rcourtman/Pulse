@@ -68,13 +68,19 @@ webhook delivery now also share one owned rendering path for URL rendering,
 service-specific enrichment, and template selection. When persistent queue
 bootstrap fails, the runtime now falls back to an in-memory queue owner
 instead of dropping into a separate nil-queue direct-send mode. Service-specific
-webhook compatibility like Pushover `app_token` / `user_token` legacy fields is
+	webhook compatibility like Pushover `app_token` / `user_token` legacy fields is
 now canonicalized at webhook-config ownership boundaries, so runtime delivery
 only handles canonical `token` / `user` fields instead of injecting aliases
 mid-flight. That boundary includes config persistence plus API/UI ingress for
 create, update, and ad hoc test requests; `internal/notifications/` may not
 silently rewrite those legacy keys once webhook state is already live in the
 runtime.
+
+The webhook template registry is also the canonical source of truth for the
+alert webhook service set and the metadata the frontend uses to build its
+service chooser. Frontend presentation may format the options, but it must
+derive the available services from the backend template registry instead of
+keeping a second hardcoded service list.
 Email single-alert, grouped, resolved, and HTML send paths must follow that
 same ownership rule: they may expose different calling surfaces, but they must
 all route through one canonical enhanced email executor instead of rebuilding

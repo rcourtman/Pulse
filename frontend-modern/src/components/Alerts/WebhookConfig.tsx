@@ -53,6 +53,7 @@ import {
 interface WebhookTemplate {
   service: string;
   name: string;
+  description?: string;
   urlPattern: string;
   method: string;
   headers: Record<string, string>;
@@ -446,7 +447,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
 
             <Show when={showServiceDropdown()}>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-border px-3 py-2 mb-3 text-xs">
-                <For each={getAlertWebhookServices()}>
+                <For each={getAlertWebhookServices(templates())}>
                   {(service) => (
                     <button
                       type="button"
