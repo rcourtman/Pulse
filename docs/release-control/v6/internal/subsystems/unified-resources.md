@@ -143,6 +143,10 @@ only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope
 instead of being stored as a second boolean in the owned resource-policy
 contract.
+The canonical policy summary formatter also mirrors that shape now: it reports
+the sensitivity and routing scope directly, then lists redactions, so
+governed mention blocks no longer repeat a derived cloud-summary boolean in
+their owned summary line.
 The backend AI and Patrol correlation context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the correlation

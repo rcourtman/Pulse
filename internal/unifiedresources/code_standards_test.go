@@ -271,7 +271,7 @@ func TestResourcePolicySummaryContractOmitsRawSignals(t *testing.T) {
 	}
 
 	summary := strings.Join(ResourcePolicySummaryLines(&policy), "\n")
-	if strings.Contains(summary, "Raw Signals") || strings.Contains(summary, "allowCloudRawSignals") {
+	if strings.Contains(summary, "Raw Signals") || strings.Contains(summary, "allowCloudRawSignals") || strings.Contains(summary, "cloud_summary=") {
 		t.Fatalf("resource policy summary leaked raw-signals wording: %q", summary)
 	}
 }
@@ -458,7 +458,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) string",
 			"if ResourcePolicyRequiresGovernedSummary(policy) {",
 			"return ResourcePolicyRedactedLabel",
-			"Policy: sensitivity=%s, routing=%s, cloud_summary=%t",
+			"Policy: sensitivity=%s, routing=%s",
 			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
 			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
 			"func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string",

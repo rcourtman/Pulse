@@ -67,15 +67,6 @@ func ResourceRoutingScopeLabel(scope ResourceRoutingScope) string {
 	}
 }
 
-func resourcePolicyAllowsCloudSummary(scope ResourceRoutingScope) bool {
-	switch scope {
-	case ResourceRoutingScopeCloudSummary, ResourceRoutingScopeLocalFirst:
-		return true
-	default:
-		return false
-	}
-}
-
 // ResourceRedactionHintLabel returns the canonical human-readable redaction label.
 func ResourceRedactionHintLabel(hint ResourceRedactionHint) string {
 	switch hint {
@@ -196,10 +187,9 @@ func ResourcePolicySummaryLines(policy *ResourcePolicy) []string {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t",
+		fmt.Sprintf("Policy: sensitivity=%s, routing=%s",
 			ResourceSensitivityLabel(policy.Sensitivity),
 			ResourceRoutingScopeLabel(policy.Routing.Scope),
-			resourcePolicyAllowsCloudSummary(policy.Routing.Scope),
 		),
 	}
 
