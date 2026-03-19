@@ -56,6 +56,14 @@ import { ResourceGraphSummary } from './ResourceGraphSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
+import {
+  RESOURCE_CHANGE_KIND_ORDER,
+  RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
+  RESOURCE_CHANGE_SOURCE_TYPE_ORDER,
+  getResourceChangeKindPresentation,
+  getResourceChangeSourceAdapterPresentation,
+  getResourceChangeSourceTypePresentation,
+} from '@/utils/resourceChangePresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
@@ -83,30 +91,27 @@ const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
 
 const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | '' }> = [
   { label: 'All kinds', value: '' },
-  { label: 'State transition', value: 'state_transition' },
-  { label: 'Restart', value: 'restart' },
-  { label: 'Config update', value: 'config_update' },
-  { label: 'Metric anomaly', value: 'metric_anomaly' },
-  { label: 'Relationship change', value: 'relationship_change' },
-  { label: 'Capability change', value: 'capability_change' },
+  ...RESOURCE_CHANGE_KIND_ORDER.map((kind) => ({
+    label: getResourceChangeKindPresentation(kind).label,
+    value: kind,
+  })),
 ];
 
 const timelineSourceTypeOptions: Array<{ label: string; value: ResourceChangeSourceType | '' }> = [
   { label: 'All sources', value: '' },
-  { label: 'Platform event', value: 'platform_event' },
-  { label: 'Pulse diff', value: 'pulse_diff' },
-  { label: 'Heuristic', value: 'heuristic' },
-  { label: 'User action', value: 'user_action' },
-  { label: 'Agent action', value: 'agent_action' },
+  ...RESOURCE_CHANGE_SOURCE_TYPE_ORDER.map((sourceType) => ({
+    label: getResourceChangeSourceTypePresentation(sourceType).label,
+    value: sourceType,
+  })),
 ];
 
 const timelineSourceAdapterOptions: Array<{ label: string; value: ResourceChangeSourceAdapter | '' }> =
   [
     { label: 'All adapters', value: '' },
-    { label: 'Docker adapter', value: 'docker_adapter' },
-    { label: 'Proxmox adapter', value: 'proxmox_adapter' },
-    { label: 'TrueNAS adapter', value: 'truenas_adapter' },
-    { label: 'Ops agent', value: 'agent:ops-helper' },
+    ...RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER.map((sourceAdapter) => ({
+      label: getResourceChangeSourceAdapterPresentation(sourceAdapter).label,
+      value: sourceAdapter,
+    })),
   ];
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
@@ -1827,91 +1832,99 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             >
               <div class="space-y-2">
                 <For each={sortedResourceTimeline()}>
-                  {(change) => (
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="font-medium text-base-content">
-                            {humanizeFacetToken(change.kind)}
+                  {(change) => {
+                    const kindPresentation = getResourceChangeKindPresentation(change.kind);
+                    const sourceTypePresentation = getResourceChangeSourceTypePresentation(
+                      change.sourceType,
+                    );
+                    const sourceAdapterPresentation = change.sourceAdapter
+                      ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
+                      : null;
+
+                    return (
+                      <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                        <div class="flex items-start justify-between gap-3">
+                          <div class="min-w-0">
+                            <div class="font-medium text-base-content">{kindPresentation.label}</div>
+                            <div class="mt-0.5 text-muted">
+                              {formatFacetTimestamp(change.observedAt)}
+                              <Show when={change.occurredAt}>
+                                <span class="mx-1">•</span>
+                                <span>Occurred {formatFacetTimestamp(change.occurredAt)}</span>
+                              </Show>
+                            </div>
                           </div>
-                          <div class="mt-0.5 text-muted">
-                            {formatFacetTimestamp(change.observedAt)}
-                            <Show when={change.occurredAt}>
-                              <span class="mx-1">•</span>
-                              <span>Occurred {formatFacetTimestamp(change.occurredAt)}</span>
-                            </Show>
-                          </div>
+                          <span class="text-muted">{sourceTypePresentation.label}</span>
                         </div>
-                        <span class="text-muted">{humanizeFacetToken(change.sourceType)}</span>
-                      </div>
-                      <div class="mt-1 grid gap-1 sm:grid-cols-2">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Confidence</span>
-                          <span class="font-medium text-base-content">
-                            {formatConfidence(change.confidence)}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Adapter</span>
-                          <span class="font-medium text-base-content">
-                            {change.sourceAdapter || '—'}
-                          </span>
-                        </div>
-                        <Show when={change.actor}>
+                        <div class="mt-1 grid gap-1 sm:grid-cols-2">
                           <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Actor</span>
-                            <span class="font-medium text-base-content">{change.actor}</span>
-                          </div>
-                        </Show>
-                        <Show when={change.from || change.to}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Transition</span>
+                            <span class="text-muted">Confidence</span>
                             <span class="font-medium text-base-content">
-                              {change.from || '—'} → {change.to || '—'}
+                              {formatConfidence(change.confidence)}
                             </span>
                           </div>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Adapter</span>
+                            <span class="font-medium text-base-content">
+                              {sourceAdapterPresentation?.label || '—'}
+                            </span>
+                          </div>
+                          <Show when={change.actor}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Actor</span>
+                              <span class="font-medium text-base-content">{change.actor}</span>
+                            </div>
+                          </Show>
+                          <Show when={change.from || change.to}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Transition</span>
+                              <span class="font-medium text-base-content">
+                                {change.from || '—'} → {change.to || '—'}
+                              </span>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={change.reason}>
+                          <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                            {change.reason}
+                          </div>
+                        </Show>
+                        <Show when={hasMetadataEntries(change.metadata)}>
+                          <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                            <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                              Metadata
+                            </summary>
+                            <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                              {JSON.stringify(change.metadata ?? {}, null, 2)}
+                            </pre>
+                          </details>
+                        </Show>
+                        <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                          <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
+                            <span>Related:</span>
+                            <For each={change.relatedResources ?? []}>
+                              {(relatedResource) => {
+                                const href = buildInfrastructureResourceHref(relatedResource);
+                                return href ? (
+                                  <a
+                                    class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                    href={href}
+                                    aria-label={`Open related resource ${relatedResource} in Infrastructure`}
+                                  >
+                                    {relatedResource}
+                                  </a>
+                                ) : (
+                                  <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                    {relatedResource}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
                         </Show>
                       </div>
-                      <Show when={change.reason}>
-                        <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
-                          {change.reason}
-                        </div>
-                      </Show>
-                      <Show when={hasMetadataEntries(change.metadata)}>
-                        <details class="mt-1 rounded border border-border bg-base px-2 py-1">
-                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                            Metadata
-                          </summary>
-                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
-                            {JSON.stringify(change.metadata ?? {}, null, 2)}
-                          </pre>
-                        </details>
-                      </Show>
-                      <Show when={change.relatedResources && change.relatedResources.length > 0}>
-                        <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
-                          <span>Related:</span>
-                          <For each={change.relatedResources ?? []}>
-                            {(relatedResource) => {
-                              const href = buildInfrastructureResourceHref(relatedResource);
-                              return href ? (
-                                <a
-                                  class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                  href={href}
-                                  aria-label={`Open related resource ${relatedResource} in Infrastructure`}
-                                >
-                                  {relatedResource}
-                                </a>
-                              ) : (
-                                <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
-                                  {relatedResource}
-                                </span>
-                              );
-                            }}
-                          </For>
-                        </div>
-                      </Show>
-                    </div>
-                  )}
+                    );
+                  }}
                 </For>
               </div>
             </Show>

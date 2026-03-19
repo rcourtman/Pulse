@@ -65,6 +65,8 @@ import dashboardStoragePresentationSource from '@/utils/dashboardStoragePresenta
 import dashboardRecoveryPresentationSource from '@/utils/dashboardRecoveryPresentation.ts?raw';
 import dashboardKpiPresentationSource from '@/utils/dashboardKpiPresentation.ts?raw';
 import dashboardEmptyStatePresentationSource from '@/utils/dashboardEmptyStatePresentation.ts?raw';
+import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
+import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
 import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
@@ -1832,8 +1834,26 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('getServiceHealthPresentation');
     expect(resourceDetailDrawerSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerSource).toContain('History');
+    expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_KIND_ORDER');
+    expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_TYPE_ORDER');
+    expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER');
+    expect(resourceDetailDrawerSource).toContain('getResourceChangeKindPresentation');
+    expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceTypePresentation');
+    expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
+    expect(resourceChangeSummarySource).toContain('getResourceChangeKindPresentation');
+    expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
+    expect(resourceChangeSummarySource).toContain(
+      'getResourceChangeSourceAdapterPresentation',
+    );
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
+    expect(resourceChangePresentationSource).toContain('getResourceChangeKindPresentation');
+    expect(resourceChangePresentationSource).toContain(
+      'getResourceChangeSourceTypePresentation',
+    );
+    expect(resourceChangePresentationSource).toContain(
+      'getResourceChangeSourceAdapterPresentation',
+    );
     expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');

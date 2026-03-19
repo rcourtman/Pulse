@@ -3,8 +3,10 @@ import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
+  getResourceChangeKindPresentation,
+  getResourceChangeSourceAdapterPresentation,
+  getResourceChangeSourceTypePresentation,
   formatResourceChangeHeadline,
-  formatResourceChangeKind,
   sortResourceChangesByObservedAt,
 } from '@/utils/resourceChangePresentation';
 
@@ -75,6 +77,13 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
               const headline = formatResourceChangeHeadline(change);
               const resourceHref = buildResourceHref(change.resourceId);
               const relatedResources = (change.relatedResources ?? []).slice(0, 3);
+              const kindPresentation = getResourceChangeKindPresentation(change.kind);
+              const sourceTypePresentation = getResourceChangeSourceTypePresentation(
+                change.sourceType,
+              );
+              const sourceAdapterPresentation = change.sourceAdapter
+                ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
+                : null;
 
               return (
                 <li class={`rounded-md border border-border-subtle bg-base ${itemPadding()}`}>
@@ -111,20 +120,26 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
 
                     <div class="flex flex-wrap items-center gap-1.5">
                       <span
-                        class={`rounded-full border border-border-subtle bg-surface px-2 py-0.5 ${badgeText()} font-medium text-muted`}
+                        class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
+                          kindPresentation.className
+                        }`}
                       >
-                        {formatResourceChangeKind(change.kind)}
+                        {kindPresentation.label}
                       </span>
                       <span
-                        class={`rounded-full border border-border-subtle bg-surface px-2 py-0.5 ${badgeText()} font-medium text-muted`}
+                        class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
+                          sourceTypePresentation.className
+                        }`}
                       >
-                        {change.sourceType}
+                        {sourceTypePresentation.label}
                       </span>
-                      <Show when={change.sourceAdapter}>
+                      <Show when={sourceAdapterPresentation}>
                         <span
-                          class={`rounded-full border border-border-subtle bg-surface px-2 py-0.5 ${badgeText()} font-medium text-muted`}
+                          class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
+                            sourceAdapterPresentation!.className
+                          }`}
                         >
-                          {change.sourceAdapter}
+                          {sourceAdapterPresentation!.label}
                         </span>
                       </Show>
                     </div>

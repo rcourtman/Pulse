@@ -219,6 +219,10 @@ That shared presentation layer also owns the elapsed-time and "ago" wording
 utilities, so the same "time ago" phrasing stays consistent across resource,
 incident, and fallback memory summaries instead of being reformatted
 independently.
+The canonical resource-change kind, source type, and source adapter labels
+now also come from the shared change presentation helper, so the resource
+summary card and drawer history use the same badge vocabulary instead of
+hardcoding their own labels.
 Resource-only incident context should follow the same rule: if an alert
 timeline is absent, the incident prompt path should fall back to the canonical
 unified-resource timeline rather than depending only on patrol-local change

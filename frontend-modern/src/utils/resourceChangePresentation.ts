@@ -131,22 +131,47 @@ const RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS: Record<
   },
 };
 
+const humanizeResourceChangeToken = (value: string): string => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return 'Unknown';
+  }
+  return normalized
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const fallbackResourceChangePresentation = (value: string): ResourceChangeLabelPresentation => {
+  const label = humanizeResourceChangeToken(value);
+  return {
+    label,
+    plural: `${label}s`,
+    className: 'bg-surface text-muted',
+  };
+};
+
 export function getResourceChangeKindPresentation(
-  kind: ResourceChangeKind,
+  kind: ResourceChangeKind | string,
 ): ResourceChangeLabelPresentation {
-  return RESOURCE_CHANGE_KIND_PRESENTATIONS[kind];
+  return RESOURCE_CHANGE_KIND_PRESENTATIONS[kind as ResourceChangeKind] ?? fallbackResourceChangePresentation(String(kind));
 }
 
 export function getResourceChangeSourceTypePresentation(
-  sourceType: ResourceChangeSourceType,
+  sourceType: ResourceChangeSourceType | string,
 ): ResourceChangeLabelPresentation {
-  return RESOURCE_CHANGE_SOURCE_TYPE_PRESENTATIONS[sourceType];
+  return (
+    RESOURCE_CHANGE_SOURCE_TYPE_PRESENTATIONS[sourceType as ResourceChangeSourceType] ??
+    fallbackResourceChangePresentation(String(sourceType))
+  );
 }
 
 export function getResourceChangeSourceAdapterPresentation(
-  sourceAdapter: ResourceFacetSourceAdapter,
+  sourceAdapter: ResourceFacetSourceAdapter | string,
 ): ResourceChangeLabelPresentation {
-  return RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS[sourceAdapter];
+  return (
+    RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS[sourceAdapter as ResourceFacetSourceAdapter] ??
+    fallbackResourceChangePresentation(String(sourceAdapter))
+  );
 }
 
 export function formatResourceChangeKind(kind: ResourceChange['kind']): string {

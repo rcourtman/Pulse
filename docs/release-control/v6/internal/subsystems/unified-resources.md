@@ -504,6 +504,10 @@ references). These fields are defined in `capabilities.go`, `relationships.go`,
 `changes.go`, `privacy.go`, and `actions.go`. The store now also owns a
 `resource_changes` persistence table with `RecordChange` and `GetRecentChanges`
 methods so change history is queryable by canonical ID and time window.
+The shared change presentation helper also owns the canonical kind, source
+type, and source adapter labels for those timeline entries, so summary cards
+and drawer history surfaces both read the same badge vocabulary instead of
+rebuilding resource-change labels locally.
 
 That frontend consumer rule now applies on the canonical decode path too:
 `frontend-modern/src/hooks/useUnifiedResources.ts` must preserve backend-owned

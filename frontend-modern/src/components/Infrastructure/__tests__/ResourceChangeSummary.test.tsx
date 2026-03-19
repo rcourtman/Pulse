@@ -44,6 +44,8 @@ describe('ResourceChangeSummary', () => {
     expect(screen.getByText('Recent changes')).toBeInTheDocument();
     expect(screen.getByText('Canonical 24h timeline')).toBeInTheDocument();
     expect(screen.getByText('Restart: running → restarting')).toBeInTheDocument();
+    expect(screen.getByText('Platform event')).toBeInTheDocument();
+    expect(screen.getByText('Docker adapter')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Open resource storage-2 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=storage-2');
