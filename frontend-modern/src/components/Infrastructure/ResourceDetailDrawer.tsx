@@ -605,6 +605,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       return true;
     });
   });
+  const hasRuntimeOperationalContext = createMemo(
+    () => kubernetesCapabilityBadges().length > 0 || relatedLinks().length > 0,
+  );
   const sourceSections = createMemo(() => {
     const data = platformData();
     if (!data) return [];
@@ -855,7 +858,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </span>
                 </div>
               </Show>
-              <Show when={props.resource.platformId}>
+              <Show when={props.resource.platformId && !hasRuntimeOperationalContext()}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Platform ID</span>
                   <span
@@ -866,35 +869,55 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </span>
                 </div>
               </Show>
-              <Show when={kubernetesCapabilityBadges().length > 0}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-muted">Platform signals</span>
-                  <div class="flex flex-wrap gap-1">
-                    <For each={kubernetesCapabilityBadges()}>
-                      {(badge) => (
-                        <span class={badge.classes} title={badge.title}>
-                          {badge.label}
-                        </span>
-                      )}
-                    </For>
+              <Show when={hasRuntimeOperationalContext()}>
+                <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
+                  <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                    Operational context
                   </div>
-                </div>
-              </Show>
-              <Show when={relatedLinks().length > 0}>
-                <div class="flex flex-col gap-1 pt-1">
-                  <span class="text-muted">Quick links</span>
-                  <div class="flex flex-wrap gap-2">
-                    <For each={relatedLinks()}>
-                      {(link) => (
-                        <a
-                          href={link.href}
-                          aria-label={link.ariaLabel}
-                          class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                  <div class="mt-2 space-y-1.5">
+                    <Show when={props.resource.platformId}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Platform ID</span>
+                        <span
+                          class="font-medium text-base-content truncate"
+                          title={props.resource.platformId}
                         >
-                          {link.compactLabel}
-                        </a>
-                      )}
-                    </For>
+                          {props.resource.platformId}
+                        </span>
+                      </div>
+                    </Show>
+                    <Show when={kubernetesCapabilityBadges().length > 0}>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-muted">Platform signals</span>
+                        <div class="flex flex-wrap gap-1">
+                          <For each={kubernetesCapabilityBadges()}>
+                            {(badge) => (
+                              <span class={badge.classes} title={badge.title}>
+                                {badge.label}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={relatedLinks().length > 0}>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-muted">Quick links</span>
+                        <div class="flex flex-wrap gap-2">
+                          <For each={relatedLinks()}>
+                            {(link) => (
+                              <a
+                                href={link.href}
+                                aria-label={link.ariaLabel}
+                                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                              >
+                                {link.compactLabel}
+                              </a>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
                   </div>
                 </div>
               </Show>

@@ -268,6 +268,10 @@ Host and node system or hardware cards now also live behind a collapsed
 `Host details` support block instead of rendering before the primary overview
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
+Within the runtime card, current-state facts now stay in the primary summary
+while platform IDs, quick links, and platform-signal badges live in a smaller
+`Operational context` block, so first read remains status-first instead of
+mixing state and supporting action surfaces together.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

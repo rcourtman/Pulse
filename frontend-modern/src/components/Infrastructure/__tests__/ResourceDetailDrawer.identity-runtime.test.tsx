@@ -121,6 +121,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2/2 healthy')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
+    expect(getByText('Operational context')).toBeInTheDocument();
     expect(getByText('Quick links')).toBeInTheDocument();
     expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
       'Workloads',
@@ -210,12 +211,15 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText, getAllByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByText, getAllByText, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('Sources')).toBeInTheDocument();
     expect(getAllByText('PMG').length).toBeGreaterThan(0);
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('API')).toBeInTheDocument();
+    expect(queryByText('Operational context')).toBeInTheDocument();
   });
 
   it('shows identity aliases and fallback message when identity metadata is sparse', () => {

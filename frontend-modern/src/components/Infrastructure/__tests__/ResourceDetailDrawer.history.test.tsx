@@ -193,6 +193,7 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.getByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
+    expect(screen.queryByText('Operational context')).toBeNull();
     expect(within(changeHistorySection).getByText('Recent activity')).toBeInTheDocument();
     expect(screen.queryByText('Events')).toBeNull();
     expect(screen.getAllByText('Timeline 3')).toHaveLength(1);
