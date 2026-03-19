@@ -344,6 +344,18 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	}
 }
 
+func TestResourceAISafeSummaryPolicySuffix(t *testing.T) {
+	if got := resourceAISafeSummaryPolicySuffix(ResourceSensitivitySensitive); got != "redacted for cloud summary" {
+		t.Fatalf("sensitive suffix = %q, want redacted for cloud summary", got)
+	}
+	if got := resourceAISafeSummaryPolicySuffix(ResourceSensitivityRestricted); got != "local-only context" {
+		t.Fatalf("restricted suffix = %q, want local-only context", got)
+	}
+	if got := resourceAISafeSummaryPolicySuffix(ResourceSensitivityInternal); got != "" {
+		t.Fatalf("internal suffix = %q, want empty", got)
+	}
+}
+
 func TestResourcePolicyRequiresGovernedSummary(t *testing.T) {
 	if ResourcePolicyRequiresGovernedSummary(nil) {
 		t.Fatal("expected nil policy to not require governed summary")

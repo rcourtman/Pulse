@@ -223,12 +223,23 @@ func buildAISafeSummary(resource Resource, sensitivity ResourceSensitivity) stri
 
 	switch sensitivity {
 	case ResourceSensitivitySensitive:
-		parts = append(parts, "redacted for cloud summary")
+		parts = append(parts, resourceAISafeSummaryPolicySuffix(sensitivity))
 	case ResourceSensitivityRestricted:
-		parts = append(parts, "local-only context")
+		parts = append(parts, resourceAISafeSummaryPolicySuffix(sensitivity))
 	}
 
 	return strings.Join(parts, "; ")
+}
+
+func resourceAISafeSummaryPolicySuffix(sensitivity ResourceSensitivity) string {
+	switch sensitivity {
+	case ResourceSensitivitySensitive:
+		return "redacted for cloud summary"
+	case ResourceSensitivityRestricted:
+		return "local-only context"
+	default:
+		return ""
+	}
 }
 
 func resourceSummaryType(resource Resource) string {

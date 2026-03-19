@@ -174,6 +174,10 @@ The export audit should also record canonical human-readable redaction labels
 from the shared policy presentation helper, so the audit trail and the
 resource-context surfaces speak the same governed redaction language instead
 of reformatting hint names locally.
+The canonical AI-safe summary builder also owns the `sensitive` and
+`restricted` suffix phrases, so downstream AI consumers should treat those
+ending fragments as shared policy output instead of inventing their own
+wording.
 The same AI runtime boundary now also consumes the canonical unified-resource
 timeline when it assembles rich resource or incident context. Recent-change
 context should come from the shared resource store first so AI prompts reflect

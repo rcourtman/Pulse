@@ -340,6 +340,24 @@ func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestAISafeSummarySuffixHelperIsOwnedByUnifiedResources(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(".", "policy_metadata.go"))
+	if err != nil {
+		t.Fatalf("failed to read policy_metadata.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func resourceAISafeSummaryPolicySuffix(sensitivity ResourceSensitivity) string",
+		"return \"redacted for cloud summary\"",
+		"return \"local-only context\"",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("policy_metadata.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestCanonicalMetadataRefreshHelperUsedByConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join(".", "policy_metadata.go"): {
