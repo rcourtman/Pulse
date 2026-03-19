@@ -685,12 +685,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   </div>
                                 </Show>
                                 <ResourceFacetSummary
-                                  capabilities={resource.capabilities}
-                                  relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
-                                  showCapabilities={false}
-                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1141,12 +1137,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   </span>
                                 </Show>
                                 <ResourceFacetSummary
-                                  capabilities={resource.capabilities}
-                                  relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
-                                  showCapabilities={false}
-                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1452,12 +1444,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   </span>
                                 </Show>
                                 <ResourceFacetSummary
-                                  capabilities={resource.capabilities}
-                                  relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
-                                  showCapabilities={false}
-                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>

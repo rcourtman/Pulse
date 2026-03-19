@@ -1,10 +1,5 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
-import type {
-  ResourceCapability,
-  ResourceChange,
-  ResourceFacetCounts,
-  ResourceRelationship,
-} from '@/types/resource';
+import type { ResourceChange, ResourceFacetCounts } from '@/types/resource';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -21,12 +16,8 @@ type FacetBadge = {
 };
 
 export interface ResourceFacetSummaryProps {
-  capabilities?: readonly ResourceCapability[] | null;
-  relationships?: readonly ResourceRelationship[] | null;
   recentChanges?: readonly ResourceChange[] | null;
   counts?: ResourceFacetCounts | null;
-  showCapabilities?: boolean;
-  showRelationships?: boolean;
   showTimeline?: boolean;
   class?: string;
   testId?: string;
@@ -39,36 +30,12 @@ const countLabel = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
 
 const buildFacetBadges = (
-  capabilities?: readonly ResourceCapability[] | null,
-  relationships?: readonly ResourceRelationship[] | null,
   recentChanges?: readonly ResourceChange[] | null,
   counts?: ResourceFacetCounts | null,
-  visibility: { showCapabilities: boolean; showRelationships: boolean; showTimeline: boolean } = {
-    showCapabilities: true,
-    showRelationships: true,
-    showTimeline: true,
-  },
+  visibility: { showTimeline: boolean } = { showTimeline: true },
 ): FacetBadge[] => {
   const badges: FacetBadge[] = [];
-  const capabilityCount = counts?.capabilities ?? capabilities?.length ?? 0;
-  const relationshipCount = counts?.relationships ?? relationships?.length ?? 0;
   const changeCount = counts?.recentChanges ?? recentChanges?.length ?? 0;
-
-  if (visibility.showCapabilities && capabilityCount > 0) {
-    badges.push({
-      label: `Capabilities ${capabilityCount}`,
-      title: countLabel(capabilityCount, 'capability'),
-      className: `${badgeBase} bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300`,
-    });
-  }
-
-  if (visibility.showRelationships && relationshipCount > 0) {
-    badges.push({
-      label: `Relationships ${relationshipCount}`,
-      title: countLabel(relationshipCount, 'relationship'),
-      className: `${badgeBase} bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300`,
-    });
-  }
 
   if (visibility.showTimeline && changeCount > 0) {
     badges.push({
@@ -133,9 +100,7 @@ const buildFacetBadges = (
 
 export const ResourceFacetSummary: Component<ResourceFacetSummaryProps> = (props) => {
   const badges = createMemo(() =>
-    buildFacetBadges(props.capabilities, props.relationships, props.recentChanges, props.counts, {
-      showCapabilities: props.showCapabilities ?? true,
-      showRelationships: props.showRelationships ?? true,
+    buildFacetBadges(props.recentChanges, props.counts, {
       showTimeline: props.showTimeline ?? true,
     }),
   );

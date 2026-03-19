@@ -97,10 +97,11 @@ consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
 The default table hot path now scopes those summary chips to timeline and
-change-provenance badges only. Generic capability and relationship counts are
-kept out of the main row budget until the underlying data is proven populated,
-which preserves the fleet-table scan path and avoids spending hot-path visual
-budget on model nouns that do not yet clear the product bar.
+change-provenance badges only. Generic capability and relationship badges are
+removed from the default row surface entirely until the underlying data is
+proven populated, which preserves the fleet-table scan path and avoids
+spending hot-path visual budget on model nouns that do not yet clear the
+product bar.
 Row summaries now also prefer canonical `facetCounts` on each resource when
 they are available, so the hot path can stay within the same budget while
 still reading totals from the shared resource contract. The drawer history

@@ -212,12 +212,13 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the graph and timeline inline.
-The shared `ResourceFacetSummary` consumer can now explicitly suppress
-capability and relationship badges, and the canonical table/detail surfaces
-use that narrower mode by default. That keeps the proven monitoring UX
-centered on factual timeline investigation while the richer facet payloads
-remain available as backend and AI-facing foundations instead of being
-presented as first-class product facts before they are fully populated.
+The shared `ResourceFacetSummary` consumer now omits capability and
+relationship badges from the default table/detail surface entirely, while the
+backend contract still preserves those facet fields for governed consumers.
+That keeps the proven monitoring UX centered on factual timeline
+investigation while the richer facet payloads remain available as backend and
+AI-facing foundations instead of being presented as first-class product facts
+before they are fully populated.
 That drawer now also uses a shared frontend relationship-presentation helper
 for graph labels and provenance wording, so the UI stays aligned with the
 canonical relationship semantics instead of keeping drawer-local token

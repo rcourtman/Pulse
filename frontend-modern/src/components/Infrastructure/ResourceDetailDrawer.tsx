@@ -878,8 +878,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <ResourceFacetSummary
                     recentChanges={resourceTimeline()}
                     counts={resourceFacetCounts()}
-                    showCapabilities={false}
-                    showRelationships={false}
                   />
                 </div>
               </Show>
@@ -1555,8 +1553,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <ResourceFacetSummary
                   recentChanges={historyTimeline()}
                   counts={historyFacetCounts()}
-                  showCapabilities={false}
-                  showRelationships={false}
                 />
               </div>
             </Show>
