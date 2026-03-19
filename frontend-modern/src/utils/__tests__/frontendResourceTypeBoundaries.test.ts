@@ -78,7 +78,6 @@ import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
-import resourcePolicyNormalizationSource from '@/utils/resourcePolicyNormalization.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
 import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
@@ -1906,9 +1905,6 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).not.toContain("normalized.replace(/_/g, ' ')");
     expect(patrolRunPresentationSource).not.toContain("normalized ? normalized.replace(/_/g, ' ') : 'unknown'");
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
-    expect(resourcePolicyNormalizationSource).toContain(
-      'normalizeResourcePolicyAISafeSummary',
-    );
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');
