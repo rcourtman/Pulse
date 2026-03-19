@@ -143,7 +143,7 @@ broader surfaced case is proven.
 
 ## Governance Mapping
 
-- Resource graph and change intelligence: retained as hidden backend
+- Resource change intelligence: retained as hidden backend
   foundations in the current L6/L13 overlap, while the surfaced lane stays
   deferred until the cross-resource investigation case is proven.
 - Policy-aware data governance: promoted from the current L6/L14 overlap.
