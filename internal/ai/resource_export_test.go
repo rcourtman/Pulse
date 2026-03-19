@@ -42,7 +42,7 @@ func TestRecordUnifiedResourceExport_UsesCanonicalPrivacyHelpers(t *testing.T) {
 			},
 			wantDecision:   unifiedresources.ExportRedacted,
 			wantReason:     "governed unified resource context exported in redacted form",
-			wantRedactions: []string{"hostname", "path"},
+			wantRedactions: []string{"Hostname", "Path"},
 		},
 	}
 

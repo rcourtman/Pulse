@@ -145,6 +145,10 @@ That export decision must come from the shared unified-resource privacy
 helpers, so sensitivity floors and redaction-triggered routing stay aligned
 with the canonical policy contract instead of being recomputed in AI-local
 code.
+The export audit should also record canonical human-readable redaction labels
+from the shared policy presentation helper, so the audit trail and the
+resource-context surfaces speak the same governed redaction language instead
+of reformatting hint names locally.
 The same AI runtime boundary now also consumes the canonical unified-resource
 timeline when it assembles rich resource or incident context. Recent-change
 context should come from the shared resource store first so AI prompts reflect

@@ -236,6 +236,24 @@ func TestResourcePolicyLabelHelpers(t *testing.T) {
 	}
 }
 
+func TestResourceRedactionLabelsFromHints(t *testing.T) {
+	got := ResourceRedactionLabelsFromHints([]ResourceRedactionHint{
+		ResourceRedactionPath,
+		ResourceRedactionHostname,
+		ResourceRedactionHostname,
+		ResourceRedactionAlias,
+	})
+	want := []string{"Hostname", "Alias", "Path"}
+	if len(got) != len(want) {
+		t.Fatalf("labels = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("labels[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestResourceDisplayName(t *testing.T) {
 	if got := ResourceDisplayName(Resource{
 		Name: "  node-a  ",

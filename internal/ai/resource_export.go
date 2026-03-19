@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -42,16 +41,7 @@ func (s *Service) recordUnifiedResourceExport(destinationModel, summary string, 
 		return
 	}
 
-	redactions := make([]string, 0, len(redactionHints))
-	for _, hint := range redactionHints {
-		redaction := strings.TrimSpace(string(hint))
-		if redaction == "" {
-			continue
-		}
-		redactions = append(redactions, redaction)
-	}
-	sort.Strings(redactions)
-	redactions = uniqueStrings(redactions)
+	redactions := unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)
 
 	sensitivityFloor := unifiedresources.ExportSensitivityFloor(sensitivityCounts)
 	decision, reason := unifiedresources.ExportDecisionForContext(sensitivityFloor, localOnlyCount, len(redactions))
@@ -121,20 +111,4 @@ func (s *Service) recordUnifiedResourceExport(destinationModel, summary string, 
 			Str("destinationModel", destinationModel).
 			Msg("failed to persist unified resource export audit")
 	}
-}
-
-func uniqueStrings(values []string) []string {
-	if len(values) <= 1 {
-		return values
-	}
-	out := make([]string, 0, len(values))
-	last := ""
-	for _, value := range values {
-		if value == "" || value == last {
-			continue
-		}
-		out = append(out, value)
-		last = value
-	}
-	return out
 }

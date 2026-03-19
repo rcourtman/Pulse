@@ -97,6 +97,18 @@ func ResourcePolicyRedactionLabels(policy *ResourcePolicy) []string {
 	return ResourcePolicyRedactionLabelsFromCounts(counts)
 }
 
+// ResourceRedactionLabelsFromHints returns canonical human-readable labels for a hint slice.
+func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string {
+	if len(hints) == 0 {
+		return nil
+	}
+	counts := make(map[ResourceRedactionHint]int, len(hints))
+	for _, hint := range hints {
+		counts[hint]++
+	}
+	return ResourcePolicyRedactionLabelsFromCounts(counts)
+}
+
 // ResourcePolicyRedactionLabelsFromCounts returns the canonical labels for the
 // redaction hints present in the provided count map.
 func ResourcePolicyRedactionLabelsFromCounts(counts map[ResourceRedactionHint]int) []string {
