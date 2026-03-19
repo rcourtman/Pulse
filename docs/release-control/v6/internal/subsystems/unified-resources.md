@@ -249,6 +249,9 @@ Inside that disclosure, learned dependency and correlation detail now sits
 behind its own reveal instead of rendering at full depth immediately, so the
 opened investigation surface still starts with compact health, change, and
 policy summaries before the user asks for relationship pattern detail.
+Change-related summary badges now belong to the `Change history` section
+instead of the `Runtime` card, so current-state facts and timeline context do
+not compete for the same ownership on first read.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the runtime card, so the top strip does not compete with

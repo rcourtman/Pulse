@@ -441,17 +441,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const historyTimeline = createMemo(
     () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
   );
-  const historyFacetCounts = createMemo(
-    () => historyFacetBundle()?.counts ?? resourceFacetCounts(),
-  );
   const hasTimelineFilters = createMemo(() =>
     Boolean(timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter()),
   );
   const resourceTimelineCount = createMemo(
     () => resourceFacetCounts()?.recentChanges ?? resourceTimeline().length,
-  );
-  const historyTimelineCount = createMemo(
-    () => historyFacetCounts()?.recentChanges ?? historyTimeline().length,
   );
   const sortedResourceTimeline = createMemo(() =>
     [...historyTimeline()].sort((left, right) => {
@@ -827,15 +821,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   >
                     {sourceSummary()!.label}
                   </span>
-                </div>
-              </Show>
-              <Show when={resourceTimelineCount() > 0}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-muted">Recent activity</span>
-                  <ResourceFacetSummary
-                    recentChanges={resourceTimeline()}
-                    counts={resourceFacetCounts()}
-                  />
                 </div>
               </Show>
               <div class="flex items-center justify-between gap-2">
@@ -1587,6 +1572,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <div class="mt-1 text-[10px] text-muted">
                 Filterable event history for this resource.
               </div>
+              <Show when={resourceTimelineCount() > 0}>
+                <div class="mt-2 flex flex-col gap-1">
+                  <span class="text-[10px] text-muted">Recent activity</span>
+                  <ResourceFacetSummary
+                    recentChanges={resourceTimeline()}
+                    counts={resourceFacetCounts()}
+                  />
+                </div>
+              </Show>
             </div>
             <div class="text-right text-[10px] text-muted">
               <div>
@@ -1685,13 +1679,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </div>
             </div>
           </Show>
-
-          <div class="mt-3 flex flex-wrap gap-2">
-            <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-              <div class="text-[10px] text-muted">Events</div>
-              <div class="text-sm font-semibold text-base-content">{historyTimelineCount()}</div>
-            </div>
-          </div>
 
           <div class="mt-3 rounded border border-border bg-surface p-3">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
