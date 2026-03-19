@@ -3,10 +3,8 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -289,103 +287,6 @@ type resourceFacetBundleResponse struct {
 	Counts        resourceFacetCountsResponse    `json:"counts"`
 }
 
-func parseResourceChangeFilters(values url.Values) (unified.ResourceChangeFilters, error) {
-	var filters unified.ResourceChangeFilters
-	if kinds, err := parseResourceChangeKinds(values["kind"]); err != nil {
-		return unified.ResourceChangeFilters{}, err
-	} else {
-		filters.Kinds = kinds
-	}
-	if sourceTypes, err := parseResourceChangeSourceTypes(values["sourceType"]); err != nil {
-		return unified.ResourceChangeFilters{}, err
-	} else {
-		filters.SourceTypes = sourceTypes
-	}
-	if sourceAdapters, err := parseResourceChangeSourceAdapters(values["sourceAdapter"]); err != nil {
-		return unified.ResourceChangeFilters{}, err
-	} else {
-		filters.SourceAdapters = sourceAdapters
-	}
-	return filters, nil
-}
-
-func parseResourceChangeKinds(values []string) ([]unified.ChangeKind, error) {
-	parsed := make([]unified.ChangeKind, 0, len(values))
-	for _, value := range values {
-		for _, token := range strings.Split(value, ",") {
-			switch normalized := strings.TrimSpace(strings.ToLower(token)); normalized {
-			case "":
-				continue
-			case string(unified.ChangeStateTransition):
-				parsed = append(parsed, unified.ChangeStateTransition)
-			case string(unified.ChangeRestart):
-				parsed = append(parsed, unified.ChangeRestart)
-			case string(unified.ChangeConfigUpdate):
-				parsed = append(parsed, unified.ChangeConfigUpdate)
-			case string(unified.ChangeAnomaly):
-				parsed = append(parsed, unified.ChangeAnomaly)
-			case string(unified.ChangeRelationship):
-				parsed = append(parsed, unified.ChangeRelationship)
-			case string(unified.ChangeCapability):
-				parsed = append(parsed, unified.ChangeCapability)
-			default:
-				return nil, fmt.Errorf("invalid kind value %q", token)
-			}
-		}
-	}
-	return parsed, nil
-}
-
-func parseResourceChangeSourceTypes(values []string) ([]unified.ChangeSourceType, error) {
-	parsed := make([]unified.ChangeSourceType, 0, len(values))
-	for _, value := range values {
-		for _, token := range strings.Split(value, ",") {
-			switch normalized := strings.TrimSpace(strings.ToLower(token)); normalized {
-			case "":
-				continue
-			case string(unified.SourcePlatformEvent):
-				parsed = append(parsed, unified.SourcePlatformEvent)
-			case string(unified.SourcePulseDiff):
-				parsed = append(parsed, unified.SourcePulseDiff)
-			case string(unified.SourceHeuristic):
-				parsed = append(parsed, unified.SourceHeuristic)
-			case string(unified.SourceUserAction):
-				parsed = append(parsed, unified.SourceUserAction)
-			case string(unified.SourceAgentAction):
-				parsed = append(parsed, unified.SourceAgentAction)
-			default:
-				return nil, fmt.Errorf("invalid sourceType value %q", token)
-			}
-		}
-	}
-	return parsed, nil
-}
-
-func parseResourceChangeSourceAdapters(values []string) ([]unified.ChangeSourceAdapter, error) {
-	parsed := make([]unified.ChangeSourceAdapter, 0, len(values))
-	for _, value := range values {
-		for _, token := range strings.Split(value, ",") {
-			normalized := strings.TrimSpace(strings.ToLower(token))
-			if normalized == "" {
-				continue
-			}
-			switch normalized {
-			case string(unified.AdapterDocker):
-				parsed = append(parsed, unified.AdapterDocker)
-			case string(unified.AdapterProxmox):
-				parsed = append(parsed, unified.AdapterProxmox)
-			case string(unified.AdapterTrueNAS):
-				parsed = append(parsed, unified.AdapterTrueNAS)
-			case string(unified.AdapterOpsAgent):
-				parsed = append(parsed, unified.AdapterOpsAgent)
-			default:
-				return nil, fmt.Errorf("invalid sourceAdapter value %q", token)
-			}
-		}
-	}
-	return parsed, nil
-}
-
 // HandleResourceRoutes dispatches nested resource routes.
 func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/facets") {
@@ -479,7 +380,7 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		}
 		limit = parsed
 	}
-	filters, err := parseResourceChangeFilters(r.URL.Query())
+	filters, err := unified.ParseResourceChangeFilters(r.URL.Query()["kind"], r.URL.Query()["sourceType"], r.URL.Query()["sourceAdapter"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -729,7 +630,7 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 		}
 		limit = parsed
 	}
-	filters, err := parseResourceChangeFilters(r.URL.Query())
+	filters, err := unified.ParseResourceChangeFilters(r.URL.Query()["kind"], r.URL.Query()["sourceType"], r.URL.Query()["sourceAdapter"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

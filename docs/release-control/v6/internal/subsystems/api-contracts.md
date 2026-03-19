@@ -171,6 +171,10 @@ chips.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the filter
 contract stays aligned with the canonical adapter set rather than silently
 falling back to an empty slice.
+The same resource-timeline contract now also owns canonical parsing for
+`kind`, `sourceType`, and `sourceAdapter` query values, so the HTTP handler
+stays thin and the change model remains the source of truth for timeline
+filter validation.
 The same API contract now also exposes the unified-resource control-plane
 history through dedicated enterprise audit reads. The action, lifecycle, and
 export history endpoints live in `internal/api/activity_audit_handlers.go` and
@@ -204,6 +208,10 @@ pages.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate graph-detail schema.
+The same `/api/resources/{id}/timeline` filter contract now also routes its
+kinds, source types, and source adapters through the shared unified-resource
+change-filter parser, so API validation stays owned by the change model rather
+than being re-parsed separately in the HTTP handler.
 The tenant-scoped unified resource API now also stays on canonical
 unified-resource seeds end to end: `internal/api/resources.go`,
 `internal/api/router_helpers.go`, and `internal/api/state_provider.go` no

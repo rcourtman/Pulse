@@ -257,6 +257,14 @@ That same decode path now delegates policy string and redaction normalization
 to `frontend-modern/src/utils/resourcePolicyNormalization.ts`, so storage and
 recovery surfaces do not reimplement sensitivity, routing, or redaction
 parsing locally.
+That same shared `internal/api/` dependency now also routes resource-timeline
+filters through the unified-resource change parser, so storage and recovery
+surfaces do not inherit a second local decoder for `kind`, `sourceType`, or
+`sourceAdapter` values.
+That same shared `internal/api/` dependency now also assumes the resource
+timeline parser is owned by unified resources, so storage and recovery
+surfaces rely on one canonical change-filter contract instead of re-decoding
+timeline query values in the handler layer.
 That same shared `internal/api/` dependency now also assumes canonical install
 payload URLs are slash-normalized before they become response fields or helper
 attachments, so recovery-adjacent links and transport surfaces cannot inherit

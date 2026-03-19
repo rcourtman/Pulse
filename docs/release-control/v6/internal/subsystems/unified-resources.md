@@ -139,6 +139,10 @@ The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
 maintaining its own "time ago" implementation.
+The same resource-change contract now also owns the canonical filter parser
+used by `/api/resources/{id}/timeline`, so `kind`, `sourceType`, and
+`sourceAdapter` validation stays with the change model instead of being
+reconstructed in the HTTP handler.
 The canonical resource policy model also owns a shared clone helper, so AI
 chat and tools consumers preserve policy metadata by copying through the same
 unified-resource contract instead of maintaining their own deep-copy logic.

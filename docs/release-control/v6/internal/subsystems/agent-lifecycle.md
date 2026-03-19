@@ -106,6 +106,11 @@ fleet-continuity ownership instead of re-deriving resource history locally.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the fleet
 lane continues to consume only the canonical adapter set rather than
 introducing a broader compatibility escape hatch.
+That same API boundary now routes the `kind`, `sourceType`, and
+`sourceAdapter` query values through the shared unified-resource change
+filter parser, so the lifecycle lane keeps the transport contract aligned
+with the canonical resource-history model instead of rebuilding filter
+normalization locally.
 The router now wires the tenant resource state provider during initial setup
 when a multi-tenant monitor is present, so tenant-scoped fleet pages do not
 trip a missing-provider 500 before the monitor has finished initializing.

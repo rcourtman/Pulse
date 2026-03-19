@@ -245,13 +245,12 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 		"HandleGetResourceCapabilities",
 		"HandleGetResourceRelationships",
 		"HandleGetResourceTimeline",
-		"parseResourceChangeFilters(r.URL.Query())",
+		"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
 		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
 		"CountRecentChangesFiltered(resourceID, since, filters)",
 		"CountRecentChangesByKindFiltered(resourceID, since, filters)",
 		"CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)",
 		"sourceAdapter",
-		"invalid sourceAdapter value",
 		"strings.HasSuffix(r.URL.Path, \"/facets\")",
 		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
 		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
@@ -260,6 +259,31 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("internal/api/resources.go must expose canonical facet read snippet %q", snippet)
+		}
+	}
+}
+
+func TestResourceChangeFilterParsingIsOwnedByUnifiedResources(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "change_filters.go"): {
+			"func ParseResourceChangeFilters(kinds, sourceTypes, sourceAdapters []string) (ResourceChangeFilters, error)",
+			"func parseResourceChangeKinds(values []string) ([]ChangeKind, error)",
+			"func parseResourceChangeSourceTypes(values []string) ([]ChangeSourceType, error)",
+			"func parseResourceChangeSourceAdapters(values []string) ([]ChangeSourceAdapter, error)",
+		},
+		filepath.Join("..", "api", "resources.go"): {
+			"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
+		},
+	}
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
 		}
 	}
 }
