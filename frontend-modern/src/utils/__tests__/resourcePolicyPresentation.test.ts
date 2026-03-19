@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  RESOURCE_POLICY_REDACTION_ORDER,
+  RESOURCE_POLICY_ROUTING_ORDER,
+  RESOURCE_POLICY_SENSITIVITY_ORDER,
   getResourcePolicyRedactionLabels,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
@@ -26,5 +29,22 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toEqual(['Hostname', 'IP Address']);
+  });
+
+  it('exports canonical policy ordering', () => {
+    expect(RESOURCE_POLICY_SENSITIVITY_ORDER).toEqual([
+      'public',
+      'internal',
+      'sensitive',
+      'restricted',
+    ]);
+    expect(RESOURCE_POLICY_ROUTING_ORDER).toEqual(['cloud-summary', 'local-first', 'local-only']);
+    expect(RESOURCE_POLICY_REDACTION_ORDER).toEqual([
+      'hostname',
+      'ip-address',
+      'platform-id',
+      'alias',
+      'path',
+    ]);
   });
 });

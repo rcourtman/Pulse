@@ -1,32 +1,13 @@
 import { For, Show, type Component } from 'solid-js';
 import type { IntelligencePolicyPostureSummary } from '@/types/aiIntelligence';
-import type {
-  ResourceRedactionHint,
-  ResourceRoutingScope,
-  ResourceSensitivity,
-} from '@/types/resource';
 import {
+  RESOURCE_POLICY_REDACTION_ORDER,
+  RESOURCE_POLICY_ROUTING_ORDER,
+  RESOURCE_POLICY_SENSITIVITY_ORDER,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
-
-const policySensitivityOrder: ResourceSensitivity[] = [
-  'public',
-  'internal',
-  'sensitive',
-  'restricted',
-];
-
-const policyRoutingOrder: ResourceRoutingScope[] = ['cloud-summary', 'local-first', 'local-only'];
-
-const policyRedactionOrder: ResourceRedactionHint[] = [
-  'hostname',
-  'ip-address',
-  'platform-id',
-  'alias',
-  'path',
-];
 
 interface ResourcePolicySummaryProps {
   posture?: IntelligencePolicyPostureSummary | null;
@@ -52,7 +33,7 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
           </div>
 
           <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <For each={policySensitivityOrder}>
+            <For each={RESOURCE_POLICY_SENSITIVITY_ORDER}>
               {(sensitivity) => {
                 const count = () => value().sensitivity_counts?.[sensitivity] ?? 0;
                 return (
@@ -65,7 +46,7 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
                 );
               }}
             </For>
-            <For each={policyRoutingOrder}>
+            <For each={RESOURCE_POLICY_ROUTING_ORDER}>
               {(scope) => {
                 const count = () => value().routing_counts?.[scope] ?? 0;
                 return (
@@ -81,10 +62,12 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
           </dl>
 
           <Show
-            when={policyRedactionOrder.some((hint) => (value().redaction_counts?.[hint] ?? 0) > 0)}
+            when={RESOURCE_POLICY_REDACTION_ORDER.some(
+              (hint) => (value().redaction_counts?.[hint] ?? 0) > 0,
+            )}
           >
             <div class="mt-2 flex flex-wrap gap-1">
-              <For each={policyRedactionOrder}>
+              <For each={RESOURCE_POLICY_REDACTION_ORDER}>
                 {(hint) => {
                   const count = value().redaction_counts?.[hint] ?? 0;
                   if (!count) return null;

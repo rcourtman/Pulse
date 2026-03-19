@@ -11,6 +11,27 @@ type PolicyBadgePresentation = {
   className: string;
 };
 
+export const RESOURCE_POLICY_SENSITIVITY_ORDER: ResourceSensitivity[] = [
+  'public',
+  'internal',
+  'sensitive',
+  'restricted',
+];
+
+export const RESOURCE_POLICY_ROUTING_ORDER: ResourceRoutingScope[] = [
+  'cloud-summary',
+  'local-first',
+  'local-only',
+];
+
+export const RESOURCE_POLICY_REDACTION_ORDER: ResourceRedactionHint[] = [
+  'hostname',
+  'ip-address',
+  'platform-id',
+  'alias',
+  'path',
+];
+
 const badgeBaseClass =
   'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
