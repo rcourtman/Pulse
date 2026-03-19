@@ -149,6 +149,9 @@ detectors only serving as fallback coverage when the canonical store is not
 available. When that patrol-local fallback is used, it must render through the
 shared memory change presentation helper so the same heading, scope prefix, and
 change-type labels are reused instead of being rebuilt ad hoc in AI-local code.
+AI-facing policy metadata must also be cloned through the shared unified-
+resource policy helper so chat and tools consumers do not maintain their own
+policy copy logic.
 That shared presentation layer also owns the elapsed-time and "ago" wording
 utilities, so the same "time ago" phrasing stays consistent across resource,
 incident, and fallback memory summaries instead of being reformatted

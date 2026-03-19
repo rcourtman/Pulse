@@ -210,6 +210,44 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	}
 }
 
+func TestCloneResourcePolicy(t *testing.T) {
+	t.Parallel()
+
+	original := &ResourcePolicy{
+		Sensitivity: ResourceSensitivityRestricted,
+		Routing: ResourceRoutingPolicy{
+			Scope:                ResourceRoutingScopeLocalOnly,
+			AllowCloudSummary:    false,
+			AllowCloudRawSignals: false,
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionHostname,
+				ResourceRedactionIPAddress,
+			},
+		},
+	}
+
+	clone := CloneResourcePolicy(original)
+	if clone == nil {
+		t.Fatal("expected clone")
+	}
+	if clone == original {
+		t.Fatal("expected clone to allocate a new policy")
+	}
+	if clone.Sensitivity != original.Sensitivity || clone.Routing.Scope != original.Routing.Scope {
+		t.Fatalf("clone does not match original: %#v vs %#v", clone, original)
+	}
+	if len(clone.Routing.Redact) != len(original.Routing.Redact) {
+		t.Fatalf("clone redactions = %#v, want %#v", clone.Routing.Redact, original.Routing.Redact)
+	}
+	clone.Routing.Redact[0] = ResourceRedactionPath
+	if original.Routing.Redact[0] != ResourceRedactionHostname {
+		t.Fatalf("expected clone to deep copy redactions, original mutated to %#v", original.Routing.Redact)
+	}
+	if CloneResourcePolicy(nil) != nil {
+		t.Fatal("expected nil clone for nil policy")
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {

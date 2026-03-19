@@ -2205,19 +2205,9 @@ func governedQueryMetadataFromResolvedResource(resource *unifiedresources.Resour
 	resourceCopy := *resource
 	unifiedresources.RefreshPolicyMetadata(&resourceCopy)
 	return GovernedResourceMetadata{
-		Policy:        cloneGovernedQueryPolicy(resourceCopy.Policy),
+		Policy:        unifiedresources.CloneResourcePolicy(resourceCopy.Policy),
 		AISafeSummary: strings.TrimSpace(resourceCopy.AISafeSummary),
 	}
-}
-
-func cloneGovernedQueryPolicy(policy *unifiedresources.ResourcePolicy) *unifiedresources.ResourcePolicy {
-	if policy == nil {
-		return nil
-	}
-
-	copyPolicy := *policy
-	copyPolicy.Routing.Redact = append([]unifiedresources.ResourceRedactionHint(nil), policy.Routing.Redact...)
-	return &copyPolicy
 }
 
 // executeQuery routes to the appropriate query handler based on action

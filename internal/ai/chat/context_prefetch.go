@@ -901,10 +901,7 @@ func cloneMentionPolicy(resource *unifiedresources.Resource) *unifiedresources.R
 	if resource == nil || resource.Policy == nil {
 		return nil
 	}
-
-	policy := *resource.Policy
-	policy.Routing.Redact = append([]unifiedresources.ResourceRedactionHint(nil), resource.Policy.Routing.Redact...)
-	return &policy
+	return unifiedresources.CloneResourcePolicy(resource.Policy)
 }
 
 func mentionAISafeSummary(resource *unifiedresources.Resource) string {

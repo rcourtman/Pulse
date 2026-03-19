@@ -131,6 +131,9 @@ The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
 maintaining its own "time ago" implementation.
+The canonical resource policy model also owns a shared clone helper, so AI
+chat and tools consumers preserve policy metadata by copying through the same
+unified-resource contract instead of maintaining their own deep-copy logic.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

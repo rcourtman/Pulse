@@ -462,6 +462,39 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	}
 }
 
+func TestCloneMentionPolicyUsesSharedHelper(t *testing.T) {
+	resource := &unifiedresources.Resource{
+		Policy: &unifiedresources.ResourcePolicy{
+			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
+				Redact: []unifiedresources.ResourceRedactionHint{
+					unifiedresources.ResourceRedactionHostname,
+					unifiedresources.ResourceRedactionIPAddress,
+				},
+			},
+		},
+	}
+
+	clone := cloneMentionPolicy(resource)
+	if clone == nil {
+		t.Fatal("expected clone")
+	}
+	if clone == resource.Policy {
+		t.Fatal("expected clone to allocate a new policy")
+	}
+	clone.Routing.Redact[0] = unifiedresources.ResourceRedactionAlias
+	if resource.Policy.Routing.Redact[0] != unifiedresources.ResourceRedactionHostname {
+		t.Fatalf("expected clone to deep copy redactions, original mutated to %#v", resource.Policy.Routing.Redact)
+	}
+	if clone.Sensitivity != resource.Policy.Sensitivity {
+		t.Fatalf("clone sensitivity = %q, want %q", clone.Sensitivity, resource.Policy.Sensitivity)
+	}
+	if clone.Routing.Scope != unifiedresources.ResourceRoutingScopeLocalOnly {
+		t.Fatalf("clone routing scope = %q, want %q", clone.Routing.Scope, unifiedresources.ResourceRoutingScopeLocalOnly)
+	}
+}
+
 func TestCanonicalMentionResourceType(t *testing.T) {
 	testCases := []struct {
 		in   string

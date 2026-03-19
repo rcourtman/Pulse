@@ -293,6 +293,29 @@ func TestResourcePolicyPresentationUsesCanonicalLabels(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
+	requiredFiles := []string{
+		filepath.Join("..", "ai", "chat", "context_prefetch.go"),
+		filepath.Join("..", "ai", "tools", "tools_query.go"),
+		filepath.Join(".", "policy_metadata.go"),
+	}
+	requiredSnippets := map[string]string{
+		filepath.Join("..", "ai", "chat", "context_prefetch.go"): "unifiedresources.CloneResourcePolicy(resource.Policy)",
+		filepath.Join("..", "ai", "tools", "tools_query.go"):     "unifiedresources.CloneResourcePolicy(resourceCopy.Policy)",
+		filepath.Join(".", "policy_metadata.go"):                 "func CloneResourcePolicy(policy *ResourcePolicy) *ResourcePolicy",
+	}
+	for _, name := range requiredFiles {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		snippet := requiredSnippets[name]
+		if !strings.Contains(string(data), snippet) {
+			t.Fatalf("%s must contain %q", name, snippet)
+		}
+	}
+}
+
 func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("store.go"))
 	if err != nil {

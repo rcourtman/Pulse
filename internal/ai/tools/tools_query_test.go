@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestQueryResponsesUseCanonicalEmptyCollections(t *testing.T) {
@@ -767,6 +768,51 @@ func TestExecuteQuerySurfacesIncludeGovernedMetadata(t *testing.T) {
 	}
 	if len(topology.Proxmox.Nodes[0].VMs) != 1 || topology.Proxmox.Nodes[0].VMs[0].Policy == nil {
 		t.Fatalf("expected governed VM metadata in topology response, got %+v", topology.Proxmox.Nodes[0].VMs)
+	}
+}
+
+func TestGovernedQueryMetadataFromResolvedResourceClonesPolicy(t *testing.T) {
+	resource := &unifiedresources.Resource{
+		ID:   "vm-1",
+		Name: "customer-payments",
+		Tags: []string{"customer-data"},
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"payments.internal"},
+			IPAddresses: []string{"10.0.0.44"},
+		},
+		Canonical: &unifiedresources.CanonicalIdentity{
+			PlatformID: "payments.internal",
+			PrimaryID:  "vm:100",
+			Aliases:    []string{"vm-100"},
+		},
+	}
+
+	metadata := governedQueryMetadataFromResolvedResource(resource)
+	if metadata.Policy == nil {
+		t.Fatal("expected policy metadata")
+	}
+	if metadata.Policy == resource.Policy {
+		t.Fatal("expected metadata policy to be a clone")
+	}
+	if len(metadata.Policy.Routing.Redact) == 0 {
+		t.Fatal("expected redactions on governed metadata policy")
+	}
+	baselinePolicy := unifiedresources.CloneResourcePolicy(metadata.Policy)
+	metadata.Policy.Routing.Redact[0] = unifiedresources.ResourceRedactionAlias
+	if baselinePolicy.Routing.Redact[0] != unifiedresources.ResourceRedactionHostname {
+		t.Fatalf("expected clone to deep copy redactions, baseline mutated to %#v", baselinePolicy.Routing.Redact)
+	}
+	if metadata.AISafeSummary == "" {
+		t.Fatal("expected ai safe summary")
+	}
+	if metadata.AISafeSummary == resource.Name {
+		t.Fatalf("expected safe summary to avoid raw resource name: %q", metadata.AISafeSummary)
+	}
+	if metadata.Policy.Sensitivity != unifiedresources.ResourceSensitivityRestricted {
+		t.Fatalf("expected restricted sensitivity, got %q", metadata.Policy.Sensitivity)
+	}
+	if metadata.Policy.Routing.Scope != unifiedresources.ResourceRoutingScopeLocalOnly {
+		t.Fatalf("expected local-only routing, got %q", metadata.Policy.Routing.Scope)
 	}
 }
 

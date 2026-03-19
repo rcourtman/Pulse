@@ -50,6 +50,16 @@ type ResourceRoutingPolicy struct {
 	Redact               []ResourceRedactionHint `json:"redact,omitempty"`
 }
 
+// CloneResourcePolicy returns a deep copy of the canonical resource policy.
+func CloneResourcePolicy(policy *ResourcePolicy) *ResourcePolicy {
+	if policy == nil {
+		return nil
+	}
+	copyPolicy := *policy
+	copyPolicy.Routing.Redact = append([]ResourceRedactionHint(nil), policy.Routing.Redact...)
+	return &copyPolicy
+}
+
 // RefreshPolicyMetadata derives canonical sensitivity, routing, and AI-safe summary data.
 func RefreshPolicyMetadata(resource *Resource) {
 	if resource == nil {
