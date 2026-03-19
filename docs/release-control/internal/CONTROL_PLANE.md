@@ -10,11 +10,11 @@ model that active and future release profiles reuse.
 1. Keep one canonical governance system across releases.
 2. Keep one canonical values layer for agent behavior instead of pushing
    detailed operating burden into prompts.
-2. Separate evergreen control-plane rules from release-specific profile state.
-3. Make the active release profile explicit and machine-resolvable.
-4. Make the active engineering target explicit so the objective can change
+3. Separate evergreen control-plane rules from release-specific profile state.
+4. Make the active release profile explicit and machine-resolvable.
+5. Make the active engineering target explicit so the objective can change
    without replacing the control plane itself.
-5. Prevent future releases from cloning a new `v7`, `v8`, or `v9` governance
+6. Prevent future releases from cloning a new `v7`, `v8`, or `v9` governance
    stack when the system itself should remain continuous.
 
 ## Control-Plane Rules
