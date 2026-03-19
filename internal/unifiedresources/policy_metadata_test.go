@@ -332,6 +332,20 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	if ResourcePolicyUsesAISafeSummary("resource summary safe for remote AI use", nil) {
 		t.Fatal("did not expect nil policy to use AI-safe summary")
 	}
+
+	pathOnlyPolicy := &ResourcePolicy{
+		Sensitivity: ResourceSensitivitySensitive,
+		Routing: ResourceRoutingPolicy{
+			Scope:  ResourceRoutingScopeLocalFirst,
+			Redact: []ResourceRedactionHint{ResourceRedactionPath},
+		},
+	}
+	if !ResourcePolicyUsesAISafeSummary("storage resource; status online; redacted for cloud summary", pathOnlyPolicy) {
+		t.Fatal("expected AI-safe summary to be used for path-redacted policy")
+	}
+	if got := ResourcePolicyLabel(" backup-storage ", " storage resource; status online; redacted for cloud summary ", pathOnlyPolicy); got != "storage resource; status online; redacted for cloud summary" {
+		t.Fatalf("ResourcePolicyLabel() for path-redacted policy = %q, want governed summary", got)
+	}
 }
 
 func TestResourceAISafeSummaryPolicySuffix(t *testing.T) {

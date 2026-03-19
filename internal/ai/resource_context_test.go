@@ -373,6 +373,49 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 	}
 }
 
+func TestBuildUnifiedResourceContextUsesAISafeSummaryForPathRedactedResources(t *testing.T) {
+	storage := unifiedresources.Resource{
+		ID:     "storage-1",
+		Name:   "backup-volume",
+		Type:   unifiedresources.ResourceTypeStorage,
+		Status: unifiedresources.StatusOnline,
+		Storage: &unifiedresources.StorageMeta{
+			Path: "/mnt/pve/backups",
+		},
+	}
+	unifiedresources.RefreshCanonicalMetadata(&storage)
+
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeStorage: 1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusOnline: 1,
+		},
+	}
+
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{storage}
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{storage}
+		},
+	}
+
+	s := &Service{unifiedResourceProvider: mockURP}
+	got := s.buildUnifiedResourceContext()
+
+	if !strings.Contains(got, "storage resource; status online; redacted for cloud summary") {
+		t.Fatalf("expected AI-safe summary for path-redacted resource, got %q", got)
+	}
+	if strings.Contains(got, "backup-volume") {
+		t.Fatalf("expected path-redacted resource name to be hidden, got %q", got)
+	}
+}
+
 func TestResourcePolicyHelpersShareAISafeSummaryDecision(t *testing.T) {
 	policy := &unifiedresources.ResourcePolicy{
 		Sensitivity: unifiedresources.ResourceSensitivitySensitive,

@@ -262,11 +262,12 @@ helpers. Chat consumers now call `CloneResourcePolicy(...)` directly from the
 shared unified-resource contract, and their governed labels now flow through
 shared `ResourcePolicyLabel(...)` and `ResourcePolicyRedactedValue(...)`
 helpers instead of through AI-local presentation shims, so policy copying and
-policy-bound labels both stay centralized in the resource model.
-If a governed resource reaches those callers without an AI-safe summary, the
-shared label helper now falls back to the canonical redacted label instead of
-the raw resource name, so missing summary data does not leak governed identity
-through a local fallback path.
+policy-bound labels both stay centralized in the resource model. When a
+policy requires governed handling, the shared label helper now prefers the
+canonical AI-safe summary for every redacted or local-only resource and only
+falls back to the canonical redacted label if that governed summary is
+missing, so path-only and IP-only redactions do not regress to raw identity
+leakage or over-redaction.
 The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary value stays
 aligned with the same policy-aware contract that governs sensitivity and

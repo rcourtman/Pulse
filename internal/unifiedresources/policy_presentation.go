@@ -318,14 +318,7 @@ func ResourcePolicyUsesAISafeSummary(summary string, policy *ResourcePolicy) boo
 	if strings.TrimSpace(summary) == "" || policy == nil {
 		return false
 	}
-	if policy.Routing.Scope == ResourceRoutingScopeLocalOnly {
-		return true
-	}
-	return ResourcePolicyRedacts(policy,
-		ResourceRedactionAlias,
-		ResourceRedactionHostname,
-		ResourceRedactionPlatformID,
-	)
+	return ResourcePolicyRequiresGovernedSummary(policy)
 }
 
 // ResourcePolicyRequiresGovernedSummary reports whether the policy requires a
