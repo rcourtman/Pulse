@@ -203,7 +203,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (%s)%s%s [%s]",
-						unifiedResourceContextLabel(node), agentStatus, clusterInfo, metrics, node.Status))
+						unifiedresources.ResourcePolicyLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
 				}
 			}
 
@@ -224,7 +224,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
-						unifiedResourceContextLabel(host), ips, metrics, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), ips, metrics, host.Status))
 				}
 			}
 
@@ -241,7 +241,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s [%s]",
-						unifiedResourceContextLabel(host), metrics, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), metrics, host.Status))
 				}
 			}
 
@@ -264,7 +264,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (%d/%d containers running) [%s]",
-						unifiedResourceContextLabel(host), runningCount, containerCount, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), runningCount, containerCount, host.Status))
 				}
 			}
 
@@ -283,7 +283,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 						clusterInfo = fmt.Sprintf(" [cluster: %s]", name)
 					}
 					sections = append(sections, fmt.Sprintf("- **%s** (Cluster%s, %d nodes) [%s]",
-						unifiedResourceContextLabel(cluster), clusterInfo, nodeCount, cluster.Status))
+						unifiedresources.ResourcePolicyLabel(cluster.Name, cluster.AISafeSummary, cluster.Policy), clusterInfo, nodeCount, cluster.Status))
 				}
 
 				for _, node := range k8sNodes {
@@ -309,7 +309,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (Node, %s)%s%s [%s]",
-						unifiedResourceContextLabel(node), agentStatus, clusterInfo, metrics, node.Status))
+						unifiedresources.ResourcePolicyLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
 				}
 			}
 		}
@@ -341,7 +341,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			for _, parentID := range parentIDs {
 				parentName := "unresolved parent resource"
 				if parent, ok := infraMap[parentID]; ok {
-					parentName = unifiedResourceContextLabel(parent)
+					parentName = unifiedresources.ResourcePolicyLabel(parent.Name, parent.AISafeSummary, parent.Policy)
 				}
 
 				sections = append(sections, fmt.Sprintf("\n**On %s:**", parentName))
@@ -369,7 +369,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					ips := unifiedResourceContextIPSummary(workload, 2)
 
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s%s)%s [%s]",
-						unifiedResourceContextLabel(workload), typeLabel, vmidInfo, ips, workload.Status))
+						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), typeLabel, vmidInfo, ips, workload.Status))
 				}
 			}
 
@@ -381,7 +381,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				for _, workload := range noParent {
 					ips := unifiedResourceContextIPSummary(workload, 2)
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s)%s [%s]",
-						unifiedResourceContextLabel(workload), workload.Type, ips, workload.Status))
+						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), workload.Type, ips, workload.Status))
 				}
 			}
 		}
@@ -397,7 +397,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				displayName := strings.TrimSpace(alert.ResourceName)
 				if resourceID := strings.TrimSpace(alert.ResourceID); resourceID != "" {
 					if resource, ok := byResourceID[resourceID]; ok {
-						displayName = unifiedResourceContextLabel(resource)
+						displayName = unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy)
 					} else if displayName == "" {
 						displayName = resourceID
 					}
@@ -481,7 +481,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					cpuPercent = unifiedMetricPercent(resource.Metrics.CPU)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, unifiedResourceContextLabel(resource), resource.Type, cpuPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, cpuPercent))
 			}
 		}
 
@@ -494,7 +494,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					memPercent = unifiedMetricPercent(resource.Metrics.Memory)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, unifiedResourceContextLabel(resource), resource.Type, memPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, memPercent))
 			}
 		}
 
@@ -507,7 +507,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					diskPercent = unifiedMetricPercent(resource.Metrics.Disk)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, unifiedResourceContextLabel(resource), resource.Type, diskPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, diskPercent))
 			}
 		}
 
@@ -553,13 +553,6 @@ func unifiedResourceDisplayName(r unifiedresources.Resource) string {
 	return strings.TrimSpace(r.ID)
 }
 
-func unifiedResourceContextLabel(r unifiedresources.Resource) string {
-	if unifiedresources.ResourcePolicyUsesAISafeSummary(r.AISafeSummary, r.Policy) {
-		return strings.TrimSpace(r.AISafeSummary)
-	}
-	return unifiedResourceDisplayName(r)
-}
-
 func unifiedResourceContextClusterName(r unifiedresources.Resource) string {
 	name := ""
 	switch {
@@ -573,10 +566,11 @@ func unifiedResourceContextClusterName(r unifiedresources.Resource) string {
 	if name == "" {
 		return ""
 	}
-	if unifiedresources.ResourcePolicyUsesAISafeSummary(r.AISafeSummary, r.Policy) {
-		return "redacted by policy"
-	}
-	return name
+	return unifiedresources.ResourcePolicyRedactedValue(name, r.Policy,
+		unifiedresources.ResourceRedactionAlias,
+		unifiedresources.ResourceRedactionHostname,
+		unifiedresources.ResourceRedactionPlatformID,
+	)
 }
 
 func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) string {
@@ -585,7 +579,7 @@ func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) str
 		return ""
 	}
 	if unifiedresources.ResourcePolicyRedacts(r.Policy, unifiedresources.ResourceRedactionIPAddress) {
-		return " - IPs redacted by policy"
+		return " - IPs " + unifiedresources.ResourcePolicyRedactedLabel
 	}
 	if limit > 0 && len(ips) > limit {
 		ips = ips[:limit]

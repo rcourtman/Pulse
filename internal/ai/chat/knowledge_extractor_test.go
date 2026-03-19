@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -971,7 +972,7 @@ func TestExtractFacts_QueryConfig_UsesGovernedSummary(t *testing.T) {
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 2)
 	assert.Contains(t, facts[0].Value, "system container resource; status online; linked to parent resource; redacted for cloud summary")
-	assert.Contains(t, facts[0].Value, "hostname=redacted by policy")
+	assert.Contains(t, facts[0].Value, "hostname="+unifiedresources.ResourcePolicyRedactedLabel)
 	assert.NotContains(t, facts[0].Value, "postfix.internal")
 	assert.NotContains(t, facts[0].Value, "postfix-server")
 }

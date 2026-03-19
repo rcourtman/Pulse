@@ -188,8 +188,10 @@ redaction predicates used by AI chat knowledge extraction and resource
 context rendering, so governed labels and summary selection stay rooted in
 the unified resource policy model instead of being duplicated in chat-local
 helpers. Chat consumers now call `CloneResourcePolicy(...)` directly from the
-shared unified-resource contract, so policy copying stays centralized in the
-resource model rather than hidden behind an AI-local shim.
+shared unified-resource contract, and their governed labels now flow through
+shared `ResourcePolicyLabel(...)` and `ResourcePolicyRedactedValue(...)`
+helpers instead of through AI-local presentation shims, so policy copying and
+policy-bound labels both stay centralized in the resource model.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

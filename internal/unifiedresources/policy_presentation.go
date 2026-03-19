@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+// ResourcePolicyRedactedLabel is the canonical human-readable label used when
+// governed policy hides a value.
+const ResourcePolicyRedactedLabel = "redacted by policy"
+
 // ResourceSensitivityOrder captures the canonical presentation order for
 // sensitivity counts across policy surfaces.
 var ResourceSensitivityOrder = []ResourceSensitivity{
@@ -199,6 +203,27 @@ func ResourcePolicyRedacts(policy *ResourcePolicy, hints ...ResourceRedactionHin
 		}
 	}
 	return false
+}
+
+// ResourcePolicyLabel returns the governed display label for a resource.
+func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) string {
+	if ResourcePolicyUsesAISafeSummary(aiSafeSummary, policy) {
+		return strings.TrimSpace(aiSafeSummary)
+	}
+	return strings.TrimSpace(name)
+}
+
+// ResourcePolicyRedactedValue returns the canonical redacted label when the
+// provided policy hides the supplied value.
+func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if ResourcePolicyRedacts(policy, hints...) {
+		return ResourcePolicyRedactedLabel
+	}
+	return value
 }
 
 // ResourcePolicyUsesAISafeSummary reports whether the canonical aiSafeSummary

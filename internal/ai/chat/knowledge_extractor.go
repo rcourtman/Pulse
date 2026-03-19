@@ -80,28 +80,6 @@ func extractQueryFacts(input map[string]interface{}, resultText string) []FactEn
 	}
 }
 
-func governedQueryFactLabel(name, aiSafeSummary string, policy *unifiedresources.ResourcePolicy) string {
-	if unifiedresources.ResourcePolicyUsesAISafeSummary(aiSafeSummary, policy) {
-		return strings.TrimSpace(aiSafeSummary)
-	}
-	return strings.TrimSpace(name)
-}
-
-func governedQueryFactNodeLabel(name string, policy *unifiedresources.ResourcePolicy) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ""
-	}
-	if unifiedresources.ResourcePolicyRedacts(policy,
-		unifiedresources.ResourceRedactionAlias,
-		unifiedresources.ResourceRedactionHostname,
-		unifiedresources.ResourceRedactionPlatformID,
-	) {
-		return "redacted by policy"
-	}
-	return name
-}
-
 func extractQueryGetFacts(input map[string]interface{}, resultText string) []FactEntry {
 	// Tool results are direct JSON (NewJSONResult), no ToolResponse wrapper.
 	// ResourceResponse has nested CPU/Memory structs.
@@ -171,7 +149,7 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if resource.Status != "" {
 		parts = append(parts, resource.Status)
 	}
-	if label := governedQueryFactLabel(resource.Name, resource.AISafeSummary, resource.Policy); label != "" {
+	if label := unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy); label != "" {
 		parts = append(parts, label)
 	}
 	if resource.CPU.Percent > 0 {
@@ -239,7 +217,7 @@ func extractQuerySearchFacts(input map[string]interface{}, resultText string) []
 		limit = len(resp.Matches)
 	}
 	for _, m := range resp.Matches[:limit] {
-		entry := governedQueryFactLabel(m.Name, m.AISafeSummary, m.Policy)
+		entry := unifiedresources.ResourcePolicyLabel(m.Name, m.AISafeSummary, m.Policy)
 		if entry == "" {
 			entry = m.Name
 		}
@@ -291,9 +269,13 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 		if status == "" {
 			status = "unknown"
 		}
-		label := governedQueryFactLabel(n.Name, n.AISafeSummary, n.Policy)
+		label := unifiedresources.ResourcePolicyLabel(n.Name, n.AISafeSummary, n.Policy)
 		if label == "" {
-			label = governedQueryFactNodeLabel(n.Name, n.Policy)
+			label = unifiedresources.ResourcePolicyRedactedValue(n.Name, n.Policy,
+				unifiedresources.ResourceRedactionAlias,
+				unifiedresources.ResourceRedactionHostname,
+				unifiedresources.ResourceRedactionPlatformID,
+			)
 		}
 		nodeDescs = append(nodeDescs, fmt.Sprintf("%s=%s", label, status))
 	}
@@ -512,14 +494,11 @@ func extractQueryConfigFacts(input map[string]interface{}, resultText string) []
 		parts = append(parts, strings.TrimSpace(resp.AISafeSummary))
 	}
 	if resp.Hostname != "" {
-		hostname := resp.Hostname
-		if unifiedresources.ResourcePolicyRedacts(resp.Policy,
+		hostname := unifiedresources.ResourcePolicyRedactedValue(resp.Hostname, resp.Policy,
 			unifiedresources.ResourceRedactionHostname,
 			unifiedresources.ResourceRedactionAlias,
 			unifiedresources.ResourceRedactionPlatformID,
-		) {
-			hostname = "redacted by policy"
-		}
+		)
 		parts = append(parts, "hostname="+hostname)
 	}
 	if resp.OSType != "" {

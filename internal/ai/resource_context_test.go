@@ -250,7 +250,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("On unresolved parent resource")
 	assertContains("Other workloads")
 	assertContains("virtual machine resource; status online; linked to parent resource; redacted for cloud summary")
-	assertContains("IPs redacted by policy")
+	assertContains("IPs " + unifiedresources.ResourcePolicyRedactedLabel)
 	assertContains("Resources with Active Alerts")
 	assertContains("CPU high")
 	assertContains("Infrastructure Summary")
@@ -361,7 +361,7 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 	if !strings.Contains(got, "virtual machine resource; status online; redacted for cloud summary") {
 		t.Fatalf("expected AI-safe summary for sensitive resource, got %q", got)
 	}
-	if !strings.Contains(got, "IPs redacted by policy") {
+	if !strings.Contains(got, "IPs "+unifiedresources.ResourcePolicyRedactedLabel) {
 		t.Fatalf("expected sensitive IP redaction marker, got %q", got)
 	}
 	if strings.Contains(got, "finance-db") {

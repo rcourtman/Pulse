@@ -210,6 +210,32 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyLabelHelpers(t *testing.T) {
+	policy := &ResourcePolicy{
+		Sensitivity: ResourceSensitivityRestricted,
+		Routing: ResourceRoutingPolicy{
+			Scope: ResourceRoutingScopeLocalOnly,
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionHostname,
+				ResourceRedactionAlias,
+			},
+		},
+	}
+
+	if got := ResourcePolicyLabel(" fallback-name ", " governed summary ", policy); got != "governed summary" {
+		t.Fatalf("ResourcePolicyLabel() = %q, want governed summary", got)
+	}
+	if got := ResourcePolicyLabel(" fallback-name ", " governed summary ", nil); got != "fallback-name" {
+		t.Fatalf("ResourcePolicyLabel() with nil policy = %q, want fallback-name", got)
+	}
+	if got := ResourcePolicyRedactedValue(" host-01 ", policy, ResourceRedactionHostname, ResourceRedactionAlias); got != ResourcePolicyRedactedLabel {
+		t.Fatalf("ResourcePolicyRedactedValue() = %q, want %q", got, ResourcePolicyRedactedLabel)
+	}
+	if got := ResourcePolicyRedactedValue(" host-01 ", nil, ResourceRedactionHostname); got != "host-01" {
+		t.Fatalf("ResourcePolicyRedactedValue() with nil policy = %q, want host-01", got)
+	}
+}
+
 func TestCloneResourcePolicy(t *testing.T) {
 	t.Parallel()
 

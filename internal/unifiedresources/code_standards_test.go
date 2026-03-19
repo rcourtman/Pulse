@@ -316,6 +316,35 @@ func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join("..", "ai", "chat", "knowledge_extractor.go"): {
+			"unifiedresources.ResourcePolicyLabel(",
+			"unifiedresources.ResourcePolicyRedactedValue(",
+		},
+		filepath.Join("..", "ai", "resource_context.go"): {
+			"unifiedresources.ResourcePolicyLabel(",
+			"unifiedresources.ResourcePolicyRedactedValue(",
+		},
+		filepath.Join(".", "policy_presentation.go"): {
+			"func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) string",
+			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
+			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
+		},
+	}
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("store.go"))
 	if err != nil {
