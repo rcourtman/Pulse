@@ -287,57 +287,8 @@ func proxmoxLifecycleChanged(before, after Resource) bool {
 	return !reflect.DeepEqual(beforeProxmox, afterProxmox)
 }
 
-func resourceStateSummary(resource Resource) string {
-	status := resourceStatusString(resource.Status)
-	if status == "" {
-		status = "unknown"
-	}
-	return status
-}
-
-func resourceRestartSummary(resource Resource) string {
-	parts := []string{resourceStateSummary(resource)}
-	if resource.Docker != nil {
-		parts = append(parts, fmt.Sprintf("docker.restartCount=%d", resource.Docker.RestartCount))
-		if resource.Docker.UptimeSeconds > 0 {
-			parts = append(parts, fmt.Sprintf("docker.uptimeSeconds=%d", resource.Docker.UptimeSeconds))
-		}
-	}
-	if resource.Kubernetes != nil {
-		parts = append(parts, fmt.Sprintf("kubernetes.restarts=%d", resource.Kubernetes.Restarts))
-		if resource.Kubernetes.UptimeSeconds > 0 {
-			parts = append(parts, fmt.Sprintf("kubernetes.uptimeSeconds=%d", resource.Kubernetes.UptimeSeconds))
-		}
-	}
-	return strings.Join(parts, "|")
-}
-
 func resourceIncidentChanged(before, after Resource) bool {
 	return resourceIncidentFingerprint(before.Incidents) != resourceIncidentFingerprint(after.Incidents)
-}
-
-func resourceIncidentSummary(resource Resource) string {
-	return resourceIncidentSummaryFromSlice(resource.Incidents)
-}
-
-func resourceIncidentSummaryFromSlice(incidents []ResourceIncident) string {
-	if len(incidents) == 0 {
-		return "none"
-	}
-
-	labels := make([]string, 0, len(incidents))
-	for _, incident := range incidents {
-		labels = append(labels, resourceIncidentLabel(incident))
-	}
-
-	sort.Strings(labels)
-	if len(labels) == 1 {
-		return labels[0]
-	}
-	if len(labels) <= 3 {
-		return strings.Join(labels, ", ")
-	}
-	return fmt.Sprintf("%d incidents", len(labels))
 }
 
 func resourceIncidentFingerprint(incidents []ResourceIncident) string {
@@ -360,20 +311,6 @@ func resourceIncidentFingerprint(incidents []ResourceIncident) string {
 	return strings.Join(labels, "||")
 }
 
-func resourceIncidentLabel(incident ResourceIncident) string {
-	code := strings.TrimSpace(incident.Code)
-	if code == "" {
-		code = "incident"
-	}
-	if severity := strings.TrimSpace(string(incident.Severity)); severity != "" {
-		code += fmt.Sprintf("[%s]", severity)
-	}
-	if summary := strings.TrimSpace(incident.Summary); summary != "" {
-		code += fmt.Sprintf(":%s", summary)
-	}
-	return code
-}
-
 func resourceRelationSummary(resource Resource) string {
 	if summary := resourceRelationshipSummary(resource.Relationships); summary != "" {
 		return summary
@@ -386,10 +323,6 @@ func resourceRelationSummary(resource Resource) string {
 		parentID = "root"
 	}
 	return parentID
-}
-
-func resourceConfigSummary(resource Resource) string {
-	return fmt.Sprintf("%s|%s|%s|%s", resource.Type, resource.Technology, resource.Name, resource.CustomURL)
 }
 
 func resourceStatusString(status ResourceStatus) string {

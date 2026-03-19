@@ -97,6 +97,10 @@ kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
 semantic mapping lives with the resource model instead of being duplicated in
 lane-local prompt helpers.
+That same presenter now also owns the resource state, restart, incident, and
+config summary fragments used by change emission, so the human-readable
+timeline values stay canonical even before they are wrapped into a full change
+summary.
 That same change-presentation helper now also owns the one-line
 `FormatResourceChangeSummary` used by AI runtime recent-change sections and
 Patrol seed context, so the change wording itself stays canonical before any

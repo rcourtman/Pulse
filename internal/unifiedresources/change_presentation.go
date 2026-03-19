@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -73,6 +74,73 @@ func DescribeChange(change ResourceChange) ChangePresentation {
 	return presentation
 }
 
+func resourceStateSummary(resource Resource) string {
+	status := resourceStatusString(resource.Status)
+	if status == "" {
+		status = "unknown"
+	}
+	return status
+}
+
+func resourceRestartSummary(resource Resource) string {
+	parts := []string{resourceStateSummary(resource)}
+	if resource.Docker != nil {
+		parts = append(parts, fmt.Sprintf("docker.restartCount=%d", resource.Docker.RestartCount))
+		if resource.Docker.UptimeSeconds > 0 {
+			parts = append(parts, fmt.Sprintf("docker.uptimeSeconds=%d", resource.Docker.UptimeSeconds))
+		}
+	}
+	if resource.Kubernetes != nil {
+		parts = append(parts, fmt.Sprintf("kubernetes.restarts=%d", resource.Kubernetes.Restarts))
+		if resource.Kubernetes.UptimeSeconds > 0 {
+			parts = append(parts, fmt.Sprintf("kubernetes.uptimeSeconds=%d", resource.Kubernetes.UptimeSeconds))
+		}
+	}
+	return strings.Join(parts, "|")
+}
+
+func resourceIncidentSummary(resource Resource) string {
+	return resourceIncidentSummaryFromSlice(resource.Incidents)
+}
+
+func resourceIncidentSummaryFromSlice(incidents []ResourceIncident) string {
+	if len(incidents) == 0 {
+		return "none"
+	}
+
+	labels := make([]string, 0, len(incidents))
+	for _, incident := range incidents {
+		labels = append(labels, resourceIncidentLabel(incident))
+	}
+
+	sort.Strings(labels)
+	if len(labels) == 1 {
+		return labels[0]
+	}
+	if len(labels) <= 3 {
+		return strings.Join(labels, ", ")
+	}
+	return fmt.Sprintf("%d incidents", len(labels))
+}
+
+func resourceIncidentLabel(incident ResourceIncident) string {
+	code := strings.TrimSpace(incident.Code)
+	if code == "" {
+		code = "incident"
+	}
+	if severity := strings.TrimSpace(string(incident.Severity)); severity != "" {
+		code += fmt.Sprintf("[%s]", severity)
+	}
+	if summary := strings.TrimSpace(incident.Summary); summary != "" {
+		code += fmt.Sprintf(":%s", summary)
+	}
+	return code
+}
+
+func resourceConfigSummary(resource Resource) string {
+	return fmt.Sprintf("%s|%s|%s|%s", resource.Type, resource.Technology, resource.Name, resource.CustomURL)
+}
+
 // FormatResourceChangeSummary returns the canonical one-line human-readable
 // summary used by AI prompt sections and recent-change feeds.
 func FormatResourceChangeSummary(change ResourceChange) string {
@@ -115,6 +183,48 @@ func FormatResourceChangeSummary(change ResourceChange) string {
 		ago = utils.FormatDurationAgo(time.Since(change.ObservedAt).Truncate(time.Minute))
 	}
 	return summary + fmt.Sprintf(" (%s)", ago)
+}
+
+func resourceRelationshipSummary(relationships []ResourceRelationship) string {
+	if len(relationships) == 0 {
+		return ""
+	}
+
+	summaries := make([]string, 0, len(relationships))
+	for _, relationship := range relationships {
+		sourceID := CanonicalResourceID(relationship.SourceID)
+		targetID := CanonicalResourceID(relationship.TargetID)
+		if sourceID == "" && targetID == "" {
+			continue
+		}
+
+		label := sourceID
+		if label == "" {
+			label = "?"
+		}
+		label += "->"
+		if targetID == "" {
+			label += "?"
+		} else {
+			label += targetID
+		}
+		if relationship.Type != "" {
+			label += fmt.Sprintf("[%s]", RelationshipTypeLabel(relationship.Type))
+		}
+		summaries = append(summaries, label)
+	}
+
+	if len(summaries) == 0 {
+		return ""
+	}
+	sort.Strings(summaries)
+	if len(summaries) == 1 {
+		return summaries[0]
+	}
+	if len(summaries) <= 3 {
+		return strings.Join(summaries, ", ")
+	}
+	return fmt.Sprintf("%d relationships", len(summaries))
 }
 
 // FormatResourceRecentChangesContext returns the canonical markdown section

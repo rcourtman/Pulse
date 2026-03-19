@@ -169,6 +169,9 @@ For relationship changes, the `from` and `to` fields now summarize the actual
 edge(s) rather than only the parent pointer, so the API contract keeps the
 graph transition legible even before the frontend expands the related-resource
 chips.
+The same relationship and change presenters now also own the state, restart,
+incident, and config summary fragments that feed those timeline values, so the
+API surface preserves the canonical wording before the frontend renders it.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the filter
 contract stays aligned with the canonical adapter set rather than silently
 falling back to an empty slice.

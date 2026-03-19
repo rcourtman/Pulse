@@ -165,6 +165,10 @@ The canonical relationship-summary helper also feeds resource change records,
 so AI timeline prompts read the same relationship wording and edge labels that
 the unified-resource contract emits instead of building another summary shape
 in AI-local code.
+The same shared change presenter also owns the resource state, restart,
+incident, and config summary fragments used by change emission, so the AI
+timeline prompt can reuse the canonical from/to wording before it formats the
+markdown section itself.
 The Patrol-backed correlation endpoint, resource-intelligence payload, and
 seed prompt correlations now flow through the shared AI intelligence facade
 first, so the detector remains an implementation detail behind one canonical

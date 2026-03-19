@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func TestChangeKindLabel(t *testing.T) {
@@ -61,6 +63,36 @@ func TestDescribeChange(t *testing.T) {
 	}
 	if len(presentation.RelatedResources) != 2 || presentation.RelatedResources[0] != "related-1" || presentation.RelatedResources[1] != "related-2" {
 		t.Fatalf("unexpected related resources: %#v", presentation.RelatedResources)
+	}
+}
+
+func TestResourceChangeSummaries(t *testing.T) {
+	if got := resourceStateSummary(Resource{}); got != "unknown" {
+		t.Fatalf("resourceStateSummary(empty) = %q, want unknown", got)
+	}
+
+	if got := resourceRestartSummary(Resource{Status: StatusWarning}); got != "warning" {
+		t.Fatalf("resourceRestartSummary(status) = %q, want warning", got)
+	}
+
+	incidentSummary := resourceIncidentSummary(Resource{Incidents: []ResourceIncident{
+		{Code: "alpha", Severity: storagehealth.RiskCritical},
+		{Code: "beta", Summary: "needs attention"},
+	}})
+	if incidentSummary != "alpha[critical], beta:needs attention" {
+		t.Fatalf("resourceIncidentSummary() = %q, want canonical labels", incidentSummary)
+	}
+
+	if got := resourceIncidentSummaryFromSlice(nil); got != "none" {
+		t.Fatalf("resourceIncidentSummaryFromSlice(nil) = %q, want none", got)
+	}
+
+	if got := resourceIncidentLabel(ResourceIncident{}); got != "incident" {
+		t.Fatalf("resourceIncidentLabel(empty) = %q, want incident", got)
+	}
+
+	if got := resourceConfigSummary(Resource{Type: "vm", Technology: "proxmox", Name: "vm-1", CustomURL: "https://example"}); got != "vm|proxmox|vm-1|https://example" {
+		t.Fatalf("resourceConfigSummary() = %q, want canonical config summary", got)
 	}
 }
 
