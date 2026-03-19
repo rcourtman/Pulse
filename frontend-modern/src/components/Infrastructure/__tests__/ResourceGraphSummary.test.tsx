@@ -25,7 +25,6 @@ describe('ResourceGraphSummary', () => {
           },
         ]}
         summaryText="5 total"
-        buildResourceHref={(resourceId) => `/infrastructure?resource=${resourceId}`}
       />
     ));
 
@@ -63,7 +62,6 @@ describe('ResourceGraphSummary', () => {
             description: 'Disk pressure often precedes restarts',
           },
         ]}
-        buildResourceHref={(resourceId) => `/infrastructure?resource=${resourceId}`}
         showLastSeen
       />
     ));

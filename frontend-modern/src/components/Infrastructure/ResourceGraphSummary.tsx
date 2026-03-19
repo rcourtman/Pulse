@@ -1,6 +1,7 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
+import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
   formatResourceCorrelationEndpoint,
   formatResourceCorrelationHeadline,
@@ -14,7 +15,7 @@ interface ResourceGraphSummaryProps {
   dependents?: string[] | null;
   title?: string;
   summaryText?: string;
-  buildResourceHref: (resourceId: string) => string | null | undefined;
+  buildResourceHref?: (resourceId: string) => string | null | undefined;
   showLastSeen?: boolean;
   class?: string;
   maxCorrelations?: number;
@@ -40,6 +41,7 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
   const correlations = createMemo(() => sortResourceCorrelations(props.correlations ?? []));
   const dependencies = () => props.dependencies ?? [];
   const dependents = () => props.dependents ?? [];
+  const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
   const maxCorrelations = () => props.maxCorrelations ?? 3;
   const hasContent = () =>
     dependencies().length > 0 || dependents().length > 0 || correlations().length > 0;
@@ -76,7 +78,7 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
             <div class="mt-1 flex flex-wrap gap-1">
               <For each={dependencies().slice(0, maxCorrelations())}>
                 {(dependency) => {
-                  const href = props.buildResourceHref(dependency);
+                  const href = buildResourceHref(dependency);
                   return href ? (
                     <a
                       class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
@@ -102,7 +104,7 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
             <div class="mt-1 flex flex-wrap gap-1">
               <For each={dependents().slice(0, maxCorrelations())}>
                 {(dependent) => {
-                  const href = props.buildResourceHref(dependent);
+                  const href = buildResourceHref(dependent);
                   return href ? (
                     <a
                       class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
@@ -128,8 +130,8 @@ export const ResourceGraphSummary: Component<ResourceGraphSummaryProps> = (props
             <div class="mt-1 space-y-1.5">
               <For each={correlations().slice(0, maxCorrelations())}>
                 {(correlation) => {
-                  const sourceHref = props.buildResourceHref(correlation.source_id);
-                  const targetHref = props.buildResourceHref(correlation.target_id);
+                  const sourceHref = buildResourceHref(correlation.source_id);
+                  const targetHref = buildResourceHref(correlation.target_id);
                   const headline = formatResourceCorrelationHeadline(correlation);
                   const summary = formatResourceCorrelationSummary(correlation);
                   const sourceLabel = formatResourceCorrelationEndpoint(correlation, 'source');

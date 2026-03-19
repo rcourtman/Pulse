@@ -37,7 +37,6 @@ describe('ResourceChangeSummary', () => {
             relatedResources: ['vm-200', 'vm-300'],
           },
         ]}
-        buildResourceHref={(resourceId) => `/infrastructure?resource=${resourceId}`}
         maxChanges={1}
       />
     ));
@@ -62,7 +61,6 @@ describe('ResourceChangeSummary', () => {
         title="Latest canonical change"
         emptyText="No canonical changes were recorded."
         changes={[]}
-        buildResourceHref={(resourceId) => `/infrastructure?resource=${resourceId}`}
       />
     ));
 

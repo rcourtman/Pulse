@@ -98,9 +98,6 @@ import {
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
-import {
-  buildInfrastructureResourceHref,
-} from '@/routing/resourceLinks';
 type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
@@ -1279,7 +1276,6 @@ export function AIIntelligence() {
                     title="Recent changes"
                     subtitle="Canonical 24h timeline"
                     changes={summary().recent_changes}
-                    buildResourceHref={buildInfrastructureResourceHref}
                   />
 
                   <div class="space-y-4">
@@ -1336,7 +1332,6 @@ export function AIIntelligence() {
                       title="Learned correlations"
                       correlations={aiIntelligenceStore.correlations?.correlations ?? []}
                       summaryText={`${correlationTotal()} total`}
-                      buildResourceHref={buildInfrastructureResourceHref}
                     />
                     </Show>
 

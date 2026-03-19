@@ -855,7 +855,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     class="space-y-0"
                     title="Latest canonical change"
                     changes={intel().recent_changes}
-                    buildResourceHref={buildInfrastructureResourceHref}
                     maxChanges={1}
                     compact
                   />
@@ -865,7 +864,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     dependencies={resourceDependencies()}
                     dependents={resourceDependents()}
                     correlations={resourceCorrelations()}
-                    buildResourceHref={buildInfrastructureResourceHref}
                     showLastSeen
                   />
                 </div>

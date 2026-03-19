@@ -1,6 +1,7 @@
 import { type Component, For, Show, createMemo } from 'solid-js';
 import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import {
   formatResourceChangeHeadline,
   formatResourceChangeKind,
@@ -11,7 +12,7 @@ interface ResourceChangeSummaryProps {
   title: string;
   subtitle?: string;
   emptyText?: string;
-  buildResourceHref: (resourceId: string) => string | null | undefined;
+  buildResourceHref?: (resourceId: string) => string | null | undefined;
   maxChanges?: number;
   compact?: boolean;
   class?: string;
@@ -34,6 +35,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const visibleChanges = createMemo(() => sortedChanges().slice(0, maxChanges()));
   const hasChanges = () => visibleChanges().length > 0;
   const compact = () => props.compact ?? false;
+  const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
   const itemPadding = () => (compact() ? 'p-2.5' : 'p-3');
   const itemText = () => (compact() ? 'text-[11px]' : 'text-xs');
   const headlineText = () => (compact() ? 'text-[11px]' : 'text-sm');
@@ -41,7 +43,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const gapSize = () => (compact() ? 'gap-2' : 'gap-3');
 
   const renderRelatedResource = (resourceId: string) => {
-    const href = props.buildResourceHref(resourceId);
+    const href = buildResourceHref(resourceId);
     const className =
       'rounded-full border border-border-subtle bg-surface px-2 py-0.5 font-medium text-muted transition-colors hover:border-border hover:text-base-content';
 
@@ -81,7 +83,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
           <For each={visibleChanges()}>
             {(change) => {
               const headline = formatResourceChangeHeadline(change);
-              const resourceHref = props.buildResourceHref(change.resourceId);
+              const resourceHref = buildResourceHref(change.resourceId);
               const relatedResources = (change.relatedResources ?? []).slice(0, 3);
 
               return (

@@ -117,11 +117,13 @@ That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches
 inline.
-Resource-only Infrastructure links on the Patrol page, resource drawer, and
-problem-resource dashboard panels now resolve through the shared
-`frontend-modern/src/routing/resourceLinks.ts` helper, so canonical resource
-href construction stays in the routing boundary instead of being rebuilt as
-local wrappers in each surface.
+The shared
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and
+`frontend-modern/src/components/Infrastructure/ResourceGraphSummary.tsx`
+cards now own the canonical Infrastructure resource-link default, so the
+Patrol page and resource drawer inherit resource-filter href construction
+through the shared summary cards instead of rebuilding local wrappers in each
+surface.
 The Patrol intelligence page and resource drawer now also share the canonical
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 card, so the data-governance posture counts stay rendered from one governed
