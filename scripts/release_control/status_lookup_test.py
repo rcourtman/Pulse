@@ -17,7 +17,7 @@ REPORT = {
     "coverage_gaps": [
         {
             "id": "resource-graph-and-change-timeline",
-            "summary": "Resource graph and timeline are still under-modeled.",
+            "summary": "Resource change and timeline are still under-modeled.",
             "status": "planned",
             "proposed_resolution": "lane-split",
             "coverage_impact": 15,
