@@ -214,6 +214,19 @@ func ResourcePolicyGovernedSummaryFooter() string {
 	return "Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy."
 }
 
+// FormatResourcePolicyGovernedSummary returns the canonical governed mention
+// block for AI chat prefetch and related policy-aware summaries.
+func FormatResourcePolicyGovernedSummary(summary string, policy *ResourcePolicy) string {
+	lines := make([]string, 0, 4)
+	lines = append(lines, "## Governed resource")
+	if summary = strings.TrimSpace(summary); summary != "" {
+		lines = append(lines, summary)
+	}
+	lines = append(lines, ResourcePolicySummaryLines(policy)...)
+	lines = append(lines, ResourcePolicyGovernedSummaryFooter())
+	return strings.Join(lines, "\n") + "\n\n"
+}
+
 // ResourcePolicyRedacts reports whether the policy redacts any of the provided hints.
 func ResourcePolicyRedacts(policy *ResourcePolicy, hints ...ResourceRedactionHint) bool {
 	if policy == nil {

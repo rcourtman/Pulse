@@ -125,6 +125,9 @@ the same routing and redaction rules as the rendered summary itself.
 The governed mention preamble and footer text now also come from the shared
 policy presenter, so the warning copy around the block does not drift from the
 canonical policy wording.
+The complete governed mention block is also assembled by the shared policy
+presenter, so chat prefetch only decides when to render it and never rebuilds
+the summary layout locally.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

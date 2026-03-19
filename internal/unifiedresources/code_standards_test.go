@@ -363,8 +363,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 		},
 		filepath.Join("..", "ai", "chat", "context_prefetch.go"): {
 			"unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)",
-			"unifiedresources.ResourcePolicyGovernedSummaryPreamble()",
-			"unifiedresources.ResourcePolicyGovernedSummaryFooter()",
+			"unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy)",
 		},
 		filepath.Join("..", "ai", "resource_export.go"): {
 			"unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)",
@@ -386,6 +385,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"func ResourcePolicyRequiresGovernedSummary(policy *ResourcePolicy) bool",
 			"func ResourcePolicyGovernedSummaryPreamble() string",
 			"func ResourcePolicyGovernedSummaryFooter() string",
+			"func FormatResourcePolicyGovernedSummary(summary string, policy *ResourcePolicy) string",
 			"func ResourceDisplayName(resource Resource) string",
 		},
 	}

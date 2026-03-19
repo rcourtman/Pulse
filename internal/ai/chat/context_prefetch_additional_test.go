@@ -495,6 +495,49 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	}
 }
 
+func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	summary := prefetcher.formatContextSummary([]ResourceMention{{
+		Name:          "customer-db",
+		ResourceType:  "system-container",
+		ResourceID:    "201",
+		TargetID:      "node1",
+		AISafeSummary: "system container resource; status online; local-only context",
+		Policy: &unifiedresources.ResourcePolicy{
+			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope:                unifiedresources.ResourceRoutingScopeLocalOnly,
+				AllowCloudSummary:    false,
+				AllowCloudRawSignals: false,
+				Redact: []unifiedresources.ResourceRedactionHint{
+					unifiedresources.ResourceRedactionAlias,
+					unifiedresources.ResourceRedactionHostname,
+				},
+			},
+		},
+	}}, nil)
+
+	want := unifiedresources.FormatResourcePolicyGovernedSummary(
+		"system container resource; status online; local-only context",
+		&unifiedresources.ResourcePolicy{
+			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope:                unifiedresources.ResourceRoutingScopeLocalOnly,
+				AllowCloudSummary:    false,
+				AllowCloudRawSignals: false,
+				Redact: []unifiedresources.ResourceRedactionHint{
+					unifiedresources.ResourceRedactionAlias,
+					unifiedresources.ResourceRedactionHostname,
+				},
+			},
+		},
+	)
+	if !strings.Contains(summary, want) {
+		t.Fatalf("expected governed summary block to match shared formatter, got %q", summary)
+	}
+}
+
 func TestCanonicalMentionResourceType(t *testing.T) {
 	testCases := []struct {
 		in   string

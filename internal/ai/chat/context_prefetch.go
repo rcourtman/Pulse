@@ -744,7 +744,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 	for _, mention := range mentions {
 		if mention.requiresGovernedSummary() {
-			formatGovernedMentionSummary(&sb, mention)
+			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
 			continue
 		}
 
@@ -907,20 +907,6 @@ func mentionAISafeSummary(resource *unifiedresources.Resource) string {
 
 func (m ResourceMention) requiresGovernedSummary() bool {
 	return unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)
-}
-
-func formatGovernedMentionSummary(sb *strings.Builder, mention ResourceMention) {
-	sb.WriteString("## Governed resource\n")
-	if summary := strings.TrimSpace(mention.AISafeSummary); summary != "" {
-		sb.WriteString(summary)
-		sb.WriteString("\n")
-	}
-	for _, line := range unifiedresources.ResourcePolicySummaryLines(mention.Policy) {
-		sb.WriteString(line)
-		sb.WriteString("\n")
-	}
-	sb.WriteString(unifiedresources.ResourcePolicyGovernedSummaryFooter())
-	sb.WriteString("\n\n")
 }
 
 // extractWords extracts words (3+ characters) from a message for matching
