@@ -100,7 +100,7 @@ describe('UnifiedResourceTable governance presentation', () => {
   });
 
   it('surfaces resource facet counts in the resource row', () => {
-    const { getByText } = render(() => (
+    const { getByText, queryByText } = render(() => (
       <UnifiedResourceTable
         resources={[resource]}
         expandedResourceId={null}
@@ -109,8 +109,8 @@ describe('UnifiedResourceTable governance presentation', () => {
       />
     ));
 
-    expect(getByText('Capabilities 2')).toBeInTheDocument();
-    expect(getByText('Relationships 1')).toBeInTheDocument();
     expect(getByText('Timeline 1')).toBeInTheDocument();
+    expect(queryByText('Capabilities 2')).toBeNull();
+    expect(queryByText('Relationships 1')).toBeNull();
   });
 });

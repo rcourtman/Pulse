@@ -25,6 +25,9 @@ export interface ResourceFacetSummaryProps {
   relationships?: readonly ResourceRelationship[] | null;
   recentChanges?: readonly ResourceChange[] | null;
   counts?: ResourceFacetCounts | null;
+  showCapabilities?: boolean;
+  showRelationships?: boolean;
+  showTimeline?: boolean;
   class?: string;
   testId?: string;
 }
@@ -40,13 +43,18 @@ const buildFacetBadges = (
   relationships?: readonly ResourceRelationship[] | null,
   recentChanges?: readonly ResourceChange[] | null,
   counts?: ResourceFacetCounts | null,
+  visibility: { showCapabilities: boolean; showRelationships: boolean; showTimeline: boolean } = {
+    showCapabilities: true,
+    showRelationships: true,
+    showTimeline: true,
+  },
 ): FacetBadge[] => {
   const badges: FacetBadge[] = [];
   const capabilityCount = counts?.capabilities ?? capabilities?.length ?? 0;
   const relationshipCount = counts?.relationships ?? relationships?.length ?? 0;
   const changeCount = counts?.recentChanges ?? recentChanges?.length ?? 0;
 
-  if (capabilityCount > 0) {
+  if (visibility.showCapabilities && capabilityCount > 0) {
     badges.push({
       label: `Capabilities ${capabilityCount}`,
       title: countLabel(capabilityCount, 'capability'),
@@ -54,7 +62,7 @@ const buildFacetBadges = (
     });
   }
 
-  if (relationshipCount > 0) {
+  if (visibility.showRelationships && relationshipCount > 0) {
     badges.push({
       label: `Relationships ${relationshipCount}`,
       title: countLabel(relationshipCount, 'relationship'),
@@ -62,7 +70,7 @@ const buildFacetBadges = (
     });
   }
 
-  if (changeCount > 0) {
+  if (visibility.showTimeline && changeCount > 0) {
     badges.push({
       label: `Timeline ${changeCount}`,
       title: countLabel(changeCount, 'timeline event'),
@@ -70,7 +78,7 @@ const buildFacetBadges = (
     });
   }
 
-  const kindCounts = counts?.recentChangeKinds;
+  const kindCounts = visibility.showTimeline ? counts?.recentChangeKinds : null;
   if (kindCounts) {
     for (const kind of RESOURCE_CHANGE_KIND_ORDER) {
       const count = kindCounts[kind];
@@ -84,7 +92,7 @@ const buildFacetBadges = (
     }
   }
 
-  const sourceTypeCounts = counts?.recentChangeSourceTypes;
+  const sourceTypeCounts = visibility.showTimeline ? counts?.recentChangeSourceTypes : null;
   if (sourceTypeCounts) {
     for (const sourceType of RESOURCE_CHANGE_SOURCE_TYPE_ORDER) {
       const count = sourceTypeCounts[sourceType];
@@ -102,7 +110,7 @@ const buildFacetBadges = (
     }
   }
 
-  const sourceAdapterCounts = counts?.recentChangeSourceAdapters;
+  const sourceAdapterCounts = visibility.showTimeline ? counts?.recentChangeSourceAdapters : null;
   if (sourceAdapterCounts) {
     for (const sourceAdapter of RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER) {
       const count = sourceAdapterCounts[sourceAdapter];
@@ -125,7 +133,11 @@ const buildFacetBadges = (
 
 export const ResourceFacetSummary: Component<ResourceFacetSummaryProps> = (props) => {
   const badges = createMemo(() =>
-    buildFacetBadges(props.capabilities, props.relationships, props.recentChanges, props.counts),
+    buildFacetBadges(props.capabilities, props.relationships, props.recentChanges, props.counts, {
+      showCapabilities: props.showCapabilities ?? true,
+      showRelationships: props.showRelationships ?? true,
+      showTimeline: props.showTimeline ?? true,
+    }),
   );
 
   return (

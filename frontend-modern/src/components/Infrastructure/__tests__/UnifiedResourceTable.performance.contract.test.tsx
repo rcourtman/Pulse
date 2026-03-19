@@ -126,8 +126,8 @@ describe('UnifiedResourceTable performance contract', () => {
       });
     });
 
-    it('renders the shared facet summary component for canonical resource counts', async () => {
-      const { getByText } = render(() => (
+    it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {
+      const { getByText, queryByText } = render(() => (
         <ResourceFacetSummary
           capabilities={[
             {
@@ -168,11 +168,11 @@ describe('UnifiedResourceTable performance contract', () => {
             },
           }}
           recentChanges={[]}
+          showCapabilities={false}
+          showRelationships={false}
         />
       ));
 
-      expect(getByText('Capabilities 1')).toBeInTheDocument();
-      expect(getByText('Relationships 1')).toBeInTheDocument();
       expect(getByText('Timeline 3')).toBeInTheDocument();
       expect(getByText('Restart 2')).toBeInTheDocument();
       expect(getByText('Config update 1')).toBeInTheDocument();
@@ -181,6 +181,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Pulse diff 2')).toBeInTheDocument();
       expect(getByText('Docker adapter 2')).toBeInTheDocument();
       expect(getByText('Proxmox adapter 1')).toBeInTheDocument();
+      expect(queryByText('Capabilities 1')).toBeNull();
+      expect(queryByText('Relationships 1')).toBeNull();
     });
 
     it('formats sensor labels through the shared resource detail mapper helper', () => {
@@ -233,17 +235,17 @@ describe('UnifiedResourceTable performance contract', () => {
                   config_update: 1,
                   metric_anomaly: 1,
                 },
-              recentChangeSourceTypes: {
-                platform_event: 1,
-                pulse_diff: 2,
+                recentChangeSourceTypes: {
+                  platform_event: 1,
+                  pulse_diff: 2,
+                },
+                recentChangeSourceAdapters: {
+                  docker_adapter: 2,
+                  proxmox_adapter: 1,
+                },
               },
-              recentChangeSourceAdapters: {
-                docker_adapter: 2,
-                proxmox_adapter: 1,
-              },
-            },
-            recentChanges: [],
-          }
+              recentChanges: [],
+            }
           : {},
       );
       const { container, getByText } = render(() => (
@@ -259,8 +261,6 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(container.querySelector('table')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(getByText('Capabilities 1')).toBeInTheDocument();
-        expect(getByText('Relationships 1')).toBeInTheDocument();
         expect(getByText('Timeline 3')).toBeInTheDocument();
         expect(getByText('Config update 1')).toBeInTheDocument();
       });
@@ -382,18 +382,18 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(pbsRow).toBeTruthy();
       if (pbsRow) {
         const row = within(pbsRow);
-        expect(row.getByText('Capabilities 1')).toBeInTheDocument();
-        expect(row.getByText('Relationships 1')).toBeInTheDocument();
         expect(row.getByText('Timeline 1')).toBeInTheDocument();
+        expect(row.queryByText('Capabilities 1')).toBeNull();
+        expect(row.queryByText('Relationships 1')).toBeNull();
       }
 
       const pmgRow = getByText('pmg-service').closest('tr');
       expect(pmgRow).toBeTruthy();
       if (pmgRow) {
         const row = within(pmgRow);
-        expect(row.getByText('Capabilities 1')).toBeInTheDocument();
-        expect(row.getByText('Relationships 1')).toBeInTheDocument();
         expect(row.getByText('Timeline 1')).toBeInTheDocument();
+        expect(row.queryByText('Capabilities 1')).toBeNull();
+        expect(row.queryByText('Relationships 1')).toBeNull();
       }
     });
   });

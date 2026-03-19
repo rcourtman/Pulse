@@ -272,9 +272,9 @@ describe('UnifiedResourceTable workloads links', () => {
       const row = within(pbsRow);
       expect(row.getByText('2')).toBeInTheDocument();
       expect(row.getByText('1')).toBeInTheDocument();
-      expect(row.getByText('Capabilities 1')).toBeInTheDocument();
-      expect(row.getByText('Relationships 1')).toBeInTheDocument();
       expect(row.getByText('Timeline 1')).toBeInTheDocument();
+      expect(row.queryByText('Capabilities 1')).toBeNull();
+      expect(row.queryByText('Relationships 1')).toBeNull();
     }
 
     const pmgRow = getByText('pmg-main').closest('tr');
@@ -283,9 +283,9 @@ describe('UnifiedResourceTable workloads links', () => {
       const row = within(pmgRow);
       expect(row.getByText('519')).toBeInTheDocument();
       expect(row.getByText('1')).toBeInTheDocument();
-      expect(row.getByText('Capabilities 1')).toBeInTheDocument();
-      expect(row.getByText('Relationships 1')).toBeInTheDocument();
       expect(row.getByText('Timeline 1')).toBeInTheDocument();
+      expect(row.queryByText('Capabilities 1')).toBeNull();
+      expect(row.queryByText('Relationships 1')).toBeNull();
     }
 
     const pbsLink = getByRole('link', { name: /open pbs backups/i });

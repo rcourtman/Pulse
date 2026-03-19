@@ -1,4 +1,12 @@
-import { Show, Suspense, createMemo, For, createSignal, createEffect, createResource } from 'solid-js';
+import {
+  Show,
+  Suspense,
+  createMemo,
+  For,
+  createSignal,
+  createEffect,
+  createResource,
+} from 'solid-js';
 import type { Component } from 'solid-js';
 import type {
   Resource,
@@ -52,12 +60,10 @@ import {
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
-import { describeResourceRelationship } from '@/utils/resourceRelationshipPresentation';
 import { ResourceGraphSummary } from './ResourceGraphSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
-import { getResourceApprovalLevelLabel } from '@/utils/approvalPresentation';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -67,7 +73,7 @@ import {
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
-import { formatIdentifierLabel, humanizeToken } from '@/utils/textPresentation';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
@@ -109,14 +115,16 @@ const timelineSourceTypeOptions: Array<{ label: string; value: ResourceChangeSou
   })),
 ];
 
-const timelineSourceAdapterOptions: Array<{ label: string; value: ResourceChangeSourceAdapter | '' }> =
-  [
-    { label: 'All adapters', value: '' },
-    ...RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER.map((sourceAdapter) => ({
-      label: getResourceChangeSourceAdapterPresentation(sourceAdapter).label,
-      value: sourceAdapter,
-    })),
-  ];
+const timelineSourceAdapterOptions: Array<{
+  label: string;
+  value: ResourceChangeSourceAdapter | '';
+}> = [
+  { label: 'All adapters', value: '' },
+  ...RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER.map((sourceAdapter) => ({
+    label: getResourceChangeSourceAdapterPresentation(sourceAdapter).label,
+    value: sourceAdapter,
+  })),
+];
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab =
@@ -149,7 +157,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const policyBadges = createMemo(() => getResourcePolicyBadges(props.resource.policy));
-  const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(props.resource.policy));
+  const policyRedactions = createMemo(() =>
+    getResourcePolicyRedactionLabels(props.resource.policy),
+  );
   const policyRoutingDecisions = createMemo(() =>
     getResourcePolicyRoutingDecisionSummaries(props.resource.policy),
   );
@@ -260,10 +270,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
   const resourceFacetId = createMemo(() => props.resource.id.trim());
   const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
-  const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] =
-    createSignal<ResourceChangeSourceType | ''>('');
-  const [timelineSourceAdapterFilter, setTimelineSourceAdapterFilter] =
-    createSignal<ResourceChangeSourceAdapter | ''>('');
+  const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] = createSignal<
+    ResourceChangeSourceType | ''
+  >('');
+  const [timelineSourceAdapterFilter, setTimelineSourceAdapterFilter] = createSignal<
+    ResourceChangeSourceAdapter | ''
+  >('');
   const resourceFacetRequest = createMemo(() => {
     const id = resourceFacetId();
     return id ? { id } : null;
@@ -381,12 +393,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const nonZero = all.filter((entry) => entry.value > 0);
     return nonZero.length > 0 ? nonZero : all;
   });
-  const resourceCapabilities = createMemo(
-    () => resourceFacets()?.capabilities ?? props.resource.capabilities ?? [],
-  );
-  const resourceRelationships = createMemo(
-    () => resourceFacets()?.relationships ?? props.resource.relationships ?? [],
-  );
   const resourceTimeline = createMemo(
     () => resourceFacets()?.recentChanges ?? props.resource.recentChanges ?? [],
   );
@@ -394,44 +400,36 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     () => resourceFacets()?.counts ?? props.resource.facetCounts ?? null,
   );
   const historyFacetBundle = createMemo(() =>
-    timelineFacetRequest() ? timelineFacets() ?? resourceFacets() : resourceFacets(),
+    timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
   );
-  const historyCapabilities = createMemo(
-    () => historyFacetBundle()?.capabilities ?? resourceCapabilities(),
+  const historyTimeline = createMemo(
+    () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
   );
-  const historyRelationships = createMemo(
-    () => historyFacetBundle()?.relationships ?? resourceRelationships(),
-  );
-  const historyTimeline = createMemo(() => historyFacetBundle()?.recentChanges ?? resourceTimeline());
   const historyFacetCounts = createMemo(
     () => historyFacetBundle()?.counts ?? resourceFacetCounts(),
   );
-  const hasTimelineFilters = createMemo(
-    () =>
-      Boolean(
-        timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter(),
-      ),
-  );
-  const resourceCapabilityCount = createMemo(
-    () => resourceFacetCounts()?.capabilities ?? resourceCapabilities().length,
-  );
-  const resourceRelationshipCount = createMemo(
-    () => resourceFacetCounts()?.relationships ?? resourceRelationships().length,
+  const hasTimelineFilters = createMemo(() =>
+    Boolean(timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter()),
   );
   const resourceTimelineCount = createMemo(
     () => resourceFacetCounts()?.recentChanges ?? resourceTimeline().length,
+  );
+  const historyTimelineCount = createMemo(
+    () => historyFacetCounts()?.recentChanges ?? historyTimeline().length,
   );
   const sortedResourceTimeline = createMemo(() =>
     [...historyTimeline()].sort((left, right) => {
       const leftTime = Date.parse(left.observedAt || '');
       const rightTime = Date.parse(right.observedAt || '');
-      return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+      return (
+        (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
+      );
     }),
   );
   const facetBundleError = createMemo(() => {
     const error = timelineFacetRequest() ? timelineFacets.error : resourceFacets.error;
     if (!error) return '';
-    return (error as Error)?.message || 'Failed to load resource facets';
+    return (error as Error)?.message || 'Failed to load resource history';
   });
   const refetchHistoryFacets = () => {
     if (timelineFacetRequest()) {
@@ -784,7 +782,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               )}
             </Show>
           </div>
-          </Show>
+        </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
           <Show when={resourceIntelligence()}>
@@ -874,20 +872,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </span>
                 </div>
               </Show>
-              <Show
-                when={
-                  resourceCapabilities().length > 0 ||
-                  resourceRelationships().length > 0 ||
-                  resourceTimeline().length > 0
-                }
-              >
+              <Show when={resourceTimelineCount() > 0}>
                 <div class="flex flex-col gap-1">
-                  <span class="text-muted">Facets</span>
+                  <span class="text-muted">Timeline</span>
                   <ResourceFacetSummary
-                    capabilities={resourceCapabilities()}
-                    relationships={resourceRelationships()}
                     recentChanges={resourceTimeline()}
                     counts={resourceFacetCounts()}
+                    showCapabilities={false}
+                    showRelationships={false}
                   />
                 </div>
               </Show>
@@ -1113,7 +1105,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <span
                         class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
                       >
-                        {formatIdentifierLabel(dockerHostCommand()?.status, { fallback: 'unknown' })}
+                        {formatIdentifierLabel(dockerHostCommand()?.status, {
+                          fallback: 'unknown',
+                        })}
                       </span>
                     </div>
                     <Show when={dockerHostCommand()?.message}>
@@ -1455,16 +1449,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <div>
                   {timelineFacetRequest()
                     ? timelineFacets.loading
-                      ? 'Refreshing filtered facet data...'
-                      : 'Filtered facet data loaded'
+                      ? 'Refreshing filtered history...'
+                      : 'Filtered history loaded'
                     : resourceFacets.loading
-                      ? 'Refreshing facet data...'
-                      : 'Facet data loaded'}
+                      ? 'Refreshing history...'
+                      : 'History loaded'}
                 </div>
                 <Show when={hasTimelineFilters()}>
-                  <div class="mt-0.5 text-blue-700 dark:text-blue-300">
-                    History filters active
-                  </div>
+                  <div class="mt-0.5 text-blue-700 dark:text-blue-300">History filters active</div>
                 </Show>
               </div>
             </div>
@@ -1476,7 +1468,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
                   value={timelineKindFilter()}
                   onChange={(event) =>
-                    setTimelineKindFilter((event.currentTarget.value || '') as ResourceChangeKind | '')
+                    setTimelineKindFilter(
+                      (event.currentTarget.value || '') as ResourceChangeKind | '',
+                    )
                   }
                 >
                   <For each={timelineKindOptions}>
@@ -1486,9 +1480,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </label>
               <label class="space-y-1 text-[10px]">
                 <span class="text-muted">Source type</span>
-                  <select
-                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                    value={timelineSourceTypeFilter()}
+                <select
+                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={timelineSourceTypeFilter()}
                   onChange={(event) =>
                     setTimelineSourceTypeFilter(
                       (event.currentTarget.value || '') as ResourceChangeSourceType | '',
@@ -1498,8 +1492,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <For each={timelineSourceTypeOptions}>
                     {(option) => <option value={option.value}>{option.label}</option>}
                   </For>
-                  </select>
-                </label>
+                </select>
+              </label>
               <label class="space-y-1 text-[10px]">
                 <span class="text-muted">Source adapter</span>
                 <select
@@ -1549,230 +1543,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </div>
             </Show>
 
-            <div class="mt-3 grid gap-2 sm:grid-cols-3">
-              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                <div class="text-[10px] text-muted">Capabilities</div>
-                <div class="text-sm font-semibold text-base-content">
-                  {historyFacetCounts()?.capabilities ?? resourceCapabilityCount()}
-                </div>
-              </div>
-              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                <div class="text-[10px] text-muted">Relationships</div>
-                <div class="text-sm font-semibold text-base-content">
-                  {historyFacetCounts()?.relationships ?? resourceRelationshipCount()}
-                </div>
-              </div>
+            <div class="mt-3 flex flex-wrap gap-2">
               <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
                 <div class="text-[10px] text-muted">Timeline Events</div>
-                <div class="text-sm font-semibold text-base-content">
-                  {historyFacetCounts()?.recentChanges ?? resourceTimelineCount()}
-                </div>
+                <div class="text-sm font-semibold text-base-content">{historyTimelineCount()}</div>
               </div>
             </div>
-            <Show
-              when={
-                historyCapabilities().length > 0 ||
-                historyRelationships().length > 0 ||
-                historyTimeline().length > 0
-              }
-            >
+            <Show when={historyTimelineCount() > 0}>
               <div class="mt-2 flex flex-col gap-1">
-                <span class="text-muted">Facet chips</span>
+                <span class="text-muted">Timeline summary</span>
                 <ResourceFacetSummary
-                  capabilities={historyCapabilities()}
-                  relationships={historyRelationships()}
                   recentChanges={historyTimeline()}
                   counts={historyFacetCounts()}
+                  showCapabilities={false}
+                  showRelationships={false}
                 />
-              </div>
-            </Show>
-          </div>
-
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Capabilities
-            </div>
-            <Show
-              when={historyCapabilities().length > 0}
-              fallback={
-                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No capability records are available for this resource yet.
-                </div>
-              }
-            >
-              <div class="space-y-2">
-                <For each={historyCapabilities()}>
-                  {(capability) => (
-                    <details class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                      <summary class="flex cursor-pointer list-none items-center justify-between gap-2 text-[10px] font-medium text-base-content">
-                        <span class="truncate" title={capability.name}>
-                          {capability.name}
-                        </span>
-                        <span class="text-muted">
-                          {humanizeToken(capability.type, {
-                            fallback: '—',
-                            preserveShortAllCaps: true,
-                          })}
-                        </span>
-                      </summary>
-                      <div class="mt-2 space-y-1.5 border-t border-border pt-2 text-[10px]">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Approval</span>
-                          <span class="font-medium text-base-content">
-                            {getResourceApprovalLevelLabel(capability.minimumApprovalLevel)}
-                          </span>
-                        </div>
-                        <Show when={capability.platform}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Platform</span>
-                            <span class="font-medium text-base-content">
-                              {capability.platform}
-                            </span>
-                          </div>
-                        </Show>
-                        <Show when={capability.description}>
-                          <div class="rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
-                            {capability.description}
-                          </div>
-                        </Show>
-                        <Show when={capability.params && capability.params.length > 0}>
-                          <div class="space-y-1">
-                            <div class="text-[10px] font-medium uppercase tracking-wide text-muted">
-                              Params
-                            </div>
-                            <For each={capability.params ?? []}>
-                              {(param) => (
-                                <div class="rounded border border-border bg-base px-2 py-1 text-[10px]">
-                                  <div class="flex items-center justify-between gap-2">
-                                    <span class="font-medium text-base-content">{param.name}</span>
-                                    <span class="text-muted">
-                                      {param.type}
-                                      {param.required ? ' • required' : ''}
-                                    </span>
-                                  </div>
-                                  <Show when={param.description}>
-                                    <div class="mt-1 text-muted">{param.description}</div>
-                                  </Show>
-                                  <Show when={param.enum && param.enum.length > 0}>
-                                    <div class="mt-1 text-muted">
-                                      Allowed: {param.enum?.join(', ')}
-                                    </div>
-                                  </Show>
-                                  <Show when={param.pattern}>
-                                    <div class="mt-1 text-muted">Pattern: {param.pattern}</div>
-                                  </Show>
-                                </div>
-                              )}
-                            </For>
-                          </div>
-                        </Show>
-                      </div>
-                    </details>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
-
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Relationships
-            </div>
-            <Show
-              when={historyRelationships().length > 0}
-              fallback={
-                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No relationship edges are available for this resource yet.
-                </div>
-              }
-            >
-              <div class="space-y-2">
-                <For each={historyRelationships()}>
-                  {(relationship) => {
-                    const presentation = describeResourceRelationship(relationship);
-                    return (
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-base-content">
-                          <Show
-                            when={buildInfrastructureResourceHref(relationship.sourceId)}
-                            fallback={<span>{relationship.sourceId}</span>}
-                          >
-                            {(href) => (
-                              <a
-                                class="rounded px-0.5 text-blue-700 hover:underline dark:text-blue-300"
-                                href={href()}
-                                aria-label={`Open source resource ${relationship.sourceId} in Infrastructure`}
-                              >
-                                {relationship.sourceId}
-                              </a>
-                            )}
-                          </Show>
-                          {' → '}
-                          <Show
-                            when={buildInfrastructureResourceHref(relationship.targetId)}
-                            fallback={<span>{relationship.targetId}</span>}
-                          >
-                            {(href) => (
-                              <a
-                                class="rounded px-0.5 text-blue-700 hover:underline dark:text-blue-300"
-                                href={href()}
-                                aria-label={`Open target resource ${relationship.targetId} in Infrastructure`}
-                              >
-                                {relationship.targetId}
-                              </a>
-                            )}
-                          </Show>
-                        </span>
-                        <span class="text-muted">{presentation.typeLabel}</span>
-                      </div>
-                      <div class="mt-1 grid gap-1 sm:grid-cols-2">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Confidence</span>
-                          <span class="font-medium text-base-content">
-                            {formatConfidenceLabel(relationship.confidence)}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">State</span>
-                          <span class="font-medium text-base-content">
-                            {relationship.active ? 'Active' : 'Historical'}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Discoverer</span>
-                          <span class="font-medium text-base-content">
-                            {presentation.provenance || '—'}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Observed</span>
-                          <span class="font-medium text-base-content">
-                            {formatRelativeTime(relationship.observedAt)}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Last Seen</span>
-                          <span class="font-medium text-base-content">
-                            {formatRelativeTime(relationship.lastSeenAt) ||
-                              formatRelativeTime(relationship.observedAt)}
-                          </span>
-                        </div>
-                      </div>
-                      <Show when={hasMetadataEntries(relationship.metadata)}>
-                        <details class="mt-2 rounded border border-border bg-base px-2 py-1">
-                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                            Metadata
-                          </summary>
-                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
-                            {JSON.stringify(relationship.metadata ?? {}, null, 2)}
-                          </pre>
-                        </details>
-                      </Show>
-                    </div>
-                    );
-                  }}
-                </For>
               </div>
             </Show>
           </div>
@@ -1804,7 +1589,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                         <div class="flex items-start justify-between gap-3">
                           <div class="min-w-0">
-                            <div class="font-medium text-base-content">{kindPresentation.label}</div>
+                            <div class="font-medium text-base-content">
+                              {kindPresentation.label}
+                            </div>
                             <div class="mt-0.5 text-muted">
                               {formatRelativeTime(change.observedAt)}
                               <Show when={change.occurredAt}>

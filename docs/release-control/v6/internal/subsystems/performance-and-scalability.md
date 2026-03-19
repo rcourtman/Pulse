@@ -96,12 +96,22 @@ forking separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
+The default table hot path now scopes those summary chips to timeline and
+change-provenance badges only. Generic capability and relationship counts are
+kept out of the main row budget until the underlying data is proven populated,
+which preserves the fleet-table scan path and avoids spending hot-path visual
+budget on model nouns that do not yet clear the product bar.
 Row summaries now also prefer canonical `facetCounts` on each resource when
 they are available, so the hot path can stay within the same budget while
 still reading totals from the shared resource contract. The drawer history
 surface reuses the same governed resource route helpers for relationship and
 related-resource links, so cross-resource navigation stays within the existing
 infrastructure surface rather than branching into custom detail-only routing.
+The detail drawer now follows the same default posture by collapsing its
+history overview down to timeline counts and timeline-summary chips, so the
+performance-sensitive shared presentation path stays aligned with the
+investigation-first product contract instead of rendering low-signal generic
+facet sections by default.
 Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather

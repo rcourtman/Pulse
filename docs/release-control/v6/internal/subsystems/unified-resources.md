@@ -212,14 +212,22 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the graph and timeline inline.
+The shared `ResourceFacetSummary` consumer can now explicitly suppress
+capability and relationship badges, and the canonical table/detail surfaces
+use that narrower mode by default. That keeps the proven monitoring UX
+centered on factual timeline investigation while the richer facet payloads
+remain available as backend and AI-facing foundations instead of being
+presented as first-class product facts before they are fully populated.
 That drawer now also uses a shared frontend relationship-presentation helper
 for graph labels and provenance wording, so the UI stays aligned with the
 canonical relationship semantics instead of keeping drawer-local token
 humanization.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
-state transitions, restarts, config updates, anomalies, relationships, and
-capabilities without recomputing timeline history in the browser.
+state transitions, restarts, config updates, and anomalies without
+recomputing timeline history in the browser, while broader graph or
+capability facets stay available behind the same contract for non-default
+consumers that can prove they are populated and justified.
 That same facet bundle now also returns grouped recent-change provenance
 counts by source type, so the detail drawer can distinguish platform events,
 pulse diffs, heuristics, user actions, and agent actions without re-deriving

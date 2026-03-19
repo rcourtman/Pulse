@@ -165,9 +165,7 @@ const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
     nodes: (pmg?.nodeCount || 0) > 0 ? pmg?.nodeCount || 0 : null,
     health,
     tone:
-      backlog > 0
-        ? 'warning'
-        : getServiceHealthSummaryPresentation(resource.status, health).tone,
+      backlog > 0 ? 'warning' : getServiceHealthSummaryPresentation(resource.status, health).tone,
   };
 };
 
@@ -691,6 +689,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
+                                  showCapabilities={false}
+                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1059,9 +1059,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const healthClass = createMemo(() =>
-                        getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
-                          .textClass,
+                      const healthClass = createMemo(
+                        () =>
+                          getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
+                            .textClass,
                       );
 
                       const rowClass = createMemo(() => {
@@ -1144,6 +1145,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
+                                  showCapabilities={false}
+                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>
@@ -1362,9 +1365,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const healthClass = createMemo(() =>
-                        getServiceHealthSummaryPresentation(resource.status, pmgRow()?.health)
-                          .textClass,
+                      const healthClass = createMemo(
+                        () =>
+                          getServiceHealthSummaryPresentation(resource.status, pmgRow()?.health)
+                            .textClass,
                       );
                       const queueClass = createMemo(() =>
                         (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
@@ -1452,6 +1456,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   relationships={resource.relationships}
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
+                                  showCapabilities={false}
+                                  showRelationships={false}
                                   class="mt-0.5"
                                 />
                               </div>

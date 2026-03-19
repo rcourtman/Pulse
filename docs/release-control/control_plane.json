@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-product-lane-expansion",
+  "active_target_id": "v6-rc-stabilization",
   "profiles": [
     {
       "id": "v6",
@@ -38,8 +38,8 @@
       "id": "v6-rc-stabilization",
       "profile_id": "v6",
       "kind": "stabilization",
-      "status": "superseded",
-      "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed, while broader post-RC polish stays out of the release floor by default.",
+      "status": "active",
+      "summary": "Keep Pulse v6 centered on the proven monitoring-and-alerting RC floor, using timeline/change intelligence only where it materially improves investigation or safe AI flows while broader control-plane expansion stays out of the default target until it is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },
@@ -55,8 +55,8 @@
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
-      "status": "active",
-      "summary": "Default v6 engineering work to the bridge-release foundation by promoting and landing the known resource-graph, policy-governance, action-governance, and fleet-governance gaps ahead of further local RC cleanup.",
+      "status": "planned",
+      "summary": "Promote the known resource-graph, policy-governance, action-governance, and fleet-governance gaps only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }
