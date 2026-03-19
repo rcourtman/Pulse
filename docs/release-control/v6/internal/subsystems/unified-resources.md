@@ -255,9 +255,12 @@ policy summaries before the user asks for relationship pattern detail.
 Change-related summary badges now belong to the `Change history` section
 instead of the `Runtime` card, so current-state facts and timeline context do
 not compete for the same ownership on first read.
+The overview now begins with one primary `Summary` shell instead of separate
+peer `Runtime` and `Identity` cards, so current state and canonical identity
+read as one first-screen answer rather than two adjacent mini-surfaces.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
-signals live with the runtime card, so the top strip does not compete with
+signals live with the summary shell, so the top strip does not compete with
 the resource name, status, or primary identity line.
 Discovery support now also lives inside overview-only `Discovery context`
 instead of a peer drawer tab, so supplemental discovery detail stays available
@@ -275,15 +278,15 @@ Host and node system or hardware cards now also live behind a collapsed
 `Host details` support block instead of rendering before the primary overview
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
-Within the runtime card, current-state facts now stay in the primary summary
+Within that summary shell, current-state facts now stay in the primary summary
 while platform IDs, quick links, and platform-signal badges live in a smaller
 `Operational context` block, so first read remains status-first instead of
 mixing state and supporting action surfaces together.
-The identity card now follows the same rule: canonical identity rows stay in
-the primary summary, while aliases, IPs, and tags live in a smaller
+That same summary shell also keeps canonical identity rows primary, while
+aliases, IPs, and tags live in a smaller
 `Supporting context` block so the drawer answers "what is this resource" before
 showing every attached label.
-When that card has no owned identity rows or supporting labels yet, the sparse
+When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.
 Type-specific Docker, PBS, and PMG operational panels now also live inside a

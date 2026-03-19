@@ -918,221 +918,233 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Overview Tab */}
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Runtime
+        <div class="space-y-3">
+          <div
+            data-testid="resource-summary-section"
+            class="rounded border border-border bg-surface p-3"
+          >
+            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+              Summary
             </div>
-            <div class="space-y-1.5 text-[11px]">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">State</span>
-                <span class="font-medium text-base-content capitalize">
-                  {props.resource.status || 'unknown'}
-                </span>
-              </div>
-              <Show when={props.resource.uptime}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Uptime</span>
-                  <span class="font-medium text-base-content">
-                    {formatUptime(props.resource.uptime ?? 0)}
-                  </span>
+            <div class="mt-3 grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <div data-testid="resource-current-state-section">
+                <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
+                  Current state
                 </div>
-              </Show>
-              <Show when={props.resource.lastSeen}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Last Seen</span>
-                  <span class="font-medium text-base-content" title={lastSeenAbsolute()}>
-                    {lastSeen() || '—'}
-                  </span>
-                </div>
-              </Show>
-              <Show when={sourceSummary()}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Sources</span>
-                  <span
-                    class={`font-medium ${sourceSummary()!.className}`}
-                    title={sourceSummary()!.title}
-                  >
-                    {sourceSummary()!.label}
-                  </span>
-                </div>
-              </Show>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Mode</span>
-                <span class="font-medium text-base-content">
-                  {formatSourceType(props.resource.sourceType)}
-                </span>
-              </div>
-              <Show when={(props.resource.alerts?.length || 0) > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Alerts</span>
-                  <span class="font-medium text-amber-600 dark:text-amber-400">
-                    {formatInteger(props.resource.alerts?.length)}
-                  </span>
-                </div>
-              </Show>
-              <Show when={props.resource.platformId && !hasRuntimeOperationalContext()}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Platform ID</span>
-                  <span
-                    class="font-medium text-base-content truncate"
-                    title={props.resource.platformId}
-                  >
-                    {props.resource.platformId}
-                  </span>
-                </div>
-              </Show>
-              <Show when={hasRuntimeOperationalContext()}>
-                <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
-                  <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                    Operational context
-                  </div>
-                  <div class="mt-2 space-y-1.5">
-                    <Show when={props.resource.platformId}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Platform ID</span>
-                        <span
-                          class="font-medium text-base-content truncate"
-                          title={props.resource.platformId}
-                        >
-                          {props.resource.platformId}
-                        </span>
-                      </div>
-                    </Show>
-                    <Show when={kubernetesCapabilityBadges().length > 0}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-muted">Platform signals</span>
-                        <div class="flex flex-wrap gap-1">
-                          <For each={kubernetesCapabilityBadges()}>
-                            {(badge) => (
-                              <span class={badge.classes} title={badge.title}>
-                                {badge.label}
-                              </span>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    </Show>
-                    <Show when={relatedLinks().length > 0}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-muted">Quick links</span>
-                        <div class="flex flex-wrap gap-2">
-                          <For each={relatedLinks()}>
-                            {(link) => (
-                              <a
-                                href={link.href}
-                                aria-label={link.ariaLabel}
-                                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-                              >
-                                {link.compactLabel}
-                              </a>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-            </div>
-          </div>
-
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Identity
-            </div>
-            <div class="space-y-1.5 text-[11px]">
-              <For each={primaryIdentityRows()}>
-                {(row) => (
+                <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">{row.label}</span>
-                    <span class="font-medium text-base-content truncate" title={row.value}>
-                      {row.value}
+                    <span class="text-muted">State</span>
+                    <span class="font-medium text-base-content capitalize">
+                      {props.resource.status || 'unknown'}
                     </span>
                   </div>
-                )}
-              </For>
-              <Show when={hasIdentitySupportContext()}>
-                <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
-                  <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                    Supporting context
-                  </div>
-                  <Show when={identitySupportSummary()}>
-                    <div class="mt-1 text-[10px] text-muted">{identitySupportSummary()}</div>
+                  <Show when={props.resource.uptime}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Uptime</span>
+                      <span class="font-medium text-base-content">
+                        {formatUptime(props.resource.uptime ?? 0)}
+                      </span>
+                    </div>
                   </Show>
-                  <div class="mt-2 space-y-1.5">
-                    <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-muted">IP Addresses</span>
-                        <div class="flex flex-wrap gap-1">
-                          <For each={props.resource.identity?.ips ?? []}>
-                            {(ip) => (
-                              <span
-                                class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                                title={ip}
-                              >
-                                {ip}
-                              </span>
-                            )}
-                          </For>
-                        </div>
+                  <Show when={props.resource.lastSeen}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Last Seen</span>
+                      <span class="font-medium text-base-content" title={lastSeenAbsolute()}>
+                        {lastSeen() || '—'}
+                      </span>
+                    </div>
+                  </Show>
+                  <Show when={sourceSummary()}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Sources</span>
+                      <span
+                        class={`font-medium ${sourceSummary()!.className}`}
+                        title={sourceSummary()!.title}
+                      >
+                        {sourceSummary()!.label}
+                      </span>
+                    </div>
+                  </Show>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Mode</span>
+                    <span class="font-medium text-base-content">
+                      {formatSourceType(props.resource.sourceType)}
+                    </span>
+                  </div>
+                  <Show when={(props.resource.alerts?.length || 0) > 0}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Alerts</span>
+                      <span class="font-medium text-amber-600 dark:text-amber-400">
+                        {formatInteger(props.resource.alerts?.length)}
+                      </span>
+                    </div>
+                  </Show>
+                  <Show when={props.resource.platformId && !hasRuntimeOperationalContext()}>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Platform ID</span>
+                      <span
+                        class="font-medium text-base-content truncate"
+                        title={props.resource.platformId}
+                      >
+                        {props.resource.platformId}
+                      </span>
+                    </div>
+                  </Show>
+                  <Show when={hasRuntimeOperationalContext()}>
+                    <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
+                      <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                        Operational context
                       </div>
-                    </Show>
-                    <Show when={props.resource.tags && props.resource.tags.length > 0}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Tags</span>
-                        <TagBadges tags={props.resource.tags} maxVisible={6} />
-                      </div>
-                    </Show>
-                    <Show when={identityAliasValues().length > 0}>
-                      <Show
-                        when={hasAliasOverflow()}
-                        fallback={
+                      <div class="mt-2 space-y-1.5">
+                        <Show when={props.resource.platformId}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Platform ID</span>
+                            <span
+                              class="font-medium text-base-content truncate"
+                              title={props.resource.platformId}
+                            >
+                              {props.resource.platformId}
+                            </span>
+                          </div>
+                        </Show>
+                        <Show when={kubernetesCapabilityBadges().length > 0}>
                           <div class="flex flex-col gap-1">
-                            <span class="text-muted">Aliases</span>
+                            <span class="text-muted">Platform signals</span>
                             <div class="flex flex-wrap gap-1">
-                              <For each={aliasPreviewValues()}>
-                                {(value) => (
-                                  <span
-                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                    title={value}
-                                  >
-                                    {value}
+                              <For each={kubernetesCapabilityBadges()}>
+                                {(badge) => (
+                                  <span class={badge.classes} title={badge.title}>
+                                    {badge.label}
                                   </span>
                                 )}
                               </For>
                             </div>
                           </div>
-                        }
-                      >
-                        <details class="rounded border border-border bg-surface px-2 py-1.5">
-                          <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                            <span>Aliases</span>
-                            <span class="text-muted">{identityAliasValues().length}</span>
-                          </summary>
-                          <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
-                            <For each={identityAliasValues()}>
-                              {(value) => (
-                                <span
-                                  class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                  title={value}
-                                >
-                                  {value}
-                                </span>
-                              )}
-                            </For>
+                        </Show>
+                        <Show when={relatedLinks().length > 0}>
+                          <div class="flex flex-col gap-1">
+                            <span class="text-muted">Quick links</span>
+                            <div class="flex flex-wrap gap-2">
+                              <For each={relatedLinks()}>
+                                {(link) => (
+                                  <a
+                                    href={link.href}
+                                    aria-label={link.ariaLabel}
+                                    class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                                  >
+                                    {link.compactLabel}
+                                  </a>
+                                )}
+                              </For>
+                            </div>
                           </div>
-                        </details>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+
+              <div data-testid="resource-identity-section">
+                <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
+                  Identity
+                </div>
+                <div class="space-y-1.5 text-[11px]">
+                  <For each={primaryIdentityRows()}>
+                    {(row) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">{row.label}</span>
+                        <span class="font-medium text-base-content truncate" title={row.value}>
+                          {row.value}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                  <Show when={hasIdentitySupportContext()}>
+                    <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
+                      <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                        Supporting context
+                      </div>
+                      <Show when={identitySupportSummary()}>
+                        <div class="mt-1 text-[10px] text-muted">{identitySupportSummary()}</div>
                       </Show>
-                    </Show>
-                  </div>
+                      <div class="mt-2 space-y-1.5">
+                        <Show
+                          when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}
+                        >
+                          <div class="flex flex-col gap-1">
+                            <span class="text-muted">IP Addresses</span>
+                            <div class="flex flex-wrap gap-1">
+                              <For each={props.resource.identity?.ips ?? []}>
+                                {(ip) => (
+                                  <span
+                                    class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                                    title={ip}
+                                  >
+                                    {ip}
+                                  </span>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        </Show>
+                        <Show when={props.resource.tags && props.resource.tags.length > 0}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Tags</span>
+                            <TagBadges tags={props.resource.tags} maxVisible={6} />
+                          </div>
+                        </Show>
+                        <Show when={identityAliasValues().length > 0}>
+                          <Show
+                            when={hasAliasOverflow()}
+                            fallback={
+                              <div class="flex flex-col gap-1">
+                                <span class="text-muted">Aliases</span>
+                                <div class="flex flex-wrap gap-1">
+                                  <For each={aliasPreviewValues()}>
+                                    {(value) => (
+                                      <span
+                                        class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                        title={value}
+                                      >
+                                        {value}
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+                              </div>
+                            }
+                          >
+                            <details class="rounded border border-border bg-surface px-2 py-1.5">
+                              <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                <span>Aliases</span>
+                                <span class="text-muted">{identityAliasValues().length}</span>
+                              </summary>
+                              <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                                <For each={identityAliasValues()}>
+                                  {(value) => (
+                                    <span
+                                      class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                      title={value}
+                                    >
+                                      {value}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </details>
+                          </Show>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={!identityCardHasRichData()}>
+                    <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
+                      No identity metadata yet.
+                    </div>
+                  </Show>
                 </div>
-              </Show>
-              <Show when={!identityCardHasRichData()}>
-                <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
-                  No identity metadata yet.
-                </div>
-              </Show>
+              </div>
             </div>
           </div>
 

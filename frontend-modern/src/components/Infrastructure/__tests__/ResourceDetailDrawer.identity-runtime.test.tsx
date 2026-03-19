@@ -106,7 +106,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer runtime and identity cards', () => {
-  it('renders runtime source summary and mode details', () => {
+  it('renders a unified summary shell with current-state source and mode details', () => {
     const resource = baseResource({
       platformData: {
         sources: ['agent', 'proxmox'],
@@ -119,13 +119,15 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const { getByRole, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByText('Runtime')).toBeInTheDocument();
+    expect(getByText('Summary')).toBeInTheDocument();
+    expect(getByText('Current state')).toBeInTheDocument();
     expect(getByText('Sources')).toBeInTheDocument();
     expect(getByText('2/2 healthy')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
     expect(getByText('Operational context')).toBeInTheDocument();
     expect(getByText('Quick links')).toBeInTheDocument();
+    expect(() => getByText('Runtime')).toThrow();
     expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
       'Workloads',
     );

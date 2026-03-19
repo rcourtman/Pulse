@@ -186,6 +186,9 @@ describe('ResourceDetailDrawer change history section', () => {
     await screen.findByText('Changes loaded');
     const changeHistorySection = screen.getByTestId('resource-change-history-section');
     expect(screen.queryByRole('button', { name: 'Discovery' })).toBeNull();
+    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Current state')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
