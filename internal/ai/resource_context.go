@@ -554,34 +554,10 @@ func unifiedResourceDisplayName(r unifiedresources.Resource) string {
 }
 
 func unifiedResourceContextLabel(r unifiedresources.Resource) string {
-	if unifiedResourceContextUsesAISafeSummary(r) {
+	if unifiedresources.ResourcePolicyUsesAISafeSummary(r.AISafeSummary, r.Policy) {
 		return strings.TrimSpace(r.AISafeSummary)
 	}
 	return unifiedResourceDisplayName(r)
-}
-
-func unifiedResourceContextUsesAISafeSummary(r unifiedresources.Resource) bool {
-	if strings.TrimSpace(r.AISafeSummary) == "" || r.Policy == nil {
-		return false
-	}
-	if r.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
-		return true
-	}
-	return unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionAlias) ||
-		unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionHostname) ||
-		unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionPlatformID)
-}
-
-func unifiedResourceContextRedacts(r unifiedresources.Resource, hint unifiedresources.ResourceRedactionHint) bool {
-	if r.Policy == nil {
-		return false
-	}
-	for _, candidate := range r.Policy.Routing.Redact {
-		if candidate == hint {
-			return true
-		}
-	}
-	return false
 }
 
 func unifiedResourceContextClusterName(r unifiedresources.Resource) string {
@@ -597,10 +573,7 @@ func unifiedResourceContextClusterName(r unifiedresources.Resource) string {
 	if name == "" {
 		return ""
 	}
-	if unifiedResourceContextUsesAISafeSummary(r) ||
-		unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionAlias) ||
-		unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionHostname) ||
-		unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionPlatformID) {
+	if unifiedresources.ResourcePolicyUsesAISafeSummary(r.AISafeSummary, r.Policy) {
 		return "redacted by policy"
 	}
 	return name
@@ -611,7 +584,7 @@ func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) str
 	if len(ips) == 0 {
 		return ""
 	}
-	if unifiedResourceContextRedacts(r, unifiedresources.ResourceRedactionIPAddress) {
+	if unifiedresources.ResourcePolicyRedacts(r.Policy, unifiedresources.ResourceRedactionIPAddress) {
 		return " - IPs redacted by policy"
 	}
 	if limit > 0 && len(ips) > limit {

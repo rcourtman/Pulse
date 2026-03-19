@@ -165,6 +165,11 @@ The same shared policy presentation helper now also formats governed mention
 policy lines and redaction lists for AI chat prefetch, so prompt context
 stays aligned with the canonical sensitivity, routing, and redaction labels
 instead of rebuilding them in lane-local helpers.
+The same shared policy helper also owns the `aiSafeSummary` decision and
+redaction predicates used by AI chat knowledge extraction and resource
+context rendering, so governed labels and summary selection stay rooted in
+the unified resource policy model instead of being duplicated in chat-local
+helpers.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

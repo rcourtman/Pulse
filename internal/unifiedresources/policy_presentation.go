@@ -185,3 +185,34 @@ func ResourcePolicySummaryLines(policy *ResourcePolicy) []string {
 
 	return lines
 }
+
+// ResourcePolicyRedacts reports whether the policy redacts any of the provided hints.
+func ResourcePolicyRedacts(policy *ResourcePolicy, hints ...ResourceRedactionHint) bool {
+	if policy == nil {
+		return false
+	}
+	for _, candidate := range policy.Routing.Redact {
+		for _, hint := range hints {
+			if candidate == hint {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ResourcePolicyUsesAISafeSummary reports whether the canonical aiSafeSummary
+// should be used instead of raw resource labels for governed output.
+func ResourcePolicyUsesAISafeSummary(summary string, policy *ResourcePolicy) bool {
+	if strings.TrimSpace(summary) == "" || policy == nil {
+		return false
+	}
+	if policy.Routing.Scope == ResourceRoutingScopeLocalOnly {
+		return true
+	}
+	return ResourcePolicyRedacts(policy,
+		ResourceRedactionAlias,
+		ResourceRedactionHostname,
+		ResourceRedactionPlatformID,
+	)
+}

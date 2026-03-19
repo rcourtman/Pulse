@@ -199,6 +199,10 @@ The unified AI resource data-governance block must also use the shared
 unified-resource redaction-label helper directly, so the same canonical
 policy labels back both the posture summary and the governed prompt context
 without an AI-local wrapper.
+The governed query-fact and resource-context paths must also use the shared
+unified-resource policy helpers for the `aiSafeSummary` decision and
+redaction predicates, so the same local-only and redaction rules are applied
+consistently instead of being reimplemented in chat-local helpers.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.

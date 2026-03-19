@@ -375,6 +375,31 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 	}
 }
 
+func TestResourcePolicyHelpersShareAISafeSummaryDecision(t *testing.T) {
+	policy := &unifiedresources.ResourcePolicy{
+		Sensitivity: unifiedresources.ResourceSensitivitySensitive,
+		Routing: unifiedresources.ResourceRoutingPolicy{
+			Scope:                unifiedresources.ResourceRoutingScopeLocalFirst,
+			AllowCloudSummary:    true,
+			AllowCloudRawSignals: false,
+			Redact: []unifiedresources.ResourceRedactionHint{
+				unifiedresources.ResourceRedactionHostname,
+				unifiedresources.ResourceRedactionIPAddress,
+			},
+		},
+	}
+
+	if !unifiedresources.ResourcePolicyUsesAISafeSummary("virtual machine resource; status online; redacted for cloud summary", policy) {
+		t.Fatal("expected AI-safe summary helper to honor shared policy rules")
+	}
+	if !unifiedresources.ResourcePolicyRedacts(policy, unifiedresources.ResourceRedactionHostname) {
+		t.Fatal("expected hostname redaction helper to honor shared policy rules")
+	}
+	if unifiedresources.ResourcePolicyRedacts(policy, unifiedresources.ResourceRedactionAlias) {
+		t.Fatal("did not expect alias redaction helper to match")
+	}
+}
+
 func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 	clusterID := "k8s-cluster-1"
 	k8sCluster := unifiedresources.Resource{

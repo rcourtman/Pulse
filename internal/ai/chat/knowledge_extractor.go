@@ -80,36 +80,8 @@ func extractQueryFacts(input map[string]interface{}, resultText string) []FactEn
 	}
 }
 
-func queryFactUsesAISafeSummary(summary string, policy *unifiedresources.ResourcePolicy) bool {
-	if strings.TrimSpace(summary) == "" || policy == nil {
-		return false
-	}
-	if policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
-		return true
-	}
-	return queryFactRedacts(policy,
-		unifiedresources.ResourceRedactionAlias,
-		unifiedresources.ResourceRedactionHostname,
-		unifiedresources.ResourceRedactionPlatformID,
-	)
-}
-
-func queryFactRedacts(policy *unifiedresources.ResourcePolicy, hints ...unifiedresources.ResourceRedactionHint) bool {
-	if policy == nil {
-		return false
-	}
-	for _, candidate := range policy.Routing.Redact {
-		for _, hint := range hints {
-			if candidate == hint {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func governedQueryFactLabel(name, aiSafeSummary string, policy *unifiedresources.ResourcePolicy) string {
-	if queryFactUsesAISafeSummary(aiSafeSummary, policy) {
+	if unifiedresources.ResourcePolicyUsesAISafeSummary(aiSafeSummary, policy) {
 		return strings.TrimSpace(aiSafeSummary)
 	}
 	return strings.TrimSpace(name)
@@ -120,7 +92,7 @@ func governedQueryFactNodeLabel(name string, policy *unifiedresources.ResourcePo
 	if name == "" {
 		return ""
 	}
-	if queryFactRedacts(policy,
+	if unifiedresources.ResourcePolicyRedacts(policy,
 		unifiedresources.ResourceRedactionAlias,
 		unifiedresources.ResourceRedactionHostname,
 		unifiedresources.ResourceRedactionPlatformID,
@@ -536,12 +508,12 @@ func extractQueryConfigFacts(input map[string]interface{}, resultText string) []
 	if resp.GuestType != "" {
 		parts = append(parts, resp.GuestType)
 	}
-	if queryFactUsesAISafeSummary(resp.AISafeSummary, resp.Policy) {
+	if unifiedresources.ResourcePolicyUsesAISafeSummary(resp.AISafeSummary, resp.Policy) {
 		parts = append(parts, strings.TrimSpace(resp.AISafeSummary))
 	}
 	if resp.Hostname != "" {
 		hostname := resp.Hostname
-		if queryFactRedacts(resp.Policy,
+		if unifiedresources.ResourcePolicyRedacts(resp.Policy,
 			unifiedresources.ResourceRedactionHostname,
 			unifiedresources.ResourceRedactionAlias,
 			unifiedresources.ResourceRedactionPlatformID,

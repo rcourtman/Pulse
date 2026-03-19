@@ -179,6 +179,37 @@ func TestResourcePolicySummaryLines(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
+	policy := &ResourcePolicy{
+		Sensitivity: ResourceSensitivitySensitive,
+		Routing: ResourceRoutingPolicy{
+			Scope:                ResourceRoutingScopeLocalFirst,
+			AllowCloudSummary:    true,
+			AllowCloudRawSignals: false,
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionHostname,
+				ResourceRedactionIPAddress,
+			},
+		},
+	}
+
+	if !ResourcePolicyRedacts(policy, ResourceRedactionHostname) {
+		t.Fatal("expected hostname to be redacted")
+	}
+	if ResourcePolicyRedacts(policy, ResourceRedactionAlias) {
+		t.Fatal("did not expect alias to be redacted")
+	}
+	if !ResourcePolicyUsesAISafeSummary("resource summary safe for remote AI use", policy) {
+		t.Fatal("expected AI-safe summary to be used")
+	}
+	if ResourcePolicyUsesAISafeSummary("", policy) {
+		t.Fatal("did not expect empty summary to be used")
+	}
+	if ResourcePolicyUsesAISafeSummary("resource summary safe for remote AI use", nil) {
+		t.Fatal("did not expect nil policy to use AI-safe summary")
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {
