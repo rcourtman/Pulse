@@ -7,7 +7,7 @@ Pulse is a real-time infrastructure monitoring platform for **Proxmox VE**, **Pr
 The system runs as a single binary that serves both the API and the embedded frontend assets. It connects to infrastructure via platform-specific REST APIs and lightweight push-based agents, normalises everything into a **Unified Resource model**, and delivers real-time updates to clients over WebSocket.
 
 ```mermaid
-graph TD
+flowchart TD
     User[Browser / Mobile] <-->|WebSocket + HTTP| Pulse[Pulse Server]
     Mobile[Mobile App] <-->|E2E Encrypted| Relay[Relay Server]
     Relay <-->|WebSocket| Pulse
