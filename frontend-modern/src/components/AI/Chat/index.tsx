@@ -474,7 +474,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     for (const runtime of dockerHosts) {
       const dockerActionId = getDockerActionId(runtime);
-      const displayName = getPreferredResourceDisplayName(runtime);
+      const label = getPreferredResourceDisplayName(runtime);
       const hostnameOrId = getPreferredResourceHostname(runtime) || runtime.id;
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
@@ -482,7 +482,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : runtime.status || 'online';
       mentionCandidates.push({
         id: `agent:${dockerActionId}`,
-        label: displayName,
+        label,
         type: 'agent',
         status: runtimeStatus,
       });
@@ -515,14 +515,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add standalone agents
     for (const agentResource of agentResources) {
       const agentActionId = getAgentActionId(agentResource);
-      const name = getPreferredResourceDisplayName(agentResource);
+      const label = getPreferredResourceDisplayName(agentResource);
       const agentStatus =
         agentResource.status === 'online' || agentResource.status === 'running'
           ? 'online'
           : agentResource.status;
       mentionCandidates.push({
         id: `agent:${agentActionId}`,
-        label: name,
+        label,
         type: 'agent',
         status: agentStatus,
       });

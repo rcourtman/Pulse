@@ -142,8 +142,10 @@ canonicalization helpers now, so chat prefetch and discovery responses agree
 on resource-type and target-ID formatting instead of maintaining chat-local
 copies.
 The chat mention picker now also carries the canonical preferred resource
-label as `label` through the structured mention payload, so mention search,
-selection, and submission do not depend on a raw `displayName` field fork.
+label as `label` through the structured mention payload, and the insertion
+path uses that same label for prompt text and cursor placement, so mention
+search, selection, and submission do not depend on a raw `displayName` field
+fork.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved
