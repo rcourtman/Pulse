@@ -92,6 +92,11 @@ hints.
 Those same relationship changes now summarize the actual edge(s) in `from` and
 `to`, so the canonical timeline keeps the graph transition readable without
 needing the drawer to reconstruct an edge summary from raw endpoints.
+The backend AI and Patrol context renderers now derive their canonical change
+kind, source type, source adapter, actor, reason, and related-resource
+fragments from `internal/unifiedresources/change_presentation.go`, so the
+semantic mapping lives with the resource model instead of being duplicated in
+lane-local prompt helpers.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

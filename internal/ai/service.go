@@ -4629,11 +4629,10 @@ func truncateString(s string, maxLen int) string {
 }
 
 func formatResourceChangeContext(change unifiedresources.ResourceChange) string {
-	label := formatResourceChangeKindLabel(change.Kind)
-	summary := fmt.Sprintf("**%s**", label)
+	presentation := unifiedresources.DescribeChange(change)
+	summary := fmt.Sprintf("**%s**", presentation.KindLabel)
 
-	if from := strings.TrimSpace(change.From); from != "" || strings.TrimSpace(change.To) != "" {
-		to := strings.TrimSpace(change.To)
+	if from, to := strings.TrimSpace(presentation.From), strings.TrimSpace(presentation.To); from != "" || to != "" {
 		if from == "" {
 			summary += fmt.Sprintf(" → %s", to)
 		} else if to == "" {
@@ -4644,24 +4643,24 @@ func formatResourceChangeContext(change unifiedresources.ResourceChange) string 
 	}
 
 	provenance := make([]string, 0, 2)
-	if sourceType := strings.TrimSpace(string(change.SourceType)); sourceType != "" {
+	if sourceType := strings.TrimSpace(presentation.SourceType); sourceType != "" {
 		provenance = append(provenance, sourceType)
 	}
-	if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+	if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
 		provenance = append(provenance, sourceAdapter)
 	}
 	if len(provenance) > 0 {
 		summary += fmt.Sprintf(" [%s]", strings.Join(provenance, "/"))
 	}
 
-	if actor := strings.TrimSpace(change.Actor); actor != "" {
+	if actor := strings.TrimSpace(presentation.Actor); actor != "" {
 		summary += fmt.Sprintf("; actor %s", actor)
 	}
-	if reason := strings.TrimSpace(change.Reason); reason != "" {
+	if reason := strings.TrimSpace(presentation.Reason); reason != "" {
 		summary += fmt.Sprintf("; %s", reason)
 	}
-	if len(change.RelatedResources) > 0 {
-		summary += fmt.Sprintf("; related: %s", strings.Join(change.RelatedResources, ", "))
+	if len(presentation.RelatedResources) > 0 {
+		summary += fmt.Sprintf("; related: %s", strings.Join(presentation.RelatedResources, ", "))
 	}
 
 	ago := "recently"
@@ -4670,29 +4669,6 @@ func formatResourceChangeContext(change unifiedresources.ResourceChange) string 
 	}
 	summary += fmt.Sprintf(" (%s ago)", ago)
 	return summary
-}
-
-func formatResourceChangeKindLabel(kind unifiedresources.ChangeKind) string {
-	switch kind {
-	case unifiedresources.ChangeStateTransition:
-		return "State transition"
-	case unifiedresources.ChangeRestart:
-		return "Restart"
-	case unifiedresources.ChangeConfigUpdate:
-		return "Config update"
-	case unifiedresources.ChangeAnomaly:
-		return "Metric anomaly"
-	case unifiedresources.ChangeRelationship:
-		return "Relationship change"
-	case unifiedresources.ChangeCapability:
-		return "Capability change"
-	default:
-		raw := strings.TrimSpace(strings.ReplaceAll(string(kind), "_", " "))
-		if raw == "" {
-			return "Change"
-		}
-		return strings.ToUpper(raw[:1]) + raw[1:]
-	}
 }
 
 // buildEnrichedResourceContext adds historical intelligence to regular AI chat

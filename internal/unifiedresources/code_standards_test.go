@@ -314,6 +314,26 @@ func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing
 	}
 }
 
+func TestResourceChangePresentationUsesCanonicalLabels(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("change_presentation.go"))
+	if err != nil {
+		t.Fatalf("failed to read change_presentation.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func ChangeKindLabel(kind ChangeKind) string",
+		"func DescribeChange(change ResourceChange) ChangePresentation",
+		"KindLabel: ChangeKindLabel(change.Kind)",
+		"presentation.SourceType = strings.TrimSpace(string(change.SourceType))",
+		"presentation.SourceAdapter = strings.TrimSpace(string(change.SourceAdapter))",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/change_presentation.go must pin canonical change presentation snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	typesData, err := os.ReadFile(filepath.Join("types.go"))
 	if err != nil {

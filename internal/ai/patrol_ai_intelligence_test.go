@@ -438,6 +438,36 @@ func TestSeedPrecomputeIntelligenceState_UsesCanonicalResourceTimeline(t *testin
 	}
 }
 
+func TestPatrolRecentChangeFromUnified_UsesCanonicalChangePresentation(t *testing.T) {
+	change := ur.ResourceChange{
+		Kind:             ur.ChangeAnomaly,
+		From:             " old-state ",
+		To:               " new-state ",
+		SourceType:       ur.SourcePulseDiff,
+		SourceAdapter:    ur.AdapterOpsAgent,
+		Actor:            " agent:ops-helper ",
+		Reason:           "  incident changed  ",
+		RelatedResources: []string{"", " related-1 "},
+	}
+
+	memoryChange := patrolRecentChangeFromUnified(change)
+	if memoryChange.ChangeType != "Metric anomaly" {
+		t.Fatalf("unexpected change type: %q", memoryChange.ChangeType)
+	}
+	if !strings.Contains(memoryChange.Description, "Metric anomaly") {
+		t.Fatalf("expected canonical description to contain label, got %q", memoryChange.Description)
+	}
+	if !strings.Contains(memoryChange.Description, "source: pulse_diff via agent:ops-helper") {
+		t.Fatalf("expected canonical description to contain provenance, got %q", memoryChange.Description)
+	}
+	if !strings.Contains(memoryChange.Description, "actor: agent:ops-helper") {
+		t.Fatalf("expected canonical description to contain actor, got %q", memoryChange.Description)
+	}
+	if !strings.Contains(memoryChange.Description, "related: related-1") {
+		t.Fatalf("expected canonical description to contain related resource, got %q", memoryChange.Description)
+	}
+}
+
 func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)

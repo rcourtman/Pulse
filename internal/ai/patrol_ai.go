@@ -1691,12 +1691,13 @@ func (p *PatrolService) loadCanonicalRecentChanges(scopedSet map[string]bool, si
 }
 
 func patrolRecentChangeFromUnified(change unifiedresources.ResourceChange) memory.Change {
+	presentation := unifiedresources.DescribeChange(change)
 	return memory.Change{
 		ResourceID:   strings.TrimSpace(change.ResourceID),
 		ResourceName: strings.TrimSpace(change.ResourceID),
-		ChangeType:   memory.ChangeType(formatResourceChangeKindLabel(change.Kind)),
+		ChangeType:   memory.ChangeType(presentation.KindLabel),
 		DetectedAt:   patrolRecentChangeDetectedAt(change),
-		Description:  patrolFormatCanonicalRecentChangeDescription(change),
+		Description:  patrolFormatCanonicalRecentChangeDescription(presentation),
 	}
 }
 
@@ -1710,41 +1711,41 @@ func patrolRecentChangeDetectedAt(change unifiedresources.ResourceChange) time.T
 	return time.Now()
 }
 
-func patrolFormatCanonicalRecentChangeDescription(change unifiedresources.ResourceChange) string {
-	parts := []string{formatResourceChangeKindLabel(change.Kind)}
+func patrolFormatCanonicalRecentChangeDescription(presentation unifiedresources.ChangePresentation) string {
+	parts := []string{presentation.KindLabel}
 
-	if from := strings.TrimSpace(change.From); from != "" || strings.TrimSpace(change.To) != "" {
+	if from, to := strings.TrimSpace(presentation.From), strings.TrimSpace(presentation.To); from != "" || to != "" {
 		switch {
-		case from != "" && strings.TrimSpace(change.To) != "":
-			parts = append(parts, fmt.Sprintf("%s -> %s", from, strings.TrimSpace(change.To)))
+		case from != "" && to != "":
+			parts = append(parts, fmt.Sprintf("%s -> %s", from, to))
 		case from != "":
 			parts = append(parts, fmt.Sprintf("from %s", from))
 		default:
-			parts = append(parts, fmt.Sprintf("to %s", strings.TrimSpace(change.To)))
+			parts = append(parts, fmt.Sprintf("to %s", to))
 		}
 	}
 
-	if sourceType := strings.TrimSpace(string(change.SourceType)); sourceType != "" {
-		if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+	if sourceType := strings.TrimSpace(presentation.SourceType); sourceType != "" {
+		if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
 			parts = append(parts, fmt.Sprintf("source: %s via %s", sourceType, sourceAdapter))
 		} else {
 			parts = append(parts, fmt.Sprintf("source: %s", sourceType))
 		}
-	} else if sourceAdapter := strings.TrimSpace(string(change.SourceAdapter)); sourceAdapter != "" {
+	} else if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
 		parts = append(parts, fmt.Sprintf("source: %s", sourceAdapter))
 	}
 
-	if actor := strings.TrimSpace(change.Actor); actor != "" {
+	if actor := strings.TrimSpace(presentation.Actor); actor != "" {
 		parts = append(parts, fmt.Sprintf("actor: %s", actor))
 	}
 
-	if reason := strings.TrimSpace(change.Reason); reason != "" {
+	if reason := strings.TrimSpace(presentation.Reason); reason != "" {
 		parts = append(parts, reason)
 	}
 
-	if len(change.RelatedResources) > 0 {
-		related := make([]string, 0, len(change.RelatedResources))
-		for _, resourceID := range change.RelatedResources {
+	if len(presentation.RelatedResources) > 0 {
+		related := make([]string, 0, len(presentation.RelatedResources))
+		for _, resourceID := range presentation.RelatedResources {
 			if trimmed := strings.TrimSpace(resourceID); trimmed != "" {
 				related = append(related, trimmed)
 			}
