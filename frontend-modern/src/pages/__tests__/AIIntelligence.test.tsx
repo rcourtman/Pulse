@@ -599,7 +599,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('Derived signal coverage')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Coverage from baselines, knowledge, patterns, learned correlations, incidents, and predictions\./,
+        /Coverage from baselines, knowledge, patterns, learned correlations, and predictions\./,
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Data Governance')).toBeInTheDocument();

@@ -1289,8 +1289,8 @@ export function AIIntelligence() {
                         </span>
                       </div>
                       <p class="mt-1 text-xs text-muted">
-                        Coverage from baselines, knowledge, patterns, learned correlations,
-                        incidents, and predictions.
+                        Coverage from baselines, knowledge, patterns, learned correlations, and
+                        predictions.
                       </p>
 
                       <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -1316,12 +1316,6 @@ export function AIIntelligence() {
                           <dt class="text-xs uppercase tracking-wide text-muted">Correlations</dt>
                           <dd class="mt-1 font-semibold text-base-content">
                             {summary().learning.correlations_learned}
-                          </dd>
-                        </div>
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Incidents</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().learning.incidents_tracked}
                           </dd>
                         </div>
                         <div class="rounded-md bg-surface px-3 py-2">
