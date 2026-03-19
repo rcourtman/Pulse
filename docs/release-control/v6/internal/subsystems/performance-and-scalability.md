@@ -49,6 +49,7 @@ regression protection.
 5. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 6. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
+8. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 
 ## Forbidden Paths
 
@@ -120,6 +121,11 @@ The Infrastructure page now also normalizes source filter keys through the
 shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
 selector boundary keeps using the canonical source-platform contract instead of
 maintaining a local source-normalization alias.
+
+Resource detail mappers now also use the shared
+`frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
+labels, so the canonical presentation layer owns that wording instead of the
+mapper carrying its own title-casing branch.
 
 Dashboard, workload-summary, infrastructure-summary, and org-scoped cache-key
 paths now normalize org scope through the shared

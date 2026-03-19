@@ -3,6 +3,7 @@ import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
+import { formatSensorName } from '@/components/Infrastructure/resourceDetailMappers';
 import {
   buildStatusOptions,
   filterResources,
@@ -180,6 +181,11 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Pulse diff 2')).toBeInTheDocument();
       expect(getByText('Docker adapter 2')).toBeInTheDocument();
       expect(getByText('Proxmox adapter 1')).toBeInTheDocument();
+    });
+
+    it('formats sensor labels through the shared resource detail mapper helper', () => {
+      expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
+      expect(formatSensorName('psu_temp')).toBe('Temp');
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

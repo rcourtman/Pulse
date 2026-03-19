@@ -1961,6 +1961,7 @@ describe('frontend resource type boundaries', () => {
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRedactionHints =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicy =');
+    expect(resourceDetailMappersSource).toContain('titleCaseDelimitedLabel');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
     expect(unifiedResourceTableSource).toContain('getServiceHealthSummaryPresentation');

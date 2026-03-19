@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatInteger,
+  formatSensorName,
   formatSourceType,
   toDiscoveryConfig,
   toAgentFromResource,
@@ -84,6 +85,14 @@ describe('resourceDetailMappers', () => {
 
     it('returns unknown source type as-is', () => {
       expect(formatSourceType('unknown-source' as any)).toBe('unknown-source');
+    });
+  });
+
+  describe('formatSensorName', () => {
+    it('strips sensor prefixes and title-cases the remainder with the shared helper', () => {
+      expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
+      expect(formatSensorName('disk_0_temp')).toBe('0 Temp');
+      expect(formatSensorName('')).toBe('');
     });
   });
 

@@ -23,6 +23,7 @@ import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 export { getSourceTypeLabel as formatSourceType } from '@/utils/sourceTypePresentation';
 
 export type ProxmoxPlatformData = {
@@ -505,8 +506,7 @@ export const toAgentFromResource = (
 
 export const formatSensorName = (name: string) => {
   let clean = name.replace(/^[a-z]+\d*_/i, '');
-  clean = clean.replace(/_/g, ' ');
-  return clean.replace(/\b\w/g, (char) => char.toUpperCase());
+  return titleCaseDelimitedLabel(clean);
 };
 
 export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
