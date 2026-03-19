@@ -107,6 +107,9 @@ export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): 
 export const getResourceRoutingScopeLabel = (scope?: ResourceRoutingScope): string =>
   scope ? routingPresentation[scope].label : 'Unrouted';
 
+export const getResourcePolicyRoutingDecisionLabel = (allowed?: boolean): string =>
+  allowed ? 'Allowed' : 'Blocked';
+
 export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): string =>
   hint ? redactionLabels[hint] ?? hint : 'Unclassified';
 

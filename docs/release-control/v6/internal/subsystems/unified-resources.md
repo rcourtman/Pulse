@@ -122,6 +122,10 @@ The canonical policy-posture aggregate now also lives in
 `internal/unifiedresources/policy_posture.go`, so AI summaries and resource
 context share the same sensitivity, routing, and redaction counts from the
 resource model instead of rebuilding governance posture in AI-local code.
+The same policy presenter now also owns the `Allowed`/`Blocked` routing
+decision labels shown in the resource detail drawer, so routing-state wording
+stays canonical with the rest of the policy surface instead of being
+rendered inline by the drawer.
 The backend AI and Patrol graph context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph

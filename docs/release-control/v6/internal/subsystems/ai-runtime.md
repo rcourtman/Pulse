@@ -112,6 +112,9 @@ That governed context should also surface the canonical routing posture and
 redaction hints that were derived from the shared policy model, so prompts
 reflect the same sensitivity, routing, and scrub decisions that the runtime
 uses for export boundaries instead of rebuilding privacy posture locally.
+The same shared policy presenter also owns the `Allowed`/`Blocked` routing
+decision labels shown in the resource drawer, so the policy state wording
+stays canonical instead of being rendered inline by the consumer.
 That same policy boundary now applies to chat structured-mention prefetch and
 resource-summary formatting: mention resolution must consume canonical
 unified-resource policy metadata, skip discovery fan-out when governed

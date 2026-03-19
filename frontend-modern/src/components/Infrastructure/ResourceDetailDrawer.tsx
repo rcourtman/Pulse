@@ -48,6 +48,7 @@ import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
+  getResourcePolicyRoutingDecisionLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
@@ -1063,13 +1064,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Cloud Summary</span>
                     <span class="font-medium text-base-content">
-                      {props.resource.policy?.routing.allowCloudSummary ? 'Allowed' : 'Blocked'}
+                      {getResourcePolicyRoutingDecisionLabel(
+                        props.resource.policy?.routing.allowCloudSummary,
+                      )}
                     </span>
                   </div>
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Raw Signals</span>
                     <span class="font-medium text-base-content">
-                      {props.resource.policy?.routing.allowCloudRawSignals ? 'Allowed' : 'Blocked'}
+                      {getResourcePolicyRoutingDecisionLabel(
+                        props.resource.policy?.routing.allowCloudRawSignals,
+                      )}
                     </span>
                   </div>
                 </Show>

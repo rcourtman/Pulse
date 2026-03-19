@@ -8,6 +8,7 @@ import {
   getResourcePolicyRoutingSummaries,
   getResourcePolicySensitivitySummaries,
   getResourcePolicyRedactionLabels,
+  getResourcePolicyRoutingDecisionLabel,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -17,6 +18,8 @@ describe('resourcePolicyPresentation utils', () => {
   it('formats canonical policy labels', () => {
     expect(getResourceSensitivityLabel('restricted')).toBe('Restricted');
     expect(getResourceRoutingScopeLabel('local-only')).toBe('Local Only');
+    expect(getResourcePolicyRoutingDecisionLabel(true)).toBe('Allowed');
+    expect(getResourcePolicyRoutingDecisionLabel(false)).toBe('Blocked');
     expect(getResourceRedactionHintLabel('platform-id')).toBe('Platform ID');
   });
 
