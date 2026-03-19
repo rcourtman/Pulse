@@ -104,7 +104,7 @@ func TestExtractFacts_QueryGet_NoCPU(t *testing.T) {
 
 func TestExtractFacts_QueryGet_UsesGovernedSummary(t *testing.T) {
 	input := map[string]interface{}{"action": "get", "resource_type": "vm", "resource_id": "100"}
-	result := `{"type":"vm","name":"finance-vm","status":"running","node":"node1.internal","id":"qemu/pve1/node1/100","vmid":100,"policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","allowCloudSummary":true,"redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"virtual machine resource; status running; redacted for cloud summary","cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
+	result := `{"type":"vm","name":"finance-vm","status":"running","node":"node1.internal","id":"qemu/pve1/node1/100","vmid":100,"policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"virtual machine resource; status running; redacted for cloud summary","cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 2)
@@ -137,7 +137,7 @@ func TestExtractFacts_QuerySearch_Empty(t *testing.T) {
 
 func TestExtractFacts_QuerySearch_UsesGovernedSummary(t *testing.T) {
 	input := map[string]interface{}{"action": "search", "query": "finance"}
-	result := `{"query":"finance","matches":[{"name":"finance-vm","status":"running","type":"vm","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","allowCloudSummary":true,"redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"virtual machine resource; status running; redacted for cloud summary"}],"total":1}`
+	result := `{"query":"finance","matches":[{"name":"finance-vm","status":"running","type":"vm","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"virtual machine resource; status running; redacted for cloud summary"}],"total":1}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -468,7 +468,7 @@ func TestExtractFacts_QueryTopology(t *testing.T) {
 
 func TestExtractFacts_QueryTopology_UsesGovernedSummary(t *testing.T) {
 	input := map[string]interface{}{"action": "topology"}
-	result := `{"summary":{"total_nodes":1,"total_vms":1,"running_vms":1,"total_system_containers":0,"running_containers":0,"total_docker_hosts":0},"proxmox":{"nodes":[{"name":"finance-node.internal","status":"online","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","allowCloudSummary":true,"redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"agent resource; status online; redacted for cloud summary"}]}}`
+	result := `{"summary":{"total_nodes":1,"total_vms":1,"running_vms":1,"total_system_containers":0,"running_containers":0,"total_docker_hosts":0},"proxmox":{"nodes":[{"name":"finance-node.internal","status":"online","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"agent resource; status online; redacted for cloud summary"}]}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -967,7 +967,7 @@ func TestExtractFacts_QueryConfig_VM(t *testing.T) {
 
 func TestExtractFacts_QueryConfig_UsesGovernedSummary(t *testing.T) {
 	input := map[string]interface{}{"action": "config", "resource_id": "106", "node": "pve-node"}
-	result := `{"guest_type":"lxc","vmid":106,"name":"postfix-server","node":"pve-node","hostname":"postfix.internal","os_type":"ubuntu","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","allowCloudSummary":true,"redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"system container resource; status online; linked to parent resource; redacted for cloud summary","onboot":true,"mounts":[{"key":"mp0","mountpoint":"/data"}]}`
+	result := `{"guest_type":"lxc","vmid":106,"name":"postfix-server","node":"pve-node","hostname":"postfix.internal","os_type":"ubuntu","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"system container resource; status online; linked to parent resource; redacted for cloud summary","onboot":true,"mounts":[{"key":"mp0","mountpoint":"/data"}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 2)

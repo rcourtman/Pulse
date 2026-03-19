@@ -263,8 +263,7 @@ func TestResourcePolicySummaryContractOmitsRawSignals(t *testing.T) {
 	policy := ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,
 		Routing: ResourceRoutingPolicy{
-			Scope:             ResourceRoutingScopeLocalOnly,
-			AllowCloudSummary: false,
+			Scope: ResourceRoutingScopeLocalOnly,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionHostname,
 			},

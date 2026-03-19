@@ -34,9 +34,6 @@ func TestRefreshPolicyMetadata_ClassifiesRestrictedResources(t *testing.T) {
 	if got := resource.Policy.Routing.Scope; got != ResourceRoutingScopeLocalOnly {
 		t.Fatalf("routing scope = %q, want %q", got, ResourceRoutingScopeLocalOnly)
 	}
-	if resource.Policy.Routing.AllowCloudSummary {
-		t.Fatal("expected local-only resource to block cloud summary")
-	}
 	if !containsRedactionHint(resource.Policy.Routing.Redact, ResourceRedactionHostname) {
 		t.Fatalf("expected hostname redaction hint, got %#v", resource.Policy.Routing.Redact)
 	}
@@ -73,9 +70,6 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 	if got := resource.Policy.Routing.Scope; got != ResourceRoutingScopeCloudSummary {
 		t.Fatalf("routing scope = %q, want %q", got, ResourceRoutingScopeCloudSummary)
-	}
-	if !resource.Policy.Routing.AllowCloudSummary {
-		t.Fatal("expected internal resource to allow cloud summary")
 	}
 }
 
@@ -259,8 +253,7 @@ func TestResourcePolicySummaryLines(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,
 		Routing: ResourceRoutingPolicy{
-			Scope:             ResourceRoutingScopeLocalOnly,
-			AllowCloudSummary: false,
+			Scope: ResourceRoutingScopeLocalOnly,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionAlias,
 				ResourceRedactionHostname,
@@ -316,8 +309,7 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivitySensitive,
 		Routing: ResourceRoutingPolicy{
-			Scope:             ResourceRoutingScopeLocalFirst,
-			AllowCloudSummary: true,
+			Scope: ResourceRoutingScopeLocalFirst,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionHostname,
 				ResourceRedactionIPAddress,
@@ -455,8 +447,7 @@ func TestCloneResourcePolicy(t *testing.T) {
 	original := &ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,
 		Routing: ResourceRoutingPolicy{
-			Scope:             ResourceRoutingScopeLocalOnly,
-			AllowCloudSummary: false,
+			Scope: ResourceRoutingScopeLocalOnly,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionHostname,
 				ResourceRedactionIPAddress,
@@ -490,8 +481,7 @@ func TestResourcePolicySummaryLinesOmitRawSignals(t *testing.T) {
 	got := ResourcePolicySummaryLines(&ResourcePolicy{
 		Sensitivity: ResourceSensitivityInternal,
 		Routing: ResourceRoutingPolicy{
-			Scope:             ResourceRoutingScopeCloudSummary,
-			AllowCloudSummary: true,
+			Scope: ResourceRoutingScopeCloudSummary,
 		},
 	})
 

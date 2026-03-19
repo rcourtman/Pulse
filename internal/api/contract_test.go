@@ -3728,9 +3728,6 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	if got := resource.Policy.Routing.Scope; got != unifiedresources.ResourceRoutingScopeLocalOnly {
 		t.Fatalf("routing scope = %q, want %q", got, unifiedresources.ResourceRoutingScopeLocalOnly)
 	}
-	if resource.Policy.Routing.AllowCloudSummary {
-		t.Fatal("expected restricted resource to block cloud summary")
-	}
 	wantRedactions := []unifiedresources.ResourceRedactionHint{
 		unifiedresources.ResourceRedactionHostname,
 		unifiedresources.ResourceRedactionIPAddress,

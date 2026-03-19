@@ -377,8 +377,7 @@ func TestResourcePolicyHelpersShareAISafeSummaryDecision(t *testing.T) {
 	policy := &unifiedresources.ResourcePolicy{
 		Sensitivity: unifiedresources.ResourceSensitivitySensitive,
 		Routing: unifiedresources.ResourceRoutingPolicy{
-			Scope:             unifiedresources.ResourceRoutingScopeLocalFirst,
-			AllowCloudSummary: true,
+			Scope: unifiedresources.ResourceRoutingScopeLocalFirst,
 			Redact: []unifiedresources.ResourceRedactionHint{
 				unifiedresources.ResourceRedactionHostname,
 				unifiedresources.ResourceRedactionIPAddress,

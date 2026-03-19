@@ -283,7 +283,6 @@ describe('Resource Interface', () => {
         sensitivity: 'restricted',
         routing: {
           scope: 'local-only',
-          allowCloudSummary: false,
           redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
         },
       },

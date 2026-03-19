@@ -283,7 +283,6 @@ describe('useUnifiedResources', () => {
               sensitivity: 'restricted',
               routing: {
                 scope: 'local-only',
-                allowCloudSummary: false,
                 redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
               },
             },
@@ -303,12 +302,11 @@ describe('useUnifiedResources', () => {
     await result!.refetch();
     expect(result!.resources()[0].policy).toEqual({
       sensitivity: 'restricted',
-        routing: {
-          scope: 'local-only',
-          allowCloudSummary: false,
-          redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
-        },
-      });
+      routing: {
+        scope: 'local-only',
+        redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
+      },
+    });
     expect(result!.resources()[0].aiSafeSummary).toBe('resource summary safe for remote AI use');
 
     dispose();

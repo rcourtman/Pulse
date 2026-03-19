@@ -372,7 +372,6 @@ type APIResource = {
     sensitivity?: string;
     routing?: {
       scope?: string;
-      allowCloudSummary?: boolean;
       redact?: string[];
     };
   };

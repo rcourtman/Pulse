@@ -339,7 +339,6 @@ describe('UnifiedResourceTable performance contract', () => {
           sensitivity: i % 2 === 0 ? 'restricted' : 'internal',
           routing: {
             scope: i % 3 === 0 ? 'local-only' : 'local-first',
-            allowCloudSummary: i % 3 !== 0,
             redact: ['hostname', 'alias'],
           },
         },

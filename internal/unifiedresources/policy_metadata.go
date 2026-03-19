@@ -44,9 +44,8 @@ type ResourcePolicy struct {
 
 // ResourceRoutingPolicy captures the current routing posture for AI-safe handling.
 type ResourceRoutingPolicy struct {
-	Scope             ResourceRoutingScope    `json:"scope"`
-	AllowCloudSummary bool                    `json:"allowCloudSummary"`
-	Redact            []ResourceRedactionHint `json:"redact,omitempty"`
+	Scope  ResourceRoutingScope    `json:"scope"`
+	Redact []ResourceRedactionHint `json:"redact,omitempty"`
 }
 
 // CloneResourcePolicy returns a deep copy of the canonical resource policy.
@@ -148,13 +147,10 @@ func buildResourceRoutingPolicy(resource Resource, sensitivity ResourceSensitivi
 	switch sensitivity {
 	case ResourceSensitivityPublic, ResourceSensitivityInternal:
 		policy.Scope = ResourceRoutingScopeCloudSummary
-		policy.AllowCloudSummary = true
 	case ResourceSensitivitySensitive:
 		policy.Scope = ResourceRoutingScopeLocalFirst
-		policy.AllowCloudSummary = true
 	case ResourceSensitivityRestricted:
 		policy.Scope = ResourceRoutingScopeLocalOnly
-		policy.AllowCloudSummary = false
 	default:
 		policy.Scope = ResourceRoutingScopeLocalFirst
 	}

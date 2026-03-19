@@ -128,7 +128,6 @@ export type ResourceRedactionHint = 'hostname' | 'ip-address' | 'platform-id' | 
 
 export interface ResourceRoutingPolicy {
   scope: ResourceRoutingScope;
-  allowCloudSummary: boolean;
   redact?: ResourceRedactionHint[];
 }
 

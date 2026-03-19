@@ -125,7 +125,9 @@ export const getResourcePolicyRoutingDecisionSummaries = (
   return [
     {
       label: 'Cloud Summary',
-      value: getResourcePolicyRoutingDecisionLabel(policy.routing.allowCloudSummary),
+      value: getResourcePolicyRoutingDecisionLabel(
+        policy.routing.scope !== 'local-only',
+      ),
     },
   ];
 };

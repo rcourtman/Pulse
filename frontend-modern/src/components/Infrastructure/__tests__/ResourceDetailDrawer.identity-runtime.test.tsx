@@ -295,7 +295,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         sensitivity: 'restricted',
         routing: {
           scope: 'local-only',
-          allowCloudSummary: false,
           redact: ['hostname', 'ip-address', 'alias'],
         },
       },

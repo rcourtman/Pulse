@@ -41,7 +41,6 @@ const resource: Resource = {
     sensitivity: 'restricted',
     routing: {
       scope: 'local-only',
-      allowCloudSummary: false,
       redact: ['hostname', 'alias'],
     },
   },

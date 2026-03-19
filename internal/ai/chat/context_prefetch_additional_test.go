@@ -436,8 +436,7 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 		Policy: &unifiedresources.ResourcePolicy{
 			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
 			Routing: unifiedresources.ResourceRoutingPolicy{
-				Scope:             unifiedresources.ResourceRoutingScopeLocalOnly,
-				AllowCloudSummary: false,
+				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
 				Redact: []unifiedresources.ResourceRedactionHint{
 					unifiedresources.ResourceRedactionAlias,
 					unifiedresources.ResourceRedactionHostname,
@@ -479,8 +478,7 @@ func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter
 		Policy: &unifiedresources.ResourcePolicy{
 			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
 			Routing: unifiedresources.ResourceRoutingPolicy{
-				Scope:             unifiedresources.ResourceRoutingScopeLocalOnly,
-				AllowCloudSummary: false,
+				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
 				Redact: []unifiedresources.ResourceRedactionHint{
 					unifiedresources.ResourceRedactionAlias,
 					unifiedresources.ResourceRedactionHostname,
@@ -494,8 +492,7 @@ func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter
 		&unifiedresources.ResourcePolicy{
 			Sensitivity: unifiedresources.ResourceSensitivityRestricted,
 			Routing: unifiedresources.ResourceRoutingPolicy{
-				Scope:             unifiedresources.ResourceRoutingScopeLocalOnly,
-				AllowCloudSummary: false,
+				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
 				Redact: []unifiedresources.ResourceRedactionHint{
 					unifiedresources.ResourceRedactionAlias,
 					unifiedresources.ResourceRedactionHostname,

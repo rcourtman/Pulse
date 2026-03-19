@@ -30,7 +30,6 @@ describe('resourcePolicyPresentation utils', () => {
         sensitivity: 'sensitive',
         routing: {
           scope: 'local-first',
-          allowCloudSummary: true,
           redact: ['hostname', 'ip-address'],
         },
       }),
@@ -43,7 +42,6 @@ describe('resourcePolicyPresentation utils', () => {
         sensitivity: 'sensitive',
         routing: {
           scope: 'local-first',
-          allowCloudSummary: true,
           redact: [],
         },
       }),
