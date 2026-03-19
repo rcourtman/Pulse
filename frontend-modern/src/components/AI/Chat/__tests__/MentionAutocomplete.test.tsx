@@ -8,7 +8,7 @@ afterEach(cleanup);
 function makeResource(overrides?: Partial<MentionResource>): MentionResource {
   return {
     id: 'vm-100',
-    displayName: 'web-server',
+    label: 'web-server',
     type: 'vm',
     status: 'running',
     node: 'pve1',
@@ -19,29 +19,29 @@ function makeResource(overrides?: Partial<MentionResource>): MentionResource {
 const defaultResources: MentionResource[] = [
   makeResource({
     id: 'vm-100',
-    displayName: 'web-server',
+    label: 'web-server',
     type: 'vm',
     status: 'running',
     node: 'pve1',
   }),
   makeResource({
     id: 'ct-200',
-    displayName: 'db-container',
+    label: 'db-container',
     type: 'system-container',
     status: 'running',
     node: 'pve2',
   }),
-  makeResource({ id: 'node-1', displayName: 'pve1', type: 'agent', status: 'running' }),
+  makeResource({ id: 'node-1', label: 'pve1', type: 'agent', status: 'running' }),
   makeResource({
     id: 'docker-1',
-    displayName: 'nginx-proxy',
+    label: 'nginx-proxy',
     type: 'app-container',
     status: 'running',
     node: 'docker-host',
   }),
   makeResource({
     id: 'host-1',
-    displayName: 'bare-metal-01',
+    label: 'bare-metal-01',
     type: 'agent',
     status: 'stopped',
     node: undefined,
@@ -85,7 +85,7 @@ describe('MentionAutocomplete', () => {
     it('shows all resources (up to 10) when query is empty', () => {
       renderAutocomplete({ query: '' });
       for (const r of defaultResources) {
-        expect(screen.getByText(r.displayName)).toBeInTheDocument();
+        expect(screen.getByText(r.label)).toBeInTheDocument();
       }
     });
 
@@ -103,7 +103,7 @@ describe('MentionAutocomplete', () => {
 
     it('limits results to 10 items', () => {
       const manyResources = Array.from({ length: 15 }, (_, i) =>
-        makeResource({ id: `vm-${i}`, displayName: `server-${i}` }),
+        makeResource({ id: `vm-${i}`, label: `server-${i}` }),
       );
       renderAutocomplete({ resources: manyResources, query: '' });
 
