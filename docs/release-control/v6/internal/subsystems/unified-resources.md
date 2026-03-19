@@ -299,6 +299,11 @@ That same ownership rule now keeps the service-summary sentence in the
 inside PBS or PMG cards, and the service-local reveal labels stay terse
 (`Show jobs`, `Show mail flow`, `Jobs`, `Queue`) so opened cards read like
 current state instead of descriptive chrome.
+The Docker service card now follows the same rule: its opened state uses
+compact labels (`Docker runtime`, `Updates`, `Checked`, `Show actions`,
+`Check now`, `Update all`) and short queued/confirm feedback so action
+surfaces stay readable without turning the card into a paragraph of control
+copy.
 Unsupported secondary tabs now also use the same terse availability notices
 (`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
 Swarm only.`) instead of explanatory sentences, so mismatch fallback state

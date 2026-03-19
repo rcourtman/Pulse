@@ -202,6 +202,9 @@ describe('ResourceDetailDrawer change history section', () => {
         'Swarm details are only available for Docker runtimes reporting Swarm metadata.',
       ),
     ).toBeNull();
+    expect(screen.queryByText('Container Updates')).toBeNull();
+    expect(screen.queryByText('Check Updates')).toBeNull();
+    expect(screen.queryByText('Show update controls')).toBeNull();
     expect(screen.getByText('Discovery context')).toBeInTheDocument();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),

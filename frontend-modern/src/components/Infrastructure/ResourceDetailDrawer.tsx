@@ -1150,7 +1150,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
                       <div class="mb-2 flex items-center justify-between gap-2">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                          Container Updates
+                          Docker runtime
                         </div>
                         <Show when={dockerHostData()?.runtime}>
                           <span
@@ -1170,7 +1170,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           </span>
                         </div>
                         <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Updates Available</span>
+                          <span class="text-muted">Updates</span>
                           <span
                             class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
                           >
@@ -1179,7 +1179,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         </div>
                         <Show when={dockerUpdatesCheckedRelative()}>
                           <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Last Check</span>
+                            <span class="text-muted">Checked</span>
                             <span class="font-medium text-base-content">
                               {dockerUpdatesCheckedRelative()}
                             </span>
@@ -1191,7 +1191,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
                               <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
                                 <div class="flex items-center justify-between gap-2">
-                                  <span class="text-muted">Command</span>
+                                  <span class="text-muted">Action</span>
                                   <span class="font-medium text-base-content">
                                     {formatIdentifierLabel(dockerHostCommand()?.type, {
                                       fallback: 'command',
@@ -1199,7 +1199,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                   </span>
                                 </div>
                                 <div class="mt-1 flex items-center justify-between gap-2">
-                                  <span class="text-muted">Status</span>
+                                  <span class="text-muted">State</span>
                                   <span
                                     class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
                                   >
@@ -1253,21 +1253,19 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                   try {
                                     setDockerActionBusy(true);
                                     await MonitoringAPI.checkDockerUpdates(hostId);
-                                    setDockerActionNote(
-                                      'Update check queued. Results will refresh on the next agent report.',
-                                    );
+                                    setDockerActionNote('Check queued.');
                                   } catch (err) {
                                     setDockerActionError(
-                                      (err as Error)?.message || 'Failed to queue update check',
+                                      (err as Error)?.message || 'Failed to queue check',
                                     );
                                   } finally {
                                     setDockerActionBusy(false);
                                   }
                                 }}
                                 class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
-                                title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
+                                title={dockerUpdateActionsLoading() ? 'Loading settings...' : undefined}
                               >
-                                Check Updates
+                                Check now
                               </button>
 
                               <button
@@ -1288,21 +1286,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
                                   if (!confirmUpdateAll()) {
                                     setConfirmUpdateAll(true);
-                                    setDockerActionNote(
-                                      `Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`,
-                                    );
+                                    setDockerActionNote(`Click again to update ${dockerUpdatesAvailable()} containers.`);
                                     return;
                                   }
 
                                   try {
                                     setDockerActionBusy(true);
                                     await MonitoringAPI.updateAllDockerContainers(hostId);
-                                    setDockerActionNote(
-                                      'Batch update queued. Progress will appear as the agent reports back.',
-                                    );
+                                    setDockerActionNote('Update queued.');
                                   } catch (err) {
                                     setDockerActionError(
-                                      (err as Error)?.message || 'Failed to queue batch update',
+                                      (err as Error)?.message || 'Failed to queue update',
                                     );
                                   } finally {
                                     setDockerActionBusy(false);
@@ -1312,13 +1306,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
                                 title={
                                   dockerUpdateActionsDisabled()
-                                    ? 'Docker updates are disabled by server configuration.'
+                                    ? 'Updates disabled by server settings.'
                                     : undefined
                                 }
                               >
                                 {confirmUpdateAll()
-                                  ? 'Confirm Update All'
-                                  : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
+                                  ? 'Confirm update'
+                                  : `Update all${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
                               </button>
                             </div>
                           </div>
@@ -1329,7 +1323,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           onClick={() => setShowDockerUpdateControls((value) => !value)}
                           class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-base dark:border-sky-700 dark:text-sky-300"
                         >
-                          {showDockerUpdateControls() ? 'Hide update controls' : 'Show update controls'}
+                          {showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
                         </button>
                       </div>
                     </div>
