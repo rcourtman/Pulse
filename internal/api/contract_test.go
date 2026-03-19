@@ -336,6 +336,22 @@ func TestContract_IntelligenceSummaryIncludesRecentChanges(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("record canonical change: %v", err)
 	}
+	svc.SetUnifiedResourceProvider(&stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
+			{
+				ID:   "public-1",
+				Name: "public-vm",
+				Type: unifiedresources.ResourceTypeVM,
+				Tags: []string{"public"},
+			},
+			{
+				ID:   "restricted-1",
+				Name: "mail-gw",
+				Type: unifiedresources.ResourceTypePMG,
+				PMG:  &unifiedresources.PMGData{Hostname: "mail.internal"},
+			},
+		},
+	})
 	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
 	setUnexportedField(t, svc.GetPatrolService(), "aiService", svc)
 
@@ -359,6 +375,13 @@ func TestContract_IntelligenceSummaryIncludesRecentChanges(t *testing.T) {
 	}
 	if len(recentChanges) != 1 {
 		t.Fatalf("expected 1 recent change, got %d", len(recentChanges))
+	}
+	policyPosture, ok := payload["policy_posture"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected policy_posture object in response, got %T", payload["policy_posture"])
+	}
+	if got := int(policyPosture["total_resources"].(float64)); got != 2 {
+		t.Fatalf("expected total_resources=2, got %d", got)
 	}
 }
 

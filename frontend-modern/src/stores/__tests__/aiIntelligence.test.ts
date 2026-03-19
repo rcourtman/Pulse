@@ -90,6 +90,24 @@ describe('aiIntelligenceStore', () => {
           confidence: 'high',
         },
       ],
+      policy_posture: {
+        total_resources: 4,
+        sensitivity_counts: {
+          public: 1,
+          internal: 1,
+          sensitive: 1,
+          restricted: 1,
+        },
+        routing_counts: {
+          'cloud-summary': 2,
+          'local-first': 1,
+          'local-only': 1,
+        },
+        redaction_counts: {
+          hostname: 2,
+          'ip-address': 1,
+        },
+      },
       learning: {
         resources_with_knowledge: 4,
         total_notes: 11,
@@ -109,6 +127,9 @@ describe('aiIntelligenceStore', () => {
         total: 7,
       },
       recent_changes_count: 1,
+      policy_posture: {
+        total_resources: 4,
+      },
     });
     expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
   });

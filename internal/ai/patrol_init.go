@@ -789,6 +789,7 @@ func (p *PatrolService) GetIntelligence() *Intelligence {
 		p.aiService.mu.RUnlock()
 		p.intelligence.SetResourceTimelineStore(store, orgID)
 	}
+	p.intelligence.SetUnifiedResourceProvider(p.unifiedResourceProvider)
 
 	if p.stateProvider != nil {
 		p.intelligence.SetStateProvider(p.stateProvider)

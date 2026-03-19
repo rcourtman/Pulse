@@ -9,7 +9,12 @@
  * Store logic lives in @/stores/aiIntelligence.ts
  */
 
-import type { ResourceChange } from '@/types/resource';
+import type {
+  ResourceChange,
+  ResourceRedactionHint,
+  ResourceRoutingScope,
+  ResourceSensitivity,
+} from '@/types/resource';
 
 // ============================================
 // Anomaly Detection Types
@@ -82,6 +87,13 @@ export interface IntelligenceLearningStats {
   incidents_tracked: number;
 }
 
+export interface IntelligencePolicyPostureSummary {
+  total_resources: number;
+  sensitivity_counts: Partial<Record<ResourceSensitivity, number>>;
+  routing_counts: Partial<Record<ResourceRoutingScope, number>>;
+  redaction_counts?: Partial<Record<ResourceRedactionHint, number>>;
+}
+
 export interface IntelligenceSummary {
   timestamp: string;
   overall_health: IntelligenceHealthScore;
@@ -90,6 +102,7 @@ export interface IntelligenceSummary {
   recent_changes_count: number;
   recent_changes?: ResourceChange[];
   recent_remediations?: Array<Record<string, unknown>>;
+  policy_posture?: IntelligencePolicyPostureSummary;
   learning: IntelligenceLearningStats;
   resources_at_risk?: Array<Record<string, unknown>>;
 }

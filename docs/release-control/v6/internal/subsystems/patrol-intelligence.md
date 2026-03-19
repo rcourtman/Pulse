@@ -88,6 +88,10 @@ instead of being reconstructed locally.
 The Patrol page also now renders the canonical intelligence summary card
 through the governed AI client and store, so the visible page summary and the
 resource/timeline sections stay aligned on the same shared backend slice.
+That Patrol summary card now also includes the canonical data-governance
+posture snapshot from the shared AI summary payload, so the visible page can
+show the same sensitivity, routing, and redaction distribution that the
+runtime derives from unified resources.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

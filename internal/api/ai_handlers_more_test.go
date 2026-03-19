@@ -49,27 +49,35 @@ func (stubMetricsHistoryProvider) GetAllStorageMetrics(string, time.Duration) ma
 	return nil
 }
 
-type stubUnifiedResourceProvider struct{}
+type stubUnifiedResourceProvider struct {
+	resources []unifiedresources.Resource
+}
 
-func (stubUnifiedResourceProvider) GetAll() []unifiedresources.Resource            { return nil }
-func (stubUnifiedResourceProvider) GetInfrastructure() []unifiedresources.Resource { return nil }
-func (stubUnifiedResourceProvider) GetWorkloads() []unifiedresources.Resource      { return nil }
-func (stubUnifiedResourceProvider) GetByType(unifiedresources.ResourceType) []unifiedresources.Resource {
+func (s stubUnifiedResourceProvider) GetAll() []unifiedresources.Resource {
+	return s.resources
+}
+func (s stubUnifiedResourceProvider) GetInfrastructure() []unifiedresources.Resource {
+	return nil
+}
+func (s stubUnifiedResourceProvider) GetWorkloads() []unifiedresources.Resource {
+	return nil
+}
+func (s stubUnifiedResourceProvider) GetByType(unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
 func (stubUnifiedResourceProvider) GetStats() unifiedresources.ResourceStats {
 	return unifiedresources.ResourceStats{}
 }
-func (stubUnifiedResourceProvider) GetTopByCPU(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
+func (s stubUnifiedResourceProvider) GetTopByCPU(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubUnifiedResourceProvider) GetTopByMemory(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
+func (s stubUnifiedResourceProvider) GetTopByMemory(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubUnifiedResourceProvider) GetTopByDisk(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
+func (s stubUnifiedResourceProvider) GetTopByDisk(int, []unifiedresources.ResourceType) []unifiedresources.Resource {
 	return nil
 }
-func (stubUnifiedResourceProvider) GetRelated(string) map[string][]unifiedresources.Resource {
+func (s stubUnifiedResourceProvider) GetRelated(string) map[string][]unifiedresources.Resource {
 	return map[string][]unifiedresources.Resource{}
 }
 func (stubUnifiedResourceProvider) FindContainerHost(string) string { return "" }

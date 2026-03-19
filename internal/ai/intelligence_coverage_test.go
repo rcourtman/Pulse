@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -204,6 +205,82 @@ func TestIntelligence_getLearningStats(t *testing.T) {
 	}
 	if stats.CorrelationsLearned != 1 {
 		t.Errorf("expected 1 correlation, got %d", stats.CorrelationsLearned)
+	}
+}
+
+func TestIntelligence_summarizePolicyPosture(t *testing.T) {
+	resources := []ur.Resource{
+		{
+			ID:   "public-1",
+			Name: "public-vm",
+			Type: ur.ResourceTypeVM,
+			Tags: []string{"public"},
+		},
+		{
+			ID:     "internal-1",
+			Name:   "agent-1",
+			Type:   ur.ResourceTypeAgent,
+			Agent:  &ur.AgentData{Hostname: "agent-1"},
+			Status: ur.StatusOnline,
+		},
+		{
+			ID:     "sensitive-1",
+			Name:   "db-1",
+			Type:   ur.ResourceTypeVM,
+			Status: ur.StatusOnline,
+			Identity: ur.ResourceIdentity{
+				Hostnames:   []string{"db.internal"},
+				IPAddresses: []string{"10.0.0.10"},
+			},
+			Canonical: &ur.CanonicalIdentity{
+				PlatformID: "db.internal",
+				Aliases:    []string{"db-1"},
+			},
+		},
+		{
+			ID:     "restricted-1",
+			Name:   "mail-gw",
+			Type:   ur.ResourceTypePMG,
+			Status: ur.StatusWarning,
+			PMG:    &ur.PMGData{Hostname: "mail.internal"},
+		},
+	}
+
+	summary := summarizePolicyPosture(normalizeUnifiedResourceContextSlice(resources))
+	if summary == nil {
+		t.Fatal("expected posture summary")
+	}
+	if summary.TotalResources != 4 {
+		t.Fatalf("total resources = %d, want 4", summary.TotalResources)
+	}
+	if got := summary.SensitivityCounts[ur.ResourceSensitivityPublic]; got != 1 {
+		t.Fatalf("public sensitivity count = %d, want 1", got)
+	}
+	if got := summary.SensitivityCounts[ur.ResourceSensitivityInternal]; got != 1 {
+		t.Fatalf("internal sensitivity count = %d, want 1", got)
+	}
+	if got := summary.SensitivityCounts[ur.ResourceSensitivitySensitive]; got != 1 {
+		t.Fatalf("sensitive sensitivity count = %d, want 1", got)
+	}
+	if got := summary.SensitivityCounts[ur.ResourceSensitivityRestricted]; got != 1 {
+		t.Fatalf("restricted sensitivity count = %d, want 1", got)
+	}
+	if got := summary.RoutingCounts[ur.ResourceRoutingScopeCloudSummary]; got != 2 {
+		t.Fatalf("cloud summary routing count = %d, want 2", got)
+	}
+	if got := summary.RoutingCounts[ur.ResourceRoutingScopeLocalFirst]; got != 1 {
+		t.Fatalf("local-first routing count = %d, want 1", got)
+	}
+	if got := summary.RoutingCounts[ur.ResourceRoutingScopeLocalOnly]; got != 1 {
+		t.Fatalf("local-only routing count = %d, want 1", got)
+	}
+	if got := summary.RedactionCounts[ur.ResourceRedactionHostname]; got == 0 {
+		t.Fatal("expected hostname redaction count")
+	}
+
+	labels := policyPostureRedactionLabels(summary)
+	if !reflect.DeepEqual(labels, []string{"Alias", "Hostname", "IP Address", "Platform ID"}) {
+		t.Fatalf("redaction labels = %#v, want %#v", labels, []string{"Alias", "Hostname", "IP Address", "Platform ID"})
 	}
 }
 

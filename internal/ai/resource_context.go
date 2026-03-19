@@ -101,52 +101,43 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		infrastructure := normalizeUnifiedResourceContextSlice(urp.GetInfrastructure())
 		workloads := normalizeUnifiedResourceContextSlice(urp.GetWorkloads())
 		allResources := normalizeUnifiedResourceContextSlice(urp.GetAll())
+		policyPosture := summarizePolicyPosture(allResources)
+		sensitivityCounts := map[unifiedresources.ResourceSensitivity]int{}
+		routingCounts := map[unifiedresources.ResourceRoutingScope]int{}
+		var redactionHints []unifiedresources.ResourceRedactionHint
+		localOnlyCount := 0
+		if policyPosture != nil {
+			sensitivityCounts = policyPosture.SensitivityCounts
+			routingCounts = policyPosture.RoutingCounts
+			localOnlyCount = routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly]
+			if len(policyPosture.RedactionCounts) > 0 {
+				redactionHints = make([]unifiedresources.ResourceRedactionHint, 0, len(policyPosture.RedactionCounts))
+				for hint := range policyPosture.RedactionCounts {
+					redactionHints = append(redactionHints, hint)
+				}
+			}
+		}
 		byResourceID := make(map[string]unifiedresources.Resource, len(allResources))
 		for _, resource := range allResources {
 			byResourceID[resource.ID] = resource
 		}
-		sensitivityCounts := make(map[unifiedresources.ResourceSensitivity]int)
-		routingCounts := make(map[unifiedresources.ResourceRoutingScope]int)
-		localOnlyCount := 0
-		var redactionHints []unifiedresources.ResourceRedactionHint
-		redactionHintSet := make(map[unifiedresources.ResourceRedactionHint]struct{})
-		if len(allResources) > 0 {
-			for _, resource := range allResources {
-				if resource.Policy == nil {
-					continue
-				}
-				sensitivityCounts[resource.Policy.Sensitivity]++
-				routingCounts[resource.Policy.Routing.Scope]++
-				if resource.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
-					localOnlyCount++
-				}
-				for _, hint := range resource.Policy.Routing.Redact {
-					redactionHintSet[hint] = struct{}{}
-				}
-			}
-			if len(redactionHintSet) > 0 {
-				redactionHints = make([]unifiedresources.ResourceRedactionHint, 0, len(redactionHintSet))
-				for hint := range redactionHintSet {
-					redactionHints = append(redactionHints, hint)
-				}
-				sort.Slice(redactionHints, func(i, j int) bool {
-					return redactionHints[i] < redactionHints[j]
-				})
-			}
-			if len(sensitivityCounts) > 0 {
-				sections = append(sections, "\n### Data Governance")
-				sections = append(sections, fmt.Sprintf("- Sensitivity: %d public, %d internal, %d sensitive, %d restricted",
-					sensitivityCounts[unifiedresources.ResourceSensitivityPublic],
-					sensitivityCounts[unifiedresources.ResourceSensitivityInternal],
-					sensitivityCounts[unifiedresources.ResourceSensitivitySensitive],
-					sensitivityCounts[unifiedresources.ResourceSensitivityRestricted],
-				))
-				sections = append(sections, fmt.Sprintf("- Routing: %d cloud-summary, %d local-first, %d local-only",
-					routingCounts[unifiedresources.ResourceRoutingScopeCloudSummary],
-					routingCounts[unifiedresources.ResourceRoutingScopeLocalFirst],
-					routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly],
-				))
-				sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
+		if policyPosture != nil && policyPosture.TotalResources > 0 {
+			sections = append(sections, "\n### Data Governance")
+			sections = append(sections, fmt.Sprintf("- Sensitivity: %d public, %d internal, %d sensitive, %d restricted",
+				sensitivityCounts[unifiedresources.ResourceSensitivityPublic],
+				sensitivityCounts[unifiedresources.ResourceSensitivityInternal],
+				sensitivityCounts[unifiedresources.ResourceSensitivitySensitive],
+				sensitivityCounts[unifiedresources.ResourceSensitivityRestricted],
+			))
+			sections = append(sections, fmt.Sprintf("- Routing: %d cloud-summary, %d local-first, %d local-only",
+				routingCounts[unifiedresources.ResourceRoutingScopeCloudSummary],
+				routingCounts[unifiedresources.ResourceRoutingScopeLocalFirst],
+				routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly],
+			))
+			sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
+			if redactionLabels := policyPostureRedactionLabels(policyPosture); len(redactionLabels) > 0 {
+				sections = append(sections, "\n### Policy Redaction Hints")
+				sections = append(sections, fmt.Sprintf("- Redactions in use: %s", strings.Join(redactionLabels, ", ")))
 			}
 		}
 

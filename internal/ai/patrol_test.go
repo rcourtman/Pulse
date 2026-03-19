@@ -1003,6 +1003,24 @@ func TestPatrolService_GetIntelligence(t *testing.T) {
 
 	ps := NewPatrolService(svc, nil)
 	ps.stateProvider = &mockStateProvider{}
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getAllFunc: func() []ur.Resource {
+			return []ur.Resource{
+				{
+					ID:   "public-1",
+					Name: "public-vm",
+					Type: ur.ResourceTypeVM,
+					Tags: []string{"public"},
+				},
+				{
+					ID:    "internal-1",
+					Name:  "agent-1",
+					Type:  ur.ResourceTypeAgent,
+					Agent: &ur.AgentData{Hostname: "agent-1"},
+				},
+			}
+		},
+	})
 
 	intel := ps.GetIntelligence()
 	if intel == nil {
@@ -1014,6 +1032,15 @@ func TestPatrolService_GetIntelligence(t *testing.T) {
 	summary := intel.GetSummary()
 	if summary.RecentChangesCount != 1 {
 		t.Fatalf("expected canonical timeline count, got %d", summary.RecentChangesCount)
+	}
+	if summary.PolicyPosture == nil {
+		t.Fatal("expected canonical policy posture summary")
+	}
+	if summary.PolicyPosture.TotalResources != 2 {
+		t.Fatalf("expected 2 governed resources, got %d", summary.PolicyPosture.TotalResources)
+	}
+	if got := summary.PolicyPosture.SensitivityCounts[ur.ResourceSensitivityPublic]; got != 1 {
+		t.Fatalf("expected 1 public resource, got %d", got)
 	}
 }
 

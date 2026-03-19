@@ -80,6 +80,8 @@ export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): 
 export const getResourceRoutingScopeLabel = (scope?: ResourceRoutingScope): string =>
   scope ? routingPresentation[scope].label : 'Unrouted';
 
-export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
-  (policy?.routing.redact ?? []).map((hint) => redactionLabels[hint] ?? hint);
+export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): string =>
+  hint ? redactionLabels[hint] ?? hint : 'Unclassified';
 
+export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
+  (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));

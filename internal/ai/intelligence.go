@@ -102,6 +102,9 @@ type IntelligenceSummary struct {
 	RecentChanges      []unifiedresources.ResourceChange `json:"recent_changes,omitempty"`
 	RecentRemediations []memory.RemediationRecord        `json:"recent_remediations,omitempty"`
 
+	// Data governance posture
+	PolicyPosture *PolicyPostureSummary `json:"policy_posture,omitempty"`
+
 	// Learning progress
 	Learning LearningStats `json:"learning"`
 
@@ -152,6 +155,7 @@ type Intelligence struct {
 	remediations               *memory.RemediationLog
 	resourceTimelineStore      unifiedresources.ResourceStore
 	resourceTimelineStoreOrgID string
+	unifiedResourceProvider    UnifiedResourceProvider
 
 	// State access
 	stateProvider StateProvider
@@ -208,6 +212,14 @@ func (i *Intelligence) SetResourceTimelineStore(store unifiedresources.ResourceS
 	i.resourceTimelineStoreOrgID = strings.TrimSpace(orgID)
 }
 
+// SetUnifiedResourceProvider wires the canonical unified resource provider used
+// for infrastructure-wide posture summaries.
+func (i *Intelligence) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.unifiedResourceProvider = urp
+}
+
 // SetStateProvider sets the state provider for current metrics
 func (i *Intelligence) SetStateProvider(sp StateProvider) {
 	i.mu.Lock()
@@ -227,6 +239,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	remediations := i.remediations
 	changes := i.changes
 	resourceTimelineStore := i.resourceTimelineStore
+	unifiedResourceProvider := i.unifiedResourceProvider
 	i.mu.RUnlock()
 
 	// Aggregate findings
@@ -269,6 +282,12 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	if remediations != nil {
 		recent := remediations.GetRecentRemediations(5, time.Now().Add(-24*time.Hour))
 		summary.RecentRemediations = recent
+	}
+
+	if unifiedResourceProvider != nil {
+		summary.PolicyPosture = summarizePolicyPosture(
+			normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()),
+		)
 	}
 
 	// Learning stats

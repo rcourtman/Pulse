@@ -47,6 +47,12 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
             reason?: string;
             relatedResources?: string[];
           }>;
+          policy_posture?: {
+            total_resources: number;
+            sensitivity_counts: Record<string, number>;
+            routing_counts: Record<string, number>;
+            redaction_counts?: Record<string, number>;
+          };
           learning: {
             resources_with_knowledge: number;
             total_notes: number;
@@ -389,6 +395,24 @@ describe('AIIntelligence entitlement gating', () => {
           relatedResources: ['agent-1'],
         },
       ],
+      policy_posture: {
+        total_resources: 4,
+        sensitivity_counts: {
+          public: 1,
+          internal: 1,
+          sensitive: 1,
+          restricted: 1,
+        },
+        routing_counts: {
+          'cloud-summary': 2,
+          'local-first': 1,
+          'local-only': 1,
+        },
+        redaction_counts: {
+          hostname: 2,
+          'ip-address': 1,
+        },
+      },
       learning: {
         resources_with_knowledge: 4,
         total_notes: 11,
@@ -412,6 +436,13 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('vm-100')).toBeInTheDocument();
     expect(screen.getByText('proxmox_adapter')).toBeInTheDocument();
     expect(screen.getByText('Learning signals')).toBeInTheDocument();
+    expect(screen.getByText('Data Governance')).toBeInTheDocument();
+    expect(screen.getByText('4 governed resources')).toBeInTheDocument();
+    expect(screen.getByText('Public')).toBeInTheDocument();
+    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.getByText('Cloud Summary')).toBeInTheDocument();
+    expect(screen.getByText('Local Only')).toBeInTheDocument();
+    expect(screen.getByText('Hostname 2')).toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

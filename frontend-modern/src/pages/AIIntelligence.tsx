@@ -94,12 +94,39 @@ import {
   formatResourceChangeKind,
 } from '@/utils/resourceChangePresentation';
 import {
+  getResourceRedactionHintLabel,
+  getResourceRoutingScopeLabel,
+  getResourceSensitivityLabel,
+} from '@/utils/resourcePolicyPresentation';
+import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
+import type {
+  ResourceRedactionHint,
+  ResourceRoutingScope,
+  ResourceSensitivity,
+} from '@/types/resource';
 type PatrolTab = 'findings' | 'history';
+
+const policySensitivityOrder: ResourceSensitivity[] = [
+  'public',
+  'internal',
+  'sensitive',
+  'restricted',
+];
+
+const policyRoutingOrder: ResourceRoutingScope[] = ['cloud-summary', 'local-first', 'local-only'];
+
+const policyRedactionOrder: ResourceRedactionHint[] = [
+  'hostname',
+  'ip-address',
+  'platform-id',
+  'alias',
+  'path',
+];
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -541,6 +568,7 @@ export function AIIntelligence() {
   });
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
+  const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
@@ -1334,52 +1362,121 @@ export function AIIntelligence() {
                     </Show>
                   </div>
 
-                  <div class="rounded-md border border-border-subtle bg-base p-4">
-                    <div class="flex items-center justify-between gap-2">
-                      <h3 class="text-sm font-semibold text-base-content">Learning signals</h3>
-                      <span class="text-xs text-muted">
-                        {summary().learning.resources_with_baselines} baselined
-                      </span>
+                  <div class="space-y-4">
+                    <div class="rounded-md border border-border-subtle bg-base p-4">
+                      <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-sm font-semibold text-base-content">Learning signals</h3>
+                        <span class="text-xs text-muted">
+                          {summary().learning.resources_with_baselines} baselined
+                        </span>
+                      </div>
+
+                      <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Knowledge</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().learning.resources_with_knowledge}
+                          </dd>
+                        </div>
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Notes</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().learning.total_notes}
+                          </dd>
+                        </div>
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Patterns</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().learning.patterns_detected}
+                          </dd>
+                        </div>
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Correlations</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().learning.correlations_learned}
+                          </dd>
+                        </div>
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Incidents</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().learning.incidents_tracked}
+                          </dd>
+                        </div>
+                        <div class="rounded-md bg-surface px-3 py-2">
+                          <dt class="text-xs uppercase tracking-wide text-muted">Predictions</dt>
+                          <dd class="mt-1 font-semibold text-base-content">
+                            {summary().predictions_count}
+                          </dd>
+                        </div>
+                      </dl>
                     </div>
 
-                    <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Knowledge</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().learning.resources_with_knowledge}
-                        </dd>
-                      </div>
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Notes</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().learning.total_notes}
-                        </dd>
-                      </div>
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Patterns</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().learning.patterns_detected}
-                        </dd>
-                      </div>
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Correlations</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().learning.correlations_learned}
-                        </dd>
-                      </div>
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Incidents</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().learning.incidents_tracked}
-                        </dd>
-                      </div>
-                      <div class="rounded-md bg-surface px-3 py-2">
-                        <dt class="text-xs uppercase tracking-wide text-muted">Predictions</dt>
-                        <dd class="mt-1 font-semibold text-base-content">
-                          {summary().predictions_count}
-                        </dd>
-                      </div>
-                    </dl>
+                    <Show when={policyPosture()}>
+                      {(posture) => (
+                        <div class="rounded-md border border-border-subtle bg-base p-4">
+                          <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h3 class="text-sm font-semibold text-base-content">Data Governance</h3>
+                              <p class="mt-1 text-xs text-muted">
+                                {posture().total_resources} governed resources
+                              </p>
+                            </div>
+                          </div>
+
+                          <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                            <For each={policySensitivityOrder}>
+                              {(sensitivity) => {
+                                const count = () => posture().sensitivity_counts?.[sensitivity] ?? 0;
+                                return (
+                                  <div class="rounded-md bg-surface px-3 py-2">
+                                    <dt class="text-xs uppercase tracking-wide text-muted">
+                                      {getResourceSensitivityLabel(sensitivity)}
+                                    </dt>
+                                    <dd class="mt-1 font-semibold text-base-content">
+                                      {count()}
+                                    </dd>
+                                  </div>
+                                );
+                              }}
+                            </For>
+                          </dl>
+
+                          <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+                            <For each={policyRoutingOrder}>
+                              {(scope) => {
+                                const count = () => posture().routing_counts?.[scope] ?? 0;
+                                return (
+                                  <div class="rounded-md bg-surface px-3 py-2">
+                                    <dt class="text-xs uppercase tracking-wide text-muted">
+                                      {getResourceRoutingScopeLabel(scope)}
+                                    </dt>
+                                    <dd class="mt-1 font-semibold text-base-content">
+                                      {count()}
+                                    </dd>
+                                  </div>
+                                );
+                              }}
+                            </For>
+                          </div>
+
+                          <Show when={policyRedactionOrder.some((hint) => (posture().redaction_counts?.[hint] ?? 0) > 0)}>
+                            <div class="mt-3 flex flex-wrap gap-1.5">
+                              <For each={policyRedactionOrder}>
+                                {(hint) => {
+                                  const count = posture().redaction_counts?.[hint] ?? 0;
+                                  if (!count) return null;
+                                  return (
+                                    <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                                      {getResourceRedactionHintLabel(hint)} {count}
+                                    </span>
+                                  );
+                                }}
+                              </For>
+                            </div>
+                          </Show>
+                        </div>
+                      )}
+                    </Show>
                   </div>
                 </div>
               </section>
