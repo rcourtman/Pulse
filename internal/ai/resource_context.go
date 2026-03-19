@@ -123,17 +123,19 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		}
 		if policyPosture != nil && policyPosture.TotalResources > 0 {
 			sections = append(sections, "\n### Data Governance")
-			sections = append(sections, fmt.Sprintf("- Sensitivity: %d public, %d internal, %d sensitive, %d restricted",
-				sensitivityCounts[unifiedresources.ResourceSensitivityPublic],
-				sensitivityCounts[unifiedresources.ResourceSensitivityInternal],
-				sensitivityCounts[unifiedresources.ResourceSensitivitySensitive],
-				sensitivityCounts[unifiedresources.ResourceSensitivityRestricted],
-			))
-			sections = append(sections, fmt.Sprintf("- Routing: %d cloud-summary, %d local-first, %d local-only",
-				routingCounts[unifiedresources.ResourceRoutingScopeCloudSummary],
-				routingCounts[unifiedresources.ResourceRoutingScopeLocalFirst],
-				routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly],
-			))
+			sensitivityParts := make([]string, 0, len(unifiedresources.ResourceSensitivityOrder))
+			for _, sensitivity := range unifiedresources.ResourceSensitivityOrder {
+				sensitivityParts = append(sensitivityParts, fmt.Sprintf("%d %s",
+					sensitivityCounts[sensitivity], sensitivity))
+			}
+			sections = append(sections, fmt.Sprintf("- Sensitivity: %s", strings.Join(sensitivityParts, ", ")))
+
+			routingParts := make([]string, 0, len(unifiedresources.ResourceRoutingScopeOrder))
+			for _, scope := range unifiedresources.ResourceRoutingScopeOrder {
+				routingParts = append(routingParts, fmt.Sprintf("%d %s",
+					routingCounts[scope], scope))
+			}
+			sections = append(sections, fmt.Sprintf("- Routing: %s", strings.Join(routingParts, ", ")))
 			sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
 			if redactionLabels := policyPostureRedactionLabels(policyPosture); len(redactionLabels) > 0 {
 				sections = append(sections, "\n### Policy Redaction Hints")

@@ -187,6 +187,9 @@ runtime uses for prompt export and context rendering.
 That posture snapshot must render redaction labels through the canonical
 unified-resource hint order, not alphabetically, so the AI summary, drawer,
 and any future policy surfaces all present the same redaction precedence.
+Its sensitivity and routing counts must also follow the canonical
+unified-resource order, so both the backend summary and the frontend policy
+card stay aligned on the same presentation sequence.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.

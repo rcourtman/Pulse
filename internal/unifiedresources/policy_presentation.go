@@ -2,6 +2,23 @@ package unifiedresources
 
 import "sort"
 
+// ResourceSensitivityOrder captures the canonical presentation order for
+// sensitivity counts across policy surfaces.
+var ResourceSensitivityOrder = []ResourceSensitivity{
+	ResourceSensitivityPublic,
+	ResourceSensitivityInternal,
+	ResourceSensitivitySensitive,
+	ResourceSensitivityRestricted,
+}
+
+// ResourceRoutingScopeOrder captures the canonical presentation order for
+// routing counts across policy surfaces.
+var ResourceRoutingScopeOrder = []ResourceRoutingScope{
+	ResourceRoutingScopeCloudSummary,
+	ResourceRoutingScopeLocalFirst,
+	ResourceRoutingScopeLocalOnly,
+}
+
 // ResourceRedactionHintOrder captures the canonical presentation order for
 // redaction hints across backend and frontend policy surfaces.
 var ResourceRedactionHintOrder = []ResourceRedactionHint{

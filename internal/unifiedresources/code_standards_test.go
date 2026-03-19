@@ -272,6 +272,8 @@ func TestResourcePolicyPresentationUsesCanonicalLabels(t *testing.T) {
 	source := string(data)
 
 	requiredSnippets := []string{
+		"ResourceSensitivityOrder",
+		"ResourceRoutingScopeOrder",
 		"ResourceRedactionHintOrder",
 		"ResourceSensitivityLabel(",
 		"ResourceRoutingScopeLabel(",

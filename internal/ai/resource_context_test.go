@@ -225,7 +225,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("Sensitivity: 0 public, 5 internal, 6 sensitive, 0 restricted")
 	assertContains("Routing: 5 cloud-summary, 6 local-first, 0 local-only")
 	assertContains("Policy Redaction Hints")
-	assertContains("Redactions in use: Alias, Hostname, IP Address, Platform ID")
+	assertContains("Redactions in use: Hostname, IP Address, Platform ID, Alias")
 	assertContains("Proxmox VE Nodes")
 	assertContains("HAS AGENT")
 	assertContains("NO AGENT")

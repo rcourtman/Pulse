@@ -404,6 +404,9 @@ re-described independently per surface.
 Those helpers now own the canonical redaction-hint order and count-to-label
 projection, so the AI summary and any other backend policy posture surface do
 not re-sort redaction labels locally.
+They also own the canonical sensitivity and routing order used to format
+policy-posture counts, so the AI summary and frontend policy card both read
+the same presentation sequence from the shared resource model.
 Canonical resources now carry first-class graph-expansion fields: `Capabilities`
 (bounded action definitions with approval levels), `Relationships` (typed
 inter-resource links with direction and confidence), and `RecentChanges` (typed
