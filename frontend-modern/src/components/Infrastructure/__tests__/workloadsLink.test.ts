@@ -66,6 +66,22 @@ describe('buildWorkloadsHref', () => {
       expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=Fallback+Display');
     });
 
+    it('uses the governed preferred display label for redacted k8s-cluster fallback', () => {
+      const resource = makeResource({
+        type: 'k8s-cluster',
+        platformType: 'kubernetes',
+        name: 'secret-cluster',
+        displayName: 'secret-cluster',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Governed Cluster',
+      });
+
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=Governed+Cluster');
+    });
+
     it('falls back to resource.name when displayName is empty for k8s-cluster', () => {
       const resource = makeResource({
         type: 'k8s-cluster',
@@ -78,11 +94,13 @@ describe('buildWorkloadsHref', () => {
 
     it('returns path without context when all k8s-cluster fields are empty', () => {
       const resource = makeResource({
+        id: '',
         type: 'k8s-cluster',
         platformType: 'kubernetes',
         name: '',
         displayName: '',
         clusterId: undefined,
+        platformId: '',
       });
       expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod');
     });

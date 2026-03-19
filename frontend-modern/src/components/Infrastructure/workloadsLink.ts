@@ -4,7 +4,10 @@ import {
   getActionableDockerRuntimeIdFromResource,
   hasDockerWorkloadsScope,
 } from '@/utils/agentResources';
-import { getPreferredWorkloadsAgentHint } from '@/utils/resourceIdentity';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredWorkloadsAgentHint,
+} from '@/utils/resourceIdentity';
 
 type ProxmoxPlatformData = {
   nodeName?: string;
@@ -44,8 +47,7 @@ const resolveKubernetesContext = (resource: Resource): string | undefined => {
       kubernetes?.context,
       kubernetes?.clusterId,
       resource.clusterId,
-      resource.displayName,
-      resource.name,
+      getPreferredResourceDisplayName(resource),
     ]);
   }
   if (resource.type === 'k8s-node') {

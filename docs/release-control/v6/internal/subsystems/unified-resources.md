@@ -283,6 +283,10 @@ resource label no longer need to re-encode the governed summary boundary by
 hand. Settings quick-picks, infrastructure selectors, and the connected-
 infrastructure / monitored-system projections now all stay on that same
 preferred-label helper instead of carrying a separate raw-name fallback fork.
+The shared workloads-link helper now also uses that preferred-label helper
+for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
+context stays inside the same governed resource-label boundary instead of
+repeating a raw display-name fork.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the shared resource selectors instead of being

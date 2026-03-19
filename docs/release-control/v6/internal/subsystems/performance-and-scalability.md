@@ -135,6 +135,10 @@ The shared infrastructure selector search path now also routes through that
 same preferred resource display contract, so governed resources do not
 reappear via raw-name search candidates while the selector stays on the same
 hot-path budget.
+The shared workloads-link helper used by the resource drawer and table now
+also routes its Kubernetes-cluster fallback through the same preferred
+resource display contract, so navigation context does not leak raw
+`displayName` values for governed clusters.
 The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
