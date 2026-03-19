@@ -11,6 +11,7 @@ import { alertTypeDisplayLabel } from './helpers';
 import { getCanonicalAlertId } from './identity';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
@@ -33,14 +34,10 @@ import {
   getAlertIncidentEventFilterChipClass,
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
-  getAlertIncidentTimelineCommandClass,
-  getAlertIncidentTimelineDetailClass,
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
-  getAlertIncidentTimelineEventCardClass,
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
-  getAlertIncidentTimelineOutputClass,
   getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentSaveNoteLabel,
 } from '@/utils/alertIncidentPresentation';
@@ -727,52 +724,7 @@ export function OverviewTab(props: {
                                       <div class="space-y-2">
                                         <For each={filteredEvents}>
                                           {(event) => (
-                                            <div
-                                              class={getAlertIncidentTimelineEventCardClass('alt')}
-                                            >
-                                              <div class={getAlertIncidentTimelineMetaRowClass()}>
-                                                <span class={getAlertIncidentTimelineHeadingClass()}>
-                                                  {event.summary}
-                                                </span>
-                                                <span>
-                                                  {new Date(event.timestamp).toLocaleString()}
-                                                </span>
-                                              </div>
-                                              <Show
-                                                when={
-                                                  event.details &&
-                                                  (event.details as { note?: string }).note
-                                                }
-                                              >
-                                                <p class={getAlertIncidentTimelineDetailClass()}>
-                                                  {(event.details as { note?: string }).note}
-                                                </p>
-                                              </Show>
-                                              <Show
-                                                when={
-                                                  event.details &&
-                                                  (event.details as { command?: string }).command
-                                                }
-                                              >
-                                                <p class={getAlertIncidentTimelineCommandClass()}>
-                                                  {(event.details as { command?: string }).command}
-                                                </p>
-                                              </Show>
-                                              <Show
-                                                when={
-                                                  event.details &&
-                                                  (event.details as { output_excerpt?: string })
-                                                    .output_excerpt
-                                                }
-                                              >
-                                                <p class={getAlertIncidentTimelineOutputClass()}>
-                                                  {
-                                                    (event.details as { output_excerpt?: string })
-                                                      .output_excerpt
-                                                  }
-                                                </p>
-                                              </Show>
-                                            </div>
+                                            <IncidentTimelineEventCard event={event} variant="alt" />
                                           )}
                                         </For>
                                       </div>

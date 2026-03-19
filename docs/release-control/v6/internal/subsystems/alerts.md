@@ -85,10 +85,12 @@ presentation now also route through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
 duplicated inline across the alerts page and overview timeline surfaces.
 
-Alert incident event meta rows and detail text treatments now also route
-through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
-keeping duplicate summary/detail typography inline in the alerts page and
-overview timelines.
+Alert incident timeline event cards now route through
+`frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,
+while their meta-row, heading, detail, command, and output typography still
+route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
+instead of keeping duplicate timeline card structure inline in the alerts
+page and overview timelines.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

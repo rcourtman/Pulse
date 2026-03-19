@@ -131,4 +131,39 @@ describe('OverviewTab incident timeline error state', () => {
     expect(screen.queryByText('Failed to load timeline.')).not.toBeInTheDocument();
     expect(screen.queryByText('Retry')).not.toBeInTheDocument();
   });
+
+  it('renders the shared incident event card when the timeline loads successfully', async () => {
+    mockGetIncidentTimeline.mockResolvedValueOnce({
+      id: 'inc-1',
+      status: 'open',
+      acknowledged: false,
+      openedAt: '2026-01-01T00:00:00Z',
+      closedAt: null,
+      events: [
+        {
+          id: 'evt-1',
+          type: 'command',
+          timestamp: '2026-01-01T00:05:00Z',
+          summary: 'Command executed',
+          details: {
+            note: 'checked service health',
+            command: 'systemctl status pulse',
+            output_excerpt: 'Active: active (running)',
+          },
+        },
+      ],
+    });
+
+    render(() => <OverviewTab {...defaultProps()} />);
+
+    const timelineBtn = screen.getByText('Timeline');
+    fireEvent.click(timelineBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Command executed')).toBeInTheDocument();
+    });
+    expect(screen.getByText('checked service health')).toBeInTheDocument();
+    expect(screen.getByText('systemctl status pulse')).toBeInTheDocument();
+    expect(screen.getByText('Active: active (running)')).toBeInTheDocument();
+  });
 });

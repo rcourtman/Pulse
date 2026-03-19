@@ -131,6 +131,11 @@ Alert incident meta-row and detail-text presentation must also route through
 the alerts page and overview timeline maintain duplicated inline incident
 typography rules.
 
+Alert incident timeline event card structure must also route through
+`frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx` so the
+alerts page and overview timeline share one canonical event-card renderer
+instead of reimplementing the same summary/detail/output block twice.
+
 Resource incident panel card and summary-row presentation must also route
 through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside

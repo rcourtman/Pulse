@@ -116,6 +116,7 @@ import useStorageAlertStateSource from '@/components/Storage/useStorageAlertStat
 import temperatureUtilSource from '@/utils/temperature.ts?raw';
 import pmgInstanceDrawerSource from '@/components/PMG/PMGInstanceDrawer.tsx?raw';
 import serviceHealthPresentationSource from '@/utils/serviceHealthPresentation.ts?raw';
+import alertIncidentTimelineEventCardSource from '@/components/Alerts/IncidentTimelineEventCard.tsx?raw';
 import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
 import swarmPresentationSource from '@/utils/swarmPresentation.ts?raw';
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
@@ -2056,14 +2057,14 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterActionButtonClass');
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertsPageSource).toContain('getAlertIncidentAcknowledgedBadgeClass');
-    expect(alertsPageSource).toContain('getAlertIncidentTimelineEventCardClass');
     expect(alertsPageSource).toContain('getAlertIncidentNoteTextareaClass');
     expect(alertsPageSource).toContain('getAlertIncidentNoteSaveButtonClass');
     expect(alertsPageSource).toContain('getAlertIncidentTimelineMetaRowClass');
     expect(alertsPageSource).toContain('getAlertIncidentTimelineHeadingClass');
-    expect(alertsPageSource).toContain('getAlertIncidentTimelineDetailClass');
-    expect(alertsPageSource).toContain('getAlertIncidentTimelineCommandClass');
-    expect(alertsPageSource).toContain('getAlertIncidentTimelineOutputClass');
+    expect(alertsPageSource).toContain('IncidentTimelineEventCard');
+    expect(alertsPageSource).not.toContain('getAlertIncidentTimelineEventCardClass');
+    expect(alertsPageSource).not.toContain('getAlertIncidentTimelineDetailClass');
+    expect(alertsPageSource).not.toContain('getAlertIncidentTimelineCommandClass');
     expect(alertsPageSource).toContain('getAlertResourceIncidentCardClass');
     expect(alertsPageSource).toContain('getAlertResourceIncidentSummaryRowClass');
     expect(alertsPageSource).toContain('getAlertResourceIncidentToggleButtonClass');
@@ -2705,14 +2706,15 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentAcknowledgedBadgeClass');
-    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineEventCardClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentNoteTextareaClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentNoteSaveButtonClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineMetaRowClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineHeadingClass');
-    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineDetailClass');
-    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineCommandClass');
-    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineOutputClass');
+    expect(alertOverviewTabSource).toContain('IncidentTimelineEventCard');
+    expect(alertOverviewTabSource).not.toContain('getAlertIncidentTimelineEventCardClass');
+    expect(alertOverviewTabSource).not.toContain('getAlertIncidentTimelineDetailClass');
+    expect(alertOverviewTabSource).not.toContain('getAlertIncidentTimelineCommandClass');
+    expect(alertOverviewTabSource).not.toContain('getAlertIncidentTimelineOutputClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewCardPresentation');
     expect(alertOverviewTabSource).toContain('getAlertOverviewAcknowledgedBadgeClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewStartedAtClass');
@@ -2805,6 +2807,27 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertResourceIncidentTruncatedEventsLabel',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'export function IncidentTimelineEventCard',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineEventCardClass',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineMetaRowClass',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineHeadingClass',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineDetailClass',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineCommandClass',
+    );
+    expect(alertIncidentTimelineEventCardSource).toContain(
+      'getAlertIncidentTimelineOutputClass',
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistoryEmptyState',

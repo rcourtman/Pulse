@@ -64,6 +64,7 @@ import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
+import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import {
   getAlertHistoryStatusPresentation,
   getAlertIncidentAcknowledgedBadgeClass,
@@ -72,11 +73,8 @@ import {
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
   getAlertIncidentLevelBadgeClass,
-  getAlertIncidentTimelineCommandClass,
-  getAlertIncidentTimelineDetailClass,
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
-  getAlertIncidentTimelineEventCardClass,
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
@@ -5455,88 +5453,10 @@ function HistoryTab(props: {
                                                         <div class="space-y-2">
                                                           <For each={filteredEvents}>
                                                             {(event) => (
-                                                              <div
-                                                                class={getAlertIncidentTimelineEventCardClass(
-                                                                  'surface',
-                                                                )}
-                                                              >
-                                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
-                                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
-                                                                    {event.summary}
-                                                                  </span>
-                                                                  <span>
-                                                                    {new Date(
-                                                                      event.timestamp,
-                                                                    ).toLocaleString()}
-                                                                  </span>
-                                                                </div>
-                                                                <Show
-                                                                  when={
-                                                                    event.details &&
-                                                                    (
-                                                                      event.details as {
-                                                                        note?: string;
-                                                                      }
-                                                                    ).note
-                                                                  }
-                                                                >
-                                                                  <p
-                                                                    class={getAlertIncidentTimelineDetailClass()}
-                                                                  >
-                                                                    {
-                                                                      (
-                                                                        event.details as {
-                                                                          note?: string;
-                                                                        }
-                                                                      ).note
-                                                                    }
-                                                                  </p>
-                                                                </Show>
-                                                                <Show
-                                                                  when={
-                                                                    event.details &&
-                                                                    (
-                                                                      event.details as {
-                                                                        command?: string;
-                                                                      }
-                                                                    ).command
-                                                                  }
-                                                                >
-                                                                  <p
-                                                                    class={getAlertIncidentTimelineCommandClass()}
-                                                                  >
-                                                                    {
-                                                                      (
-                                                                        event.details as {
-                                                                          command?: string;
-                                                                        }
-                                                                      ).command
-                                                                    }
-                                                                  </p>
-                                                                </Show>
-                                                                <Show
-                                                                  when={
-                                                                    event.details &&
-                                                                    (
-                                                                      event.details as {
-                                                                        output_excerpt?: string;
-                                                                      }
-                                                                    ).output_excerpt
-                                                                  }
-                                                                >
-                                                                  <p
-                                                                    class={getAlertIncidentTimelineOutputClass()}
-                                                                  >
-                                                                    {
-                                                                      (
-                                                                        event.details as {
-                                                                          output_excerpt?: string;
-                                                                        }
-                                                                      ).output_excerpt
-                                                                    }
-                                                                  </p>
-                                                                </Show>
-                                                              </div>
+                                                              <IncidentTimelineEventCard
+                                                                event={event}
+                                                                variant="surface"
+                                                              />
                                                             )}
                                                           </For>
                                                         </div>
