@@ -187,7 +187,9 @@ The same shared policy helper also owns the `aiSafeSummary` decision and
 redaction predicates used by AI chat knowledge extraction and resource
 context rendering, so governed labels and summary selection stay rooted in
 the unified resource policy model instead of being duplicated in chat-local
-helpers.
+helpers. Chat consumers now call `CloneResourcePolicy(...)` directly from the
+shared unified-resource contract, so policy copying stays centralized in the
+resource model rather than hidden behind an AI-local shim.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home
