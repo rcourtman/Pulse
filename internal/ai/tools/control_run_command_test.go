@@ -224,8 +224,6 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		planMap := mustParseJSONMap(t, string(planJSON))
 		_, hasRelationshipVersion := planMap["relationshipVersion"]
 		assert.False(t, hasRelationshipVersion)
-		_, hasGraphVersion := planMap["graphVersion"]
-		assert.False(t, hasGraphVersion)
 
 		events, err := store.GetActionLifecycleEvents(audits[0].ID, time.Time{}, 10)
 		require.NoError(t, err)

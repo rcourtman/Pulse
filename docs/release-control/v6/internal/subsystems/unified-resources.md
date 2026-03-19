@@ -549,8 +549,8 @@ owns a `resource_changes` persistence table with `RecordChange` and
 time window.
 Action plans in `actions.go` now keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so the durable
-audit record stays minimal and does not need a separate topology-version
-field.
+audit record stays minimal and does not need extra relationship-topology
+versioning.
 The shared change presentation helper also owns the canonical kind, source
 type, and source adapter labels for those timeline entries, so summary cards
 and drawer history surfaces both read the same badge vocabulary instead of

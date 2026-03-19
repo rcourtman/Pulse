@@ -239,7 +239,7 @@ hardcoding their own labels.
 Action-plan stale-plan protection now keys the durable audit payload on the
 canonical `resourceVersion`, `policyVersion`, and `planHash` fields only,
 so the audit record stays on the minimal deterministic contract instead of
-carrying a separate topology version.
+carrying extra versioning for relationship topology.
 Resource-only incident context should follow the same rule: if an alert
 timeline is absent, the incident prompt path should fall back to the canonical
 unified-resource timeline rather than depending only on patrol-local change

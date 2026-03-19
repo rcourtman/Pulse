@@ -484,7 +484,7 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 	s := NewService(nil, nil)
 	ps := NewPatrolService(nil, nil)
 
-	resourceID := "vm-graph-1"
+	resourceID := "vm-rel-1"
 	readState := &mockReadState{
 		resources: map[string]*unifiedresources.Resource{
 			resourceID: {
@@ -495,7 +495,7 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 				Relationships: []unifiedresources.ResourceRelationship{
 					{
 						SourceID:   resourceID,
-						TargetID:   "node-graph-1",
+						TargetID:   "node-rel-1",
 						Type:       unifiedresources.RelRunsOn,
 						Confidence: 0.9,
 						Active:     true,
@@ -526,8 +526,8 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 		Timestamp:    now.Add(-30 * time.Minute),
 	})
 	corr.RecordEvent(correlation.Event{
-		ResourceID:   "vm-graph-2",
-		ResourceName: "vm-graph-2",
+		ResourceID:   "vm-rel-2",
+		ResourceName: "vm-rel-2",
 		ResourceType: "vm",
 		EventType:    CorrelationEventRestart,
 		Timestamp:    now.Add(-25 * time.Minute),

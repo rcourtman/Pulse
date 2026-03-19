@@ -4091,7 +4091,7 @@ func TestContract_ResourceTimelineRelationshipJSONSnapshot(t *testing.T) {
 				SourceAdapter:    unifiedresources.AdapterProxmox,
 				Confidence:       unifiedresources.ConfidenceHigh,
 				RelatedResources: []string{"db:alpha", "service:beta"},
-				Reason:           "dependency graph updated",
+				Reason:           "relationship updated",
 				Metadata: map[string]any{
 					"edgeType": "depends_on",
 					"active":   true,
@@ -4121,7 +4121,7 @@ func TestContract_ResourceTimelineRelationshipJSONSnapshot(t *testing.T) {
 				"sourceAdapter":"proxmox_adapter",
 				"confidence":"high",
 				"relatedResources":["db:alpha","service:beta"],
-				"reason":"dependency graph updated",
+				"reason":"relationship updated",
 				"metadata":{"active":true,"edgeType":"depends_on"}
 			}
 		],

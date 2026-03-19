@@ -521,7 +521,7 @@ func TestRecordChange_PreservesTimelineMetadata(t *testing.T) {
 		Confidence:       ConfidenceMedium,
 		Actor:            "pulse:differ",
 		RelatedResources: []string{"node:20", "service:api"},
-		Reason:           "dependency graph updated",
+		Reason:           "relationship updated",
 		Metadata: map[string]any{
 			"edgeType": "runs_on",
 			"active":   true,
