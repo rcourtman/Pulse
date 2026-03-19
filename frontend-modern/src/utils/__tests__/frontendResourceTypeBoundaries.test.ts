@@ -135,6 +135,7 @@ import securityAuthPresentationSource from '@/utils/securityAuthPresentation.ts?
 import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
+import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import exploreStatusBlockSource from '@/components/AI/Chat/ExploreStatusBlock.tsx?raw';
 import aiExplorePresentationSource from '@/utils/aiExplorePresentation.ts?raw';
@@ -1821,6 +1822,11 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('History');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
+    expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicy(');
+    expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
+    expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');
+    expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRedactionHints =');
+    expect(useUnifiedResourcesSource).not.toContain('const resolvePolicy =');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
     expect(unifiedResourceTableSource).toContain('getServiceHealthSummaryPresentation');

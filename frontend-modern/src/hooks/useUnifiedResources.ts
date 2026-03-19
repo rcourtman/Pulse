@@ -12,10 +12,6 @@ import type {
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourcePBSMeta,
-  ResourcePolicy,
-  ResourceRedactionHint,
-  ResourceRoutingScope,
-  ResourceSensitivity,
   ResourceStatus,
   ResourceStorageMeta,
   ResourceRelationship,
@@ -26,6 +22,7 @@ import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
+import { normalizeResourcePolicy } from '@/utils/resourcePolicyNormalization';
 import {
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
@@ -543,70 +540,6 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
   };
 };
 
-const resolvePolicySensitivity = (value?: string): ResourceSensitivity | undefined => {
-  switch ((value || '').toLowerCase()) {
-    case 'public':
-      return 'public';
-    case 'internal':
-      return 'internal';
-    case 'sensitive':
-      return 'sensitive';
-    case 'restricted':
-      return 'restricted';
-    default:
-      return undefined;
-  }
-};
-
-const resolvePolicyRoutingScope = (value?: string): ResourceRoutingScope | undefined => {
-  switch ((value || '').toLowerCase()) {
-    case 'cloud-summary':
-      return 'cloud-summary';
-    case 'local-first':
-      return 'local-first';
-    case 'local-only':
-      return 'local-only';
-    default:
-      return undefined;
-  }
-};
-
-const resolvePolicyRedactionHints = (value: unknown): ResourceRedactionHint[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  const hints = value.flatMap((entry) => {
-    switch ((entry || '').toString().toLowerCase()) {
-      case 'hostname':
-        return 'hostname';
-      case 'ip-address':
-        return 'ip-address';
-      case 'platform-id':
-        return 'platform-id';
-      case 'alias':
-        return 'alias';
-      case 'path':
-        return 'path';
-      default:
-        return [];
-    }
-  });
-  return hints.length > 0 ? hints : undefined;
-};
-
-const resolvePolicy = (policy?: APIResource['policy']): ResourcePolicy | undefined => {
-  const sensitivity = resolvePolicySensitivity(policy?.sensitivity);
-  const scope = resolvePolicyRoutingScope(policy?.routing?.scope);
-  if (!sensitivity || !scope) return undefined;
-  return {
-    sensitivity,
-    routing: {
-      scope,
-      allowCloudSummary: policy?.routing?.allowCloudSummary === true,
-      allowCloudRawSignals: policy?.routing?.allowCloudRawSignals === true,
-      redact: resolvePolicyRedactionHints(policy?.routing?.redact),
-    },
-  };
-};
-
 const toResource = (v2: APIResource): Resource => {
   const sources = (v2.sources || []).filter(
     (s): s is string => typeof s === 'string' && s.trim().length > 0,
@@ -629,7 +562,7 @@ const toResource = (v2: APIResource): Resource => {
       : undefined;
 
   const metricsTarget = resolveMetricsTarget(v2.type, v2.metricsTarget);
-  const policy = resolvePolicy(v2.policy);
+  const policy = normalizeResourcePolicy(v2.policy);
   const aiSafeSummary = asTrimmedString(v2.aiSafeSummary);
 
   return {

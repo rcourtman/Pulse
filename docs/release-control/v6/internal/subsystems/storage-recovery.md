@@ -253,6 +253,10 @@ that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
 preserve canonical `policy` and `aiSafeSummary` fields so storage-bearing
 resources do not silently lose their routing or redaction posture when they
 cross from unified-resource ownership into storage or recovery presentation.
+That same decode path now delegates policy string and redaction normalization
+to `frontend-modern/src/utils/resourcePolicyNormalization.ts`, so storage and
+recovery surfaces do not reimplement sensitivity, routing, or redaction
+parsing locally.
 That same shared `internal/api/` dependency now also assumes canonical install
 payload URLs are slash-normalized before they become response fields or helper
 attachments, so recovery-adjacent links and transport surfaces cannot inherit

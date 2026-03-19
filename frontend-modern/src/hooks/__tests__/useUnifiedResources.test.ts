@@ -272,12 +272,12 @@ describe('useUnifiedResources', () => {
           {
             ...v2Resource,
             policy: {
-              sensitivity: 'restricted',
+              sensitivity: '  ReStRiCtEd ',
               routing: {
-                scope: 'local-only',
+                scope: 'LOCAL-ONLY',
                 allowCloudSummary: false,
                 allowCloudRawSignals: false,
-                redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
+                redact: ['HOSTNAME', ' ip-address ', 'Platform-ID', 'ALIAS'],
               },
             },
             aiSafeSummary: 'resource summary safe for remote AI use',

@@ -471,7 +471,11 @@ methods so change history is queryable by canonical ID and time window.
 That frontend consumer rule now applies on the canonical decode path too:
 `frontend-modern/src/hooks/useUnifiedResources.ts` must preserve backend-owned
 policy metadata and AI-safe summaries as first-class `Resource` fields, and
-shared infrastructure consumers such as the unified resource table and detail
+it now delegates policy string and redaction normalization to the shared
+`frontend-modern/src/utils/resourcePolicyNormalization.ts` helper so the
+canonical frontend decode path does not reimplement sensitivity, routing, or
+redaction parsing locally.
+Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
