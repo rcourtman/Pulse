@@ -144,6 +144,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(false);
+  const [showServiceDetails, setShowServiceDetails] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
   const kubernetesClusterName = createMemo(() =>
@@ -601,6 +602,26 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
     return `${hostDetailCards().length} detail card${hostDetailCards().length === 1 ? '' : 's'} covering ${categories}.`;
   });
+  const hasServiceDetails = createMemo(
+    () => props.resource.type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
+  );
+  const serviceDetailsSummary = createMemo(() => {
+    if (props.resource.type === 'docker-host') {
+      return `${formatInteger(dockerContainerCount())} containers · ${formatInteger(dockerUpdatesAvailable())} updates`;
+    }
+
+    const pbs = pbsData();
+    if (pbs) {
+      return `${formatInteger(pbs.datastoreCount)} datastores · ${formatInteger(pbsJobTotal())} jobs`;
+    }
+
+    const pmg = pmgData();
+    if (pmg) {
+      return `${formatInteger(pmg.queueTotal)} queue total · ${formatInteger(pmgQueueBacklog())} backlog`;
+    }
+
+    return null;
+  });
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
@@ -1041,371 +1062,403 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-          <Show when={props.resource.type === 'docker-host'}>
-            <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
-              <div class="mb-2 flex items-center justify-between gap-2">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                  Container Updates
+          <Show when={hasServiceDetails()}>
+            <div class="rounded border border-dashed border-border bg-surface-hover p-3">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                    Service details
+                  </div>
+                  <div class="mt-1 text-[10px] text-muted">
+                    Secondary service-specific operations and breakdowns.
+                  </div>
+                  <Show when={serviceDetailsSummary()}>
+                    <div class="mt-1 text-[10px] text-base-content">{serviceDetailsSummary()}</div>
+                  </Show>
                 </div>
-                <Show when={dockerHostData()?.runtime}>
-                  <span
-                    class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
-                    title={dockerHostData()?.runtime}
-                  >
-                    {dockerHostData()?.runtime}
-                  </span>
-                </Show>
+
+                <button
+                  type="button"
+                  onClick={() => setShowServiceDetails((value) => !value)}
+                  class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                >
+                  {showServiceDetails() ? 'Hide service details' : 'Show service details'}
+                </button>
               </div>
 
-              <div class="space-y-1.5 text-[11px]">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Containers</span>
-                  <span class="font-medium text-base-content">
-                    {formatInteger(dockerContainerCount())}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Updates Available</span>
-                  <span
-                    class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                  >
-                    {formatInteger(dockerUpdatesAvailable())}
-                  </span>
-                </div>
-                <Show when={dockerUpdatesCheckedRelative()}>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Last Check</span>
-                    <span class="font-medium text-base-content">
-                      {dockerUpdatesCheckedRelative()}
-                    </span>
-                  </div>
-                </Show>
-
-                <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
-                  <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Command</span>
-                      <span class="font-medium text-base-content">
-                        {formatIdentifierLabel(dockerHostCommand()?.type, { fallback: 'command' })}
-                      </span>
-                    </div>
-                    <div class="mt-1 flex items-center justify-between gap-2">
-                      <span class="text-muted">Status</span>
-                      <span
-                        class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                      >
-                        {formatIdentifierLabel(dockerHostCommand()?.status, {
-                          fallback: 'unknown',
-                        })}
-                      </span>
-                    </div>
-                    <Show when={dockerHostCommand()?.message}>
-                      <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
-                        {dockerHostCommand()?.message}
-                      </div>
-                    </Show>
-                    <Show when={dockerHostCommand()?.failureReason}>
-                      <div
-                        class="mt-1 text-red-700 dark:text-red-300 truncate"
-                        title={dockerHostCommand()?.failureReason}
-                      >
-                        {dockerHostCommand()?.failureReason}
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-
-                <Show when={dockerActionError()}>
-                  <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
-                    {dockerActionError()}
-                  </div>
-                </Show>
-                <Show when={dockerActionNote()}>
-                  <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
-                    {dockerActionNote()}
-                  </div>
-                </Show>
-
-                <div class="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={
-                      dockerActionBusy() ||
-                      dockerUpdateActionsLoading() ||
-                      dockerHostCommandActive() ||
-                      dockerHostSourceId() === null
-                    }
-                    onClick={async () => {
-                      setDockerActionError('');
-                      setDockerActionNote('');
-                      setConfirmUpdateAll(false);
-                      const hostId = dockerHostSourceId();
-                      if (!hostId) return;
-                      try {
-                        setDockerActionBusy(true);
-                        await MonitoringAPI.checkDockerUpdates(hostId);
-                        setDockerActionNote(
-                          'Update check queued. Results will refresh on the next agent report.',
-                        );
-                      } catch (err) {
-                        setDockerActionError(
-                          (err as Error)?.message || 'Failed to queue update check',
-                        );
-                      } finally {
-                        setDockerActionBusy(false);
-                      }
-                    }}
-                    class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
-                    title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
-                  >
-                    Check Updates
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={
-                      dockerActionBusy() ||
-                      dockerUpdateActionsLoading() ||
-                      dockerUpdateActionsDisabled() ||
-                      dockerHostCommandActive() ||
-                      dockerHostSourceId() === null ||
-                      dockerUpdatesAvailable() <= 0
-                    }
-                    onClick={async () => {
-                      setDockerActionError('');
-                      setDockerActionNote('');
-                      const hostId = dockerHostSourceId();
-                      if (!hostId) return;
-
-                      if (!confirmUpdateAll()) {
-                        setConfirmUpdateAll(true);
-                        setDockerActionNote(
-                          `Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`,
-                        );
-                        return;
-                      }
-
-                      try {
-                        setDockerActionBusy(true);
-                        await MonitoringAPI.updateAllDockerContainers(hostId);
-                        setDockerActionNote(
-                          'Batch update queued. Progress will appear as the agent reports back.',
-                        );
-                      } catch (err) {
-                        setDockerActionError(
-                          (err as Error)?.message || 'Failed to queue batch update',
-                        );
-                      } finally {
-                        setDockerActionBusy(false);
-                        setConfirmUpdateAll(false);
-                      }
-                    }}
-                    class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-                    title={
-                      dockerUpdateActionsDisabled()
-                        ? 'Docker updates are disabled by server configuration.'
-                        : undefined
-                    }
-                  >
-                    {confirmUpdateAll()
-                      ? 'Confirm Update All'
-                      : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </Show>
-
-          <Show when={pbsData()}>
-            {(pbs) => {
-              const connection = getServiceHealthPresentation(
-                props.resource.status,
-                pbs().connectionHealth,
-              );
-              return (
-                <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
-                  <div class="mb-2 flex items-center justify-between gap-2">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                      PBS Service
-                    </div>
-                    <Show when={pbs().hostname}>
-                      <span
-                        class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
-                        title={pbs().hostname}
-                      >
-                        {pbs().hostname}
-                      </span>
-                    </Show>
-                  </div>
-                  <div class="space-y-1.5 text-[11px]">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Connection</span>
-                      <span class={`font-medium ${connection.text}`}>{connection.label}</span>
-                    </div>
-                    <Show when={pbs().version}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Version</span>
-                        <span class="font-medium text-base-content">{pbs().version}</span>
-                      </div>
-                    </Show>
-                    <Show when={pbs().uptimeSeconds || props.resource.uptime}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Uptime</span>
-                        <span class="font-medium text-base-content">
-                          {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
-                        </span>
-                      </div>
-                    </Show>
-                    <div class="grid grid-cols-2 gap-2 pt-1">
-                      <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                        <div class="text-[10px] text-muted">Datastores</div>
-                        <div class="text-sm font-semibold text-base-content">
-                          {formatInteger(pbs().datastoreCount)}
+              <Show when={showServiceDetails()}>
+                <div class="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  <Show when={props.resource.type === 'docker-host'}>
+                    <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
+                      <div class="mb-2 flex items-center justify-between gap-2">
+                        <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                          Container Updates
                         </div>
+                        <Show when={dockerHostData()?.runtime}>
+                          <span
+                            class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
+                            title={dockerHostData()?.runtime}
+                          >
+                            {dockerHostData()?.runtime}
+                          </span>
+                        </Show>
                       </div>
-                      <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                        <div class="text-[10px] text-muted">Total Jobs</div>
-                        <div class="text-sm font-semibold text-base-content">
-                          {formatInteger(pbsJobTotal())}
+
+                      <div class="space-y-1.5 text-[11px]">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Containers</span>
+                          <span class="font-medium text-base-content">
+                            {formatInteger(dockerContainerCount())}
+                          </span>
                         </div>
-                      </div>
-                    </div>
-                    <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                        <span>Job breakdown</span>
-                        <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
-                      </summary>
-                      <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
-                        <For each={pbsVisibleJobBreakdown()}>
-                          {(entry) => (
-                            <span class="text-muted">
-                              {entry.label}:{' '}
-                              <span class="font-medium text-base-content">
-                                {formatInteger(entry.value)}
-                              </span>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Updates Available</span>
+                          <span
+                            class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
+                          >
+                            {formatInteger(dockerUpdatesAvailable())}
+                          </span>
+                        </div>
+                        <Show when={dockerUpdatesCheckedRelative()}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Last Check</span>
+                            <span class="font-medium text-base-content">
+                              {dockerUpdatesCheckedRelative()}
                             </span>
-                          )}
-                        </For>
-                      </div>
-                    </details>
-                  </div>
-                </div>
-              );
-            }}
-          </Show>
+                          </div>
+                        </Show>
 
-          <Show when={pmgData()}>
-            {(pmg) => {
-              const connection = getServiceHealthPresentation(
-                props.resource.status,
-                pmg().connectionHealth,
-              );
-              return (
-                <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
-                  <div class="mb-2 flex items-center justify-between gap-2">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                      Mail Gateway
-                    </div>
-                    <Show when={pmg().hostname}>
-                      <span
-                        class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
-                        title={pmg().hostname}
-                      >
-                        {pmg().hostname}
-                      </span>
-                    </Show>
-                  </div>
-                  <div class="space-y-1.5 text-[11px]">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Connection</span>
-                      <span class={`font-medium ${connection.text}`}>{connection.label}</span>
-                    </div>
-                    <Show when={pmg().version}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Version</span>
-                        <span class="font-medium text-base-content">{pmg().version}</span>
-                      </div>
-                    </Show>
-                    <Show when={pmg().uptimeSeconds || props.resource.uptime}>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">Uptime</span>
-                        <span class="font-medium text-base-content">
-                          {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
-                        </span>
-                      </div>
-                    </Show>
-                    <div class="grid grid-cols-3 gap-2 pt-1">
-                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                        <div class="text-[10px] text-muted">Nodes</div>
-                        <div class="text-sm font-semibold text-base-content">
-                          {formatInteger(pmg().nodeCount)}
-                        </div>
-                      </div>
-                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                        <div class="text-[10px] text-muted">Queue Total</div>
-                        <div
-                          class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                        >
-                          {formatInteger(pmg().queueTotal)}
-                        </div>
-                      </div>
-                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                        <div class="text-[10px] text-muted">Backlog</div>
-                        <div
-                          class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                        >
-                          {formatInteger(pmgQueueBacklog())}
-                        </div>
-                      </div>
-                    </div>
-                    <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                        <span>Queue breakdown</span>
-                        <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
-                      </summary>
-                      <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                        <For each={pmgVisibleQueueBreakdown()}>
-                          {(entry) => (
-                            <span class="text-muted">
-                              {entry.label}:{' '}
+                        <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
+                          <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Command</span>
+                              <span class="font-medium text-base-content">
+                                {formatIdentifierLabel(dockerHostCommand()?.type, {
+                                  fallback: 'command',
+                                })}
+                              </span>
+                            </div>
+                            <div class="mt-1 flex items-center justify-between gap-2">
+                              <span class="text-muted">Status</span>
                               <span
-                                class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
                               >
-                                {formatInteger(entry.value)}
+                                {formatIdentifierLabel(dockerHostCommand()?.status, {
+                                  fallback: 'unknown',
+                                })}
                               </span>
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </details>
-                    <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                        <span>Mail processing</span>
-                        <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
-                      </summary>
-                      <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                        <For each={pmgVisibleMailBreakdown()}>
-                          {(entry) => (
-                            <span class="text-muted">
-                              {entry.label}:{' '}
-                              <span class="font-medium text-base-content">
-                                {formatInteger(entry.value)}
-                              </span>
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                      <Show when={pmgUpdatedRelative()}>
-                        <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                          <span class="text-muted">Updated</span>
-                          <span class="font-medium text-base-content">{pmgUpdatedRelative()}</span>
+                            </div>
+                            <Show when={dockerHostCommand()?.message}>
+                              <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
+                                {dockerHostCommand()?.message}
+                              </div>
+                            </Show>
+                            <Show when={dockerHostCommand()?.failureReason}>
+                              <div
+                                class="mt-1 text-red-700 dark:text-red-300 truncate"
+                                title={dockerHostCommand()?.failureReason}
+                              >
+                                {dockerHostCommand()?.failureReason}
+                              </div>
+                            </Show>
+                          </div>
+                        </Show>
+
+                        <Show when={dockerActionError()}>
+                          <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                            {dockerActionError()}
+                          </div>
+                        </Show>
+                        <Show when={dockerActionNote()}>
+                          <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
+                            {dockerActionNote()}
+                          </div>
+                        </Show>
+
+                        <div class="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={
+                              dockerActionBusy() ||
+                              dockerUpdateActionsLoading() ||
+                              dockerHostCommandActive() ||
+                              dockerHostSourceId() === null
+                            }
+                            onClick={async () => {
+                              setDockerActionError('');
+                              setDockerActionNote('');
+                              setConfirmUpdateAll(false);
+                              const hostId = dockerHostSourceId();
+                              if (!hostId) return;
+                              try {
+                                setDockerActionBusy(true);
+                                await MonitoringAPI.checkDockerUpdates(hostId);
+                                setDockerActionNote(
+                                  'Update check queued. Results will refresh on the next agent report.',
+                                );
+                              } catch (err) {
+                                setDockerActionError(
+                                  (err as Error)?.message || 'Failed to queue update check',
+                                );
+                              } finally {
+                                setDockerActionBusy(false);
+                              }
+                            }}
+                            class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
+                            title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
+                          >
+                            Check Updates
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              dockerActionBusy() ||
+                              dockerUpdateActionsLoading() ||
+                              dockerUpdateActionsDisabled() ||
+                              dockerHostCommandActive() ||
+                              dockerHostSourceId() === null ||
+                              dockerUpdatesAvailable() <= 0
+                            }
+                            onClick={async () => {
+                              setDockerActionError('');
+                              setDockerActionNote('');
+                              const hostId = dockerHostSourceId();
+                              if (!hostId) return;
+
+                              if (!confirmUpdateAll()) {
+                                setConfirmUpdateAll(true);
+                                setDockerActionNote(
+                                  `Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`,
+                                );
+                                return;
+                              }
+
+                              try {
+                                setDockerActionBusy(true);
+                                await MonitoringAPI.updateAllDockerContainers(hostId);
+                                setDockerActionNote(
+                                  'Batch update queued. Progress will appear as the agent reports back.',
+                                );
+                              } catch (err) {
+                                setDockerActionError(
+                                  (err as Error)?.message || 'Failed to queue batch update',
+                                );
+                              } finally {
+                                setDockerActionBusy(false);
+                                setConfirmUpdateAll(false);
+                              }
+                            }}
+                            class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                            title={
+                              dockerUpdateActionsDisabled()
+                                ? 'Docker updates are disabled by server configuration.'
+                                : undefined
+                            }
+                          >
+                            {confirmUpdateAll()
+                              ? 'Confirm Update All'
+                              : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
+                          </button>
                         </div>
-                      </Show>
-                    </details>
-                  </div>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={pbsData()}>
+                    {(pbs) => {
+                      const connection = getServiceHealthPresentation(
+                        props.resource.status,
+                        pbs().connectionHealth,
+                      );
+                      return (
+                        <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
+                          <div class="mb-2 flex items-center justify-between gap-2">
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                              PBS Service
+                            </div>
+                            <Show when={pbs().hostname}>
+                              <span
+                                class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
+                                title={pbs().hostname}
+                              >
+                                {pbs().hostname}
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="space-y-1.5 text-[11px]">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Connection</span>
+                              <span class={`font-medium ${connection.text}`}>{connection.label}</span>
+                            </div>
+                            <Show when={pbs().version}>
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Version</span>
+                                <span class="font-medium text-base-content">{pbs().version}</span>
+                              </div>
+                            </Show>
+                            <Show when={pbs().uptimeSeconds || props.resource.uptime}>
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Uptime</span>
+                                <span class="font-medium text-base-content">
+                                  {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                                </span>
+                              </div>
+                            </Show>
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                              <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                <div class="text-[10px] text-muted">Datastores</div>
+                                <div class="text-sm font-semibold text-base-content">
+                                  {formatInteger(pbs().datastoreCount)}
+                                </div>
+                              </div>
+                              <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                <div class="text-[10px] text-muted">Total Jobs</div>
+                                <div class="text-sm font-semibold text-base-content">
+                                  {formatInteger(pbsJobTotal())}
+                                </div>
+                              </div>
+                            </div>
+                            <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                              <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                <span>Job breakdown</span>
+                                <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
+                              </summary>
+                              <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
+                                <For each={pbsVisibleJobBreakdown()}>
+                                  {(entry) => (
+                                    <span class="text-muted">
+                                      {entry.label}:{' '}
+                                      <span class="font-medium text-base-content">
+                                        {formatInteger(entry.value)}
+                                      </span>
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </details>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </Show>
+
+                  <Show when={pmgData()}>
+                    {(pmg) => {
+                      const connection = getServiceHealthPresentation(
+                        props.resource.status,
+                        pmg().connectionHealth,
+                      );
+                      return (
+                        <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
+                          <div class="mb-2 flex items-center justify-between gap-2">
+                            <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                              Mail Gateway
+                            </div>
+                            <Show when={pmg().hostname}>
+                              <span
+                                class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
+                                title={pmg().hostname}
+                              >
+                                {pmg().hostname}
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="space-y-1.5 text-[11px]">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Connection</span>
+                              <span class={`font-medium ${connection.text}`}>{connection.label}</span>
+                            </div>
+                            <Show when={pmg().version}>
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Version</span>
+                                <span class="font-medium text-base-content">{pmg().version}</span>
+                              </div>
+                            </Show>
+                            <Show when={pmg().uptimeSeconds || props.resource.uptime}>
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Uptime</span>
+                                <span class="font-medium text-base-content">
+                                  {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                                </span>
+                              </div>
+                            </Show>
+                            <div class="grid grid-cols-3 gap-2 pt-1">
+                              <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <div class="text-[10px] text-muted">Nodes</div>
+                                <div class="text-sm font-semibold text-base-content">
+                                  {formatInteger(pmg().nodeCount)}
+                                </div>
+                              </div>
+                              <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <div class="text-[10px] text-muted">Queue Total</div>
+                                <div
+                                  class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                >
+                                  {formatInteger(pmg().queueTotal)}
+                                </div>
+                              </div>
+                              <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <div class="text-[10px] text-muted">Backlog</div>
+                                <div
+                                  class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                >
+                                  {formatInteger(pmgQueueBacklog())}
+                                </div>
+                              </div>
+                            </div>
+                            <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                              <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                <span>Queue breakdown</span>
+                                <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
+                              </summary>
+                              <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                <For each={pmgVisibleQueueBreakdown()}>
+                                  {(entry) => (
+                                    <span class="text-muted">
+                                      {entry.label}:{' '}
+                                      <span
+                                        class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                      >
+                                        {formatInteger(entry.value)}
+                                      </span>
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </details>
+                            <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                              <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                <span>Mail processing</span>
+                                <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
+                              </summary>
+                              <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                <For each={pmgVisibleMailBreakdown()}>
+                                  {(entry) => (
+                                    <span class="text-muted">
+                                      {entry.label}:{' '}
+                                      <span class="font-medium text-base-content">
+                                        {formatInteger(entry.value)}
+                                      </span>
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                              <Show when={pmgUpdatedRelative()}>
+                                <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                  <span class="text-muted">Updated</span>
+                                  <span class="font-medium text-base-content">{pmgUpdatedRelative()}</span>
+                                </div>
+                              </Show>
+                            </details>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </Show>
                 </div>
-              );
-            }}
+              </Show>
+            </div>
           </Show>
         </div>
 

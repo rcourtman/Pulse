@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
@@ -66,10 +66,14 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole } = render(() => (
+    const { getByText, getAllByText, getByRole, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
+    expect(getByText('Service details')).toBeInTheDocument();
+    expect(getByText('2 datastores · 3 jobs')).toBeInTheDocument();
+    expect(queryByText('PBS Service')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show service details' }));
     expect(getByText('PBS Service')).toBeInTheDocument();
     expect(getAllByText('pbs-main.local').length).toBeGreaterThan(0);
     expect(getByText('Datastores')).toBeInTheDocument();
@@ -81,7 +85,7 @@ describe('ResourceDetailDrawer service cards', () => {
     );
   });
 
-  it('renders PMG card with compact summary and queue/mail breakdown sections', () => {
+  it('renders PMG card with compact summary and queue/mail breakdown sections', async () => {
     const resource = baseResource({
       id: 'pmg-1',
       type: 'pmg',
@@ -105,11 +109,17 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole } = render(() => (
+    const { getByText, getAllByText, getByRole, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Mail Gateway')).toBeInTheDocument();
+    expect(getByText('Service details')).toBeInTheDocument();
+    expect(getByText('519 queue total · 16 backlog')).toBeInTheDocument();
+    expect(queryByText('Mail Gateway')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    await waitFor(() => {
+      expect(getByText('Mail Gateway')).toBeInTheDocument();
+    });
     expect(getAllByText('pmg-main.local').length).toBeGreaterThan(0);
     expect(getByText('Queue Total')).toBeInTheDocument();
     expect(getByText('Backlog')).toBeInTheDocument();

@@ -276,6 +276,10 @@ The identity card now follows the same rule: canonical identity rows stay in
 the primary summary, while aliases, IPs, and tags live in a smaller
 `Supporting context` block so the drawer answers "what is this resource" before
 showing every attached label.
+Type-specific Docker, PBS, and PMG operational panels now also live inside a
+collapsed `Service details` support block, so lane-specific controls and
+breakdowns stay available without displacing the common runtime and identity
+hierarchy on first read.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without
