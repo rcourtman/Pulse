@@ -8,8 +8,6 @@ import {
   getResourcePolicyRoutingSummaries,
   getResourcePolicySensitivitySummaries,
   getResourcePolicyRedactionLabels,
-  getResourcePolicyRoutingDecisionLabel,
-  getResourcePolicyRoutingDecisionSummaries,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -19,8 +17,6 @@ describe('resourcePolicyPresentation utils', () => {
   it('formats canonical policy labels', () => {
     expect(getResourceSensitivityLabel('restricted')).toBe('Restricted');
     expect(getResourceRoutingScopeLabel('local-only')).toBe('Local Only');
-    expect(getResourcePolicyRoutingDecisionLabel(true)).toBe('Allowed');
-    expect(getResourcePolicyRoutingDecisionLabel(false)).toBe('Blocked');
     expect(getResourceRedactionHintLabel('platform-id')).toBe('Platform ID');
   });
 
@@ -34,18 +30,6 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toEqual(['Hostname', 'IP Address']);
-  });
-
-  it('formats canonical policy routing decision summaries', () => {
-    expect(
-      getResourcePolicyRoutingDecisionSummaries({
-        sensitivity: 'sensitive',
-        routing: {
-          scope: 'local-first',
-          redact: [],
-        },
-      }),
-    ).toEqual([{ label: 'Cloud Summary', value: 'Allowed' }]);
   });
 
   it('formats canonical policy count summaries', () => {

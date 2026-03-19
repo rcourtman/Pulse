@@ -56,7 +56,6 @@ import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
-  getResourcePolicyRoutingDecisionSummaries,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
@@ -159,9 +158,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const policyBadges = createMemo(() => getResourcePolicyBadges(props.resource.policy));
   const policyRedactions = createMemo(() =>
     getResourcePolicyRedactionLabels(props.resource.policy),
-  );
-  const policyRoutingDecisions = createMemo(() =>
-    getResourcePolicyRoutingDecisionSummaries(props.resource.policy),
   );
   const hasGovernanceData = createMemo(
     () => policyBadges().length > 0 || Boolean(props.resource.aiSafeSummary),
@@ -1015,14 +1011,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       {getResourceRoutingScopeLabel(props.resource.policy?.routing.scope)}
                     </span>
                   </div>
-                  <For each={policyRoutingDecisions()}>
-                    {(decision) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-muted">{decision.label}</span>
-                        <span class="font-medium text-base-content">{decision.value}</span>
-                      </div>
-                    )}
-                  </For>
                 </Show>
                 <Show when={policyRedactions().length > 0}>
                   <div class="flex flex-col gap-1">

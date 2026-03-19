@@ -12,11 +12,6 @@ type PolicyBadgePresentation = {
   className: string;
 };
 
-export type ResourcePolicyRoutingDecisionPresentation = {
-  label: string;
-  value: string;
-};
-
 export type ResourcePolicyCountSummary = {
   label: string;
   count: number;
@@ -111,26 +106,6 @@ export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): 
 
 export const getResourceRoutingScopeLabel = (scope?: ResourceRoutingScope): string =>
   scope ? routingPresentation[scope].label : 'Unrouted';
-
-export const getResourcePolicyRoutingDecisionLabel = (allowed?: boolean): string =>
-  allowed ? 'Allowed' : 'Blocked';
-
-export const getResourcePolicyRoutingDecisionSummaries = (
-  policy?: ResourcePolicy,
-): ResourcePolicyRoutingDecisionPresentation[] => {
-  if (!policy) {
-    return [];
-  }
-
-  return [
-    {
-      label: 'Cloud Summary',
-      value: getResourcePolicyRoutingDecisionLabel(
-        policy.routing.scope !== 'local-only',
-      ),
-    },
-  ];
-};
 
 export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): string =>
   hint ? redactionLabels[hint] ?? hint : 'Unclassified';

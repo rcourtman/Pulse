@@ -1898,7 +1898,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('getResourceChangeKindPresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
-    expect(resourceDetailDrawerSource).toContain('getResourcePolicyRoutingDecisionSummaries');
     expect(resourceChangeSummarySource).toContain('getResourceChangeKindPresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangeSummarySource).toContain(

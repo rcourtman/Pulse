@@ -306,8 +306,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getAllByText('Restricted').length).toBeGreaterThan(0);
     expect(getAllByText('Local Only').length).toBeGreaterThan(0);
     expect(getByText('Data Governance')).toBeInTheDocument();
-    expect(getByText('Cloud Summary')).toBeInTheDocument();
-    expect(getAllByText('Blocked').length).toBe(1);
     expect(getByText('Redactions')).toBeInTheDocument();
     expect(getByText('Hostname')).toBeInTheDocument();
     expect(getByText('IP Address')).toBeInTheDocument();
