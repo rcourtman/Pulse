@@ -67,7 +67,7 @@ import {
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
-import { humanizeToken } from '@/utils/textPresentation';
+import { formatIdentifierLabel, humanizeToken } from '@/utils/textPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
@@ -1105,7 +1105,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     <div class="flex items-center justify-between gap-2">
                       <span class="text-muted">Command</span>
                       <span class="font-medium text-base-content">
-                        {(dockerHostCommand()?.type || 'command').replace(/_/g, ' ')}
+                        {formatIdentifierLabel(dockerHostCommand()?.type, { fallback: 'command' })}
                       </span>
                     </div>
                     <div class="mt-1 flex items-center justify-between gap-2">
@@ -1113,7 +1113,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <span
                         class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
                       >
-                        {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
+                        {formatIdentifierLabel(dockerHostCommand()?.status, { fallback: 'unknown' })}
                       </span>
                     </div>
                     <Show when={dockerHostCommand()?.message}>

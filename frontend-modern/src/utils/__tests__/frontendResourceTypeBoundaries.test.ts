@@ -1920,6 +1920,7 @@ describe('frontend resource type boundaries', () => {
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
     expect(throughputPresentationSource).toContain('formatThroughputRate');
+    expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
