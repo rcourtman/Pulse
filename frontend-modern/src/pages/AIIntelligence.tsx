@@ -109,14 +109,12 @@ import {
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
-import { AIAPI } from '@/api/ai';
 import { buildInfrastructurePath } from '@/routing/resourceLinks';
 import type {
   ResourceRedactionHint,
   ResourceRoutingScope,
   ResourceSensitivity,
 } from '@/types/resource';
-import type { CorrelationsResponse } from '@/types/aiIntelligence';
 type PatrolTab = 'findings' | 'history';
 
 const policySensitivityOrder: ResourceSensitivity[] = [
@@ -511,8 +509,6 @@ export function AIIntelligence() {
     },
   );
 
-  const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
-
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
   const upgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_autofix'));
   const blockedReason = createMemo(() => patrolStatus()?.blocked_reason?.trim() ?? '');
@@ -580,9 +576,11 @@ export function AIIntelligence() {
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
   const correlationHighlights = createMemo(
-    () => correlations()?.correlations?.slice(0, 3) ?? [],
+    () => aiIntelligenceStore.correlations?.correlations?.slice(0, 3) ?? [],
   );
-  const correlationTotal = createMemo(() => correlations()?.count ?? correlationHighlights().length);
+  const correlationTotal = createMemo(
+    () => aiIntelligenceStore.correlations?.count ?? correlationHighlights().length,
+  );
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
@@ -768,14 +766,9 @@ export function AIIntelligence() {
         aiIntelligenceStore.loadFindings(),
         aiIntelligenceStore.loadCircuitBreakerStatus(),
         aiIntelligenceStore.loadPendingApprovals(),
+        aiIntelligenceStore.loadCorrelations(),
         refetchPatrolStatus(),
       ]);
-      try {
-        setCorrelations(await AIAPI.getCorrelations());
-      } catch (err) {
-        console.error('Failed to load correlations:', err);
-        setCorrelations(null);
-      }
       // Trigger refresh of patrol status bar
       setActivityRefreshTrigger((prev) => prev + 1);
     } finally {

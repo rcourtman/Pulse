@@ -79,6 +79,7 @@ Own canonical runtime payload shapes between backend and frontend.
    and the shared `frontend-modern/src/utils/resourceChangePresentation.ts` formatter used by the summary page and resource drawer, so canonical change wording does not drift across surfaces
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the governed posture snapshot remains visible on the resource-detail surface without introducing a separate posture endpoint
+   and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
 10. Add or change infrastructure operations token generation, lookup, assignment, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
@@ -178,9 +179,11 @@ The same AI resource-intelligence payload now also carries dependency and
 dependent graph arrays plus correlation evidence, so the drawer can render
 canonical graph context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
-The same AI frontend client now also fetches `/api/ai/intelligence/correlations`
-for the Patrol intelligence page, so the learned-correlation list is governed
-by the same API contract that backs the resource drawer's graph evidence.
+The same AI frontend client now also loads `/api/ai/intelligence/correlations`
+through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
+the Patrol intelligence page and the AI summary page, so the
+learned-correlation list is governed by the same API contract that backs the
+resource drawer's graph evidence instead of being fetched as page-local state.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history

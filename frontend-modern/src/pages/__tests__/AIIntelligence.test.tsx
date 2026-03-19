@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 
 import { AIIntelligence } from '../AIIntelligence';
-import { AIAPI } from '@/api/ai';
 
 const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(() => ({
   findingsPanelState: {
@@ -64,9 +64,32 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
           };
         }
       | null,
+    correlations: null as
+      | {
+          correlations: Array<{
+            source_id: string;
+            source_name: string;
+            source_type: string;
+            target_id: string;
+            target_name: string;
+            target_type: string;
+            event_pattern: string;
+            occurrences: number;
+            avg_delay: number | string;
+            confidence: number;
+            last_seen: string;
+            description?: string;
+          }>;
+          count: number;
+        }
+      | null,
   },
 }));
 
+const getCorrelationsMock = vi.fn();
+const [correlationsState, setCorrelationsState] = createSignal<
+  (typeof intelligenceState)['correlations']
+>(null);
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
@@ -93,10 +116,7 @@ vi.mock('@/api/patrol', () => ({
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
-    getCorrelations: vi.fn().mockResolvedValue({
-      correlations: [],
-      count: 0,
-    }),
+    getCorrelations: (...args: unknown[]) => getCorrelationsMock(...args),
   },
 }));
 
@@ -131,8 +151,17 @@ vi.mock('@/stores/aiIntelligence', () => ({
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
     loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
+    loadCorrelations: vi.fn().mockImplementation(async () => {
+      const response = await getCorrelationsMock();
+      intelligenceState.correlations = response;
+      setCorrelationsState(response);
+      return response;
+    }),
     get intelligenceSummary() {
       return intelligenceState.summary;
+    },
+    get correlations() {
+      return correlationsState();
     },
   },
 }));
@@ -269,6 +298,9 @@ describe('AIIntelligence entitlement gating', () => {
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.summary = null;
+    intelligenceState.correlations = null;
+    setCorrelationsState(null);
+    getCorrelationsMock.mockReset();
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
     getPatrolAutonomySettingsMock.mockResolvedValue({
@@ -304,7 +336,7 @@ describe('AIIntelligence entitlement gating', () => {
     getUpgradeActionUrlOrFallbackMock.mockImplementation(
       (feature?: string) => `/upgrade${feature ? `?feature=${feature}` : ''}`,
     );
-    vi.mocked(AIAPI.getCorrelations).mockResolvedValue({
+    getCorrelationsMock.mockResolvedValue({
       correlations: [],
       count: 0,
     });
@@ -342,8 +374,7 @@ describe('AIIntelligence entitlement gating', () => {
         incidents_tracked: 0,
       },
     };
-    const { AIAPI } = await import('@/api/ai');
-    vi.mocked(AIAPI.getCorrelations).mockResolvedValue({
+    getCorrelationsMock.mockResolvedValue({
       correlations: [
         {
           source_id: 'storage-1',

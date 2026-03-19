@@ -25,7 +25,10 @@ import {
 } from '@/utils/aiFindingPresentation';
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { logger } from '@/utils/logger';
-import type { IntelligenceSummary } from '@/types/aiIntelligence';
+import type {
+  CorrelationsResponse,
+  IntelligenceSummary,
+} from '@/types/aiIntelligence';
 
 // ============================================
 // Enum validation helpers
@@ -225,6 +228,12 @@ const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBrea
 const [intelligenceSummary, setIntelligenceSummary] = createSignal<IntelligenceSummary | null>(
   null,
 );
+
+// ============================================
+// Learned Correlations
+// ============================================
+
+const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
 
 // ============================================
 // Store API
@@ -489,11 +498,29 @@ export const aiIntelligenceStore = {
   },
   circuitBreakerStatusSignal: circuitBreakerStatus,
 
+  // Learned Correlations
+  get correlations() {
+    return correlations();
+  },
+  correlationsSignal: correlations,
+
   // Canonical Intelligence Summary
   get intelligenceSummary() {
     return intelligenceSummary();
   },
   intelligenceSummarySignal: intelligenceSummary,
+
+  async loadCorrelations(resourceId?: string) {
+    try {
+      const response = await AIAPI.getCorrelations(resourceId);
+      setCorrelations(response);
+      return response;
+    } catch (e) {
+      logger.error('Failed to load correlations:', e);
+      setCorrelations(null);
+      return null;
+    }
+  },
 
   async loadIntelligenceSummary() {
     try {
@@ -524,6 +551,7 @@ export const aiIntelligenceStore = {
       this.loadRemediationPlans(),
       this.loadCircuitBreakerStatus(),
       this.loadPendingApprovals(),
+      this.loadCorrelations(),
     ]);
   },
 

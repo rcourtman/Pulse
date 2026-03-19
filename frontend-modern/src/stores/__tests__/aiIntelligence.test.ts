@@ -5,6 +5,7 @@ vi.mock('@/api/ai', () => ({
     getUnifiedFindings: vi.fn(),
     getPendingApprovals: vi.fn(),
     getIntelligenceSummary: vi.fn(),
+    getCorrelations: vi.fn(),
   },
 }));
 
@@ -134,6 +135,35 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
     expect(aiIntelligenceStore.intelligenceSummary?.learning.correlations_learned).toBe(1);
     expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only']).toBe(1);
+  });
+
+  it('loads the canonical correlations response', async () => {
+    vi.mocked(AIAPI.getCorrelations).mockResolvedValueOnce({
+      correlations: [
+        {
+          source_id: 'storage-1',
+          source_name: 'Storage 1',
+          source_type: 'storage',
+          target_id: 'vm-42',
+          target_name: 'VM 42',
+          target_type: 'vm',
+          event_pattern: 'disk_full -> restart',
+          occurrences: 2,
+          avg_delay: '1m30s',
+          confidence: 0.875,
+          last_seen: '2026-03-01T00:00:00Z',
+          description: 'Disk pressure often precedes restarts',
+        },
+      ],
+      count: 1,
+    });
+
+    await aiIntelligenceStore.loadCorrelations();
+
+    expect(aiIntelligenceStore.correlations).toMatchObject({
+      count: 1,
+    });
+    expect(aiIntelligenceStore.correlations?.correlations).toHaveLength(1);
   });
 
   it('treats queued fixes without a live approval as findings needing attention', async () => {

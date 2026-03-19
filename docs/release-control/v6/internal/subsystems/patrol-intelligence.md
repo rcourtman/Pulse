@@ -99,10 +99,11 @@ That same resource-intelligence payload also carries canonical dependency and
 dependent graph context plus canonical correlation evidence, so the resource
 drawer can surface relationship reachability and learned edge patterns
 directly from the AI contract instead of inventing a second graph summary.
-The Patrol intelligence page now also fetches the learned correlation list
-from the canonical AI correlations endpoint, so the global summary and the
-resource drawer both reflect the same learned edge evidence instead of only
-showing a count.
+The Patrol intelligence page now also consumes the learned correlation list
+from the canonical AI correlations endpoint through the shared
+`frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
+and the resource drawer both reflect the same learned edge evidence instead
+of each page fetching its own copy.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical
