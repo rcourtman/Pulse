@@ -98,6 +98,16 @@ class ControlPlaneAuditTest(unittest.TestCase):
             entrypoint["startup_commands"],
             ["python3 scripts/release_control/status_audit.py --pretty"],
         )
+        self.assertEqual(entrypoint["default_pick_surface"], "available_candidate_lane_queue")
+        self.assertIn("candidate lanes", entrypoint["selection_rule"])
+        self.assertIn(
+            "python3 scripts/release_control/status_lookup.py --candidate-lane <CANDIDATE_LANE_ID> --pretty",
+            entrypoint["targeted_lookup_commands"],
+        )
+        self.assertIn(
+            "python3 scripts/release_control/status_lookup.py --coverage-gap <COVERAGE_GAP_ID> --pretty",
+            entrypoint["targeted_lookup_commands"],
+        )
         self.assertIn(
             "python3 scripts/release_control/status_lookup.py --lane <LANE_ID> --pretty",
             entrypoint["targeted_lookup_commands"],

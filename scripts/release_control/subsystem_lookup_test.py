@@ -13,7 +13,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(result["status_audit_errors"], [])
         self.assertIn(
             result["control_plane"]["active_target"]["id"],
-            {"v6-rc-stabilization", "v6-ga-promotion"},
+            {"v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion"},
         )
         self.assertEqual(result["scope"]["control_plane_repo"], "pulse")
         self.assertEqual(result["status_summary"]["lane_count"], 16)

@@ -299,6 +299,7 @@ def active_control_plane(*, staged: bool = False) -> dict[str, Any]:
 
 def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
     resolved = active_control_plane(staged=staged)
+    active_target_id = str(resolved["active_target_id"])
     startup_files = [
         resolved["agent_values_doc_rel"],
         resolved["control_plane_doc_rel"],
@@ -315,17 +316,37 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
     startup_commands = [
         "python3 scripts/release_control/status_audit.py --pretty",
     ]
-    targeted_lookup_commands = [
-        "python3 scripts/release_control/status_lookup.py --lane <LANE_ID> --pretty",
-        "python3 scripts/release_control/status_lookup.py --assertion <ASSERTION_ID> --pretty",
-        "python3 scripts/release_control/status_lookup.py --release-gate <GATE_ID> --pretty",
-        "python3 scripts/release_control/status_lookup.py --followup <FOLLOWUP_ID> --pretty",
-        "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
-        "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty",
-        "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
-        "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
-        "python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty",
-    ]
+    targeted_lookup_commands = []
+    if active_target_id == "v6-product-lane-expansion":
+        targeted_lookup_commands.extend(
+            [
+                "python3 scripts/release_control/status_lookup.py --candidate-lane <CANDIDATE_LANE_ID> --pretty",
+                "python3 scripts/release_control/status_lookup.py --coverage-gap <COVERAGE_GAP_ID> --pretty",
+            ]
+        )
+    targeted_lookup_commands.extend(
+        [
+            "python3 scripts/release_control/status_lookup.py --lane <LANE_ID> --pretty",
+            "python3 scripts/release_control/status_lookup.py --assertion <ASSERTION_ID> --pretty",
+            "python3 scripts/release_control/status_lookup.py --release-gate <GATE_ID> --pretty",
+            "python3 scripts/release_control/status_lookup.py --followup <FOLLOWUP_ID> --pretty",
+            "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
+            "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty",
+            "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
+            "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
+            "python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty",
+        ]
+    )
+    if active_target_id == "v6-product-lane-expansion":
+        default_pick_surface = "available_candidate_lane_queue"
+        selection_rule = (
+            "Pick from available candidate lanes and linked coverage gaps before local RC cleanup unless the user overrides the priority or a release-blocking surface needs immediate containment."
+        )
+    else:
+        default_pick_surface = "lanes"
+        selection_rule = (
+            "Pick from the current lane map first unless the user overrides the priority or a narrower governed surface is already the explicit task."
+        )
     return {
         "active_profile_id": resolved["active_profile_id"],
         "active_target_id": resolved["active_target_id"],
@@ -337,6 +358,8 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         "ordered_files": startup_files + escalation_files,
         "startup_commands": startup_commands,
         "targeted_lookup_commands": targeted_lookup_commands,
+        "default_pick_surface": default_pick_surface,
+        "selection_rule": selection_rule,
         "subsystems_dir": resolved["subsystems_dir_rel"],
         "subsystem_lookup": "scripts/release_control/subsystem_lookup.py",
         "status_lookup": "scripts/release_control/status_lookup.py",
@@ -420,6 +443,8 @@ def main(argv: list[str] | None = None) -> int:
                         *[f"  - {rel}" for rel in payload["startup_files"]],
                         "startup_commands:",
                         *[f"  - {command}" for command in payload["startup_commands"]],
+                        f"default_pick_surface={payload['default_pick_surface']}",
+                        f"selection_rule={payload['selection_rule']}",
                         "targeted_lookup_commands:",
                         *[f"  - {command}" for command in payload["targeted_lookup_commands"]],
                         "escalation_files:",

@@ -13,6 +13,8 @@ from status_audit import audit_status_payload, load_status_payload, status_schem
 
 
 ENTRY_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ("coverage_gap", "coverage_gaps", "id"),
+    ("candidate_lane", "candidate_lanes", "id"),
     ("lane", "lanes", "id"),
     ("assertion", "readiness_assertions", "id"),
     ("release_gate", "release_gates", "id"),
@@ -52,7 +54,7 @@ def lookup_status_entry(report: dict[str, Any], *, kind: str, entry_id: str) -> 
             raise KeyError(f"{collection} is not a list in status report")
         for entry in entries:
             if isinstance(entry, dict) and str(entry.get(key)) == entry_id:
-                return {
+                result = {
                     "kind": kind,
                     "collection": collection,
                     "id": entry_id,
@@ -60,12 +62,34 @@ def lookup_status_entry(report: dict[str, Any], *, kind: str, entry_id: str) -> 
                     "control_plane": report.get("control_plane", {}),
                     "summary": report.get("summary", {}),
                 }
+                if kind == "candidate_lane":
+                    queue_item = next(
+                        (
+                            item
+                            for item in report.get("candidate_lane_queue", [])
+                            if isinstance(item, dict) and str(item.get("candidate_lane_id")) == entry_id
+                        ),
+                        None,
+                    )
+                    if queue_item is not None:
+                        result["queue_item"] = queue_item
+                if kind == "coverage_gap":
+                    linked_candidates = [
+                        str(candidate.get("id"))
+                        for candidate in report.get("candidate_lanes", [])
+                        if isinstance(candidate, dict)
+                        and entry_id in [str(gap_id) for gap_id in candidate.get("coverage_gap_ids", [])]
+                    ]
+                    result["linked_candidate_lane_ids"] = linked_candidates
+                return result
         raise KeyError(f"{kind} {entry_id!r} not found")
     raise KeyError(f"unsupported kind {kind!r}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Lookup one release-control status entry by id.")
+    parser.add_argument("--coverage-gap", dest="coverage_gap", help="Coverage gap id.")
+    parser.add_argument("--candidate-lane", dest="candidate_lane", help="Candidate lane id.")
     parser.add_argument("--lane", help="Lane id, such as L16.")
     parser.add_argument("--assertion", help="Readiness assertion id, such as RA8.")
     parser.add_argument("--release-gate", dest="release_gate", help="Release gate id.")
@@ -87,6 +111,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def _render_collection_specific(lines: list[str], kind: str, entry: dict[str, Any]) -> None:
+    if kind == "coverage_gap":
+        lines.extend(
+            [
+                f"status={entry.get('status')} resolution={entry.get('proposed_resolution')} impact={entry.get('coverage_impact')}",
+                f"lanes={','.join(entry.get('lane_ids', [])) or '-'} repos={','.join(entry.get('repo_ids', [])) or '-'} subsystems={','.join(entry.get('subsystem_ids', [])) or '-'}",
+            ]
+        )
+        return
+    if kind == "candidate_lane":
+        lines.extend(
+            [
+                f"status={entry.get('status')} target={entry.get('target_id')} repos={','.join(entry.get('repo_ids', [])) or '-'}",
+                f"current_lanes={','.join(entry.get('current_lane_ids', [])) or '-'} subsystems={','.join(entry.get('subsystem_ids', [])) or '-'} coverage_gaps={','.join(entry.get('coverage_gap_ids', [])) or '-'}",
+            ]
+        )
+        return
     if kind == "lane":
         lines.extend(
             [
@@ -163,6 +203,15 @@ def render_pretty(result: dict[str, Any]) -> str:
         f"{result['kind']} {result['id']}: {entry.get('summary') or '-'}",
     ]
     _render_collection_specific(lines, result["kind"], entry)
+    if result["kind"] == "candidate_lane":
+        queue_item = result.get("queue_item", {})
+        if queue_item:
+            lines.append(
+                f"queue: rank={queue_item.get('rank')} available={queue_item.get('available')} available_rank={queue_item.get('available_rank')}"
+            )
+    if result["kind"] == "coverage_gap":
+        linked = result.get("linked_candidate_lane_ids", [])
+        lines.append(f"linked_candidate_lanes={','.join(linked) or '-'}")
     return "\n".join(lines)
 
 

@@ -473,8 +473,10 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
 		"stable or GA promotion readiness",
+		"v6-product-lane-expansion",
 		"v6-ga-promotion",
 		"v6-rc-stabilization",
+		"available_candidate_lane_queue",
 		"should always be true",
 		"Lane work must follow canonical v6 modernization rules",
 		"These modernization rules are retrospective as well as forward-looking",
@@ -508,7 +510,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	if !ok || activeTargetID == "" {
 		t.Fatalf("%s missing active_target_id", jsonRel)
 	}
-	if activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" {
+	if activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" && activeTargetID != "v6-product-lane-expansion" {
 		t.Fatalf("%s has unexpected active_target_id %q", jsonRel, activeTargetID)
 	}
 
@@ -535,7 +537,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		}
 	}
 
-	for _, requiredID := range []string{"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion"} {
+	for _, requiredID := range []string{"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion"} {
 		if _, ok := targetsByID[requiredID]; !ok {
 			t.Fatalf("%s missing target %q", jsonRel, requiredID)
 		}
@@ -554,6 +556,9 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	}
 	if scope, _ := targetsByID["v6-rc-stabilization"]["proof_scope"].(string); scope != "none" {
 		t.Fatalf("%s v6-rc-stabilization must keep proof_scope=none", jsonRel)
+	}
+	if rule, _ := targetsByID["v6-product-lane-expansion"]["completion_rule"].(string); rule != "manual" {
+		t.Fatalf("%s v6-product-lane-expansion must keep completion_rule=manual", jsonRel)
 	}
 
 	schemaRel := "docs/release-control/control_plane.schema.json"

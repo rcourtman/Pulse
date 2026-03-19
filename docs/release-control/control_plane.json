@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-rc-stabilization",
+  "active_target_id": "v6-product-lane-expansion",
   "profiles": [
     {
       "id": "v6",
@@ -38,7 +38,7 @@
       "id": "v6-rc-stabilization",
       "profile_id": "v6",
       "kind": "stabilization",
-      "status": "active",
+      "status": "superseded",
       "summary": "Keep Pulse v6 in RC stabilization until remaining product/runtime concerns are resolved or normalized into governed proofs before GA promotion is resumed, while broader post-RC polish stays out of the release floor by default.",
       "completion_rule": "manual",
       "proof_scope": "none"
@@ -55,8 +55,8 @@
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
-      "status": "planned",
-      "summary": "Expand the governed lane taxonomy from the current RC-stabilization map toward the v6 bridge-release foundation by promoting resource-graph, policy-governance, action-governance, and fleet-governance gaps into explicit lanes, lane splits, or lane expansions.",
+      "status": "active",
+      "summary": "Default v6 engineering work to the bridge-release foundation by promoting and landing the known resource-graph, policy-governance, action-governance, and fleet-governance gaps ahead of further local RC cleanup.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }
