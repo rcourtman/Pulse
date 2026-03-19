@@ -279,8 +279,7 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForLocalOnlyResources(t *te
 			Hostname: "mail-gateway.internal",
 		},
 	}
-	unifiedresources.RefreshCanonicalIdentity(&restricted)
-	unifiedresources.RefreshPolicyMetadata(&restricted)
+	unifiedresources.RefreshCanonicalMetadata(&restricted)
 
 	stats := unifiedresources.ResourceStats{
 		Total: 1,
@@ -329,8 +328,7 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 			VMID:        101,
 		},
 	}
-	unifiedresources.RefreshCanonicalIdentity(&sensitiveVM)
-	unifiedresources.RefreshPolicyMetadata(&sensitiveVM)
+	unifiedresources.RefreshCanonicalMetadata(&sensitiveVM)
 
 	stats := unifiedresources.ResourceStats{
 		Total: 1,

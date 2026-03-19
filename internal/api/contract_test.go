@@ -3713,6 +3713,12 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	}
 
 	resource := resp.Data[0]
+	if resource.Canonical == nil {
+		t.Fatal("expected canonical identity metadata in resource contract")
+	}
+	if strings.TrimSpace(resource.Canonical.DisplayName) == "" {
+		t.Fatal("expected canonical display name in resource contract")
+	}
 	if resource.Policy == nil {
 		t.Fatal("expected policy metadata in resource contract")
 	}

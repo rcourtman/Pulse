@@ -268,7 +268,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 
 	if unifiedResourceProvider != nil {
 		summary.PolicyPosture = unifiedresources.SummarizePolicyPosture(
-			normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()),
+			unifiedresources.RefreshCanonicalMetadataSlice(unifiedResourceProvider.GetAll()),
 		)
 	}
 
@@ -344,7 +344,7 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 
 	if unifiedResourceProvider != nil {
 		intel.PolicyPosture = unifiedresources.SummarizePolicyPosture(
-			normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()),
+			unifiedresources.RefreshCanonicalMetadataSlice(unifiedResourceProvider.GetAll()),
 		)
 	}
 
@@ -391,7 +391,7 @@ func (i *Intelligence) DescribeResource(resourceID string) (string, string) {
 		return "", ""
 	}
 
-	for _, resource := range normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()) {
+	for _, resource := range unifiedresources.RefreshCanonicalMetadataSlice(unifiedResourceProvider.GetAll()) {
 		if strings.TrimSpace(resource.ID) != resourceID {
 			continue
 		}

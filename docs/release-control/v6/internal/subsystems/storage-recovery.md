@@ -122,6 +122,10 @@ as adjacent governed API ownership rather than timeline-store ownership. The
 storage and recovery lanes still own their own persistence and query
 contracts, while the control-plane execution trail remains governed by the
 unified-resource and audit contracts.
+The same API resource serializer also refreshes canonical identity and policy
+metadata through the shared unified-resource helper before it writes resource
+payloads, so storage and recovery links inherit the same canonical metadata
+pass instead of carrying local attach wrappers in adjacent transport code.
 The shared unified-resource facet bundle that storage-adjacent detail views
 consume now also carries grouped `recentChangeKinds` counts by canonical change
 kind, so storage and recovery surfaces can show the distribution of restarts,

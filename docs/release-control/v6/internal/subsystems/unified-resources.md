@@ -26,22 +26,23 @@ cross-source deduplication.
 4. `internal/unifiedresources/adapters.go`
 5. `internal/unifiedresources/monitor_adapter.go`
 6. `internal/unifiedresources/canonical_identity.go`
-7. `internal/unifiedresources/metrics.go`
-8. `internal/unifiedresources/metrics_targets.go`
-9. `internal/unifiedresources/registry.go`
-10. `internal/unifiedresources/resolve.go`
-11. `internal/unifiedresources/resolve_context.go`
-12. `internal/unifiedresources/resolved_host_set.go`
-13. `internal/unifiedresources/snapshot_source_filter.go`
-14. `internal/unifiedresources/store.go`
-15. `internal/unifiedresources/kubernetes_capabilities.go`
-16. `internal/unifiedresources/pbs_rollups.go`
-17. `internal/unifiedresources/monitored_systems.go`
-18. `internal/unifiedresources/capabilities.go`
-19. `internal/unifiedresources/changes.go`
-20. `internal/unifiedresources/relationships.go`
-21. `internal/unifiedresources/privacy.go`
-22. `internal/unifiedresources/actions.go`
+7. `internal/unifiedresources/policy_metadata.go`
+8. `internal/unifiedresources/metrics.go`
+9. `internal/unifiedresources/metrics_targets.go`
+10. `internal/unifiedresources/registry.go`
+11. `internal/unifiedresources/resolve.go`
+12. `internal/unifiedresources/resolve_context.go`
+13. `internal/unifiedresources/resolved_host_set.go`
+14. `internal/unifiedresources/snapshot_source_filter.go`
+15. `internal/unifiedresources/store.go`
+16. `internal/unifiedresources/kubernetes_capabilities.go`
+17. `internal/unifiedresources/pbs_rollups.go`
+18. `internal/unifiedresources/monitored_systems.go`
+19. `internal/unifiedresources/capabilities.go`
+20. `internal/unifiedresources/changes.go`
+21. `internal/unifiedresources/relationships.go`
+22. `internal/unifiedresources/privacy.go`
+23. `internal/unifiedresources/actions.go`
 
 ## Shared Boundaries
 
@@ -159,6 +160,10 @@ reconstructed in the HTTP handler.
 The canonical resource policy model also owns a shared clone helper, so AI
 chat and tools consumers preserve policy metadata by copying through the same
 unified-resource contract instead of maintaining their own deep-copy logic.
+That same contract now also owns `RefreshCanonicalMetadata` and
+`RefreshCanonicalMetadataSlice`, so API and AI consumers refresh identity and
+policy in one shared pass instead of composing the same metadata steps in
+consumer-local shims.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

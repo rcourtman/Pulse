@@ -246,7 +246,7 @@ func TestIntelligence_SummarizePolicyPostureUsesSharedHelper(t *testing.T) {
 		},
 	}
 
-	summary := ur.SummarizePolicyPosture(normalizeUnifiedResourceContextSlice(resources))
+	summary := ur.SummarizePolicyPosture(ur.RefreshCanonicalMetadataSlice(resources))
 	if summary == nil {
 		t.Fatal("expected posture summary")
 	}

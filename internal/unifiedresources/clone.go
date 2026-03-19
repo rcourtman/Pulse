@@ -41,8 +41,7 @@ func cloneResource(in *Resource) Resource {
 	out.Ceph = cloneCephMeta(in.Ceph)
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	out.FacetCounts = resourceFacetCounts(out)
-	RefreshCanonicalIdentity(&out)
-	RefreshPolicyMetadata(&out)
+	RefreshCanonicalMetadata(&out)
 	return out
 }
 

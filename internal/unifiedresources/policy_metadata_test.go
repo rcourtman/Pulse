@@ -79,6 +79,62 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 }
 
+func TestRefreshCanonicalMetadata(t *testing.T) {
+	resource := Resource{
+		ID:     "agent-1",
+		Name:   "pve-node",
+		Type:   ResourceTypeAgent,
+		Status: StatusOnline,
+		Agent: &AgentData{
+			Hostname: "pve-node",
+		},
+	}
+
+	RefreshCanonicalMetadata(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatal("expected canonical identity metadata")
+	}
+	if resource.Policy == nil {
+		t.Fatal("expected policy metadata")
+	}
+	if resource.AISafeSummary == "" {
+		t.Fatal("expected aiSafeSummary")
+	}
+}
+
+func TestRefreshCanonicalMetadataSlice(t *testing.T) {
+	input := []Resource{
+		{
+			ID:     "agent-1",
+			Name:   "pve-node",
+			Type:   ResourceTypeAgent,
+			Status: StatusOnline,
+			Agent: &AgentData{
+				Hostname: "pve-node",
+			},
+		},
+	}
+
+	out := RefreshCanonicalMetadataSlice(input)
+
+	if input[0].Canonical != nil {
+		t.Fatal("expected input slice to remain unmodified")
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected one resource, got %d", len(out))
+	}
+	if out[0].Canonical == nil {
+		t.Fatal("expected canonical identity metadata in output slice")
+	}
+	if out[0].Policy == nil {
+		t.Fatal("expected policy metadata in output slice")
+	}
+	if out[0].AISafeSummary == "" {
+		t.Fatal("expected aiSafeSummary in output slice")
+	}
+}
+
 func TestResourcePolicyPresentationLabels(t *testing.T) {
 	if got := ResourceSensitivityLabel(ResourceSensitivityPublic); got != "Public" {
 		t.Fatalf("sensitivity label = %q, want %q", got, "Public")

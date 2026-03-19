@@ -134,8 +134,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
 	attachMetricsTargets(paged, registry)
-	attachCanonicalIdentities(paged)
-	attachResourcePolicies(paged)
+	paged = unified.RefreshCanonicalMetadataSlice(paged)
 	pruneResourcesForListResponse(paged)
 
 	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
@@ -269,8 +268,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	resourceCopy := *resource
 	attachDiscoveryTarget(&resourceCopy)
 	attachMetricsTarget(&resourceCopy, registry)
-	attachCanonicalIdentity(&resourceCopy)
-	attachResourcePolicy(&resourceCopy)
+	unified.RefreshCanonicalMetadata(&resourceCopy)
 	resourceCopy.Type = resourceContractType(resourceCopy)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -462,8 +460,7 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	}
 
 	children := registry.GetChildren(path)
-	attachCanonicalIdentities(children)
-	attachResourcePolicies(children)
+	children = unified.RefreshCanonicalMetadataSlice(children)
 	applyResourceContractTypes(children)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1877,32 +1874,6 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 		return
 	}
 	resource.MetricsTarget = registry.MetricsTarget(resource.ID)
-}
-
-func attachCanonicalIdentities(resources []unified.Resource) {
-	for i := range resources {
-		attachCanonicalIdentity(&resources[i])
-	}
-}
-
-func attachCanonicalIdentity(resource *unified.Resource) {
-	if resource == nil {
-		return
-	}
-	unified.RefreshCanonicalIdentity(resource)
-}
-
-func attachResourcePolicies(resources []unified.Resource) {
-	for i := range resources {
-		attachResourcePolicy(&resources[i])
-	}
-}
-
-func attachResourcePolicy(resource *unified.Resource) {
-	if resource == nil {
-		return
-	}
-	unified.RefreshPolicyMetadata(resource)
 }
 
 // resourceContractType maps internal unified resource shapes onto the canonical

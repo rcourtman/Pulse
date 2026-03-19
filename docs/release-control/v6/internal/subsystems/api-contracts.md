@@ -138,6 +138,10 @@ The same resource contract now also exposes dedicated facet endpoints for
 `/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
 `/api/resources/{id}/timeline`, so operators can read the graph and change
 history without depending on a monolithic resource payload.
+The `/api/resources` serializer now also refreshes canonical identity and
+policy metadata through the shared unified-resource helper before it writes
+the payload, so backend and frontend contract tests stay aligned on one
+canonical metadata pass instead of consumer-local attach wrappers.
 Those history reads now also accept governed `kind`, `sourceType`, and
 `sourceAdapter` query filters, and the backend store owns the corresponding
 filtered counts, so the timeline contract can narrow by change class and

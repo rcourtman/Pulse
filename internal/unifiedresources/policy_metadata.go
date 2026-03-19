@@ -74,6 +74,32 @@ func RefreshPolicyMetadata(resource *Resource) {
 	resource.AISafeSummary = buildAISafeSummary(*resource, sensitivity)
 }
 
+// RefreshCanonicalMetadata derives the canonical identity and policy metadata
+// for a resource in one pass.
+func RefreshCanonicalMetadata(resource *Resource) {
+	if resource == nil {
+		return
+	}
+
+	RefreshCanonicalIdentity(resource)
+	RefreshPolicyMetadata(resource)
+}
+
+// RefreshCanonicalMetadataSlice returns a cloned slice with canonical identity
+// and policy metadata refreshed for each resource.
+func RefreshCanonicalMetadataSlice(resources []Resource) []Resource {
+	if len(resources) == 0 {
+		return resources
+	}
+
+	out := make([]Resource, len(resources))
+	for i, resource := range resources {
+		out[i] = resource
+		RefreshCanonicalMetadata(&out[i])
+	}
+	return out
+}
+
 func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 	tagSet := normalizedTagSet(resource.Tags)
 

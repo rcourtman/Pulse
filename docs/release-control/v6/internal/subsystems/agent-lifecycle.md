@@ -103,6 +103,11 @@ Those same dedicated reads also accept governed timeline filters for change
 kind, source type, and source adapter, and the underlying store owns the
 filtered counts so agent lifecycle routing still stays on canonical
 fleet-continuity ownership instead of re-deriving resource history locally.
+The same API serializer now also refreshes canonical identity and policy
+metadata through the shared unified-resource helper before it returns
+resource payloads, so lifecycle-adjacent links keep the same canonical
+metadata pass as the rest of the resource API instead of composing local
+attach wrappers.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the fleet
 lane continues to consume only the canonical adapter set rather than
 introducing a broader compatibility escape hatch.

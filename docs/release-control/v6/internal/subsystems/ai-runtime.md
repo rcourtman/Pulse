@@ -190,6 +190,10 @@ AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly
 at each resolved mention site rather than going through an AI-local wrapper.
+AI resource and intelligence consumers now also refresh canonical identity and
+policy through the shared unified-resource metadata helper, so the AI runtime
+no longer keeps its own slice-level normalization shim for the same
+composition.
 Chat knowledge extraction and resource-context rendering now also consume the
 shared unified-resource label helpers directly, so governed labels and
 redacted values stay consistent without AI-local presentation shims.

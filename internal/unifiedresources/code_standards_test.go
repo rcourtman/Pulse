@@ -340,6 +340,43 @@ func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestCanonicalMetadataRefreshHelperUsedByConsumers(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "policy_metadata.go"): {
+			"func RefreshCanonicalMetadata(resource *Resource)",
+			"func RefreshCanonicalMetadataSlice(resources []Resource) []Resource",
+		},
+		filepath.Join(".", "clone.go"): {
+			"RefreshCanonicalMetadata(&out)",
+		},
+		filepath.Join("..", "api", "resources.go"): {
+			"unified.RefreshCanonicalMetadata(&resourceCopy)",
+			"unified.RefreshCanonicalMetadataSlice(paged)",
+			"unified.RefreshCanonicalMetadataSlice(children)",
+		},
+		filepath.Join("..", "ai", "resource_context.go"): {
+			"unifiedresources.RefreshCanonicalMetadataSlice(urp.GetInfrastructure())",
+			"unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())",
+			"unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())",
+		},
+		filepath.Join("..", "ai", "intelligence.go"): {
+			"unifiedresources.RefreshCanonicalMetadataSlice(unifiedResourceProvider.GetAll())",
+		},
+	}
+
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "ai", "intelligence.go"): {

@@ -98,9 +98,9 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			return false
 		}
 
-		infrastructure := normalizeUnifiedResourceContextSlice(urp.GetInfrastructure())
-		workloads := normalizeUnifiedResourceContextSlice(urp.GetWorkloads())
-		allResources := normalizeUnifiedResourceContextSlice(urp.GetAll())
+		infrastructure := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetInfrastructure())
+		workloads := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())
+		allResources := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())
 		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
 		sensitivityCounts := map[unifiedresources.ResourceSensitivity]int{}
 		routingCounts := map[unifiedresources.ResourceRoutingScope]int{}
@@ -472,7 +472,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topCPU := normalizeUnifiedResourceContextSlice(urp.GetTopByCPU(3, nil))
+		topCPU := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByCPU(3, nil))
 		if len(topCPU) > 0 {
 			sections = append(sections, "\n### Top CPU Consumers")
 			for i, resource := range topCPU {
@@ -485,7 +485,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topMem := normalizeUnifiedResourceContextSlice(urp.GetTopByMemory(3, nil))
+		topMem := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByMemory(3, nil))
 		if len(topMem) > 0 {
 			sections = append(sections, "\n### Top Memory Consumers")
 			for i, resource := range topMem {
@@ -498,7 +498,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topDisk := normalizeUnifiedResourceContextSlice(urp.GetTopByDisk(3, nil))
+		topDisk := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByDisk(3, nil))
 		if len(topDisk) > 0 {
 			sections = append(sections, "\n### Top Disk Usage")
 			for i, resource := range topDisk {
@@ -575,27 +575,6 @@ func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) str
 		ips = ips[:limit]
 	}
 	return " - IPs " + unifiedresources.ResourcePolicyRedactedValue(strings.Join(ips, ", "), r.Policy, unifiedresources.ResourceRedactionIPAddress)
-}
-
-func normalizeUnifiedResourceContextSlice(resources []unifiedresources.Resource) []unifiedresources.Resource {
-	if len(resources) == 0 {
-		return resources
-	}
-	out := make([]unifiedresources.Resource, len(resources))
-	for i, resource := range resources {
-		out[i] = normalizeUnifiedResourceContextResource(resource)
-	}
-	return out
-}
-
-func normalizeUnifiedResourceContextResource(resource unifiedresources.Resource) unifiedresources.Resource {
-	if resource.Canonical != nil && resource.Policy != nil && strings.TrimSpace(resource.AISafeSummary) != "" {
-		return resource
-	}
-	resourceCopy := resource
-	unifiedresources.RefreshCanonicalIdentity(&resourceCopy)
-	unifiedresources.RefreshPolicyMetadata(&resourceCopy)
-	return resourceCopy
 }
 
 func unifiedMetricPercent(m *unifiedresources.MetricValue) float64 {
