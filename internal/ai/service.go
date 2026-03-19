@@ -4512,6 +4512,9 @@ func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) strin
 		if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
 			sections = append(sections, recentChanges)
 		}
+		if graphContext := s.buildResourceGraphContext(resourceID); graphContext != "" {
+			sections = append(sections, graphContext)
+		}
 	}
 
 	if len(sections) == 0 {
@@ -4618,6 +4621,74 @@ func (s *Service) buildRecentResourceChangesContext(resourceID string) string {
 		return ""
 	}
 	return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
+}
+
+type canonicalResourceGetter interface {
+	Get(id string) (*unifiedresources.Resource, bool)
+}
+
+func (s *Service) buildResourceGraphContext(resourceID string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return ""
+	}
+
+	s.mu.RLock()
+	rs := s.readState
+	s.mu.RUnlock()
+
+	if rs == nil {
+		return ""
+	}
+
+	getter, ok := rs.(canonicalResourceGetter)
+	if !ok {
+		return ""
+	}
+
+	resource, ok := getter.Get(resourceID)
+	if !ok || resource == nil || len(resource.Relationships) == 0 {
+		return ""
+	}
+
+	relationshipLimit := len(resource.Relationships)
+	if relationshipLimit > 3 {
+		relationshipLimit = 3
+	}
+	lines := make([]string, 0, relationshipLimit)
+	for _, rel := range resource.Relationships {
+		if len(lines) >= 3 {
+			break
+		}
+		presentation := unifiedresources.DescribeRelationship(rel)
+		parts := []string{
+			fmt.Sprintf("**%s** %s", presentation.TypeLabel, presentation.Direction),
+		}
+		if presentation.StateLabel != "" {
+			parts = append(parts, presentation.StateLabel)
+		}
+		if presentation.Provenance != "" {
+			parts = append(parts, fmt.Sprintf("discoverer %s", presentation.Provenance))
+		}
+		if presentation.Confidence != "" {
+			parts = append(parts, fmt.Sprintf("confidence %s", presentation.Confidence))
+		}
+		if !rel.ObservedAt.IsZero() {
+			parts = append(parts, fmt.Sprintf("observed %s ago", formatDuration(time.Since(rel.ObservedAt).Truncate(time.Minute))))
+		}
+		if !rel.LastSeenAt.IsZero() {
+			parts = append(parts, fmt.Sprintf("last seen %s ago", formatDuration(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
+		}
+		if presentation.HasMetadata {
+			parts = append(parts, "metadata present")
+		}
+		lines = append(lines, strings.Join(parts, "; "))
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n\n### Resource Graph\n" + strings.Join(lines, "\n")
 }
 
 // truncateString truncates a string to maxLen characters
@@ -4843,6 +4914,11 @@ func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetr
 	// Get change detector for recent changes
 	if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
 		sections = append(sections, recentChanges)
+	}
+
+	// Get canonical resource graph context from unified resources.
+	if graphContext := s.buildResourceGraphContext(resourceID); graphContext != "" {
+		sections = append(sections, graphContext)
 	}
 
 	// Get correlation detector for related resources

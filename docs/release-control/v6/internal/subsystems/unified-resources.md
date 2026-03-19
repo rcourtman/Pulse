@@ -97,6 +97,11 @@ kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
 semantic mapping lives with the resource model instead of being duplicated in
 lane-local prompt helpers.
+The backend AI and Patrol graph context renderers now derive their canonical
+relationship labels, direction, provenance, freshness, and metadata flags
+from `internal/unifiedresources/relationship_presentation.go`, so the graph
+semantics live with the resource model instead of being duplicated in prompt
+helpers or drawer-specific markdown.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

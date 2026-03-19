@@ -152,6 +152,10 @@ store instead of leaving command execution state in memory-only tool helpers.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
+AI resource and incident context now also surfaces a canonical resource-graph
+section from unified-resource relationships, so relationship wording and edge
+provenance stay aligned with the same shared resource model instead of being
+reconstructed from the drawer or prompt helpers.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share

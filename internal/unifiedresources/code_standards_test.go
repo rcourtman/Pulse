@@ -334,6 +334,26 @@ func TestResourceChangePresentationUsesCanonicalLabels(t *testing.T) {
 	}
 }
 
+func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "ai", "service.go"))
+	if err != nil {
+		t.Fatalf("failed to read service.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func (s *Service) buildResourceGraphContext(resourceID string) string",
+		"if graphContext := s.buildResourceGraphContext(resourceID); graphContext != \"\" {",
+		"unifiedresources.DescribeRelationship(rel)",
+		"### Resource Graph",
+		"type canonicalResourceGetter interface {",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/ai/service.go must pin canonical resource graph presentation snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	typesData, err := os.ReadFile(filepath.Join("types.go"))
 	if err != nil {

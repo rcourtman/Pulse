@@ -27,6 +27,7 @@ type mockReadState struct {
 	pbs         []*ur.PBSInstanceView
 	pmg         []*ur.PMGInstanceView
 	k8sClusters []*ur.K8sClusterView
+	resources   map[string]*ur.Resource
 }
 
 func (m *mockReadState) Nodes() []*ur.NodeView             { return m.nodes }
@@ -48,6 +49,17 @@ func (m *mockReadState) K8sDeployments() []*ur.K8sDeploymentView { return nil }
 func (m *mockReadState) Workloads() []*ur.WorkloadView           { return nil }
 func (m *mockReadState) Infrastructure() []*ur.InfrastructureView {
 	return nil
+}
+
+func (m *mockReadState) Get(id string) (*ur.Resource, bool) {
+	if m.resources == nil {
+		return nil, false
+	}
+	resource, ok := m.resources[id]
+	if !ok || resource == nil {
+		return nil, false
+	}
+	return resource, true
 }
 
 type precomputeMetricsHistoryProvider struct {

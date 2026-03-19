@@ -81,6 +81,10 @@ Patrol-owned resource and global intelligence prompt contexts should also
 render the canonical recent changes section before any patrol-local change
 detector fallback so the prompt surface stays aligned with the shared
 unified-resource timeline.
+Those same Patrol-owned prompt contexts now also surface a canonical
+resource-graph section from unified-resource relationships, so edge labels,
+directionality, and provenance stay aligned with the shared graph model
+instead of being reconstructed locally.
 The Patrol page also now renders the canonical intelligence summary card
 through the governed AI client and store, so the visible page summary and the
 resource/timeline sections stay aligned on the same shared backend slice.

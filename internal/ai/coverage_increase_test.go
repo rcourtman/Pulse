@@ -467,6 +467,61 @@ func TestService_BuildIncidentContext(t *testing.T) {
 	}
 }
 
+func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) {
+	now := time.Now()
+	s := NewService(nil, nil)
+	ps := NewPatrolService(nil, nil)
+
+	resourceID := "vm-graph-1"
+	readState := &mockReadState{
+		resources: map[string]*unifiedresources.Resource{
+			resourceID: {
+				ID:     resourceID,
+				Type:   unifiedresources.ResourceTypeVM,
+				Name:   resourceID,
+				Status: unifiedresources.StatusOnline,
+				Relationships: []unifiedresources.ResourceRelationship{
+					{
+						SourceID:   resourceID,
+						TargetID:   "node-graph-1",
+						Type:       unifiedresources.RelRunsOn,
+						Confidence: 0.9,
+						Active:     true,
+						Discoverer: "proxmox_adapter",
+						ObservedAt: now.Add(-2 * time.Hour),
+						LastSeenAt: now.Add(-time.Hour),
+						Metadata:   map[string]any{"role": "primary"},
+					},
+				},
+			},
+		},
+	}
+
+	s.mu.Lock()
+	s.patrolService = ps
+	s.readState = readState
+	s.mu.Unlock()
+
+	resourceCtx := s.buildEnrichedResourceContext(resourceID, "", nil)
+	if !strings.Contains(resourceCtx, "Resource Graph") {
+		t.Fatalf("expected enriched resource context to include graph section, got %q", resourceCtx)
+	}
+	if !strings.Contains(resourceCtx, "Runs on") {
+		t.Fatalf("expected enriched resource context to include canonical relationship label, got %q", resourceCtx)
+	}
+	if !strings.Contains(resourceCtx, "discoverer proxmox_adapter") {
+		t.Fatalf("expected enriched resource context to include provenance, got %q", resourceCtx)
+	}
+
+	incidentCtx := s.buildIncidentContext(resourceID, "")
+	if !strings.Contains(incidentCtx, "Resource Graph") {
+		t.Fatalf("expected incident context to include graph section, got %q", incidentCtx)
+	}
+	if !strings.Contains(incidentCtx, "Runs on") {
+		t.Fatalf("expected incident context to include canonical relationship label, got %q", incidentCtx)
+	}
+}
+
 type mockIncidentStore struct {
 }
 
