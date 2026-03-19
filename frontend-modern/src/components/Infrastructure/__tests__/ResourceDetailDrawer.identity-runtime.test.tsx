@@ -129,16 +129,16 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
   });
 
   it('keeps discovery as secondary overview context instead of a peer tab', async () => {
-    const { getByRole, getByText, queryByRole, queryByTestId } = render(() => (
+    const { getByRole, getByText, queryByRole, queryByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={baseResource({})} />
     ));
 
     expect(queryByRole('button', { name: 'Discovery' })).toBeNull();
     expect(getByText('Discovery context')).toBeInTheDocument();
-    expect(
-      getByText('Supporting metadata only. The web interface path above stays primary.'),
-    ).toBeInTheDocument();
     expect(getByText('Host discovery via host-1')).toBeInTheDocument();
+    expect(
+      queryByText('Supporting metadata only. The web interface path above stays primary.'),
+    ).toBeNull();
     expect(queryByTestId('discovery-tab')).toBeNull();
 
     fireEvent.click(getByRole('button', { name: 'Show metadata' }));

@@ -192,8 +192,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Supporting context')).toBeNull();
     expect(screen.getByText('Discovery context')).toBeInTheDocument();
     expect(
-      screen.getByText('Supporting metadata only. The web interface path above stays primary.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
     expect(screen.queryByText('Operational context')).toBeNull();
     expect(within(changeHistorySection).getByText('Recent activity')).toBeInTheDocument();

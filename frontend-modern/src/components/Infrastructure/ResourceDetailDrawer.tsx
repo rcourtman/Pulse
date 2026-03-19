@@ -7,7 +7,7 @@ import {
   createEffect,
   createResource,
 } from 'solid-js';
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import type {
   Resource,
   ResourceChangeKind,
@@ -100,6 +100,57 @@ import {
 
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
   Boolean(value && Object.keys(value).length > 0);
+
+interface SupportDisclosureProps {
+  title: string;
+  summary?: string | null;
+  expanded: boolean;
+  onToggle: () => void;
+  showLabel: string;
+  hideLabel: string;
+  children: JSX.Element;
+  class?: string;
+  buttonClass?: string;
+  contentClass?: string;
+  dataTestId?: string;
+}
+
+const SupportDisclosure: Component<SupportDisclosureProps> = (props) => {
+  const summary = () => props.summary?.trim() ?? '';
+
+  return (
+    <div
+      data-testid={props.dataTestId}
+      class={props.class ?? 'rounded border border-dashed border-border bg-surface-hover p-3'}
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+            {props.title}
+          </div>
+          <Show when={summary()}>
+            <div class="mt-1 text-[10px] text-base-content">{summary()}</div>
+          </Show>
+        </div>
+
+        <button
+          type="button"
+          onClick={props.onToggle}
+          class={
+            props.buttonClass ??
+            'inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base'
+          }
+        >
+          {props.expanded ? props.hideLabel : props.showLabel}
+        </button>
+      </div>
+
+      <Show when={props.expanded}>
+        <div class={props.contentClass ?? 'mt-3'}>{props.children}</div>
+      </Show>
+    </div>
+  );
+};
 
 const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | '' }> = [
   { label: 'All kinds', value: '' },
@@ -1076,31 +1127,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </div>
 
           <Show when={hasServiceDetails()}>
-            <div class="rounded border border-dashed border-border bg-surface-hover p-3">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                    Service details
-                  </div>
-                  <div class="mt-1 text-[10px] text-muted">
-                    Secondary service-specific operations and breakdowns.
-                  </div>
-                  <Show when={serviceDetailsSummary()}>
-                    <div class="mt-1 text-[10px] text-base-content">{serviceDetailsSummary()}</div>
-                  </Show>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowServiceDetails((value) => !value)}
-                  class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-                >
-                  {showServiceDetails() ? 'Hide service details' : 'Show service details'}
-                </button>
-              </div>
-
-              <Show when={showServiceDetails()}>
-                <div class="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <SupportDisclosure
+              title="Service details"
+              summary={serviceDetailsSummary()}
+              expanded={showServiceDetails()}
+              onToggle={() => setShowServiceDetails((value) => !value)}
+              showLabel="Show service details"
+              hideLabel="Hide service details"
+              contentClass="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3"
+            >
                   <Show when={props.resource.type === 'docker-host'}>
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
                       <div class="mb-2 flex items-center justify-between gap-2">
@@ -1519,38 +1554,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       );
                     }}
                   </Show>
-                </div>
-              </Show>
-            </div>
+            </SupportDisclosure>
           </Show>
         </div>
 
         <Show when={hasHostDetails()}>
-          <div class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                  Host details
-                </div>
-                <div class="mt-1 text-[10px] text-muted">
-                  Secondary system and hardware detail for deeper inspection.
-                </div>
-                <Show when={hostDetailSummary()}>
-                  <div class="mt-1 text-[10px] text-base-content">{hostDetailSummary()}</div>
-                </Show>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowHostDetails((value) => !value)}
-                class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-              >
-                {showHostDetails() ? 'Hide host details' : 'Show host details'}
-              </button>
-            </div>
-
-            <Show when={showHostDetails()}>
-              <div class="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
+          <SupportDisclosure
+            title="Host details"
+            summary={hostDetailSummary()}
+            expanded={showHostDetails()}
+            onToggle={() => setShowHostDetails((value) => !value)}
+            showLabel="Show host details"
+            hideLabel="Hide host details"
+            class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3"
+            contentClass="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden"
+          >
                 <Show when={proxmoxNode()}>
                   {(node) => (
                     <>
@@ -1572,42 +1590,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </>
                   )}
                 </Show>
-              </div>
-            </Show>
-          </div>
+          </SupportDisclosure>
         </Show>
 
         <Show when={hasInvestigationContext()}>
-          <div
-            data-testid="resource-investigation-context"
+          <SupportDisclosure
+            title="Investigation context"
+            summary={investigationContextSummary()}
+            expanded={showInvestigationContext()}
+            onToggle={() => setShowInvestigationContext((value) => !value)}
+            showLabel="Show context"
+            hideLabel="Hide context"
             class="mt-3 rounded border border-border bg-surface p-3"
+            contentClass="mt-3 grid gap-3 md:grid-cols-2"
+            dataTestId="resource-investigation-context"
           >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                  Investigation context
-                </div>
-                <div class="mt-1 text-[10px] text-muted">
-                  Secondary AI and policy signals for deeper investigation.
-                </div>
-                <Show when={investigationContextSummary()}>
-                  <div class="mt-1 text-[10px] text-base-content">
-                    {investigationContextSummary()}
-                  </div>
-                </Show>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowInvestigationContext((value) => !value)}
-                class="inline-flex items-center rounded-md border border-border bg-surface-hover px-3 py-1.5 text-[11px] font-medium text-base-content transition-colors hover:bg-surface"
-              >
-                {showInvestigationContext() ? 'Hide context' : 'Show context'}
-              </button>
-            </div>
-
-            <Show when={showInvestigationContext()}>
-              <div class="mt-3 grid gap-3 md:grid-cols-2">
                 <Show when={resourceIntelligence()}>
                   {(intel) => (
                     <div class="rounded border border-border bg-surface p-3">
@@ -1739,9 +1736,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </div>
                 </Show>
-              </div>
-            </Show>
-          </div>
+          </SupportDisclosure>
         </Show>
 
         <Show when={discoveryConfig()}>
@@ -1753,36 +1748,16 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 targetLabel={config().targetLabel}
               />
 
-              <div class="rounded border border-dashed border-border bg-surface-hover p-3">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                      Discovery context
-                    </div>
-                    <div class="mt-1 text-[10px] text-muted">
-                      Supporting metadata only. The web interface path above stays primary.
-                    </div>
-                    <Show when={discoveryContextSummary()}>
-                      <div class="mt-1 text-[10px] text-base-content">
-                        {discoveryContextSummary()}
-                      </div>
-                    </Show>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowDiscoveryContext((value) => !value)}
-                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-                  >
-                    {showDiscoveryContext() ? 'Hide metadata' : 'Show metadata'}
-                  </button>
-                </div>
-
-                <Show when={showDiscoveryContext()}>
-                  <div class="mt-3 rounded border border-border bg-surface p-2.5">
-                    <div class="mb-2 text-[10px] text-muted">
-                      Detailed discovery metadata for this {config().targetLabel}.
-                    </div>
+              <SupportDisclosure
+                title="Discovery context"
+                summary={discoveryContextSummary()}
+                expanded={showDiscoveryContext()}
+                onToggle={() => setShowDiscoveryContext((value) => !value)}
+                showLabel="Show metadata"
+                hideLabel="Hide metadata"
+                class="rounded border border-dashed border-border bg-surface-hover p-3"
+                contentClass="mt-3 rounded border border-border bg-surface p-2.5"
+              >
                     <Suspense
                       fallback={
                         <div class="flex items-center justify-center py-8">
@@ -1800,9 +1775,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         hostname={config().hostname}
                       />
                     </Suspense>
-                  </div>
-                </Show>
-              </div>
+              </SupportDisclosure>
             </div>
           )}
         </Show>
