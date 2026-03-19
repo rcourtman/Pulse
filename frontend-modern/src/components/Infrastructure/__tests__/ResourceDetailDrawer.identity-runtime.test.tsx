@@ -54,6 +54,8 @@ vi.mock('@/api/ai', () => ({
           reason: 'Updated canonical config',
         },
       ],
+      dependencies: ['storage-1'],
+      dependents: ['vm-child'],
       policy_posture: {
         total_resources: 2,
         sensitivity_counts: {
@@ -303,7 +305,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
   it('surfaces canonical AI intelligence for the resource overview', async () => {
     const resource = baseResource({});
-    const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByRole, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
     await waitFor(() => {
       expect(getByText('AI Intelligence')).toBeInTheDocument();
@@ -316,6 +318,18 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2 governed resources')).toBeInTheDocument();
     expect(getByText('Public')).toBeInTheDocument();
     expect(getByText('Cloud Summary')).toBeInTheDocument();
+    expect(getByText('Graph context')).toBeInTheDocument();
+    expect(getByText('1 dependencies · 1 dependents')).toBeInTheDocument();
+    expect(
+      getByRole('link', {
+        name: 'Open dependency resource storage-1 in Infrastructure',
+      }),
+    ).toHaveAttribute('href', expect.stringContaining('/infrastructure?resource=storage-1'));
+    expect(
+      getByRole('link', {
+        name: 'Open dependent resource vm-child in Infrastructure',
+      }),
+    ).toHaveAttribute('href', expect.stringContaining('/infrastructure?resource=vm-child'));
     const latestChange = getByText('Latest canonical change').parentElement;
     expect(latestChange).not.toBeNull();
     expect(latestChange).toHaveTextContent('Config update');

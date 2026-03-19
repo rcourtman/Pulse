@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -297,12 +298,47 @@ func TestContract_ResourceIntelligenceIncludesRecentChanges(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("record canonical change: %v", err)
 	}
+	correlationDetector := correlation.NewDetector(correlation.Config{
+		MinOccurrences:    1,
+		CorrelationWindow: 2 * time.Hour,
+		RetentionWindow:   24 * time.Hour,
+	})
+	correlationBase := observedAt.Add(-10 * time.Minute)
+	correlationDetector.RecordEvent(correlation.Event{
+		ResourceID:   "storage-1",
+		ResourceName: "storage-1",
+		ResourceType: "storage",
+		EventType:    correlation.EventDiskFull,
+		Timestamp:    correlationBase,
+	})
+	correlationDetector.RecordEvent(correlation.Event{
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		ResourceType: "vm",
+		EventType:    correlation.EventRestart,
+		Timestamp:    correlationBase.Add(1 * time.Minute),
+	})
+	correlationDetector.RecordEvent(correlation.Event{
+		ResourceID:   "storage-1",
+		ResourceName: "storage-1",
+		ResourceType: "storage",
+		EventType:    correlation.EventDiskFull,
+		Timestamp:    correlationBase.Add(2 * time.Minute),
+	})
+	correlationDetector.RecordEvent(correlation.Event{
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		ResourceType: "vm",
+		EventType:    correlation.EventRestart,
+		Timestamp:    correlationBase.Add(3 * time.Minute),
+	})
 	svc.SetUnifiedResourceProvider(&stubUnifiedResourceProvider{
 		resources: []unifiedresources.Resource{
 			{ID: "public-1", Type: unifiedresources.ResourceTypeVM, Tags: []string{"public"}},
 			{ID: "internal-1", Type: unifiedresources.ResourceTypeAgent, Agent: &unifiedresources.AgentData{Hostname: "agent-1"}},
 		},
 	})
+	setUnexportedField(t, svc.GetPatrolService(), "correlationDetector", correlationDetector)
 	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
 	setUnexportedField(t, svc.GetPatrolService(), "aiService", svc)
 
@@ -333,6 +369,13 @@ func TestContract_ResourceIntelligenceIncludesRecentChanges(t *testing.T) {
 	}
 	if got := int(policyPosture["total_resources"].(float64)); got != 2 {
 		t.Fatalf("expected total_resources=2, got %d", got)
+	}
+	dependencies, ok := payload["dependencies"].([]interface{})
+	if !ok {
+		t.Fatalf("expected dependencies array in response, got %T", payload["dependencies"])
+	}
+	if len(dependencies) == 0 {
+		t.Fatal("expected at least one dependency in response")
 	}
 }
 

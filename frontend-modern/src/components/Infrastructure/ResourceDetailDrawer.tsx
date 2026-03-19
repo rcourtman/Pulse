@@ -296,6 +296,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     },
     { initialValue: null as ResourceIntelligence | null },
   );
+  const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
+  const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const policyPosture = createMemo(() => resourceIntelligence()?.policy_posture);
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
@@ -951,6 +953,71 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         </Show>
                       </div>
                     )}
+                  </Show>
+                  <Show when={resourceDependencies().length > 0 || resourceDependents().length > 0}>
+                    <div class="rounded border border-border-subtle bg-base px-2 py-1.5">
+                      <div class="text-[10px] uppercase tracking-wide text-muted">
+                        Graph context
+                      </div>
+                      <div class="mt-0.5 text-[11px] text-base-content">
+                        {resourceDependencies().length} dependencies ·{' '}
+                        {resourceDependents().length} dependents
+                      </div>
+                      <Show when={resourceDependencies().length > 0}>
+                        <div class="mt-2">
+                          <div class="text-[9px] uppercase tracking-wide text-muted">
+                            Depends on
+                          </div>
+                          <div class="mt-1 flex flex-wrap gap-1">
+                            <For each={resourceDependencies().slice(0, 3)}>
+                              {(dependency) => {
+                                const href = buildInfrastructureResourceHref(dependency);
+                                return href ? (
+                                  <a
+                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                    href={href}
+                                    aria-label={`Open dependency resource ${dependency} in Infrastructure`}
+                                  >
+                                    {dependency}
+                                  </a>
+                                ) : (
+                                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                                    {dependency}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
+                        </div>
+                      </Show>
+                      <Show when={resourceDependents().length > 0}>
+                        <div class="mt-2">
+                          <div class="text-[9px] uppercase tracking-wide text-muted">
+                            Used by
+                          </div>
+                          <div class="mt-1 flex flex-wrap gap-1">
+                            <For each={resourceDependents().slice(0, 3)}>
+                              {(dependent) => {
+                                const href = buildInfrastructureResourceHref(dependent);
+                                return href ? (
+                                  <a
+                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                    href={href}
+                                    aria-label={`Open dependent resource ${dependent} in Infrastructure`}
+                                  >
+                                    {dependent}
+                                  </a>
+                                ) : (
+                                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                                    {dependent}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
                   </Show>
                 </div>
               </div>

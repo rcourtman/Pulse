@@ -112,6 +112,8 @@ export interface ResourceIntelligence {
   resource_name?: string;
   resource_type?: string;
   health: IntelligenceHealthScore;
+  dependencies?: string[];
+  dependents?: string[];
   recent_changes?: ResourceChange[];
   policy_posture?: IntelligencePolicyPostureSummary;
   note_count: number;

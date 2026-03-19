@@ -443,6 +443,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('Cloud Summary')).toBeInTheDocument();
     expect(screen.getByText('Local Only')).toBeInTheDocument();
     expect(screen.getByText('Hostname 2')).toBeInTheDocument();
+    expect(screen.getByText('IP Address 1')).toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

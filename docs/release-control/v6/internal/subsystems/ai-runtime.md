@@ -174,6 +174,10 @@ runtime uses for prompt export and context rendering.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.
+That same resource-intelligence payload also carries dependency and
+dependent graph context from unified-resource correlations, so the drawer
+can show canonical graph relationships without reconstructing them from the
+relationship timeline alone.
 The shared AI resource and infrastructure prompt contexts should also surface
 the same canonical recent changes section before any patrol-local fallback so
 the model sees the same timeline entries that power the resource API and
