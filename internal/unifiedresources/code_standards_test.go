@@ -439,6 +439,8 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 		},
 		filepath.Join(".", "policy_presentation.go"): {
 			"func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) string",
+			"if ResourcePolicyRequiresGovernedSummary(policy) {",
+			"return ResourcePolicyRedactedLabel",
 			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
 			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
 			"func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string",

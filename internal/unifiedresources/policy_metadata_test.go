@@ -398,6 +398,9 @@ func TestResourcePolicyLabelHelpers(t *testing.T) {
 	if got := ResourcePolicyLabel(" fallback-name ", " governed summary ", policy); got != "governed summary" {
 		t.Fatalf("ResourcePolicyLabel() = %q, want governed summary", got)
 	}
+	if got := ResourcePolicyLabel(" fallback-name ", "", policy); got != ResourcePolicyRedactedLabel {
+		t.Fatalf("ResourcePolicyLabel() with governed policy and empty summary = %q, want redacted label", got)
+	}
 	if got := ResourcePolicyLabel(" fallback-name ", " governed summary ", nil); got != "fallback-name" {
 		t.Fatalf("ResourcePolicyLabel() with nil policy = %q, want fallback-name", got)
 	}

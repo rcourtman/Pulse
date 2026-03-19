@@ -247,6 +247,9 @@ func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) str
 	if ResourcePolicyUsesAISafeSummary(aiSafeSummary, policy) {
 		return strings.TrimSpace(aiSafeSummary)
 	}
+	if ResourcePolicyRequiresGovernedSummary(policy) {
+		return ResourcePolicyRedactedLabel
+	}
 	return strings.TrimSpace(name)
 }
 
