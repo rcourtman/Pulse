@@ -1789,12 +1789,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
                 Change history
               </div>
-              <div class="mt-1 text-[10px] text-muted">
-                Filterable event history for this resource.
-              </div>
               <Show when={resourceTimelineCount() > 0}>
-                <div class="mt-2 flex flex-col gap-1">
-                  <span class="text-[10px] text-muted">Recent activity</span>
+                <div class="mt-1">
                   <ResourceFacetSummary
                     recentChanges={resourceTimeline()}
                     counts={resourceFacetCounts()}
@@ -1908,7 +1904,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               when={sortedResourceTimeline().length > 0}
               fallback={
                 <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No event records are available for this resource yet.
+                  No events yet.
                 </div>
               }
             >

@@ -241,6 +241,9 @@ instead of surfacing a peer `History` tab, so resource investigation stays on
 one coherent runtime surface: the overview card carries the compact recent
 activity summary, while the embedded change-history section owns filters and
 the event log without duplicating a second timeline-summary card.
+That same change-history header now renders as title plus compact summary only,
+without an explanatory subheading, so the section reads like investigation
+state instead of inline documentation.
 That same overview now keeps AI intelligence and data-governance details
 inside a collapsed `Investigation context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available

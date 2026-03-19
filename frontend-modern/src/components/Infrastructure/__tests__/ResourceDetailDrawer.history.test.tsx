@@ -196,7 +196,10 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
     expect(screen.queryByText('Operational context')).toBeNull();
-    expect(within(changeHistorySection).getByText('Recent activity')).toBeInTheDocument();
+    expect(
+      within(changeHistorySection).queryByText('Filterable event history for this resource.'),
+    ).toBeNull();
+    expect(within(changeHistorySection).queryByText('Recent activity')).toBeNull();
     expect(screen.queryByText('Events')).toBeNull();
     expect(screen.getAllByText('Timeline 3')).toHaveLength(1);
     expect(screen.getAllByText('Restart 2')).toHaveLength(1);
@@ -308,7 +311,8 @@ describe('ResourceDetailDrawer change history section', () => {
     const panel = within(historyPanel);
     expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
-    expect(panel.getByText('Recent activity')).toBeInTheDocument();
+    expect(panel.queryByText('Recent activity')).toBeNull();
+    expect(panel.queryByText('Filterable event history for this resource.')).toBeNull();
     expect(panel.getByText('Event log')).toBeInTheDocument();
     expect(
       panel.getByRole('link', { name: 'Open related resource PVE Node 1 in Infrastructure' }),
