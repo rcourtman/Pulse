@@ -14,6 +14,7 @@ import type {
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
 } from '@/types/resource';
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
@@ -56,6 +57,7 @@ import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation'
 import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
+  getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -165,8 +167,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const policyRedactions = createMemo(() =>
     getResourcePolicyRedactionLabels(props.resource.policy),
   );
+  const governanceSummary = createMemo(() =>
+    requiresGovernedResourceDisplay(props.resource.policy)
+      ? getResourcePolicyDisplayLabel(props.resource)
+      : props.resource.aiSafeSummary?.trim() ?? '',
+  );
   const hasGovernanceData = createMemo(
-    () => policyBadges().length > 0 || Boolean(props.resource.aiSafeSummary),
+    () => policyBadges().length > 0 || Boolean(governanceSummary()),
   );
   const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
   const agentMeta = createMemo(
@@ -1032,11 +1039,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </div>
                 </Show>
-                <Show when={props.resource.aiSafeSummary}>
+                <Show when={governanceSummary()}>
                   <div class="flex flex-col gap-1">
                     <span class="text-muted">AI-Safe Summary</span>
                     <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
-                      {props.resource.aiSafeSummary}
+                      {governanceSummary()}
                     </div>
                   </div>
                 </Show>

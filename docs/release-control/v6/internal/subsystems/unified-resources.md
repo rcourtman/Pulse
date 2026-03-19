@@ -285,6 +285,10 @@ governed display label through the same policy-aware helper, and they suppress
 the raw alternate name when policy requires governed handling, so the visible
 label stays aligned with the backend redaction boundary instead of
 reconstructing a local name fallback.
+The resource detail drawer now also resolves its AI-safe summary through that
+same helper, so governed resources still present the canonical redacted label
+when the backend summary is missing instead of dropping the governed summary
+block entirely.
 The shared frontend resource identity helper now owns that policy-aware
 display contract, so infrastructure surfaces that ask for the preferred
 resource label no longer need to re-encode the governed summary boundary by

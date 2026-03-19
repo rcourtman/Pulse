@@ -334,6 +334,10 @@ The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary and policy posture
 stay aligned with the same resource-policy boundary that governs
 policy-aware routing and redaction without any frontend-local re-normalization.
+The resource detail drawer now also resolves the visible AI-safe summary
+through the same shared policy helper, so governed resources still show the
+canonical redacted label if the backend summary is missing instead of
+silently dropping the summary block.
 The per-resource intelligence payload returned from
 `/api/ai/intelligence?resource_id=...` now carries recent changes,
 dependencies, dependents, correlations, and knowledge only; policy posture

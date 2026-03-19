@@ -309,6 +309,26 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(queryByText('sensitive-host')).toBeNull();
   });
 
+  it('uses the governed policy helper when aiSafeSummary is absent', () => {
+    const resource = baseResource({
+      id: 'governed-resource-1',
+      name: 'governed-host',
+      displayName: 'Governed Host',
+      policy: {
+        sensitivity: 'restricted',
+        routing: {
+          scope: 'local-only',
+          redact: ['hostname'],
+        },
+      },
+    });
+
+    const { getAllByText, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('AI-Safe Summary')).toBeInTheDocument();
+    expect(getAllByText('redacted by policy').length).toBeGreaterThan(1);
+  });
+
   it('surfaces canonical AI intelligence for the resource overview', async () => {
     const resource = baseResource({});
     const { getByRole, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
