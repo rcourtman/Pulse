@@ -135,6 +135,80 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 	assert.NotContains(t, payload, "host_id")
 }
 
+func TestCanonicalDiscoveryResourceType(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "docker", want: "app-container"},
+		{in: "app-container", want: "app-container"},
+		{in: "k8s-cluster", want: "k8s-cluster"},
+		{in: "k8s-pod", want: "k8s-pod"},
+		{in: "docker-host", want: "docker-host"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			assert.Equal(t, tc.want, CanonicalDiscoveryResourceType(tc.in))
+		})
+	}
+}
+
+func TestDiscoveryProviderResourceType(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "app-container", want: "docker"},
+		{in: "docker", want: "docker"},
+		{in: "vm", want: "vm"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			assert.Equal(t, tc.want, DiscoveryProviderResourceType(tc.in))
+		})
+	}
+}
+
+func TestCanonicalDiscoveryTargetID(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       *ResourceDiscoveryInfo
+		fallback string
+		want     string
+	}{
+		{
+			name: "uses discovery target",
+			in: &ResourceDiscoveryInfo{
+				TargetID: "node1",
+			},
+			fallback: "fallback",
+			want:     "node1",
+		},
+		{
+			name: "falls back when target missing",
+			in: &ResourceDiscoveryInfo{
+				TargetID: "   ",
+			},
+			fallback: "fallback",
+			want:     "fallback",
+		},
+		{
+			name:     "nil discovery falls back",
+			in:       nil,
+			fallback: "fallback",
+			want:     "fallback",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, CanonicalDiscoveryTargetID(tc.in, tc.fallback))
+		})
+	}
+}
+
 func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
 

@@ -209,7 +209,9 @@ func getCommonServicePaths(serviceType string) (logPaths, configPaths, dataPaths
 	return nil, nil, nil
 }
 
-func canonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string {
+// CanonicalDiscoveryTargetID returns the canonical target ID for a discovery,
+// falling back to the provided target ID when the discovery payload omits one.
+func CanonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string {
 	if discovery == nil {
 		return strings.TrimSpace(fallbackTargetID)
 	}
@@ -231,8 +233,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	if isUnsupportedDiscoveryLegacyResourceTypeToken(resourceTypeRaw) {
 		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
 	}
-	resourceType := canonicalDiscoveryResourceType(resourceTypeRaw)
-	providerResourceType := discoveryProviderResourceType(resourceType)
+	resourceType := CanonicalDiscoveryResourceType(resourceTypeRaw)
+	providerResourceType := DiscoveryProviderResourceType(resourceType)
 	targetID = strings.TrimSpace(targetID)
 
 	if resourceType == "" {
@@ -357,10 +359,10 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
-	discoveryTargetID := canonicalDiscoveryTargetID(discovery, targetID)
+	discoveryTargetID := CanonicalDiscoveryTargetID(discovery, targetID)
 
 	// Return the discovery information
-	responseResourceType := canonicalDiscoveryResourceType(discovery.ResourceType)
+	responseResourceType := CanonicalDiscoveryResourceType(discovery.ResourceType)
 	if responseResourceType == "" {
 		responseResourceType = resourceType
 	}
@@ -510,7 +512,9 @@ func isUnsupportedDiscoveryLegacyResourceTypeToken(value string) bool {
 	}
 }
 
-func canonicalDiscoveryResourceType(raw string) string {
+// CanonicalDiscoveryResourceType returns the canonical discovery resource type
+// used by the AI tools layer.
+func CanonicalDiscoveryResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
 	switch resourceType {
 	case "docker", "app-container":
@@ -520,13 +524,15 @@ func canonicalDiscoveryResourceType(raw string) string {
 	}
 }
 
-func discoveryProviderResourceType(canonical string) string {
-	switch canonicalDiscoveryResourceType(canonical) {
+// DiscoveryProviderResourceType returns the discovery-provider resource type
+// used for the canonical discovery representation.
+func DiscoveryProviderResourceType(canonical string) string {
+	switch CanonicalDiscoveryResourceType(canonical) {
 	case "app-container":
 		// Discovery storage still keys Docker/container runtime discoveries as "docker".
 		return "docker"
 	default:
-		return canonicalDiscoveryResourceType(canonical)
+		return CanonicalDiscoveryResourceType(canonical)
 	}
 }
 
@@ -542,8 +548,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	if isUnsupportedDiscoveryLegacyResourceTypeToken(filterType) {
 		return NewErrorResult(fmt.Errorf("unsupported type %q", strings.TrimSpace(filterType))), nil
 	}
-	filterType = canonicalDiscoveryResourceType(filterType)
-	providerFilterType := discoveryProviderResourceType(filterType)
+	filterType = CanonicalDiscoveryResourceType(filterType)
+	providerFilterType := DiscoveryProviderResourceType(filterType)
 	filterTargetID = strings.TrimSpace(filterTargetID)
 
 	if filterType != "" && !isSupportedDiscoveryResourceType(filterType) {
@@ -587,10 +593,10 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	// Build response
 	results := make([]map[string]interface{}, 0, len(discoveries))
 	for _, d := range discoveries {
-		discoveryTargetID := canonicalDiscoveryTargetID(d, "")
+		discoveryTargetID := CanonicalDiscoveryTargetID(d, "")
 		result := map[string]interface{}{
 			"id":              d.ID,
-			"resource_type":   canonicalDiscoveryResourceType(d.ResourceType),
+			"resource_type":   CanonicalDiscoveryResourceType(d.ResourceType),
 			"resource_id":     d.ResourceID,
 			"target_id":       discoveryTargetID,
 			"agent_id":        d.AgentID,

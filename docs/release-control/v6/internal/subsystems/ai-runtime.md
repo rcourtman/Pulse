@@ -131,6 +131,10 @@ the summary layout locally.
 The chat prefetch path now also calls the shared governed-summary predicate
 directly at each mention site, so it no longer carries a local wrapper around
 the canonical policy decision or a separate mention-summary trim helper.
+Structured mention resolution also uses the shared AI tools discovery
+canonicalization helpers now, so chat prefetch and discovery responses agree
+on resource-type and target-ID formatting instead of maintaining chat-local
+copies.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

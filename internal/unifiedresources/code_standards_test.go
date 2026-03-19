@@ -399,8 +399,16 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"unifiedresources.ResourcePolicyRedactedValue(",
 		},
 		filepath.Join("..", "ai", "chat", "context_prefetch.go"): {
-			"unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)",
+			"tools.CanonicalDiscoveryResourceType(",
+			"tools.DiscoveryProviderResourceType(",
+			"tools.CanonicalDiscoveryTargetID(",
+			"unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy)",
 			"unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy)",
+		},
+		filepath.Join("..", "ai", "tools", "tools_discovery.go"): {
+			"func CanonicalDiscoveryResourceType(raw string) string",
+			"func DiscoveryProviderResourceType(canonical string) string",
+			"func CanonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string",
 		},
 		filepath.Join("..", "ai", "resource_export.go"): {
 			"unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)",

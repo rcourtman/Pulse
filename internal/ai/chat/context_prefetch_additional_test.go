@@ -510,25 +510,3 @@ func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter
 		t.Fatalf("expected governed summary block to match shared formatter, got %q", summary)
 	}
 }
-
-func TestCanonicalMentionResourceType(t *testing.T) {
-	testCases := []struct {
-		in   string
-		want string
-	}{
-		{in: "docker", want: "app-container"},
-		{in: "docker-container", want: "docker-container"},
-		{in: "app_container", want: "app_container"},
-		{in: "dockerhost", want: "dockerhost"},
-		{in: "k8s_cluster", want: "k8s_cluster"},
-		{in: "k8s_pod", want: "k8s_pod"},
-		{in: "k8s_deployment", want: "k8s_deployment"},
-		{in: "system-container", want: "system-container"},
-	}
-
-	for _, tc := range testCases {
-		if got := canonicalMentionResourceType(tc.in); got != tc.want {
-			t.Fatalf("canonicalMentionResourceType(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}

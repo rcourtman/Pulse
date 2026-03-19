@@ -466,7 +466,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
 			continue
 		}
-		resourceType := canonicalMentionResourceType(sm.Type)
+		resourceType := tools.CanonicalDiscoveryResourceType(sm.Type)
 
 		// Use the canonical unified-resource resolver for routing plus policy metadata.
 		resolved := unifiedresources.ResolveResourceContext(rs, sm.Name)
@@ -655,46 +655,10 @@ func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadSt
 	return parts[0], parts[1]
 }
 
-func canonicalMentionResourceType(raw string) string {
-	resourceType := strings.ToLower(strings.TrimSpace(raw))
-	switch resourceType {
-	case "docker":
-		return "app-container"
-	case "docker-host":
-		return "docker-host"
-	case "k8s-cluster":
-		return "k8s-cluster"
-	case "k8s-pod":
-		return "k8s-pod"
-	case "k8s-deployment":
-		return "k8s-deployment"
-	default:
-		return resourceType
-	}
-}
-
-func discoveryResourceType(resourceType string) string {
-	switch canonicalMentionResourceType(resourceType) {
-	case "app-container":
-		// Discovery backend still stores Docker containers under "docker".
-		return "docker"
-	default:
-		return canonicalMentionResourceType(resourceType)
-	}
-}
-
-func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
-	if discovery == nil {
-		return ""
-	}
-	targetID := strings.TrimSpace(discovery.TargetID)
-	return targetID
-}
-
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
-	discoveryType := discoveryResourceType(mention.ResourceType)
-	canonicalType := canonicalMentionResourceType(mention.ResourceType)
+	discoveryType := tools.DiscoveryProviderResourceType(mention.ResourceType)
+	canonicalType := tools.CanonicalDiscoveryResourceType(mention.ResourceType)
 
 	// First try to get existing discovery
 	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.TargetID, mention.ResourceID)
@@ -737,8 +701,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	// Create a map for quick discovery lookup
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
 	for _, d := range discoveries {
-		discoveryTargetID := canonicalDiscoveryTargetID(d)
-		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(d.ResourceType), discoveryTargetID, d.ResourceID)
+		discoveryTargetID := tools.CanonicalDiscoveryTargetID(d, "")
+		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(d.ResourceType), discoveryTargetID, d.ResourceID)
 		discoveryMap[key] = d
 	}
 
@@ -748,11 +712,11 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 			continue
 		}
 
-		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
+		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain
-		if canonicalMentionResourceType(mention.ResourceType) == "app-container" {
+		if tools.CanonicalDiscoveryResourceType(mention.ResourceType) == "app-container" {
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
 			// Show the full routing chain unambiguously
