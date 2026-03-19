@@ -30,6 +30,7 @@ import {
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
+  getPreferredResourceDisplayName,
 } from '@/utils/resourceIdentity';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
@@ -54,7 +55,6 @@ import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation'
 import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
-  getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -139,7 +139,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
 
-  const displayName = createMemo(() => getResourcePolicyDisplayLabel(props.resource));
+  const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
   const statusIndicator = createMemo(() =>
     getAgentStatusIndicator({ status: props.resource.status }),
   );

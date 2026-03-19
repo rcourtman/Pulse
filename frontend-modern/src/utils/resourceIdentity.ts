@@ -2,6 +2,10 @@ import type { Agent, Node } from '@/types/api';
 import type { Resource, ResourceCanonicalIdentity } from '@/types/resource';
 import type { NodeConfig } from '@/types/nodes';
 import {
+  getResourcePolicyDisplayLabel,
+  requiresGovernedResourceDisplay,
+} from '@/utils/resourcePolicyPresentation';
+import {
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
@@ -297,10 +301,12 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
 };
 
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
-  resource.displayName ||
-  asTrimmedString(getCanonicalIdentityRecord(resource)?.displayName) ||
-  getPreferredResourceHostname(resource) ||
-  getPrimaryResourceIdentity(resource);
+  requiresGovernedResourceDisplay(resource.policy)
+    ? getResourcePolicyDisplayLabel(resource)
+    : asTrimmedString(resource.displayName) ||
+      asTrimmedString(getCanonicalIdentityRecord(resource)?.displayName) ||
+      getPreferredResourceHostname(resource) ||
+      getPrimaryResourceIdentity(resource);
 
 export const getPreferredWorkloadsAgentHint = (resource: Resource): string | undefined => {
   const platformData = getPlatformDataRecord(resource);

@@ -367,6 +367,23 @@ describe('resourceIdentity', () => {
     expect(
       getPreferredResourceDisplayName(
         makeResource({
+          name: 'sensitive-host',
+          displayName: 'Sensitive Host',
+          policy: {
+            sensitivity: 'restricted',
+            routing: {
+              scope: 'local-only',
+              redact: ['hostname', 'alias'],
+            },
+          },
+          aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+        }),
+      ),
+    ).toBe('restricted host summary safe for remote AI consumption');
+
+    expect(
+      getPreferredResourceDisplayName(
+        makeResource({
           displayName: 'Display Label',
           platformData: {
             agent: {

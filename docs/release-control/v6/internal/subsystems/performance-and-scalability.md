@@ -118,11 +118,12 @@ the table, but it must remain on the same bounded row-windowing and mounted-row
 budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather
 than creating a separate unbounded rendering path for policy-rich fleets.
 The shared table and detail drawer now also render governed resource labels
-through `getResourcePolicyDisplayLabel` and suppress the raw alternate name
-when policy requires governed handling. That keeps the policy-aware label path
-inside the same hot-row rendering budget instead of adding a second display
-branch for redacted fleets, and the proof for that behavior lives in
-`UnifiedResourceTable.performance.contract.test.tsx`.
+through the shared identity/display contract, which routes policy-aware
+resources through the canonical policy-aware helper and suppresses the raw
+alternate name when policy requires governed handling. That keeps the
+policy-aware label path inside the same hot-row rendering budget instead of
+adding a second display branch for redacted fleets, and the proof for that
+behavior lives in `UnifiedResourceTable.performance.contract.test.tsx`.
 The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its

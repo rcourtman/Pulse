@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
 import { formatSensorName } from '@/components/Infrastructure/resourceDetailMappers';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   buildStatusOptions,
   filterResources,
@@ -378,6 +379,9 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getAllByText('Restricted').length).toBeGreaterThan(0);
       });
+      expect(getPreferredResourceDisplayName(resources[0]!)).toBe(
+        'restricted host summary safe for remote AI consumption',
+      );
       expect(getByTitle('restricted host summary safe for remote AI consumption')).toBeInTheDocument();
       expect(queryByText('Sensitive Host')).toBeNull();
       expect(queryByText('sensitive-host')).toBeNull();

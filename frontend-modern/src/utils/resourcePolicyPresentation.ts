@@ -119,6 +119,11 @@ export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): str
 export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
   (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));
 
+export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null): boolean => {
+  if (!policy) return false;
+  return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;
+};
+
 const buildCountSummaries = <T extends string>(
   counts: Partial<Record<T, number>> | undefined,
   order: readonly T[],
@@ -181,10 +186,7 @@ export const getResourcePolicyDisplayLabel = (
   if (!policy) {
     return resource.displayName?.trim() || resource.name?.trim() || '';
   }
-  const requiresGovernedDisplay =
-    (policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0);
-
-  if (requiresGovernedDisplay) {
+  if (requiresGovernedResourceDisplay(policy)) {
     return summary || 'redacted by policy';
   }
 
@@ -196,10 +198,7 @@ export const shouldShowResourceAlternateName = (
 ): boolean => {
   if (!resource?.displayName || !resource.name) return false;
 
-  if (
-    resource.policy &&
-    (resource.policy.routing.scope === 'local-only' || (resource.policy.routing.redact?.length ?? 0) > 0)
-  ) {
+  if (requiresGovernedResourceDisplay(resource.policy)) {
     return false;
   }
 

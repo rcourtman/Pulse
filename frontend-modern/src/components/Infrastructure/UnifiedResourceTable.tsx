@@ -25,9 +25,9 @@ import {
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getAgentStatusIndicator } from '@/utils/status';
 import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   getResourcePolicyBadges,
-  getResourcePolicyDisplayLabel,
   shouldShowResourceAlternateName,
 } from '@/utils/resourcePolicyPresentation';
 import type { Disk } from '@/types/api';
@@ -537,7 +537,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     const isHighlighted = createMemo(
                       () => props.highlightedResourceId === resource.id,
                     );
-                    const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
+                    const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
                     const statusIndicator = createMemo(() =>
                       getAgentStatusIndicator({ status: resource.status }),
                     );
@@ -1036,7 +1036,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       const isHighlighted = createMemo(
                         () => props.highlightedResourceId === resource.id,
                       );
-                      const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
+                      const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
                       const serviceLink = createMemo(
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
@@ -1338,7 +1338,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                       const isHighlighted = createMemo(
                         () => props.highlightedResourceId === resource.id,
                       );
-                      const displayName = createMemo(() => getResourcePolicyDisplayLabel(resource));
+                      const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
                       const serviceLink = createMemo(
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
