@@ -2996,6 +2996,7 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).not.toContain('Optional — tag users or groups');
     expect(webhookConfigSource).not.toContain('getAlertWebhookMentionPlaceholder(');
     expect(webhookConfigSource).not.toContain('getAlertWebhookMentionHelp(');
+    expect(webhookConfigSource).not.toContain('interface WebhookTemplate');
     expect(webhookConfigSource).not.toContain('Your Pushover application token');
     expect(webhookConfigSource).not.toContain('Primary user key or group key');
     expect(webhookConfigSource).not.toContain('app_token');

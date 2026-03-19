@@ -1,5 +1,5 @@
 import { createSignal, createEffect, Show, For, Index } from 'solid-js';
-import { NotificationsAPI, Webhook } from '@/api/notifications';
+import { NotificationsAPI, Webhook, type WebhookTemplate } from '@/api/notifications';
 import { logger } from '@/utils/logger';
 import {
   ALERT_WEBHOOK_ADD_LABEL,
@@ -50,18 +50,6 @@ import {
   formHelpText,
   formCheckbox,
 } from '@/components/shared/Form';
-
-interface WebhookTemplate {
-  service: string;
-  label?: string;
-  name: string;
-  description?: string;
-  urlPattern: string;
-  method: string;
-  headers: Record<string, string>;
-  payloadTemplate: string;
-  instructions: string;
-}
 
 interface WebhookConfigProps {
   webhooks: Webhook[];

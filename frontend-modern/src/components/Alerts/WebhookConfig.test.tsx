@@ -20,7 +20,7 @@ vi.mock('@/utils/logger', () => ({
 
 import { WebhookConfig } from './WebhookConfig';
 import { logger } from '@/utils/logger';
-import type { Webhook } from '@/api/notifications';
+import type { Webhook, WebhookTemplate } from '@/api/notifications';
 
 // --- Helpers ---
 
@@ -37,7 +37,7 @@ function makeWebhook(overrides: Partial<Webhook> = {}): Webhook {
   };
 }
 
-const discordTemplate = {
+const discordTemplate: WebhookTemplate = {
   service: 'discord',
   label: 'Discord',
   mentionPlaceholder: '@everyone or <@USER_ID> or <@&ROLE_ID>',
@@ -51,7 +51,7 @@ const discordTemplate = {
   instructions: 'Go to Server Settings → Integrations → Webhooks → New Webhook.',
 };
 
-const slackTemplate = {
+const slackTemplate: WebhookTemplate = {
   service: 'slack',
   label: 'Slack',
   mentionPlaceholder: '@channel, @here, or <@USER_ID>',
@@ -65,7 +65,7 @@ const slackTemplate = {
   instructions: 'Create an incoming webhook in your Slack workspace.',
 };
 
-const genericTemplate = {
+const genericTemplate: WebhookTemplate = {
   service: 'generic',
   label: 'Generic',
   name: 'Generic Webhook',
@@ -77,7 +77,7 @@ const genericTemplate = {
   instructions: '',
 };
 
-const pushoverTemplate = {
+const pushoverTemplate: WebhookTemplate = {
   service: 'pushover',
   label: 'Pushover',
   name: 'Pushover',
@@ -89,7 +89,12 @@ const pushoverTemplate = {
   instructions: 'Create an application at https://pushover.net/apps',
 };
 
-const mockTemplates = [genericTemplate, discordTemplate, slackTemplate, pushoverTemplate];
+const mockTemplates: WebhookTemplate[] = [
+  genericTemplate,
+  discordTemplate,
+  slackTemplate,
+  pushoverTemplate,
+];
 
 // --- Tests ---
 describe('WebhookConfig', () => {
