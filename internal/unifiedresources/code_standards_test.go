@@ -429,8 +429,8 @@ func TestResourcePresentationsUseSharedDurationHelper(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read %s: %v", name, err)
 		}
-		if !strings.Contains(string(data), "utils.FormatDuration(") {
-			t.Fatalf("%s must use the shared utils.FormatDuration helper", name)
+		if !strings.Contains(string(data), "utils.FormatDurationAgo(") {
+			t.Fatalf("%s must use the shared utils.FormatDurationAgo helper", name)
 		}
 	}
 }

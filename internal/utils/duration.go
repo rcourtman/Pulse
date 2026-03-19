@@ -19,6 +19,15 @@ func FormatDuration(d time.Duration) string {
 	return formatUnit(int(d.Hours()/24), "day")
 }
 
+// FormatDurationAgo returns a short human-readable elapsed-time string with an "ago" suffix.
+func FormatDurationAgo(d time.Duration) string {
+	formatted := FormatDuration(d)
+	if formatted == "just now" {
+		return formatted
+	}
+	return formatted + " ago"
+}
+
 func formatUnit(n int, unit string) string {
 	if n == 1 {
 		return "1 " + unit

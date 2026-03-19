@@ -112,9 +112,9 @@ func FormatResourceChangeSummary(change ResourceChange) string {
 
 	ago := "recently"
 	if !change.ObservedAt.IsZero() {
-		ago = utils.FormatDuration(time.Since(change.ObservedAt).Truncate(time.Minute))
+		ago = utils.FormatDurationAgo(time.Since(change.ObservedAt).Truncate(time.Minute))
 	}
-	return summary + fmt.Sprintf(" (%s ago)", ago)
+	return summary + fmt.Sprintf(" (%s)", ago)
 }
 
 // FormatResourceRecentChangesContext returns the canonical markdown section

@@ -290,7 +290,7 @@ func (r *RemediationLog) FormatForContext(resourceID string, limit int) string {
 	for _, rec := range records {
 		ago := time.Since(rec.Timestamp)
 		outcomeStr := string(rec.Outcome)
-		result += "- " + utils.FormatDuration(ago) + " ago: " + rec.Problem + "\n"
+		result += "- " + utils.FormatDurationAgo(ago) + ": " + rec.Problem + "\n"
 		result += "  Action: " + rec.Action + " (" + outcomeStr + ")\n"
 		if rec.Note != "" {
 			result += "  Note: " + rec.Note + "\n"

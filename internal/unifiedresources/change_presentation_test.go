@@ -65,31 +65,64 @@ func TestDescribeChange(t *testing.T) {
 }
 
 func TestFormatResourceChangeSummary(t *testing.T) {
-	change := ResourceChange{
-		Kind:             ChangeRestart,
-		From:             "running",
-		To:               "restarting",
-		SourceType:       SourcePlatformEvent,
-		SourceAdapter:    AdapterProxmox,
-		Actor:            "agent:oncall-helper",
-		Reason:           "Routine restart requested",
-		RelatedResources: []string{"node-1"},
-		ObservedAt:       time.Now().Add(-2 * time.Hour),
+	cases := []struct {
+		name   string
+		change ResourceChange
+		wants  []string
+	}{
+		{
+			name: "recent",
+			change: ResourceChange{
+				Kind:             ChangeRestart,
+				From:             "running",
+				To:               "restarting",
+				SourceType:       SourcePlatformEvent,
+				SourceAdapter:    AdapterProxmox,
+				Actor:            "agent:oncall-helper",
+				Reason:           "Routine restart requested",
+				RelatedResources: []string{"node-1"},
+				ObservedAt:       time.Now().Add(-2 * time.Hour),
+			},
+			wants: []string{
+				"**Restart**",
+				"running → restarting",
+				"platform_event/proxmox_adapter",
+				"actor agent:oncall-helper",
+				"Routine restart requested",
+				"related: node-1",
+				"2 hours ago",
+			},
+		},
+		{
+			name: "just now",
+			change: ResourceChange{
+				Kind:          ChangeConfigUpdate,
+				From:          "old",
+				To:            "new",
+				SourceType:    SourcePulseDiff,
+				SourceAdapter: AdapterOpsAgent,
+				ObservedAt:    time.Now().Add(-30 * time.Second),
+			},
+			wants: []string{
+				"just now",
+			},
+		},
 	}
 
-	summary := FormatResourceChangeSummary(change)
-	for _, want := range []string{
-		"**Restart**",
-		"running → restarting",
-		"platform_event/proxmox_adapter",
-		"actor agent:oncall-helper",
-		"Routine restart requested",
-		"related: node-1",
-		"2 hours ago",
-	} {
-		if !strings.Contains(summary, want) {
-			t.Fatalf("expected summary %q to contain %q", summary, want)
-		}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			summary := FormatResourceChangeSummary(tc.change)
+			for _, want := range tc.wants {
+				if !strings.Contains(summary, want) {
+					t.Fatalf("expected summary %q to contain %q", summary, want)
+				}
+			}
+			if strings.Contains(summary, "just now ago") {
+				t.Fatalf("summary should not contain duplicated ago wording: %q", summary)
+			}
+		})
 	}
 }
 

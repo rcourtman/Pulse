@@ -69,7 +69,7 @@ func FormatRecentChangesContext(changes []Change, includeResourcePrefix bool, he
 			entry = fmt.Sprintf("%s: %s", scope, entry)
 		}
 		ago := time.Since(change.DetectedAt).Truncate(time.Minute)
-		lines = append(lines, fmt.Sprintf("- %s (%s ago)", entry, utils.FormatDuration(ago)))
+		lines = append(lines, fmt.Sprintf("- %s (%s)", entry, utils.FormatDurationAgo(ago)))
 	}
 	return strings.Join(lines, "\n")
 }

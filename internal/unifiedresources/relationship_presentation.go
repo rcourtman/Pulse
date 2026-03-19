@@ -98,10 +98,10 @@ func FormatResourceGraphContext(resource *Resource, limit int) string {
 			parts = append(parts, fmt.Sprintf("confidence %s", presentation.Confidence))
 		}
 		if !rel.ObservedAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("observed %s ago", utils.FormatDuration(time.Since(rel.ObservedAt).Truncate(time.Minute))))
+			parts = append(parts, fmt.Sprintf("observed %s", utils.FormatDurationAgo(time.Since(rel.ObservedAt).Truncate(time.Minute))))
 		}
 		if !rel.LastSeenAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("last seen %s ago", utils.FormatDuration(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
+			parts = append(parts, fmt.Sprintf("last seen %s", utils.FormatDurationAgo(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
 		}
 		if presentation.HasMetadata {
 			parts = append(parts, "metadata present")

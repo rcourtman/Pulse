@@ -37,6 +37,14 @@ func TestFormatRecentChangesContext(t *testing.T) {
 	now := time.Now()
 	changes := []Change{
 		{
+			ResourceID:   "res-0",
+			ResourceType: "node",
+			ResourceName: "lb-01",
+			ChangeType:   ChangeCreated,
+			Description:  "came online",
+			DetectedAt:   now.Add(-30 * time.Second),
+		},
+		{
 			ResourceID:   "res-1",
 			ResourceType: "vm",
 			ResourceName: "web-01",
@@ -56,6 +64,7 @@ func TestFormatRecentChangesContext(t *testing.T) {
 	got := FormatRecentChangesContext(changes, true, "###")
 	for _, want := range []string{
 		"### Recent Changes Across Infrastructure",
+		"res-0 (node): **Created** came online (just now)",
 		"res-1 (vm): **Restart** restarted after maintenance (1 hour ago)",
 		"cache-1 (container): **Config update** adjusted memory limit (30 minutes ago)",
 	} {
