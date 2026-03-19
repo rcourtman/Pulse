@@ -203,6 +203,40 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('projects kubernetes clusterId from the canonical context prefix', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            type: 'pod',
+            kubernetes: {
+              clusterName: 'cluster-a',
+              context: 'cluster-context',
+              clusterId: 'cluster-a-id',
+              podUid: 'pod-uid-1',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(result!.resources()[0]?.clusterId).toBe('cluster-a');
+
+    dispose();
+  });
+
   it('falls back to proxmox temperature when agent temperature is unavailable', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

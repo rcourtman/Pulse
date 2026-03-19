@@ -152,6 +152,10 @@ same canonical cluster-name boundary.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail hot path and the dashboard selector path stay
 aligned on the same cluster-name source of truth.
+The unified-resource projection also uses that same helper for Kubernetes
+`clusterId`, so the shared store, dashboard grouping, and detail-navigation
+surfaces all see the same cluster-context prefix before any surface-specific
+fallback applies.
 The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its

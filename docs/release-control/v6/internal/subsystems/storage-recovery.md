@@ -737,8 +737,12 @@ trusts the backend canonical metadata directly instead of re-normalizing it
 locally, so storage and recovery views see the same policy posture the API
 publishes. The same hook and the resource-identity helpers it depends on now
 share the canonical trimmed-string utility instead of each surface rebuilding
-its own whitespace cleanup, so storage and recovery identity checks stay
-aligned with the other unified-resource consumers. That same boundary now also
-owns the backend facet-bundle route for timeline history and related change
-counts, so storage and recovery surfaces must continue to consume the shared
-bundle rather than issuing separate local resource-detail fetches.
+    its own whitespace cleanup, so storage and recovery identity checks stay
+    aligned with the other unified-resource consumers. That same decode path
+    also projects Kubernetes cluster identity through the shared cluster-context
+    helper, so storage and recovery surfaces see the same canonical cluster
+    prefix as the dashboard and unified-resource store instead of rebuilding
+    their own fallback. That same boundary now also owns the backend facet-bundle
+    route for timeline history and related change counts, so storage and recovery
+    surfaces must continue to consume the shared bundle rather than issuing
+    separate local resource-detail fetches.
