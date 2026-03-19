@@ -150,8 +150,8 @@ Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so adjacent recovery and storage workflows do not turn
 bounded history reads into unbounded collection scans.
 The same shared API runtime now also exposes dedicated
-`/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
-`/api/resources/{id}/timeline` reads, but storage and recovery must continue
+`/api/resources/{id}/timeline` reads plus the bundled
+`/api/resources/{id}/facets` surface, but storage and recovery must continue
 to treat those as adjacent governed API ownership rather than storage/recovery
 timeline ownership.
 Those resource timeline reads now also accept governed kind and source-type

@@ -200,10 +200,9 @@ the pre-v6 `timestamp` column by backfilling canonical `observed_at` values,
 adding the newer `occurred_at` field, and preserving the legacy timestamp on
 write when the target database still requires it.
 `internal/api/resources.go` now exposes that same history through dedicated
-`/api/resources/{id}/timeline` reads, while `/api/resources/{id}/capabilities`
-and `/api/resources/{id}/relationships` expose the current graph facets as
-separate queryable surfaces instead of forcing consumers to parse the full
-resource payload.
+`/api/resources/{id}/timeline` reads, while the bundled `/api/resources/{id}/facets`
+surface keeps the facet summary and recent-change history available without
+forcing consumers to parse the full resource payload.
 Those filtered timeline reads are backed by dedicated `resource_changes`
 indexes on `canonical_id`, `kind`, `source_type`, and `observed_at`, so the
 canonical history path stays fast as the filtered timeline grows instead of

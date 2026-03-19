@@ -34,8 +34,6 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
 	r.mux.HandleFunc("/api/resources/k8s/namespaces", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleK8sNamespaces)))
 	r.mux.HandleFunc("/api/resources/{id}/facets", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceFacets)))
-	r.mux.HandleFunc("/api/resources/{id}/capabilities", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceCapabilities)))
-	r.mux.HandleFunc("/api/resources/{id}/relationships", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceRelationships)))
 	r.mux.HandleFunc("/api/resources/{id}/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleGetResourceTimeline)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
 	// Guest metadata routes

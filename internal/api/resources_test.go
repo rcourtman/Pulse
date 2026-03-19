@@ -1020,49 +1020,6 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 	})
 
-	t.Run("capabilities", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/capabilities", nil)
-		h.HandleResourceRoutes(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-		}
-		var payload struct {
-			ResourceID   string                       `json:"resourceId"`
-			Capabilities []unified.ResourceCapability `json:"capabilities"`
-			Count        int                          `json:"count"`
-		}
-		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode capabilities: %v", err)
-		}
-		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.Capabilities) != 1 {
-			t.Fatalf("unexpected capabilities payload: %#v", payload)
-		}
-	})
-
-	t.Run("relationships", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/relationships", nil)
-		h.HandleResourceRoutes(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-		}
-		var payload struct {
-			ResourceID    string                         `json:"resourceId"`
-			Relationships []unified.ResourceRelationship `json:"relationships"`
-			Count         int                            `json:"count"`
-		}
-		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode relationships: %v", err)
-		}
-		if payload.ResourceID != "vm:42" || payload.Count != 1 || len(payload.Relationships) != 1 {
-			t.Fatalf("unexpected relationships payload: %#v", payload)
-		}
-		if got := payload.Relationships[0].Metadata["cluster"]; got != "pve-prod" {
-			t.Fatalf("unexpected relationship metadata: %#v", payload.Relationships[0].Metadata)
-		}
-	})
-
 	t.Run("timeline", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/resources/vm:42/timeline?limit=10", nil)

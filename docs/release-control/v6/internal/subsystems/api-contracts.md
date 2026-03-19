@@ -134,10 +134,10 @@ through the owned backend response: resource objects can expose canonical
 in addition to policy and identity metadata, so the backend payload contract
 stays aligned with the
 timeline and control-plane model instead of flattening those fields away.
-The same resource contract now also exposes dedicated facet endpoints for
-`/api/resources/{id}/capabilities`, `/api/resources/{id}/relationships`, and
-`/api/resources/{id}/timeline`, so operators can read the graph and change
-history without depending on a monolithic resource payload.
+The same resource contract now also exposes a dedicated
+`/api/resources/{id}/timeline` history endpoint and bundled facet reads under
+`/api/resources/{id}/facets`, so operators can inspect change history without
+depending on a monolithic resource payload.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

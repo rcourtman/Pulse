@@ -354,8 +354,6 @@ var allRouteAllowlist = []string{
 	"/api/resources/stats",
 	"/api/resources/",
 	"/api/resources/{id}/facets",
-	"/api/resources/{id}/capabilities",
-	"/api/resources/{id}/relationships",
 	"/api/resources/{id}/timeline",
 	"/api/guests/metadata",
 	"/api/guests/metadata/",

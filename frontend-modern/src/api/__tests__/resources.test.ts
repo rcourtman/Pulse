@@ -11,30 +11,9 @@ describe('ResourceAPI', () => {
     vi.clearAllMocks();
   });
 
-  it('fetches capabilities with the canonical facet endpoint', async () => {
+  it('fetches the resource history bundle from the facet endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       resourceId: 'vm:42',
-      capabilities: [],
-      count: 0,
-    } as any);
-
-    const result = await ResourceAPI.getCapabilities(' vm:42 ');
-
-    expect(apiFetchJSON).toHaveBeenCalledWith('/api/resources/vm%3A42/capabilities', {
-      cache: 'no-store',
-    });
-    expect(result).toEqual({
-      resourceId: 'vm:42',
-      capabilities: [],
-      count: 0,
-    });
-  });
-
-  it('fetches the resource history bundle from the dedicated facet endpoints', async () => {
-    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
-      resourceId: 'vm:42',
-      capabilities: [{ name: 'restart' }],
-      relationships: [{ sourceId: 'node:1', targetId: 'vm:42' }],
       recentChanges: [{ id: 'change-1' }],
       counts: {
         capabilities: 1,
@@ -71,8 +50,6 @@ describe('ResourceAPI', () => {
     );
     expect(result).toEqual({
       resourceId: 'vm:42',
-      capabilities: [{ name: 'restart' }],
-      relationships: [{ sourceId: 'node:1', targetId: 'vm:42' }],
       recentChanges: [{ id: 'change-1' }],
       counts: {
         capabilities: 1,

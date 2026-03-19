@@ -96,13 +96,13 @@ Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so audit history stays bounded even when callers ask
 for arbitrarily large pages.
 The same shared API runtime now also exposes dedicated unified-resource
-capability, relationship, and timeline reads through
-`internal/api/resources.go`, but those query surfaces remain owned by the API
-and unified-resource contracts rather than by lifecycle continuity.
-Those same dedicated reads also accept governed timeline filters for change
-kind, source type, and source adapter, and the underlying store owns the
-filtered counts so agent lifecycle routing still stays on canonical
-fleet-continuity ownership instead of re-deriving resource history locally.
+timeline reads through `internal/api/resources.go` plus the bundled facet
+history read used by the drawer, but those query surfaces remain owned by the
+API and unified-resource contracts rather than by lifecycle continuity.
+Those timeline reads also accept governed filters for change kind, source
+type, and source adapter, and the underlying store owns the filtered counts so
+agent lifecycle routing still stays on canonical fleet-continuity ownership
+instead of re-deriving resource history locally.
 The same API serializer now also refreshes canonical identity and policy
 metadata through the shared unified-resource helper before it returns
 resource payloads, so lifecycle-adjacent links keep the same canonical
@@ -1064,7 +1064,7 @@ policy-aware resource metadata. Agent lifecycle and fleet-control surfaces may
 consume canonical `policy` and `aiSafeSummary` fields from unified resource
 payloads when they need resource context, but they must not fork their own
 sensitivity-classification or local-vs-cloud routing heuristics on the same
-runtime boundary. The same shared resource boundary now also owns the canonical
-facet-bundle read path for capabilities, relationships, and timeline history,
-so fleet lifecycle surfaces that open resource drawers must continue to consume
-the backend bundle instead of reassembling a local multi-call summary.
+runtime boundary. The same shared resource boundary now also owns the bundled
+facet history read path for timeline data, so fleet lifecycle surfaces that
+open resource drawers must continue to consume the backend bundle instead of
+reassembling a local multi-call summary.

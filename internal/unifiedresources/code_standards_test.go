@@ -242,8 +242,6 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 
 	requiredSnippets := []string{
 		"HandleGetResourceFacets",
-		"HandleGetResourceCapabilities",
-		"HandleGetResourceRelationships",
 		"HandleGetResourceTimeline",
 		"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
 		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
@@ -252,8 +250,6 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 		"CountRecentChangesBySourceTypeFiltered(resourceID, since, filters)",
 		"sourceAdapter",
 		"strings.HasSuffix(r.URL.Path, \"/facets\")",
-		"strings.HasSuffix(r.URL.Path, \"/capabilities\")",
-		"strings.HasSuffix(r.URL.Path, \"/relationships\")",
 		"strings.HasSuffix(r.URL.Path, \"/timeline\")",
 	}
 	for _, snippet := range requiredSnippets {

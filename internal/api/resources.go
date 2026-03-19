@@ -291,14 +291,6 @@ func (h *ResourceHandlers) HandleResourceRoutes(w http.ResponseWriter, r *http.R
 		h.HandleGetResourceFacets(w, r)
 		return
 	}
-	if strings.HasSuffix(r.URL.Path, "/capabilities") {
-		h.HandleGetResourceCapabilities(w, r)
-		return
-	}
-	if strings.HasSuffix(r.URL.Path, "/relationships") {
-		h.HandleGetResourceRelationships(w, r)
-		return
-	}
 	if strings.HasSuffix(r.URL.Path, "/timeline") {
 		h.HandleGetResourceTimeline(w, r)
 		return
@@ -500,90 +492,6 @@ func (h *ResourceHandlers) HandleGetMetrics(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resource.Metrics)
-}
-
-// HandleGetResourceCapabilities handles GET /api/resources/{id}/capabilities.
-func (h *ResourceHandlers) HandleGetResourceCapabilities(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
-	resourceID = strings.TrimSuffix(resourceID, "/capabilities")
-	resourceID = strings.TrimSuffix(resourceID, "/")
-	resourceID = unified.CanonicalResourceID(resourceID)
-	if resourceID == "" {
-		http.Error(w, "Resource ID required", http.StatusBadRequest)
-		return
-	}
-
-	resource, ok := registry.Get(resourceID)
-	if !ok {
-		http.Error(w, "Resource not found", http.StatusNotFound)
-		return
-	}
-
-	capabilities := resource.Capabilities
-	if capabilities == nil {
-		capabilities = []unified.ResourceCapability{}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"resourceId":   resourceID,
-		"capabilities": capabilities,
-		"count":        resource.FacetCounts.Capabilities,
-	})
-}
-
-// HandleGetResourceRelationships handles GET /api/resources/{id}/relationships.
-func (h *ResourceHandlers) HandleGetResourceRelationships(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
-	resourceID = strings.TrimSuffix(resourceID, "/relationships")
-	resourceID = strings.TrimSuffix(resourceID, "/")
-	resourceID = unified.CanonicalResourceID(resourceID)
-	if resourceID == "" {
-		http.Error(w, "Resource ID required", http.StatusBadRequest)
-		return
-	}
-
-	resource, ok := registry.Get(resourceID)
-	if !ok {
-		http.Error(w, "Resource not found", http.StatusNotFound)
-		return
-	}
-
-	relationships := resource.Relationships
-	if relationships == nil {
-		relationships = []unified.ResourceRelationship{}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"resourceId":    resourceID,
-		"relationships": relationships,
-		"count":         resource.FacetCounts.Relationships,
-	})
 }
 
 // HandleGetResourceTimeline handles GET /api/resources/{id}/timeline.

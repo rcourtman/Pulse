@@ -1,25 +1,11 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
-  ResourceCapability,
   ResourceChange,
   ResourceChangeKind,
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
   ResourceFacetCounts,
-  ResourceRelationship,
 } from '@/types/resource';
-
-export interface ResourceCapabilitiesResponse {
-  resourceId: string;
-  capabilities: ResourceCapability[];
-  count: number;
-}
-
-export interface ResourceRelationshipsResponse {
-  resourceId: string;
-  relationships: ResourceRelationship[];
-  count: number;
-}
 
 export interface ResourceTimelineQueryOptions {
   since?: string | number | Date;
@@ -36,8 +22,6 @@ export interface ResourceTimelineResponse {
 }
 
 export interface ResourceFacetBundle {
-  capabilities: ResourceCapability[];
-  relationships: ResourceRelationship[];
   recentChanges: ResourceChange[];
   counts: ResourceFacetCounts;
 }
@@ -77,14 +61,6 @@ const fetchFacet = async <T>(url: string): Promise<T> =>
   });
 
 export class ResourceAPI {
-  static async getCapabilities(resourceId: string): Promise<ResourceCapabilitiesResponse> {
-    return fetchFacet<ResourceCapabilitiesResponse>(buildFacetPath(resourceId, 'capabilities'));
-  }
-
-  static async getRelationships(resourceId: string): Promise<ResourceRelationshipsResponse> {
-    return fetchFacet<ResourceRelationshipsResponse>(buildFacetPath(resourceId, 'relationships'));
-  }
-
   static async getTimeline(
     resourceId: string,
     options?: ResourceTimelineQueryOptions,
