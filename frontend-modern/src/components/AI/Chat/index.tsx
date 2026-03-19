@@ -341,7 +341,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const dedupeMentionResources = (resources: MentionResource[]) => {
-    // Only dedupe agent mentions: VMs/containers/docker containers can legitimately share names across nodes/agents.
+    // Only dedupe agent mentions, and use the stable mention id so redacted labels
+    // do not collapse distinct resources into one suggestion.
     const byKey = new Map<string, { resource: MentionResource; index: number }>();
     const out: MentionResource[] = [];
 
@@ -351,7 +352,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         continue;
       }
 
-      const key = `${normalizeChatMentionKeyPart(resource.name)}:${resource.type}`;
+      const key = resource.id;
       const existing = byKey.get(key);
       if (!existing) {
         const index = out.length;
@@ -437,7 +438,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const vmid = parseLegacyVmid(vm, platformData);
       mentionCandidates.push({
         id: `vm:${node}:${vmid}`,
-        name: vm.name,
+        name: getPreferredResourceDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
         node,
@@ -452,7 +453,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const vmid = parseLegacyVmid(container, platformData);
       mentionCandidates.push({
         id: `system-container:${node}:${vmid}`,
-        name: container.name,
+        name: getPreferredResourceDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
         node,
@@ -493,7 +494,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : container.id;
         mentionCandidates.push({
           id: `docker:${dockerActionId}:${originalContainerId}`,
-          name: container.name,
+          name: getPreferredResourceDisplayName(container),
           type: 'app-container',
           status: container.status === 'running' ? 'running' : 'exited',
           node: hostnameOrId,
@@ -505,7 +506,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const node of nodes) {
       mentionCandidates.push({
         id: `node:${node.platformId || ''}:${node.name}`,
-        name: node.name,
+        name: getPreferredResourceDisplayName(node),
         type: 'agent',
         status: node.status,
       });

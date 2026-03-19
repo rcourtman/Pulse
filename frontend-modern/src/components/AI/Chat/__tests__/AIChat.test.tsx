@@ -83,7 +83,7 @@ const {
     notifySettingsChanged: vi.fn(),
   };
 
-  const mockByType = vi.fn((): Array<{ name: string }> => []);
+  const mockByType = vi.fn((_type: string): Array<{ name: string }> => []);
   const mockResources = vi.fn((): Array<{ id: string; type: string }> => []);
 
   return {
@@ -124,12 +124,31 @@ vi.mock('../ModelSelector', () => ({
 }));
 
 vi.mock('../MentionAutocomplete', () => ({
-  MentionAutocomplete: (props: { visible: boolean; query: string }) => (
+  MentionAutocomplete: (props: {
+    visible: boolean;
+    query: string;
+    resources: Array<{ id: string; name: string }>;
+    onSelect: (resource: { id: string; name: string }) => void;
+  }) => (
     <div
       data-testid="mention-autocomplete"
       data-visible={String(props.visible)}
       data-query={props.query}
-    />
+      data-resource-count={String(props.resources.length)}
+      data-resource-labels={props.resources.map((resource) => resource.name).join('|')}
+    >
+      <button
+        type="button"
+        data-testid="mention-select-first"
+        onClick={() => {
+          if (props.resources[0]) {
+            props.onSelect(props.resources[0]);
+          }
+        }}
+      >
+        select-first
+      </button>
+    </div>
   ),
 }));
 
@@ -498,6 +517,101 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: 'email@' } });
       const autocomplete = screen.getByTestId('mention-autocomplete');
       expect(autocomplete).toHaveAttribute('data-visible', 'false');
+    });
+
+    it('uses policy-aware labels and preserves distinct governed mention candidates', async () => {
+      const governedPolicy = {
+        sensitivity: 'restricted' as const,
+        routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
+      };
+      const governedResources = [
+        {
+          id: 'agent-1',
+          name: 'secret-node-1',
+          displayName: 'secret-node-1',
+          type: 'agent' as const,
+          status: 'online',
+          policy: governedPolicy,
+          aiSafeSummary: 'redacted by policy',
+        },
+        {
+          id: 'agent-2',
+          name: 'secret-node-2',
+          displayName: 'secret-node-2',
+          type: 'agent' as const,
+          status: 'online',
+          policy: governedPolicy,
+          aiSafeSummary: 'redacted by policy',
+        },
+      ];
+      mockByType.mockImplementation((type: string) => (type === 'agent' ? governedResources : []));
+      mockResources.mockReturnValue(governedResources);
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+
+      const autocomplete = await screen.findByTestId('mention-autocomplete');
+      expect(autocomplete).toHaveAttribute('data-resource-count', '2');
+      expect(autocomplete).toHaveAttribute(
+        'data-resource-labels',
+        'redacted by policy|redacted by policy',
+      );
+    });
+
+    it('inserts the governed display label into the prompt when a mention is selected', async () => {
+      const governedPolicy = {
+        sensitivity: 'restricted' as const,
+        routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
+      };
+      const governedResources = [
+        {
+          id: 'agent-1',
+          name: 'secret-node-1',
+          displayName: 'secret-node-1',
+          type: 'agent' as const,
+          status: 'online',
+          policy: governedPolicy,
+          aiSafeSummary: 'redacted by policy',
+        },
+      ];
+      mockByType.mockImplementation((type: string) => (type === 'agent' ? governedResources : []));
+      mockResources.mockReturnValue(governedResources);
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 1, writable: true });
+      fireEvent.input(textarea, { target: { value: '@' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mention-autocomplete')).toHaveAttribute(
+          'data-resource-count',
+          '1',
+        );
+      });
+
+      fireEvent.click(screen.getByTestId('mention-select-first'));
+      await waitFor(() => {
+        expect(textarea.value).toBe('@redacted by policy ');
+      });
+
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        '@redacted by policy',
+        [
+          expect.objectContaining({
+            id: 'node::secret-node-1',
+            name: 'redacted by policy',
+            type: 'agent',
+          }),
+        ],
+        undefined,
+      );
     });
   });
 
