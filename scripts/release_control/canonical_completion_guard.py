@@ -17,7 +17,7 @@ from typing import Dict, List, Sequence, Set
 
 from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
-from subsystem_contracts import load_contract_graph, referenced_contracts_for_path
+from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -258,11 +258,11 @@ def required_contract_updates(
     staged_files: Sequence[str],
     impacted: Dict[str, dict] | None = None,
     *,
-    use_staged_contract_graph: bool = False,
+    use_staged_contract_index: bool = False,
 ) -> Dict[str, dict]:
     impacted_subsystems = impacted if impacted is not None else infer_impacted_subsystems(staged_files)
     required: Dict[str, dict] = {}
-    contract_graph = load_contract_graph(staged=use_staged_contract_graph)
+    contract_index = load_contract_index(staged=use_staged_contract_index)
 
     for subsystem_id, data in impacted_subsystems.items():
         required[data["contract"]] = {
@@ -281,7 +281,7 @@ def required_contract_updates(
         }
     )
     for path in touched_runtime_files:
-        for contract in referenced_contracts_for_path(path, contract_graph):
+        for contract in referenced_contracts_for_path(path, contract_index):
             contract_path = str(contract["contract"])
             entry = required.setdefault(
                 contract_path,
@@ -467,7 +467,7 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
     required_contracts = required_contract_updates(
         staged_files,
         impacted,
-        use_staged_contract_graph=True,
+        use_staged_contract_index=True,
     )
     missing_contracts = {
         contract_path: data

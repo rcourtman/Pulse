@@ -477,7 +477,7 @@ start_hot_dev_runtime() {
         return 2
     fi
 
-    # Frontend startup can lag behind backend startup when dependency graph is large.
+    # Frontend startup can lag behind backend startup when the dependency map is large.
     if ! wait_for_port "${expected_frontend_port}" "${startup_timeout}"; then
         log_warn "hot-dev backend is up but frontend port ${expected_frontend_port} is not listening yet"
         log_warn "Proceeding with backend-only availability; check ${HOT_DEV_LOG} for frontend startup"

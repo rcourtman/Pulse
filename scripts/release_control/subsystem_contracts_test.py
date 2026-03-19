@@ -7,7 +7,7 @@ import tempfile
 
 from subsystem_contracts import (
     contract_reference_matches_path,
-    load_contract_graph,
+    load_contract_index,
     parse_contract_text,
     referenced_contracts_for_path,
     tracked_contract_paths,
@@ -89,7 +89,7 @@ Stable.
         self.assertFalse(contract_reference_matches_path("internal/example/runtime.go", "internal/example/other.go"))
 
     def test_referenced_contracts_for_path_returns_matching_subsystem(self) -> None:
-        contract_graph = load_contract_graph(
+        contract_index = load_contract_index(
             {
                 "docs/release-control/v6/internal/subsystems/example.md": """# Example Contract
 
@@ -132,7 +132,7 @@ Stable.
             }
         )
 
-        matches = referenced_contracts_for_path("internal/example/runtime.go", contract_graph)
+        matches = referenced_contracts_for_path("internal/example/runtime.go", contract_index)
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["subsystem_id"], "example")
         self.assertEqual(
@@ -143,7 +143,7 @@ Stable.
             ],
         )
 
-        shared_matches = referenced_contracts_for_path("internal/shared/runtime.go", contract_graph)
+        shared_matches = referenced_contracts_for_path("internal/shared/runtime.go", contract_index)
         self.assertEqual(len(shared_matches), 1)
         self.assertEqual(shared_matches[0]["subsystem_id"], "example")
         self.assertEqual(

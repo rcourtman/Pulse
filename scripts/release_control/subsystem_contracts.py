@@ -198,12 +198,12 @@ def parse_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
     }, errors
 
 
-def load_contract_graph(
+def load_contract_index(
     contract_texts: dict[str, str] | None = None,
     *,
     staged: bool = False,
 ) -> dict[str, dict[str, Any]]:
-    graph: dict[str, dict[str, Any]] = {}
+    contract_index: dict[str, dict[str, Any]] = {}
     for rel, content in (contract_texts or tracked_contract_files(staged=staged)).items():
         if rel == TEMPLATE_REL or not rel.endswith(".md"):
             continue
@@ -214,14 +214,14 @@ def load_contract_graph(
         subsystem_id = str(metadata.get("subsystem_id", "")).strip()
         if not subsystem_id:
             continue
-        graph[subsystem_id] = {
+        contract_index[subsystem_id] = {
             "subsystem_id": subsystem_id,
             "contract": rel,
             "metadata": metadata,
             "path_references": list(parsed.get("path_references", [])),
             "title": parsed.get("title", ""),
         }
-    return graph
+    return contract_index
 
 
 def contract_reference_matches_path(reference_path: str, path: str) -> bool:
@@ -232,11 +232,11 @@ def contract_reference_matches_path(reference_path: str, path: str) -> bool:
 
 def referenced_contracts_for_path(
     path: str,
-    contract_graph: dict[str, dict[str, Any]] | None = None,
+    contract_index: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    graph = contract_graph or load_contract_graph()
+    contracts_by_subsystem = contract_index or load_contract_index()
     matches: list[dict[str, Any]] = []
-    for contract in graph.values():
+    for contract in contracts_by_subsystem.values():
         referenced_paths = [
             reference
             for reference in contract.get("path_references", [])

@@ -245,7 +245,7 @@ def canonical_commit_shape_errors(staged_files: Sequence[str]) -> list[str]:
     required_contracts = required_contract_updates(
         staged_files,
         impacted,
-        use_staged_contract_graph=True,
+        use_staged_contract_index=True,
     )
     missing_contracts = {
         contract_path: data
