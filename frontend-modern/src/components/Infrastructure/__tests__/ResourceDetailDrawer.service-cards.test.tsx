@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
@@ -28,6 +28,26 @@ vi.mock('@/api/resources', () => ({
       capabilities: [],
       relationships: [],
       recentChanges: [],
+    }),
+  },
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getResourceIntelligence: vi.fn().mockResolvedValue({
+      resource_id: 'resource-1',
+      health: {
+        score: 92,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      recent_changes: [],
+      dependencies: [],
+      dependents: [],
+      correlations: [],
+      note_count: 0,
     }),
   },
 }));
@@ -66,7 +86,7 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole, queryByText } = render(() => (
+    const { getByText, getByRole, getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -74,8 +94,11 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('2 datastores · 3 jobs')).toBeInTheDocument();
     expect(queryByText('PBS Service')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
-    expect(getByText('PBS Service')).toBeInTheDocument();
-    expect(getAllByText('pbs-main.local').length).toBeGreaterThan(0);
+    const serviceDetails = within(getByTestId('resource-service-details-section'));
+    expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
+    expect(serviceDetails.queryByText('Connection')).toBeNull();
+    expect(serviceDetails.getAllByText('State').length).toBeGreaterThan(0);
+    expect(serviceDetails.getAllByText('pbs-main.local').length).toBeGreaterThan(0);
     expect(queryByText('Backup summary')).toBeNull();
     expect(queryByText('Job breakdown')).toBeNull();
     expect(queryByText('Show job detail')).toBeNull();
@@ -89,7 +112,7 @@ describe('ResourceDetailDrawer service cards', () => {
     );
   });
 
-  it('renders PMG card with compact summary and queue/mail breakdown sections', async () => {
+  it('renders PMG card with compact summary and queue/mail breakdown sections', () => {
     const resource = baseResource({
       id: 'pmg-1',
       type: 'pmg',
@@ -113,7 +136,7 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByText, getAllByText, getByRole, queryByText } = render(() => (
+    const { getByText, getByRole, getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -121,10 +144,11 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('519 queue total · 16 backlog')).toBeInTheDocument();
     expect(queryByText('Mail Gateway')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
-    await waitFor(() => {
-      expect(getByText('Mail Gateway')).toBeInTheDocument();
-    });
-    expect(getAllByText('pmg-main.local').length).toBeGreaterThan(0);
+    const serviceDetails = within(getByTestId('resource-service-details-section'));
+    expect(serviceDetails.getByText('PMG')).toBeInTheDocument();
+    expect(serviceDetails.queryByText('Connection')).toBeNull();
+    expect(serviceDetails.getAllByText('State').length).toBeGreaterThan(0);
+    expect(serviceDetails.getAllByText('pmg-main.local').length).toBeGreaterThan(0);
     expect(queryByText('Mail flow summary')).toBeNull();
     expect(queryByText('Queue breakdown')).toBeNull();
     expect(queryByText('Mail processing')).toBeNull();

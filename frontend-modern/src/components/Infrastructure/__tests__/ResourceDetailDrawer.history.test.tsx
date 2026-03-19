@@ -372,7 +372,10 @@ describe('ResourceDetailDrawer change history section', () => {
 
     expect(screen.getByText('Service details')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
-    expect(screen.getByText('PBS Service')).toBeInTheDocument();
+    const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
+    expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
+    expect(serviceDetails.queryByText('PBS Service')).toBeNull();
+    expect(serviceDetails.queryByText('Connection')).toBeNull();
     expect(screen.queryByText('Backup summary')).toBeNull();
     expect(screen.queryByText('Job breakdown')).toBeNull();
     expect(screen.queryByText('Show job detail')).toBeNull();

@@ -304,6 +304,10 @@ compact labels (`Docker runtime`, `Updates`, `Checked`, `Show actions`,
 `Check now`, `Update all`) and short queued/confirm feedback so action
 surfaces stay readable without turning the card into a paragraph of control
 copy.
+The remaining PBS and PMG cards also stay neutral and resource-first now:
+their headings read `PBS` and `PMG`, and the primary health row is `State`
+instead of `Connection`, so service support blocks read like resource status
+rather than branded sub-pages.
 Unsupported secondary tabs now also use the same terse availability notices
 (`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
 Swarm only.`) instead of explanatory sentences, so mismatch fallback state

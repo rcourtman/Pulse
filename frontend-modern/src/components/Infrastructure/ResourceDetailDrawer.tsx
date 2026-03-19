@@ -1145,6 +1145,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               showLabel="Show service details"
               hideLabel="Hide service details"
               contentClass="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3"
+              dataTestId="resource-service-details-section"
             >
                   <Show when={props.resource.type === 'docker-host'}>
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
@@ -1339,7 +1340,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
                           <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                              PBS Service
+                              PBS
                             </div>
                             <Show when={pbs().hostname}>
                               <span
@@ -1352,7 +1353,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           </div>
                           <div class="space-y-1.5 text-[11px]">
                             <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Connection</span>
+                              <span class="text-muted">State</span>
                               <span class={`font-medium ${connection.text}`}>{connection.label}</span>
                             </div>
                             <Show when={pbs().version}>
@@ -1428,7 +1429,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
                           <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                              Mail Gateway
+                              PMG
                             </div>
                             <Show when={pmg().hostname}>
                               <span
@@ -1441,7 +1442,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           </div>
                           <div class="space-y-1.5 text-[11px]">
                             <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Connection</span>
+                              <span class="text-muted">State</span>
                               <span class={`font-medium ${connection.text}`}>{connection.label}</span>
                             </div>
                             <Show when={pmg().version}>
