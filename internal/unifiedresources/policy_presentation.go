@@ -202,6 +202,18 @@ func ResourcePolicySummaryLines(policy *ResourcePolicy) []string {
 	return lines
 }
 
+// ResourcePolicyGovernedSummaryPreamble returns the canonical opening guidance
+// used for governed mention and prompt summaries.
+func ResourcePolicyGovernedSummaryPreamble() string {
+	return "Raw hostnames, paths, and local identifiers are withheld when governed resource policy requires redaction."
+}
+
+// ResourcePolicyGovernedSummaryFooter returns the canonical closing guidance
+// used for governed mention summaries.
+func ResourcePolicyGovernedSummaryFooter() string {
+	return "Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy."
+}
+
 // ResourcePolicyRedacts reports whether the policy redacts any of the provided hints.
 func ResourcePolicyRedacts(policy *ResourcePolicy, hints ...ResourceRedactionHint) bool {
 	if policy == nil {

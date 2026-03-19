@@ -731,7 +731,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	var sb strings.Builder
 	sb.WriteString("=== PULSE MONITORING DATA (AUTHORITATIVE) ===\n")
 	sb.WriteString("This is verified data from Pulse agents. Canonical resource policy is enforced below.\n")
-	sb.WriteString("Raw hostnames, paths, and local identifiers are withheld when governed resource policy requires redaction.\n\n")
+	sb.WriteString(unifiedresources.ResourcePolicyGovernedSummaryPreamble())
+	sb.WriteString("\n\n")
 
 	// Create a map for quick discovery lookup
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
@@ -918,7 +919,8 @@ func formatGovernedMentionSummary(sb *strings.Builder, mention ResourceMention) 
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
-	sb.WriteString("Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy.\n\n")
+	sb.WriteString(unifiedresources.ResourcePolicyGovernedSummaryFooter())
+	sb.WriteString("\n\n")
 }
 
 // extractWords extracts words (3+ characters) from a message for matching

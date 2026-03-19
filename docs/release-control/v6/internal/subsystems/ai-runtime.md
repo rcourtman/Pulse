@@ -122,6 +122,9 @@ and redaction labels used by the AI summary and resource drawer.
 The decision to show that governed mention block now comes from the shared
 unified-resource policy helper as well, so the local gate stays aligned with
 the same routing and redaction rules as the rendered summary itself.
+The governed mention preamble and footer text now also come from the shared
+policy presenter, so the warning copy around the block does not drift from the
+canonical policy wording.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

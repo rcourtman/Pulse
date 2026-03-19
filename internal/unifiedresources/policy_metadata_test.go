@@ -179,6 +179,15 @@ func TestResourcePolicySummaryLines(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyGovernedSummaryGuidance(t *testing.T) {
+	if got := ResourcePolicyGovernedSummaryPreamble(); got != "Raw hostnames, paths, and local identifiers are withheld when governed resource policy requires redaction." {
+		t.Fatalf("ResourcePolicyGovernedSummaryPreamble() = %q", got)
+	}
+	if got := ResourcePolicyGovernedSummaryFooter(); got != "Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy." {
+		t.Fatalf("ResourcePolicyGovernedSummaryFooter() = %q", got)
+	}
+}
+
 func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivitySensitive,

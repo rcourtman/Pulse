@@ -410,6 +410,9 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 	if !strings.Contains(ctx.Summary, "local-only context") {
 		t.Fatalf("expected aiSafeSummary local-only wording, got %q", ctx.Summary)
 	}
+	if !strings.Contains(ctx.Summary, unifiedresources.ResourcePolicyGovernedSummaryPreamble()) {
+		t.Fatalf("expected governed summary preamble, got %q", ctx.Summary)
+	}
 	if !strings.Contains(ctx.Summary, "routing=Local Only") {
 		t.Fatalf("expected policy routing in summary, got %q", ctx.Summary)
 	}
@@ -480,6 +483,9 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	}
 	if !strings.Contains(summary, "Redactions: Hostname, Alias, Path") {
 		t.Fatalf("expected canonical redaction list, got %q", summary)
+	}
+	if !strings.Contains(summary, unifiedresources.ResourcePolicyGovernedSummaryFooter()) {
+		t.Fatalf("expected governed summary footer, got %q", summary)
 	}
 	if strings.Contains(summary, "customer-db") {
 		t.Fatalf("expected governed formatter to avoid raw name, got %q", summary)

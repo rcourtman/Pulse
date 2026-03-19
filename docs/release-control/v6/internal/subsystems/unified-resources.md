@@ -206,6 +206,8 @@ instead of rebuilding them in lane-local helpers.
 The same helper now also owns the governed-summary gate for mention
 prefetching, so the decision to surface the block follows the same canonical
 local-only and redaction rules as the rendered policy text.
+The same helper also owns the governed-mention preamble and footer copy, so
+the warning language around the block stays centralized with the policy model.
 The same shared policy helper also owns the `aiSafeSummary` decision and
 redaction predicates used by AI chat knowledge extraction and resource
 context rendering, so governed labels and summary selection stay rooted in
