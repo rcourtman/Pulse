@@ -121,6 +121,10 @@ That same resource model now also owns the canonical
 `FormatResourceGraphContext` helper, so service-layer callers only resolve the
 resource and hand the model the relationship list instead of rebuilding the
 graph section header, ordering, or freshness wording locally.
+The same shared relationship presenter also owns the compact change-timeline
+relationship summary used by resource change records, so change `from` and
+`to` values stay aligned with the canonical relationship labels instead of
+reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency graph without rebuilding correlation

@@ -537,7 +537,6 @@ func TestResourceChangeEmissionCoversRelationshipAndCapabilityChanges(t *testing
 		"changed = append(changed, \"kubernetes.restarts\", \"kubernetes.uptimeSeconds\")",
 		"if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {",
 		"changed = append(changed, \"capabilities\")",
-		"resourceRelationshipSummary(relationships []ResourceRelationship)",
 		"resourceRestartSummary(resource Resource) string",
 		"resourceIncidentSummary(resource Resource) string",
 	}
@@ -586,6 +585,23 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("internal/ai/service.go must pin canonical resource graph presentation snippet %q", snippet)
+		}
+	}
+}
+
+func TestResourceRelationshipSummaryUsesCanonicalRelationshipPresentation(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("relationship_presentation.go"))
+	if err != nil {
+		t.Fatalf("failed to read relationship_presentation.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func resourceRelationshipSummary(relationships []ResourceRelationship) string",
+		"label += fmt.Sprintf(\"[%s]\", RelationshipTypeLabel(relationship.Type))",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/relationship_presentation.go must pin canonical relationship summary snippet %q", snippet)
 		}
 	}
 }

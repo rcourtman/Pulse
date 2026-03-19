@@ -213,6 +213,10 @@ pages.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate graph-detail schema.
+Relationship-change timeline entries now also use the canonical relationship
+summary helper for their compact `from` and `to` wording, so the API keeps the
+human-readable edge label aligned with the unified-resource relationship
+presenter instead of reconstructing a local type-token summary.
 The same `/api/resources/{id}/timeline` filter contract now also routes its
 kinds, source types, and source adapters through the shared unified-resource
 change-filter parser, so API validation stays owned by the change model rather

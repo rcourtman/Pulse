@@ -51,6 +51,25 @@ func TestDescribeRelationship(t *testing.T) {
 	}
 }
 
+func TestResourceRelationshipSummary(t *testing.T) {
+	summary := resourceRelationshipSummary([]ResourceRelationship{
+		{
+			SourceID: "node-1",
+			TargetID: "vm-1",
+			Type:     RelRunsOn,
+		},
+		{
+			SourceID: "node-1",
+			TargetID: "storage-1",
+			Type:     RelDependsOn,
+		},
+	})
+
+	if want := "node-1->storage-1[Depends on], node-1->vm-1[Runs on]"; summary != want {
+		t.Fatalf("resourceRelationshipSummary() = %q, want %q", summary, want)
+	}
+}
+
 func TestFormatResourceGraphContext(t *testing.T) {
 	resource := &Resource{
 		Relationships: []ResourceRelationship{

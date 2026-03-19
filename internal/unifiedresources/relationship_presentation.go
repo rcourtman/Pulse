@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,6 +67,50 @@ func DescribeRelationship(rel ResourceRelationship) RelationshipPresentation {
 	presentation.HasMetadata = len(rel.Metadata) > 0
 
 	return presentation
+}
+
+// resourceRelationshipSummary returns the canonical compact label for a set
+// of relationships used by resource change timelines and related context.
+func resourceRelationshipSummary(relationships []ResourceRelationship) string {
+	if len(relationships) == 0 {
+		return ""
+	}
+
+	summaries := make([]string, 0, len(relationships))
+	for _, relationship := range relationships {
+		sourceID := CanonicalResourceID(relationship.SourceID)
+		targetID := CanonicalResourceID(relationship.TargetID)
+		if sourceID == "" && targetID == "" {
+			continue
+		}
+
+		label := sourceID
+		if label == "" {
+			label = "?"
+		}
+		label += "->"
+		if targetID == "" {
+			label += "?"
+		} else {
+			label += targetID
+		}
+		if relationship.Type != "" {
+			label += fmt.Sprintf("[%s]", RelationshipTypeLabel(relationship.Type))
+		}
+		summaries = append(summaries, label)
+	}
+
+	if len(summaries) == 0 {
+		return ""
+	}
+	sort.Strings(summaries)
+	if len(summaries) == 1 {
+		return summaries[0]
+	}
+	if len(summaries) <= 3 {
+		return strings.Join(summaries, ", ")
+	}
+	return fmt.Sprintf("%d relationships", len(summaries))
 }
 
 // FormatResourceGraphContext returns the canonical AI prompt section for a
