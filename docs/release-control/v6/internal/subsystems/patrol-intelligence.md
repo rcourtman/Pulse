@@ -158,6 +158,15 @@ The Patrol intelligence page now also renders the canonical
 card, so the data-governance posture counts stay rendered from one governed
 frontend component on the page instead of being duplicated in the resource
 drawer.
+That same Patrol summary surface now keeps health and findings primary while
+rendering recent changes, learned correlations, and policy posture as
+secondary investigation context behind an explicit disclosure, so expansion
+lane concepts stay available for deeper investigation without reading as the
+headline Patrol product story.
+The Patrol page's run-history tab label is now also tightened to `Runs`, while
+the underlying run-history panel remains canonical for snapshot filtering and
+tool-call inspection. That copy change is intentional: run history is support
+context for Patrol findings, not a peer primary workflow beside findings.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

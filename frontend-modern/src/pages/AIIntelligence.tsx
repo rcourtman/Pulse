@@ -102,6 +102,7 @@ type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
+  const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
   >(undefined);
@@ -547,6 +548,36 @@ export function AIIntelligence() {
       aiIntelligenceStore.correlations?.correlations?.length ??
       0,
   );
+  const recentChangeCount = createMemo(
+    () =>
+      intelligenceSummary()?.recent_changes_count ?? intelligenceSummary()?.recent_changes?.length ?? 0,
+  );
+  const hasInvestigationContext = createMemo(
+    () =>
+      recentChangeCount() > 0 ||
+      correlationTotal() > 0 ||
+      (policyPosture()?.total_resources ?? 0) > 0,
+  );
+  const investigationContextSummary = createMemo(() => {
+    const parts: string[] = [];
+    if (recentChangeCount() > 0) {
+      parts.push(
+        `${recentChangeCount()} recent change${recentChangeCount() === 1 ? '' : 's'}`,
+      );
+    }
+    if (correlationTotal() > 0) {
+      parts.push(
+        `${correlationTotal()} correlation${correlationTotal() === 1 ? '' : 's'}`,
+      );
+    }
+    const governedResources = policyPosture()?.total_resources ?? 0;
+    if (governedResources > 0) {
+      parts.push(
+        `${governedResources} governed resource${governedResources === 1 ? '' : 's'}`,
+      );
+    }
+    return parts.join(' · ');
+  });
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
@@ -1248,7 +1279,7 @@ export function AIIntelligence() {
                 <div class="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                      Canonical intelligence summary
+                      Patrol summary
                     </p>
                     <h2 class="mt-1 text-lg font-semibold text-base-content">
                       Health {summary().overall_health.grade} ·{' '}
@@ -1264,32 +1295,68 @@ export function AIIntelligence() {
                     <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
                       Warning {summary().findings_count.warning}
                     </span>
-                    <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                      Recent changes {summary().recent_changes_count}
-                    </span>
                   </div>
                 </div>
 
-                <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                  <ResourceChangeSummary
-                    class="space-y-0"
-                    title="Recent changes"
-                    subtitle="Canonical 24h timeline"
-                    changes={summary().recent_changes}
-                  />
+                <Show when={hasInvestigationContext()}>
+                  <div class="mt-4 rounded-md border border-border-subtle bg-base p-3">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                          Investigation context
+                        </p>
+                        <p class="mt-1 text-sm text-muted">
+                          Secondary change and policy signals for deeper investigation.
+                        </p>
+                        <Show when={investigationContextSummary()}>
+                          <p class="mt-1 text-xs text-base-content">
+                            {investigationContextSummary()}
+                          </p>
+                        </Show>
+                      </div>
 
-                  <div class="space-y-4">
-                    <Show when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}>
-                      <ResourceCorrelationSummary
-                        title="Learned correlations"
-                        correlations={aiIntelligenceStore.correlations?.correlations ?? []}
-                        summaryText={`${correlationTotal()} total`}
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowInvestigationContext((value) => !value)}
+                        class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                      >
+                        {showInvestigationContext() ? 'Hide context' : 'Show context'}
+                      </button>
+                    </div>
+
+                    <Show when={showInvestigationContext()}>
+                      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                        <Show when={recentChangeCount() > 0}>
+                          <ResourceChangeSummary
+                            class="space-y-0"
+                            title="Recent changes"
+                            subtitle="Last 24 hours"
+                            changes={summary().recent_changes}
+                            maxChanges={3}
+                            compact
+                          />
+                        </Show>
+
+                        <div class="space-y-4">
+                          <Show
+                            when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}
+                          >
+                            <ResourceCorrelationSummary
+                              title="Correlations"
+                              correlations={aiIntelligenceStore.correlations?.correlations ?? []}
+                              summaryText={`${correlationTotal()} total`}
+                            />
+                          </Show>
+
+                          <ResourcePolicySummary
+                            posture={policyPosture()}
+                            title="Policy posture"
+                          />
+                        </div>
+                      </div>
                     </Show>
-
-                    <ResourcePolicySummary posture={policyPosture()} title="Data Governance" />
                   </div>
-                </div>
+                </Show>
               </section>
             )}
           </Show>
@@ -1396,7 +1463,7 @@ export function AIIntelligence() {
                   : 'border-transparent text-muted hover:text-base-content hover:border-border'
               }`}
             >
-              Run History
+              Runs
               <Show when={displayRunHistory().length > 0}>
                 <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-muted">
                   {displayRunHistory().length}

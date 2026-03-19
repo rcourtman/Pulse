@@ -34,7 +34,7 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
     <div class="bg-surface rounded-md border border-border p-4">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-sm font-semibold text-base-content">Patrol Run History</h2>
+          <h2 class="text-sm font-semibold text-base-content">Recent patrol runs</h2>
           <p class="text-xs text-muted">Select a run to filter findings to that snapshot</p>
         </div>
         <Show when={props.selectedRun}>

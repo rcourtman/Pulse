@@ -424,7 +424,13 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Learned correlations' })).toBeInTheDocument();
+      expect(screen.getByText('Investigation context')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Correlations' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Correlations' })).toBeInTheDocument();
     });
 
     expect(screen.getByText('2 total')).toBeInTheDocument();
@@ -583,11 +589,20 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Canonical intelligence summary')).toBeInTheDocument();
+      expect(screen.getByText('Patrol summary')).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
-    expect(screen.getByText(/Recent changes 1/)).toBeInTheDocument();
+    expect(screen.getByText('Investigation context')).toBeInTheDocument();
+    expect(screen.getByText('1 recent change · 4 governed resources')).toBeInTheDocument();
+    expect(screen.queryByText('Policy posture')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Policy posture')).toBeInTheDocument();
+    });
+
     expect(screen.getByText('Config update: Updated guest configuration')).toBeInTheDocument();
     expect(screen.getByText('Updated guest configuration')).toBeInTheDocument();
     expect(
@@ -598,7 +613,7 @@ describe('AIIntelligence entitlement gating', () => {
     ).toHaveAttribute('href', '/infrastructure?resource=agent-1');
     expect(screen.queryByText('Derived signal coverage')).not.toBeInTheDocument();
     expect(screen.queryByText(/baselined/)).not.toBeInTheDocument();
-    expect(screen.getByText('Data Governance')).toBeInTheDocument();
+    expect(screen.getByText('Recent changes')).toBeInTheDocument();
     expect(screen.getByText('4 governed resources')).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
     expect(screen.getByText('Internal')).toBeInTheDocument();
@@ -653,7 +668,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
     fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
@@ -712,7 +727,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
     fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
@@ -770,7 +785,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
     fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
