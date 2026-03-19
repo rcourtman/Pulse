@@ -131,8 +131,8 @@ stays on the monitoring-and-alerting RC floor rather than the finished private
 operational broker.
 For this profile, "bridge release" means the product should stop reading as a
 monitoring product growing sideways only where the surfaced case is already
-proven; the broader resource-centric, policy-aware, action-ready control
-platform remains a future lane.
+proven; the next surfaced target is policy-aware data governance, while the
+broader resource-centric, action-ready control platform remains a future lane.
 Pulse owns infrastructure context, policy, and governed action boundaries so
 any sandboxed agent can use them; Pulse does not own being the sandbox where
 arbitrary agent execution lives.
