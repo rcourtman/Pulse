@@ -1,7 +1,7 @@
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatDurationMs } from '@/utils/patrolFormat';
 import { formatConfidencePercentage } from '@/utils/confidencePresentation';
-import { humanizeArrowDelimitedLabel } from '@/utils/textPresentation';
+import { formatTrimmedLabel, humanizeArrowDelimitedLabel } from '@/utils/textPresentation';
 
 const parseGoDurationMs = (value: string): number | null => {
   const normalized = value.trim();
@@ -31,20 +31,15 @@ const humanizeCorrelationToken = (value?: string): string => {
   return humanizeArrowDelimitedLabel(value, { fallback: 'Correlation' });
 };
 
-const formatResourceCorrelationEndpointLabel = (value?: string): string => {
-  const normalized = (value || '').trim();
-  if (!normalized) return 'Unknown resource';
-  return normalized;
-};
-
 export function formatResourceCorrelationEndpoint(
   correlation: ResourceCorrelation,
   role: 'source' | 'target',
 ): string {
-  return formatResourceCorrelationEndpointLabel(
+  return formatTrimmedLabel(
     role === 'source'
       ? correlation.source_name || correlation.source_id
       : correlation.target_name || correlation.target_id,
+    { fallback: 'Unknown resource' },
   );
 }
 
